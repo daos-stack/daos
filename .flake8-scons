@@ -1,0 +1,16 @@
+# Flake8 config file scons files in the DAOS project.  This is invoked by the flake githook.
+#
+# Disable checks that play badly with scons Import/Export only.
+[flake8]
+exclude =
+    .git,
+    __pycache__,
+    src/rdb/raft,
+    src/control/vendor,
+    src/client/pydaos/raw,
+    venv,
+    build,
+    install
+filename=*/SConscript, SConstruct
+max-line-length: 100
+ignore=F821,F841

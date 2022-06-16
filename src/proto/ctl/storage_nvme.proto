@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -80,7 +80,8 @@ message NvmeController {
 		uint64 total_bytes = 5;		// blobstore clusters total bytes
 		uint64 avail_bytes = 6;		// blobstore clusters available bytes
 		string tr_addr = 7;		// transport address of the blobstore
-		uint32 dev_state = 8;		// NVMe device state
+		string dev_state = 8;		// NVMe device state
+		uint64 cluster_size = 9;        // blobstore cluster size in bytes
 	}
 
 	string model = 1;	// model name
@@ -99,17 +100,6 @@ message NvmeControllerResult {
 	ResponseState state = 2;	// state of current operation
 }
 
-message PrepareNvmeReq {
-	string pci_allow_list = 1;	// Whitespace separated list of PCI addresses
-	int32 nr_huge_pages = 2;		// Number of hugepages to allocate (in MB)
-	string target_user = 3;		// User to access NVMe devices
-	bool reset = 4;			// Reset SPDK returning devices to kernel
-}
-
-message PrepareNvmeResp {
-	ResponseState state = 1;
-}
-
 message ScanNvmeReq {
 	bool Health = 1; // Retrieve NVMe device health statistics
 	bool Meta = 2; // Retrieve metadata relating to NVMe device
@@ -124,3 +114,4 @@ message ScanNvmeResp {
 message FormatNvmeReq {}
 
 // FormatNvmeResp isn't required because controller results are returned instead
+

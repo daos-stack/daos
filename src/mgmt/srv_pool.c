@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -167,31 +167,46 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*filtered_targets = NULL;
 	d_rank_list_t			*pg_ranks = NULL;
-	uint32_t			pg_size;
+	d_rank_list_t			*pg_targets = NULL;
 	int				rc;
 	int				rc_cleanup;
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
 	 */
-	rc = crt_group_size(NULL, &pg_size);
+	rc = crt_group_ranks_get(NULL, &pg_ranks);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	pg_ranks = d_rank_list_alloc(pg_size);
-	if (pg_ranks == NULL) {
-		rc = -DER_NOMEM;
+
+	rc = d_rank_list_dup(&pg_targets, targets);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
-	rc = d_rank_list_dup(&filtered_targets, targets);
-	if (rc) {
-		rc = -DER_NOMEM;
-		D_GOTO(out, rc);
-	}
-	/* Remove any targets not found in pg_ranks */
-	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
-	if (!d_rank_list_identical(filtered_targets, targets)) {
-		D_ERROR("some ranks not found in cart primary group\n");
+
+	/* The pg_ranks and targets lists should overlap perfectly.
+	 * If not, fail early to avoid expensive corpc failures.
+	 */
+	d_rank_list_filter(pg_ranks, pg_targets, false /* exclude */);
+	if (!d_rank_list_identical(pg_targets, targets)) {
+		char *pg_str, *tgt_str;
+
+		pg_str = d_rank_list_to_str(pg_ranks);
+		if (pg_str == NULL) {
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		tgt_str = d_rank_list_to_str(targets);
+		if (tgt_str == NULL) {
+			D_FREE(pg_str);
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
+			DP_UUID(pool_uuid), tgt_str, pg_str);
+
+		D_FREE(pg_str);
+		D_FREE(tgt_str);
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
@@ -230,7 +245,7 @@ out_svcp:
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 	}
 out:
-	d_rank_list_free(filtered_targets);
+	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
@@ -415,7 +430,14 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		pool_uuid	UUID of the pool.
+ * \param[in]		svc_ranks	Ranks of pool svc replicas.
+ * \param[out]		ranks		Optional, returned storage ranks in this pool.
+ *					If #pool_info is NULL, engines with disabled targets.
+ *					If #pool_info is passed, engines with enabled or disabled
+ *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					The caller must free the list with d_rank_list_free().
  * \param[in][out]	pool_info	Query results
  *
  * \return		0		Success
@@ -423,7 +445,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *			Negative value	Other error
  */
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
 		   daos_pool_info_t *pool_info)
 {
 	if (pool_info == NULL) {
@@ -433,7 +455,59 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, pool_info);
+	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
+}
+
+/**
+ * Calls into the pool svc to query one or more targets of a pool storage engine.
+ *
+ * \param[in]		pool_uuid	UUID of the pool.
+ * \param[in]		svc_ranks	Ranks of pool svc replicas.
+ * \param[in]		rank		Rank of the pool storage engine.
+ * \param[in]		tgts		Target indices of the engine.
+ * \param[out]		infos		State, storage  capacity/usage per target in \a tgts.
+ *					Allocated if returning 0. Caller frees with D_FREE().
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid inputs
+ *			Negative value	Other error
+ */
+int
+ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			   d_rank_list_t *tgts, daos_target_info_t **infos)
+{
+	int			rc = 0;
+	uint32_t		i;
+	daos_target_info_t	*out_infos = NULL;
+
+	if (infos == NULL) {
+		D_ERROR("infos argument was NULL\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_ARRAY(out_infos, tgts->rl_nr);
+	if (out_infos == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < tgts->rl_nr; i++) {
+		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
+			rank, tgts->rl_ranks[i]);
+		rc = ds_pool_svc_query_target(pool_uuid, svc_ranks, rank, tgts->rl_ranks[i],
+					      &out_infos[i]);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": ds_pool_svc_query_target() failed rank %u tgt %u\n",
+				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
+			goto out;
+		}
+	}
+
+out:
+	if (rc)
+		D_FREE(out_infos);
+	else
+		*infos = out_infos;
+
+	return rc;
 }
 
 static int
@@ -575,6 +649,14 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 out:
 	return rc;
+}
+
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
 }
 
 int

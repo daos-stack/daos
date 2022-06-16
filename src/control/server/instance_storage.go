@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,16 +20,9 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// GetScmConfig calls in to the private engine storage provider to retrieve the
-// SCM config.
-func (ei *EngineInstance) GetScmConfig() (*storage.TierConfig, error) {
-	return ei.storage.GetScmConfig()
-}
-
-// GetScmUsage calls in to the private engine storage provider to retrieve the
-// SCM usage.
-func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
-	return ei.storage.GetScmUsage()
+// GetStorage retrieve the storage provider for an engine instance.
+func (ei *EngineInstance) GetStorage() *storage.Provider {
+	return ei.storage
 }
 
 // MountScm mounts the configured SCM device (DCPM or ramdisk emulation)
@@ -45,12 +38,6 @@ func (ei *EngineInstance) MountScm() error {
 	}
 
 	return ei.storage.MountScm()
-}
-
-// NeedsScmFormat probes the configured instance storage and determines whether
-// or not it requires a format operation before it can be used.
-func (ei *EngineInstance) NeedsScmFormat() (bool, error) {
-	return ei.storage.ScmNeedsFormat()
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
@@ -83,7 +70,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 
 	ei.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
 
-	needsScmFormat, err := ei.NeedsScmFormat()
+	needsScmFormat, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
 		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
 		needsScmFormat = true
@@ -160,12 +147,6 @@ func (ei *EngineInstance) logScmStorage() error {
 		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
 
 	return nil
-}
-
-// HasBlockDevices calls in to the private engine storage provider to check if
-// block devices exist in the storage configurations of the engine.
-func (ei *EngineInstance) HasBlockDevices() bool {
-	return ei.storage.HasBlockDevices()
 }
 
 // ScanBdevTiers calls in to the private engine storage provider to scan bdev

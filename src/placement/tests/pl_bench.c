@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -222,7 +222,7 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 
 	/* Warm up the cache and check that it works correctly */
 	for (i = 0; i < BENCHMARK_COUNT; i++)
-		pl_obj_place(pl_map, &obj_table[i], NULL, &layout_table[i]);
+		pl_obj_place(pl_map, &obj_table[i], 0, NULL, &layout_table[i]);
 	check_unique_layout(num_domains, nodes_per_domain, vos_per_target,
 			    layout_table, BENCHMARK_COUNT, 0);
 
@@ -230,7 +230,7 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 		D_PRINT("Starting vtune loop!\n");
 		while (1)
 			for (i = 0; i < BENCHMARK_COUNT; i++)
-				pl_obj_place(pl_map, &obj_table[i], NULL,
+				pl_obj_place(pl_map, &obj_table[i], 0, NULL,
 					     &layout_table[i]);
 	}
 
@@ -243,7 +243,7 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 
 		benchmark_start(bench_hdl);
 		for (i = 0; i < BENCHMARK_COUNT; i++)
-			pl_obj_place(pl_map, &obj_table[i], NULL,
+			pl_obj_place(pl_map, &obj_table[i], 0, NULL,
 				     &layout_table[i]);
 		benchmark_stop(bench_hdl);
 
@@ -320,7 +320,7 @@ compute_data_movement(uint32_t domains, uint32_t nodes_per_domain,
 
 	/* Calculate new placement using this configuration */
 	for (obj_idx = 0; obj_idx < test_entries; obj_idx++)
-		pl_obj_place(iter_pl_map, &obj_table[obj_idx],
+		pl_obj_place(iter_pl_map, &obj_table[obj_idx], 0,
 			     NULL, &iter_layout[obj_idx]);
 
 	/* Compute the number of objects that moved */
@@ -508,7 +508,7 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 
 		/* Initial placement */
 		for (obj_idx = 0; obj_idx < test_entries; obj_idx++)
-			pl_obj_place(initial_pl_map, &obj_table[obj_idx], NULL,
+			pl_obj_place(initial_pl_map, &obj_table[obj_idx], 0, NULL,
 				     &initial_layout[obj_idx]);
 
 		for (added = 0; added <= domains_to_add; added++) {

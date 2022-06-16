@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -541,6 +541,10 @@ public class DaosObject {
     if (objectPtr == -1) {
       throw new DaosObjectException(oid, "object is not open.");
     }
+  }
+
+  public DaosObjectId getOid() {
+    return oid;
   }
 
   /**

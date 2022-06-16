@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2020-2021 Intel Corporation
+# Copyright 2020-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,9 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
+# Give the avocado test tearDown method a minimum of 120 seconds to complete when the test process
+# has timed out.  The test harness will increment this timeout based upon the number of pools
+# created in the test to account for pool destroy command timeouts.
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
@@ -78,7 +81,9 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
-process_died = 60
+after_interrupted = 120
+process_alive = 120
+process_died = 120
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -214,7 +219,7 @@ fi
 
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
-    if ! ./slurm_setup.py -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
+    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
@@ -225,10 +230,15 @@ fi
 ulimit -n 4096
 
 launch_args="-jcrisa"
-# can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ] ||
-   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
-    launch_args="-jcrispa"
+# processing cores is broken on EL7 currently
+id="$(lsb_release -si)"
+if { [ "$id" = "CentOS" ]                 &&
+     [[ $(lsb_release -s -r) != 7.* ]]; } ||
+   [ "$id" = "AlmaLinux" ]                ||
+   [ "$id" = "Rocky" ]                    ||
+   [ "$id" = "RedHatEnterpriseServer" ]   ||
+   [ "$id" = "openSUSE" ]; then
+    launch_args+="p"
 fi
 
 # Clean stale job results
@@ -239,6 +249,8 @@ fi
 # now run it!
 # shellcheck disable=SC2086
 export WITH_VALGRIND
+export STAGE_NAME
+# shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

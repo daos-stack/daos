@@ -1,9 +1,11 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+//go:build linux && amd64
 // +build linux,amd64
+
 //
 
 package telemetry
@@ -14,7 +16,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestTelemetry_GetCounter(t *testing.T) {
@@ -57,7 +59,7 @@ func TestTelemetry_GetCounter(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := GetCounter(tc.ctx, tc.metricName)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expResult != nil {
 				if result == nil {
@@ -65,9 +67,9 @@ func TestTelemetry_GetCounter(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeCounter, "bad type")
-				common.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
-				common.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
+				test.AssertEqual(t, result.Type(), MetricTypeCounter, "bad type")
+				test.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
+				test.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
 			} else {
 				if result != nil {
 					t.Fatalf("expected nil result, got %+v", result)

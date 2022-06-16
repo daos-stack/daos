@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -26,7 +26,7 @@ import (
 )
 
 func TestIOEngineInstance_MountScmDevice(t *testing.T) {
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	var (
@@ -112,7 +112,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.cfg == nil {
 				tc.cfg = &storage.Config{}
@@ -126,7 +126,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			instance := NewEngineInstance(log, provider, nil, runner)
 
 			gotErr := instance.MountScm()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -138,13 +138,13 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	var (
 		ramCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithBdevClass(storage.ClassRam.String()).
+				WithStorageClass(storage.ClassRam.String()).
 				WithScmMountPoint(goodMountPoint).
 				WithScmRamdiskSize(1),
 		)
 		dcpmCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithBdevClass(storage.ClassDcpm.String()).
+				WithStorageClass(storage.ClassDcpm.String()).
 				WithScmMountPoint(goodMountPoint).
 				WithScmDeviceList("/dev/foo"),
 		)
@@ -224,14 +224,14 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		"check dcpm fails (missing device)": {
 			engineCfg: engine.MockConfig().WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass(storage.ClassDcpm.String()).
+					WithStorageClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(goodMountPoint)),
 			expErr: storage.ErrInvalidDcpmCount,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.engineCfg == nil {
 				tc.engineCfg = &engine.Config{}
@@ -244,8 +244,8 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				nil)
 			instance := NewEngineInstance(log, mp, nil, runner)
 
-			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
-			common.CmpErr(t, tc.expErr, gotErr)
+			gotNeedsFormat, gotErr := instance.GetStorage().ScmNeedsFormat()
+			test.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNeedsFormat, gotNeedsFormat); diff != "" {
 				t.Fatalf("unexpected needs format (-want, +got):\n%s\n", diff)
 			}
@@ -280,7 +280,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	errStarted := errors.New("already started")
 	dcpmCfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithBdevClass(storage.ClassDcpm.String()).
+			WithStorageClass(storage.ClassDcpm.String()).
 			WithScmMountPoint("/mnt/test").
 			WithScmDeviceList("/dev/foo"),
 	)
@@ -323,7 +323,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			trc := &engine.TestRunnerConfig{}
 			if tc.engineStarted {
@@ -361,7 +361,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			defer cancel()
 
 			gotErr := engine.awaitStorageReady(ctx, tc.skipMissingSB)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr == errStarted || tc.skipMissingSB == true || tc.hasSB == true {
 				return
 			}

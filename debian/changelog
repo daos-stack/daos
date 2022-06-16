@@ -1,3 +1,119 @@
+daos (2.3.100-12) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
+daos (2.3.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 01 Jun 2022 13:58:03 -0000
+
+daos (2.3.100-10) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+
+daos (2.3.100-9) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-client-tests-openmpi dependency from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 17 May 2022 12:43:00 -0400
+
+daos (2.3.100-8) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Extend dfusedaosbuild test to run in different configurations.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Mon, 9 May 2022 22:34:00 -0100
+
+daos (2.3.100-7) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Add dfuse unit-test binary to call from ftest.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Fri, 6 May 2022 09:03:00 -0100
+
+daos (2.3.100-6) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Update UXC Mercury patch to disable unified mode
+
+ -- Joseph Moore <joseph.moore@intel.com>  Wed, 4 May 2022 11:19:00 -0600
+
+daos (2.3.100-5) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 26 Apr 2022 17:13:00 -0400
+
+daos (2.3.100-4) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.0rc3-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 20 Apr 2022 09:00:00 -0500
+
+daos (2.3.100-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 12 Apr 2022 08:33:00 +0800
+
+daos (2.3.100-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Extract MPI from many binaries create dpar and dpar_mpi providing a
+    similar interface to abstract away the direct MPI dependence
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 6 Apr 2022 14:30:01 -0100
+
+daos (2.3.100-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.3.100
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 6 Apr 2022 12:00:00 +0800
+
+daos (2.1.100-26) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Add build depends entries for UCX libraries
+
+ -- Joseph Moore <joseph.moore@intel.com>  Wed, 6 Apr 2022 10:44:21 +0800
+
+daos (2.1.100-25) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Update mercury to UCX provider patch
+
+ -- Joseph Moore <joseph.moore@intel.com>  Sat, 2 Apr 2022 11:56:35 +0800
+
+daos (2.1.100-24) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to CXI provider patch
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 11 Mar 2022 14:33:00 +0800
+
+daos (2.1.100-22) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to include DAOS-9561 workaround
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 22 Feb 2022 14:33:00 +0800
+
+daos (2.1.100-20) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+ -- Li Wei <wei.g.li@intel.com>  Thu, 10 Feb 2022 14:33:00 +0800
+
+daos (2.1.100-19) unstable; urgency=low
+  [ Michael MacDonald ]
+  * Move libdaos_common.so from daos-client to daos package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 19 Jan 2022 13:58:03 -0000
+
+daos (2.1.100-18) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 17 Jan 2022 10:00:00 -0100
+
 daos (2.1.100-17) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update to mercury v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage

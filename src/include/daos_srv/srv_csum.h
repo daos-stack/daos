@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,27 +9,6 @@
 
 #include <daos_srv/bio.h>
 #include <daos/checksum.h>
-
-/**
- * Determine if the saved checksum for a chunk can be used, or if a
- * new checksum is required.
- * @param raw_ext		Range of the raw (actual) extent (should map
- *				to evt_entry.en_ext)
- * @param req_ext		Range of the requested extent (should map
- *				to evt_entry.en_sel_ext)
- * @param chunk			Range of the chunk under investigation
- * @param csum_started		whether or not a previous biov for the current
- *				chunk exists and started a new checksum that
- *				\biov should contribute to
- * @param has_next_biov		Is there another extent following
- * @return
- */
-bool
-ds_csum_calc_needed(struct daos_csum_range *raw_ext,
-		    struct daos_csum_range *req_ext,
-		    struct daos_csum_range *chunk,
-		    bool csum_started,
-		    bool has_next_biov);
 
 /**
  * Process the bsgl and create new checksums or use the stored
@@ -46,8 +25,28 @@ ds_csum_calc_needed(struct daos_csum_range *raw_ext,
  * @return
  */
 int
-ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums);
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
+		struct dcs_iod_csums *iod_csums);
+
+/**
+ * Allocate the memory for and populate the IO Maps structure. This structure is used to identify
+ * the parts of the iods' recxes for which there is data and which part are holes.
+ *
+ * @param biod[in]	contains the extents and info on holes
+ * @param iods[in]	IO Descriptor
+ * @param iods_nr[in]	Number of iods
+ * @param flags[in]	if ORF_CREATE_MAP_DETAIL is set, then all mapped extents are requested,
+ *			not just the low and high extents.
+ * @param p_maps[out]	pointer to the resulting structures
+ *
+ * @return		0 on success, else error
+ */
+int
+ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_t flags,
+		 daos_iom_t **p_maps);
+
+void
+ds_iom_free(daos_iom_t **p_maps, uint64_t map_nr);
 
 #endif

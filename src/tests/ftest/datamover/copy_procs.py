@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -27,8 +27,7 @@ class DmvrCopyProcs(DataMoverTestBase):
 
         # Get the parameters
         self.test_file = self.ior_cmd.test_file.value
-        self.ior_flags = self.params.get(
-            "ior_flags", "/run/ior/*")
+        self.ior_flags = self.params.get("ior_flags", "/run/ior/*")
 
     def test_copy_procs(self):
         """
@@ -41,8 +40,8 @@ class DmvrCopyProcs(DataMoverTestBase):
             Create a single 100M file in cont1 using ior.
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw
-        :avocado: tags=datamover
-        :avocado: tags=copy_procs
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
+        :avocado: tags=dm_copy_procs
         """
         # Create pool and containers
         pool1 = self.create_pool()
@@ -50,8 +49,7 @@ class DmvrCopyProcs(DataMoverTestBase):
         cont2 = self.create_cont(pool1)
 
         # Get the varying number of processes
-        procs_list = self.params.get(
-            "processes", "/run/dcp/copy_procs/*")
+        procs_list = self.params.get("processes", "/run/dcp/copy_procs/*")
 
         # Generate test file paths
         src_daos = join("/", self.test_file)
@@ -60,11 +58,8 @@ class DmvrCopyProcs(DataMoverTestBase):
         dst_posix = join(self.new_posix_test_path(), self.test_file)
 
         # Create the test files
-        self.run_ior_with_params("DAOS", src_daos,
-                                 pool1, cont1,
-                                 flags=self.ior_flags[0])
-        self.run_ior_with_params("POSIX", src_posix,
-                                 flags=self.ior_flags[0])
+        self.run_ior_with_params("DAOS", src_daos, pool1, cont1, flags=self.ior_flags[0])
+        self.run_ior_with_params("POSIX", src_posix, flags=self.ior_flags[0])
 
         # DAOS -> POSIX
         # Run with varying number of processes
@@ -72,13 +67,9 @@ class DmvrCopyProcs(DataMoverTestBase):
             "DAOS_UUID", src_daos, pool1, cont1,
             "POSIX", dst_posix)
         for num_procs in procs_list:
-            test_desc = "copy_procs (DAOS->POSIX with {} procs)".format(
-                num_procs)
-            self.run_datamover(
-                test_desc=test_desc,
-                processes=num_procs)
-            self.run_ior_with_params(
-                "POSIX", dst_posix, flags=self.ior_flags[1])
+            test_desc = "copy_procs (DAOS->POSIX with {} procs)".format(num_procs)
+            self.run_datamover(test_desc=test_desc, processes=num_procs)
+            self.run_ior_with_params("POSIX", dst_posix, flags=self.ior_flags[1])
 
         # POSIX -> DAOS
         # Run with varying number of processes
@@ -86,11 +77,6 @@ class DmvrCopyProcs(DataMoverTestBase):
             "POSIX", src_posix, None, None,
             "DAOS_UUID", dst_daos, pool1, cont2)
         for num_procs in procs_list:
-            test_desc = "copy_procs (POSIX->DAOS with {} procs)".format(
-                num_procs)
-            self.run_datamover(
-                test_desc=test_desc,
-                processes=num_procs)
-            self.run_ior_with_params(
-                "DAOS_UUID", dst_daos, pool1, cont2,
-                flags=self.ior_flags[1])
+            test_desc = "copy_procs (POSIX->DAOS with {} procs)".format(num_procs)
+            self.run_datamover(test_desc=test_desc, processes=num_procs)
+            self.run_ior_with_params("DAOS_UUID", dst_daos, pool1, cont2, flags=self.ior_flags[1])

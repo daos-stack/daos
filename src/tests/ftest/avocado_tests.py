@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,7 +25,6 @@ class ApricotTests(Test):
         print("__init__()")
         self.timeout = 9
 
-
     def setUp(self):
         """Set up."""
         print("setUp() start")
@@ -39,7 +38,6 @@ class ApricotTests(Test):
         time.sleep(5)
         print("tearDown() ended after 5s sleep")
 
-
     def test_junit_stdio(self):
         """Test full Stdout in Jenkins JUnit display
 
@@ -49,7 +47,6 @@ class ApricotTests(Test):
             print(inp.read())
         self.fail()
 
-
     def test_teardown_timeout_timed_out(self):
         """Test the PoC tearDown() timeout patch
 
@@ -58,7 +55,6 @@ class ApricotTests(Test):
         """
         self.log.debug("Sleeping for 10 seconds")
         time.sleep(10)
-
 
     def test_teardown_timeout(self):
         """Test the PoC tearDown() timeout patch

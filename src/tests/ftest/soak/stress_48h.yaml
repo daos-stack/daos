@@ -27,7 +27,6 @@ server_config:
     engines_per_host: 2
     name: daos_server
     provider: ofi+verbs;ofi_rxm
-    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     crt_timeout: 60
@@ -46,8 +45,7 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - DAOS_MC_CAP=1024
-                - ABT_THREAD_STACKSIZE=32768
+                - DAOS_MD_CAP=1024
         1:
             pinned_numa_node: 1
             nr_xs_helpers: 1
@@ -62,8 +60,7 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - DAOS_MC_CAP=1024
-                - ABT_THREAD_STACKSIZE=32768
+                - DAOS_MD_CAP=1024
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
@@ -75,6 +72,11 @@ pool_reserved:
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
+    control_method: dmg
+pool_racer:
+    name: daos_server
+    scm_size: 3GB
+    nvme_size: 10GB
     control_method: dmg
 container:
     type: POSIX
@@ -106,6 +108,9 @@ soak_stress:
         - daos_racer
         - ior_stress
         - mdtest_stress
+        - vpic_stress
+        - lammps_stress
+        - macsio_stress
     ignore_soak_errors: False
 # Commandline parameters
 # Benchmark and application params
@@ -148,6 +153,7 @@ ior_stress:
         mount_dir: "/tmp/daos_dfuse/ior/"
         disable_caching: True
 fio_stress:
+  job_timeout: 30
   names:
     - global
     - test
@@ -183,6 +189,34 @@ fio_stress:
     disable_wb_caching: True
 daos_racer:
     runtime: 120
+vpic_stress:
+# Requires opeapi
+    job_timeout: 20
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    module: mpi/latest
+    posix: True
+    workdir: "/tmp/daos_dfuse/vpic/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "EC_2P1GX"
+lammps_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj"
+    posix: True
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "EC_2P1GX"
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 40
@@ -217,6 +251,35 @@ mdtest_stress:
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
+macsio_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    taskspernode:
+        - 16
+    api:
+        - HDF5
+        - HDF5-VOL
+    interface: hdf5
+    parallel_file_mode: SIF 1
+    filebase: daos
+    units_prefix_system: decimal
+    part_size: 10M
+    avg_num_parts: 2.5
+    num_dumps: 2
+    debug_level: 1
+    oclass:
+        - "SX"
+        - "EC_2P1GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/macsio/"
         disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"

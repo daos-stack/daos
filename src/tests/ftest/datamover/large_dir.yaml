@@ -5,11 +5,11 @@ hosts:
     - server-C
     - server-D
     - server-E
+    - server-F
+    - server-G
   test_clients:
     - client-F
-    - client-G
-    - client-H
-timeout: 1080
+timeout: 420
 server_config:
   name: daos_server
   servers:
@@ -33,7 +33,6 @@ mdtest:
     dcp: 30
   api: DFS
   test_dir: "/"
-  iteration: 1
   dfs_destroy: False
   manager: "MPICH"
   mux_dataset: !mux

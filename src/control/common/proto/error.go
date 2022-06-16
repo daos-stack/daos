@@ -1,11 +1,12 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package proto
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 
@@ -14,8 +15,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -25,7 +26,7 @@ const (
 	AnnotatedFaultType = "proto.fault.Fault"
 	// AnnotatedDaosStatusType defines an identifier for DaosStatus errors serialized
 	// as gRPC status metadata.
-	AnnotatedDaosStatusType = "proto.drpc.DaosStatus"
+	AnnotatedDaosStatusType = "proto.daos.DaosStatus"
 	// AnnotatedSystemErrNotLeader defines an identifier for ErrNotLeader errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrNotLeader = "proto.system.ErrNotLeader"
@@ -74,8 +75,12 @@ func MetaFromFault(f *fault.Fault) map[string]string {
 // AnnotateError adds more details to the gRPC error, if available.
 func AnnotateError(in error) error {
 	var details *errdetails.ErrorInfo
-
 	cause := errors.Cause(in)
+
+	if cause == context.DeadlineExceeded || cause == context.Canceled {
+		return status.FromContextError(cause).Err()
+	}
+
 	switch et := cause.(type) {
 	case *fault.Fault:
 		details = &errdetails.ErrorInfo{
@@ -83,7 +88,7 @@ func AnnotateError(in error) error {
 			Domain:   et.Domain,
 			Metadata: MetaFromFault(et),
 		}
-	case drpc.DaosStatus:
+	case daos.Status:
 		details = &errdetails.ErrorInfo{
 			Reason: AnnotatedDaosStatusType,
 			Domain: "DAOS",
@@ -147,7 +152,7 @@ func UnwrapError(st *status.Status) error {
 				if err != nil {
 					return err
 				}
-				return drpc.DaosStatus(i)
+				return daos.Status(i)
 			case AnnotatedSystemErrNotReplica:
 				return ErrFromMeta(t.Metadata, new(system.ErrNotReplica))
 			case AnnotatedSystemErrNotLeader:

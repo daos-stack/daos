@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016-2021 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@ TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
 
+
 def scons():
     """scons function"""
 
@@ -109,10 +110,11 @@ def scons():
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
     basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [cart_utils_objs])
+    Depends(basic_target, [cart_utils_objs])
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

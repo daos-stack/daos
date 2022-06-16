@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,8 +9,9 @@ package engine
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestValidateLogMasks(t *testing.T) {
@@ -65,7 +66,7 @@ func TestValidateLogMasks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := ValidateLogMasks(tc.masks)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

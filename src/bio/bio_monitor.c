@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,16 +44,14 @@ struct bio_dev_list_msg_arg {
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
-	uint64_t	cl_sz;
-
 	if (bs == NULL)
 		return;
 
 	D_ASSERT(stats != NULL);
 
-	cl_sz = spdk_bs_get_cluster_size(bs);
-	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * cl_sz;
-	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * cl_sz;
+	stats->cluster_size = spdk_bs_get_cluster_size(bs);
+	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * stats->cluster_size;
+	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * stats->cluster_size;
 }
 
 /* Copy out the nvme_stats in the device owner xstream context */

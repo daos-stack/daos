@@ -11,56 +11,75 @@ hosts:
     - client-H
 timeout: 700
 server_config:
-    name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
-    transport_config:
-      allow_insecure: True
+  engines_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+  transport_config:
+    allow_insecure: True
 agent_config:
-    transport_config:
-      allow_insecure: True
+  transport_config:
+    allow_insecure: True
 dmg:
-    transport_config:
-      allow_insecure: True
+  transport_config:
+    allow_insecure: True
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 3000000000
-    nvme_size: 9000000000
-    control_method: dmg
+  mode: 146
+  name: daos_server
+  scm_size: 3000000000
+  nvme_size: 9000000000
+  control_method: dmg
 container:
-    type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 ior:
-    ior_timeout: 60
-    client_processes:
-        np_16:
-            np: 16
-    test_file: daos:/testFile
-    repetitions: 2
-    dfs_destroy: False
-    iorflags:
-          ior_flags:
-            - "-v -W -w -r -R"
-            - "-v -W -w -r -R -F"
-          ior_api:
-            - DFS
-            - MPIIO
-            - POSIX
-            - HDF5
-            - HDF5-VOL
-          transfer_block_size:
-            - [256B, 2M]
-            - [1M, 32M]
-          obj_class:
-            - "SX"
-            - "RP_2GX"
+  ior_timeout: 60
+  client_processes:
+    np: 128
+  test_file: daos:/testFile
+  repetitions: 2
+  dfs_destroy: False
+  iorflags:
+    ior_flags:
+      - "-v -W -w -r -R"
+      - "-v -W -w -r -R -F"
+    ior_api:
+      - DFS
+      - MPIIO
+      - POSIX
+      - POSIX+IL # Custom DFUSE with interception handled by test
+      - HDF5
+      - HDF5-VOL
+    transfer_block_size:
+      - [256B, 512K]
+      - [1M, 8M]
+    obj_class:
+      - "SX"
+      - "RP_2GX"
 dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_caching: True
+  mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
 hdf5_vol:
-    plugin_path: /usr/lib64/mpich/lib
+  plugin_path: /usr/lib64/mpich/lib

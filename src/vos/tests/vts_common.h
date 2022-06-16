@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,10 +41,13 @@
 
 #define VPOOL_SIZE	VPOOL_2G
 
-#define VPOOL_NAME	"/mnt/daos/vpool"
 #define	VP_OPS 10
 
-extern int gc;
+#define STORAGE_PATH_LEN 96
+extern char	vos_path[STORAGE_PATH_LEN+1];
+extern int	gc;
+extern bool	g_force_checksum;
+extern bool	g_force_no_zero_copy;
 
 enum vts_ops_type {
 	CREAT,
@@ -119,7 +122,7 @@ int run_aggregate_tests(bool slow, const char *cfg);
 int run_dtx_tests(const char *cfg);
 int run_gc_tests(const char *cfg);
 int run_pm_tests(const char *cfg);
-int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
+int run_io_test(enum daos_otype_t type, int keys, bool nest_iterators,
 		const char *cfg);
 int run_ts_tests(const char *cfg);
 

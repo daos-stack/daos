@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,7 +41,7 @@ func (p *Provider) QueryFirmware(req storage.ScmFirmwareQueryRequest) (*storage.
 }
 
 func (p *Provider) getRequestedModules(requestedUIDs []string, ignoreMissing bool) (storage.ScmModules, error) {
-	modules, err := p.backend.Discover()
+	modules, err := p.backend.getModules()
 	if err != nil {
 		return nil, err
 	}

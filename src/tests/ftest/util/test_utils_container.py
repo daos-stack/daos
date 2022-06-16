@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,8 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils_base import BasicParameter, CommandFailure
+from command_utils_base import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_bytes, DaosTestError
@@ -881,3 +882,31 @@ class TestContainer(TestDaosApiBase):
 
         # Return the number of punched objects
         return count
+
+    @fail_on(CommandFailure)
+    def get_prop(self, properties=None):
+        """Get container property by calling daos container get-prop.
+
+        Args:
+            properties (list): "name" field(s). Defaults to None.
+
+        Returns:
+            str: JSON output of daos container get-prop.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        if self.control_method.value == self.USE_DAOS and self.daos:
+            # Get container property using daos utility.
+            return self.daos.container_get_prop(
+                pool=self.pool.uuid, cont=self.uuid, properties=properties)
+
+        if self.control_method.value == self.USE_DAOS:
+            self.log.error("Error: Undefined daos command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s", self.control_method.value)
+
+        return None

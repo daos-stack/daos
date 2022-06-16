@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 
 class ListPoolsTest(TestWithServers):

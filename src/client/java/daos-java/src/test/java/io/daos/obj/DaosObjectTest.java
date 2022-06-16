@@ -26,7 +26,7 @@ public class DaosObjectTest {
   public void setup() throws Exception {
     PowerMockito.mockStatic(DaosObjClient.class);
     DaosObjectId oid = new DaosObjectId();
-    oid.encode();
+    oid.encode(0L);
     DaosObjClient client = Mockito.mock(DaosObjClient.class);
     long contPtr = 12345;
     long address = oid.getBuffer().memoryAddress();

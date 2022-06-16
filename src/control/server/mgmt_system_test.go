@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,18 +20,21 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func act2state(a string) string {
@@ -55,7 +59,7 @@ func mockRankFail(a string, r uint32, n ...int32) *sharedpb.RankResult {
 		Action: a,
 	}
 	if len(n) > 0 {
-		rr.Addr = common.MockHostAddr(n[0]).String()
+		rr.Addr = test.MockHostAddr(n[0]).String()
 	}
 	return rr
 }
@@ -64,12 +68,12 @@ func mockRankSuccess(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	rr := &sharedpb.RankResult{Rank: r, Action: a}
 	rr.State = act2state(a)
 	if len(n) > 0 {
-		rr.Addr = common.MockHostAddr(n[0]).String()
+		rr.Addr = test.MockHostAddr(n[0]).String()
 	}
 	return rr
 }
 
-var defEvtCmpOpts = append(common.DefaultCmpOpts(),
+var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(events.RASEvent{}),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
 
@@ -87,7 +91,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
-				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
+				CrtTimeout:      10,
+				NetDevClass:     uint32(hardware.Infiniband),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -98,7 +103,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+verbs",
 					CrtCtxShareAddr: 1,
 					CrtTimeout:      10,
-					NetDevClass:     netdetect.Infiniband,
+					NetDevClass:     uint32(hardware.Infiniband),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -118,7 +123,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				NetDevClass:     uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -129,7 +134,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
-					NetDevClass:     netdetect.Ether,
+					NetDevClass:     uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -149,7 +154,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				NetDevClass:     uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -160,7 +165,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
-					NetDevClass:     netdetect.Ether,
+					NetDevClass:     uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -174,7 +179,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
 			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
 			srv := newTestEngine(log, true, sp)
@@ -185,7 +190,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			srv.setDrpcClient(newMockDrpcClient(nil))
 			harness.started.SetTrue()
 
-			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
+			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
 			tc.svc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.svc.membership.Add(msReplica); err != nil {
@@ -205,7 +210,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := test.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -244,10 +249,10 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			db, cleanup := system.TestDatabase(t, log)
+			db, cleanup := raft.TestDatabase(t, log)
 			defer cleanup()
 			svc.sysdb = db
 
@@ -266,12 +271,12 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.LeaderQuery(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := test.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -316,7 +321,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
 
@@ -347,14 +352,14 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.ClusterEvent(context.TODO(), pbReq)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			<-ctx.Done()
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := test.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -388,14 +393,16 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 	}{
 		"no peer": {
 			ctx:    context.Background(),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer details not found in context"),
 		},
-		"bad input address": {
+		"no input address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
 			expErr: errors.New("get listening port: missing port in address"),
 		},
 		"non tcp address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer address (127.0.0.1) not tcp"),
 		},
 		"normal operation": {
@@ -403,10 +410,15 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 			addr:    "0.0.0.0:15001",
 			expAddr: combinedAddr,
 		},
+		"specific addr": {
+			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			addr:    combinedAddr.String(),
+			expAddr: combinedAddr,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotAddr, gotErr := getPeerListenAddr(tc.ctx, tc.addr)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -438,32 +450,60 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 		t.Fatalf("testcase specifies unknown member state %s", s)
 	}
 
-	return system.NewMember(system.Rank(r), common.MockUUID(r), "", common.MockHostAddr(a), state)
+	addr := test.MockHostAddr(a)
+	fd, err := system.NewFaultDomain(addr.String(), strconv.Itoa(int(r)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := fmt.Sprintf("tcp://%s", addr)
+
+	m := system.MockMemberFullSpec(t, system.Rank(r), test.MockUUID(r), uri, addr, state)
+	m.FabricContexts = uint32(r)
+	m.FaultDomain = fd
+	m.Incarnation = uint64(r)
+
+	return m
 }
 
 func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 	t.Helper()
 
-	common.AssertEqual(t, len(exp), len(ms.Members(nil)),
-		"unexpected number of members")
+	test.AssertEqual(t, len(exp), len(ms.Members(nil)), "unexpected number of members")
 	for _, em := range exp {
 		am, err := ms.Get(em.Rank)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		// state is not exported so compare using access method
-		if diff := cmp.Diff(em.State(), am.State()); diff != "" {
-			t.Fatalf("unexpected member state for rank %d (-want, +got)\n%s\n", em.Rank, diff)
-		}
-
-		cmpOpts := []cmp.Option{
-			cmpopts.IgnoreUnexported(system.Member{}),
+		cmpOpts := append(test.DefaultCmpOpts(),
 			cmpopts.EquateApproxTime(time.Second),
-		}
+		)
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
 		}
+	}
+}
+
+func checkMemberResults(t *testing.T, exp, got system.MemberResults) {
+	t.Helper()
+
+	less := func(x, y *system.MemberResult) bool { return x.Rank < y.Rank }
+	cmpOpts := append(test.DefaultCmpOpts(),
+		cmpopts.SortSlices(less),
+	)
+	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected member results (-want, +got)\n%s\n", diff)
+	}
+}
+
+func checkRankResults(t *testing.T, exp, got []*sharedpb.RankResult) {
+	t.Helper()
+
+	less := func(x, y *sharedpb.RankResult) bool { return x.Rank < y.Rank }
+	cmpOpts := append(test.DefaultCmpOpts(),
+		cmpopts.SortSlices(less),
+	)
+	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected rank results (-want, +got)\n%s\n", diff)
 	}
 }
 
@@ -487,7 +527,8 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
 	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
-	svc.membership, _ = system.MockMembership(t, l, mockResolver)
+	svc.sysdb = raft.MockDatabase(t, l)
+	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
 			t.Fatal(err)
@@ -565,7 +606,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: common.MockHostAddr(1).String(),
+					Addr: test.MockHostAddr(1).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
@@ -577,7 +618,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: common.MockHostAddr(2).String(),
+					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
@@ -592,11 +633,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					Error: errors.New("connection refused"),
 				},
 				{
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -610,39 +651,39 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  common.MockHostAddr(1).String(),
+					Addr:  test.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(1).String(),
+					Rank: 3, Addr: test.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: common.MockHostAddr(2).String(),
+					Rank: 1, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused",
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused",
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 6, Msg: "connection refused",
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused",
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -672,7 +713,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: common.MockHostAddr(1).String(),
+					Addr: test.MockHostAddr(1).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
@@ -687,7 +728,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: common.MockHostAddr(2).String(),
+					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{Rank: 1, State: stateString(system.MemberStateJoined)},
@@ -696,7 +737,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -710,29 +751,29 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  common.MockHostAddr(1).String(),
+					Addr:  test.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(1).String(),
+					Rank: 3, Addr: test.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: common.MockHostAddr(2).String(),
+					Rank: 1, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 6, Msg: "connection refused",
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused",
-					Addr:  common.MockHostAddr(4).String(),
+					Addr:  test.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -763,7 +804,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: common.MockHostAddr(1).String(),
+					Addr: test.MockHostAddr(1).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
@@ -778,7 +819,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: common.MockHostAddr(2).String(),
+					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{Rank: 1, State: stateString(system.MemberStateJoined)},
@@ -787,7 +828,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -801,29 +842,29 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  common.MockHostAddr(1).String(),
+					Addr:  test.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(1).String(),
+					Rank: 3, Addr: test.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: common.MockHostAddr(2).String(),
+					Rank: 1, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused",
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused",
-					Addr:  common.MockHostAddr(3).String(),
+					Addr:  test.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
@@ -840,10 +881,88 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expRanks:       "0-5",
 			expAbsentHosts: "10.0.0.5",
 		},
+		// Test case relates to DAOS-10660. Ranks 0 & 3 joined via different interfaces but
+		// reside on the same host so a duplicate set of stop results is received.
+		"filtered ranks; duplicate rank results": {
+			sysReq: &mgmtpb.SystemStopReq{Ranks: "0-3"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 3, "joined"),
+				mockMember(t, 2, 3, "joined"),
+				mockMember(t, 3, 2, "joined"),
+				mockMember(t, 4, 4, "joined"),
+				mockMember(t, 5, 4, "joined"),
+				mockMember(t, 6, 5, "joined"),
+				mockMember(t, 7, 5, "joined"),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: test.MockHostAddr(1).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 0, State: stateString(system.MemberStateStopped)},
+							{Rank: 3, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+				{
+					Addr: test.MockHostAddr(2).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 0, State: stateString(system.MemberStateStopped)},
+							{Rank: 3, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+				{
+					Addr: test.MockHostAddr(3).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 1, State: stateString(system.MemberStateStopped)},
+							{Rank: 2, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+			},
+			expFanReq: &fanoutRequest{
+				Method: control.StopRanks,
+				Ranks:  system.MustCreateRankSet("0-3"),
+			},
+			// Verifies de-duplication of rank results.
+			expResults: system.MemberResults{
+				{
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 1, Addr: test.MockHostAddr(3).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 2, Addr: test.MockHostAddr(3).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					State: system.MemberStateStopped,
+				},
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 3, "stopped"),
+				mockMember(t, 2, 3, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+				mockMember(t, 4, 4, "joined"),
+				mockMember(t, 5, 4, "joined"),
+				mockMember(t, 6, 5, "joined"),
+				mockMember(t, 7, 5, "joined"),
+			},
+			expRanks: "0-3",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
@@ -853,7 +972,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			}
 
 			gotFanReq, baseResp, gotErr := svc.getFanout(tc.sysReq)
-			common.CmpErr(t, expErr, gotErr)
+			test.CmpErr(t, expErr, gotErr)
 			if gotErr != nil && tc.expErrMsg != "" {
 				return
 			}
@@ -861,6 +980,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			switch tc.sysReq.(type) {
 			case *mgmtpb.SystemStartReq:
 				gotFanReq.Method = control.StartRanks
+			case *mgmtpb.SystemStopReq:
+				gotFanReq.Method = control.StopRanks
 			default:
 				gotFanReq.Method = control.PingRanks
 			}
@@ -887,25 +1008,18 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			}
 
 			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), gotFanReq, baseResp, true)
-			common.CmpErr(t, expErr, gotErr)
+			test.CmpErr(t, expErr, gotErr)
 			if tc.expErrMsg != "" {
 				return
 			}
 
-			cmpOpts = []cmp.Option{
-				cmpopts.IgnoreUnexported(system.MemberResult{}, system.Member{}),
-				cmpopts.EquateApproxTime(time.Second),
-			}
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkMemberResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
-			if diff := cmp.Diff(tc.expRanks, gotRankSet.String(), common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expRanks, gotRankSet.String(), test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected ranks (-want, +got)\n%s\n", diff) // prints on err
 			}
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.AbsentHosts.String(), "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.AbsentRanks.String(), "absent ranks")
+			test.AssertEqual(t, tc.expAbsentHosts, gotResp.AbsentHosts.String(), "absent hosts")
+			test.AssertEqual(t, tc.expAbsentRanks, gotResp.AbsentRanks.String(), "absent ranks")
 		})
 	}
 }
@@ -938,39 +1052,39 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 		"unfiltered rank results": {
 			expMembers: []*mgmtpb.SystemMember{
 				{
-					Rank: 0, Addr: common.MockHostAddr(1).String(),
-					Uuid:  common.MockUUID(0),
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					Uuid:  test.MockUUID(0),
 					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
-					Rank: 1, Addr: common.MockHostAddr(1).String(),
-					Uuid: common.MockUUID(1),
+					Rank: 1, Addr: test.MockHostAddr(1).String(),
+					Uuid: test.MockUUID(1),
 					// transition to "ready" illegal
 					State:       stateString(system.MemberStateStopping),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(2),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(2),
 					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(3),
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(3),
 					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 4, Addr: common.MockHostAddr(3).String(),
-					Uuid:        common.MockUUID(4),
+					Rank: 4, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(4),
 					State:       stateString(system.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 5, Addr: common.MockHostAddr(3).String(),
-					Uuid:        common.MockUUID(5),
+					Rank: 5, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(5),
 					State:       stateString(system.MemberStateStopped),
 					FaultDomain: "/",
 				},
@@ -981,20 +1095,20 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			ranks: "0,2-3,6-9",
 			expMembers: []*mgmtpb.SystemMember{
 				{
-					Rank: 0, Addr: common.MockHostAddr(1).String(),
-					Uuid:  common.MockUUID(0),
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					Uuid:  test.MockUUID(0),
 					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(2),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(2),
 					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(3),
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(3),
 					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
@@ -1006,26 +1120,26 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			hosts: "10.0.0.[2-5]",
 			expMembers: []*mgmtpb.SystemMember{
 				{
-					Rank: 2, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(2),
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(2),
 					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 3, Addr: common.MockHostAddr(2).String(),
-					Uuid:        common.MockUUID(3),
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(3),
 					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 4, Addr: common.MockHostAddr(3).String(),
-					Uuid:        common.MockUUID(4),
+					Rank: 4, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(4),
 					State:       stateString(system.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
-					Rank: 5, Addr: common.MockHostAddr(3).String(),
-					Uuid:        common.MockUUID(5),
+					Rank: 5, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(5),
 					State:       stateString(system.MemberStateStopped),
 					FaultDomain: "/",
 				},
@@ -1045,7 +1159,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockResolver := func(_ string, addr string) (*net.TCPAddr, error) {
 				return map[string]*net.TCPAddr{
@@ -1087,19 +1201,19 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.SystemQuery(context.TODO(), req)
-			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
 			}
 
-			cmpOpts := append(common.DefaultCmpOpts(),
+			cmpOpts := append(test.DefaultCmpOpts(),
 				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
 			)
 			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
+			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
 	}
 }
@@ -1107,7 +1221,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
-			Addr:    common.MockHostAddr(a).String(),
+			Addr:    test.MockHostAddr(a).String(),
 			Message: &mgmtpb.SystemStartResp{Results: rrs},
 		}
 	}
@@ -1240,7 +1354,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
@@ -1257,21 +1371,15 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 			gotResp, gotAPIErr := svc.SystemStart(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expAPIErr, gotAPIErr)
+			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
 			}
 
-			cmpOpts := append(common.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
+			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 
 			<-ctx.Done()
 
@@ -1300,7 +1408,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	expMembersStopFail := emf("stop")
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
-			Addr:    common.MockHostAddr(a).String(),
+			Addr:    test.MockHostAddr(a).String(),
 			Message: &mgmtpb.SystemStopResp{Results: rrs},
 		}
 	}
@@ -1432,7 +1540,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.mResps == nil {
 				tc.mResps = [][]*control.HostResponse{{}}
@@ -1452,21 +1560,15 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 			gotResp, gotAPIErr := svc.SystemStop(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expAPIErr, gotAPIErr)
+			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
 			}
 
-			cmpOpts := append(common.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
+			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 
 			<-ctx.Done()
 
@@ -1475,7 +1577,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			}
 
 			mi := svc.rpcClient.(*control.MockInvoker)
-			common.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
 		})
 	}
 }
@@ -1483,7 +1585,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
-			Addr:    common.MockHostAddr(a).String(),
+			Addr:    test.MockHostAddr(a).String(),
 			Message: &mgmtpb.SystemEraseResp{Results: rrs},
 		}
 	}
@@ -1573,7 +1675,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
@@ -1585,19 +1687,212 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.SystemErase(context.TODO(), req)
-			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
 			}
 
-			cmpOpts := append(common.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_Join(t *testing.T) {
+	curMember := mockMember(t, 0, 0, "excluded")
+	newMember := mockMember(t, 1, 1, "joined")
+
+	for name, tc := range map[string]struct {
+		req      *mgmtpb.JoinReq
+		guResp   *mgmtpb.GroupUpdateResp
+		expGuReq *mgmtpb.GroupUpdateReq
+		expResp  *mgmtpb.JoinResp
+		expErr   error
+	}{
+		"bad sys": {
+			req: &mgmtpb.JoinReq{
+				Sys: "bad sys",
+			},
+			expErr: errors.New("bad sys"),
+		},
+		"bad uuid": {
+			req: &mgmtpb.JoinReq{
+				Uuid: "bad uuid",
+			},
+			expErr: errors.New("bad uuid"),
+		},
+		"bad fault domain": {
+			req: &mgmtpb.JoinReq{
+				SrvFaultDomain: "bad fault domain",
+			},
+			expErr: errors.New("bad fault domain"),
+		},
+		"dupe host same rank diff uuid": {
+			req: &mgmtpb.JoinReq{
+				Rank: curMember.Rank.Uint32(),
+				Uuid: test.MockUUID(5),
+			},
+			expErr: errors.New("uuid changed"),
+		},
+		"dupe host diff rank same uuid": {
+			req: &mgmtpb.JoinReq{
+				Rank: 22,
+				Uuid: curMember.UUID.String(),
+			},
+			expErr: errors.New("already exists"),
+		},
+		"rejoining host": {
+			req: &mgmtpb.JoinReq{
+				Rank: curMember.Rank.Uint32(),
+				Uuid: curMember.UUID.String(),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank: curMember.Rank.Uint32(),
+						Uri:  curMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status: 0,
+				Rank:   curMember.Rank.Uint32(),
+				State:  mgmtpb.JoinResp_IN,
+			},
+		},
+		"rejoining host; NilRank": {
+			req: &mgmtpb.JoinReq{
+				Rank: uint32(system.NilRank),
+				Uuid: curMember.UUID.String(),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank: curMember.Rank.Uint32(),
+						Uri:  curMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status: 0,
+				Rank:   curMember.Rank.Uint32(),
+				State:  mgmtpb.JoinResp_IN,
+			},
+		},
+		"new host (non local)": {
+			req: &mgmtpb.JoinReq{
+				Rank: uint32(system.NilRank),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					// rank 0 is excluded, so shouldn't be in the map
+					{
+						Rank: newMember.Rank.Uint32(),
+						Uri:  newMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status:    0,
+				Rank:      newMember.Rank.Uint32(),
+				State:     mgmtpb.JoinResp_IN,
+				LocalJoin: false,
+			},
+		},
+		"new host (local)": {
+			req: &mgmtpb.JoinReq{
+				Addr: common.LocalhostCtrlAddr().String(),
+				Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+				Rank: uint32(system.NilRank),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					// rank 0 is excluded, so shouldn't be in the map
+					{
+						Rank: newMember.Rank.Uint32(),
+						Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status:    0,
+				Rank:      newMember.Rank.Uint32(),
+				State:     mgmtpb.JoinResp_IN,
+				LocalJoin: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Make a copy to avoid test side-effects.
+			curCopy := &system.Member{}
+			*curCopy = *curMember
+			curCopy.Rank = system.NilRank // ensure that db.data.NextRank is incremented
+
+			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			svc.startJoinLoop(ctx)
+
+			if tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			if tc.req.Uuid == "" {
+				tc.req.Uuid = newMember.UUID.String()
+			}
+			if tc.req.Addr == "" {
+				tc.req.Addr = newMember.Addr.String()
+			}
+			if tc.req.Uri == "" {
+				tc.req.Uri = newMember.FabricURI
+			}
+			if tc.req.SrvFaultDomain == "" {
+				tc.req.SrvFaultDomain = newMember.FaultDomain.String()
+			}
+			if tc.req.Nctxs == 0 {
+				tc.req.Nctxs = newMember.FabricContexts
+			}
+			if tc.req.Incarnation == 0 {
+				tc.req.Incarnation = newMember.Incarnation
+			}
+			peerAddr, err := net.ResolveTCPAddr("tcp", tc.req.Addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			peerCtx := peer.NewContext(ctx, &peer.Peer{Addr: peerAddr})
+
+			setupMockDrpcClient(svc, tc.guResp, nil)
+			ei := svc.harness.instances[0].(*EngineInstance)
+			mdc := ei._drpcClient.(*mockDrpcClient)
+
+			gotResp, gotErr := svc.Join(peerCtx, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			gotGuReq := new(mgmtpb.GroupUpdateReq)
+			if err := proto.Unmarshal(mdc.calls[len(mdc.calls)-1].Body, gotGuReq); err != nil {
+				t.Fatal(err)
+			}
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+				protocmp.SortRepeatedFields(&mgmtpb.GroupUpdateReq{}, "engines"),
+			}
+			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }

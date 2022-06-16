@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -50,57 +50,6 @@ class PoolCreateTests(PoolTestBase):
         # Create 1 pool using 90% of the available capacity
         self.add_pool_qty(1, namespace="/run/pool_2/*", create=False)
         self.check_pool_creation(120)
-
-    def test_create_no_space(self):
-        """JIRA ID: DAOS-3728.
-
-        Test Description:
-            Create a pool using most of the capacity of one server on only one
-            server.  Verify that attempting to create  a pool of the same size
-            across all of the servers fails due to no space.  Now verify that
-            creating a pool of the same size on across all but the first pool
-            succeeds.
-
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_no_space
-        """
-        # Define three pools to create:
-        #   - one pool using 90% of the available capacity of one server
-        #   - one pool using 90% of the available capacity of all servers
-        #   - one pool using 90% of the available capacity of the other server
-        self.add_pool_qty(3, namespace="/run/pool_2/*", create=False)
-        ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
-        self.pool[1].target_list.update(ranks, "pool[1].target_list")
-        self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
-
-        # Disable failing the test if a pool create fails
-        self.dmg.exit_status_exception = False
-
-        # Create all three pools.  The creation of the first and third pools
-        # should succeed.  The second pool creation should fail due to not
-        # enough space.
-        self.pool[0].create()
-        self.assertEqual(
-            self.pool[0].dmg.result.exit_status, 0,
-            "Creating a large capacity pool on a single server should succeed."
-        )
-        self.pool[1].create()
-        self.assertTrue(
-            self.pool[1].dmg.result.exit_status == 1 and
-            "-1007" in self.pool[1].dmg.result.stdout_text,
-            "Creating a large capacity pool across all servers should fail "
-            "due to an existing pool on one server consuming the required "
-            "space."
-        )
-        self.pool[2].create()
-        self.assertEqual(
-            self.pool[2].dmg.result.exit_status, 0,
-            "Creating a large capacity pool across all but the first server "
-            "should succeed."
-        )
 
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.

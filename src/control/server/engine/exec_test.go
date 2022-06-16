@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -78,13 +79,11 @@ func createFakeBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// capture this and set on exit to accommodate the addition of
-	// netdetect dependencies
-	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
-	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
-
+	// stash this to restore after scrubbing the rest of the env
+	ld_library_path := os.Getenv("LD_LIBRARY_PATH")
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
+	os.Setenv("LD_LIBRARY_PATH", ld_library_path)
 }
 
 func TestRunnerContextExit(t *testing.T) {
@@ -94,10 +93,10 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
+		WithEnvPassThrough(testModeVar)
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
@@ -131,11 +130,10 @@ func TestRunnerNormalExit(t *testing.T) {
 	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
-			"OFI_INTERFACE", allowedUserEnv).
+		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv, "LD_LIBRARY_PATH").
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
@@ -146,7 +144,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)

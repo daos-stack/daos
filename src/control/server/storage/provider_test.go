@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package storage
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -16,7 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -104,14 +103,14 @@ func Test_scanBdevs(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			scanFn := func(r BdevScanRequest) (*BdevScanResponse, error) {
 				return tc.scanResp, tc.scanErr
 			}
 
 			gotResp, gotErr := scanBdevs(log, tc.scanReq, tc.cache, scanFn)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -128,12 +127,16 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mockScmTier := NewTierConfig().WithStorageClass(ClassDcpm.String()).
+		WithScmMountPoint("/mnt/daos0").
+		WithScmDeviceList("/dev/pmem0")
 
 	for name, tc := range map[string]struct {
-		cfg       *Config
-		getTopoFn topologyGetter
-		expReq    BdevWriteConfigRequest
-		expErr    error
+		cfg        *Config
+		vmdEnabled bool
+		getTopoFn  topologyGetter
+		expReq     *BdevWriteConfigRequest
+		expErr     error
 	}{
 		"nil config": {
 			expErr: errors.New("nil config"),
@@ -144,16 +147,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 		},
 		"no bdev configs": {
 			cfg: &Config{
-				Tiers: TierConfigs{
-					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
-						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
-						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
-				},
+				Tiers:         TierConfigs{mockScmTier},
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID:       os.Geteuid(),
 				OwnerGID:       os.Getegid(),
 				TierProps:      []BdevTierProperties{},
@@ -164,17 +162,13 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 		"hotplug disabled": {
 			cfg: &Config{
 				Tiers: TierConfigs{
-					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
-						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
-						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
-					NewTierConfig().
-						WithBdevClass(ClassNvme.String()).
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x00-0x7f"),
 				},
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -186,18 +180,14 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 		"range specified": {
 			cfg: &Config{
 				Tiers: TierConfigs{
-					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
-						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
-						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
-					NewTierConfig().
-						WithBdevClass(ClassNvme.String()).
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x70-0x7f"),
 				},
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -209,20 +199,40 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				HotplugBusidEnd:   0x7f,
 			},
 		},
+		"range specified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
 		"range unspecified": {
 			cfg: &Config{
 				Tiers: TierConfigs{
-					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
-						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
-						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
-					NewTierConfig().
-						WithBdevClass(ClassNvme.String()),
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
 				},
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -233,14 +243,62 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				HotplugBusidEnd: 0x07,
 			},
 		},
+		"range unspecified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
+		"accel properties; spdk": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			gotReq, gotErr := BdevWriteConfigRequestFromConfig(context.TODO(), log, tc.cfg,
-				tc.getTopoFn)
-			common.CmpErr(t, tc.expErr, gotErr)
+				tc.vmdEnabled, tc.getTopoFn)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}

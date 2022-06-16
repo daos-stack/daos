@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,9 +82,8 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    daos_epoch_t epoch,
-					    struct evt_desc *desc, int intent,
-					    void *args);
+					    daos_epoch_t epoch, struct evt_desc *desc,
+					    int intent, bool retry, void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
@@ -154,8 +153,8 @@ struct evt_filter {
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
+	(filter)->fr_epr.epr_hi, (filter)->fr_epoch,		\
+	(filter)->fr_punch_epc, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -283,11 +282,15 @@ enum evt_feats {
 	 *  evenly
 	 */
 	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
+	/** Place new feats above this line */
+	EVT_FEATS_END,
+	/** Calculated mask for all supported feats */
+	EVT_FEATS_SUPPORTED		= ((EVT_FEATS_END - 1) << 1) - 1,
 };
 
+/** These are "internal" flags meant to match the btree ones */
+
 #define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST
-#define EVT_FEATS_SUPPORTED	\
-	(EVT_FEAT_SORT_SOFF | EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN)
 
 /* Information about record to insert */
 struct evt_entry_in {
@@ -584,6 +587,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
  * \param csum_bufp	[OUT]	The pointer for the csum copy location.
+ *
+ * \return	0 success
+ *		1 success, detected potential need for aggregation
+ *		< 0 on error
  */
 int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	       uint8_t **csum_bufp);
@@ -774,5 +781,28 @@ int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
  */
 int evt_overhead_get(int alloc_overhead, int tree_order,
 		     struct daos_tree_overhead *ovhd);
+
+/** Get the tree feats
+ *
+ * \param[in]	root	evtree root
+ *
+ * return	Tree feats
+ */
+static inline uint64_t
+evt_feats_get(struct evt_root *root)
+{
+	return root->tr_feats;
+}
+
+/**
+ * Set the tree feats.
+ *
+ * \param root[in]	Tree root
+ * \param umm[in]	umem instance
+ * \param feats[in]	feats to set
+ *
+ * \return 0 on success
+ */
+int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
 
 #endif /* __DAOS_EV_TREE_H__ */

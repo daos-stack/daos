@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,6 +161,7 @@ subtree_destroy(const char *path)
 
 struct tgt_destroy_args {
 	struct d_uuid		 tda_id;
+	struct dss_xstream	*tda_dx;
 	char			*tda_path;
 	int			 tda_rc;
 };
@@ -603,6 +604,7 @@ struct tgt_create_args {
 	char			*tca_newborn;
 	char			*tca_path;
 	struct ds_pooltgts_rec	*tca_ptrec;
+	struct dss_xstream	*tca_dx;
 	daos_size_t		 tca_scm_size;
 	daos_size_t		 tca_nvme_size;
 	int			 tca_rc;
@@ -613,6 +615,8 @@ tgt_create_preallocate(void *arg)
 {
 	struct tgt_create_args	*tca = arg;
 	int			 rc;
+
+	(void)dss_xstream_set_affinity(tca->tca_dx);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(tca->tca_ptrec->dptr_uuid, NULL, NULL,
@@ -720,6 +724,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	tca.tca_scm_size  = tc_in->tc_scm_size;
 	tca.tca_nvme_size = tc_in->tc_nvme_size;
+	tca.tca_dx = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_create_preallocate, &tca);
 	if (rc) {
 		rc = daos_errno2der(errno);
@@ -841,6 +846,8 @@ tgt_destroy_cleanup(void *arg)
 	char			*zombie;
 	int			 rc;
 
+	(void)dss_xstream_set_affinity(tda->tda_dx);
+
 	/** move target directory to ZOMBIES */
 	rc = path_gen(tda->tda_id.uuid, zombies_path, NULL, NULL, &zombie);
 	if (rc)
@@ -888,8 +895,9 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	if (rc && rc != -DER_BUSY)
 		goto out;
 
-	tda.tda_path   = path;
-	tda.tda_rc     = rc;
+	tda.tda_path = path;
+	tda.tda_rc   = rc;
+	tda.tda_dx   = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_destroy_cleanup, &tda);
 	if (rc) {
 		rc = daos_errno2der(errno);

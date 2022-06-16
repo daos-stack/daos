@@ -1,82 +1,75 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-# this needs to be disabled as list_tests.py is still using python2
-# pylint: disable=raise-missing-from
-
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from collections import OrderedDict
 from datetime import datetime
+from tempfile import TemporaryDirectory
 import errno
 import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess   # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
+
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
 
 # Graft some functions from xml.etree into defusedxml etree.
 ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
 
-
-from avocado.utils.distro import detect
-from ClusterShell.NodeSet import NodeSet
-from ClusterShell.Task import task_self
-
-try:
-    # For python versions >= 3.2
-    from tempfile import TemporaryDirectory
-
-except ImportError:
-    # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from tempfile import mkdtemp
-    from shutil import rmtree
-
-    class TemporaryDirectory(object):
-        # pylint: disable=too-few-public-methods
-        """Create a temporary directory.
-
-        When the last reference of this object goes out of scope the directory
-        and its contents are removed.
-        """
-
-        def __init__(self):
-            """Initialize a TemporaryDirectory object."""
-            self.name = mkdtemp()
-
-        def __del__(self):
-            """Destroy a TemporaryDirectory object."""
-            rmtree(self.name)
-
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
-YAML_KEYS = {
-    "test_servers": "test_servers",
-    "test_clients": "test_clients",
-    "bdev_list": "nvme",
-}
-YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
+YAML_KEYS = OrderedDict(
+    [
+        ("test_servers", "test_servers"),
+        ("test_clients", "test_clients"),
+        ("bdev_list", "nvme"),
+        ("timeout", "timeout_multiplier"),
+        ("timeouts", "timeout_multiplier"),
+        ("clush_timeout", "timeout_multiplier"),
+        ("ior_timeout", "timeout_multiplier"),
+        ("job_manager_timeout", "timeout_multiplier"),
+        ("pattern_timeout", "timeout_multiplier"),
+        ("pool_query_timeout", "timeout_multiplier"),
+        ("rebuild_timeout", "timeout_multiplier"),
+        ("srv_timeout", "timeout_multiplier"),
+        ("storage_prepare_timeout", "timeout_multiplier"),
+        ("storage_format_timeout", "timeout_multiplier"),
+    ]
+)
+PROVIDER_KEYS = OrderedDict(
+    [
+        ("cxi", "ofi+cxi"),
+        ("verbs", "ofi+verbs"),
+        ("ucx", "ucx+dc_x"),
+        ("tcp", "ofi+tcp"),
+    ]
+)
 
 
-def display(args, message):
+def display(args, message, level=1):
     """Display the message if verbosity is set.
 
     Args:
         args (argparse.Namespace): command line arguments for this program
         message (str): message to display if verbosity is set
+        level (int, optional): minimum verbosity level.  Defaults to 1.
     """
-    if args.verbose > 0:
+    if args.verbose >= level:
         print(message)
 
 
@@ -97,9 +90,8 @@ def get_build_environment(args):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    build_vars_file = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "../../.build_vars.json")
+    build_vars_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   "../../.build_vars.json")
     try:
         with open(build_vars_file) as vars_file:
             return json.load(vars_file)
@@ -112,6 +104,8 @@ def get_build_environment(args):
             if not args.list:
                 raise
             return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    # Pylint warns about possible return types if we take this path, so ensure we do not.
+    assert False
 
 
 def get_temporary_directory(args, base_dir=None):
@@ -160,7 +154,7 @@ def set_test_environment(args):
 
     if not args.list:
         # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
-        set_interface_environment()
+        set_interface_environment(args)
 
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
@@ -182,13 +176,13 @@ def set_test_environment(args):
     # Python paths required for functional testing
     set_python_environment()
 
-    if args.verbose > 0:
+    if args.verbose > 2:
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
 
 
-def set_interface_environment():
+def set_interface_environment(args):
     """Set up the interface environment variables.
 
     Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
@@ -196,6 +190,9 @@ def set_interface_environment():
 
     The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
     configuration file.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
     """
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
@@ -203,48 +200,13 @@ def set_interface_environment():
         # Find all the /sys/class/net interfaces on the launch node
         # (excluding lo)
         print("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = {}
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-        for device in sorted(net_list):
-            if device == "bonding_masters":
-                continue
-            # Get the interface state - only include active (up) interfaces
-            device_operstate = os.path.join(net_path, device, "operstate")
-            with open(device_operstate, "r") as file_handle:
-                state = file_handle.read().strip()
-            # Only include interfaces that are up
-            if state.lower() == "up":
-                # Get the interface speed - used to select the fastest
-                # available
-                device_speed = os.path.join(net_path, device, "speed")
-                with open(device_speed, "r") as file_handle:
-                    try:
-                        speed = int(file_handle.read().strip())
-                        # KVM/Qemu/libvirt returns an EINVAL
-                    except IOError as ioerror:
-                        if ioerror.errno == errno.EINVAL:
-                            speed = 1000
-                        else:
-                            raise
-                print(
-                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                        device, speed, state))
-                # Only include the first active interface for each speed -
-                # first is determined by an alphabetic sort: ib0 will be
-                # checked before ib1
-                if speed not in available_interfaces:
-                    available_interfaces[speed] = device
-        print("Available interfaces: {}".format(available_interfaces))
+        available_interfaces = get_available_interfaces(args)
         try:
             # Select the fastest active interface available by sorting
             # the speed
-            interface = \
-                available_interfaces[sorted(available_interfaces)[-1]]
+            interface = available_interfaces[sorted(available_interfaces)[-1]]
         except IndexError:
-            print(
-                "Error obtaining a default interface from: {}".format(
-                    os.listdir(net_path)))
+            print("Error obtaining a default interface!")
             sys.exit(1)
 
     # Update env definitions
@@ -258,6 +220,97 @@ def set_interface_environment():
             print("Testing with {} unset".format(name))
 
 
+def get_available_interfaces(args):
+    # pylint: disable=too-many-nested-blocks
+    """Get a dictionary of active available interfaces and their speeds.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        dict: a dictionary of speeds with the first available active interface providing that speed
+
+    """
+    available_interfaces = {}
+    all_hosts = NodeSet()
+    all_hosts.update(args.test_servers)
+    all_hosts.update(args.test_clients)
+    host_list = list(all_hosts)
+
+    # Find any active network interfaces on the server or client hosts
+    net_path = os.path.join(os.path.sep, "sys", "class", "net")
+    operstate = os.path.join(net_path, "*", "operstate")
+    command = " | ".join(
+        ["grep -l 'up' {}".format(operstate), "grep -Ev '/(lo|bonding_masters)/'", "sort"])
+    task = get_remote_output(list(host_list), command)
+    if check_remote_output(task, command):
+        # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
+        active_interfaces = {}
+        for output, nodelist in task.iter_buffers():
+            output_lines = [line.decode("utf-8") for line in output]
+            nodeset = NodeSet.fromlist(nodelist)
+            for line in output_lines:
+                try:
+                    interface = line.split("/")[-2]
+                    if interface not in active_interfaces:
+                        active_interfaces[interface] = nodeset
+                    else:
+                        active_interfaces[interface].update(nodeset)
+                except IndexError:
+                    pass
+
+        # From the active interface dictionary find all the interfaces that are common to all hosts
+        print("Active network interfaces detected:")
+        common_interfaces = []
+        for interface, node_set in active_interfaces.items():
+            print(
+                "  - {0:<8} on {1} (Common={2})".format(interface, node_set, node_set == all_hosts))
+            if node_set == all_hosts:
+                common_interfaces.append(interface)
+
+        # Find the speed of each common active interface in order to be able to choose the fastest
+        interface_speeds = {}
+        for interface in common_interfaces:
+            speed = None
+            command = "cat {}".format(os.path.join(net_path, interface, "speed"))
+            task = get_remote_output(list(host_list), command)
+            if check_remote_output(task, command):
+                # Verify each host has the same interface speed
+                output_data = list(task.iter_buffers())
+                if len(output_data) > 1:
+                    print(
+                        "ERROR: Non-homogeneous interface speed detected for {} on {}.".format(
+                            interface, all_hosts))
+                else:
+                    for line in output_data[0][0]:
+                        try:
+                            interface_speeds[interface] = int(line.strip())
+                        except IOError as io_error:
+                            # KVM/Qemu/libvirt returns an EINVAL
+                            if io_error.errno == errno.EINVAL:
+                                interface_speeds[interface] = 1000
+                        except ValueError:
+                            # Any line not containing a speed (integer)
+                            pass
+            else:
+                print("Error detecting speed of {} on {}".format(interface, all_hosts))
+
+        if interface_speeds:
+            print("Active network interface speeds on {}:".format(all_hosts))
+
+        for interface, speed in interface_speeds.items():
+            print("  - {0:<8} (speed: {1:>6})".format(interface, speed))
+            # Only include the first active interface for each speed - first is
+            # determined by an alphabetic sort: ib0 will be checked before ib1
+            if speed is not None and speed not in available_interfaces:
+                available_interfaces[speed] = interface
+    else:
+        print("Error obtaining a default interface on {} from {}".format(all_hosts, net_path))
+
+    print("Available interfaces on {}: {}".format(all_hosts, available_interfaces))
+    return available_interfaces
+
+
 def set_provider_environment(interface, args):
     """Set up the provider environment variables.
 
@@ -268,35 +321,52 @@ def set_provider_environment(interface, args):
         interface (str): the current interface being used.
     """
     # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if args.provider:
+        provider = args.provider
+    else:
+        provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
-        provider = "ofi+tcp"
-        # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
-        command = "sudo mst status -v"
+        print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
+
+        # Check for a Omni-Path interface
+        command = "sudo opainfo"
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
-            # Detect the provider for the specified interface
-            print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
-            command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
-            task = get_remote_output(list(args.test_servers), command)
-            if check_remote_output(task, command):
-                # Verify each server host has the same interface driver
-                output_data = list(task.iter_buffers())
-                if len(output_data) > 1:
-                    print("ERROR: Non-homogeneous drivers detected.")
-                    sys.exit(1)
-                # Select the provider - currently use verbs or tcp
-                for line in output_data[0][0]:
-                    provider_name = line.decode("utf-8").replace(":", "")
-                    # Temporary code to only enable verbs on HW Large stages
-                    if "verbs" in provider_name:
-                        provider = "ofi+verbs"
-                        break
-                    if "tcp" in provider_name:
-                        provider = "ofi+tcp"
-                        break
-        else:
-            print("No Infiniband devices found - using tcp")
+            # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
+            print("  Excluding verbs provider for Omni-Path adapters")
+            PROVIDER_KEYS.pop("verbs")
+
+        # Detect all supported providers
+        command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+        task = get_remote_output(list(args.test_servers), command)
+        if check_remote_output(task, command):
+            # Verify each server host has the same interface driver
+            output_data = list(task.iter_buffers())
+            if len(output_data) > 1:
+                print("ERROR: Non-homogeneous drivers detected.")
+                sys.exit(1)
+
+            # Find all supported providers
+            keys_found = []
+            for line in output_data[0][0]:
+                provider_name = line.decode("utf-8").replace(":", "")
+                if provider_name in PROVIDER_KEYS:
+                    keys_found.append(provider_name)
+
+            # Select the preferred found provider based upon PROVIDER_KEYS order
+            print("Supported providers detected: {}".format(keys_found))
+            for key in PROVIDER_KEYS:
+                if key in keys_found:
+                    provider = PROVIDER_KEYS[key]
+                    break
+
+        # Report an error if a provider cannot be found
+        if not provider:
+            print(
+                "Error obtaining a supported provider for {} from: {}".format(
+                    interface, list(PROVIDER_KEYS)))
+            sys.exit(1)
+
         print("  Found {} provider for {}".format(provider, interface))
 
     # Update env definitions
@@ -309,7 +379,7 @@ def set_python_environment():
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.abspath("cart/util"),
+        os.path.abspath("cart"),
     ]
 
     required_python_paths.extend(site.getsitepackages())
@@ -347,14 +417,12 @@ def run_command(cmd):
     print("Running {}".format(" ".join(cmd)))
 
     try:
-        # pylint: disable=consider-using-with
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        stdout, _ = process.communicate()
-        retcode = process.poll()
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True) as process:
+            stdout, _ = process.communicate()
+            retcode = process.poll()
     except Exception as error:
-        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error)) from error
     if retcode:
         raise RuntimeError(
             "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
@@ -641,7 +709,7 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address list contains VMD address.
+        vmd_flag (bool): whether server hosts contains VMD drives.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -649,244 +717,188 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
             dictionary entry will be set to None.
 
     """
+    # Replace any placeholders in the extra yaml file, if provided
+    if args.extra_yaml:
+        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir)
+
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yaml_file, env_vars = replace_yaml_file(
-            "{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir)
         test_file["yaml"] = yaml_file
-        test_file["env"] = env_vars
+
+        # Display the modified yaml file variants with debug
+        command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
+        if args.extra_yaml:
+            command.append(args.extra_yaml)
+        command.extend(["--summary", "3"])
+        display(args, get_output(command, False), 2)
 
     return test_files
 
 
-def get_nvme_replacement(args):
+def get_device_replacement(args):
     """Determine the value to use for the '--nvme' command line argument.
 
-    Parse the lspci output for any NMVe devices, e.g.
-        $ lspci | grep 'Non-Volatile memory controller:'
-        5e:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
-        5f:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
-        81:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+    Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
+    controlled) and use these values to replace placeholder devices in avocado test yaml files.
 
-    Optionally filter the above output even further with a specified search
-    string (e.g. '--nvme=auto:Optane'):
-        $ lspci | grep 'Non-Volatile memory controller:' | grep 'Optane'
-        81:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+    Supported auto '--nvme' arguments:
+        auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
+                              (connected to a VMD enabled NVMe device) in the homogeneous 'lspci -D'
+                              output from each server.  Optionally grep the list of NVMe or VMD
+                              enabled NVMe devices for 'filter'.
+        auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device in
+                              the homogeneous 'lspci -D' output from each server.  Optionally grep
+                              this output for 'filter'.
+        auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a VMD
+                              enabled NVMe device in the homogeneous 'lspci -D' output from each
+                              server.  Optionally grep the list of VMD enabled NVMe devices for
+                              'filter'.
 
     Args:
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
-        str: a comma-separated list of nvme device pci addresses available on
-            all of the specified test servers
-        bool: VMD PCI address included in the pci address string (True)
-              VMD PCI address not included in the pci address string (False)
-              Defaults to False (For NVME only)
+        tuple:
+            str: a comma-separated list of nvme device pci addresses available on
+                all of the specified test servers
+            bool: VMD PCI address included in the pci address string (True)
+                VMD PCI address not included in the pci address string (False)
+                Defaults to False (For NVME only)
 
     """
-    # A list of server host is required to able to auto-detect NVMe devices
-    if not args.test_servers:
-        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
-        sys.exit(1)
-
-    # Get a list of NVMe, VMD devices from each specified server host
-    # if nvme:auto is set, all PCI Non-volatile memory controller
-    # devices are considered NVME (some NVMEs might be behind the VMD
-    # controller). if nvme:vmd, then ignore the NVME
-    # PCI addressed devices behind the VMD controller.
+    devices = []
+    device_types = []
     host_list = list(args.test_servers)
 
-    command_list = [
-        "/sbin/lspci -D",
-        "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-        "Non-Volatile memory controller:'"]
-    if ":" in args.nvme:
-        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+    # Separate any optional filter from the key
+    dev_filter = None
+    nvme_args = args.nvme.split(":")
+    if len(nvme_args) > 1:
+        dev_filter = nvme_args[1]
 
-    command = " | ".join(command_list)
+    # First check for any VMD disks, if requested
+    if nvme_args[0] in ["auto", "auto_vmd"]:
+        vmd_devices = auto_detect_devices(host_list, "NVMe", "5", dev_filter)
+        if vmd_devices:
+            # Find the VMD controller for the matching VMD disks
+            vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
+            devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
+        elif not dev_filter:
+            # Use any VMD controller if no VMD disks found w/o a filter
+            devices = auto_detect_devices(host_list, "VMD", "4", None)
+        if devices:
+            device_types.append("VMD")
 
-    task = get_remote_output(host_list, command)
+    # Second check for any non-VMD NVMe disks, if requested
+    if nvme_args[0] in ["auto", "auto_nvme"]:
+        dev_list = auto_detect_devices(host_list, "NVMe", "4", dev_filter)
+        if dev_list:
+            devices.extend(dev_list)
+            device_types.append("NVMe")
 
-    # Verify the command was successful on each server host
-    if not check_remote_output(task, command):
-        print("ERROR: Issuing commands to detect NVMe PCI addresses.")
+    # If no VMD or NVMe devices were found exit
+    if not devices:
+        print("ERROR: Unable to auto-detect devices for the '--nvme {}' argument".format(args.nvme))
         sys.exit(1)
 
-    # Verify each server host has the same NVMe PCI addresses
-    output_data = list(task.iter_buffers())
-    if len(output_data) > 1:
-        print("ERROR: Non-homogeneous NVMe PCI addresses.")
-        sys.exit(1)
-
-    # Get the list of NVMe PCI addresses found in the output
-    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    devices = find_pci_address(output_str)
-    print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
-    return ",".join(devices)
+    print(
+        "Auto-detected {} devices on {}: {}".format(
+            " & ".join(device_types), args.test_servers, devices))
+    return ",".join(devices), "VMD" in device_types
 
 
-def get_vmd_replacement(args):
-    """Determine the value to use for the '--nvme=auto_vmd*' command line argument.
-
-    Parse the lspci output for any VMD devices, (e.g. --nvme=auto_vmd)
-        $ lspci -D | grep Volume
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
-
-    Other command line options which will be supported are:
-    (e.g. '--nvme=auto_vmd_disks') [Use all NVME devices behind the VMD
-    controller]
-        $ lspci | grep 'Non-Volatile memory controller:' | grep '10001'
-        10001:01:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-
-    (e.g. '--name=auto_vmd_mixed) [Use the NVME devices and VMD controller PCI
-    address]
-        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
-        0000:da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-
-    (e.g. '--name=auto_vmd_nvme) [Use the NVME devices and NVME devices behind
-    VMD controller]
-        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
-        0000:da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        10001:01:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+def auto_detect_devices(host_list, device_type, length, device_filter=None):
+    """Get a list of NVMe/VMD devices found on each specified host.
 
     Args:
-        args (argparse.Namespace): command line arguments for this program
+        host_list (list): list of host on which to find the NVMe/VMD devices
+        device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
+        length (str): number of digits to match in the first PCI domain number
+        device_filter (str, optional): optional filter to apply to device searching. Defaults to
+            None.
 
     Returns:
-        str: a comma-separated list of vmd,nvme device pci addresses available
-        on all of the specified test servers
-        bool: VMD PCI address included in the pci address string (True)
-              VMD PCI address not included in the pci address string (False)
+        list: A list of detected devices - empty if none found
 
     """
-    # A list of server host is required to able to auto-detect NVMe devices
-    if not args.test_servers:
-        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
-        sys.exit(1)
+    devices = []
 
-    # Get a list of NVMe, VMD devices from each specified server host
-    # if nvme:auto is set, all PCI Non-volatile memory controller
-    # devices are considered NVME (some NVMEs might be behind the VMD
-    # controller). if nvme:vmd, then ignore the NVME
-    # PCI addressed devices behind the VMD controller.
-    host_list = list(args.test_servers)
-    vmd_include_flag = False
-
-    if args.nvme == "auto_vmd":
-        command_list = [
-            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
-        vmd_include_flag = True
-    elif args.nvme == "auto_vmd_disks":
+    # Find the devices on each host
+    if device_type == "VMD":
+        # Exclude the controller revision as this causes heterogeneous clush output
         command_list = [
             "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-    elif args.nvme == "auto_vmd_nvme":
+            "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
+            "grep -E 'Volume Management Device NVMe RAID Controller'",
+            r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
+    elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-    elif args.nvme == "auto_vmd_mixed":
-        command_list1 = [
-            "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-        command_list2 = [
-            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
-        vmd_include_flag = True
+            "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
+            "grep -E 'Non-Volatile memory controller:'"]
+        if device_filter and device_filter.startswith("-"):
+            command_list.append("grep -v '{}'".format(device_filter[1:]))
+        elif device_filter:
+            command_list.append("grep '{}'".format(device_filter))
     else:
-        print("ERROR: Invalid --nvme argument")
+        print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
         sys.exit(1)
-
-    if ":" in args.nvme and args.nvme != "auto_vmd_mixed":
-        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
-    elif ":" in args.nvme and args.nvme == "auto_vmd_mixed":
-        command_list1.append("grep '{}'".format(args.nvme.split(":")[1]))
-        command_list2.append("grep '{}'".format(args.nvme.split(":")[1]))
-
-    if args.nvme != "auto_vmd_mixed":
-        command = " | ".join(command_list)
-    else:
-        command1 = " | ".join(command_list1)
-        command2 = " | ".join(command_list2)
-        command = command1 + ";" + command2
-
+    command = " | ".join(command_list) + " || :"
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
-    if not check_remote_output(task, command):
-        print("ERROR: Issuing commands to detect VMD/NVME PCI addresses.")
-        sys.exit(1)
+    if check_remote_output(task, command):
+        # Verify each server host has the same VMD PCI addresses
+        output_data = list(task.iter_buffers())
+        if len(output_data) > 1:
+            print("ERROR: Non-homogeneous {} PCI addresses.".format(device_type))
+        elif len(output_data) == 1:
+            # Get the devices from the successful, homogeneous command output
+            output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+            devices = find_pci_address(output_str)
 
-    # Verify each server host has the same VMD/NVMe PCI addresses
-    output_data = list(task.iter_buffers())
-    if len(output_data) > 1:
-        print("ERROR: Non-homogeneous VMD/NVMe PCI addresses.")
-        sys.exit(1)
-
-    # Get the list of NVMe PCI addresses found in the output
-    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    all_vmd_devices = find_pci_address(output_str)
-
-    # Get the only VMD device addresses which has NVMe device connected.
-    devices = get_vmd_address_backed_nvme(host_list, all_vmd_devices)
-    print("Auto-detected VMD device which has NVMe devices connected {}: {}"
-          .format(host_list, devices))
-
-    return ",".join(devices), vmd_include_flag
+    return devices
 
 
-def get_vmd_address_backed_nvme(host_list, value):
+def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
     """Find valid VMD address which has backing NVMe.
 
     Args:
         host_list (list): list of hosts
-        value (list): list of all PCI address.
+        vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
+        vmd_controllers (list): list of PCI domain numbers for each VMD controller
 
     Returns:
-        list: a list of the VMD PCI addresses only which has connected NVMe
-              devices.
+        list: a list of the VMD controller PCI domain numbers which are connected to the VMD disks
 
     """
-    command = "ls -l /sys/block/ | grep nvme | cut -d\'>\' -f2 | cut -d'/' -f4"
-
+    disk_controllers = []
+    command_list = ["ls -l /sys/block/", "grep nvme"]
+    if vmd_disks:
+        command_list.append("grep -E '({0})'".format("|".join(vmd_disks)))
+    command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
+    command = " | ".join(command_list) + " || :"
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
-        print("ERROR: Issuing commands ls -l /sys/block/")
-        sys.exit(1)
+        print("ERROR: Issuing command '{}'".format(command))
+    else:
+        # Verify each server host has the same NVMe devices behind the same VMD addresses.
+        output_data = list(task.iter_buffers())
+        if len(output_data) > 1:
+            print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
+        elif len(output_data) == 1:
+            # Add any VMD controller addresses found in the /sys/block output that are also
+            # included in the provided list of VMD controllers.
+            output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+            for device in vmd_controllers:
+                if device in output_str:
+                    disk_controllers.append(device)
 
-    # Verify each server host has the same NVMe device behind VMD addresses.
-    output_data = list(task.iter_buffers())
-    if len(output_data) > 1:
-        print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
-        sys.exit(1)
-
-    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-
-    # Remove the VMD PCI address if no NVMe is backed-up and connected.
-    for device in value:
-        if device not in output_str:
-            value.remove(device)
-
-    return value
+    return disk_controllers
 
 
 def find_pci_address(value):
@@ -903,7 +915,8 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
+def replace_yaml_file(yaml_file, args, yaml_dir):
+    # pylint: disable=too-many-nested-blocks
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -932,89 +945,103 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address includes VMD address (True)
-                         PCI address doesn't include VMD address (False).
-                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
-        env_vars (dict): Returns environment variable dictionary. Presently,
-            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
-    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
-    if args.test_servers or args.nvme:
+    if args.test_servers or args.nvme or args.timeout_multiplier:
         # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
+        display(args, "Detected yaml data: {}".format(yaml_data), 3)
         yaml_keys = list(YAML_KEYS.keys())
-        yaml_find = find_values(yaml_data, yaml_keys)
+        yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict))
 
         # Generate a list of values that can be used as replacements
-        new_values = {}
+        user_values = OrderedDict()
         for key, value in list(YAML_KEYS.items()):
             args_value = getattr(args, value)
             if isinstance(args_value, NodeSet):
-                new_values[key] = list(args_value)
+                user_values[key] = list(args_value)
+            elif isinstance(args_value, str):
+                user_values[key] = args_value.split(",")
             elif args_value:
-                new_values[key] = args_value.split(",")
+                user_values[key] = [args_value]
             else:
-                new_values[key] = []
+                user_values[key] = None
 
         # Assign replacement values for the test yaml entries to be replaced
-        display(args, "Detecting replacements for {} in {}".format(
-            yaml_keys, yaml_file))
+        display(args, "Detecting replacements for {} in {}".format(yaml_keys, yaml_file))
         display(args, "  Found values: {}".format(yaml_find))
-        display(args, "  New values:   {}".format(new_values))
+        display(args, "  User values:  {}".format(dict(user_values)))
 
-        for key in YAML_KEY_ORDER:
+        for key, user_value in user_values.items():
             # If the user did not provide a specific list of replacement
             # test_clients values, use the remaining test_servers values to
             # replace test_clients placeholder values
-            if key == "test_clients" and not new_values[key]:
-                new_values[key] = new_values["test_servers"]
+            if key == "test_clients" and not user_value:
+                user_value = user_values["test_servers"]
 
             # Replace test yaml keys that were:
             #   - found in the test yaml
             #   - have a user-specified replacement
-            if key in yaml_find and new_values[key]:
+            if key in yaml_find and user_value:
+                values_to_replace = []
                 if key.startswith("test_"):
                     # The entire server/client test yaml list entry is replaced
                     # by a new test yaml list entry, e.g.
                     #   '- serverA' --> '- wolf-1'
                     value_format = "- {}"
-                    values_to_replace = [
-                        value_format.format(item) for item in yaml_find[key]]
+                    values_to_replace = [value_format.format(item) for item in yaml_find[key]]
 
-                else:
+                elif key == "bdev_list":
                     # Individual bdev_list NVMe PCI addresses in the test yaml
                     # file are replaced with the new NVMe PCI addresses in the
                     # order they are found, e.g.
                     #   0000:81:00.0 --> 0000:12:00.0
                     value_format = "\"{}\""
-                    values_to_replace = [
-                        value_format.format(item)
-                        for item in find_pci_address(yaml_find[key])]
-                    # if VMD pci address in present under nvme_data,
-                    # set DAOS_ENABLE_VMD to True
-                    if vmd_flag is True:
-                        env_vars["DAOS_ENABLE_VMD"] = "True"
+                    values_to_replace = [value_format.format(item) for item in yaml_find[key]]
+
+                else:
+                    # Timeouts - replace the entire timeout entry (key + value)
+                    # with the same key with its original value multiplied by the
+                    # user-specified value, e.g.
+                    #   timeout: 60 -> timeout: 600
+                    if isinstance(yaml_find[key], int):
+                        timeout_key = r":\s+".join([key, str(yaml_find[key])])
+                        timeout_new = max(1, round(yaml_find[key] * user_value[0]))
+                        replacements[timeout_key] = ": ".join([key, str(timeout_new)])
+                        display(
+                            args,
+                            "  - Timeout adjustment (x {}): {} -> {}".format(
+                                user_value, timeout_key, replacements[timeout_key]),
+                            3)
+                    elif isinstance(yaml_find[key], dict):
+                        for timeout_test, timeout_val in list(yaml_find[key].items()):
+                            timeout_key = r":\s+".join([timeout_test, str(timeout_val)])
+                            timeout_new = max(1, round(timeout_val * user_value[0]))
+                            replacements[timeout_key] = ": ".join([timeout_test, str(timeout_new)])
+                            display(
+                                args,
+                                "  - Timeout adjustment (x {}): {} -> {}".format(
+                                    user_value, timeout_key, replacements[timeout_key]),
+                                3)
 
                 # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
                     if value in replacements:
                         continue
                     try:
-                        replacements[value] = value_format.format(
-                            new_values[key].pop(0))
+                        replacements[value] = value_format.format(user_value.pop(0))
                     except IndexError:
                         replacements[value] = None
-                    display(
-                        args,
-                        "  - Replacement: {} -> {}".format(
-                            value, replacements[value]))
+
+        # Display the replacement values
+        for value, replacement in list(replacements.items()):
+            display(args, "  - Replacement: {} -> {}".format(value, replacement))
 
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
@@ -1061,7 +1088,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file, env_vars
+    return yaml_file
 
 
 def setup_test_directory(args, mode="all"):
@@ -1196,16 +1223,20 @@ def run_tests(test_files, tag_filter, args):
 
             # Execute this test
             test_command_list = list(command_list)
-            test_command_list.extend([
-                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+            test_command_list.extend(["--mux-yaml", test_file["yaml"]])
+            if args.extra_yaml:
+                test_command_list.append(args.extra_yaml)
+            test_command_list.extend(["--", test_file["py"]])
             run_return_code = time_command(test_command_list)
             if run_return_code != 0:
                 collect_crash_files(avocado_logs_dir)
             return_code |= run_return_code
 
             # Stop any agents or servers running via systemd
-            return_code |= stop_daos_agent_services(test_file["py"], args)
-            return_code |= stop_daos_server_service(test_file["py"], args)
+            if not args.disable_stop_daos:
+                return_code |= stop_daos_agent_services(test_file, args)
+                return_code |= stop_daos_server_service(test_file, args)
+                return_code |= reset_server_storage(test_file, args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -1326,7 +1357,8 @@ def run_tests(test_files, tag_filter, args):
 
 
 def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
+    """Get the contents of a yaml file as a dictionary, removing any mux tags and ignoring any
+    other tags present.
 
     Args:
         yaml_file (str): yaml file to read
@@ -1338,12 +1370,25 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+        """Helper class for parsing avocado yaml files"""
+
+        def forward_mux(self, node):
+            """Pass on mux tags unedited"""
+            return self.construct_mapping(node)
+
+        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+            """Drop any other tag"""
+            return None
+
+    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
+    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
+
     yaml_data = {}
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
-                file_data = open_file.read()
-                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)
@@ -1784,6 +1829,11 @@ def resolve_debuginfo(pkg):
     return package_info
 
 
+def is_el(distro):
+    """Return True if a distro is an EL."""
+    return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
+
+
 def install_debuginfos():
     """Install debuginfo packages.
 
@@ -1792,9 +1842,13 @@ def install_debuginfos():
         on this node also.
 
     """
+    # The distro_utils.py file is installed in the util sub-directory relative to this file location
+    sys.path.append(os.path.join(os.getcwd(), "util"))
+    from distro_utils import detect         # pylint: disable=import-outside-toplevel
+
     distro_info = detect()
     install_pkgs = [{'name': 'gdb'}]
-    if "centos" in distro_info.name.lower():
+    if is_el(distro_info):
         install_pkgs.append({'name': 'python3-debuginfo'})
 
     cmds = []
@@ -1828,8 +1882,7 @@ def install_debuginfos():
                 dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
                                  "nvml-debuginfo", "libpmemobj",
                                  "python36", "openmpi3", "gcc"])
-            elif "centos" in distro_info.name.lower() and \
-                 distro_info.version == "8":
+            elif is_el(distro_info) and distro_info.version == "8":
                 dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
                                  "python3", "openmpi", "gcc"])
             else:
@@ -1839,10 +1892,10 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
-            ["daos-client-" + rpm_version,
-             "daos-server-" + rpm_version,
-             "daos-tests-" + rpm_version])
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+            + ["daos-client-" + rpm_version,
+               "daos-server-" + rpm_version,
+               "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1864,7 +1917,7 @@ def install_debuginfos():
 
     # Now install a few pkgs that debuginfo-install wouldn't
     cmd = ["sudo", "dnf", "-y"]
-    if "centos" in distro_info.name.lower():
+    if is_el(distro_info) or "suse" in distro_info.name.lower():
         cmd.append("--enablerepo=*debug*")
     cmd.append("install")
     for pkg in install_pkgs:
@@ -1889,7 +1942,7 @@ def install_debuginfos():
     if retry:
         print("Going to refresh caches and try again")
         cmd_prefix = ["sudo", "dnf"]
-        if "centos" in distro_info.name.lower():
+        if is_el(distro_info) or "suse" in distro_info.name.lower():
             cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
@@ -2013,7 +2066,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
                 return_status = False
-            except RuntimeError:
+            except RuntimeError as error:
                 print("Error creating {}: {}".format(stack_trace_file, error))
                 return_status = False
         else:
@@ -2046,7 +2099,7 @@ def stop_daos_agent_services(test_file, args):
     """Stop any daos_agent.service running on the hosts running servers.
 
     Args:
-        test_file (str): the test python file
+        test_file (dict): a dictionary of the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2054,23 +2107,22 @@ def stop_daos_agent_services(test_file, args):
 
     """
     service = "daos_agent.service"
-    print("-" * 80)
-    print("Verifying {} after running '{}'".format(service, test_file))
-    if args.test_clients:
-        hosts = list(args.test_clients)
-    else:
-        hosts = list(args.test_servers)
+    client_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_clients"])
     local_host = socket.gethostname().split(".")[0]
-    if local_host not in hosts:
-        hosts.append(local_host)
-    return stop_service(hosts, service)
+    if local_host not in client_hosts:
+        client_hosts.append(local_host)
+    print("-" * 80)
+    print(
+        "Verifying {} on {} after running '{}'".format(
+            service, NodeSet.fromlist(client_hosts), test_file["py"]))
+    return stop_service(client_hosts, service)
 
 
 def stop_daos_server_service(test_file, args):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
-        test_file (str): the test python file
+        test_file (dict): a dictionary of the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2078,9 +2130,12 @@ def stop_daos_server_service(test_file, args):
 
     """
     service = "daos_server.service"
+    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
     print("-" * 80)
-    print("Verifying {} after running '{}'".format(service, test_file))
-    return stop_service(list(args.test_servers), service)
+    print(
+        "Verifying {} on {} after running '{}'".format(
+            service, NodeSet.fromlist(server_hosts), test_file["py"]))
+    return stop_service(server_hosts, service)
 
 
 def stop_service(hosts, service):
@@ -2188,6 +2243,41 @@ def indent_text(indent, text):
     return " " * indent + str(text)
 
 
+def reset_server_storage(test_file, args):
+    """Reset the server storage for the hosts that ran servers in the test.
+
+    This is a workaround to enable binding devices back to nvme or vfio-pci after they are unbound
+    from vfio-pci to nvme.  This should resolve the "NVMe not found" error seen when attempting to
+    start daos engines in the test.
+
+    Args:
+        test_file (dict): a dictionary of the test script/yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
+    print("-" * 80)
+    if server_hosts:
+        commands = [
+            "if lspci | grep -i nvme",
+            "then daos_server storage prepare -n --reset && " +
+            "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
+            "fi"]
+        print(
+            "Resetting server storage on {} after running '{}'".format(
+                NodeSet.fromlist(server_hosts), test_file["py"]))
+        if not spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
+            print(indent_text(2, "Ignoring any errors from these workaround commands"))
+    else:
+        print(
+            "Skipping resetting server storage after running '{}' - no server hosts".format(
+                test_file["py"]))
+    return 0
+
+
 def main():
     """Launch DAOS functional tests."""
     # Parse the command line arguments
@@ -2255,6 +2345,18 @@ def main():
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
     parser.add_argument(
+        "-dsd", "--disable_stop_daos",
+        action="store_true",
+        help="disable stopping DAOS servers and clients between running tests")
+    parser.add_argument(
+        "-e", "--extra_yaml",
+        action="store",
+        default=None,
+        type=str,
+        help="additional yaml file to include with the test yaml file. Any "
+             "entries in the extra yaml file can be used to replace an "
+             "existing entry in the test yaml file.")
+    parser.add_argument(
         "--failfast",
         action="store_true",
         help="stop the test suite after the first failure")
@@ -2262,6 +2364,14 @@ def main():
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
+    parser.add_argument(
+        "-ins", "--insecure_mode",
+        action="store_true",
+        help="Launch test with insecure-mode")
+    parser.add_argument(
+        "-j", "--jenkinslog",
+        action="store_true",
+        help="rename the avocado test logs directory for publishing in Jenkins")
     parser.add_argument(
         "-l", "--list",
         action="store_true",
@@ -2283,10 +2393,27 @@ def main():
         action="store",
         help="comma-separated list of NVMe device PCI addresses to use as "
              "replacement values for the bdev_list in each test's yaml file.  "
-             "Using the 'auto[:<filter>]' keyword will auto-detect the NVMe "
-             "PCI address list on each of the '--test_servers' hosts - the "
-             "optional '<filter>' can be used to limit auto-detected "
-             "addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.")
+             "Using the 'auto[:<filter>]' keyword will auto-detect any VMD "
+             "controller or NVMe PCI address list on each of the '--test_servers' "
+             "hosts - the optional '<filter>' can be used to limit auto-detected "
+             "NVMe addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.  "
+             "To limit the device detection to either VMD controller or NVMe "
+             "devices the 'auto_vmd[:filter]' or 'auto_nvme[:<filter>]' keywords "
+             "can be used, respectively.  When using 'filter' with VMD controllers, "
+             "the filter is applied to devices managed by the controller, therefore "
+             "only selecting controllers that manage the matching devices.")
+    parser.add_argument(
+        "-p", "--process_cores",
+        action="store_true",
+        help="process core files from tests")
+    parser.add_argument(
+        "-pr", "--provider",
+        action="store",
+        choices=[None] + list(PROVIDER_KEYS.values()),
+        default=None,
+        type=str,
+        help="default provider to use in the test daos_server config file, e.g. {}".format(
+            ", ".join(list(PROVIDER_KEYS.values()))))
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
@@ -2298,23 +2425,9 @@ def main():
         type=int,
         help="number of times to repeat test execution")
     parser.add_argument(
-        "-p", "--process_cores",
-        action="store_true",
-        help="process core files from tests")
-    parser.add_argument(
-        "-th", "--logs_threshold",
-        action="store",
-        help="collect log sizes and report log sizes that go past provided"
-             "threshold. e.g. '-th 5M'"
-             "Valid threshold units are: B, K, M, G, T")
-    parser.add_argument(
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
-    parser.add_argument(
-        "-ins", "--insecure_mode",
-        action="store_true",
-        help="Launch test with insecure-mode")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -2325,6 +2438,18 @@ def main():
         action="store",
         help="comma-separated list of hosts to use as replacement values for "
              "client placeholders in each test's yaml file")
+    parser.add_argument(
+        "-th", "--logs_threshold",
+        action="store",
+        help="collect log sizes and report log sizes that go past provided"
+             "threshold. e.g. '-th 5M'"
+             "Valid threshold units are: B, K, M, G, T")
+    parser.add_argument(
+        "-tm", "--timeout_multiplier",
+        action="store",
+        default=None,
+        type=float,
+        help="a multiplier to apply to each timeout value found in the test yaml")
     parser.add_argument(
         "-ts", "--test_servers",
         action="store",
@@ -2339,10 +2464,6 @@ def main():
         help="verbosity output level. Specify multiple times (e.g. -vv) for "
              "additional output")
     parser.add_argument(
-        "-j", "--jenkinslog",
-        action="store_true",
-        help="rename the avocado test logs directory for publishing in Jenkins")
-    parser.add_argument(
         "-y", "--yaml_directory",
         action="store",
         default=None,
@@ -2356,14 +2477,21 @@ def main():
     args.test_servers = NodeSet(args.test_servers)
     args.test_clients = NodeSet(args.test_clients)
 
+    # A list of server hosts is required
+    if not args.test_servers and not args.list:
+        print("ERROR: Missing a required '--test_servers' argument.")
+        sys.exit(1)
+
     # Setup the user environment
     set_test_environment(args)
-    vmd_flag = False
+
     # Auto-detect nvme test yaml replacement values if requested
-    if args.nvme and args.nvme.startswith("auto_vmd"):
-        args.nvme, vmd_flag = get_vmd_replacement(args)
-    elif args.nvme and args.nvme.startswith("auto"):
-        args.nvme = get_nvme_replacement(args)
+    vmd_flag = False
+    if args.nvme and args.nvme.startswith("auto") and not args.list:
+        args.nvme, vmd_flag = get_device_replacement(args)
+    elif args.nvme and args.nvme.startswith("vmd:"):
+        args.nvme = args.nvme.replace("vmd:", "")
+        vmd_flag = True
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
@@ -2375,7 +2503,7 @@ def main():
 
     # Display a list of the tests matching the tags
     print("Detected tests:  \n{}".format("  \n".join(test_list)))
-    if args.list:
+    if args.list and not args.modify:
         sys.exit(0)
 
     # Create a temporary directory

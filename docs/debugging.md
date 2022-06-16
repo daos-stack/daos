@@ -15,10 +15,11 @@ common facilities which are defined in GURT, as well as other facilities that
 can be defined on a per-project basis (such as those for CaRT and DAOS).
 `DD_SUBSYS` can be used to set which subsystems to enable logging for. By
 default all subsystems are enabled (`DD_SUBSYS=all`).
-- DAOS Facilities: [common, tree, vos, client, server, rdb, pool, container,
-		    object, placement, rebuild, tier, mgmt, eio, tests]
-- Common Facilities (GURT): [MISC, MEM]
-- CaRT Facilities: [RPC, BULK, CORPC, GRP, LM, HG, ST, IV]
+- DAOS Facilities: [array, kv, common, tree, vos, client, server, rdb, rsvc,
+		    pool, container, object, placement, rebuild, mgmt, bio, tests, dfs,
+		    duns, drpc, security, dtx, dfuse, il, csum]
+- Common Facilities (GURT): [MISC, MEM, SWIM, TELEM]
+- CaRT Facilities: [RPC, BULK, CORPC, GRP, HG, ST, IV, CTL]
 
 ## Priority Logging
 
@@ -56,7 +57,9 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 	- epc = epoch system
 	- df = durable format
 	- rebuild = rebuild process
-	- daos_default = (group mask) io, md, pl, and rebuild operations
+	- group_default = (group mask) io, md, pl, and rebuild operations
+	- group_metadata = (group mask) group_default and mgmt operations
+	- group_metadata_only = (group mask) mgmt and md operations
 - Common Debug Masks (GURT):
 	- any = generic messages, no classification
 	- trace = function trace, tree/hash/lru operations
@@ -66,6 +69,11 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 	- test = test programs
 
 ## Common Use Cases
+
+Please note: where in these examples the export command is shown setting an environment variable,
+this is intended to convey either that the variable is actually set (for the client environment), or
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 - Generic setup for all messages (default settings)
 ```bash
@@ -84,6 +92,13 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 ```bash
   $ export D_LOG_MASK=DEBUG,MEM=ERR # -> disables MEM facility by restricting all logs
                                     # from that facility to ERROR or higher priority only
+  $ export D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR # -> disables SWIM and RPC/HG facilities
+```
+
+- Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+```bash
+  $ export D_LOG_MASK=DEBUG,MEM=ERR # log at DEBUG level from all facilities except MEM
+  $ export DD_MASK=group_metadata   # limit logging to include only streams (mgmt, plus defaults from group_default)
 ```
 
 - Enable a subset of facilities of interest
@@ -99,5 +114,5 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
   $ export DD_MASK=mgmt     # -> only logs DEBUG messages related to pool management
 ```
 
-**See the [DAOS Environment Variables](./environ.md) documentation for more info
+**See the [Troubleshooting](admin/troubleshooting.md) documentation for more info
 about debug system environment.**

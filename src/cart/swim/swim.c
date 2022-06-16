@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -695,8 +695,14 @@ swim_self_get(struct swim_context *ctx)
 void
 swim_self_set(struct swim_context *ctx, swim_id_t self_id)
 {
-	if (ctx != NULL)
-		ctx->sc_self = self_id;
+	if (ctx == NULL)
+		return;
+
+	ctx->sc_self = self_id;
+
+	/* Reset it when disabled to avoid false error report about stopping progress */
+	if (self_id == SWIM_ID_INVALID)
+		ctx->sc_expect_progress_time = 0;
 }
 
 struct swim_context *

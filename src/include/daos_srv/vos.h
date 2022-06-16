@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -200,11 +200,12 @@ vos_dtx_cleanup(struct dtx_handle *dth);
  * Reset DTX related cached information in VOS.
  *
  * \param coh	[IN]	Container open handle.
+ * \param force	[IN]	Reset all DTX tables by force.
  *
  * \return	Zero on success, negative value if error.
  */
 int
-vos_dtx_cache_reset(daos_handle_t coh);
+vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
  * Initialize the environment for a VOS instance
@@ -217,7 +218,7 @@ vos_dtx_cache_reset(daos_handle_t coh);
  * \return		Zero on success, negative value if error
  */
 int
-vos_self_init(const char *db_path);
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 /**
  * Finalize the environment for a VOS instance
@@ -277,16 +278,24 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 /**
  * Open a Versioning Object Storage Pool (VOSP)
  *
- * \param path	[IN]	Path of the memory pool
- * \param uuid	[IN]    Pool UUID
- * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
- * \param poh	[OUT]	Returned pool handle
+ * \param path	 [IN]	Path of the memory pool
+ * \param uuid	 [IN]	Pool UUID
+ * \param flags  [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	 [OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
+
+/** Enable any version specific features on the pool
+ *
+ * \param poh	[IN]	Container open handle
+ * \param feats	[IN]	Features to enable
+ */
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -404,6 +413,11 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+enum {
+	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
+	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -414,13 +428,13 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param epr	  [IN]		The epoch range of aggregation
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
- * \param full_scan  [IN]	Full scan for snapshot deletion
+ * \param flags      [IN]	Aggregation flags
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan);
+	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -451,7 +465,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
-	    bool (*yield_func)(void *arg), void *yield_arg);
+	    int (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -789,7 +803,7 @@ vos_ioh2recx_list(daos_handle_t ioh);
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
@@ -894,8 +908,10 @@ vos_iter_finish(daos_handle_t ih);
  * not NULL, otherwise move the cursor to the begin of the iterator.
  * This function must be called before using vos_iter_next or vos_iter_fetch.
  *
- * \param ih	[IN]	Iterator handle.
- * \param pos	[IN]	Optional, position cursor to move to.
+ * \param ih	[IN]		Iterator handle.
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
+ *				be modified if entries are skipped during
+ *				probe.
  *
  * \return		zero if there is an entry at/after @anchor
  *			-DER_NONEXIST if no more entry
@@ -905,16 +921,36 @@ int
 vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
+ * Set the iterator cursor to the specified position \a anchor if it is
+ * not NULL, otherwise move the cursor to the begin of the iterator.
+ * This function must be called before using vos_iter_next or vos_iter_fetch.
+ *
+ * \param ih	[IN]		Iterator handle.
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
+ *				be modified if entries are skipped during
+ *				probe.
+ * \param flags	[IN]		Probe flags (See VOS_ITER_PROBE*)
+ *
+ * \return		zero if there is an entry at/after @anchor
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
+ */
+int
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags);
+
+/**
  * Move forward the iterator cursor.
  *
  * \param ih	[IN]	Iterator handle.
+ * \param anchor[OUT]	Optional, current anchor. May be modified if entries
+ *			are skipped.
  *
  * \return		Zero if there is an available entry
  *			-DER_NONEXIST if no more entry
  *			negative value if error
  */
 int
-vos_iter_next(daos_handle_t ih);
+vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
  * Return the current data entry of the iterator.
@@ -1025,26 +1061,27 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
- * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object id
- * \param[in]	flags	mask with the following options:
- *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
- *			DAOS_GET_MAX, DAOS_GET_MIN
- *			User has to indicate whether to query the MAX or MIN, in
- *			addition to what needs to be queried. Providing
- *			(MAX | MIN) in any combination will return an error.
- *			i.e. user can only query MAX or MIN in one call.
+ * \param[in]	coh		Container open handle.
+ * \param[in]	oid		Object id
+ * \param[in]	flags		mask with the following options:
+ *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *				DAOS_GET_MAX, DAOS_GET_MIN
+ *				User has to indicate whether to query the MAX or MIN, in
+ *				addition to what needs to be queried. Providing
+ *				(MAX | MIN) in any combination will return an error.
+ *				i.e. user can only query MAX or MIN in one call.
  * \param[in,out]
- *		dkey	[in]: allocated integer dkey. User can provide the dkey
- *			if not querying the max or min dkey.
- *			[out]: max or min dkey (if flag includes dkey query).
+ *		dkey		[in]: allocated integer dkey. User can provide the dkey
+ *				if not querying the max or min dkey.
+ *				[out]: max or min dkey (if flag includes dkey query).
  * \param[in,out]
- *		akey	[in]: allocated integer akey. User can provide the akey
- *			if not querying the max or min akey.
- *			[out]: max or min akey (if flag includes akey query).
- * \param[out]	recx	max or min offset in dkey/akey, and the size of the
- *			extent at the offset. If there are no visible array
- *			records, the size in the recx returned will be 0.
+ *		akey		[in]: allocated integer akey. User can provide the akey
+ *				if not querying the max or min akey.
+ *				[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx		max or min offset in dkey/akey, and the size of the
+ *				extent at the offset. If there are no visible array
+ *				records, the size in the recx returned will be 0.
+ * \param[out]	max_write	Optional: Returns max write epoch for object
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
@@ -1060,22 +1097,22 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
-		  struct dtx_handle *dth);
+		  daos_recx_t *recx, daos_epoch_t *max_write, unsigned int cell_size,
+		  uint64_t stripe_size, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
  *
  *  \param alloc_overhead[IN]	Expected allocation overhead
  *  \param tclass[IN]		The type of tree to query
- *  \param ofeat[IN]		Relevant object features
+ *  \param otype[IN]		Relevant object features
  *  \param ovhd[IN,OUT]		Returned overheads
  *
  *  \return 0 on success, error otherwise.
  */
 int
 vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-		      uint64_t ofeat, struct daos_tree_overhead *ovhd);
+		      uint64_t otype, struct daos_tree_overhead *ovhd);
 
 /** Return the size of the pool metadata in persistent memory on-disk format */
 int
@@ -1096,6 +1133,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
+	/** Set pool tiering policy */
+	VOS_PO_CTL_SET_POLICY,
 };
 
 /**
@@ -1103,10 +1142,10 @@ enum vos_pool_opc {
  * mostly for debug & test
  */
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
-vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
@@ -1145,7 +1184,9 @@ struct sys_db *vos_db_get(void);
  * System DB is KV store that can support insert/delete/traverse
  * See \a sys_db for more details.
  */
-int  vos_db_init(const char *db_path, const char *db_name, bool self_mode);
+int vos_db_init(const char *db_path);
+int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
+		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

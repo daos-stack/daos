@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -177,7 +177,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
-	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
+	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
 	bool			sep_mode;
 	int			cur_ctx_num;
 	int			max_ctx_num;
@@ -221,13 +221,15 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-			     ctx->cc_self_uri, &uri_len);
-	if (rc != 0) {
-		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		crt_context_destroy(ctx, true);
-		D_GOTO(out, rc);
+	if (crt_is_service()) {
+		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+				     ctx->cc_self_uri, &uri_len);
+		if (rc != 0) {
+			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+			crt_context_destroy(ctx, true);
+			D_GOTO(out, rc);
+		}
 	}
 
 	ctx->cc_idx = cur_ctx_num;

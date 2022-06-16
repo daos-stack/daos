@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,15 +7,20 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
@@ -25,16 +30,17 @@ type mgmtSvc struct {
 	log               logging.Logger
 	harness           *EngineHarness
 	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *system.Database
+	sysdb             *raft.Database
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
+	systemProps       daos.SystemPropertyMap
 	clientNetworkHint *mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
 }
 
-func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:               h.log,
 		harness:           h,
@@ -42,6 +48,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c co
 		sysdb:             s,
 		rpcClient:         c,
 		events:            p,
+		systemProps:       daos.SystemProperties(),
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
 		joinReqs:          make(joinReqChan),
 		groupUpdateReqs:   make(chan bool),
@@ -55,8 +62,18 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 		return errors.New("nil request")
 	}
 	if sReq, ok := req.(interface{ GetSys() string }); ok {
-		if sReq.GetSys() != svc.sysdb.SystemName() {
-			return FaultWrongSystem(sReq.GetSys(), svc.sysdb.SystemName())
+		comps := strings.Split(sReq.GetSys(), "-")
+		sysName := comps[0]
+		if len(comps) > 1 {
+			if _, err := build.NewVersion(comps[len(comps)-1]); err == nil {
+				sysName = strings.Join(comps[:len(comps)-1], "-")
+			} else {
+				sysName = strings.Join(comps, "-")
+			}
+		}
+
+		if sysName != svc.sysdb.SystemName() {
+			return FaultWrongSystem(sysName, svc.sysdb.SystemName())
 		}
 	}
 	return nil

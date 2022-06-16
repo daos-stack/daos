@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,25 +68,25 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	)
 }
 
-func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolNvmeTooSmall,
-		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested NVMe capacity too small (min %s per target)",
 			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
-		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.Bytes(engine.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s NVMe",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minNVMe+humanize.MiByte),
+		),
 	)
 }
 
-func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,
-		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested SCM capacity is too small (min %s per target)",
 			humanize.IBytes(engine.ScmMinBytesPerTarget)),
-		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.Bytes(engine.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s SCM",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minSCM+humanize.MiByte),
+		),
 	)
 }
 
@@ -112,10 +112,13 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+func FaultInsufficientFreeHugePageMem(engineIndex, required, available, pagesReq, pagesAvail int) *fault.Fault {
 	return serverFault(
-		code.ServerInsufficientFreeHugePages,
-		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
+		code.ServerInsufficientFreeHugePageMem,
+		fmt.Sprintf("insufficient amount of hugepage memory allocated for engine %d: "+
+			"want %s (%d hugepages), got %s (%d hugepages)", engineIndex,
+			humanize.IBytes(uint64(humanize.MiByte*required)), pagesReq,
+			humanize.IBytes(uint64(humanize.MiByte*available)), pagesAvail),
 		"reboot the system or manually clear /dev/hugepages as appropriate",
 	)
 }
@@ -133,6 +136,14 @@ func FaultWrongSystem(reqName, sysName string) *fault.Fault {
 		code.ServerWrongSystem,
 		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
 		"retry the request with the correct system name",
+	)
+}
+
+func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.Fault {
+	return serverFault(
+		code.ServerIncompatibleComponents,
+		fmt.Sprintf("components %s and %s are not compatible", self, other),
+		"retry the request with compatible components",
 	)
 }
 

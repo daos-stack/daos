@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,16 @@ typedef struct {
 } d_rank_list_t;
 
 typedef d_rank_list_t	*d_rank_list_ptr_t;
+
+typedef struct {
+	d_rank_t	lo;
+	d_rank_t	hi;
+} d_rank_range_t;
+
+typedef struct {
+	d_rank_range_t *rrl_ranges;
+	uint32_t	rrl_nr;
+} d_rank_range_list_t;
 
 typedef char		*d_string_t;
 typedef const char	*d_const_string_t;

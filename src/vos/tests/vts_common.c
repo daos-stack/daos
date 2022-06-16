@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,7 @@
 #include <vos_internal.h>
 #include "vts_common.h"
 #include <cmocka.h>
+#include <linux/limits.h>
 
 enum {
 	TCX_NONE,
@@ -38,7 +39,8 @@ enum {
 	TCX_READY,
 };
 
-int gc, oid_cnt;
+int	gc, oid_cnt;
+char	vos_path[STORAGE_PATH_LEN+1];
 
 bool
 vts_file_exists(const char *filename)
@@ -52,15 +54,13 @@ vts_file_exists(const char *filename)
 int
 vts_alloc_gen_fname(char **fname)
 {
-	char *file_name = NULL;
-	int n;
+	int rc;
 
-	file_name = malloc(25);
-	if (!file_name)
-		return -ENOMEM;
-	n = snprintf(file_name, 25, VPOOL_NAME);
-	snprintf(file_name+n, 25-n, ".%d", gc++);
-	*fname = file_name;
+	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
+	if (rc < 0) {
+		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -127,7 +127,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
-	tcx->tc_step = TCX_CO_OPEN;
+
+	vos_pool_features_set(tcx->tc_po_hdl, VOS_POOL_FEAT_AGG_OPT);
 	tcx->tc_step = TCX_READY;
 	return 0;
 
@@ -254,16 +255,15 @@ pool_init(struct credit_context *tsc)
 	if (tsc->tsc_scm_size == 0)
 		tsc->tsc_scm_size = (1ULL << 30);
 
-	if (!daos_file_is_dax(pmem_file)) {
-		rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
-		if (rc < 0)
-			goto out;
+	D_ASSERT(!daos_file_is_dax(pmem_file));
+	rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
+	if (rc < 0)
+		goto out;
 
-		fd = rc;
-		rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
-		if (rc)
-			goto out;
-	}
+	fd = rc;
+	rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
+	if (rc)
+		goto out;
 
 	/* Use pool size as blob size for this moment. */
 	if (tsc_create_pool(tsc)) {
@@ -311,6 +311,7 @@ cont_init(struct credit_context *tsc)
 	if (rc)
 		goto out;
 
+	vos_pool_features_set(tsc->tsc_poh, VOS_POOL_FEAT_AGG_OPT);
 	tsc->tsc_coh = coh;
  out:
 	return rc;
@@ -335,7 +336,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path, false, -1);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,8 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -33,8 +33,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -195,7 +195,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				engineCfgs[i] = engine.MockConfig().
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram").
+							WithStorageClass("ram").
 							WithScmRamdiskSize(1).
 							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
 					)
@@ -289,7 +289,8 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
+			sysdb := raft.MockDatabase(t, log)
+			membership := system.MockMembership(t, log, sysdb, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
 				gotErr = harness.Start(ctxIn, sysdb, config)
@@ -544,7 +545,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			h := NewEngineHarness(log)
 			for _, mic := range tc.mics {
@@ -584,8 +585,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			}
 
 			_, gotErr := h.CallDrpc(ctx, tc.method, tc.body)
-			common.CmpErr(t, tc.expErr, gotErr)
-			common.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
+			test.CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 		})
 	}
 }

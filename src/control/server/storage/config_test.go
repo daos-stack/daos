@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +7,254 @@
 package storage
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
+
+func defConfigCmpOpts() cmp.Options {
+	return cmp.Options{
+		cmp.Comparer(func(x, y *BdevDeviceList) bool {
+			if x == nil && y == nil {
+				return true
+			}
+			return x.Equals(y)
+		}),
+	}
+}
+
+func TestStorage_BdevDeviceList_Devices(t *testing.T) {
+	for name, tc := range map[string]struct {
+		list      *BdevDeviceList
+		expResult []string
+	}{
+		"nil": {
+			expResult: []string{},
+		},
+		"empty": {
+			list:      &BdevDeviceList{},
+			expResult: []string{},
+		},
+		"string set": {
+			list: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("one", "two"),
+			},
+			expResult: []string{"one", "two"},
+		},
+		"PCI addresses": {
+			list: &BdevDeviceList{
+				PCIAddressSet: *hardware.MustNewPCIAddressSet(
+					"0000:01:01.0",
+					"0000:02:02.0",
+				),
+			},
+			expResult: []string{"0000:01:01.0", "0000:02:02.0"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.list.Devices()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_BdevDeviceList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		devices    []string
+		expList    *BdevDeviceList
+		expYamlStr string
+		expJSONStr string
+		expErr     error
+	}{
+		"empty": {
+			expList:    &BdevDeviceList{},
+			expYamlStr: "[]\n",
+			expJSONStr: "[]",
+		},
+		"valid pci addresses": {
+			devices: []string{"0000:81:00.0", "0000:82:00.0"},
+			expList: &BdevDeviceList{
+				PCIAddressSet: func() hardware.PCIAddressSet {
+					set, err := hardware.NewPCIAddressSetFromString("0000:81:00.0 0000:82:00.0")
+					if err != nil {
+						panic(err)
+					}
+					return *set
+				}(),
+			},
+			expYamlStr: `
+- 0000:81:00.0
+- 0000:82:00.0
+`,
+			expJSONStr: `["0000:81:00.0","0000:82:00.0"]`,
+		},
+		"non-pci devices": {
+			devices: []string{"/dev/block0", "/dev/block1"},
+			expList: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
+			},
+			expYamlStr: `
+- /dev/block0
+- /dev/block1
+`,
+			expJSONStr: `["/dev/block0","/dev/block1"]`,
+		},
+		"invalid pci device": {
+			devices: []string{"0000:8g:00.0"},
+			expErr:  errors.New("unable to parse \"0000:8g:00.0\""),
+		},
+		"mixed pci and non-pci devices": {
+			devices: []string{"/dev/block0", "0000:81:00.0"},
+			expErr:  errors.New("mix"),
+		},
+		"duplicate pci device": {
+			devices: []string{"0000:81:00.0", "0000:81:00.0"},
+			expErr:  errors.New("duplicate"),
+		},
+		"duplicate non-pci device": {
+			devices: []string{"/dev/block0", "/dev/block0"},
+			expErr:  errors.New("duplicate"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			list, err := NewBdevDeviceList(tc.devices...)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expList, list, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad list (-want +got):\n%s", diff)
+			}
+
+			yamlData, err := yaml.Marshal(list)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(strings.TrimLeft(tc.expYamlStr, "\n"), string(yamlData)); diff != "" {
+				t.Fatalf("bad yaml (-want +got):\n%s", diff)
+			}
+
+			jsonData, err := json.Marshal(list)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(strings.TrimLeft(tc.expJSONStr, "\n"), string(jsonData)); diff != "" {
+				t.Fatalf("bad json (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input   string
+		expList *BdevDeviceList
+		expErr  error
+	}{
+		"empty": {
+			input:   "[]\n",
+			expList: &BdevDeviceList{},
+		},
+		"valid pci addresses": {
+			input: `["0000:81:00.0","0000:82:00.0"]`,
+			expList: &BdevDeviceList{
+				PCIAddressSet: func() hardware.PCIAddressSet {
+					set, err := hardware.NewPCIAddressSetFromString("0000:81:00.0 0000:82:00.0")
+					if err != nil {
+						panic(err)
+					}
+					return *set
+				}(),
+			},
+		},
+		"non-pci devices": {
+			input: `
+- /dev/block0
+- /dev/block1
+`,
+			expList: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
+			},
+		},
+		"mixed pci and non-pci devices": {
+			input:  `["/dev/block0", "0000:81:00.0"]`,
+			expErr: errors.New("mix"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			list := &BdevDeviceList{}
+			err := yaml.Unmarshal([]byte(tc.input), list)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expList, list, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad list (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input   string
+		expList *BdevDeviceList
+		expErr  error
+	}{
+		"empty": {
+			input:   "[]\n",
+			expList: &BdevDeviceList{},
+		},
+		"valid pci addresses": {
+			input: `["0000:81:00.0","0000:82:00.0"]`,
+			expList: &BdevDeviceList{
+				PCIAddressSet: func() hardware.PCIAddressSet {
+					set, err := hardware.NewPCIAddressSetFromString("0000:81:00.0 0000:82:00.0")
+					if err != nil {
+						panic(err)
+					}
+					return *set
+				}(),
+			},
+		},
+		"non-pci devices": {
+			input: `["/dev/block0","/dev/block1"]`,
+			expList: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
+			},
+		},
+		"mixed pci and non-pci devices": {
+			input:  `["/dev/block0", "0000:81:00.0"]`,
+			expErr: errors.New("mix"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			list := &BdevDeviceList{}
+			err := json.Unmarshal([]byte(tc.input), list)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expList, list, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad list (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestStorage_parsePCIBusRange(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -65,13 +308,176 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
-			common.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
+			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+		})
+	}
+}
+
+func TestStorage_AccelProps_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expProps AccelProps
+		expErr   error
+	}{
+		"acceleration section missing": {
+			input: ``,
+		},
+		"acceleration section empty": {
+			input: `
+acceleration:
+`,
+		},
+		"engine unset": {
+			input: `
+acceleration:
+  engine:
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"engine set empty": {
+			input: `
+acceleration:
+  engine: ""
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"engine set; default opts": {
+			input: `
+acceleration:
+  engine: spdk
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+		},
+		"engine unset; opts set": {
+			input: `
+acceleration:
+  options:
+  - move
+  - crc
+`,
+			expProps: AccelProps{
+				Engine: AccelEngineNone,
+			},
+		},
+		"engine set; opts set": {
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - crc
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineDML,
+				Options: AccelOptCRCFlag,
+			},
+		},
+		"engine set; opts all set": {
+			input: `
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+		},
+		"unrecognized engine": {
+			input: `
+acceleration:
+  engine: native
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"unrecognized option": {
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - bar
+`,
+			expErr: errors.New("unknown acceleration option"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := new(Config)
+			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expProps, cfg.AccelProps, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad props (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_AccelProps_ToYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		props  AccelProps
+		expOut string
+		expErr error
+	}{
+		"nil props": {
+			expOut: `
+storage: []
+`,
+		},
+		"empty props": {
+			expOut: `
+storage: []
+`,
+		},
+		"engine set": {
+			props: AccelProps{Engine: AccelEngineNone},
+			expOut: `
+storage: []
+acceleration:
+  engine: none
+`,
+		},
+		"engine set; default opts": {
+			props: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+			expOut: `
+storage: []
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				AccelProps: tc.props,
+			}
+
+			bytes, err := yaml.Marshal(cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

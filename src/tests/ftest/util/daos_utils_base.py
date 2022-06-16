@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,6 +33,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
             self.sub_command_class = self.FilesystemSubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -41,14 +43,12 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def __init__(self):
             """Create a daos pool subcommand object."""
-            super().__init__(
-                "/run/daos/pool/*", "pool")
+            super().__init__("/run/daos/pool/*", "pool")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
-            if ((self.sub_command.value == "list-containers") or
-                (self.sub_command.value == "list")):
+            if self.sub_command.value in ("list-containers", "list"):
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -81,8 +81,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                    "/run/daos/pool/{}/*".format(sub_command), sub_command)
+                super().__init__("/run/daos/pool/{}/*".format(sub_command), sub_command)
                 self.pool = PositionalParameter(1)
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.sys = FormattedParameter("--sys={}")
@@ -211,9 +210,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                        "/run/daos/container/{}/*".format(sub_command),
-                        sub_command)
+                super().__init__("/run/daos/container/{}/*".format(sub_command), sub_command)
                 self.pool = PositionalParameter(1)
                 self.cont = PositionalParameter(2)
                 self.sys_name = FormattedParameter("--sys-name={}")
@@ -224,9 +221,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container check command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
-                    self).__init__("check")
+                super(DaosCommandBase.ContainerSubCommand.CheckSubCommand, self).__init__("check")
                 self.src = FormattedParameter("--epc={}")
 
         class CloneSubCommand(CommandWithParameters):
@@ -256,10 +251,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
                 self.oclass = FormattedParameter("--oclass={}")
-                #   --chunk_size=BYTES
+                #   --chunk-size=BYTES
                 #           chunk size of files created. Supports suffixes:
                 #               K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
-                self.chunk_size = FormattedParameter("--chunk_size={}")
+                self.chunk_size = FormattedParameter("--chunk-size={}")
                 #   --properties=<name>:<value>[,<name>:<value>,...]
                 #           - supported names:
                 #               label, cksum, cksum_size, srv_cksum, rf
@@ -273,9 +268,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
-                #    -c, --cont=<UUID>
-                #           container UUID (optional)
-                self.cont = FormattedParameter("--cont={}")
+                #     -l, --label=<container label>
+                self.label = FormattedParameter("--label={}")
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -479,9 +473,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                        "/run/daos/object/{}/*".format(sub_command),
-                        sub_command)
+                super().__init__("/run/daos/object/{}/*".format(sub_command), sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.cont = FormattedParameter("--cont={}")
@@ -532,9 +524,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                    "/run/daos/filesystem/{}/*".format(
-                        sub_command), sub_command)
+                super().__init__("/run/daos/filesystem/{}/*".format(sub_command), sub_command)
 
         class CopySubCommand(CommonFilesystemSubCommand):
             """Defines an object for the daos filesystem copy command."""
@@ -550,3 +540,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.dst = FormattedParameter("--dst={}")
                 # filename to write and read container properties
                 self.preserve_props = FormattedParameter("--preserve-props={}")
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos version sub command."""
+
+        def __init__(self):
+            """Create a dmg version subcommand object."""
+            super().__init__("/run/daos/version/*", "version")

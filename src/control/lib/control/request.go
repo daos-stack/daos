@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,6 +62,10 @@ type (
 		getTimeout() time.Duration
 	}
 
+	hostResponseReporter interface {
+		reportResponse(*HostResponse)
+	}
+
 	// UnaryRequest defines an interface to be implemented by
 	// unary request types (1 response to 1 request).
 	UnaryRequest interface {
@@ -92,15 +96,19 @@ func (r *request) SetSystem(name string) {
 
 // getSystem returns the system name set on the request or that returned by the
 // supplied sysGetter implementation or the build defined default name.
+//
+// NB: As of DAOS 2.2.0, the version is appended
+// to the system name in order to validate component
+// interoperability.
 func (r *request) getSystem(getter sysGetter) string {
+	sysName := build.DefaultSystemName
 	switch {
 	case r.Sys != "":
-		return r.Sys
+		sysName = r.Sys
 	case getter.GetSystem() != "":
-		return getter.GetSystem()
-	default:
-		return build.DefaultSystemName
+		sysName = getter.GetSystem()
 	}
+	return sysName + "-" + build.DaosVersion
 }
 
 // getHostList returns the hostlist set for the request, which

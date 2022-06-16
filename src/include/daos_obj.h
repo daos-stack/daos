@@ -1,10 +1,12 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
+
+#define daos_obj_generate_oid daos_obj_generate_oid2
 
 #if defined(__cplusplus)
 extern "C" {
@@ -92,6 +94,8 @@ enum daos_otype_t {
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
 
+	DAOS_OT_MAX		= 13,
+
 	/**
 	 * reserved: Multi Dimensional Array
 	 * DAOS_OT_ARRAY_MD	= 64,
@@ -102,6 +106,12 @@ enum daos_otype_t {
 	 * DAOS_OT_BDEV	= 96,
 	 */
 };
+
+static inline bool
+daos_otype_t_is_valid(enum daos_otype_t type)
+{
+	return type <= DAOS_OT_MAX;
+}
 
 static inline enum daos_otype_t
 daos_obj_id2type(daos_obj_id_t oid)
@@ -290,14 +300,6 @@ enum {
 	DAOS_OO_IO_SEQ         = (1 << 5),
 };
 
-struct daos_oid_list {
-	/** Input/output number of oids */
-	uint32_t		 ol_nr;
-	uint32_t		 ol_nr_out;
-	/** OID buffer */
-	daos_obj_id_t		*ol_oids;
-};
-
 /**
  * Record
  *
@@ -348,7 +350,7 @@ typedef enum {
 typedef struct {
 	/** akey for this iod */
 	daos_key_t		iod_name;
-	/*
+	/**
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
 	 * records where the record is updated atomically. Note that an akey can
@@ -366,12 +368,12 @@ typedef struct {
 	 *  ignored.
 	 */
 	uint64_t		iod_flags;
-	/*
-	 * Number of entries in the \a iod_recxs for arrays,
+	/**
+	 * Number of entries in the #iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
 	uint32_t		iod_nr;
-	/*
+	/**
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
 	 * type of the iod is single, this is ignored.
@@ -413,6 +415,7 @@ typedef struct {
 	 * 1 for SV.
 	 */
 	uint32_t		 iom_nr_out;
+	/** I/O map flags */
 	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;
@@ -1126,87 +1129,7 @@ int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-typedef uint16_t daos_ofeat_t;
-int
-daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_ofeat_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
-int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-		       enum daos_otype_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
-enum {
-	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
-	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
-	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
-	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
-	/** reserved: 1-level flat KV store */
-	DAOS_OF_KV_FLAT		= (1 << 4),
-	/** reserved: 1D Array with metadata stored in the DAOS object */
-	DAOS_OF_ARRAY		= (1 << 5),
-	/** reserved: Multi Dimensional Array */
-	DAOS_OF_ARRAY_MD	= (1 << 6),
-	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OF_ARRAY_BYTE	= (1 << 7),
-	/**
-	 * benchmark-only feature bit, I/O is a network echo, no data is going
-	 * to be stored/returned
-	 *
-	 * NB: this is the last feature bits.
-	 */
-	DAOS_OF_ECHO		= (1 << 15),
-	/** Mask for convenience (16-bit) */
-	DAOS_OF_MASK		= ((1 << 16) - 1),
-};
-
 #if defined(__cplusplus)
 }
-#define daos_obj_generate_oid daos_obj_generate_oid_cpp
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  enum daos_otype_t type, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid2(coh, oid, type, cid, hints, args);
-}
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  daos_ofeat_t feat, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid1(coh, oid, feat, cid, hints, args);
-}
-#else
-/**
- * for backward compatility, support old api where the type was a set of feature
- * flags
- */
-#define daos_obj_generate_oid(coh, oid, type, ...)			\
-	({								\
-		int _ret;						\
-		if (__builtin_types_compatible_p(__typeof__(type),	\
-						 daos_ofeat_t)) {	\
-			_ret = daos_obj_generate_oid((coh), (oid),	\
-						     (type),		\
-						     __VA_ARGS__);	\
-		} else {						\
-			_ret = daos_obj_generate_oid2((coh), (oid),	\
-						      (type),		\
-						      __VA_ARGS__);	\
-		}							\
-		_ret;							\
-	})
 #endif /* __cplusplus */
 #endif /* __DAOS_OBJ_H__ */

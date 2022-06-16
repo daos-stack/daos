@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,7 +59,6 @@ enum {
 	DMG_KEY_FAIL_LOC	 = 0,
 	DMG_KEY_FAIL_VALUE,
 	DMG_KEY_FAIL_NUM,
-	DMG_KEY_REBUILD_THROTTLING,
 	DMG_KEY_NUM,
 };
 

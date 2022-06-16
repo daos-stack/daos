@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1394,12 +1394,11 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		}
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		put_needed = false;
 		if (rc != 0) {
 			D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(send_error, rc);
 		}
-
-		put_needed = false;
 
 		/* Reset the iv_value, since it maybe freed in on_put() */
 		memset(&iv_value, 0, sizeof(iv_value));
@@ -1900,11 +1899,11 @@ crt_hdlr_iv_sync_aux(void *arg)
 		}
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		need_put = false;
 		if (rc != 0) {
 			D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
-		need_put = false;
 
 		break;
 	}

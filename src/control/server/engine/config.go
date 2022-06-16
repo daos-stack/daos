@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,22 +7,16 @@
 package engine
 
 import (
-	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
-
-type netProviderValidator func(context.Context, string, string) error
-type netIfaceNumaNodeGetter func(context.Context, string) (uint, error)
-type netDevClsGetter func(string) (uint32, error)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
@@ -165,67 +159,23 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
-
-	// ValidateFabricProvider function that validates the chosen provider
-	ValidateProvider netProviderValidator `yaml:"-"`
-
-	// GetIfaceNumaNode is a function that retrieves the numa node id that a network
-	// interfaces is bound to
-	GetIfaceNumaNode netIfaceNumaNodeGetter `yaml:"-"`
-
-	// GetDeviceClass is a function that retrieves the I/O Engine's network device class
-	GetNetDevCls netDevClsGetter `yaml:"-"`
 }
 
 // NewConfig returns an I/O Engine config.
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
-		ValidateProvider:  netdetect.ValidateProviderConfig,
-		GetIfaceNumaNode:  netdetect.GetIfaceNumaNode,
-		GetNetDevCls:      netdetect.GetDeviceClass,
 	}
-}
-
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
-	ifaceNumaNode, err := c.GetIfaceNumaNode(ctx, c.Fabric.Interface)
-	if err != nil {
-		return errors.Wrapf(err, "fetching numa node of network interface %q",
-			c.Fabric.Interface)
-	}
-
-	if c.PinnedNumaNode != nil {
-		// validate that numa node is correct for the given device
-		if ifaceNumaNode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
-				ifaceNumaNode, *c.PinnedNumaNode)
-		}
-		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
-		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
-
-		return nil
-	}
-
-	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = ifaceNumaNode
-	c.Storage.NumaNodeIndex = ifaceNumaNode
-
-	return nil
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
+func (c *Config) Validate() error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
-	}
-	if c.ValidateProvider == nil {
-		return errors.New("missing ValidateProvider method on engine config")
-	}
-	if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
-		return errors.Wrapf(err, "network device %s does not support provider %s",
-			c.Fabric.Interface, c.Fabric.Provider)
 	}
 
 	if err := c.Storage.Validate(); err != nil {
@@ -236,7 +186,7 @@ func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(ctx, log), "setting numa affinity for engine")
+	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -286,6 +236,26 @@ func (c *Config) HasEnvVar(name string) bool {
 	return false
 }
 
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	for _, keyPair := range c.EnvVars {
+		keyValue := strings.SplitN(keyPair, "=", 2)
+		if keyValue[0] == name {
+			return keyValue[1], nil
+		}
+	}
+
+	return "", errors.Errorf("Undefined environment variable %q", name)
+}
+
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
@@ -300,24 +270,6 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
-	return c
-}
-
-// WithValidateProvider sets the function that validates the provider
-func (c *Config) WithValidateProvider(fn netProviderValidator) *Config {
-	c.ValidateProvider = fn
-	return c
-}
-
-// WithGetIfaceNumaNode sets the function that validates the NUMA configuration
-func (c *Config) WithGetIfaceNumaNode(fn netIfaceNumaNodeGetter) *Config {
-	c.GetIfaceNumaNode = fn
-	return c
-}
-
-// WithGetNetDevCls sets the function that determines the network device class
-func (c *Config) WithGetNetDevCls(fn netDevClsGetter) *Config {
-	c.GetNetDevCls = fn
 	return c
 }
 
@@ -474,8 +426,15 @@ func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance.
 func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
+	return c
+}
+
+// WithStorageAccelProps sets the acceleration properties for the I/O Engine instance.
+func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
+	c.Storage.AccelProps.Engine = name
+	c.Storage.AccelProps.Options = mask
 	return c
 }

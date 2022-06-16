@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,9 +8,8 @@ import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
-from test_utils_pool import TestPool
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils, ServerFillUp):
@@ -62,11 +61,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         # Exclude ranks [0, 3, 4]
         rank = [0, 3, 4]
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=self.label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
@@ -163,7 +158,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         continue
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
-                self.print_and_assert_on_rebuild_failure(output)
+                self.print_and_assert_on_rebuild_failure(output, timeout=15)
 
                 pver_reint = self.get_pool_version()
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
@@ -220,7 +215,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
-    @skipForTicket("DAOS-9313")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 

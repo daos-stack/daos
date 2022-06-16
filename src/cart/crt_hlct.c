@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Intel Corporation
+/* Copyright 2020-2022 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

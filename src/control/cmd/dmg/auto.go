@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -24,7 +24,7 @@ type configCmd struct {
 }
 
 type configGenCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
@@ -43,22 +43,22 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	cmd.log.Debugf("configGenCmd input control config: %+v", cmd.config)
+	cmd.Debugf("configGenCmd input control config: %+v", cmd.config)
 
 	req := control.ConfigGenerateReq{
 		NrEngines: cmd.NrEngines,
 		MinNrSSDs: cmd.MinNrSSDs,
 		HostList:  cmd.config.HostList,
 		Client:    cmd.ctlInvoker,
-		Log:       cmd.log,
+		Log:       cmd.Logger,
 	}
 	switch cmd.NetClass {
 	case "ethernet":
-		req.NetClass = netdetect.Ether
+		req.NetClass = hardware.Ether
 	case "infiniband":
-		req.NetClass = netdetect.Infiniband
+		req.NetClass = hardware.Infiniband
 	default:
-		req.NetClass = control.NetDevAny
+		req.NetClass = hardware.NetDevAny
 	}
 	if cmd.AccessPoints != "" {
 		req.AccessPoints = strings.Split(cmd.AccessPoints, ",")
@@ -82,7 +82,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
 			return err
 		}
-		cmd.log.Error(bld.String())
+		cmd.Error(bld.String())
 		return err
 	}
 
@@ -92,6 +92,6 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 
 	// output recommended server config yaml file
-	cmd.log.Info(string(bytes))
+	cmd.Info(string(bytes))
 	return nil
 }

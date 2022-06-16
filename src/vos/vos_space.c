@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,21 +7,28 @@
 
 #include <daos_types.h>
 #include "vos_internal.h"
+#include "vos_policy.h"
 
 #define POOL_SCM_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_SCM])
 #define POOL_NVME_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_NVME])
 #define POOL_SCM_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_SCM])
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
+/* Extra space being reserved to deal with fragmentation issues */
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
 {
 	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
 	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
-	daos_size_t	ovhd;
+	daos_size_t	ovhd = (tot_size * 5) / 100;
 
-	ovhd = (media == DAOS_MEDIA_SCM) ?
-		(tot_size * 5) / 100 : (tot_size * 2) / 100;
+	/*
+	 * Don't reserve NVMe, if NVMe allocation failed due to fragmentations,
+	 * only data coalescing in aggregation will be affected, punch and GC
+	 * won't be affected.
+	 */
+	if (media == DAOS_MEDIA_NVME)
+		return 0;
 
 	/* If caller specified the pool is small, do not enforce a range */
 	if (!small_pool) {
@@ -164,16 +171,6 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	return 0;
 }
 
-static inline daos_size_t
-recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
-	      daos_size_t rec_size)
-{
-	if (!ci_is_valid(csum))
-		return 0;
-	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
-			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rec_size);
-}
-
 static daos_size_t
 estimate_space_key(struct umem_instance *umm, daos_key_t *key)
 {
@@ -224,11 +221,12 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Akey */
 		scm += estimate_space_key(umm, &iod->iod_name);
 
-		csums = iods_csums ? iods_csums[i].ic_data : NULL;
+		csums = vos_csum_at(iods_csums, i);
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
-			media = vos_media_select(pool, iod->iod_type, size);
+			media = vos_policy_media_select(pool, iod->iod_type,
+							size, VOS_IOS_GENERIC);
 
 			/* Single value record */
 			if (media == DAOS_MEDIA_SCM) {
@@ -246,10 +244,11 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Array value */
 		for (j = 0; j < iod->iod_nr; j++) {
 			recx = &iod->iod_recxs[j];
-			recx_csum = csums ? &csums[j] : NULL;
+			recx_csum = recx_csum_at(csums, j, iod);
 
 			size = recx->rx_nr * iod->iod_size;
-			media = vos_media_select(pool, iod->iod_type, size);
+			media = vos_policy_media_select(pool, iod->iod_type,
+							size, VOS_IOS_GENERIC);
 
 			/* Extent */
 			if (media == DAOS_MEDIA_SCM)
