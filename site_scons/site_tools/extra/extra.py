@@ -96,8 +96,7 @@ def _find_indent():
 def _pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
     action = []
-    nenv = env.Clone()
-    cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
+    cccom = env.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
         if indent:
             action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
@@ -122,7 +121,7 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        newtarget = os.path.join(dirname, f'{prefix}{base}_{ext}')
+        newtarget = os.path.join(dirname, f'{prefix}{base}_pp{ext}')
         target.append(newtarget)
     return target, source
 
