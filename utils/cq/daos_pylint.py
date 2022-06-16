@@ -376,6 +376,7 @@ def main():
     parser.add_argument('--output-format', choices=['text'])
     parser.add_argument('--rcfile', default=rcfile)
 
+    # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
     parser.add_argument('--format', choices=['text', 'github'], default='text')
 
