@@ -161,12 +161,12 @@ def generate(env):
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
     try:
-        pp_builder = env["BUILDERS"]["Preprocess"]
+        env["BUILDERS"]["Preprocess"]
     except KeyError:
         env.Append(BUILDERS={"Preprocess": preprocess})
 
     try:
-        pp_builder = env["BUILDERS"]["CheckHeader"]
+        env["BUILDERS"]["CheckHeader"]
     except KeyError:
         env.Append(BUILDERS={"CheckHeader": check_header})
 
