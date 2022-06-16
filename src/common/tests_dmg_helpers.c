@@ -15,6 +15,21 @@
 #include <daos.h>
 #include <daos_srv/bio.h>
 
+#include <sys/sysinfo.h>
+
+static void
+log_free_mem(void)
+{
+	struct sysinfo	info = {0};
+
+	if (sysinfo(&info) != 0) {
+		D_ERROR("failed to get memory free from sysinfo: %s\n", strerror(errno));
+		return;
+	}
+
+	D_INFO("free mem: %lu MB\n", info.freeram / (1024*1024));
+}
+
 static void
 cmd_free_args(char **args, int argcount)
 {
@@ -128,12 +143,14 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
+	log_free_mem();
 	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
 	fp = popen(cmd_str, "r");
 	if (!fp) {
 		D_ERROR("failed to invoke '%s', errno=%d (%s)\n", cmd_str, errno, strerror(errno));
 		D_GOTO(out, rc = -DER_IO);
 	}
+	log_free_mem();
 
 	/* If the caller doesn't care about output, don't bother parsing it. */
 	if (json_out == NULL)
@@ -165,6 +182,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
+
+	log_free_mem();
 
 	if (total == 0) {
 		D_ERROR("dmg output is empty\n");
