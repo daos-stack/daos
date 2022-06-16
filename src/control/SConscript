@@ -118,7 +118,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     target = daos_build.run_command(denv, build_bin, src, libs,
-                                    f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} '
+                                    f'cd {gosrc}; {GO_BIN} build -mod vendor {go_ldflags()} '
                                     + f'{get_build_flags(denv)} '
                                     + f'{get_build_tags(denv)} '
                                     + f'-o {build_bin} {install_src}')
