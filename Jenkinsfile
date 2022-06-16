@@ -69,22 +69,82 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: 'full_regression',
-               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+               description: 'Test-tag to use for the weekly Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagTCP',
+               defaultValue: 'pr daily_regression',
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large TCP stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagUCX',
+               defaultValue: 'pr daily_regression',
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large UCX stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional on EL 8 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
+                     defaultValue: false,
+                     description: 'Run the Functional on Ubuntu 20 test stage')
+        booleanParam(name: 'CI_small_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Small test stage')
+        booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_large_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large test stage')
+        booleanParam(name: 'CI_small_tcp_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Small TCP test stage')
+        booleanParam(name: 'CI_medium_tcp_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium TCP test stage')
+        booleanParam(name: 'CI_large_tcp_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large TCP test stage')
+        booleanParam(name: 'CI_small_ucx_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Small UCX test stage')
+        booleanParam(name: 'CI_medium_ucx_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium UCX test stage')
+        booleanParam(name: 'CI_large_ucx_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large UCX test stage')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
+               description: 'Label to use for 3 node Functional Hardware Small stage')
         string(name: 'CI_NVME_5_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
+               description: 'Label to use for 5 node Functional Hardware Medium stage')
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large stage')
+        string(name: 'CI_HW_SMALL_TCP_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node Functional Hardware Small TCP stage')
+        string(name: 'CI_HW_MEDIUM_TCP_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
+        string(name: 'CI_HW_LARGE_TCP_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node Functional Hardware Large TCP stage')
+        string(name: 'CI_HW_SMALL_UCX_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node Functional Hardware Small UCX stage')
+        string(name: 'CI_HW_MEDIUM_UCX_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
+        string(name: 'CI_HW_LARGE_UCX_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node Functional Hardware Large UCX stage')
     }
 
     stages {
@@ -108,7 +168,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional on CentOS 7') {
+                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -122,30 +182,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -168,7 +205,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -191,7 +228,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -215,7 +252,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -239,7 +276,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -263,7 +300,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -272,6 +309,150 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Large')
+                stage('Functional Hardware Small TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_SMALL_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Small TCP')
+                stage('Functional Hardware Medium TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.CI_HW_MEDIUM_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Medium TCP')
+                stage('Functional Hardware Large TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 8+ node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_LARGE_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Large TCP')
+                stage('Functional Hardware Small UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_SMALL_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Small UCX')
+                stage('Functional Hardware Medium UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.CI_HW_MEDIUM_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Medium UCX')
+                stage('Functional Hardware Large UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 8+ node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_LARGE_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Large UCX')
             } // parallel
         } // stage('Test')
     } //stages
