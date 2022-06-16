@@ -186,10 +186,11 @@ class RebuildTestBase(TestWithServers):
         self.pool.wait_for_rebuild(False, 1)
 
         # clear container status for the RF issue
-        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
-                                         cont=self.container.uuid,
-                                         prop="status",
-                                         value="healthy")
+        self.daos_cmd.container_set_prop(
+            pool=self.pool.uuid,
+            cont=self.container.uuid,
+            prop="status",
+            value="healthy")
 
         # Refresh local pool and container
         self.pool.check_pool_info()

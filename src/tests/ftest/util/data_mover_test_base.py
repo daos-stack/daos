@@ -569,15 +569,16 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     data = data_size * data_val
                     akey = "akey single {}".format(akey_idx)
                     c_akey = create_string_buffer(akey)
-                    c_data = ioreq.single_fetch(c_dkey, c_akey,
-                                                data_size + 1)
+                    c_data = ioreq.single_fetch(c_dkey, c_akey, data_size + 1)
                     actual_data = str(c_data.value.decode())
                     if actual_data != data:
                         self.log.info("Expected:\n%s\nBut got:\n%s",
                                       data[:100] + "...",
                                       actual_data[:100] + "...")
-                        self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s", str(obj.c_oid.hi),
-                                      str(obj.c_oid.lo), dkey, akey)
+                        self.log.info(
+                            "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                            str(obj.c_oid.hi), str(obj.c_oid.lo),
+                            dkey, akey)
                         self.fail("Single value verification failed.")
 
                 for akey_idx in range(num_akeys_array):
@@ -598,12 +599,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         data = data_size * data_val
                         actual_idx = str(actual_data[data_idx].decode())
                         if data != actual_idx:
-                            self.log.info("Expected:\n%s\nBut got:\n%s",
-                                          data[:100] + "...",
-                                          actual_idx + "...")
-                            self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                          str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                          dkey, akey)
+                            self.log.info(
+                                "Expected:\n%s\nBut got:\n%s",
+                                data[:100] + "...",
+                                actual_idx + "...")
+                            self.log.info(
+                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()

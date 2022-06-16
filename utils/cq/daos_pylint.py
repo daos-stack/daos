@@ -122,8 +122,8 @@ class WrapScript():
         for variable in variables:
             if variable.upper() == 'PREREQS':
                 newlines += 1
-# pylint: disable-next=line-too-long
-                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
+                outfile.write(
+                    f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
@@ -319,8 +319,9 @@ sys.path.append('site_scons')"""
                 continue
             if vals['category'] == 'warning':
                 continue
-            # pylint: disable-next=line-too-long,consider-using-f-string
-            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
 
     if not types or args.reports == 'n':
         return

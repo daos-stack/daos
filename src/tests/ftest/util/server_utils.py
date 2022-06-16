@@ -1079,8 +1079,8 @@ class DaosServerManager(SubprocessManager):
 
             # Reboot the servers if a reduced number of targets is required
             if adjusted_targets < targets:
-                self.log.info("Updating targets per server engine: %s -> %s",
-                              targets, adjusted_targets)
+                self.log.info(
+                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
                 self.set_config_value("targets", adjusted_targets)
                 self.stop()
                 self.start()
