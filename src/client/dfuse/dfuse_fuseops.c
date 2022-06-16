@@ -71,6 +71,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
+#if HAVE_CACHE_READDIR
+	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
+#else
+	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
+#endif
+
 	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
 		       conn->capable);
 
