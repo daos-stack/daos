@@ -47,7 +47,7 @@ class WrapScript():
         self.wrap_file = self._outfile.name
         with open(fname, 'r') as infile:
             self._read_files(infile, self._outfile)
-            self._outfile.flush()
+        self._outfile.flush()
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
@@ -189,8 +189,9 @@ class FileTypeList():
                 return True
             if filename.endswith('site_scons/stack_analyzer.py'):
                 return True
-            if 'utils/sl/fake_scons' in filename:
-                return True
+            # Needs more work yet, mostly on spellings.
+            # if 'utils/sl/fake_scons' in filename:
+            #     return True
             return False
 
         if is_scons_file(file):
@@ -244,7 +245,7 @@ def parse_file(args, target_file, ftest=False, scons=False):
         wrapper = WrapScript(target_file)
         target = [wrapper.wrap_file]
         # Do not warn on module name for SConstruct files, we don't get to pick their name.
-        target.extend(['--disable', 'invalid-name,function-redefined,too-few-public-methods'])
+        target.extend(['--disable', 'invalid-name'])
         init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
