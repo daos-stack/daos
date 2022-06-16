@@ -105,6 +105,11 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
+		.nad_type	= CRT_NA_UCX_TCP,
+		.nad_str	= "ucx+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
 		.nad_str	= NULL,
 	}
 };
