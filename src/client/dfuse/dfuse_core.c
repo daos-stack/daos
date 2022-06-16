@@ -1055,9 +1055,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 
 #if HAVE_FUSE_LOG
 static void
-dfuse_fuse_log(enum fuse_log_level level,
-	const char *fmt,
-	va_list ap)
+dfuse_fuse_log(enum fuse_log_level level, const char *fmt, va_list ap)
 {
 	int mask;
 	int d_level = DLOG_EMIT;
