@@ -47,6 +47,7 @@ def macro_expand(target, source, env):
                   % (tgts, grepv, sed_d, h_file))
 # pylint: enable=unused-argument
 
+
 def scons():
     """Scons function"""
 
@@ -54,7 +55,7 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION', 'conf_dir')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION', 'conf_dir')
 
     daos_build.add_build_rpath(env)
 
@@ -80,16 +81,15 @@ def scons():
         pp_files = pp_env.Preprocess(SRC)
         pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
 
-        denv.Requires(cart_targets, pp_files)
+        Depends(cart_targets, pp_files)
 
-    cart_lib = daos_build.library(denv, 'libcart', [cart_targets, swim_targets],
+    cart_lib = daos_build.library(denv, 'cart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
-    denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)
-    Export('cart_lib', 'cart_targets')
+    Export('cart_targets')
     Export('env', 'prereqs')
 
     env.Install(conf_dir, ['utils/memcheck-cart.supp',

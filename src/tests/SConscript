@@ -5,11 +5,12 @@ import compiler_setup
 
 def build_tests(prereqs, env, client_libs):
     """build the tests"""
+    Import('libdaos_tgts', 'mpi_cmd_parser')
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
-                   'pthread', 'dts', 'dpar']
+    libs_server = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
+                   'pthread', 'dts', 'dpar', 'isal', 'protobuf-c']
     libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
@@ -39,13 +40,12 @@ def build_tests(prereqs, env, client_libs):
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
     vos_perf = daos_build.program(denv, 'vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine],
+                                  ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
                                   LIBS=libs_server)
     denv.Install('$PREFIX/bin/', vos_perf)
 
-    Import('mpi_cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine],
+                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine] + libdaos_tgts,
                                  LIBS=libs_server)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
