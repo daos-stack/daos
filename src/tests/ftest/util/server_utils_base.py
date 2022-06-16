@@ -300,6 +300,7 @@ class DaosServerCommand(YamlCommand):
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
 
+
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
 

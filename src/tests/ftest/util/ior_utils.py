@@ -322,8 +322,8 @@ class IorCommand(ExecutableCommand):
         idx = messages.index(ior_metric_summary)
         # idx + 1 is header.
         # idx +2 and idx + 3 will give the write and read metrics.
-        write_metrics = (" ".join(messages[idx+2].split())).split()
-        read_metrics = (" ".join(messages[idx+3].split())).split()
+        write_metrics = (" ".join(messages[idx + 2].split())).split()
+        read_metrics = (" ".join(messages[idx + 3].split())).split()
 
         return (write_metrics, read_metrics)
 

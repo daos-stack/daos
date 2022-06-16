@@ -6,6 +6,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
+from os.path import join
+import uuid
+import re
+import ctypes
 from exception_utils import CommandFailure
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
@@ -15,10 +19,6 @@ from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path
-from os.path import join
-import uuid
-import re
-import ctypes
 from general_utils import create_string_buffer
 
 
@@ -54,11 +54,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     # The valid datamover tools that can be used
     TOOLS = (
-        "DCP",       # mpifileutils dcp
-        "DSYNC",     # mpifileutils dsync
-        "DSERIAL",   # mpifileutils daos-serialize + daos-deserialize
-        "FS_COPY",   # daos filesystem copy
-        "CONT_CLONE" # daos container clone
+        "DCP",        # mpifileutils dcp
+        "DSYNC",      # mpifileutils dsync
+        "DSERIAL",    # mpifileutils daos-serialize + daos-deserialize
+        "FS_COPY",    # daos filesystem copy
+        "CONT_CLONE"  # daos container clone
     )
 
     def __init__(self, *args, **kwargs):
@@ -574,12 +574,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     actual_data = str(c_data.value.decode())
                     if actual_data != data:
                         self.log.info("Expected:\n%s\nBut got:\n%s",
-                            data[:100] + "...",
-                            actual_data[:100] + "...")
-                        self.log.info(
-                            "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                            str(obj.c_oid.hi), str(obj.c_oid.lo),
-                            dkey, akey)
+                                      data[:100] + "...",
+                                      actual_data[:100] + "...")
+                        self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s", str(obj.c_oid.hi),
+                                      str(obj.c_oid.lo), dkey, akey)
                         self.fail("Single value verification failed.")
 
                 for akey_idx in range(num_akeys_array):
@@ -594,16 +592,15 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     c_akey = create_string_buffer(akey)
                     c_num_extents = ctypes.c_uint(num_extents)
                     c_data_size = ctypes.c_size_t(data_size)
-                    actual_data = ioreq.fetch_array(c_dkey, c_akey,
-                        c_num_extents, c_data_size)
+                    actual_data = ioreq.fetch_array(c_dkey, c_akey, c_num_extents, c_data_size)
                     for data_idx in range(num_extents):
                         data_val = str(data_idx % 10)
                         data = data_size * data_val
                         actual_idx = str(actual_data[data_idx].decode())
                         if data != actual_idx:
                             self.log.info("Expected:\n%s\nBut got:\n%s",
-                                data[:100] + "...",
-                                actual_idx + "...")
+                                          data[:100] + "...",
+                                          actual_idx + "...")
                             self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
                                           str(obj.c_oid.hi), str(obj.c_oid.lo),
                                           dkey, akey)

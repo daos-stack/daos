@@ -4,9 +4,11 @@ import argparse
 import atexit
 from SCons.Script import Exit
 
+
 def exit_handler(sa):
     """run analysis on exit"""
     sa.analyze()
+
 
 class analyzer():
     """Class to parse .su files"""

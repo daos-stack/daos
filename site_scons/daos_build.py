@@ -60,9 +60,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
             env.AppendUnique(RPATH=[path])
 
     if set_cgo_ld:
-        env.AppendENVPath("CGO_LDFLAGS",
-                          env.subst("$_LIBDIRFLAGS " "$_RPATH"),
-                          sep=" ")
+        env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS ", "$_RPATH"), sep=" ")
 
 
 def add_build_rpath(env, pathin="."):

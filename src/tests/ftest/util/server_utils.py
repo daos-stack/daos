@@ -9,8 +9,8 @@ import math
 import os
 import socket
 import time
-import yaml
 import random
+import yaml
 
 from avocado import fail_on
 
@@ -797,7 +797,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("No available candidate ranks to stop.")
 
         # Stop a random rank
-        random_rank = random.choice(candidate_ranks) #nosec
+        random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def kill(self):
@@ -1079,9 +1079,8 @@ class DaosServerManager(SubprocessManager):
 
             # Reboot the servers if a reduced number of targets is required
             if adjusted_targets < targets:
-                self.log.info(
-                        "Updating targets per server engine: %s -> %s",
-                        targets, adjusted_targets)
+                self.log.info("Updating targets per server engine: %s -> %s",
+                              targets, adjusted_targets)
                 self.set_config_value("targets", adjusted_targets)
                 self.stop()
                 self.start()

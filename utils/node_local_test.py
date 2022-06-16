@@ -23,23 +23,26 @@ import pprint
 import stat
 import errno
 import argparse
-import tabulate
 import threading
 import functools
 import traceback
-import subprocess #nosec
-import junit_xml
+import subprocess  # nosec
 import tempfile
-import pickle #nosec
-import xattr
+import pickle  # nosec
 from collections import OrderedDict
+import xattr
+import junit_xml
+import tabulate
 import yaml
+
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
+
 class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
+
 
 class NLTestNoFunction(NLTestFail):
     """Used to indicate a function did not log anything"""
@@ -48,11 +51,13 @@ class NLTestNoFunction(NLTestFail):
         super().__init__(self)
         self.function = function
 
+
 class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
 
 instance_num = 0
+
 
 def get_inc_id():
     """Return a unique character"""
