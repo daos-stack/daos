@@ -759,8 +759,12 @@ class DaosServer():
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
         ret = self._agent.wait(timeout=5)
-        print('rc from agent is {}'.format(ret))
+        print(f'rc from agent is {ret}')
         self._agent = None
+        try:
+            os.unlink(join(self.agent_dir, 'daos_agent.sock'))
+        except FileNotFoundError:
+            pass
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
@@ -1087,6 +1091,7 @@ class DFuse():
         self.wbcache = wbcache
         self.use_valgrind = True
         self._sp = None
+        self.log_flush = False
 
         self.log_file = None
 
@@ -1101,7 +1106,7 @@ class DFuse():
         else:
             running = 'not running'
 
-        return 'DFuse instance at {} ({})'.format(self.dir, running)
+        return f'DFuse instance at {self.dir} ({running})'
 
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
@@ -1116,10 +1121,13 @@ class DFuse():
         if self.conf.args.dfuse_debug:
             my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
+        if self.log_flush:
+            my_env['D_LOG_FLUSH'] = 'DEBUG'
+
         if v_hint is None:
             v_hint = get_inc_id()
 
-        prefix = 'dnt_dfuse_{}_'.format(v_hint)
+        prefix = f'dnt_dfuse_{v_hint}_'
         log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                suffix='.log',
                                                delete=False)
@@ -3364,24 +3372,29 @@ def run_in_fg(server, conf, args):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
+        # Only set the container cache attributes when the container is initially created so they
+        # can be modified later.
+        cont_attrs = OrderedDict()
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = 60
+        cont_attrs['dfuse-dentry-time'] = 60
+        cont_attrs['dfuse-ndentry-time'] = 60
+        cont_attrs['dfuse-direct-io-disable'] = False
+
+        for key, value in cont_attrs.items():
+            run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
+                                '--attr', key, '--value', str(value)],
+                         show_stdout=True)
+
     dfuse = DFuse(server,
                   conf,
                   pool=pool.uuid,
                   caching=True,
                   wbcache=False,
                   multi_user=args.multi_user)
-    dfuse.start()
 
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'],
-                 show_stdout=True)
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-data-cache', '--value', 'off'],
-                 show_stdout=True)
+    dfuse.log_flush = True
+    dfuse.start()
 
     t_dir = join(dfuse.dir, container)
 
@@ -4251,6 +4264,7 @@ def test_alloc_fail(server, conf):
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
     return rc
+
 
 def run(wf, args):
     """Main entry point"""

@@ -289,27 +289,27 @@ To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed
 to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 
-| **Attribute name**    | **Description**                                                  |
-| --------------------- | ---------------------------------------------------------------- |
-| dfuse-attr-time       | How long file attributes are cached                              |
-| dfuse-dentry-time     | How long directory entries are cached                            |
-| dfuse-dentry-dir-time | How long dentries are cached, if the entry is itself a directory |
-| dfuse-ndentry-time    | How long negative dentries are cached                            |
-| dfuse-data-cache      | Data caching enabled for this file ("on"/"off")                  |
-| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"off")        |
+| **Attribute name**      | **Description**                                                        |
+| ----------------------- | ---------------------------------------------------------------------- |
+| dfuse-attr-time         | How long file attributes are cached                                    |
+| dfuse-dentry-time       | How long directory entries are cached                                  |
+| dfuse-dentry-dir-time   | How long dentries are cached, if the entry is itself a directory       |
+| dfuse-ndentry-time      | How long negative dentries are cached                                  |
+| dfuse-data-cache        | Data caching enabled for this file ("on"/"true"/"off"/"false")         |
+| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false") |
 
 For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
 minutes, hours or days.
 
-dfuse-data-cache should be set to "on", or "off" if set, any other value will
+dfuse-data-cache should be set to "on", "true", "off" or "false" if set, other values will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open
 files will be honoured with this option enabled, files which do not set
 O\_DIRECT will be cached.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
-however if this is set to "on" then the O\_DIRECT flag will be ignored, and all
-files will use the page cache.  This default value for this is "off".
+however if this is enabled then the O\_DIRECT flag will be ignored, and all
+files will use the page cache.  This default value for this is disabled.
 
 With no options specified attr and dentry timeouts will be 1 second, dentry-dir
 and ndentry timeouts will be 5 seconds, and data caching will be enabled.
