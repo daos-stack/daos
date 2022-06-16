@@ -1,4 +1,4 @@
-"""Analyze -fstack-usage output"""
+"""Analyze stack usage output"""
 import os
 import argparse
 import atexit

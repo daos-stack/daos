@@ -189,7 +189,12 @@ class FileTypeList():
                 return True
             if filename.endswith('site_scons/stack_analyzer.py'):
                 return True
-            # Needs more work yet, mostly on spellings.
+            # Needs more work yet, partly on spellings.  Another issue is that in GitHub actions
+            # pylint is called on all files in the tree concurretnly so it can resolve calls to
+            # scons as being to fake_scons, where if you call pylint on file file then it cannot.
+            # At some point we need to move fake_scons so that it's checked on it's own, and at that
+            # point also move code that uses scons from the general checks to the scons checks so
+            # they are still checked against fake_scons.
             # if 'utils/sl/fake_scons' in filename:
             #     return True
             return False
