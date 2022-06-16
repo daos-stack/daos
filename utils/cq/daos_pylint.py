@@ -20,19 +20,19 @@ from pylint.lint import pylinter
 #  Supports minimum python version
 #  Supports python virtual environment usage
 #  Can be used by atom.io live
-#  Outputs directly to github annotations
+#  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
 #  Can be used as a commit-hook
 #  flake8 style --diff option
 
-# For now this spilts code into one of three types, build (scons), ftest or other.  For build code
+# For now this splits code into one of three types, build (scons), ftest or other.  For build code
 # it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
 # does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
-# that currently exist in the codebase we need to restrict this to modified code.  Spellings can
+# that currently exist in the code-base we need to restrict this to modified code.  Spellings can
 # also be enabled shortly however we have a number to correct or whitelist before enabling.
 
 
@@ -190,7 +190,7 @@ class FileTypeList():
             if filename.endswith('site_scons/stack_analyzer.py'):
                 return True
             # Needs more work yet, partly on spellings.  Another issue is that in GitHub actions
-            # pylint is called on all files in the tree concurretnly so it can resolve calls to
+            # pylint is called on all files in the tree concurrently so it can resolve calls to
             # scons as being to fake_scons, where if you call pylint on file file then it cannot.
             # At some point we need to move fake_scons so that it's checked on it's own, and at that
             # point also move code that uses scons from the general checks to the scons checks so
