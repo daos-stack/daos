@@ -12,8 +12,7 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
 from exception_utils import CommandFailure
-from test_utils_pool import TestPool
-from test_utils_base import LabelGenerator
+from test_utils_pool import add_pool
 from apricot import skipForTicket
 import queue
 
@@ -86,7 +85,6 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass (str) : Daos object class (RP_2G1,etc)
         """
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         pool_uuid = []
         target_list = []
@@ -104,11 +102,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             pool_uuid.append(self.pool.uuid)
             # Use only pool UUID while running the test.
