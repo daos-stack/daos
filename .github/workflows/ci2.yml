@@ -138,8 +138,7 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
       - name: Build with ALT_PREFIX in docker.
-        with:
-          distro: [rocky, fedora]
+        if: ${{ matrix.base }} == "el.8"
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-dep DAOS_ALT_PREFIX=yes
                             --build-arg DEPS_JOBS
