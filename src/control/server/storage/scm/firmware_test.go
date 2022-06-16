@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -38,9 +38,11 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		expRes     *storage.ScmFirmwareQueryResponse
 	}{
 		"discovery failed": {
-			input:      storage.ScmFirmwareQueryRequest{},
-			backendCfg: &MockBackendConfig{DiscoverErr: errors.New("mock discovery")},
-			expErr:     errors.New("mock discovery"),
+			input: storage.ScmFirmwareQueryRequest{},
+			backendCfg: &MockBackendConfig{
+				GetModulesErr: errors.New("mock discovery"),
+			},
+			expErr: errors.New("mock discovery"),
 		},
 		"no modules": {
 			input: storage.ScmFirmwareQueryRequest{},
@@ -51,7 +53,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		"success": {
 			input: storage.ScmFirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -74,7 +76,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		"get status failed": {
 			input: storage.ScmFirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusErr: errors.New("mock query"),
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -99,7 +101,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				DeviceUIDs: []string{"Device1", "NotReal"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -116,7 +118,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				DeviceUIDs: []string{"Device1", "Device3"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -137,7 +139,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				DeviceUIDs: []string{"Device1", "Device3", "Device1"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expErr: FaultDuplicateDevices,
@@ -147,7 +149,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				FirmwareRev: "FWRev1",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -164,7 +166,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				ModelID: "PartNumber2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -182,7 +184,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				ModelID:     "PartNumber2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -195,7 +197,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				FirmwareRev: "FWREV2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -214,7 +216,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				ModelID:     "PartNumber1",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:          defaultModules,
+				GetModulesRes:        defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
 			expRes: &storage.ScmFirmwareQueryResponse{
@@ -224,13 +226,13 @@ func TestProvider_QueryFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
 			res, err := p.QueryFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -261,8 +263,10 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			input: storage.ScmFirmwareUpdateRequest{
 				FirmwarePath: testPath,
 			},
-			backendCfg: &MockBackendConfig{DiscoverErr: errors.New("mock discovery")},
-			expErr:     errors.New("mock discovery"),
+			backendCfg: &MockBackendConfig{
+				GetModulesErr: errors.New("mock discovery"),
+			},
+			expErr: errors.New("mock discovery"),
 		},
 		"no modules": {
 			input: storage.ScmFirmwareUpdateRequest{
@@ -275,7 +279,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -296,7 +300,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes:       defaultModules,
+				GetModulesRes:     defaultModules,
 				UpdateFirmwareErr: testErr,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
@@ -322,7 +326,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				DeviceUIDs:   []string{"Device3", "Device2"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -341,7 +345,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				DeviceUIDs:   []string{"Device3", "NotReal"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expErr: errors.New("no module found with UID \"NotReal\""),
 		},
@@ -351,7 +355,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				DeviceUIDs:   []string{"Device3", "Device3"},
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expErr: FaultDuplicateDevices,
 		},
@@ -361,7 +365,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				FirmwareRev:  "FWRev1",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -377,7 +381,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				ModelID:      "PartNumber2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -394,7 +398,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				ModelID:      "PartNumber2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expErr: FaultNoFilterMatch,
 		},
@@ -405,7 +409,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				FirmwareRev:  "FWREV2",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expRes: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -423,20 +427,20 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				ModelID:      "PartNumber1",
 			},
 			backendCfg: &MockBackendConfig{
-				DiscoverRes: defaultModules,
+				GetModulesRes: defaultModules,
 			},
 			expErr: FaultNoFilterMatch,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
 			res, err := p.UpdateFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

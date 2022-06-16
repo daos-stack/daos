@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,7 @@ expect_merge_result(daos_prop_t *old, daos_prop_t *new, daos_prop_t *exp_result)
 		case DAOS_PROP_CO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
 		case DAOS_PROP_CO_OWNER_GROUP:
+		case DAOS_PROP_PO_POLICY:
 			assert_string_equal(entry->dpe_str, exp_entry->dpe_str);
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -263,7 +264,9 @@ test_daos_prop_from_str(void **state)
 	char		*COMP		= "compression:lz4";
 	char		*ENC		= "encryption:aes-xts128";
 	char		*RF		= "rf:2";
-	char		*EC_CELL	= "ec_cell:2021";
+	char		*EC_CELL	= "ec_cell_sz:2021";
+	char		*EC_PDA		= "ec_pda:1";
+	char		*RP_PDA		= "rp_pda:4";
 
 	/** Valid prop entries, wrong values */
 	char		*CSUM_INV	= "cksum:crc2000";
@@ -321,8 +324,9 @@ test_daos_prop_from_str(void **state)
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 
-	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s",
-		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF, EC_CELL);
+	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s",
+		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF,
+		EC_CELL, EC_PDA, RP_PDA);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, 0);
 
@@ -353,6 +357,12 @@ test_daos_prop_from_str(void **state)
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
 	assert_int_equal(entry->dpe_val, 2021);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_PDA);
+	assert_int_equal(entry->dpe_val, 1);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA);
+	assert_int_equal(entry->dpe_val, 4);
 
 	daos_prop_free(prop);
 }

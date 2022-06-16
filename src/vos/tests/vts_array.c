@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -268,7 +268,7 @@ vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_size_t record_size,
 	struct vts_metadata	 meta;
 	int			 rc = 0;
 
-	*oid = dts_unit_oid_gen(DAOS_OF_DKEY_UINT64, 0);
+	*oid = dts_unit_oid_gen(DAOS_OT_DKEY_UINT64, 0);
 	rc = array_init(&array, coh, *oid, NULL);
 	if (rc != 0)
 		return rc;
@@ -413,7 +413,7 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 	rc = vos_obj_query_key(array->va_coh, array->va_oid,
 			       DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
 			       epoch, &dkey, &array->va_iod.iod_name,
-			       &recx, 0, 0, NULL);
+			       &recx, NULL, 0, 0, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		*size = 0;

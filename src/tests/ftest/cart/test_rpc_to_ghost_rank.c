@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,8 +172,8 @@ completion_cb_common(const struct crt_cb_info *cb_info)
 		rpc_req_output = crt_reply_get(rpc_req);
 		if (rpc_req_output == NULL)
 			return;
-		if (cb_info->cci_rc != -DER_UNREACH && cb_info->cci_rc !=
-				-DER_TIMEDOUT) {
+		if (cb_info->cci_rc != -DER_UNREACH && cb_info->cci_rc != -DER_TIMEDOUT &&
+		    cb_info->cci_rc != -DER_HG) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d, "
 				"expecting rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc, -DER_UNREACH);
@@ -273,8 +273,9 @@ test_init(void)
 	D_ASSERTF(test_g.t_is_service == 1,
 		  "this should only run as server.\n");
 
-	crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-			     &test_g.t_tid[0], &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
+				  &test_g.t_tid[0], &grp, &grp_size, NULL);
+	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	/* Setup and add self rank, before calling rank/membership APIs. */
 	rc = crt_group_rank(NULL, &test_g.t_my_rank);

@@ -1,9 +1,11 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+//go:build linux && amd64
 // +build linux,amd64
+
 //
 
 package telemetry
@@ -12,8 +14,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestTelemetry_GetGauge(t *testing.T) {
@@ -56,7 +59,7 @@ func TestTelemetry_GetGauge(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := GetGauge(tc.ctx, tc.metricName)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expResult != nil {
 				if result == nil {
@@ -64,9 +67,9 @@ func TestTelemetry_GetGauge(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeGauge, "bad type")
-				common.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
-				common.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
+				test.AssertEqual(t, result.Type(), MetricTypeGauge, "bad type")
+				test.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
+				test.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
 			} else if result != nil {
 				t.Fatalf("expected nil result, got %+v", result)
 			}
@@ -114,7 +117,7 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := GetStatsGauge(tc.ctx, tc.metricName)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expResult != nil {
 				if result == nil {
@@ -122,16 +125,16 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeStatsGauge, "bad type")
-				common.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
-				common.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
+				test.AssertEqual(t, result.Type(), MetricTypeStatsGauge, "bad type")
+				test.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
+				test.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
 
-				common.AssertEqual(t, tc.expResult.min, result.FloatMin(), "FloatMin() failed")
-				common.AssertEqual(t, tc.expResult.max, result.FloatMax(), "FloatMax() failed")
-				common.AssertEqual(t, tc.expResult.sum, result.FloatSum(), "FloatSum() failed")
-				common.AssertEqual(t, tc.expResult.mean, result.Mean(), "Mean() failed")
-				common.AssertEqual(t, tc.expResult.stddev, result.StdDev(), "StdDev() failed")
-				common.AssertEqual(t, uint64(3), result.SampleSize(), "SampleSize() failed")
+				test.AssertEqual(t, tc.expResult.min, result.FloatMin(), "FloatMin() failed")
+				test.AssertEqual(t, tc.expResult.max, result.FloatMax(), "FloatMax() failed")
+				test.AssertEqual(t, tc.expResult.sum, result.FloatSum(), "FloatSum() failed")
+				test.AssertEqual(t, tc.expResult.mean, result.Mean(), "Mean() failed")
+				test.AssertEqual(t, tc.expResult.stddev, result.StdDev(), "StdDev() failed")
+				test.AssertEqual(t, uint64(3), result.SampleSize(), "SampleSize() failed")
 			} else if result != nil {
 				t.Fatalf("expected nil result, got %+v", result)
 			}

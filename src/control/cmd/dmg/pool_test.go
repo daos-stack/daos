@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,21 +8,24 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -34,7 +37,7 @@ var (
 func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) string {
 	t.Helper()
 
-	return common.CreateTestFile(t, dir, control.FormatACLDefault(acl))
+	return test.CreateTestFile(t, dir, control.FormatACLDefault(acl))
 }
 
 func TestPoolCommands(t *testing.T) {
@@ -68,7 +71,7 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatalf("Couldn't set file writable only")
 	}
 
-	testEmptyFile := common.CreateTestFile(t, tmpDir, "")
+	testEmptyFile := test.CreateTestFile(t, tmpDir, "")
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
@@ -180,6 +183,30 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --size %s --scm-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (size nranks)",
+			"pool create --size 100% --nranks 16",
+			"",
+			errors.New("--size may not be mixed with --num-ranks"),
+		},
+		{
+			"Create pool with incompatible arguments (size ranks)",
+			"pool create --size 100% --ranks 1,2,3",
+			"",
+			errors.New("--size may not be mixed with --ranks"),
+		},
+		{
+			"Create pool with invalid arguments (too small ratio)",
+			"pool create --size=0%",
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
+		},
+		{
+			"Create pool with invalid arguments (too big ratio)",
+			"pool create --size=101%",
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
 		{
 			"Create pool with incompatible rank arguments (auto)",
@@ -534,6 +561,24 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
+			"Set pool ec_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
+			"",
+			errors.New("can't set EC performance domain affinity on existing pool."),
+		},
+		{
+			"Set pool rp_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rp_pda:1",
+			"",
+			errors.New("can't set RP performance domain affinity on existing pool"),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
@@ -713,6 +758,50 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query pool with UUID and enabled ranks",
+			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query -e 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query -b 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query pool with Label",
 			"pool query test_label",
 			strings.Join([]string{
@@ -729,10 +818,26 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("invalid label"),
 		},
 		{
+			"Upgrade pool with pool ID",
+			"pool upgrade 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolUpgradeReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Query pool with incompatible arguments",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			"",
+			errors.New("may not be mixed"),
 		},
 	})
 }
@@ -808,13 +913,13 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 			listResp: &mgmtpb.ListPoolsResp{
 				Pools: []*mgmtpb.ListPoolsResp_Pool{
 					{
-						Uuid:    common.MockUUID(1),
+						Uuid:    test.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
 					},
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Uuid:      common.MockUUID(1),
+				Uuid:      test.MockUUID(1),
 				TierStats: []*mgmtpb.StorageUsageStats{{}},
 			},
 		},
@@ -823,20 +928,21 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 			listResp: &mgmtpb.ListPoolsResp{
 				Pools: []*mgmtpb.ListPoolsResp_Pool{
 					{
-						Uuid:    common.MockUUID(1),
+						Uuid:    test.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
+						State:   system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Status: int32(drpc.DaosNotInit),
+				Status: int32(daos.NotInit),
 			},
 			expErr: errors.New("Query on pool \"00000001\" unsuccessful, status: \"DER_UNINIT"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			responses := []*control.UnaryResponse{
 				control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.listResp),
@@ -852,11 +958,367 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			PoolListCmd := new(PoolListCmd)
 			PoolListCmd.setInvoker(mi)
-			PoolListCmd.setLog(log)
+			PoolListCmd.SetLog(log)
 			PoolListCmd.setConfig(tc.ctlCfg)
 
 			gotErr := PoolListCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+type MockRequestsRecorderInvoker struct {
+	control.MockInvoker
+	Requests []control.UnaryRequest
+}
+
+func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Context, request control.UnaryRequest) (*control.UnaryResponse, error) {
+	invoker.Requests = append(invoker.Requests, request)
+	return invoker.MockInvoker.InvokeUnaryRPC(context, request)
+}
+
+func TestDmg_PoolCreateAllCmd(t *testing.T) {
+	type ExpectedOutput struct {
+		PoolConfig control.MockPoolRespConfig
+		WarningMsg string
+		Error      error
+	}
+
+	for name, tc := range map[string]struct {
+		StorageRatio     string
+		HostsConfigArray []control.MockHostStorageConfig
+		ExpectedOutput   ExpectedOutput
+	}{
+		"single server": {
+			StorageRatio: "100%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0",
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
+					NvmeBytes: uint64(1) * uint64(humanize.TByte),
+				},
+			},
+		},
+		"single server 30%": {
+			StorageRatio: "30%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0",
+					ScmBytes:  uint64(30) * uint64(humanize.GByte),
+					NvmeBytes: uint64(300) * uint64(humanize.GByte),
+				},
+			},
+		},
+		"double server": {
+			StorageRatio: "100%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+				{
+					HostName: "bar",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+						},
+						{ // Check if not mounted SCM is well managed
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(0),
+								AvailBytes: uint64(0),
+							},
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(50) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(400) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(300) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(2) * uint64(humanize.TByte),
+							},
+							Rank: 3,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0,1,2,3",
+					ScmBytes:  uint64(50) * uint64(humanize.GByte),
+					NvmeBytes: uint64(700) * uint64(humanize.GByte),
+				},
+			},
+		},
+		"No NVME": {
+			StorageRatio: "100%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0",
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
+					NvmeBytes: uint64(0),
+				},
+				WarningMsg: "Creating DAOS pool without NVME storage",
+			},
+		},
+		"SCM:NVME ratio": {
+			StorageRatio: "  100   %  ",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.TByte),
+								AvailBytes: uint64(100) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0",
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
+					NvmeBytes: uint64(100) * uint64(humanize.TByte),
+				},
+				WarningMsg: "SCM:NVMe ratio is less than",
+			},
+		},
+		"single server error 1%": {
+			StorageRatio: "1%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(1),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("Not enough SCM storage available with ratio 1%"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mockInvokerConfig := new(control.MockInvokerConfig)
+
+			unaryResponse := new(control.UnaryResponse)
+			for _, hostStorageConfig := range tc.HostsConfigArray {
+				storageScanResp := control.MockStorageScanResp(t,
+					hostStorageConfig.ScmConfig,
+					hostStorageConfig.NvmeConfig)
+				hostResponse := &control.HostResponse{
+					Addr:    hostStorageConfig.HostName,
+					Message: storageScanResp,
+				}
+				unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
+			}
+			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
+
+			if tc.ExpectedOutput.PoolConfig.Ranks != "" {
+				poolCreateResp := control.MockPoolCreateResp(t, &tc.ExpectedOutput.PoolConfig)
+				hostResponse := &control.HostResponse{
+					Addr:    tc.ExpectedOutput.PoolConfig.HostName,
+					Message: poolCreateResp,
+				}
+				unaryResponse = new(control.UnaryResponse)
+				unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
+				mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
+			}
+
+			mockInvoker := &MockRequestsRecorderInvoker{
+				MockInvoker: *control.NewMockInvoker(log, mockInvokerConfig),
+				Requests:    []control.UnaryRequest{},
+			}
+
+			poolCreateCmd := new(PoolCreateCmd)
+			poolCreateCmd.setInvoker(mockInvoker)
+			poolCreateCmd.SetLog(log)
+			poolCreateCmd.Size = tc.StorageRatio
+
+			err := poolCreateCmd.Execute(nil)
+
+			if tc.ExpectedOutput.Error != nil {
+				test.AssertTrue(t, err != nil, "Expected an error")
+				testExpectedError(t, tc.ExpectedOutput.Error, err)
+			} else {
+				test.AssertTrue(t, err == nil, "Expected no error")
+				test.AssertEqual(t, len(mockInvoker.Requests), 2, "Invalid number of request sent")
+				test.AssertTrue(t,
+					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
+						" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
+				test.AssertTrue(t,
+					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.PoolCreateReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
+						" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
+				poolCreateRequest := mockInvoker.Requests[1].(*control.PoolCreateReq)
+				test.AssertEqual(t,
+					poolCreateRequest.TierBytes[0],
+					tc.ExpectedOutput.PoolConfig.ScmBytes,
+					"Invalid size of allocated SCM")
+				test.AssertEqual(t,
+					poolCreateRequest.TierBytes[1],
+					tc.ExpectedOutput.PoolConfig.NvmeBytes,
+					"Invalid size of allocated NVME")
+				test.AssertEqual(t,
+					poolCreateRequest.TotalBytes,
+					uint64(0),
+					"Invalid size of TotalBytes attribute: disabled with manual allocation")
+				test.AssertTrue(t,
+					poolCreateRequest.TierRatio == nil,
+					"Invalid size of TierRatio attribute: disabled with manual allocation")
+				msg := fmt.Sprintf("Creating DAOS pool with %s of all storage",
+					strings.ReplaceAll(tc.StorageRatio, " ", ""))
+				test.AssertTrue(t,
+					strings.Contains(buf.String(), msg),
+					"missing success message: Creating DAOS pool with with <ratio>% of all storage")
+				if tc.ExpectedOutput.WarningMsg != "" {
+					test.AssertTrue(t,
+						strings.Contains(buf.String(), tc.ExpectedOutput.WarningMsg),
+						"missing warning message: "+tc.ExpectedOutput.WarningMsg)
+				}
+			}
 		})
 	}
 }

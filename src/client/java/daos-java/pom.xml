@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
+    <version>2.2.0-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -41,7 +41,7 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-buffer</artifactId>
-      <version>4.1.59.Final</version>
+      <version>4.1.77.Final</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -170,6 +170,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -185,6 +186,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -201,6 +203,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -217,6 +220,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"

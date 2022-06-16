@@ -1,7 +1,8 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
+//go:build linux
 // +build linux
 
 package logging_test
@@ -22,11 +23,13 @@ import (
 func TestSyslogOutput(t *testing.T) {
 	journalctl, err := exec.LookPath("journalctl")
 	if err != nil {
-		t.Skip("unable to locate journalctl -- not running this test")
+		t.Log("unable to locate journalctl -- not running this test")
+		return
 	}
 	cmd := exec.Command(journalctl, "--system")
 	if err := cmd.Run(); err != nil {
-		t.Skip("current user does not have permissions to view system log")
+		t.Log("current user does not have permissions to view system log")
+		return
 	}
 
 	rand.Seed(time.Now().UnixNano())

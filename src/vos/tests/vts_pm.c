@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -588,6 +588,7 @@ punch_model_test(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
+	daos_epoch_t		max_write;
 	const char		*expected = "HelloWorld";
 	const char		*under = "HelloLonelyWorld";
 	const char		*latest = "Goodbye";
@@ -602,11 +603,11 @@ punch_model_test(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(under);
@@ -737,10 +738,11 @@ punch_model_test(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
-			       11, &dkey, &akey, &rex, 0, 0, NULL);
+			       11, &dkey, &akey, &rex, &max_write, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
+	assert_int_equal(max_write, 11);
 }
 
 static void
@@ -1358,13 +1360,12 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-/** Making the oid generation deterministic, I get to 102 before I hit a false
- *  collision on the oid.   This may indicate the hashing needs to be improved
- *  but for now, it's good enough.  In general, the chance of a single
- *  collision is very high well before we get close to saturation due
+/** Making the oid generation deterministic, I get to 18201 before I hit a false
+ *  collision on the oid. For now, it's good enough. In general, the chance of
+ *  a single collision is very high well before we get close to saturation due
  *  to the birthday paradox.
  */
-#define NUM_OIDS 102
+#define NUM_OIDS 18201
 static void
 multiple_oid_cond_test(void **state)
 {
@@ -1572,7 +1573,8 @@ remove_test(void **state)
 		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	epr.epr_lo = 0;
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, true);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 
 	/* Should get same result after aggregation */
 	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
@@ -1671,11 +1673,11 @@ minor_epoch_punch_sv(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
@@ -1756,11 +1758,11 @@ minor_epoch_punch_array(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
@@ -1850,11 +1852,11 @@ minor_epoch_punch_rebuild(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -1986,6 +1988,212 @@ many_keys(void **state)
 	start_epoch = epoch + 1;
 }
 
+#define CELL_SZ 2
+#define STRIPE_SZ 8
+#define STRIPES_PER_KEY 4
+
+static void
+ec_simulate_parity(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+		   uint64_t stripe_num, int nr, d_sg_list_t *sgl)
+{
+	uint64_t	dkey_val = stripe_num / STRIPES_PER_KEY;
+	uint64_t	stripe_off;
+	daos_key_t	dkey;
+	daos_recx_t	rex = {0};
+	daos_iod_t	iod = {0};
+	char		akey = '\0';
+	int		rc;
+
+	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
+	d_iov_set(&iod.iod_name, &akey, sizeof(akey));
+
+	stripe_off = stripe_num % STRIPES_PER_KEY;
+
+	rex.rx_idx = DAOS_EC_PARITY_BIT | (stripe_off * CELL_SZ);
+	rex.rx_nr = CELL_SZ;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid,
+			    epoch, 0, 0, &dkey, 1, &iod,
+			    NULL, sgl);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+ec_simulate_data(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+		 uint64_t stripe_num, uint64_t off, uint64_t len, bool is_punch, d_sg_list_t *sgl)
+{
+	uint64_t	dkey_val = stripe_num / STRIPES_PER_KEY;
+	uint64_t	stripe_off;
+	daos_key_t	dkey;
+	daos_recx_t	rex = {0};
+	daos_iod_t	iod = {0};
+	char		akey = '\0';
+	int		rc;
+
+	assert(off < STRIPE_SZ * STRIPES_PER_KEY);
+	assert((off + len) <= STRIPE_SZ * STRIPES_PER_KEY);
+	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
+	d_iov_set(&iod.iod_name, &akey, sizeof(akey));
+
+	stripe_off = stripe_num % STRIPES_PER_KEY;
+
+	rex.rx_idx = stripe_off * STRIPE_SZ + off;
+	rex.rx_nr = len;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = is_punch ? 0 : 1;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid,
+			    epoch, 0, 0, &dkey, 1, &iod,
+			    NULL, is_punch ? NULL : sgl);
+	assert_rc_equal(rc, 0);
+}
+
+static int
+ec_get_size(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch, uint64_t *size)
+{
+	int		rc;
+	uint64_t	max;
+	daos_recx_t	recx[3];
+	daos_key_t	akey;
+	daos_key_t	dkey;
+	char		akey_val = '\0';
+	uint64_t	dkey_val;
+
+
+	d_iov_set(&dkey, NULL, 0);
+	d_iov_set(&akey, &akey_val, sizeof(akey_val));
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_MAX|DAOS_GET_DKEY|VOS_GET_RECX_EC|DAOS_GET_RECX,
+			       epoch, &dkey, &akey, &recx[0], NULL, CELL_SZ, STRIPE_SZ, NULL);
+	if (rc != 0)
+		return rc;
+
+	dkey_val = *(uint64_t *)dkey.iov_buf;
+	max = recx[0].rx_idx + recx[0].rx_nr;
+
+	*size = (dkey_val * STRIPES_PER_KEY * STRIPE_SZ) + max;
+
+	return 0;
+}
+
+static void
+ec_size(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = start_epoch;
+	const char		w[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+	daos_unit_oid_t		oid;
+	uint64_t		size;
+	uint64_t		stripe_offsets[] = {0, 2, STRIPES_PER_KEY, STRIPES_PER_KEY * 3 + 2};
+	int			i;
+
+	test_args_reset(arg, VPOOL_1G);
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	/* set up oid and dkey */
+	oid = gen_oid(DAOS_OT_DKEY_UINT64);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)w, sizeof(w) - 1);
+
+	ec_simulate_data(arg, oid, epoch++, 0, 0, STRIPE_SZ, true, NULL);
+	rc = ec_get_size(arg, oid, epoch++, &size);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	for (i = 0; i < ARRAY_SIZE(stripe_offsets); i++) {
+
+		/** Full stripe write to stripe 0 */
+		ec_simulate_parity(arg, oid, epoch++, stripe_offsets[i], 1, &sgl);
+
+		/** Size should be stripe size */
+		rc = ec_get_size(arg, oid, epoch++, &size);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(size, (stripe_offsets[i] + 1) * STRIPE_SZ);
+
+		/** Punch last record of stripe */
+		ec_simulate_data(arg, oid, epoch++, stripe_offsets[i], STRIPE_SZ - 1, 1, true,
+				 NULL);
+
+		/** Size should be STRIPE_SZ - 1 */
+		rc = ec_get_size(arg, oid, epoch++, &size);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(size, (stripe_offsets[i] + 1) * STRIPE_SZ - 1);
+
+		/** Write partial to 2nd stripe */
+		ec_simulate_data(arg, oid, epoch++, stripe_offsets[i] + 1, 0, CELL_SZ * 2, false,
+				 &sgl);
+
+		/** Size should be STRIPE_SZ + CELL_SZ * 2 */
+		rc = ec_get_size(arg, oid, epoch++, &size);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(size, (stripe_offsets[i] + 1) * STRIPE_SZ + CELL_SZ * 2);
+
+		/** Full stripe write to 2nd stripe */
+		ec_simulate_parity(arg, oid, epoch++, stripe_offsets[i] + 1, 1, &sgl);
+
+		/** Size should include 2 stripes after offset */
+		rc = ec_get_size(arg, oid, epoch++, &size);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(size, (stripe_offsets[i] + 2) * STRIPE_SZ);
+
+		if (i == 0)
+			continue;
+
+		/** Punch the stripes we wrote */
+		ec_simulate_data(arg, oid, epoch++, stripe_offsets[i], 0, STRIPE_SZ, true, NULL);
+		ec_simulate_data(arg, oid, epoch++, stripe_offsets[i] + 1, 0, STRIPE_SZ, true,
+				 NULL);
+
+		/** Size should be 2 stripes after prior offset */
+		rc = ec_get_size(arg, oid, epoch++, &size);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(size, (stripe_offsets[i - 1] + 2) * STRIPE_SZ);
+
+		/** Restore the old write */
+		ec_simulate_data(arg, oid, epoch++, stripe_offsets[i] + 1, STRIPE_SZ - 1, 1, false,
+				 &sgl);
+	}
+
+	/** Hole after parity */
+	ec_simulate_data(arg, oid, epoch++, 99, 0, STRIPE_SZ, true, NULL);
+	ec_simulate_parity(arg, oid, epoch++, 98, 1, NULL);
+
+	rc = ec_get_size(arg, oid, epoch++, &size);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(size, 99 * STRIPE_SZ);
+
+	/** parity written in later epoch than hole */
+	ec_simulate_parity(arg, oid, epoch++, 99, 1, NULL);
+	rc = ec_get_size(arg, oid, epoch++, &size);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(size, 100 * STRIPE_SZ);
+
+	/** Aggregation case.   Hole extents merged */
+	ec_simulate_parity(arg, oid, epoch++, 200, 1, NULL);
+	ec_simulate_parity(arg, oid, epoch++, 201, 1, NULL);
+	ec_simulate_parity(arg, oid, epoch++, 202, 1, NULL);
+	ec_simulate_data(arg, oid, epoch++, 201, 0, STRIPE_SZ * 2, true, NULL);
+	rc = ec_get_size(arg, oid, epoch++, &size);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(size, 201 * STRIPE_SZ);
+
+	d_sgl_fini(&sgl, false);
+
+	start_epoch = epoch + 1;
+}
+
 static void
 test_inprogress_parent_punch(void **state)
 {
@@ -2018,15 +2226,15 @@ test_inprogress_parent_punch(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey3_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
-	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
-	set_iov(&akey3, &akey3_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey1, &akey1_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	set_iov(&akey2, &akey2_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	set_iov(&akey3, &akey3_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -2273,16 +2481,16 @@ many_tx(void **state)
 
 	/* Set up dkey and akey */
 	for (i = 0; i < nr_obj; i++)
-		oid[i] = gen_oid(arg->ofeat);
+		oid[i] = gen_oid(arg->otype);
 	for (i = 0; i < nr_dkey; i++) {
 		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
 		set_iov(&dkey[i], &dkey_buf[i][0],
-			arg->ofeat & DAOS_OF_DKEY_UINT64);
+			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
 	}
 	for (i = 0; i < nr_akey; i++) {
 		vts_key_gen(&akey_buf[i][0], arg->akey_size, true, arg);
 		set_iov(&akey[i], &akey_buf[i][0],
-			arg->ofeat & DAOS_OF_AKEY_UINT64);
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 		iod[i].iod_type = DAOS_IOD_SINGLE;
 		iod[i].iod_size = strlen(first);
 		iod[i].iod_name = akey[i];
@@ -2376,7 +2584,7 @@ start_over:
 		if ((epoch - 200) < epr.epr_lo)
 			continue;
 		epr.epr_hi = epoch - 200;
-		rc = vos_aggregate(coh, &epr, NULL, NULL, false);
+		rc = vos_aggregate(coh, &epr, NULL, NULL, 0);
 		assert_rc_equal(rc, 0);
 	}
 	for (i = 0; i < NR_TX - 1; i++) {
@@ -2484,13 +2692,13 @@ uncommitted_parent(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
 	vts_key_gen(&akey_buf[0][0], arg->akey_size, true, arg);
-	set_iov(&akey[0], &akey_buf[0][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&akey[0], &akey_buf[0][0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 	vts_key_gen(&akey_buf[1][0], arg->akey_size, true, arg);
-	set_iov(&akey[1], &akey_buf[1][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&akey[1], &akey_buf[1][0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, first, 5, true,
 		   TX_OP_UPDATE1);
@@ -2550,13 +2758,13 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	memset(iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
-	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey1, &akey1_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	set_iov(&akey2, &akey2_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 	rc = d_sgl_init(&sgl[0], 1);
 	assert_rc_equal(rc, 0);
@@ -2787,6 +2995,7 @@ static const struct CMUnitTest punch_model_tests_all[] = {
 	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
 		NULL },
 	{ "VOS815: Many keys in one tree", many_keys, NULL, NULL },
+	{ "VOS816: Simulate EC array size", ec_size, NULL, NULL },
 };
 
 int

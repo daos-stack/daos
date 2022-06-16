@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,18 +11,12 @@ import (
 	"os"
 
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
-// MockConfig returns an I/O Engine config with mocked netdetect methods.
+// MockConfig returns an I/O Engine config set up for testing.
 func MockConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
-		ValidateProvider:  netdetect.ValidateProviderStub,
-		GetIfaceNumaNode:  netdetect.MockGetIfaceNumaNode,
-		GetNetDevCls: func(string) (uint32, error) {
-			return 0, nil
-		},
 	}
 }
 
@@ -98,4 +92,8 @@ func (tr *TestRunner) GetLastPid() uint64 {
 
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg
+}
+
+func (tr *TestRunner) GetRunnerConfig() *TestRunnerConfig {
+	return &tr.runnerCfg
 }

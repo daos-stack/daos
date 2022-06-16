@@ -1,13 +1,13 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from itertools import product
 
 from ior_test_base import IorTestBase
-from general_utils import human_to_bytes
+
 
 class EcodCellSizeProperty(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -27,15 +27,11 @@ class EcodCellSizeProperty(IorTestBase):
             expected_size (int): expected container cell size
         """
         daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
-                                                self.container.uuid)
-        cont_prop_stdout = cont_prop.stdout_text
-        prop_list = cont_prop_stdout.split('\n')[1:]
-        cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith('EC Cell Size')][0]
-        cell_size = (prop_list[cont_index].split('EC Cell Size')[1].strip())
-        cont_cell_size = (human_to_bytes(cell_size.replace(" ", "")))
-        self.assertEqual(expected_size, cont_cell_size)
+        cont_prop = daos_cmd.container_get_prop(
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell_sz"])
+        actual_size = cont_prop["response"][0]["value"]
+
+        self.assertEqual(expected_size, actual_size)
 
     def test_ec_pool_property(self):
         """Jira ID: DAOS-7321.
@@ -78,7 +74,7 @@ class EcodCellSizeProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_cell != pool_prop_expected:
-                self.container.properties.update("ec_cell:{}"
+                self.container.properties.update("ec_cell_sz:{}"
                                                  .format(cont_cell))
 
             # Create the container and open handle

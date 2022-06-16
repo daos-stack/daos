@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,8 +17,6 @@
 #include <gurt/telemetry_consumer.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
@@ -33,6 +31,7 @@ dtx_tls_init(int xs_id, int tgt_id)
 	if (tgt_id < 0)
 		return tls;
 
+	tls->dt_agg_gen = 1;
 	rc = d_tm_add_metric(&tls->dt_committable, D_TM_STATS_GAUGE,
 			     "total number of committable DTX entries",
 			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
@@ -141,6 +140,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	uint32_t		 committed = 0;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -172,7 +172,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
-			if (rc == 0 && rc1 < 0)
+			if (rc1 > 0)
+				committed += rc1;
+			else if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -297,6 +299,8 @@ out:
 		(int)din->di_dtx_array.ca_count, din->di_epoch, DP_RC(rc));
 
 	dout->do_status = rc;
+	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
+	dout->do_misc = committed;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
@@ -331,7 +335,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j);
+		rc = dtx_commit(cont, pdte, dcks, j, 0);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -396,6 +400,23 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
 	       dtx_agg_thd_age_up);
 
+	str = getenv("DTX_RPC_HELPER_THD");
+	if (str != NULL) {
+		dtx_rpc_helper_thd = atoi(str);
+		if (dtx_rpc_helper_thd == 0) {
+			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_MAX;
+		} else if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
+			D_WARN("Invalid DTX RPC helper threshold %u, the valid range is "
+			       "[%u, unlimited), 0 is for unlimited, use the default value %u\n",
+			       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
+			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
+		}
+	} else {
+		dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
+	}
+
+	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
+
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
@@ -417,12 +438,15 @@ dtx_setup(void)
 {
 	int	rc;
 
-	dtx_agg_gen = 1;
-
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = dss_ult_create_all(dtx_aggregation_main, NULL, true);
 	if (rc != 0)
-		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to create DTX aggregation ULT: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -444,6 +468,7 @@ struct dss_module dtx_module =  {
 	.sm_name	= "dtx",
 	.sm_mod_id	= DAOS_DTX_MODULE,
 	.sm_ver		= DAOS_DTX_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= dtx_init,
 	.sm_fini	= dtx_fini,
 	.sm_setup	= dtx_setup,

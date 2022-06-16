@@ -1,35 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import re
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from avocado.core.exceptions import TestFail
-
-
-def get_rf(oclass):
-    """Return redundancy factor based on the oclass.
-
-    Args:
-        oclass(string): object class.
-
-    return:
-        redundancy factor(int) from object type
-    """
-    rf = 0
-    if "EC" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[1])
-    elif "RP" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[0]) - 1
-    else:
-        rf = 0
-    return rf
+from oclass_utils import extract_redundancy_factor
 
 
 # pylint: disable=attribute-defined-outside-init
@@ -39,7 +16,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
 
     :avocado: recursive
     """
-
 
     def add_containers(self, oclass=None):
         """Create a list of containers that the various jobs use for storage.
@@ -54,7 +30,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         # don't include oclass in daos cont cmd; include rf based on the class
         if oclass:
             container.oclass.update(oclass)
-            redundancy_factor = get_rf(oclass)
+            redundancy_factor = extract_redundancy_factor(oclass)
             rf = 'rf:{}'.format(str(redundancy_factor))
         properties = container.properties.value
         cont_properties = (",").join(filter(None, [properties, rf]))
@@ -80,7 +56,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.dfs_oclass.update(oclass)
             self.ior_cmd.dfs_dir_oclass.update(oclass)
             # oclass_dir can not be EC must be RP based on rf
-            rf = get_rf(oclass)
+            rf = extract_redundancy_factor(oclass)
             if rf >= 2:
                 self.mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
             elif rf == 1:

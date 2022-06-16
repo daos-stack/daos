@@ -10,7 +10,7 @@ available under `src/tests`.
 
 `libdaos` is written in C and uses Doxygen comments that are added to C header
 files. The Doxygen documentation is available
-[here](https://daos-stack.github.io/html/).
+[here](https://docs.daos.io/v2.2/doxygen/html/).
 
 ## Python Bindings
 

@@ -1,6 +1,7 @@
 """Build ftest"""
 import os
 
+
 def scons():
     """Execute build"""
     Import('env')
@@ -15,9 +16,9 @@ def scons():
             'daos_test', 'data', 'fault_domain', 'io', 'ior',
             'mdtest', 'network', 'nvme', 'mpiio',
             'object', 'osa', 'pool', 'rebuild', 'security',
-            'server', 'soak', 'unittest', 'erasurecode',
+            'server', 'soak', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness',
-            'telemetry', 'deployment']
+            'telemetry', 'deployment', 'performance']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir),
@@ -33,6 +34,7 @@ def scons():
 
     # util
     SConscript('util/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

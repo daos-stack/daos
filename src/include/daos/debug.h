@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,9 +68,7 @@
 	/** security check */					\
 	ACTION(DB_SEC,	   sec,	    security,       0, arg)	\
 	/** checksum */						\
-	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)	\
-	/** daos management */					\
-	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)
+	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
@@ -81,12 +79,16 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
-#define DF_DSMC		DB_ANY
-#define DF_DSMS		DB_DSMS
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
+/**
+ * DAOS-10412
+ * need this unnecessary internal API since Go can't see log masks due to
+ * no C pre-processor macro support
+ */
+int  daos_debug_init_ex(char *logfile, d_dbug_t logmask);
 void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);

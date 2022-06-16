@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,14 +76,15 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
 
+	print_message("daos_obj_verify ...\n");
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)
@@ -203,8 +204,8 @@ rebuild_ec_multi_stripes(void **state)
 
 	/* test EC degraded fetch and verify data */
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	fail_shards[0] = 2;
-	fail_shards[1] = 1;
+	fail_shards[0] = 1;
+	fail_shards[1] = 0;
 	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
 	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
@@ -802,6 +803,7 @@ enumerate_cb(void *data)
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		print_message("total %d  number %d\n", total, number);
 	}
 
 	assert_int_equal(total, 100);
@@ -990,6 +992,61 @@ rebuild_ec_parity_overwrite(void **state)
 	free(data);
 }
 
+static void
+rebuild_ec_then_aggregation(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	char		*data;
+	char		*verify_data;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	data = (char *)malloc(CELL_SIZE);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(CELL_SIZE);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 11; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = CELL_SIZE;
+		recx.rx_idx = i * CELL_SIZE;
+		memset(data, 'a' + i, CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, CELL_SIZE, &req);
+	}
+
+	/* rebuild one data shard */
+	rank = get_rank_by_oid_shard(arg, oid, 2);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+	print_message("sleep 30 seconds");
+	sleep(30);
+
+	/* Trigger EC aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
+				       DAOS_FORCE_EC_AGG);
+
+	for (i = 0; i < 11; i++) {
+		daos_off_t offset = i * CELL_SIZE;
+
+		memset(verify_data, 'a' + i, CELL_SIZE);
+		ec_verify_parity_data(&req, "d_key", "a_key", offset,
+				      (daos_size_t)CELL_SIZE, verify_data,
+				      DAOS_TX_NONE, true);
+	}
+	free(data);
+	free(verify_data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1113,6 +1170,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD42: rebuild parity over write",
 	 rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
 	 test_teardown},
+	{"REBUILD43: EC rebuild then aggregation",
+	 rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+	 test_teardown},
 };
 
 int
@@ -1121,7 +1181,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1131,7 +1191,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

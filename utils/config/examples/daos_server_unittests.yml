@@ -6,6 +6,7 @@ access_points: ['example']  # management service leader (bootstrap)
 provider: ofi+tcp
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
+telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
@@ -23,43 +24,38 @@ control_log_file: /tmp/daos_server.log
 #  key: /etc/daos/certs/server.key
 
 engines:
--
-  targets: 1                # number of I/O service threads per-engine
-  first_core: 0             # offset of the first core for service threads
-  nr_xs_helpers: 0          # count of I/O offload threads per engine
-  fabric_iface: lo          # map to OFI_INTERFACE=lo
-  fabric_iface_port: 31316  # map to OFI_PORT=31316
-  log_mask: DEBUG,RPC=ERR,MEM=ERR
-  log_file: /tmp/daos_engine.0.log # map to D_LOG_FILE=/tmp/daos_engine.0.log
+  -
+    pinned_numa_node: 0
+    targets: 1                # number of I/O service threads per-engine
+    first_core: 0             # offset of the first core for service threads
+    nr_xs_helpers: 0          # count of I/O offload threads per engine
+    fabric_iface: lo          # map to OFI_INTERFACE=lo
+    fabric_iface_port: 31316  # map to OFI_PORT=31316
+    log_mask: DEBUG,RPC=ERR,MEM=ERR
+    log_file: /tmp/daos_engine.0.log  # map to D_LOG_FILE=/tmp/daos_engine.0.log
 
-  # Environment variable values should be supplied without encapsulating quotes.
-  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  - DD_SUBSYS=all
-  # uncomment to enable scalable endpoint
-  # - CRT_CREDIT_EP_CTX=0
-  # - CRT_CTX_SHARE_ADDR=1
-  # - CRT_CTX_NUM=8
+    # Environment variable values should be supplied without encapsulating quotes.
+    env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
+      - DAOS_MD_CAP=1024
+      - CRT_CTX_SHARE_ADDR=0
+      - CRT_TIMEOUT=30
+      - FI_SOCKETS_MAX_CONN_RETRY=1
+      - FI_SOCKETS_CONN_TIMEOUT=2000
+      - DD_SUBSYS=all
+      # uncomment to enable scalable endpoint
+      # - CRT_CREDIT_EP_CTX=0
+      # - CRT_CTX_SHARE_ADDR=1
+      # - CRT_CTX_NUM=8
 
-  # Storage definitions
+    # Legacy style storage definitions (support for this style will be removed in future)
 
-  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
-  # The size of ram is specified by scm_size in GB units.
-  scm_mount: /mnt/daos0
-  scm_class: ram
-  scm_size: 1
+    # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+    # The size of ram is specified by scm_size in GB units.
+    scm_class: ram
+    scm_size: 8
+    scm_mount: /mnt/daos
 
-  # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # PMem namespaces (currently only one per engine supported).
-  # scm_class: dcpm
-  # scm_list: [/dev/pmem0]
-
-  # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # engine with -n <path>)
-  bdev_class: nvme
-  bdev_list: []
-  bdev_busid_range: ""
+    # If no NVMe devices are specified in config file, no NVMe will be used.
+    bdev_class: nvme
+    bdev_list: []
+    bdev_busid_range: ""

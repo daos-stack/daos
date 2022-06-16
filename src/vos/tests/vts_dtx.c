@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,6 +68,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_prepared = 0;
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
+	dth->dth_already = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -143,12 +144,12 @@ vts_dtx_prep_update(struct io_test_args *args,
 	memset(rex, 0, sizeof(*rex));
 
 	args->ta_flags = TF_ZERO_COPY;
-	args->ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64;
+	args->otype = DAOS_OT_MULTI_UINT64;
 
 	*epoch = crt_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
-	set_iov(dkey, dkey_buf, args->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(dkey, dkey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 	*dkey_hash = d_hash_murmur64((const unsigned char *)dkey_buf,
 				      args->dkey_size, 5731);
 
@@ -159,10 +160,10 @@ vts_dtx_prep_update(struct io_test_args *args,
 	sgl->sg_nr = 1;
 
 	d_iov_set(dkey_iov, dkey_buf, args->dkey_size);
-	rex->rx_idx = hash_key(dkey_iov, args->ofeat & DAOS_OF_DKEY_UINT64);
+	rex->rx_idx = hash_key(dkey_iov, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 
 	vts_key_gen(akey_buf, args->akey_size, false, args);
-	set_iov(akey, akey_buf, args->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(akey, akey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_AKEY_UINT64));
 
 	iod->iod_name = *akey;
 	if (ext) {

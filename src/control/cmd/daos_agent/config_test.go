@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,17 +14,18 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 func TestAgent_LoadConfig(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
-	junkFile := common.CreateTestFile(t, dir, "One ring to rule them all\n")
-	emptyFile := common.CreateTestFile(t, dir, "")
+	junkFile := test.CreateTestFile(t, dir, "One ring to rule them all\n")
+	emptyFile := test.CreateTestFile(t, dir, "")
 
-	withoutOptCfg := common.CreateTestFile(t, dir, `
+	withoutOptCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -34,12 +35,15 @@ transport_config:
   allow_insecure: true
 `)
 
-	fabricCfg := common.CreateTestFile(t, dir, `
+	optCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
+control_log_mask: debug
+disable_caching: true
+disable_auto_evict: true
 transport_config:
   allow_insecure: true
 fabric_ifaces:
@@ -61,6 +65,17 @@ fabric_ifaces:
   -
      iface: ib3
      domain: mlx5_3
+`)
+
+	badLogMaskCfg := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: gandalf
+transport_config:
+  allow_insecure: true
 `)
 
 	for name, tc := range map[string]struct {
@@ -91,20 +106,28 @@ fabric_ifaces:
 				ControlPort:  4242,
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
+				LogLevel:     common.DefaultControlLogLevel,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
 			},
 		},
-		"manual fabric config": {
-			path: fabricCfg,
+		"bad log mask": {
+			path:   badLogMaskCfg,
+			expErr: errors.New("not a valid log level"),
+		},
+		"all options": {
+			path: optCfg,
 			expResult: &Config{
-				SystemName:   "shire",
-				AccessPoints: []string{"one:10001", "two:10001"},
-				ControlPort:  4242,
-				RuntimeDir:   "/tmp/runtime",
-				LogFile:      "/home/frodo/logfile",
+				SystemName:       "shire",
+				AccessPoints:     []string{"one:10001", "two:10001"},
+				ControlPort:      4242,
+				RuntimeDir:       "/tmp/runtime",
+				LogFile:          "/home/frodo/logfile",
+				LogLevel:         common.ControlLogLevelDebug,
+				DisableCache:     true,
+				DisableAutoEvict: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -143,7 +166,7 @@ fabric_ifaces:
 		t.Run(name, func(t *testing.T) {
 			result, err := LoadConfig(tc.path)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(security.CertificateConfig{})); diff != "" {
 				t.Fatalf("(want-, got+):\n%s", diff)
 			}

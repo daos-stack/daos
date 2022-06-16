@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -85,7 +85,7 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			addr, err := NewPCIAddress(tc.addrStr)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -185,7 +185,7 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -306,22 +306,82 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			addrSet, gotErr := NewPCIAddressSet(tc.inAddrs...)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			gotAddrs, gotErr := addrSet.BackingToVMDAddresses(log)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs.Strings()); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestHardware_PCIDevices_Get(t *testing.T) {
+	testDevs := PCIDevices{
+		*MustNewPCIAddress("0000:01:01.1"): []*PCIDevice{
+			mockPCIDevice("test0", 0, 1, 1, 1).withType(DeviceTypeNetInterface),
+			mockPCIDevice("test1", 0, 1, 1, 1).withType(DeviceTypeOFIDomain),
+		},
+		*MustNewPCIAddress("0000:01:02.1"): []*PCIDevice{
+			mockPCIDevice("test2", 0, 1, 2, 1).withType(DeviceTypeNetInterface),
+			mockPCIDevice("test3", 0, 1, 2, 1),
+		},
+		*MustNewPCIAddress("0000:01:03.1"): []*PCIDevice{},
+	}
+
+	for name, tc := range map[string]struct {
+		devices PCIDevices
+		getKey  *PCIAddress
+		expDevs []*PCIDevice
+	}{
+		"nil devs, nil key": {
+			expDevs: nil,
+		},
+		"nil key": {
+			devices: testDevs,
+			getKey:  nil,
+			expDevs: nil,
+		},
+		"empty devs": {
+			devices: PCIDevices{},
+			getKey:  MustNewPCIAddress("0000:80:00.0"),
+			expDevs: nil,
+		},
+		"bad key": {
+			devices: testDevs,
+			getKey:  MustNewPCIAddress("0000:80:00.0"),
+			expDevs: nil,
+		},
+		"good key": {
+			devices: testDevs,
+			getKey:  MustNewPCIAddress("0000:01:02.1"),
+			expDevs: []*PCIDevice{
+				mockPCIDevice("test2", 0, 1, 2, 1).withType(DeviceTypeNetInterface),
+				mockPCIDevice("test3", 0, 1, 2, 1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.devices.Keys()
+			resultStr := make([]string, len(result))
+			for i, key := range result {
+				resultStr[i] = key.String()
+			}
+			gotDevs := tc.devices.Get(tc.getKey)
+
+			if diff := cmp.Diff(tc.expDevs, gotDevs); diff != "" {
+				t.Fatalf("unexpected devices (-want, +got)\n%s\n", diff)
 			}
 		})
 	}
@@ -389,11 +449,15 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
 		newDev    *PCIDevice
+		expErr    error
 		expResult PCIDevices
 	}{
-		"nil": {},
+		"nil": {
+			expErr: errors.New("nil"),
+		},
 		"add nil Device": {
 			devices:   PCIDevices{},
+			expErr:    errors.New("nil"),
 			expResult: PCIDevices{},
 		},
 		"add to empty": {
@@ -459,8 +523,9 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.devices.Add(tc.newDev)
+			err := tc.devices.Add(tc.newDev)
 
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.devices); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -510,14 +575,14 @@ func TestHardware_PCIBus(t *testing.T) {
 			case "add":
 				gotErr = tc.bus.AddDevice(tc.dev)
 			case "nil contains":
-				contains := tc.bus.Contains(tc.dev.PCIAddr)
-				common.AssertFalse(t, contains, "nil bus shouldn't contain anything")
+				contains := tc.bus.Contains(&tc.dev.PCIAddr)
+				test.AssertFalse(t, contains, "nil bus shouldn't contain anything")
 				return
 			default:
 				panic("unknown operation")
 			}
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -529,6 +594,30 @@ func TestHardware_PCIBus(t *testing.T) {
 			}
 
 			t.Fatalf("device not added to bus")
+		})
+	}
+}
+
+func TestHardware_PCIDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dev     *PCIDevice
+		expName string
+		expType DeviceType
+	}{
+		"nil": {},
+		"valid": {
+			dev: &PCIDevice{
+				Name: "testname",
+				Type: DeviceTypeNetInterface,
+			},
+			expName: "testname",
+			expType: DeviceTypeNetInterface,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
+			test.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
+			test.AssertEqual(t, tc.dev, tc.dev.PCIDevice(), "")
 		})
 	}
 }

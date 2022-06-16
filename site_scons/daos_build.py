@@ -1,20 +1,25 @@
 """Common DAOS build functions"""
+import os
+
 from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
+from SCons.Script import Depends
 from env_modules import load_mpi
 import compiler_setup
-import os
 
-# pylint: disable=too-few-public-methods
+libraries = {}
+
+
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
+    # pylint: disable=too-few-public-methods
 
     def __hash__(self):
         """Workaround for missing hash function"""
         return hash(self.lstr)
-# pylint: enable=too-few-public-methods
+
 
 def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
@@ -59,6 +64,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                           env.subst("$_LIBDIRFLAGS " "$_RPATH"),
                           sep=" ")
 
+
 def add_build_rpath(env, pathin="."):
     """Add a build directory with -Wl,-rpath-link"""
     path = Dir(pathin).path
@@ -69,26 +75,106 @@ def add_build_rpath(env, pathin="."):
     # the dependencies
     env.AppendENVPath("LD_LIBRARY_PATH", path)
 
+
+def _known_deps(env, **kwargs):
+    """Get list of known libraries"""
+    shared_libs = []
+    static_libs = []
+    if 'LIBS' in kwargs:
+        libs = set(kwargs['LIBS'])
+    else:
+        libs = set(env.get('LIBS', []))
+
+    known_libs = libs.intersection(set(libraries.keys()))
+    for item in known_libs:
+        shared = libraries[item].get('shared', None)
+        if shared is not None:
+            shared_libs.append(shared)
+            continue
+        static_libs.append(libraries[item].get('static'))
+    return (static_libs, shared_libs)
+
+
+def _get_libname(*args, **kwargs):
+    """Work out the basic library name from library builder args"""
+    if 'target' in kwargs:
+        libname = os.path.basename(kwargs['target'])
+    else:
+        libname = os.path.basename(args[0])
+    if libname.startswith('lib'):
+        libname = libname[3:]
+    return libname
+
+
+def _add_lib(libtype, libname, target):
+    """Add library to our db"""
+    if libname not in libraries:
+        libraries[libname] = {}
+    libraries[libname][libtype] = target
+
+
+def run_command(env, target, sources, daos_libs, command):
+    """Run Command builder"""
+    static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
+    result = env.Command(target, sources + static_deps + shared_deps, command)
+    # Libraries in this case are used to force rebuild, so use Depends
+    Depends(result, static_deps + shared_deps)
+    return result
+
+
+def static_library(env, *args, **kwargs):
+    """build SharedLibrary with relative RPATH"""
+    lib = env.StaticLibrary(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    _add_lib('static', libname, lib)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
+    return lib
+
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
-    return denv.SharedLibrary(*args, **kwargs)
+    lib = denv.SharedLibrary(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    _add_lib('shared', libname, lib)
+    static_deps, shared_deps = _known_deps(denv, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
+    return lib
+
 
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
-    return denv.Program(*args, **kwargs)
+    prog = denv.Program(*args, **kwargs)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(prog, static_deps)
+    env.Requires(prog, shared_deps)
+    return prog
+
 
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
-    return denv.Program(*args, **kwargs)
+    testbuild = denv.Program(*args, **kwargs)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(testbuild, static_deps)
+    env.Requires(testbuild, shared_deps)
+    return testbuild
+
+
+def add_static_library(name, target):
+    """Add a static library to our db"""
+    _add_lib('static', name, target)
+
 
 def install(env, subdir, files):
     """install file to the subdir"""
@@ -96,51 +182,26 @@ def install(env, subdir, files):
     path = "$PREFIX/%s" % subdir
     denv.Install(path, files)
 
-def load_mpi_path(env):
-    """Load location of mpicc into path if MPI_PKG is set"""
-    mpicc = WhereIs('mpicc')
-    if mpicc:
-        env.PrependENVPath("PATH", os.path.dirname(mpicc))
-
-def _clear_icc_env(env):
-    """Remove icc specific options from environment"""
-    if env.subst("$COMPILER") == "icc":
-        linkflags = str(env.get("LINKFLAGS")).split()
-        if '-static-intel' in linkflags:
-            linkflags.remove('-static-intel')
-        for flag_type in ['CCFLAGS', 'CXXFLAGS', 'CFLAGS']:
-            oldflags = str(env.get(flag_type)).split()
-            newflags = []
-            for flag in oldflags:
-                if 'diag-disable' in flag:
-                    continue
-                if flag == '-Werror-all':
-                    newflags.append('-Werror')
-                    continue
-                newflags.append(flag)
-            env.Replace(**{flag_type : newflags})
-        env.Replace(LINKFLAGS=linkflags)
 
 def _find_mpicc(env):
     """find mpicc"""
+
     mpicc = WhereIs('mpicc')
-    if mpicc:
-        env.Replace(CC="mpicc")
-        env.Replace(LINK="mpicc")
-        env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
-        _clear_icc_env(env)
-        load_mpi_path(env)
-        compiler_setup.base_setup(env)
+    if not mpicc:
+        return False
 
-        return True
-    return False
+    env.Replace(CC="mpicc")
+    env.Replace(LINK="mpicc")
+    env.PrependENVPath('PATH', os.path.dirname(mpicc))
+    compiler_setup.base_setup(env)
 
-def _configure_mpi_pkg(env, libs):
+    return True
+
+
+def _configure_mpi_pkg(env):
     """Configure MPI using pkg-config"""
-    if GetOption('help'):
-        return "mpi"
     if _find_mpicc(env):
-        return env.subst("$MPI_PKG")
+        return True
     try:
         env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
     except OSError as e:
@@ -150,31 +211,26 @@ def _configure_mpi_pkg(env, libs):
         print("**********************************")
         raise e
 
-    # assume mpi is needed in the fallback case
-    libs.append('mpi')
-    return env.subst("$MPI_PKG")
+    return True
 
-def configure_mpi(env, libs, required=None):
+
+def configure_mpi(env):
     """Check if mpi exists and configure environment"""
+
+    if GetOption('help'):
+        return True
+
+    env['CXX'] = None
+
     if env.subst("$MPI_PKG") != "":
-        return _configure_mpi_pkg(env, libs)
+        return _configure_mpi_pkg(env)
 
-    mpis = ['openmpi', 'mpich']
-    if not required is None:
-        if isinstance(required, str):
-            mpis = [required]
-        else:
-            mpis = required
-
-    for mpi in mpis:
+    for mpi in ['openmpi', 'mpich']:
         if not load_mpi(mpi):
             continue
-        comp = mpi
-        if mpi == "openmpi":
-            comp = "ompi"
         if _find_mpicc(env):
             print("%s is installed" % mpi)
-            return comp
+            return True
         print("No %s installed and/or loaded" % mpi)
     print("No MPI installed")
-    return None
+    return False

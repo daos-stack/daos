@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,8 +68,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get(
                 "active_targets", path="/run/exp_vals/*"),
-            "total_nodes": self.params.get(
-                "total_nodes", path="/run/exp_vals/*"),
+            "total_engines": self.params.get(
+                "total_engines", path="/run/exp_vals/*"),
             "disabled_targets": self.params.get(
                 "disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
@@ -95,7 +95,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "objects", path="/run/exp_vals/rebuild/*"),
                 "records": self.params.get(
                     "records", path="/run/exp_vals/rebuild/*")
-            }
+            },
+            "enabled_ranks": None,
+            "disabled_ranks": None
         }
 
         self.assertDictEqual(

@@ -1,14 +1,18 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+# pylint: disable=import-error,no-name-in-module
+
 import logging
 import sys
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from util.command_utils_base import CommonConfig, CommandFailure
+from util.command_utils_base import CommonConfig
+from util.exception_utils import CommandFailure
 from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
 from util.server_utils_params import \

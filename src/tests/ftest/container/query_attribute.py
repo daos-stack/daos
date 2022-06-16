@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,9 +76,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
             # Characters that don't require backslash. The backslashes in here
             # are required for the code to work, but not by daos.
-            "~@#$%^*-=_+[]\{\}:/?,.",
+            "~@#$%^*-=_+[]\{\}:/?,.", # noqa: W605
             # Characters that require backslash.
-            "\`\&\(\)\\\;\\'\\\"\!\<\>",
+            "\`\&\(\)\\\;\\'\\\"\!\<\>", # noqa: W605
             # Characters that include space.
             "\"aa bb\""]
         # We added backslashes for the code to work, but get-attr output
@@ -88,7 +88,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         escape_to_not[test_strings[-3]] = "~@#$%^*-=_+[]{}:/?,."
         # We still need a backslash before the double quote for the code to
         # work.
-        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>"
+        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>" # noqa: W605
         escape_to_not[test_strings[-1]] = "aa bb"
         # Prepare attr-value paris. Use the test_strings in value for the first
         # 7 and in attr for the next 7.

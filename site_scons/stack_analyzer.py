@@ -106,14 +106,14 @@ class analyzer():
                             usage = int(split[-2])
                             if usage < self.cutoff:
                                 continue
-                            if not func in function_map:
+                            if func not in function_map:
                                 function_map[func] = usage
                             elif usage > function_map[func]:
                                 function_map[func] = usage
 
         size_map = {}
         for key, value in function_map.items():
-            if not value in size_map:
+            if value not in size_map:
                 size_map[value] = []
 
             size_map[value].append(key)

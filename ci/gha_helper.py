@@ -1,25 +1,28 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 """Helper module to choose build/cache keys to use for github actions"""
 
 import os
 import sys
 from os.path import join
-import subprocess #nosec
+import subprocess  # nosec
 
 BUILD_FILES = ['site_scons',
                'utils/build.config',
                'SConstruct',
                '.github/workflows/landing-builds.yml',
                '.dockerignore',
+               'requirements.txt',
                'ci/gha_helper.py']
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
+
 
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
 
     print('::set-output name={}::{}'.format(key, value))
+
 
 def main():
     """Parse git histrory to load caches for GHA"""
@@ -65,8 +68,6 @@ def main():
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        if install_helper == 'ubuntu2004':
-            install_helper = install_helper[:-2]
         install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
 
         assert os.path.exists(install_script)
@@ -118,6 +119,7 @@ def main():
         else:
             restore_prev = 'bc-{}-{}-'.format(target_branch, base_distro)
         set_output('restore_prev', restore_prev)
+
 
 if __name__ == '__main__':
     main()

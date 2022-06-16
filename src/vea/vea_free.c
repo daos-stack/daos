@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,80 +15,104 @@ enum vea_free_type {
 	VEA_TYPE_PERSIST,
 };
 
-static d_list_t *
-blkcnt_to_lru(struct vea_free_class *vfc, uint32_t blkcnt)
-{
-	int idx;
-
-	D_ASSERTF(blkcnt <= vfc->vfc_sizes[0], "%u, %u\n",
-		  blkcnt, vfc->vfc_sizes[0]);
-	D_ASSERT(vfc->vfc_lru_cnt > 0);
-
-	for (idx = 0; idx < (vfc->vfc_lru_cnt - 1); idx++) {
-		if (blkcnt > vfc->vfc_sizes[idx + 1])
-			break;
-	}
-
-	return &vfc->vfc_lrus[idx];
-}
-
 void
 free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry)
 {
-	struct vea_free_class *vfc = &vsi->vsi_class;
+	struct vea_free_class	*vfc = &vsi->vsi_class;
+	struct vea_sized_class	*sc = entry->ve_sized_class;
+	uint32_t		 blk_cnt = entry->ve_ext.vfe_blk_cnt;
 
-	if (entry->ve_in_heap) {
-		D_ASSERTF(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh,
-			  "%u <= %u", entry->ve_ext.vfe_blk_cnt,
-			  vfc->vfc_large_thresh);
+	if (sc == NULL) {
+		D_ASSERTF(blk_cnt > vfc->vfc_large_thresh, "%u <= %u",
+			  blk_cnt, vfc->vfc_large_thresh);
+		D_ASSERT(d_list_empty(&entry->ve_link));
+
 		d_binheap_remove(&vfc->vfc_heap, &entry->ve_node);
-		entry->ve_in_heap = 0;
 		dec_stats(vsi, STAT_FRAGS_LARGE, 1);
 	} else {
+		d_iov_t		key;
+		uint64_t	int_key = blk_cnt;
+		int		rc;
+
+		D_ASSERTF(blk_cnt > 0 && blk_cnt <= vfc->vfc_large_thresh,
+			  "%u > %u", blk_cnt, vfc->vfc_large_thresh);
+		D_ASSERT(daos_handle_is_valid(vfc->vfc_size_btr));
+
+		d_list_del_init(&entry->ve_link);
+		entry->ve_sized_class = NULL;
+		/* Remove the sized class when it's empty */
+		if (d_list_empty(&sc->vsc_lru)) {
+			d_iov_set(&key, &int_key, sizeof(int_key));
+			rc = dbtree_delete(vfc->vfc_size_btr, BTR_PROBE_EQ, &key, NULL);
+			if (rc)
+				D_ERROR("Remove size class:%u failed, "DF_RC"\n",
+					blk_cnt, DP_RC(rc));
+		}
 		dec_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
-	d_list_del_init(&entry->ve_link);
 }
 
 int
 free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 {
-	struct vea_free_class *vfc = &vsi->vsi_class;
-	int rc;
+	struct vea_free_class	*vfc = &vsi->vsi_class;
+	daos_handle_t		 btr_hdl = vfc->vfc_size_btr;
+	uint32_t		 blk_cnt = entry->ve_ext.vfe_blk_cnt;
+	d_iov_t			 key, val, val_out;
+	uint64_t		 int_key = blk_cnt;
+	struct vea_sized_class	 dummy, *sc;
+	int			 rc;
 
-	D_ASSERT(entry->ve_in_heap == 0);
+	D_ASSERT(entry->ve_sized_class == NULL);
 	D_ASSERT(d_list_empty(&entry->ve_link));
 
 	/* Add to heap if it's a large free extent */
-	if (entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh) {
+	if (blk_cnt > vfc->vfc_large_thresh) {
 		rc = d_binheap_insert(&vfc->vfc_heap, &entry->ve_node);
 		if (rc != 0) {
 			D_ERROR("Failed to insert heap: %d\n", rc);
 			return rc;
 		}
 
-		entry->ve_in_heap = 1;
 		inc_stats(vsi, STAT_FRAGS_LARGE, 1);
-	} else { /* Otherwise add to one of size categarized LRU */
-		struct vea_entry *cur;
-		d_list_t *lru_head, *tmp;
-
-		lru_head = blkcnt_to_lru(vfc, entry->ve_ext.vfe_blk_cnt);
-
-		/* List is sorted by free extent age */
-		d_list_for_each_prev(tmp, lru_head) {
-			cur = d_list_entry(tmp, struct vea_entry, ve_link);
-
-			if (entry->ve_ext.vfe_age >= cur->ve_ext.vfe_age) {
-				d_list_add(&entry->ve_link, tmp);
-				break;
-			}
-		}
-		if (d_list_empty(&entry->ve_link))
-			d_list_add(&entry->ve_link, lru_head);
-		inc_stats(vsi, STAT_FRAGS_SMALL, 1);
+		return 0;
 	}
 
+	/* Add to a sized class */
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
+	d_iov_set(&key, &int_key, sizeof(int_key));
+	d_iov_set(&val_out, NULL, 0);
+
+	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key, NULL, &val_out);
+	if (rc == 0) {
+		/* Found an existing sized class */
+		sc = (struct vea_sized_class *)val_out.iov_buf;
+		D_ASSERT(sc != NULL);
+		D_ASSERT(!d_list_empty(&sc->vsc_lru));
+	} else if (rc == -DER_NONEXIST) {
+		/* Create a new sized class */
+		d_iov_set(&val, &dummy, sizeof(dummy));
+		d_iov_set(&val_out, NULL, 0);
+
+		rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val,
+				   &val_out);
+		if (rc != 0) {
+			D_ERROR("Insert size class:%u failed. "DF_RC"\n",
+				blk_cnt, DP_RC(rc));
+			return rc;
+		}
+		sc = (struct vea_sized_class *)val_out.iov_buf;
+		D_ASSERT(sc != NULL);
+		D_INIT_LIST_HEAD(&sc->vsc_lru);
+	} else {
+		D_ERROR("Lookup size class:%u failed. "DF_RC"\n", blk_cnt, DP_RC(rc));
+		return rc;
+	}
+
+	entry->ve_sized_class = sc;
+	d_list_add_tail(&entry->ve_link, &sc->vsc_lru);
+
+	inc_stats(vsi, STAT_FRAGS_SMALL, 1);
 	return 0;
 }
 
@@ -361,7 +385,7 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	memset(&dummy, 0, sizeof(dummy));
 	dummy = *vfe;
-	dummy.vfe_age = VEA_EXT_AGE_MAX;
+	dummy.vfe_age = 0; /* Not used */
 
 	/* Add to persistent free extent tree */
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
@@ -481,7 +505,6 @@ migrate_end_cb(void *data, bool noop)
 		if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL) {
 			D_ALLOC_PTR(vue);
 			if (vue == NULL) {
-				rc = -DER_NOMEM;
 				break;
 			}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -22,9 +22,9 @@ import (
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	h := NewEngineHarness(log)
@@ -37,7 +37,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			WithSystemName(t.Name()).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(mnt),
 			)
@@ -76,7 +76,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 
-		common.AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
+		test.AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
 
 		if i == mi {
 			continue

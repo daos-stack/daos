@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,22 +48,15 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=daosio,nvme_io_verification
         """
         # Test params
-        tests = self.params.get("ior_sequence", '/run/ior/*')
         processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
 
-        # Loop for every IOR object type
-        for ior_param in tests:
-            # Create and connect to a pool
-            self.add_pool(create=False)
-
-            # update pool sizes
-            self.pool.scm_size.update(ior_param[0])
-            self.pool.nvme_size.update(ior_param[1])
-
-            # Create a pool
-            self.pool.create()
+        # Loop for every pool size
+        for index in range(ior_seq_pool_qty):
+            # Create and connect to a pool with namespace
+            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
@@ -113,24 +106,17 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
         """
         # Test params
-        tests = self.params.get("ior_sequence", '/run/ior/*')
         processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         flag_write = self.params.get("write", '/run/ior/*/')
         flag_read = self.params.get("read", '/run/ior/*/')
         block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
 
-        # Loop for every IOR object type
-        for ior_param in tests:
-            # Create and connect to a pool
-            self.add_pool(create=False)
-
-            # update pool sizes
-            self.pool.scm_size.update(ior_param[0])
-            self.pool.nvme_size.update(ior_param[1])
-
-            # Create a pool
-            self.pool.create()
+        # Loop for every pool size
+        for index in range(ior_seq_pool_qty):
+            # Create and connect to a pool with namespace
+            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()

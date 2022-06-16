@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,10 +11,11 @@ void
 dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -27,6 +28,9 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	rc = _dfuse_mode_update(req, parent, &mode);
 	if (rc != 0)
 		D_GOTO(err, rc);
+
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
 
 	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode,
 			   O_CREAT | O_EXCL | O_RDWR, 0, 0, NULL, &ie->ie_obj, &ie->ie_stat);

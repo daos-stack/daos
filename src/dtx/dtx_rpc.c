@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,6 +64,8 @@ struct dtx_req_args {
 	d_list_t			*dra_abt_list;
 	/* Pointer to the active DTX list, used for DTX_REFRESH case. */
 	d_list_t			*dra_act_list;
+	/* The committed DTX entries on all related participants, for DTX_COMMIT. */
+	int				*dra_committed;
 };
 
 /* The record for the DTX classify-tree in DRAM.
@@ -109,6 +111,8 @@ D_CASSERT(sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_rank) +
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_tag) ==
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_key));
 
+uint32_t dtx_rpc_helper_thd;
+
 static void
 dtx_req_cb(const struct crt_cb_info *cb_info)
 {
@@ -126,6 +130,11 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		goto out;
 
 	dout = crt_reply_get(req);
+	if (dra->dra_opc == DTX_COMMIT) {
+		dra->dra_committed += dout->do_misc;
+		D_GOTO(out, rc = dout->do_status);
+	}
+
 	if (dout->do_status != 0 || dra->dra_opc != DTX_REFRESH)
 		D_GOTO(out, rc = dout->do_status);
 
@@ -196,7 +205,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DAOS_EPOCH_MAX);
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
 			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
@@ -314,9 +323,7 @@ dtx_req_list_cb(void **args)
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
-			if ((drr->drr_result < 0) &&
-			    (dra->dra_result == 0 ||
-			     dra->dra_result == -DER_NONEXIST))
+			if (dra->dra_result == 0 || dra->dra_result == -DER_NONEXIST)
 				dra->dra_result = drr->drr_result;
 		}
 
@@ -348,7 +355,7 @@ dtx_req_wait(struct dtx_req_args *dra)
 }
 
 static int
-dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
+dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, int *committed, d_list_t *head,
 		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 		  struct ds_cont_child *cont, d_list_t *cmt_list,
 		  d_list_t *abt_list, d_list_t *act_list)
@@ -367,6 +374,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
+	dra->dra_committed = committed;
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &future);
 	if (rc != ABT_SUCCESS) {
@@ -487,8 +495,6 @@ btr_ops_t dbtree_dtx_cf_ops = {
 };
 
 #define DTX_CF_BTREE_ORDER	20
-/* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD	10
 
 static int
 dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
@@ -573,7 +579,7 @@ static int
 dtx_rpc_internal(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 		 daos_handle_t *tree_hdl, struct dtx_req_args *dra, struct dtx_id dtis[],
 		 struct dtx_entry **dtes, daos_epoch_t epoch, int count, int opc,
-		 d_rank_t my_rank, uint32_t my_tgtid)
+		 int *committed, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct ds_pool		*pool;
 	int			 length = 0;
@@ -616,7 +622,7 @@ dtx_rpc_internal(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tr
 
 	D_ASSERT(length > 0);
 
-	return dtx_req_list_send(dra, opc, head, length, pool->sp_uuid,
+	return dtx_req_list_send(dra, opc, committed, head, length, pool->sp_uuid,
 				 cont->sc_uuid, epoch, NULL, NULL, NULL, NULL);
 }
 
@@ -631,6 +637,7 @@ struct dtx_helper_args {
 	daos_epoch_t		  dha_epoch;
 	int			  dha_count;
 	int			  dha_opc;
+	int			 *dha_committed;
 	d_rank_t		  dha_rank;
 	uint32_t		  dha_tgtid;
 };
@@ -642,14 +649,15 @@ dtx_rpc_helper(void *arg)
 
 	dtx_rpc_internal(dha->dha_cont, dha->dha_head, dha->dha_tree_root, dha->dha_tree_hdl,
 			 dha->dha_dra, NULL, dha->dha_dtes, dha->dha_epoch, dha->dha_count,
-			 dha->dha_opc, dha->dha_rank, dha->dha_tgtid);
+			 dha->dha_opc, dha->dha_committed, dha->dha_rank, dha->dha_tgtid);
 	D_FREE(dha);
 }
 
 static int
 dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 	     daos_handle_t *tree_hdl, struct dtx_req_args *dra, ABT_thread *helper,
-	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch, int count, int opc)
+	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch,
+	     uint32_t count, int opc, int *committed)
 {
 	d_rank_t	my_rank;
 	uint32_t	my_tgtid;
@@ -660,7 +668,9 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 	crt_group_rank(NULL, &my_rank);
 	my_tgtid = dss_get_module_info()->dmi_tgt_id;
 
-	if (dtes[0]->dte_mbs->dm_tgt_cnt * count >= DTX_RPC_HELPER_THD) {
+	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
+	if (dss_has_enough_helper() &&
+	    (dtes[0]->dte_mbs->dm_tgt_cnt - 1) * count >= dtx_rpc_helper_thd) {
 		struct dtx_helper_args	*dha = NULL;
 
 		D_ALLOC_PTR(dha);
@@ -677,6 +687,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 		dha->dha_epoch = epoch;
 		dha->dha_count = count;
 		dha->dha_opc = opc;
+		dha->dha_committed = committed;
 		dha->dha_rank = my_rank;
 		dha->dha_tgtid = my_tgtid;
 
@@ -692,7 +703,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 		}
 	} else {
 		rc = dtx_rpc_internal(cont, head, tree_root, tree_hdl, dra, dtis, dtes, epoch,
-				      count, opc, my_rank, my_tgtid);
+				      count, opc, committed, my_rank, my_tgtid);
 	}
 
 	return rc;
@@ -742,7 +753,7 @@ dtx_rpc_post(d_list_t *head, daos_handle_t tree_hdl, struct dtx_req_args *dra,
  */
 int
 dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	   struct dtx_cos_key *dcks, int count)
+	   struct dtx_cos_key *dcks, int count, daos_epoch_t epoch)
 {
 	d_list_t		 head;
 	struct btr_root		 tree_root = { 0 };
@@ -753,6 +764,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	bool			*rm_cos = NULL;
 	struct dtx_id		 dti = { 0 };
 	bool			 cos = false;
+	int			 committed = 0;
 	int			 rc;
 	int			 rc1 = 0;
 	int			 rc2 = 0;
@@ -767,8 +779,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, dtis,
-			  dtes, 0, count, DTX_COMMIT);
-	if (rc != 0)
+			  dtes, 0, count, DTX_COMMIT, &committed);
+	if (rc < 0)
 		goto out;
 
 	if (dcks != NULL) {
@@ -792,8 +804,12 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
-	if (rc1 > 0 || rc1 == -DER_NONEXIST)
+	if (rc1 > 0) {
+		committed += rc1;
 		rc1 = 0;
+	} else if (rc1 == -DER_NONEXIST) {
+		rc1 = 0;
+	}
 
 out:
 	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
@@ -807,8 +823,19 @@ out:
 		D_FREE(rm_cos);
 
 log:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_IO, "Commit DTXs "
-		 DF_DTI", count %d: rc %d %d %d\n", DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+	if (rc != 0 || rc1 != 0 || rc2 != 0) {
+		D_ERROR("Failed to commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
+			DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+
+		if (epoch != 0 && committed == 0) {
+			D_ASSERT(count == 1);
+
+			dtx_abort(cont, dtes[0], epoch);
+		}
+	} else {
+		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI", count %d\n",
+			DP_DTI(&dtes[0]->dte_xid), count);
+	}
 
 	return rc != 0 ? rc : (rc1 != 0 ? rc1 : rc2);
 }
@@ -827,7 +854,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	int			rc2;
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, NULL,
-			  &dte, epoch, 1, DTX_ABORT);
+			  &dte, epoch, 1, DTX_ABORT, NULL);
 
 	if (epoch != 0)
 		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch);
@@ -864,7 +891,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 		return DTX_ST_PREPARED;
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, NULL,
-			  &dte, epoch, 1, DTX_CHECK);
+			  &dte, epoch, 1, DTX_CHECK, NULL);
 
 	rc1 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
 
@@ -880,7 +907,6 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 		     d_list_t *abt_list, d_list_t *act_list, bool failout)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct pool_target	*target;
 	struct dtx_share_peer	*dsp;
 	struct dtx_share_peer	*tmp;
 	struct dtx_req_rec	*drr;
@@ -896,62 +922,26 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	crt_group_rank(NULL, &myrank);
 
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
-		int		leader_tgt = PO_COMP_ID_ALL;
-		int		tgt;
+		struct pool_target *target;
+		int		count = 0;
 		bool		drop = false;
-
-		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
-
 again:
-			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid, &dsp->dsp_mbs,
-						      pool->sp_map_version, &tgt);
-			if (rc < 0) {
-				/* Currently, for EC object, if parity node is
-				 * in rebuilding, we will get -DER_STALE, that
-				 * is not fatal, the caller or related request
-				 * sponsor can retry sometime later.
-				 */
-				D_CDEBUG(rc == -DER_STALE, DB_TRACE, DLOG_WARN,
-					 "Failed to find DTX leader for "
-					 DF_DTI", ver %d: "DF_RC"\n",
-					 DP_DTI(&dsp->dsp_xid),
-					 pool->sp_map_version, DP_RC(rc));
+		rc = dtx_leader_get(pool, &dsp->dsp_mbs, &target);
+		if (rc < 0) {
+			/**
+			 * Currently, for EC object, if parity node is
+			 * in rebuilding, we will get -DER_STALE, that
+			 * is not fatal, the caller or related request
+			 * sponsor can retry sometime later.
+			 */
+			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
+			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
+			if (failout)
+				goto out;
 
-				if (failout)
-					goto out;
-
-				drop = true;
-				goto next;
-			}
-
-			/* Still get the same leader. That is abnormal. */
-			if (leader_tgt == tgt) {
-				D_ERROR("Get DTX leader on %d (rebuilding) for "
-					DF_DTI", that is abnormal, ver is %d\n",
-					rc, DP_DTI(&dsp->dsp_xid),
-					pool->sp_map_version);
-
-				if (failout)
-					D_GOTO(out, rc = -DER_IO);
-
-				drop = true;
-				goto next;
-			}
-
-			leader_tgt = tgt;
-		} else {
-			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
+			drop = true;
+			goto next;
 		}
-
-		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
-		if (rc != 1) {
-			D_WARN("Cannot find target %u, flags %x\n",
-			       leader_tgt, dsp->dsp_mbs.dm_flags);
-			ABT_rwlock_unlock(pool->sp_lock);
-			D_GOTO(out, rc = -DER_UNINIT);
-		}
-		ABT_rwlock_unlock(pool->sp_lock);
 
 		/* If current server is the leader, then two possible cases:
 		 *
@@ -973,8 +963,16 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			if (unlikely(++count % 10 == 3))
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
+				       " %d times, maybe dead loop\n",
+				       target->ta_comp.co_rank, target->ta_comp.co_id,
+				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
+
 			goto again;
+		}
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
@@ -1019,7 +1017,7 @@ next:
 	}
 
 	if (len > 0) {
-		rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
+		rc = dtx_req_list_send(&dra, DTX_REFRESH, NULL, &head, len,
 				       pool->sp_uuid, cont->sc_uuid, 0, cont,
 				       cmt_list, abt_list, act_list);
 		if (rc == 0)
@@ -1049,7 +1047,7 @@ next:
 
 			dck.oid = dsp->dsp_oid;
 			dck.dkey_hash = dsp->dsp_dkey_hash;
-			rc = dtx_commit(cont, &pdte, &dck, 1);
+			rc = dtx_commit(cont, &pdte, &dck, 1, 0);
 			if (rc < 0 && rc != -DER_NONEXIST && cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else

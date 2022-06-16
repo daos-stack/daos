@@ -1,10 +1,11 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+# pylint: disable=import-error,no-name-in-module
 
 import argparse
 import getpass
@@ -15,14 +16,10 @@ import sys
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 
-
 SLURM_CONF = "/etc/slurm/slurm.conf"
-
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
-
-PACKAGE_VERSION = "18.08.8-1.el7.x86_64"
 
 COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
              "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
@@ -37,9 +34,17 @@ SLURMCTLD_STARTUP = [
     "systemctl restart slurmctld",
     "systemctl enable slurmctld"]
 
+SLURMCTLD_STARTUP_DEBUG = [
+    "cat /var/log/slurmctld.log",
+    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
+
 SLURMD_STARTUP = [
     "systemctl restart slurmd",
     "systemctl enable slurmd"]
+
+SLURMD_STARTUP_DEBUG = [
+    "cat /var/log/slurmd.log",
+    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
 
 
 def update_config_cmdlist(args):
@@ -53,24 +58,28 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    if not args.sudo:
-        sudo = ""
-    else:
-        sudo = "sudo"
+    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
+                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
+                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
+    sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
-
-    cmd_list = [
-        "sed -i -e 's/ControlMachine=linux0/ControlMachine={}/g' {}".format(
-            args.control, SLURM_CONF),
-        "sed -i -e 's/ClusterName=linux/ClusterName=ci_cluster/g' {}".format(
-            SLURM_CONF),
-        "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-            args.user, SLURM_CONF),
-        "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            SLURM_CONF),
-        ]
+    match = False
+    # grep SLURM_CONF to determine format of the the file
+    for ctl_host in ["SlurmctldHost", "ControlMachine"]:
+        command = r"grep {} {}".format(ctl_host, SLURM_CONF)
+        task = run_task(all_nodes, command)
+        results = dict(task.iter_retcodes())
+        if len(results) == 1 and 0 in results:
+            ctl_str = "sed -i -e 's/{0}=linux0/{0}={1}/g' {2}".format(
+                ctl_host, args.control, SLURM_CONF)
+            cmd_list.insert(0, ctl_str)
+            match = True
+            break
+    if not match:
+        logging.error("% could not be updated. Check conf file format", SLURM_CONF)
+        sys.exit(1)
 
     # This info needs to be gathered from every node that can run a slurm job
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
@@ -93,7 +102,7 @@ def update_config_cmdlist(args):
                             info["Core"], info["Thread"], sudo, SLURM_CONF))
 
     #
-    cmd_list.append("echo \"PartitionName= {} Nodes={} Default=YES "
+    cmd_list.append("echo \"PartitionName={} Nodes={} Default=YES "
                     "MaxTime=INFINITE State=UP\" |{} tee -a {}".format(
                         args.partition, args.nodes, sudo, SLURM_CONF))
 
@@ -131,14 +140,12 @@ def configuring_packages(args, action):
         action (str):  install or remove
 
     """
-    # Install yum packages on control and compute nodes
+    # Install packages on control and compute nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
-        if PACKAGE_VERSION:
-            package = package + "-" + PACKAGE_VERSION
         logging.info("%s %s on %s", action, package, all_nodes)
-        cmd_list.append("yum {} -y ".format(action) + package)
+        cmd_list.append("dnf {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
 
@@ -149,6 +156,7 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
+    sudo = "sudo" if args.sudo else ""
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     # exclude the control node
     nodes = NodeSet(str(args.nodes))
@@ -157,8 +165,8 @@ def start_munge(args):
     # copy key to all nodes FROM slurmctl node;
     # change the protections/ownership on the munge dir on all nodes
     cmd_list = [
-        "sudo chmod -R 777 /etc/munge; sudo chown {}. /etc/munge".format(
-            args.user)]
+        "{0} chmod -R 777 /etc/munge; {0} chown {1}. /etc/munge".format(
+            sudo, args.user)]
     if execute_cluster_cmds(all_nodes, cmd_list) > 0:
         return 1
 
@@ -167,25 +175,25 @@ def start_munge(args):
     cmd_list = ["set -Eeu",
                 "rc=0",
                 "if [ ! -f /etc/munge/munge.key ]",
-                "then sudo create-munge-key",
+                "then {} create-munge-key".format(sudo),
                 "fi",
-                "sudo chmod 777 /etc/munge/munge.key",
-                "sudo chown {}. /etc/munge/munge.key".format(args.user)]
+                "{} chmod 777 /etc/munge/munge.key".format(sudo),
+                "{} chown {}. /etc/munge/munge.key".format(sudo, args.user)]
 
     if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
         return 1
     # remove any existing key from other nodes
-    cmd_list = ["sudo rm -f /etc/munge/munge.key",
+    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo),
                 "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
                     args.control)]
     if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
         return 1
     # set the protection back to defaults
     cmd_list = [
-        "sudo chmod 400 /etc/munge/munge.key",
-        "sudo chown munge. /etc/munge/munge.key",
-        "sudo chmod 700 /etc/munge",
-        "sudo chown munge. /etc/munge"]
+        "{} chmod 400 /etc/munge/munge.key".format(sudo),
+        "{} chown munge. /etc/munge/munge.key".format(sudo),
+        "{} chmod 700 /etc/munge".format(sudo),
+        "{} chown munge. /etc/munge".format(sudo)]
     if execute_cluster_cmds(all_nodes, ["; ".join(cmd_list)]) > 0:
         return 1
 
@@ -206,26 +214,43 @@ def start_slurm(args):
     cmd_list = [
         "mkdir -p /var/log/slurm",
         "chown {}. {}".format(args.user, "/var/log/slurm"),
+        "mkdir -p /var/spool/slurmd",
+        "mkdir -p /var/spool/slurmctld",
         "mkdir -p /var/spool/slurm/d",
         "mkdir -p /var/spool/slurm/ctld",
-        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm")
-        ]
+        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
+        "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
+        "chmod 775 {}".format("/var/spool/slurmctld"),
+        "rm -f /var/spool/slurmctld/clustername"]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
 
     # Startup the slurm control service
-    if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0:
+    status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
+        execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
+    if status > 0:
         return 1
 
     # Startup the slurm service
-    if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0:
+    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
+        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
+    if status > 0:
         return 1
 
     # ensure that the nodes are in the idle state
-    cmd_list = ["scontrol update nodename={} state=idle".format(
-        args.nodes)]
-    return execute_cluster_cmds(args.control, cmd_list, args.sudo)
+    cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
+    status = execute_cluster_cmds(args.nodes, cmd_list, args.sudo)
+    if status > 0 or args.debug:
+        cmd_list = (SLURMCTLD_STARTUP_DEBUG)
+        execute_cluster_cmds(args.control, cmd_list, args.sudo)
+        cmd_list = (SLURMD_STARTUP_DEBUG)
+        execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+    if status > 0:
+        return 1
+    return 0
 
 
 def main():
@@ -264,6 +289,10 @@ def main():
         "-s", "--sudo",
         action="store_true",
         help="Run all commands with privileges")
+    parser.add_argument(
+        "-d", "--debug",
+        action="store_true",
+        help="Run all debug commands")
 
     args = parser.parse_args()
     logging.info("Arguments: %s", args)

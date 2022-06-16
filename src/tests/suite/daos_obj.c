@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -581,9 +581,8 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 /**
  * get the Pool storage info.
  */
-int pool_storage_info(void **state, daos_pool_info_t *pinfo)
+int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 {
-	test_arg_t *arg = *state;
 	int rc;
 
 	/*get only pool space info*/
@@ -608,16 +607,22 @@ int pool_storage_info(void **state, daos_pool_info_t *pinfo)
  * Enabled/Disabled Aggrgation strategy for Pool.
  */
 static int
-set_pool_reclaim_strategy(void **state, void const *const strategy[])
+set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	test_arg_t *arg = *state;
-	int rc;
-	char const *const names[] = {"reclaim"};
-	size_t const in_sizes[] = {strlen(strategy[0])};
-	int			 n = (int) ARRAY_SIZE(names);
+	char	uuid_str[37] = {0};
+	char	dmg_cmd[DTS_CFG_MAX];
+	int	rc;
 
-	rc = daos_pool_set_attr(arg->pool.poh, n, names, strategy,
-		in_sizes, NULL);
+	/* build and invoke dmg cmd to set DAOS_PROP_PO_RECLAIM property */
+	uuid_unparse(arg->pool.pool_uuid, uuid_str);
+	dts_create_config(dmg_cmd, "dmg pool set-prop %s --name=reclaim --value=%s",
+			  uuid_str, (char *)strategy);
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
+
 	return rc;
 }
 
@@ -686,7 +691,8 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 static void
 io_overwrite_large(void **state, daos_obj_id_t oid)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
 	struct ioreq	 req;
 	char		*ow_buf;
 	char		*fbuf;
@@ -702,11 +708,15 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	char		*aggr_disabled = "disabled";
+	char		*aggr_set_time = "time";
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/* Disabled Pool Aggrgation */
-	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 	/**
 	 * set_pool_reclaim_strategy() to disable aggregation
@@ -739,7 +749,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/*Get the initial pool size after writing first transaction*/
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -780,7 +790,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		rx_nr++;
 
 		/*Verify the SCM/NVMe Pool Free size based on transfer size*/
-		rc = pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(arg, &pinfo);
 		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		if (overwrite_sz < 4096) {
@@ -805,12 +815,13 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	}
 
 	/* Enabled Pool Aggrgation */
-	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 /**
@@ -899,7 +910,8 @@ io_overwrite(void **state)
 static void
 io_rewritten_array_with_mixed_size(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
 	struct ioreq		req;
 	daos_obj_id_t		oid;
 	daos_pool_info_t	pinfo;
@@ -916,8 +928,12 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	char			*aggr_disabled = "disabled";
+	char			*aggr_set_time = "time";
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/* choose random object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -933,11 +949,11 @@ io_rewritten_array_with_mixed_size(void **state)
 	memset(fbuf, 0, size);
 
 	/* Disabled Pool Aggregation */
-	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 
 	/* Get the pool info at the beginning */
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -955,7 +971,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	/**
 	*Get the pool storage information
 	*/
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -987,7 +1003,7 @@ io_rewritten_array_with_mixed_size(void **state)
 		assert_memory_equal(ow_buf, fbuf, size);
 
 		/*Verify the pool size*/
-		rc = pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(arg, &pinfo);
 		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -1022,12 +1038,13 @@ io_rewritten_array_with_mixed_size(void **state)
 	}
 
 	/* Enabled Pool Aggregation */
-	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 /** i/o to variable idx offset */
@@ -1408,6 +1425,7 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
+	daos_anchor_t	anchor_des;
 	int		key_nr;
 	int		i;
 	uint32_t	number;
@@ -1415,6 +1433,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	/** Enumerate all mixed NVMe and SCM records */
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
+	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1428,6 +1447,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == iod_size);
+			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1440,8 +1460,17 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 				      i + key_nr, (int)size,
 				      (int)recxs[i].rx_nr,
 				      (int)recxs[i].rx_idx);
-
 		}
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor_des, false, req);
+		if (number == 0)
+			continue;
+		for (i = 0; i < (number - 1); i++) {
+			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		}
+
 		key_nr += number;
 	}
 
@@ -1747,6 +1776,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
 			    DAOS_TX_NONE, &req);
+	/* punch non-exist long ext (full-stripe for EC) */
+	punch_rec_with_rxnr(dkeys[0], "akey1", 1 << 20, 1 << 20, DAOS_TX_NONE, &req);
 
 
 	/**
@@ -1944,7 +1975,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		D_FREE(dkeys[i]);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define MANYREC_NUMRECS	5
@@ -2201,8 +2232,21 @@ next_step:
 	assert_rc_equal(rc, 0);
 
 	/** fetch */
-	iod.iod_size	= DAOS_REC_ANY;
+	print_message("fetch with zero iov_len\n");
+	iod.iod_size	= 1;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len * 1;
+	iod.iod_nr	= 1;
+	sg_iov[0].iov_len = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("reading data back with less buffer ...\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len;
+	iod.iod_nr	= 3;
+	iod.iod_size	= DAOS_REC_ANY;
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 2;
@@ -2592,7 +2636,7 @@ tx_discard(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
@@ -2642,7 +2686,7 @@ tx_discard(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
 		       offset, (void **)rec, th[t], &req);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	for (t = 0; t < 3; t++) {
@@ -2656,7 +2700,7 @@ tx_discard(void **state)
 			rc = daos_tx_commit(th[t], NULL);
 			assert_int_equal(rc, 0);
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
@@ -2694,7 +2738,7 @@ tx_discard(void **state)
 	}
 
 	/** Close and reopen the container and the obj. */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
 	/** Verify record is the same as the last committed transaction. */
@@ -2730,7 +2774,7 @@ tx_discard(void **state)
 	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -2771,7 +2815,7 @@ tx_commit(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
@@ -2820,7 +2864,7 @@ tx_commit(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
 			rx_nr, offset, (void **)rec, th[t], &req);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
@@ -2847,7 +2891,7 @@ tx_commit(void **state)
 		}
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Commit only the first 2 transactions */
 	for (t = 0; t < 3; t++) {
@@ -2862,7 +2906,7 @@ tx_commit(void **state)
 		}
 		rc = daos_tx_close(th[t], NULL);
 		assert_int_equal(rc, 0);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Close and reopen the container and the obj */
@@ -2923,7 +2967,7 @@ tx_commit(void **state)
 	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -3074,7 +3118,7 @@ tgt_idx_change_retry(void **state)
 				     DAOS_OBJ_TGT_IDX_CHANGE,
 				     replica, NULL);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -3144,7 +3188,7 @@ tgt_idx_change_retry(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	insert_wait(&req);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
@@ -3174,7 +3218,7 @@ tgt_idx_change_retry(void **state)
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
 				  arg->dmg_config, rank);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
 
@@ -3213,7 +3257,7 @@ fetch_replica_unavail(void **state)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, rank);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Lookup */
 	buf = calloc(size, 1);
@@ -3236,7 +3280,7 @@ fetch_replica_unavail(void **state)
 
 	}
 	D_FREE(buf);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
 
@@ -3400,8 +3444,10 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
@@ -3461,7 +3507,7 @@ blob_unmap_trigger(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	/* Tx discard only currently supports DAOS_IOD_SINGLE type */
@@ -3496,7 +3542,7 @@ blob_unmap_trigger(void **state)
 			assert_memory_equal(update_buf, fetch_buf,
 					    IO_SIZE_NVME);
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/* Discard the NVMe records (Discard second tx) */
@@ -3506,7 +3552,7 @@ blob_unmap_trigger(void **state)
 	rc = daos_tx_close(th[1], NULL);
 	assert_int_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/* Wait for >= VEA_MIGRATE_INTVL */
 	print_message("Wait for free extents to expire (15 sec)\n");
@@ -3534,7 +3580,7 @@ blob_unmap_trigger(void **state)
 	D_FREE(fetch_buf);
 	D_FREE(update_buf);
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -3784,7 +3830,7 @@ io_pool_map_refresh_trigger(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_REFRESH_POOL_MAP | DAOS_FAIL_ONCE,
 				 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/** Insert */
@@ -3985,7 +4031,7 @@ io_capa_iv_fetch(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_CAPA_FETCH | DAOS_FAIL_ONCE,
 				 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/** Insert */
@@ -4186,12 +4232,28 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		assert_int_equal(attr->u.rp.r_num, nr);
 	} else if (res == DAOS_RES_EC) {
 		assert_int_equal(attr->u.ec.e_p, nr - 1);
-		if (domain_nr >= 10)
-			assert_int_equal(attr->u.ec.e_k, 8);
-		else if (domain_nr >= 6)
-			assert_int_equal(attr->u.ec.e_k, 4);
-		else
-			assert_int_equal(attr->u.ec.e_k, 2);
+
+		if (nr == 1 || nr == 2) {
+			if (domain_nr >= 18)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 10)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 6)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else if (nr == 3) {
+			if (domain_nr >= 20)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 12)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 8)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else {
+			D_ASSERT(0);
+		}
 	}
 
 	/** need an easier way to determine grp nr. for now use fit for GX */
@@ -4230,7 +4292,10 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 18) {
+		ecidx = OC_EC_16P1GX;
+		ecid1 = OC_EC_16P1G1;
+	} else if (attr.pa_domain_nr >= 10) {
 		ecidx = OC_EC_8P1GX;
 		ecid1 = OC_EC_8P1G1;
 	} else if (attr.pa_domain_nr >= 6) {
@@ -4383,10 +4448,13 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** adjust the expected EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 20) {
+		ecidx = OC_EC_16P2GX;
+		ecid1 = OC_EC_16P2G1;
+	} else if (attr.pa_domain_nr >= 12) {
 		ecidx = OC_EC_8P2GX;
 		ecid1 = OC_EC_8P2G1;
-	} else if (attr.pa_domain_nr >= 6) {
+	} else if (attr.pa_domain_nr >= 8) {
 		ecidx = OC_EC_4P2GX;
 		ecid1 = OC_EC_4P2G1;
 	} else {
@@ -4407,7 +4475,7 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** oid with EC hint should be OC_EC_NP2G1 */
-	print_message("oid with hint class:\t");
+	print_message("oid with hint DAOS_OCH_RDD_EC class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
 			  DAOS_RES_EC, 3, ecid1);
 	assert_rc_equal(rc, 0);
@@ -4487,19 +4555,32 @@ oclass_auto_setting(void **state)
 }
 
 static void
-int_key_setting(void **state)
+int_key_setting(void **state, int size)
 {
 	test_arg_t              *arg = *state;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
 	d_iov_t			dkey;
-	char			dkey_buf[128];
-	char			akey_buf[128];
+	char			*dkey_buf;
+	char			*akey_buf;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	char			buf[STACK_BUF_LEN];
 	int                     rc;
+
+	dkey_buf = malloc(size);
+	if (!dkey_buf) {
+		print_message("allocation memory failed\n");
+		return;
+	}
+
+	akey_buf = malloc(size);
+	if (!akey_buf) {
+		print_message("allocation memory failed\n");
+		free(dkey_buf);
+		return;
+	}
 
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
@@ -4509,11 +4590,11 @@ int_key_setting(void **state)
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
-	dts_buf_render(dkey_buf, 128);
-	dts_buf_render(akey_buf, 128);
+	dts_buf_render(dkey_buf, size);
+	dts_buf_render(akey_buf, size);
 
 	/** init dkey */
-	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&dkey, dkey_buf, size);
 
 	/** init scatter/gather */
 	d_iov_set(&sg_iov, buf, sizeof(buf));
@@ -4522,7 +4603,7 @@ int_key_setting(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	d_iov_set(&iod.iod_name, akey_buf, size);
 	iod.iod_size    = STACK_BUF_LEN;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_recxs	= NULL;
@@ -4578,6 +4659,98 @@ int_key_setting(void **state)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	free(dkey_buf);
+	free(akey_buf);
+}
+
+static void invalid_int_key_setting(void **state)
+{
+	int_key_setting(state, 128);
+	int_key_setting(state, 3);
+}
+
+static void
+enum_recxs_with_aggregation_internal(void **state, bool incr)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		data_buf[10];
+	char		*aggr_disabled = "disabled";
+	char		*aggr_set_time = "time";
+	daos_anchor_t	anchor;
+	bool		enable_agg = false;
+	int		total_size = 0;
+	int		i;
+	int		rc;
+
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
+	assert_rc_equal(rc, 0);
+	sleep(10);
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	print_message("Insert 10 records\n");
+	memset(data_buf, 'a', 10);
+	for (i = 0; i < 10; i++)
+		insert_single_with_rxnr("dkey", "akey", i, &data_buf[i],
+					1, 1, DAOS_TX_NONE, &req);
+	total_size = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[3];
+		daos_recx_t		recxs[3] = { 0 };
+		daos_size_t		size;
+		uint32_t		number = 3;
+
+		enumerate_rec(DAOS_TX_NONE, "dkey", "akey", &size,
+			      &number, recxs, eprs, &anchor, incr, &req);
+		for (i = 0; i < number; i++)
+			total_size += recxs[i].rx_nr;
+
+		if (!enable_agg) {
+			/* Enabled Pool Aggrgation */
+			print_message("enable aggregation\n");
+			rc = set_pool_reclaim_strategy(arg, aggr_set_time);
+			assert_rc_equal(rc, 0);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      DAOS_FORCE_EC_AGG, 0, NULL);
+			sleep(40);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      0, 0, NULL);
+			enable_agg = true;
+		}
+	}
+
+	assert_rc_equal(total_size, 10);
+}
+
+static void
+enum_recxs_with_aggregation(void **state)
+{
+	enum_recxs_with_aggregation_internal(state, true);
+	enum_recxs_with_aggregation_internal(state, false);
+}
+
+static void
+io_tx_convert(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	par_barrier(PAR_COMM_WORLD);
+
+	arg->fail_loc = DAOS_FAIL_TX_CONVERT | DAOS_FAIL_ALWAYS;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	punch_obj(DAOS_TX_NONE, &req);
+	ioreq_fini(&req);
 }
 
 static const struct CMUnitTest io_tests[] = {
@@ -4670,7 +4843,11 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
 	{ "IO44: INT dkey/akey checks",
-	  int_key_setting, async_disable, test_case_teardown},
+	  invalid_int_key_setting, async_disable, test_case_teardown},
+	{ "IO45: enum recxs with aggregation",
+	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
+	{ "IO46: tx convert",
+	  io_tx_convert, async_disable, test_case_teardown},
 };
 
 int
@@ -4708,7 +4885,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	char oclass[16] = {0};
 	char buf[32];
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(io_tests);
 		sub_tests = NULL;
@@ -4725,6 +4902,6 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

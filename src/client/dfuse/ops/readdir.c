@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,11 +110,13 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
-	if (S_ISDIR(ie->ie_stat.st_mode))
-		entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
-	else
-		entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
+		entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
+		if (S_ISDIR(ie->ie_stat.st_mode))
+			entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
+		else
+			entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
+	}
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
@@ -254,12 +256,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 * many entries. This is the telldir/seekdir use case.
 		 */
 
-		DFUSE_TRA_INFO(oh,
-			       "Seeking from offset %ld(%d) to %ld (index %d)",
-			       oh->doh_dre[oh->doh_dre_index].dre_offset,
-			       oh->doh_anchor_index,
-			       offset,
-			       oh->doh_dre_index);
+		DFUSE_TRA_DEBUG(oh,
+				"Seeking from offset %ld(%d) to %ld (index %d)",
+				oh->doh_dre[oh->doh_dre_index].dre_offset, oh->doh_anchor_index,
+				offset,	oh->doh_dre_index);
 
 		dfuse_readdir_reset(oh);
 		num = (uint32_t)offset - OFFSET_BASE;

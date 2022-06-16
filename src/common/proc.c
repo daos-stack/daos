@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,10 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_type);
 		if (rc)
 			break;
-		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_reserv);
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_flags);
+		if (rc)
+			break;
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_reserv);
 		if (rc)
 			break;
 
@@ -90,7 +93,8 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		    entry->dpe_type == DAOS_PROP_PO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_CO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP ||
-		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP) {
+		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP ||
+		    entry->dpe_type == DAOS_PROP_PO_POLICY) {
 			rc = crt_proc_d_string_t(proc, proc_op,
 						 &entry->dpe_str);
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,25 +7,18 @@
 
 #include <daos/common.h>
 #include <daos/dtx.h>
+#include <daos/btree_class.h>
 #include "vea_internal.h"
 
 void
 destroy_free_class(struct vea_free_class *vfc)
 {
-	vfc->vfc_lru_cnt = 0;
+	/* Destroy the in-memory sized free extent tree */
+	if (daos_handle_is_valid(vfc->vfc_size_btr)) {
+		dbtree_destroy(vfc->vfc_size_btr, NULL);
+		vfc->vfc_size_btr = DAOS_HDL_INVAL;
+	}
 
-	if (vfc->vfc_cursor) {
-		D_FREE(vfc->vfc_cursor);
-		vfc->vfc_cursor = NULL;
-	}
-	if (vfc->vfc_lrus) {
-		D_FREE(vfc->vfc_lrus);
-		vfc->vfc_lrus = NULL;
-	}
-	if (vfc->vfc_sizes) {
-		D_FREE(vfc->vfc_sizes);
-		vfc->vfc_sizes = NULL;
-	}
 	d_binheap_destroy_inplace(&vfc->vfc_heap);
 }
 
@@ -50,64 +43,26 @@ struct d_binheap_ops heap_ops = {
 int
 create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 {
-	uint32_t max_blks, min_blks;
-	int rc, i, lru_cnt, size;
+	struct umem_attr	uma;
+	int			rc;
 
+	vfc->vfc_size_btr = DAOS_HDL_INVAL;
 	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &heap_ops,
 				      &vfc->vfc_heap);
 	if (rc != 0)
 		return -DER_NOMEM;
 
-	/*
-	 * Divide free extents smaller than VEA_LARGE_EXT_MB into bunch of
-	 * size classed groups, the size upper bound of each group will be
-	 * max_blks, max_blks/2, max_blks/4 ... min_blks.
-	 */
 	D_ASSERT(md->vsd_blk_sz > 0 && md->vsd_blk_sz <= (1U << 20));
-	max_blks = (VEA_LARGE_EXT_MB << 20) / md->vsd_blk_sz;
-	min_blks = (1U << 20) / md->vsd_blk_sz;
+	vfc->vfc_large_thresh = (VEA_LARGE_EXT_MB << 20) / md->vsd_blk_sz;
 
-	vfc->vfc_large_thresh = max_blks;
-	lru_cnt = 1;
-	while (max_blks > min_blks) {
-		max_blks >>= 1;
-		lru_cnt++;
-	}
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	/* Create in-memory sized free extent tree */
+	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
+			   &uma, NULL, &vfc->vfc_size_btr);
+	if (rc != 0)
+		destroy_free_class(vfc);
 
-	D_ASSERT(vfc->vfc_lrus == NULL);
-	D_ALLOC_ARRAY(vfc->vfc_lrus, lru_cnt);
-	if (vfc->vfc_lrus == NULL) {
-		rc = -DER_NOMEM;
-		goto error;
-	}
-
-	D_ASSERT(vfc->vfc_sizes == NULL);
-	D_ALLOC_ARRAY(vfc->vfc_sizes, lru_cnt);
-	if (vfc->vfc_sizes == NULL) {
-		rc = -DER_NOMEM;
-		goto error;
-	}
-
-	max_blks = vfc->vfc_large_thresh;
-	for (i = 0; i < lru_cnt; i++) {
-		D_INIT_LIST_HEAD(&vfc->vfc_lrus[i]);
-		vfc->vfc_sizes[i] = max_blks > min_blks ? max_blks : min_blks;
-		max_blks >>= 1;
-	}
-	D_ASSERT(vfc->vfc_lru_cnt == 0);
-	vfc->vfc_lru_cnt = lru_cnt;
-
-	D_ASSERT(vfc->vfc_cursor == NULL);
-	size = lru_cnt * sizeof(struct vea_entry *);
-	D_ALLOC_ARRAY(vfc->vfc_cursor, size);
-	if (vfc->vfc_cursor == NULL) {
-		rc = -DER_NOMEM;
-		goto error;
-	}
-
-	return 0;
-error:
-	destroy_free_class(vfc);
 	return rc;
 }
 
@@ -170,7 +125,7 @@ load_vec_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 int
 load_space_info(struct vea_space_info *vsi)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int rc;
 
 	D_ASSERT(vsi->vsi_umem != NULL);

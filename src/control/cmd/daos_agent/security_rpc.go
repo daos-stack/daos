@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,9 +7,11 @@
 package main
 
 import (
+	"context"
 	"net"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -33,7 +35,7 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+func (m *SecurityModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
 	if method != drpc.MethodRequestCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -52,27 +54,27 @@ func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
 	info, err := security.DomainInfoFromUnixConn(m.log, uConn)
 	if err != nil {
 		m.log.Errorf("Unable to get credentials for client socket: %s", err)
-		return m.credRespWithStatus(drpc.DaosMiscError)
+		return m.credRespWithStatus(daos.MiscError)
 	}
 
 	signingKey, err := m.config.PrivateKey()
 	if err != nil {
 		m.log.Error(err.Error())
 		// something is wrong with the cert config
-		return m.credRespWithStatus(drpc.DaosInvalidInput)
+		return m.credRespWithStatus(daos.InvalidInput)
 	}
 
 	cred, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)
 	if err != nil {
 		m.log.Errorf("Failed to get AuthSys struct: %s", err)
-		return m.credRespWithStatus(drpc.DaosMiscError)
+		return m.credRespWithStatus(daos.MiscError)
 	}
 
 	resp := &auth.GetCredResp{Cred: cred}
 	return drpc.Marshal(resp)
 }
 
-func (m *SecurityModule) credRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
+func (m *SecurityModule) credRespWithStatus(status daos.Status) ([]byte, error) {
 	resp := &auth.GetCredResp{Status: int32(status)}
 	return drpc.Marshal(resp)
 }

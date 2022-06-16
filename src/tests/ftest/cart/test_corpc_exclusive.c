@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,9 +165,8 @@ int main(void)
 		assert(0);
 	}
 
-	sleep(2);
 	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0,
-				 1, 10, 100.0);
+				 1, 50, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);

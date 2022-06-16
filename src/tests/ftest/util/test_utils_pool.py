@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,14 +9,85 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase
-from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from test_utils_base import TestDaosApiBase, LabelGenerator
+from avocado import fail_on, TestFail
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
-from env_modules import load_mpi
+from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
+
+POOL_NAMESPACE = "/run/pool/*"
+POOL_TIMEOUT_INCREMENT = 200
+
+
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+    """Add a new TestPool object to the test.
+
+    Args:
+        test (Test): the test to which the pool will be added
+        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to
+            POOL_NAMESPACE.
+        create (bool, optional): should the pool be created. Defaults to True.
+        connect (bool, optional): should the pool be connected. Defaults to True.
+        index (int, optional): Server index for dmg command. Defaults to 0.
+
+    Returns:
+        TestPool: the new pool object
+
+    """
+    pool = TestPool(
+        namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
+        label_generator=test.label_generator)
+    pool.get_params(test)
+    if params:
+        pool.update_params(**params)
+    if create:
+        pool.create()
+    if create and connect:
+        pool.connect()
+
+    # Add a step to remove this pool when the test completes and ensure their is enough time for the
+    # pool destroy to be attempted - accounting for a possible dmg command timeout
+    test.increment_timeout(POOL_TIMEOUT_INCREMENT)
+    test.register_cleanup(remove_pool, test=test, pool=pool)
+
+    return pool
+
+
+def remove_pool(test, pool):
+    """Remove the requested pool from the test.
+
+    Args:
+        test (Test): the test from which to destroy the pool
+        pool (TestPool): the pool to destroy
+
+    Returns:
+        list: a list of any errors detected when removing the pool
+
+    """
+    error_list = []
+    test.test_log.info("Destroying pool %s", pool.identifier)
+
+    # Ensure exceptions are raised for any failed command
+    exit_status_exception = None
+    if pool.dmg is not None:
+        exit_status_exception = pool.dmg.exit_status_exception
+        pool.dmg.exit_status_exception = True
+
+    # Attempt to destroy the pool
+    try:
+        pool.destroy(force=1, disconnect=1)
+    except (DaosApiError, TestFail) as error:
+        test.test_log.info("  {}".format(error))
+        error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
+
+    # Restore raising exceptions for any failed command
+    if exit_status_exception is False:
+        pool.dmg.exit_status_exception = exit_status_exception
+
+    return error_list
 
 
 class TestPool(TestDaosApiBase):
@@ -24,7 +95,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None):
+                 label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -42,8 +113,9 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
+            namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__("/run/pool/*", cb_handler)
+        super().__init__(namespace, cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -88,6 +160,9 @@ class TestPool(TestDaosApiBase):
 
         self.query_data = []
 
+        self.scm_per_rank = None
+        self.nvme_per_rank = None
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -101,16 +176,15 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
-                or (self.scm_size.value is not None
-                    and str(self.scm_size.value).endswith("%"))
+        if ((self.scm_size.value is not None
+             and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
                     and str(self.nvme_size.value).endswith("%"))):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
@@ -135,8 +209,7 @@ class TestPool(TestDaosApiBase):
         if self.label.value is not None:
             if not isinstance(self.label_generator, LabelGenerator):
                 raise CommandFailure(
-                    "Unable to create a unique pool label; " +\
-                        "Undefined label_generator")
+                    "Unable to create a unique pool label; Undefined label_generator")
             self.label.update(self.label_generator.get_label(self.label.value))
 
     @property
@@ -147,10 +220,12 @@ class TestPool(TestDaosApiBase):
             str: pool UUID
 
         """
-        uuid = None
-        if self.pool and self.pool.uuid:
-            uuid = self.pool.get_uuid_str()
-        return uuid
+        try:
+            return self.pool.get_uuid_str()
+        except AttributeError:
+            return None
+        except IndexError:
+            return self.pool.uuid
 
     @uuid.setter
     def uuid(self, value):
@@ -200,6 +275,15 @@ class TestPool(TestDaosApiBase):
         if not isinstance(value, DmgCommand):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
+
+    def skip_cleanup(self):
+        """Prevent pool from being removed during cleanup.
+
+        Useful for corner case tests where the pool no longer exists due to a storage format.
+        """
+        self.connected = False
+        if self.pool:
+            self.pool.attached = False
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -267,6 +351,10 @@ class TestPool(TestDaosApiBase):
             # Set UUID and attached to the DaosPool object
             self.uuid = data["uuid"]
             self.pool.attached = 1
+
+            # Set effective size of mediums per rank
+            self.scm_per_rank = data["scm_per_rank"]
+            self.nvme_per_rank = data["nvme_per_rank"]
 
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
@@ -385,31 +473,24 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             self.log.info("Get-prop for Pool: %s", self.identifier)
 
-            if self.control_method.value == self.USE_DMG and self.dmg:
-                # If specific property are not provided, get all the property
-                self.dmg.pool_get_prop(self.identifier, prop_name)
+            # If specific property are not provided, get all the property
+            self.dmg.pool_get_prop(self.identifier, prop_name)
 
-                if self.dmg.result.exit_status == 0:
-                    prop_value = json.loads(
-                        self.dmg.result.stdout)['response'][0]['value']
+            if self.dmg.result.exit_status == 0:
+                prop_value = json.loads(
+                    self.dmg.result.stdout)['response'][0]['value']
 
-            elif self.control_method.value == self.USE_DMG:
-                self.log.error("Error: Undefined dmg command")
-
-            else:
-                self.log.error(
-                    "Error: Undefined control_method: %s",
-                    self.control_method.value)
         return prop_value
 
     @fail_on(CommandFailure)
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
-            self.log.info(
-                "Evict all pool connections for pool: %s", self.identifier)
-
-            self.dmg.pool_evict(self.identifier)
+            self.log.info("Evict all pool connections for pool: %s", self.identifier)
+            try:
+                self.dmg.pool_evict(self.identifier)
+            finally:
+                self.connected = False
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -419,6 +500,7 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.connect()
+            self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 
@@ -505,7 +587,7 @@ class TestPool(TestDaosApiBase):
         for key in ("ps_ntargets", "ps_padding"):
             val = locals()[key]
             if val is not None:
-                checks.append(key, getattr(self.info.pi_space, key), val)
+                checks.append((key, getattr(self.info.pi_space, key), val))
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -541,8 +623,57 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
+    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_nvme (int, optional): pool expected NVME free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        Note:
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
+            default '=='.
+
+        Raises:
+            DaosTestError: if scm or nvme free space doesn't match expected
+            values within timeout.
+
+        Returns:
+            bool: True if expected value is specified and all the
+                specified values match; False if no space parameters specified.
+
+        """
+        if not expected_scm and not expected_nvme:
+            self.log.error("at least one space parameter must be specified")
+            return False
+
+        done = False
+        scm_fs = 0
+        nvme_fs = 0
+        start = time()
+        scm_index, nvme_index = 0, 1
+        while time() - start < timeout and not done:
+            sleep(1)
+            checks = []
+            self.get_info()
+            scm_fs = self.info.pi_space.ps_space.s_free[scm_index]
+            nvme_fs = self.info.pi_space.ps_space.s_free[nvme_index]
+            if expected_scm is not None:
+                checks.append(("scm", scm_fs, expected_scm))
+            if expected_nvme is not None:
+                checks.append(("nvme", nvme_fs, expected_nvme))
+            done = self._check_info(checks)
+
+        if not done:
+            raise DaosTestError(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                scm_fs, nvme_fs, expected_scm, expected_nvme))
+
+        return done
+
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -558,7 +689,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
@@ -597,7 +728,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_done == 1
+            status = self.info.pi_rebuild_st.rs_state == 2
         elif self.control_method.value == self.USE_DMG:
             self.set_query_data()
             self.log.info(
@@ -617,7 +748,8 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the rebuild data. Defaults to True.
 
         Returns:
-            [type]: [description]
+            str: the rebuild state
+
         """
         self.set_query_data()
         try:
@@ -650,7 +782,6 @@ class TestPool(TestDaosApiBase):
         expected_states = ["busy", "done"] if to_start else ["done"]
 
         start = time()
-        # while self.rebuild_complete() == to_start:
         while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
@@ -692,35 +823,6 @@ class TestPool(TestDaosApiBase):
 
         """
         return check_pool_files(self.log, hosts, self.uuid.lower())
-
-    def write_file(self, orterun, processes, hostfile, size, timeout=60):
-        """Write a file to the pool.
-
-        Args:
-            orterun (str): full path to the orterun command
-            processes (int): number of processes to launch
-            hosts (list): list of clients from which to write the file
-            size (int): size of the file to create in bytes
-            timeout (int, optional): number of seconds before timing out the
-                command. Defaults to 60 seconds.
-
-        Returns:
-            process.CmdResult: command execution result
-
-        """
-        self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        env = {
-            "DAOS_POOL": self.uuid,
-            "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        }
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
-
-        current_path = os.path.dirname(os.path.abspath(__file__))
-        command = "{} --np {} --hostfile {} {} {} testfile".format(
-            orterun, processes, hostfile,
-            os.path.join(current_path, "write_some_data.py"), size)
-        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -792,7 +894,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
@@ -842,8 +944,12 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_query_data(self):
+    def set_query_data(self, show_enabled=False, show_disabled=False):
         """Execute dmg pool query and store the results.
+
+        Args:
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Only supported with the dmg control method.
         """
@@ -859,7 +965,8 @@ class TestPool(TestDaosApiBase):
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        self.query_data = self.dmg.pool_query(self.identifier)
+                        self.query_data = self.dmg.pool_query(self.identifier, show_enabled,
+                                show_disabled)
                         break
                     except CommandFailure as error:
                         if end_time is not None:
@@ -948,31 +1055,19 @@ class TestPool(TestDaosApiBase):
         else:
             self.log.error("self.acl_file isn't defined!")
 
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
 
-class LabelGenerator():
-    # pylint: disable=too-few-public-methods
-    """Generates label used for pool."""
-
-    def __init__(self, value=1):
-        """Constructor.
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
 
         Args:
-            value (int): Number that's attached after the base_label.
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
         """
-        self.value = value
-
-    def get_label(self, base_label):
-        """Create a label by adding number after the given base_label.
-
-        Args:
-            base_label (str): Label prefix. Don't include space.
-
-        Returns:
-            str: Created label.
-
-        """
-        label = base_label
-        if label is not None:
-            label = "_".join([base_label, str(self.value)])
-            self.value += 1
-        return label
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)

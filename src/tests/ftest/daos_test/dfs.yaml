@@ -11,10 +11,10 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 1000
+timeout: 4000
 timeouts:
-  test_daos_dfs_unit: 1000
-  test_daos_dfs_parallel: 200
+  test_daos_dfs_unit: 2000
+  test_daos_dfs_parallel: 2000
   test_daos_dfs_sys: 90
 pool:
   scm_size: 8G
@@ -64,4 +64,8 @@ daos_tests:
   num_clients:
     test_daos_dfs_unit: 1
     test_daos_dfs_parallel: 32
+    test_daos_dfs_sys: 1
+  pools_created:
+    test_daos_dfs_unit: 2
+    test_daos_dfs_parallel: 2
     test_daos_dfs_sys: 1

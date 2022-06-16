@@ -1,10 +1,9 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from socket import gethostname
 
 from command_utils_base import \
@@ -86,6 +85,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.ConfigSubCommand()
         elif self.sub_command.value == "telemetry":
             self.sub_command_class = self.TelemetrySubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -322,6 +323,8 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool query command object."""
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = FormattedParameter("{}", None)
+                self.show_enabled = FormattedParameter("--show-enabled", False)
+                self.show_disabled = FormattedParameter("--show-disabled", False)
 
         class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""
@@ -380,7 +383,6 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg storage format command object."""
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
-                self.reformat = FormattedParameter("--reformat", False)
                 self.force = FormattedParameter("--force", False)
 
         class QuerySubCommand(CommandWithSubCommand):
@@ -622,3 +624,11 @@ class DmgCommandBase(YamlCommand):
                     self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg version sub command."""
+
+        def __init__(self):
+            """Create a dmg version subcommand object."""
+            super(DmgCommandBase.VersionSubCommand, self).__init__(
+                "/run/dmg/version/*", "version")

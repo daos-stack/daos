@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,7 +20,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -52,7 +52,7 @@ func getRandIdx(n ...int32) int32 {
 
 // MockNvmeHealth returns struct with examples values.
 func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
@@ -100,7 +100,7 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 
 // MockNvmeNamespace returns struct with examples values.
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   uint32(idx),
 		Size: uint64(humanize.TByte) * uint64(idx+1),
@@ -109,10 +109,10 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 
 // MockSmdDevice returns struct with examples values.
 func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
 	return &SmdDevice{
-		UUID:      common.MockUUID(idx),
+		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
 		NvmeState: MockNvmeStateIdentify,
 		TrAddr:    parentTrAddr,
@@ -121,7 +121,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 
 // MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 	pciAddr := concat("0000:80:00", idx, ".")
 
 	return &NvmeController{
@@ -147,9 +147,29 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockNvmeAioFile returns struct representing an emulated NVMe AIO-file device.
+func MockNvmeAioFile(varIdx ...int32) *NvmeAioDevice {
+	idx := test.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/tmp/daos-bdev-", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
+// MockNvmeAioKdev returns struct representing an emulated NVMe AIO-kdev device.
+func MockNvmeAioKdev(varIdx ...int32) *NvmeAioDevice {
+	idx := test.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/dev/sda", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
 // MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
-	idx := uint32(common.GetIndex(varIdx...))
+	idx := uint32(test.GetIndex(varIdx...))
 
 	return &ScmModule{
 		ChannelID:        idx,
@@ -178,7 +198,7 @@ func MockScmModules(length int) ScmModules {
 // MockScmMountPoint returns struct with examples values.
 // Avoid creating mock with zero sizes.
 func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 
 	return &ScmMountPoint{
 		Class:      ClassDcpm,
@@ -192,10 +212,10 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 // MockScmNamespace returns struct with examples values.
 // Avoid creating mock with zero sizes.
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
-	idx := common.GetIndex(varIdx...)
+	idx := test.GetIndex(varIdx...)
 
 	return &ScmNamespace{
-		UUID:        common.MockUUID(varIdx...),
+		UUID:        test.MockUUID(varIdx...),
 		BlockDevice: fmt.Sprintf("pmem%d", idx),
 		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
@@ -206,7 +226,7 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
-	p.Scm = scm
+	p.scm = scm
 	p.bdev = bdev
 	return p
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,6 +85,8 @@ struct dtx_handle {
 					 dth_verified:1,
 					 /* The DTX handle is aborted. */
 					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -150,11 +152,15 @@ struct dtx_leader_handle {
 	uint32_t			dlh_dti_cos_count;
 	struct dtx_id			*dlh_dti_cos;
 
-	/* The future to wait for all sub handle to finish */
+	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
-	/* How many sub leader transaction */
-	uint32_t			dlh_sub_cnt;
+	/* Normal sub requests have been processed. */
+	uint32_t			dlh_normal_sub_done:1;
+	/* How many normal sub request. */
+	uint32_t			dlh_normal_sub_cnt;
+	/* How many delay forward sub request. */
+	uint32_t			dlh_delay_sub_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 	dtx_agg_cb_t			dlh_agg_cb;
@@ -206,8 +212,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
-	       int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);
@@ -229,9 +234,13 @@ int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_child *cont);
+int dtx_cont_open(struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_child *cont);
+void dtx_cont_close(struct ds_cont_child *cont);
+
+int dtx_cont_register(struct ds_cont_child *cont);
+
+void dtx_cont_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);

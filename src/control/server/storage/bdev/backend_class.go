@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,7 +98,7 @@ func writeJsonConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) er
 	}
 	hasBdevs := false
 	for _, tierProp := range req.TierProps {
-		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
+		if tierProp.Class != storage.ClassNvme || tierProp.DeviceList.Len() > 0 {
 			hasBdevs = true
 			break
 		}

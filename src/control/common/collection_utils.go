@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,11 +9,71 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/pkg/errors"
 )
+
+// StringSet is a non-duplicated set of strings.
+type StringSet map[string]struct{}
+
+// ToSlice returns the strings in the set as a sorted slice.
+func (s StringSet) ToSlice() []string {
+	slice := make([]string, 0, len(s))
+	for str := range s {
+		slice = append(slice, str)
+	}
+	sort.Strings(slice)
+	return slice
+}
+
+// AddUnique adds zero or more strings to the StringSet,
+// and returns an error if any already exist.
+func (s StringSet) AddUnique(values ...string) error {
+	if s == nil {
+		return nil
+	}
+
+	dupes := StringSet{}
+	for _, str := range values {
+		if _, exists := s[str]; exists {
+			dupes.Add(str)
+			continue
+		}
+		s[str] = struct{}{}
+	}
+
+	if len(dupes) > 0 {
+		return errors.Errorf("duplicate strings: %s", dupes)
+	}
+
+	return nil
+}
+
+// Add adds zero or more strings to the StringSet.
+func (s StringSet) Add(values ...string) {
+	s.AddUnique(values...)
+}
+
+// Has checks if the passed string is in the StringSet.
+func (s StringSet) Has(val string) bool {
+	_, exists := s[val]
+	return exists
+}
+
+func (s StringSet) String() string {
+	return strings.Join(s.ToSlice(), ", ")
+}
+
+// NewStringSet creates a StringSet and initializes it with zero or more strings.
+func NewStringSet(values ...string) StringSet {
+	set := make(StringSet)
+	set.Add(values...)
+
+	return set
+}
 
 // Includes returns true if string target in slice.
 func Includes(ss []string, target string) bool {
@@ -129,18 +189,9 @@ func ParseNumberList(stringList string, output interface{}) error {
 // DedupeStringSlice is responsible for returning a slice based on
 // the input with any duplicates removed.
 func DedupeStringSlice(in []string) []string {
-	keys := make(map[string]struct{})
+	set := NewStringSet(in...)
 
-	for _, el := range in {
-		keys[el] = struct{}{}
-	}
-
-	out := make([]string, 0, len(keys))
-	for key := range keys {
-		out = append(out, key)
-	}
-
-	return out
+	return set.ToSlice()
 }
 
 // StringSliceHasDuplicates checks whether there are duplicate strings in the

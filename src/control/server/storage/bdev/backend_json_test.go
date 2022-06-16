@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -34,19 +34,19 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		return append(defaultSpdkConfig().Subsystems[0].Configs,
 			[]*SpdkSubsystemConfig{
 				{
-					Method: SpdkBdevNvmeAttachController,
+					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(1),
+						TransportAddress: test.MockPCIAddr(1),
 					},
 				},
 				{
-					Method: SpdkBdevNvmeAttachController,
+					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(2),
+						TransportAddress: test.MockPCIAddr(2),
 					},
 				},
 			}...)
@@ -65,33 +65,35 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		enableHotplug      bool
 		busidRange         string
 		vosEnv             string
+		accelEngine        string
+		accelOptMask       storage.AccelOptionBits
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
-		expDaosCfgs        []*SpdkDaosConfig
+		expDaosCfgs        []*DaosConfig
 		expValidateErr     error
 		expErr             error
 	}{
 		"config validation failure": {
 			class:          storage.ClassNvme,
 			devList:        []string{"not a pci address"},
-			expValidateErr: errors.New("unexpected pci address"),
+			expValidateErr: errors.New("valid PCI addresses"),
 		},
 		"multiple controllers": {
 			class:       storage.ClassNvme,
-			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			expBdevCfgs: multiCtrlrConfs(),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
 			enableVmd:   true,
-			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			expBdevCfgs: multiCtrlrConfs(),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
 					Name: "vmd",
 					Configs: []*SpdkSubsystemConfig{
 						{
-							Method: SpdkVmdEnable,
+							Method: storage.ConfVmdEnable,
 							Params: VmdEnableParams{},
 						},
 					},
@@ -100,13 +102,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		},
 		"multiple controllers; hotplug enabled; bus-id range specified": {
 			class:         storage.ClassNvme,
-			devList:       []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
 			expBdevCfgs:   hotplugConfs,
-			expDaosCfgs: []*SpdkDaosConfig{
+			expDaosCfgs: []*DaosConfig{
 				{
-					Method: SpdkHotplugBusidRange,
+					Method: storage.ConfSetHotplugBusidRange,
 					Params: HotplugBusidRangeParams{
 						Begin: 138, End: 143,
 					},
@@ -125,7 +127,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
@@ -133,7 +135,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						},
 					},
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
@@ -149,14 +151,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
 							Filename:   "/dev/sdb",
 						},
 					},
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
 							Filename:   "/dev/sdc",
@@ -165,18 +167,34 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				}...),
 			vosEnv: "AIO",
 		},
+		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
+			class:        storage.ClassNvme,
+			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			accelEngine:  storage.AccelEngineSPDK,
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			expBdevCfgs:  multiCtrlrConfs(),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetAccelProps,
+					Params: AccelPropsParams{
+						Engine:  storage.AccelEngineSPDK,
+						Options: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+					},
+				},
+			},
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := &storage.TierConfig{
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: tc.devList,
+					DeviceList: storage.MustNewBdevDeviceList(tc.devList...),
 					FileSize:   tc.fileSizeGB,
 					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
 				},
@@ -194,27 +212,26 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint(mockMntpt),
 					cfg,
 				).
-				WithStorageEnableHotplug(tc.enableHotplug)
+				WithStorageEnableHotplug(tc.enableHotplug).
+				WithPinnedNumaNode(0).
+				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask)
 
-			gotValidateErr := engineConfig.Validate(context.TODO(), log) // populate output path
-			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
+			gotValidateErr := engineConfig.Validate() // populate output path
+			test.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return
 			}
 
 			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
-				&engineConfig.Storage, storage.MockGetTopology)
-			if tc.enableVmd {
-				writeReq.VMDEnabled = true
-			}
+				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 
-			gotCfg, gotErr := newSpdkConfig(log, &writeReq)
-			common.CmpErr(t, tc.expErr, gotErr)
+			gotCfg, gotErr := newSpdkConfig(log, writeReq)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

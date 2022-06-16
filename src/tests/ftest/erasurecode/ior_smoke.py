@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -25,10 +25,10 @@ class EcodIor(IorTestBase):
             Create the medium size of pool and run IOR with supported EC object
             type class for sanity purpose.
 
-	    :avocado: tags=all,pr,daily_regression
-	    :avocado: tags=hw,large
-	    :avocado: tags=ec,ec_smoke,ior
-	    :avocado: tags=ec_ior
+            :avocado: tags=all,pr,daily_regression
+            :avocado: tags=hw,large
+            :avocado: tags=ec,ec_smoke,ior
+            :avocado: tags=ec_ior
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

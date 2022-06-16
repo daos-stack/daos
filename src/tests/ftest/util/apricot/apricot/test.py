@@ -1,40 +1,41 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
-# Some useful test classes inherited from avocado.Test
+from ast import literal_eval
 import os
 import json
 import re
+from time import time
 
+from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
-from avocado import skip, TestFail, fail_on
-from avocado.utils.distro import detect
 from avocado.core import exceptions
-from ast import literal_eval
 from ClusterShell.NodeSet import NodeSet
 
-from fault_config_utils import FaultInjection
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
-from dmg_utils import get_dmg_command
-from daos_utils import DaosCommand
 from cart_ctl_utils import CartCtl
-from server_utils import DaosServerManager
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure
+from daos_utils import DaosCommand
+from distro_utils import detect
+from dmg_utils import get_dmg_command
+from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
+    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
+    set_avocado_config_value
 from logger_utils import TestLogger
-from test_utils_pool import TestPool, LabelGenerator
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
+from server_utils import DaosServerManager
 from test_utils_container import TestContainer
-from env_modules import load_mpi
-from distutils.spawn import find_executable
+from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
+from job_manager_utils import get_job_manager
 
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name
@@ -127,8 +128,16 @@ class Test(avocadoTest):
         self.basepath = None
         self.prefix = None
         self.ofi_prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch",
-                                        "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
+
+        # List of methods to call during tearDown to cleanup after the steps
+        # Use the register_cleanup() method to add methods with optional arguments
+        self._cleanup_methods = []
+
+        # Current CI stage name
+        self._stage_name = os.environ.get("STAGE_NAME", None)
+        if self._stage_name is None:
+            self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
 
     def setUp(self):
         """Set up each test case."""
@@ -256,6 +265,10 @@ class Test(avocadoTest):
                     value = data.pop(0)
                     if name == "test_method_name":
                         skip_variant &= self.get_test_name() == value
+                    elif name == "stage_name":
+                        if self._stage_name is None:
+                            self.log.info("Skip variant cannot be verified: %s=%s", name, value)
+                        skip_variant &= self._stage_name == value
                     else:
                         skip_variant &= self.params.get(name) == value
                 except IndexError:
@@ -324,6 +337,24 @@ class Test(avocadoTest):
         """
         return self.get_test_info()["method"]
 
+    def get_elapsed_time(self):
+        """Get the elapsed test time.
+
+        Returns:
+            float: number of seconds since the start of the test
+
+        """
+        return time() - self.time_start
+
+    def get_remaining_time(self):
+        """Get the remaining time before the test timeout will expire.
+
+        Returns:
+            float: number of seconds remaining before the test will timeout
+
+        """
+        return self.timeout - self.get_elapsed_time()
+
     def report_timeout(self):
         """Report whether or not this test case was timed out."""
         if not self._timeout_reported:
@@ -370,6 +401,61 @@ class Test(avocadoTest):
             errors.append("Error removing temporary test files: {}".format(error))
         return errors
 
+    def _cleanup(self):
+        """Run all the the cleanup methods from last to first.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        while self._cleanup_methods:
+            try:
+                cleanup = self._cleanup_methods.pop()
+                errors.extend(cleanup["method"](**cleanup["kwargs"]))
+            except Exception as error:      # pylint: disable=broad-except
+                kwargs_str = ", ".join(
+                    ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
+                errors.append(
+                    "Unhandled exception when calling {}({}): {}".format(
+                        str(cleanup["method"]), kwargs_str, str(error)))
+        return errors
+
+    def register_cleanup(self, method, **kwargs):
+        """Add a method call to the list of cleanup methods to run in tearDown().
+
+        Args:
+            method (str): method to call with the kwargs
+        """
+        self._cleanup_methods.append({"method": method, "kwargs": kwargs})
+        kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
+        self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
+
+    def increment_timeout(self, increment):
+        """Increase the avocado runner timeout configuration settings by the provided value.
+
+        Increase the various runner timeout configuration values to ensure tearDown is given enough
+        time to perform all of its steps.
+
+        Args:
+            increment (int): number of additional seconds by which to increase the timeout.
+        """
+        namespace = "runner.timeout"
+        for key in ("after_interrupted", "process_alive", "process_died"):
+            section = ".".join([namespace, key])
+
+            # Get the existing value
+            try:
+                value = int(get_avocado_config_value(namespace, key))
+            except (TypeError, ValueError) as error:
+                self.log.debug("Unable to obtain the %s setting: %s", section, str(error))
+                continue
+
+            # Update the setting with the incremented value
+            self.log.debug(
+                "Incrementing %s from %s to %s seconds", section, value, value + increment)
+            set_avocado_config_value(namespace, key, value + increment)
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
@@ -399,8 +485,6 @@ class TestWithoutServers(Test):
         super().__init__(*args, **kwargs)
 
         self.client_mca = None
-        self.orterun = None
-        self.ompi_prefix = None
         self.bin = None
         self.daos_test = None
         self.cart_prefix = None
@@ -418,19 +502,6 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
-        if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
-
-        self.orterun = find_executable('orterun')
-        if self.orterun is None:
-            self.fail("Could not find orterun")
-
-        # hardware tests segfault in MPI_Init without this option
-        self.client_mca = "--mca btl_openib_warn_default_gid_prefix 0"
-        self.client_mca += " --mca pml ob1"
-        self.client_mca += " --mca btl tcp,self"
-        self.client_mca += " --mca oob tcp"
-        self.ompi_prefix = os.path.dirname(os.path.dirname(self.orterun))
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
@@ -472,6 +543,44 @@ class TestWithoutServers(Test):
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
+
+    def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
+        """Get a NodeSet for the hosts to use in the test.
+        Args:
+            yaml_key (str): test yaml key used to obtain the set of hosts to test
+            partition_key (str): test yaml key used to obtain the host partition name
+            reservation_key (str): test yaml key used to obtain the host reservation name
+            namespace (str): test yaml path to the keys
+        Returns:
+            NodeSet: the set of hosts to test obtained from the test yaml
+        """
+        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
+
+        # Collect any host information from the test yaml
+        host_data = self.params.get(yaml_key, namespace)
+        partition = self.params.get(partition_key, namespace)
+        reservation = self.params.get(reservation_key, namespace, reservation_default)
+        if partition is not None and host_data is not None:
+            self.fail(
+                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
+                    partition_key, yaml_key))
+
+        if partition is not None and host_data is None:
+            # If a partition is provided instead of a set of hosts get the set of hosts from the
+            # partition information
+            setattr(self, partition_key, partition)
+            setattr(self, reservation_key, reservation)
+            slurm_nodes = get_partition_hosts(partition, reservation)
+            if not slurm_nodes:
+                self.fail(
+                    "No valid nodes in {} partition with {} reservation".format(
+                        partition, reservation))
+            host_data = slurm_nodes
+
+        # Convert the set of hosts from slurm or the yaml file into a NodeSet
+        if isinstance(host_data, (list, tuple)):
+            return NodeSet.fromlist(host_data)
+        return NodeSet(host_data)
 
 
 class TestWithServers(TestWithoutServers):
@@ -549,6 +658,8 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        # whether engines ULT stacks have been already dumped
+        self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
 
     def setUp(self):
@@ -689,8 +800,7 @@ class TestWithServers(TestWithoutServers):
         self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
 
         # If there's no server started, then there's no server log to write to.
-        if (self.setup_start_servers and self.setup_start_agents and
-            not self.skip_add_log_msg):
+        if (self.setup_start_servers and self.setup_start_agents and not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
@@ -710,17 +820,7 @@ class TestWithServers(TestWithoutServers):
                     "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
-        manager_class_name = self.params.get(
-            "job_manager_class_name", default=None)
-        manager_subprocess = self.params.get(
-            "job_manager_subprocess", default=False)
-        manager_mpi_type = self.params.get(
-            "job_manager_mpi_type", default="mpich")
-        if manager_class_name is not None:
-            self.job_manager = get_job_manager_class(
-                manager_class_name, None, manager_subprocess, manager_mpi_type)
-            self.set_job_manager_timeout()
-            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
+        get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
         self.log.info("=" * 100)
@@ -752,27 +852,6 @@ class TestWithServers(TestWithoutServers):
                 "Unable to write message to the server log: %d servers groups "
                 "running / %d agent groups running",
                 len(self.server_managers), len(self.agent_managers))
-
-    def set_job_manager_timeout(self):
-        """Set the timeout for the job manager.
-
-        Use the following priority when setting the job_manager timeout:
-            1) use the test method specific timeout from the test yaml, e.g.
-                job_manager_timeout:
-                    test_one: 30
-                    test_two: 60
-            2) use the common job_manager timeout from the test yaml, e.g.
-                job_manager_timeout: 45
-            3) use the avocado test timeout minus 30 seconds
-        """
-        if self.job_manager:
-            self.job_manager.timeout = self.params.get(
-                self.get_test_name(), "/run/job_manager_timeout/*", None)
-            if self.job_manager.timeout is None:
-                self.job_manager.timeout = self.params.get(
-                    "job_manager_timeout", default=None)
-                if self.job_manager.timeout is None:
-                    self.job_manager.timeout = self.timeout - 30
 
     def start_agents(self, agent_groups=None, force=False):
         """Start the daos_agent processes.
@@ -846,6 +925,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:
@@ -1242,8 +1322,46 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files")
         return errors
 
+    def dump_engines_stacks(self, message):
+        """Dump the engines ULT stacks.
+
+        Args:
+            message (str): reason for dumping the ULT stacks. Defaults to None.
+        """
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("%s, dumping ULT stacks", message)
+            dump_engines_stacks(self.hostlist_servers)
+
+    def report_timeout(self):
+        """Dump ULTs stacks if this test case was timed out."""
+        super().report_timeout()
+        if self.timeout is not None and self.time_elapsed > self.timeout:
+            # dump engines ULT stacks upon test timeout
+            self.dump_engines_stacks("Test has timed-out")
+
+    def fail(self, msg=None):
+        """Dump engines ULT stacks upon test failure."""
+        self.dump_engines_stacks("Test has failed")
+        super().fail(msg)
+
+    def error(self, msg=None):
+        """Dump engines ULT stacks upon test error."""
+        self.dump_engines_stacks("Test has errored")
+        super().error(msg)
+
     def tearDown(self):
         """Tear down after each test case."""
+
+        # dump engines ULT stacks upon test failure
+        # check of Avocado test status during teardown is presently useless
+        # and about same behavior has been implemented by adding both fail()
+        # error() method above, to overload the methods of Avocado base Test
+        # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
+        # associated PR-5224)
+        if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
+            self.dump_engines_stacks("Test status is {}".format(self.status))
+
         # Report whether or not the timeout has expired
         self.report_timeout()
 
@@ -1256,8 +1374,8 @@ class TestWithServers(TestWithoutServers):
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
-        # Destroy any pools next
-        self._teardown_errors.extend(self.destroy_pools(self.pool))
+        # Destroy any pools next - eventually this call will encompass all teardown steps
+        self._teardown_errors.extend(self._cleanup())
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
@@ -1287,8 +1405,10 @@ class TestWithServers(TestWithoutServers):
         error_list = []
         if self.job_manager:
             self.test_log.info("Stopping test job manager")
-            error_list = self._stop_managers(
-                [self.job_manager], "test job manager")
+            if isinstance(self.job_manager, list):
+                error_list = self._stop_managers(self.job_manager, "test job manager")
+            else:
+                error_list = self._stop_managers([self.job_manager], "test job manager")
         return error_list
 
     def destroy_containers(self, containers):
@@ -1464,6 +1584,8 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
+                # dump engines stacks if not already done
+                self.dump_engines_stacks("Some engine not in expected state")
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
@@ -1571,16 +1693,16 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(None, True, True, 0)
+        self.add_pool(POOL_NAMESPACE, True, True, 0)
 
-    def get_pool(self, namespace=None, create=True, connect=True, index=0):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
@@ -1591,36 +1713,25 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
-        if namespace is not None:
-            pool.namespace = namespace
-        pool.get_params(self)
-        if create:
-            pool.create()
-        if create and connect:
-            pool.connect()
-        return pool
+        return add_pool(self, namespace, create, connect, index, **params)
 
-    def add_pool(self, namespace=None, create=True, connect=True, index=0):
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
             index (int, optional): Server index for dmg command. Defaults to 0.
         """
-        self.pool = self.get_pool(namespace, create, connect, index)
+        self.pool = self.get_pool(namespace, create, connect, index, **params)
 
-    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
-                     index=0):
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, index=0):
         """Add multiple pools to the test case.
 
         This method requires self.pool to be defined as a list.  If self.pool is
@@ -1629,7 +1740,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             quantity (int): number of pools to create
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
@@ -1643,32 +1754,42 @@ class TestWithServers(TestWithoutServers):
         if self.pool is None:
             self.pool = []
         if not isinstance(self.pool, list):
-            self.fail(
-                "add_pool_qty(): self.pool must be a list: {}".format(
-                    type(self.pool)))
+            self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
         for _ in range(quantity):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
-    def get_container(self, pool, namespace=None, create=True):
-        """Get a test container object.
+    @fail_on(AttributeError)
+    def get_container(self, pool, namespace=None, create=True, **kwargs):
+        """Create a TestContainer object.
 
         Args:
             pool (TestPool): pool in which to create the container.
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
-            create (bool, optional): should the container be created. Defaults
-                to True.
+            create (bool, optional): should the container be created. Defaults to True.
+            kwargs (dict): name/value of attributes for which to call update(value, name).
+                See TestContainer for available attributes.
 
         Returns:
-            TestContainer: the created test container object.
+            TestContainer: the created container.
+
+        Raises:
+            AttributeError: if an attribute does not exist or does not have an update() method.
 
         """
+        # Create a container with params from the config
         container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
+
+        # Set passed params
+        for name, value in kwargs.items():
+            getattr(container, name).update(value, name=name)
+
         if create:
             container.create()
+
         return container
 
     def add_container(self, pool, namespace=None, create=True):
@@ -1683,7 +1804,7 @@ class TestWithServers(TestWithoutServers):
             create (bool, optional): should the container be created. Defaults
                 to True.
         """
-        self.container = self.get_container(pool, namespace, create)
+        self.container = self.get_container(pool=pool, namespace=namespace, create=create)
 
     def add_container_qty(self, quantity, pool, namespace=None, create=True):
         """Add multiple containers to the test case.
@@ -1710,7 +1831,8 @@ class TestWithServers(TestWithoutServers):
                 "add_container_qty(): self.container must be a list: {}".format(
                     type(self.container)))
         for _ in range(quantity):
-            self.container.append(self.get_container(pool, namespace, create))
+            self.container.append(
+                self.get_container(pool=pool, namespace=namespace, create=create))
 
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 		 const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	int rc;
 
@@ -22,13 +23,16 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
+
 	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			   S_IFLNK, O_CREAT | O_RDWR | O_EXCL,
 			   0, 0, link, &ie->ie_obj, &ie->ie_stat);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	DFUSE_TRA_INFO(ie, "obj is %p", ie->ie_obj);
+	DFUSE_TRA_DEBUG(ie, "obj is %p", ie->ie_obj);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;

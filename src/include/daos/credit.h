@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,8 +51,10 @@ struct io_credit {
  */
 struct credit_context {
 	/** INPUT: should be initialized by caller */
-	/** optional, pmem file name, only for VOS test */
+	/** pmem file name, only for VOS test */
 	char			*tsc_pmem_file;
+	/** pmem file root directory, only for VOS test */
+	char			*tsc_pmem_path;
 	/** DMG config file */
 	char			*tsc_dmg_conf;
 	/** optional, pool service ranks, only for DAOS test */
@@ -96,8 +98,8 @@ struct credit_context {
 
 struct io_engine {
 	char	*ie_name;
-	int	(*ie_init)(void);
-	void	(*ie_fini)(void);
+	int	(*ie_init)(struct credit_context *);
+	void	(*ie_fini)(struct credit_context *);
 	int	(*ie_pool_init)(struct credit_context *);
 	void	(*ie_pool_fini)(struct credit_context *);
 	int	(*ie_cont_init)(struct credit_context *);
