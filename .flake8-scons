@@ -13,4 +13,4 @@ exclude =
     install
 filename=*/SConscript, SConstruct
 max-line-length: 100
-ignore=F821,F841
+ignore=F821,F841,W503

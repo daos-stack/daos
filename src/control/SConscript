@@ -119,9 +119,9 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     target = daos_build.run_command(denv, build_bin, src, libs,
                                     f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} '
-                                    + f'{get_build_flags(denv)} '  # noqa: W503
-                                    + f'{get_build_tags(denv)} '  # noqa: W503
-                                    + f'-o {build_bin} {install_src}')  # noqa: W503
+                                    + f'{get_build_flags(denv)} '
+                                    + f'{get_build_tags(denv)} '
+                                    + f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     AlwaysBuild(target)
