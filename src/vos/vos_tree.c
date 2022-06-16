@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST | VOS_TF_AGG_OPT;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -869,7 +869,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	} else {
 		struct vos_btr_attr	*ta;
-		uint64_t		 tree_feats = VOS_TF_AGG_OPT;
+		uint64_t		 tree_feats = 0;
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
@@ -1017,10 +1017,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
 		return rc;
 
-	/* As a first cut for aggregation detection, just return 1 if it's not the first update.
-	 * This can be improved upon for evtree to take into account actual extent overlap but
-	 * this is a simpler solution for now.
+	/** If it's evtree, evt_insert will detect if aggregation is needed.  For single value,
+	 *  return 1 to indicate aggregation is on update to an existing tree.
 	 */
+	if (flags & SUBTR_EVT)
+		return 0;
+
 	return created ? 0 : 1;
 }
 
@@ -1121,7 +1123,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		*known_key |= 0x1;
 	}
 
-	rc = vos_key_mark_agg(vos_obj2umm(obj), krec, epoch);
+	rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
@@ -1147,7 +1149,7 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t tree_feats = VOS_TF_AGG_OPT;
+		uint64_t tree_feats = 0;
 		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");

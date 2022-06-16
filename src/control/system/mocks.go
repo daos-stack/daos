@@ -12,30 +12,57 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
+	t.Helper()
+
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return addr
+}
+
+// MockMemberFullSpec returns a reference to a new member struct.
+func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+	t.Helper()
+
+	newUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &Member{
+		Rank:        rank,
+		UUID:        newUUID,
+		FabricURI:   uri,
+		Addr:        addr,
+		state:       state,
+		FaultDomain: MustCreateFaultDomain(),
+		LastUpdate:  time.Now(),
+	}
 }
 
 // MockMember returns a system member with appropriate values.
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+	t.Helper()
+
 	addr := mockControlAddr(t, idx)
-	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
-		addr.String(), addr, state)
+	m := MockMemberFullSpec(t, Rank(idx), test.MockUUID(int32(idx)), addr.String(), addr, state)
 	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}
+
 	return m
 }
 
@@ -48,6 +75,8 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 }
 
 func MockMembership(t *testing.T, log logging.Logger, resolver resolveTCPFn) (*Membership, *Database) {
+	t.Helper()
+
 	db := MockDatabase(t, log)
 	m := NewMembership(log, db)
 
@@ -174,7 +203,7 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*Database, func()) {
 	t.Helper()
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 
 	if len(replicas) == 0 {
 		replicas = append(replicas, common.LocalhostCtrlAddr())

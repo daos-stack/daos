@@ -23,7 +23,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG
       env_vars:
-        - DD_MASK=mgmt,md,dsms,any
+        - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
 pool:
   name: daos_server

@@ -153,8 +153,8 @@ struct evt_filter {
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
+	(filter)->fr_epr.epr_hi, (filter)->fr_epoch,		\
+	(filter)->fr_punch_epc, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -587,6 +587,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
  * \param csum_bufp	[OUT]	The pointer for the csum copy location.
+ *
+ * \return	0 success
+ *		1 success, detected potential need for aggregation
+ *		< 0 on error
  */
 int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	       uint8_t **csum_bufp);

@@ -957,8 +957,8 @@ unpack_recxs(daos_iod_t *iod, daos_epoch_t **recx_ephs, int *recxs_cap,
 			  sgl->sg_nr, iod->iod_nr);
 	}
 
-	D_DEBUG(DB_IO, "unpacked data %p idx/nr "DF_U64"/"DF_U64
-		" ver %u eph "DF_U64" size %zd epr ["DF_U64"/"DF_U64"]\n",
+	D_DEBUG(DB_IO, "unpacked data %p idx/nr "DF_X64"/"DF_U64
+		" ver %u eph "DF_X64" size %zd epr ["DF_X64"/"DF_X64"]\n",
 		rec, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 		iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 		*eph, iod->iod_size, rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);

@@ -122,14 +122,15 @@ CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
 logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 -   DAOS Facilities:
-    common, tree, vos, client, server, rdb, pool, container, object,
-    placement, rebuild, tier, mgmt, bio, tests
+    array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container,
+    object, placement, rebuild, tier, mgmt, bio, tests, dfs, duns, drpc,
+    security, dtx, dfuse, il, csum
 
 -   Common Facilities (GURT):
-    MISC, MEM
+    MISC, MEM, SWIM, TELEM
 
 -   CaRT Facilities:
-    RPC, BULK, CORPC, GRP, LM, HG, ST, IV
+    RPC, BULK, CORPC, GRP, HG, ST, IV, CTL
 
 ### Priority Logging
 
@@ -152,7 +153,9 @@ argument passed in D_DEBUG(mask, ...). To accomplish this, DD_MASK can
 be set to enable different debug streams. Similar to facilities, there
 are common debug streams defined in GURT, as well as other streams that
 can be defined on a per-project basis (CaRT and DAOS). All debug streams
-are enabled by default ("DD_MASK=all").
+are enabled by default ("DD_MASK=all"). Convenience "group mask" values
+are defined for common use cases and convenience, and consist of a
+composition of multiple individual bits.
 
 -   DAOS Debug Masks:
 
@@ -168,7 +171,11 @@ are enabled by default ("DD_MASK=all").
 
     -   rebuild = rebuild process
 
-    -   daos_default = (group mask) io, md, pl, and rebuild operations
+    -   group_default = (group mask) io, md, pl, and rebuild operations
+
+    -   group_metadata_only = (group mask) mgmt, md operations
+
+    -   group_metadata = (group mask) group_default plus mgmt operations
 
 -   Common Debug Masks (GURT):
 
@@ -184,6 +191,11 @@ are enabled by default ("DD_MASK=all").
 
 ### Common Use Cases
 
+Please note: where in these examples the export command is shown setting an environment variable,
+this is intended to convey either that the variable is actually set (for the client environment), or
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
+
 -   Generic setup for all messages (default settings)
 
         D_LOG_MASK=DEBUG
@@ -195,10 +207,16 @@ are enabled by default ("DD_MASK=all").
         D_LOG_MASK=ERR -> will only log error messages from all facilities
         D_LOG_MASK=FATAL -> will only log system fatal messages
 
+-   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+
+        D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
+        DD_MASK=group_metadata -> limit logging to include deault and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
+
 -   Disable a noisy debug logging subsystem
 
         D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
+        D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
 
 -   Enable a subset of facilities of interest
 
@@ -413,6 +431,46 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 		$ dmg pool destroy --pool=$DAOS_POOL --force
 		Pool-destroy command succeeded
+
+## Syslog
+
+[`RAS events`](https://docs.daos.io/v2.2/admin/administration/#ras-events) are printed to the Syslog
+by 'daos_server' processes via the Go standard library API.
+If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
+
+```
+ERROR: failed to create syslogger with priority 30 (severity=ERROR, facility=DAEMON): Unix syslog delivery error
+```
+
+These errors will not prevent DAOS from running as expected but indicate that no Syslog messages
+will be delivered.
+
+'rsyslog' is the Syslog daemon shipped with most operating systems and to check if the service is
+running under systemd run the following command:
+
+```
+# sudo systemctl status rsyslog
+● rsyslog.service - System Logging Service
+   Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)
+   Active: active (running) since Mon 2022-05-23 16:12:31 UTC; 1 weeks 1 days ago
+     Docs: man:rsyslogd(8)
+           https://www.rsyslog.com/doc/
+ Main PID: 1962 (rsyslogd)
+    Tasks: 3 (limit: 1648282)
+   Memory: 5.0M
+   CGroup: /system.slice/rsyslog.service
+           └─1962 /usr/sbin/rsyslogd -n
+
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Starting System Logging Service...
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Started System Logging Service.
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: imjournal: journal files changed, reloading>
+May 29 03:18:01 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+```
+
+To configure a Syslog daemon to resolve the delivery errors and receive messages from 'daos_server'
+consult the relevant operating system specific documentation for installing and/or enabling a syslog
+server package e.g. 'rsyslog'.
 
 ## Bug Report
 

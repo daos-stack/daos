@@ -17,7 +17,6 @@
 #include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
-uint64_t dtx_agg_gen;
 struct dtx_batched_cont_args;
 uint32_t dtx_agg_thd_cnt_up;
 uint32_t dtx_agg_thd_cnt_lo;
@@ -313,6 +312,9 @@ dtx_aggregate(void *arg)
 		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
 		     dtx_agg_thd_age_lo))
 			break;
+
+		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+			break;
 	}
 
 	dbca->dbca_agg_done = 1;
@@ -331,6 +333,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	struct sched_req_attr		 attr;
 	struct dtx_batched_cont_args	*victim_dbca = NULL;
 	struct dtx_stat			 victim_stat = { 0 };
+	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(dbpa->dbpa_pool);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &dbpa->dbpa_pool->spc_uuid);
@@ -353,10 +356,10 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		}
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_agg_gen == dtx_agg_gen)
+		if (dbca->dbca_agg_gen == tls->dt_agg_gen)
 			break;
 
-		dbca->dbca_agg_gen = dtx_agg_gen;
+		dbca->dbca_agg_gen = tls->dt_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_agg_req != NULL)
@@ -366,6 +369,9 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		dtx_stat(cont, &stat);
 		if (stat.dtx_cont_cmt_count == 0 ||
 		    stat.dtx_first_cmt_blob_time_lo == 0)
+			continue;
+
+		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			continue;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
@@ -422,6 +428,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 void
 dtx_aggregation_main(void *arg)
 {
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_pool_args	*dbpa;
 	struct sched_req_attr		 attr;
@@ -445,7 +452,7 @@ dtx_aggregation_main(void *arg)
 			d_list_move_tail(&dbpa->dbpa_sys_link,
 					 &dmi->dmi_dtx_batched_pool_list);
 
-			dtx_agg_gen++;
+			tls->dt_agg_gen++;
 			dtx_aggregation_pool(dmi, dbpa);
 		}
 
@@ -1462,7 +1469,7 @@ dtx_reindex_ult(void *arg)
 	uint64_t			 hint	= 0;
 	int				 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": starting DTX reindex ULT on xstream %d\n",
+	D_DEBUG(DB_ANY, DF_CONT": starting DTX reindex ULT on xstream %d\n",
 		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
@@ -1474,7 +1481,7 @@ dtx_reindex_ult(void *arg)
 		}
 
 		if (rc > 0) {
-			D_DEBUG(DF_DSMS, DF_CONT": DTX reindex done\n",
+			D_DEBUG(DB_ANY, DF_CONT": DTX reindex done\n",
 				DP_CONT(NULL, cont->sc_uuid));
 			goto out;
 		}
@@ -1482,7 +1489,7 @@ dtx_reindex_ult(void *arg)
 		ABT_thread_yield();
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": stopping DTX reindex ULT on stream %d\n",
+	D_DEBUG(DB_ANY, DF_CONT": stopping DTX reindex ULT on stream %d\n",
 		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
 
 out:
@@ -1530,6 +1537,7 @@ stop_dtx_reindex_ult(struct ds_cont_child *cont)
 int
 dtx_cont_register(struct ds_cont_child *cont)
 {
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_pool_args	*dbpa = NULL;
 	struct dtx_batched_cont_args	*dbca = NULL;
@@ -1592,7 +1600,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
-	dbca->dbca_agg_gen = dtx_agg_gen;
+	dbca->dbca_agg_gen = tls->dt_agg_gen;
 	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)

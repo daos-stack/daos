@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,11 +15,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 // NVM API calls will fail if not run as root. We should just skip the tests.
-func skipNoPerms(t *testing.T) {
+func skipNoPerms(t *testing.T) bool {
 	t.Helper()
 	u, err := user.Current()
 	if err != nil {
@@ -28,8 +28,9 @@ func skipNoPerms(t *testing.T) {
 	if u.Uid != "0" {
 		// Alert the user even if they're not running the tests in verbose mode
 		fmt.Printf("%s must be run as root\n", t.Name())
-		t.Skip("test doesn't have NVM API permissions")
+		return true
 	}
+	return false
 }
 
 // Fetch all devices in the system - and skip the test if there are none
@@ -49,7 +50,9 @@ func getDevices(t *testing.T, mgmt NvmMgmt) []DeviceDiscovery {
 }
 
 func TestNvmDiscovery(t *testing.T) {
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
 	mgmt := NvmMgmt{}
 	_, err := mgmt.Discover()
@@ -59,7 +62,9 @@ func TestNvmDiscovery(t *testing.T) {
 }
 
 func TestNvmFwInfo(t *testing.T) {
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
 	mgmt := NvmMgmt{}
 	devs := getDevices(t, mgmt)
@@ -97,15 +102,17 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 			mgmt := NvmMgmt{}
 			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
 
-			common.CmpErr(t, tt.expErr, err)
+			test.CmpErr(t, tt.expErr, err)
 		})
 	}
 }
 
 func TestNvmFwUpdate(t *testing.T) {
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// Actual DIMM will reject this junk file.
@@ -127,7 +134,7 @@ func TestNvmFwUpdate(t *testing.T) {
 		err := mgmt.UpdateFirmware(d.Uid, filename, false)
 
 		// Got down to NVM API
-		common.CmpErr(t, errors.New("update_device_fw"), err)
+		test.CmpErr(t, errors.New("update_device_fw"), err)
 		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
 }

@@ -1,0 +1,80 @@
+# Example configuration file using TCP sockets
+
+name: daos_server           # sys group daos_server
+access_points: ['example']  # management service leader (bootstrap)
+# port: 10001               # control listen port, default 10001
+provider: ofi+tcp
+control_log_mask: DEBUG
+control_log_file: /tmp/daos_server.log
+
+telemetry_port: 9191
+
+## Transport Credentials Specifying certificates to secure communications
+##
+#transport_config:
+#  # Specify to bypass loading certificates and use insecure communications channels
+#  allow_insecure: false
+#  # Location where daos_server will look for Client certificates
+#  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: /etc/daos/certs/daosCA.crt
+#  # Server certificate for use in TLS handshakes
+#  cert: /etc/daos/certs/server.crt
+#  # Key portion of Server Certificate
+#  key: /etc/daos/certs/server.key
+
+engines:
+-
+  targets: 16               # number of I/O service threads per-engine
+  pinned_numa_node: 0
+  nr_xs_helpers: 4          # count of I/O offload threads per engine
+  fabric_iface: eth0
+  fabric_iface_port: 31316
+  log_mask: ERR
+  log_file: /tmp/daos_engine.0.log
+
+  # Environment variable values should be supplied without encapsulating quotes.
+  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
+  - FI_SOCKETS_MAX_CONN_RETRY=1
+  - FI_SOCKETS_CONN_TIMEOUT=2000
+
+  # Storage definitions (one per tier)
+  storage:
+  -
+    # When class is set to dcpm, scm_list is the list of device paths for
+    # PMem namespaces (currently only one per engine supported).
+    class: dcpm
+    scm_list: [/dev/pmem0]
+    scm_mount: /mnt/daos0
+
+    # When class is set to ram, tmpfs will be used to emulate SCM.
+    # The size of ram is specified by scm_size in GB units.
+    # class: ram
+    # scm_size: 6
+  -
+    # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
+    # engine with -n <path>).
+    class: nvme
+    bdev_list: ["0000:81:00.0"]
+-
+  targets: 16               # number of I/O service threads per-engine
+  pinned_numa_node: 1
+  nr_xs_helpers: 4          # count of I/O offload threads per engine
+  fabric_iface: eth1
+  fabric_iface_port: 31416
+  log_mask: ERR
+  log_file: /tmp/daos_engine.1.log
+
+  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
+  - FI_SOCKETS_MAX_CONN_RETRY=1
+  - FI_SOCKETS_CONN_TIMEOUT=2000
+
+  storage:
+  -
+    class: dcpm
+    scm_list: [/dev/pmem1]
+    scm_mount: /mnt/daos1
+  -
+    class: nvme
+    bdev_list: ["0000:82:00.0"]

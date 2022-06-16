@@ -204,6 +204,7 @@ struct migrate_pool_tls {
 	/* POOL UUID and pool to be migrated */
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
+	uint64_t		mpt_global_version;
 	unsigned int		mpt_version;
 
 	/* Link to the migrate_pool_tls list */
@@ -511,6 +512,13 @@ int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		    uint32_t fw_cnt, tse_task_t *task);
 
+/* check if a EC obj shard IO request has been re-directed (to parity shard) */
+static inline bool
+obj_shard_redirected(struct shard_auxi_args *auxi)
+{
+	return auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx);
+}
+
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca, uint64_t *tgt_set);
@@ -538,6 +546,7 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+void obj_auxi_set_degfetch(struct obj_auxi_args *obj_auxi);
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
@@ -602,9 +611,9 @@ obj_ptr2hdl(struct dc_object *obj)
 }
 
 static inline void
-dc_io_epoch_set(struct dtx_epoch *epoch)
+dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
 		epoch->oe_value = crt_hlc_get();
 		epoch->oe_first = epoch->oe_value;
 		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
