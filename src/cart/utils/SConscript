@@ -17,7 +17,7 @@ LIB_SRC = ['crt_utils.c']
 ####################################
 def build_utility_shared_obj(env):
     """Build cart utility library"""
-    cart_utils_objs  = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
+    cart_utils_objs = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
     Export('cart_utils_objs')
 
 def scons():

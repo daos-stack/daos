@@ -18,7 +18,7 @@ from pylint.lint import pylinter
 #  Sets python-path or similar as required
 #  Runs in parallel across whole tree
 #  Supports minimum python version
-#  Supports phthon virtual environment usage
+#  Supports python virtual environment usage
 #  Can be used by atom.io live
 #  Outputs directly to github annotations
 # To be added:

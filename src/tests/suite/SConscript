@@ -57,7 +57,7 @@ def configure_cmocka(nenv):
     """configure cmocka environment"""
     if GetOption('help') or GetOption('clean'):
         return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip' : CheckCmockaSkip})
+    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
     conf.env.AppendUnique(LIBS=['cmocka'])
     if not conf.CheckCmockaSkip():
         #it would be cool to be able to check exit code is effectively 134

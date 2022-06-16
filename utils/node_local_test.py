@@ -65,6 +65,7 @@ def get_inc_id():
     instance_num += 1
     return '{:04d}'.format(instance_num)
 
+
 def umount(path, bg=False):
     """Umount dfuse from a given path"""
     if bg:
