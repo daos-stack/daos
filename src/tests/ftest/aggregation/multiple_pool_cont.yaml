@@ -2,7 +2,7 @@ hosts:
     test_servers:
         - server-A
         - server-B
-        - server-C  
+        - server-C
     test_clients:
         - client-A
         - client-B
@@ -64,9 +64,8 @@ ior:
     api: DFS
     transfer_size: '1M'
     block_size: '1G'
-    objectclass: 
-        oclass_SX:
-            dfs_oclass: "EC_2P1G1"
-            dfs_dir_oclass: "EC_2P1G1"
+    objectclass:
+        dfs_oclass: "EC_2P1G1"
+        dfs_dir_oclass: "EC_2P1G1"
 runtime:
     total_runtime: 1800 # total seconds to run

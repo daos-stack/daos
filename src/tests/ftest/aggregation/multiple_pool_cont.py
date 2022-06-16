@@ -137,7 +137,10 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
             # Destroy all containers and pools and start once again.
             self.destroy_containers(self.container)
-            time.sleep(15)
+            # Let the GC (garbage collection) cleanup the space.
+            time.sleep(60)
+            # Initialize the container list
+            self.container = []
             finish_time = time.time()
 
     def test_aggregation_single_pool(self):
@@ -148,7 +151,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             aggregation works.
 
         Test Steps:
-             - Createa pool and multiple containers.
+             - Create pool and multiple containers.
              - Disable aggregation.
              - Get initial free space
              - Start IOR (use -k ior option to keep the data).
@@ -173,7 +176,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             Use multiple pools/containers to validate aggregation.
 
         Test Steps:
-             - Createa multiple pool and multiple containers.
+             - Create multiple pools and multiple containers.
              - Disable aggregation.
              - Get initial free space for each pool
              - Start IOR ion each pool(use -k ior option to keep the data).
