@@ -3,8 +3,6 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build CaRT components"""
-
-import os
 from datetime import date
 import daos_build
 import SCons.Action
@@ -43,12 +41,11 @@ def consolidate_pp(env, parsed_targets):
     sd = {'@YEAR@': year}
     preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT=sd)
     parsed_sources = [x.abspath for x in parsed_targets]
-    cmd = (f"cat {preamble[0].abspath} > $TARGET; cat {' '.join(parsed_sources)}" +
-           f" | grep -v {grepv} | sort -u | sed {sed_d} >> $TARGET")
+    cmd = (f"cat {preamble[0].abspath} > $TARGET; cat {' '.join(parsed_sources)}"
+           + f" | grep -v {grepv} | sort -u | sed {sed_d} >> $TARGET")
     header = env.Command('_structures_from_macros.h', preamble + parsed_targets, cmd)
     env.AddPostAction(header, SCons.Action.Action(copy_header, None))
     return header
-
 
 
 def scons():

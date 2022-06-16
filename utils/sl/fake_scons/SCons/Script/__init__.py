@@ -384,6 +384,10 @@ def Command(*_args, **_kw):
     """Fake Command"""
     return ["fake"]
 
+def Execute(*_args, **_kw):
+    """Fake Execute"""
+    return ["fake"]
+
 def Builder(*_args, **_kw):
     """Fake Builder"""
     return ["fake"]
@@ -411,6 +415,7 @@ __all__ = ['DefaultEnvironment',
            'Configure',
            'GetOption',
            'SetOption',
+           'Execute',
            'Depends',
            'Platform',
            'Literal',
