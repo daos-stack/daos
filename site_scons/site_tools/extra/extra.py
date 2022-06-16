@@ -160,8 +160,15 @@ def generate(env):
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
-    env.Append(BUILDERS={"Preprocess": preprocess})
-    env.Append(BUILDERS={"CheckHeader": check_header})
+    try:
+        pp_builder = env["BUILDERS"]["Preprocess"]
+    except KeyError:
+        env.Append(BUILDERS={"Preprocess": preprocess})
+
+    try:
+        pp_builder = env["BUILDERS"]["CheckHeader"]
+    except KeyError:
+        env.Append(BUILDERS={"CheckHeader": check_header})
 
 
 def exists(_env):
