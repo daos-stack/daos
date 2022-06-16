@@ -443,6 +443,7 @@ ilog_log2cache(struct ilog_context *lctx, struct ilog_array_cache *cache)
 	}
 }
 
+
 int
 ilog_destroy(struct umem_instance *umm,
 	     struct ilog_desc_cbs *cbs, struct ilog_df *root)
@@ -674,6 +675,7 @@ reset_root(struct ilog_context *lctx, struct ilog_array_cache *cache, int i)
 	tmp.lr_magic = ilog_ver_inc(lctx);
 	if (cache->ac_nr >= 2)
 		tree = lctx->ic_root->lr_tree.it_root;
+
 
 	if (i != -1) {
 		tmp.lr_id.id_value = cache->ac_entries[i].id_value;
@@ -1003,6 +1005,7 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 		range = *epr;
 
 	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE);
+
 }
 
 /** Makes a specific update to the incarnation log permanent and
@@ -1048,7 +1051,6 @@ struct ilog_priv {
 	/** Embedded status entries */
 	uint32_t		 ip_embedded[NUM_EMBEDDED];
 };
-
 D_CASSERT(sizeof(struct ilog_priv) <= ILOG_PRIV_SIZE);
 
 static inline struct ilog_priv *
@@ -1180,8 +1182,7 @@ done:
 
 	return 0;
 }
-
-static void
+static int
 set_entry(struct ilog_entries *entries, int i, int status)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
@@ -1189,6 +1190,8 @@ set_entry(struct ilog_entries *entries, int i, int status)
 	D_ASSERT(i < NUM_EMBEDDED || i < priv->ip_alloc_size);
 	D_ASSERT(i == entries->ie_num_entries);
 	entries->ie_statuses[entries->ie_num_entries++] = status;
+
+	return 0;
 }
 
 int
@@ -1225,7 +1228,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 
 	lctx = &priv->ip_lctx;
 	if (ilog_empty(root))
-		goto out;
+		D_GOTO(out, rc = 0);
 
 	ilog_log2cache(lctx, &cache);
 
@@ -1298,6 +1301,7 @@ entry_punched(const struct ilog_entry *entry, const struct agg_arg *agg_arg)
 		return true;
 
 	return minor_epc <= agg_arg->aa_punched_minor;
+
 }
 
 static int
@@ -1365,8 +1369,7 @@ check_agg_entry(const struct ilog_entries *entries, const struct ilog_entry *ent
 			/* A create covers the prior punch */
 			agg_arg->aa_prior_punch = -1;
 		}
-		rc = AGG_RC_NEXT;
-		goto done;
+		D_GOTO(done, rc = AGG_RC_NEXT);
 	}
 
 	/* With purge set, there should not be uncommitted entries */
@@ -1396,8 +1399,7 @@ check_agg_entry(const struct ilog_entries *entries, const struct ilog_entry *ent
 
 	if (!ilog_is_punch(entry)) {
 		/* Create is needed for now */
-		rc = AGG_RC_NEXT;
-		goto done;
+		D_GOTO(done, rc = AGG_RC_NEXT);
 	}
 
 	if (agg_arg->aa_prev == -1) {

@@ -552,7 +552,7 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 		fprintf(ap->errstream, "failed to allocate memory for "
 			"pool "DF_UUIDF": %s (%d)\n", DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
+		D_GOTO(out_disconnect, 0);
 	}
 
 	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);

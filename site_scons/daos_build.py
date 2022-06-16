@@ -127,7 +127,7 @@ def _find_mpicc(env):
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
-        env.AppendUnique(CPPDEFINES=['-DDAOS_MPI_PATH="%s"' % mpicc])
+        env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
         _clear_icc_env(env)
         load_mpi_path(env)
         compiler_setup.base_setup(env)
