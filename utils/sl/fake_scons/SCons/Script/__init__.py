@@ -231,7 +231,7 @@ class DefaultEnvironment():
 
     def get(self, var, *_args, **_kw):
         """Fake get"""
-        return var
+        return [var]
 
     def GetOption(self, *_args, **_kw):
         """Fake GetOption"""
