@@ -1,0 +1,72 @@
+hosts:
+    test_servers:
+        - server-A
+        - server-B
+        - server-C  
+    test_clients:
+        - client-A
+        - client-B
+        - client-C
+        - client-D
+        - client-E
+timeout: 3600
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+pool:
+    mode: 146 # 146 is RW
+    name: daos_server
+    scm_size: 50000000000
+    nvme_size: 500000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+ior:
+    client_processes:
+        np_12:
+            np: 12
+    test_file: /testFile
+    repetitions: 1
+    dfs_destroy: False
+    iorflags:
+        flags: "-v -w -W -r -R -k"
+    api: DFS
+    transfer_size: '1M'
+    block_size: '1G'
+    objectclass: 
+        oclass_SX:
+            dfs_oclass: "EC_2P1G1"
+            dfs_dir_oclass: "EC_2P1G1"
+runtime:
+    total_runtime: 1800 # total seconds to run
