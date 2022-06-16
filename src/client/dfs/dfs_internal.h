@@ -66,7 +66,11 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 void
 dfs_free_sb_layout(daos_iod_t *iods[]);
 
-/** as dfs_open() but takes a stbuf to be populated if O_CREATE is specified */
+/** as dfs_open() but takes a stbuf to be populated if O_CREATE is specified
+ *
+ * If O_CREATE is set then entry->uid and entry->gid are popouated with the desired user,
+ * otherwise read them from the calling process.
+ */
 int
 dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
