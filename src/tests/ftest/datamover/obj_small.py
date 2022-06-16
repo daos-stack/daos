@@ -70,14 +70,12 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
-        # Generate a uuid for cont2
-        cont2_uuid = self.gen_uuid()
-
         # Clone cont1 to a new cont2 in pool1
-        self.run_datamover(
+        result = self.run_datamover(
             self.test_id + " (cont1->cont2) (same pool)",
             "DAOS_UUID", None, pool1, cont1,
-            "DAOS_UUID", None, pool1, cont2_uuid)
+            "DAOS_UUID", None, pool1, None)
+        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
 
         # Verify data in cont2
         cont2 = self.get_cont(pool1, cont2_uuid)
@@ -90,14 +88,12 @@ class DmvrObjSmallTest(DataMoverTestBase):
         pool2 = self.create_pool()
         pool2.connect(2)
 
-        # Generate a uuid for cont3
-        cont3_uuid = self.gen_uuid()
-
         # Clone cont1 to a new cont3 in pool2
-        self.run_datamover(
+        result = self.run_datamover(
             self.test_id + " (cont1->cont3) (different pool)",
             "DAOS_UUID", None, pool1, cont1,
-            "DAOS_UUID", None, pool2, cont3_uuid)
+            "DAOS_UUID", None, pool2, None)
+        cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
 
         # Verify data in cont3
         cont3 = self.get_cont(pool2, cont3_uuid)
