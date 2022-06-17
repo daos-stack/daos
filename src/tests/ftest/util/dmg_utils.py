@@ -15,6 +15,7 @@ from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
+
 class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
@@ -586,7 +587,7 @@ class DmgCommand(DmgCommandBase):
         #     "status": 0
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
-                show_enabled=show_enabled, show_disabled=show_disabled)
+                                     show_enabled=show_enabled, show_disabled=show_disabled)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -893,7 +894,7 @@ class DmgCommand(DmgCommandBase):
         #  },
         #  "error": null,
         #  "status": 0
-        #}
+        # }
 
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
@@ -1222,6 +1223,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(["version"])
+
 
 def check_system_query_status(data):
     """Check if any server crashed.
