@@ -17,7 +17,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
+      bdev_list: ["aaaa:aa:aa.a"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -28,25 +28,24 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
+      bdev_list: ["bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 pool:
     mode: 146
     name: daos_server
-    scm_size: 500000000000
-    nvme_size: 700000000000
+    size: 95%
     control_method: dmg
 container:
     type: POSIX
     control_method: daos
 ior:
-    no_parallel_job: 10
+    num_repeat: 30
+    num_parallel_job: 10
     clientslots:
       slots: 2
     test_file: /testFile
-    repetitions: 1
     dfs_destroy: False
     iorflags:
           ior_flags:
@@ -54,7 +53,7 @@ ior:
           ior_api:
             - DFS
           transfer_block_size:
-            - [2048, 128M]
+            - [2K, 128M]
             - [256K, 128M]
             - [16M, 2G]
           obj_class:

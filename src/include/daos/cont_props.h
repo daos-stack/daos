@@ -20,7 +20,7 @@
 #define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
 #define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
 #define DAOS_PROP_ENTRY_STATUS		"status"
-#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell"
+#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
 #define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
 #define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
 #define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
