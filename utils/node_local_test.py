@@ -2401,7 +2401,7 @@ class posix_tests():
     def test_cont_ro(self):
         """Test access to a read-only container"""
 
-        # Update container ACLs so current user has rta permissions only, the minimum required.
+        # Update container ACLs so current user has 'rta' permissions only, the minimum required.
         rc = run_daos_cmd(self.conf, ['container',
                                       'update-acl',
                                       self.pool.id(),
@@ -2491,7 +2491,7 @@ class posix_tests():
             self.fatal_errors = True
 
     def test_uns_basic(self):
-        """Create a UNS entry point and access it via both EP and path"""
+        """Create a UNS entry point and access it via both entry point and path"""
 
         pool = self.pool.uuid
         container = self.container
@@ -2713,7 +2713,7 @@ class posix_tests():
         # pylint: disable=consider-using-with
 
         # Create a temporary directory, with one file into it and copy it into
-        # the container.  Check the returncode only, do not verify the data.
+        # the container.  Check the return-code only, do not verify the data.
         # tempfile() will remove the directory on completion.
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
         with open(join(src_dir.name, 'file'), 'w') as ofd:
@@ -2949,7 +2949,7 @@ def run_posix_tests(server, conf, test=None):
             threads.append(thread)
 
             # Limit the number of concurrent tests, but poll all active threads so there's no
-            # expectation for them to complete in order.  At the minute we only have a handlful of
+            # expectation for them to complete in order.  At the minute we only have a handful of
             # long-running tests which dominate the time, so whilst a higher value here would
             # work there's no benefit in rushing to finish the quicker tests.  The long-running
             # tests are started first.
@@ -3652,7 +3652,7 @@ def test_pydaos_kv(server, conf):
 #
 # This runs two different commands under fault injection, although it allows
 # for more to be added.  The command is defined, then run in a loop with
-# different locations (loc) enabled, essentially failing each call to
+# different locations enabled, essentially failing each call to
 # D_ALLOC() in turn.  This iterates for all memory allocations in the command
 # which is around 1300 each command so this takes a while.
 #
@@ -3663,7 +3663,7 @@ def test_pydaos_kv(server, conf):
 # (D_ALLOC/D_FREE not matching), that it didn't crash and some checks are run
 # on stdout/stderr as well.
 #
-# If a particular loc caused the command to exit with a signal then that
+# If a particular location caused the command to exit with a signal then that
 # location is re-run at the end under valgrind to get better diagnostics.
 #
 
@@ -3946,7 +3946,7 @@ class AllocFailTest():
         max_count = 0
         finished = False
 
-        # List of fids to re-run under valgrind.
+        # List of fault identifiers to re-run under valgrind.
         to_rerun = []
 
         fatal_errors = False

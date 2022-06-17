@@ -246,7 +246,7 @@ class FileTypeList():
 def parse_file(args, target_file, ftest=False, scons=False):
     """Parse a list of targets.
 
-    Returns True if warnings issues to GitHub."""
+    Returns True if warnings issued to GitHub."""
 
     failed = False
     rep = CollectingReporter()
@@ -317,13 +317,13 @@ sys.path.append('site_scons')"""
             if f'/{word}/' in code:
                 continue
             # Skip things are followed by open quotes
-            if f"{word}(" in code:
+            if f'{word}(' in code:
                 continue
             # Skip things are followed by open colon
-            if f"{word}:" in code:
+            if f'{word}:' in code:
                 continue
             # Skip test files.
-            if f" {word}.txt" in code:
+            if f'{word}.txt' in code:
                 continue
 
         # Inserting code can cause wrong-module-order.
