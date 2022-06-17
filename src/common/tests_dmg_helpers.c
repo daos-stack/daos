@@ -27,7 +27,7 @@ log_free_mem(void)
 		return;
 	}
 
-	D_INFO("free mem: %lu MB\n", info.freeram / (1024*1024));
+	D_INFO("free mem: %lu MB\n", info.freeram / (1024 * 1024));
 }
 
 static void
