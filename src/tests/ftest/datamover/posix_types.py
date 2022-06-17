@@ -178,7 +178,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
                 dst[0], dst[1], dst[2], dst[3])
 
             if self.tool == "DSYNC":
-                # The source directory is sync'ed TO the destination.
+                # The source directory is synced TO the destination.
                 dst_path = dst[1]
             else:
                 # The source directory is created IN the destination

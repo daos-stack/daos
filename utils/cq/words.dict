@@ -89,7 +89,9 @@ bullseye
 bw
 bytearray
 cancelled
+cd
 centric
+chdir
 checksum
 chgrp
 chmod
@@ -159,6 +161,7 @@ environ
 epcrange
 ethernet
 fchmod
+fcntl
 filename
 filesystem
 findcmd
@@ -170,8 +173,10 @@ fs
 fstat
 ftest
 fuseblk
+fusermount
 gcc
 gdb
+getattr
 getfattr
 getxattr
 gid
@@ -199,6 +204,7 @@ ioengine
 ior
 iotype
 iov
+ip
 iptable
 iptables
 iteratively
@@ -242,6 +248,7 @@ middleware
 mins
 mkdir
 mnt
+modprobe
 mountpoint
 mpi
 mpicc
@@ -274,6 +281,7 @@ ok
 oneapi
 opcode
 openmpi
+oretrun
 orterun
 os
 outdata
@@ -345,6 +353,8 @@ scm
 scons
 scontrol
 sharedctypes
+shlex
+simul
 slurm
 slurmctl
 spdk
@@ -353,6 +363,7 @@ src
 srun
 ssd
 ssds
+statfs
 statvfs
 stddev
 stderr
@@ -381,6 +392,7 @@ systemd
 tcp
 teardown
 teardowns
+testcase
 testcases
 testdata
 testname

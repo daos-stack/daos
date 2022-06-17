@@ -129,7 +129,7 @@ class BoundaryTest(TestWithServers):
             0. Bring up DAOS server.
             1. Create pools and create containers_test by ThreadManager.
             2. Create containers and test under each pool by sub ThreadManager.
-            3. Launch io and syncup each container.
+            3. Launch io and sync-up each container.
             4. Close container.
         :avocado: tags=all,full_regression
         :avocado: tags=container, pool

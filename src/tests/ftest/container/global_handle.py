@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -69,9 +69,7 @@ class GlobalHandle(TestWithServers):
         container.query()
 
     def test_global_handle(self):
-        """Test ID: Jira-XXXX.
-
-        Test Description: Use a pool handle in another process.
+        """Test Description: Use a pool handle in another process.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=tiny
