@@ -67,8 +67,16 @@ jobs:
           restore-keys: ${{ steps.commit-hash.outputs.restore }}
           concurrency: 1
       - name: Prepare base image in Docker
+        if: ${{ matrix.distro != "fedora" }}
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_DEPS_BUILD=no
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+      - name: Build dependencies in Docker with ALT_PREFIX
+        if: ${{ matrix.distro == "fedora" }}
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_BUILD=no
+                            --build-arg DAOS_ALT_PREFIX=yes
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
       - name: Build dependencies in Docker
