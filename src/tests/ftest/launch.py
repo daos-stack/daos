@@ -702,7 +702,7 @@ def get_test_list(tags):
     return test_tags, test_list
 
 
-def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
+def get_test_files(test_list, args, yaml_dir):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
@@ -760,12 +760,8 @@ def get_device_replacement(args):
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
-        tuple:
-            str: a comma-separated list of nvme device pci addresses available on
-                all of the specified test servers
-            bool: VMD PCI address included in the pci address string (True)
-                VMD PCI address not included in the pci address string (False)
-                Defaults to False (For NVME only)
+        str: a comma-separated list of nvme device pci addresses available on all of the specified
+             test servers
 
     """
     devices = []
@@ -806,7 +802,7 @@ def get_device_replacement(args):
     print(
         "Auto-detected {} devices on {}: {}".format(
             " & ".join(device_types), args.test_servers, devices))
-    return ",".join(devices), "VMD" in device_types
+    return ",".join(devices)
 
 
 def auto_detect_devices(host_list, device_type, length, device_filter=None):
@@ -2538,12 +2534,10 @@ def main():
     set_test_environment(args)
 
     # Auto-detect nvme test yaml replacement values if requested
-    vmd_flag = False
     if args.nvme and args.nvme.startswith("auto") and not args.list:
-        args.nvme, vmd_flag = get_device_replacement(args)
+        args.nvme = get_device_replacement(args)
     elif args.nvme and args.nvme.startswith("vmd:"):
         args.nvme = args.nvme.replace("vmd:", "")
-        vmd_flag = True
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
@@ -2569,7 +2563,7 @@ def main():
             os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args, yaml_dir, vmd_flag)
+    test_files = get_test_files(test_list, args, yaml_dir)
     if args.modify:
         sys.exit(0)
 

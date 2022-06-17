@@ -7,6 +7,7 @@ server_config:
   name: daos_server
   servers:
     0:
+      targets: 8
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
@@ -18,6 +19,7 @@ server_config:
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
     1:
+      targets: 8
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
@@ -40,5 +42,6 @@ pool:
     mode: 146
     name: daos_server
     control_method: dmg
-    number_of_pools: 40
-    pool_used_percentage: 90
+    max_num_pools: 40
+    total_pool_percentage: 95
+    min_nvme_per_target: 1073741824 # 1 GiB
