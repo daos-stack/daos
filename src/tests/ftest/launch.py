@@ -165,6 +165,7 @@ def set_test_environment(args):
             os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
         os.environ["D_LOG_FILE"] = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+        os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
         # Assign the default value for transport configuration insecure mode
         os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
