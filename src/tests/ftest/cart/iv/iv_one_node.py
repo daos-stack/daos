@@ -10,7 +10,7 @@ import json
 import os
 import struct
 import codecs
-import subprocess #nosec
+import subprocess  # nosec
 import shlex
 import traceback
 

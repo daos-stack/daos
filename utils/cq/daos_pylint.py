@@ -316,6 +316,9 @@ sys.path.append('site_scons')"""
             # Skip words which appear to be part of a path
             if f'/{word}/' in code:
                 continue
+            # Skip things are followed by open quotes
+            if f"{word}(" in code:
+                continue
 
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:

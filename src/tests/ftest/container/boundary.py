@@ -11,6 +11,7 @@ from general_utils import DaosTestError
 from avocado.core.exceptions import TestFail
 from thread_manager import ThreadManager
 
+
 class BoundaryTest(TestWithServers):
     """
     Epic: Create system level tests that cover boundary tests and
@@ -37,7 +38,8 @@ class BoundaryTest(TestWithServers):
             msg = "#(3.{}.{}) container create failed. err={}".format(pool_num, cont_num, err)
             self.fail(msg)
 
-        self.log.info("===(3.%d.%d)create_container_and_test, container %s created..",
+        self.log.info(
+            "===(3.%d.%d)create_container_and_test, container %s created..",
             pool_num, cont_num, container)
         if with_io:
             io_run_time = self.params.get("run_time", '/run/container/execute_io/*')
@@ -51,13 +53,15 @@ class BoundaryTest(TestWithServers):
             except (DaosTestError, TestFail) as err:
                 msg = "#(3.{}.{}) container IO failed, err: {}".format(pool_num, cont_num, err)
                 self.fail(msg)
-        time.sleep(2)  #to sync-up containers before close
+        time.sleep(2)  # to sync-up containers before close
 
         try:
-            self.log.info("===(4.%d.%d)create_container_and_test, container closing.",
+            self.log.info(
+                "===(4.%d.%d)create_container_and_test, container closing.",
                 pool_num, cont_num)
             container.close()
-            self.log.info("===(4.%d.%d)create_container_and_test, container closed.",
+            self.log.info(
+                "===(4.%d.%d)create_container_and_test, container closed.",
                 pool_num, cont_num)
         except (DaosTestError, TestFail) as err:
             msg = "#(4.{}.{}) container close fail, err: {}".format(pool_num, cont_num, err)

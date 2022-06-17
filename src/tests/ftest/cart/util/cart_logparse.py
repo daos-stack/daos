@@ -52,6 +52,7 @@ import re
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested."""
 
+
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
 
@@ -69,8 +70,9 @@ LOG_LEVELS = {
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
-for (name,value) in LOG_LEVELS.items():
+for (name, value) in LOG_LEVELS.items():
     LOG_NAMES[value] = name
+
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -89,6 +91,7 @@ class LogRaw():
         LogLine
         """
         return self.line
+
 
 # pylint: disable=too-many-instance-attributes
 class LogLine():
@@ -148,10 +151,8 @@ class LogLine():
             # Catch truncated log lines.
             self.trace = False
 
-        if self.trace:
-            if self.level == 7 or self.level == 3:
-                if self.fac == 'rpc' or self.fac == 'hg':
-                    del self._fields[2:5]
+        if self.trace and self.level in (7, 3) and self.fac in ('rpc', 'hg'):
+            del self._fields[2:5]
 
         if self.trace:
             fn_str = self._fields[1]
@@ -404,6 +405,7 @@ class LogLine():
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
 
+
 # pylint: disable=too-many-branches
 class StateIter():
     """Helper class for LogIter to add a state-full iterator.
@@ -482,8 +484,8 @@ class StateIter():
 
 # pylint: disable=too-many-branches
 
-# pylint: disable=too-few-public-methods
 
+# pylint: disable=too-few-public-methods
 class LogIter():
     """Class for parsing CaRT log files
 
