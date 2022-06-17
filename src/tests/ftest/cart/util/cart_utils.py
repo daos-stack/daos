@@ -33,9 +33,8 @@ class CartTest(TestWithoutServers):
         self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
-        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.dirname(os.path.dirname(
-                           os.path.dirname(os.path.abspath(__file__))))))))
+        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
 
     def setUp(self):

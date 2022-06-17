@@ -168,7 +168,7 @@ class Snapshot(TestWithServers):
                   b"<<<---" + get_random_bytes(random.randint(1, data_size))  # nosec
         try:
             obj = self.container.write_an_obj(thedata,
-                                              len(thedata)+1,
+                                              len(thedata) + 1,
                                               dkey,
                                               akey,
                                               obj_cls=obj_cls)
@@ -422,7 +422,7 @@ class Snapshot(TestWithServers):
         #    Step(5) and (6), test loop to perform multiple snapshots data
         #    verification and snapshot destroy.
         #    Use current_ss for the individual snapshot object.
-        for ss_number in range(snapshot_loop-1, 0, -1):
+        for ss_number in range(snapshot_loop - 1, 0, -1):
             ind = ss_number - 1
             self.log.info("=(5.%s)Verify the snapshot number %s:", ss_number, ss_number)
             self.display_snapshot_test_data(test_data, ss_number)

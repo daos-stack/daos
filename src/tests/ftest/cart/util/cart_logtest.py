@@ -70,7 +70,7 @@ class RegionContig():
 
 def _ts_to_float(ts):
     int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
-    float_part = int(ts[-2:])/100
+    float_part = int(ts[-2:]) / 100
     return int_part + float_part
 
 
@@ -418,9 +418,9 @@ class LogTest():
                     if line.fac == 'external':
                         show = False
                     elif show and server_shutdown and (line.get_msg().endswith(
-                         "DER_SHUTDOWN(-2017): 'Service should shut down'") or
-                          line.get_msg().endswith(
-                              "DER_NOTLEADER(-2008): 'Not service leader'")):
+                        "DER_SHUTDOWN(-2017): 'Service should shut down'")
+                            or line.get_msg().endswith(
+                                "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
                     elif show and line.function == 'rdb_stop':
                         show = False
