@@ -75,7 +75,7 @@ def is_huge_pages_enabled():
     """Check if huge pages are enabled
 
     Returns:
-        bool: true iff huge pages are enabled
+        bool: true if huge pages are enabled
     """
     with open(r'/sys/kernel/mm/transparent_hugepage/enabled', 'r', encoding="utf8") as fd:
         line = fd.read()

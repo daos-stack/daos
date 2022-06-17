@@ -246,7 +246,7 @@ class FileTypeList():
 def parse_file(args, target_file, ftest=False, scons=False):
     """Parse a list of targets.
 
-    Returns True if warnings issues to github."""
+    Returns True if warnings issues to GitHub."""
 
     failed = False
     rep = CollectingReporter()
@@ -295,17 +295,29 @@ sys.path.append('site_scons')"""
         if not scons and msg.msg_id in ('C0401', 'C0402'):
             lines = msg.msg.splitlines()
             header = lines[0]
-            code = lines[1:]
+            code = lines[1].strip()
             components = header.split("'")
-            print(lines)
-            print(components)
             word = components[1]
-            for line in code:
-                if ftest and code.strip().startswith(':avocado: tags='):
-                    continue
-                if f'-{word}' in line:
-                    print(f"Word '{word}' is used with -")
-                    continue
+            # Skip test-tags, these are likely not words.
+            if ftest and code.startswith(':avocado: tags='):
+                continue
+            # Skip the "Fake" annotations from fake scons.
+            if code.startswith(f'Fake {word}'):
+                continue
+            # Skip things that look like function documentation
+            if code.startswith(f'{word} ('):
+                continue
+            # Skip things that look like command options.
+            if f' -{word}' in code or f' --{word}' in code:
+                print(f"Word '{word}' is used with -")
+                continue
+            # Skip things which are quoted
+            if f"'{word}'" in code:
+                continue
+            # Skip words which appear to be part of a path
+            if f'/{word}/' in code:
+                continue
+
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
             continue

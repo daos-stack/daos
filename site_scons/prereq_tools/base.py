@@ -785,7 +785,7 @@ class PreReqComponent():
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
     def _setup_intelc(self):
-        """Setup environment to use intel compilers"""
+        """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True

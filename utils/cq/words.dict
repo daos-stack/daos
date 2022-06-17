@@ -92,6 +92,7 @@ centric
 checksum
 chgrp
 chmod
+chowned
 clush
 cmd
 cmdline
@@ -403,6 +404,7 @@ unicode
 unittest
 unlink
 unlinked
+unlinking
 unmount
 unwritable
 uri
