@@ -69,7 +69,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                           space_used_by_ior)
             self.assertGreater(self.free_space_dict[pool.uuid][space_tag1],
                                self.free_space_dict[pool.uuid][space_tag2],
-                               "IOR run was not successful.")
+                               "Free space did not decrease after IOR.")
 
     def longrun_aggregation(self, total_pools=1, total_containers_per_pool=1):
         """Jira ID: DAOS-7326
@@ -134,7 +134,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             for pool in self.pool:
                 percentage = int((self.free_space_dict[pool.uuid][1] /
                                   self.free_space_dict[pool.uuid][3]) * 100)
-                self.assertGreater(percentage > 97,
+                self.assertGreater(percentage, 97,
                                    "Aggregation did not reclaim the space")
 
             # Destroy all containers and pools and start once again.
