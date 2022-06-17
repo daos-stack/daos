@@ -158,7 +158,7 @@ class LogLine():
             fn_str = self._fields[1]
             start_idx = fn_str.find('(')
             self.function = fn_str[:start_idx]
-            desc = fn_str[start_idx+1:-1]
+            desc = fn_str[start_idx + 1:-1]
             if desc == '(nil)':
                 self.descriptor = ''
             else:

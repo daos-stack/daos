@@ -188,8 +188,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
 
             # The cases below use a UNS sub path, which is
             # not supported by FS_COPY
-            if (self.tool == "FS_COPY" and
-                    src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
+            if (self.tool == "FS_COPY" and src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
                 continue
 
             # file -> file variation

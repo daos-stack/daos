@@ -313,6 +313,12 @@ sys.path.append('site_scons')"""
             # Skip things which are quoted
             if f"'{word}'" in code:
                 continue
+            # Skip things which are quoted the other way
+            if f'"{word}"' in code:
+                continue
+            # Skip things which are in braces
+            if f'({word})' in code:
+                continue
             # Skip words which appear to be part of a path
             if f'/{word}/' in code:
                 continue

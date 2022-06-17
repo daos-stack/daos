@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -112,7 +112,7 @@ class ObjFetchBadParam(TestWithServers):
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
-            # now try it with a null sgl (iod_size is not set)
+            # now try it with a null SGL (iod_size is not set)
             test_hints = ['sglnull']
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
                                                         self.dkey, self.akey,

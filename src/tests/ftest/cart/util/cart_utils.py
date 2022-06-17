@@ -147,7 +147,7 @@ class CartTest(TestWithoutServers):
             self.log.info("Expected %d completion files, ", count)
             self.log.info("but only found %d.\n", len(file_list))
 
-        # Clean up completion file(s) for next test for next runrun
+        # Clean up completion file(s) for next test for next run
         for _file in file_list:
             os.unlink(_file)
 
