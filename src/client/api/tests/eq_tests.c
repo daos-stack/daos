@@ -56,7 +56,7 @@ static daos_handle_t	my_eqh;
 static int
 eq_test_1()
 {
-	struct daos_event	*ep;
+	struct daos_event	*ep[4];
 	struct daos_event	ev;
 	struct daos_event	abort_ev;
 	daos_handle_t		eqh;
@@ -85,7 +85,10 @@ eq_test_1()
 	rc = daos_event_launch(&abort_ev);
 	D_ASSERT(rc == 0);
 
-	daos_event_abort(&abort_ev);
+	rc = daos_event_abort(&abort_ev);
+	D_ASSERT(rc == 0);
+
+	daos_event_complete(&abort_ev, 0);
 
 	print_message("Destroy non-empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
@@ -94,8 +97,9 @@ eq_test_1()
 		goto out;
 	}
 
-	rc = daos_eq_poll(eqh, 0, 0, 1, &ep);
-	if (rc != 1) {
+	/** drain EQ, should get back 2 */
+	rc = daos_eq_poll(eqh, 0, 0, 4, ep);
+	if (rc != 2) {
 		print_error("Failed to drain EQ: %d\n", rc);
 		goto out;
 	}
