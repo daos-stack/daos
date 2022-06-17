@@ -4,6 +4,12 @@ hosts:
 
 timeout: 100
 
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+
 pool:
   scm_size: 1G
   control_method: dmg

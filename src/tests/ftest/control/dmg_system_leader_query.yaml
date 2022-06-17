@@ -6,3 +6,6 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0

@@ -39,7 +39,10 @@ class ContainerAsync(TestWithServers):
         The negative case is more like a test of the API implementation rather
         than DAOS itself.
 
-        :avocado: tags=all,full_regression,container,cont_create_async
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_create_async,test_create_async
         """
         self.add_pool()
         ph = self.pool.pool.handle

@@ -7,7 +7,10 @@ hosts:
   - client-B
 timeout: 100
 server_config:
- name: daos_server
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
     createmode:
         mode_RW:

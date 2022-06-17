@@ -46,8 +46,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test container query, set-attr, get-attr, and list-attrs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_query_attr
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_query_attr,test_container_query_attr
         """
         # Create a pool and a container.
         self.add_pool()
@@ -157,8 +158,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test daos container list-attrs with 50 attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_list_attrs
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_list_attrs,test_list_attrs_long
         """
         # Create a pool and a container.
         self.add_pool()

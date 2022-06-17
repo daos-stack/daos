@@ -36,7 +36,7 @@ class QueryPropertiesTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=query_properties
+        :avocado: tags=query_properties,test_query_properties
         """
         errors = []
 

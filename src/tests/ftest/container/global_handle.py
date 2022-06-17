@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -74,8 +74,9 @@ class GlobalHandle(TestWithServers):
         Test Description: Use a pool handle in another process.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=tiny
-        :avocado: tags=container,global_handle,container_global_handle
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=global_handle,container_global_handle,test_global_handle
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to it

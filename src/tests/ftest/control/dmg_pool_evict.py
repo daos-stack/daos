@@ -32,8 +32,9 @@ class DmgPoolEvictTest(TestWithServers):
         Test Description: Test dmg pool evict.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=control,dmg_pool_evict
+        :avocado: tags=vm
+        :avocado: tags=control
+        :avocado: tags=dmg_pool_evict,test_dmg_pool_evict
         """
         # Create 2 pools and create a container in each pool.
         self.pool = []

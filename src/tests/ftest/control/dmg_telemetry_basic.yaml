@@ -11,6 +11,8 @@ server_config:
   name: daos_server
   servers:
     scm_size: 4
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   scm_size: 2G
   control_method: dmg

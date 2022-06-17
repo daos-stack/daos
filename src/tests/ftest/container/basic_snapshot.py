@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,10 @@ class BasicSnapshot(TestWithServers):
             Verify the snapshot is still available and the contents remain in
             their original state.
 
-        :avocado: tags=all,daily_regression,snap,basicsnap
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=snap,basicsnap,test_basic_snapshot
         """
         # Set up the pool and container.
         try:

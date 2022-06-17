@@ -46,7 +46,7 @@ class OpenContainerTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=container_open
+        :avocado: tags=container_open,test_container_open
         """
         self.pool = []
         self.container = []
