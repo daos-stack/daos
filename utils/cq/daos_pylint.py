@@ -296,7 +296,9 @@ sys.path.append('site_scons')"""
             lines = msg.msg.splitlines()
             header = lines[0]
             code = lines[1:]
-            components = header.split("''")
+            components = header.split("'")
+            print(lines)
+            print(components)
             word = components[1]
             for line in code:
                 if ftest and code.strip().startswith(':avocado: tags='):
