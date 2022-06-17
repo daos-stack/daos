@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -680,7 +680,7 @@ done:
 	biod->bd_bulk_hdls[biod->bd_bulk_cnt] = hdl;
 	biod->bd_bulk_cnt++;
 
-	return 0;
+	return rc;
 }
 
 void
