@@ -30,7 +30,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         self.free_space_dict[pool][0] = val [Initial free space]
         self.free_space_dict[pool][1] = val [After 1st IOR free space]
         self.free_space_dict[pool][2] = val [After 2nd IOR free space]
-        self.free_space_dict[pool][1] = val [After aggregation complete]
+        self.free_space_dict[pool][3] = val [After aggregation complete]
 
         Args:
             storage_index (int): index of the pool free space to obtain
