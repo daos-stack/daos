@@ -27,12 +27,19 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
     def save_free_space(self, space_tag, storage_index):
         """Save the storage space in free_space dictionary for each pool
-        self.free_space_dict[pool][0] = val [Initial free space]
-        self.free_space_dict[pool][1] = val [After 1st IOR free space]
-        self.free_space_dict[pool][2] = val [After 2nd IOR free space]
-        self.free_space_dict[pool][3] = val [After aggregation complete]
 
         Args:
+            space_tag (int): Free space tagged at various stages in testcase.
+            0: Initial free space before IOR run.
+            1: Free space after first IOR run.
+            2: Free space after second IOR run.
+            3. Free space after aggregation is complete.
+            Example:
+            self.free_space_dict[pool][0] = val [Initial free space]
+            self.free_space_dict[pool][1] = val [After 1st IOR free space]
+            self.free_space_dict[pool][2] = val [After 2nd IOR free space]
+            self.free_space_dict[pool][3] = val [After aggregation complete]
+
             storage_index (int): index of the pool free space to obtain
         """
         for pool in self.pool:
@@ -46,8 +53,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             self.log.info("======================")
             self.log.info(self.free_space_dict)
 
-    def test_free_space(self, space_tag1, space_tag2):
-        """Test whether the free space is decremented between two IOR runs.
+    def verify_free_space(self, space_tag1, space_tag2):
+        """Verify whether the free space is decremented between two IOR runs.
            Asserts if free sapce with space_tag1 less than free space with
            space_tag2.
 
@@ -60,11 +67,11 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                                  self.free_space_dict[pool.uuid][space_tag2])
             self.log.info("Pool %s Space used by ior = %s", pool.uuid,
                           space_used_by_ior)
-            self.assertTrue(self.free_space_dict[pool.uuid][space_tag1] >
-                            self.free_space_dict[pool.uuid][space_tag2],
-                            "IOR run was not successful.")
+            self.assertGreater(self.free_space_dict[pool.uuid][space_tag1],
+                               self.free_space_dict[pool.uuid][space_tag2],
+                               "IOR run was not successful.")
 
-    def test_longrun_aggregation(self, total_pools=1, total_containers_per_pool=1):
+    def longrun_aggregation(self, total_pools=1, total_containers_per_pool=1):
         """Jira ID: DAOS-7326
         Test Description:
             This is a common method which run IOR on the specified pools,
@@ -73,15 +80,13 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         # test params
         total_runtime = self.params.get("total_runtime",
                                         '/run/runtime/*')
-        pool_qty = total_pools
-        container_qty = total_containers_per_pool
         start_time = 0
         finish_time = 0
 
         job_manager = get_job_manager(self, "Mpirun", None, False, "mpich",
                                       self.get_remaining_time())
         # Create requested pools
-        self.add_pool_qty(pool_qty, connect=False)
+        self.add_pool_qty(total_pools, connect=False)
         start_time = time.time()
         while int(finish_time - start_time) < int(total_runtime):
             # Since the transfer size is 1M, the objects will be inserted
@@ -90,13 +95,11 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
             self.save_free_space(0, storage_index)
 
-            # Disable the aggregation
             for pool in self.pool:
+                # Disable the aggregation
                 pool.set_property("reclaim", "disabled")
-
-            # Create the containers requested per pool
-            for pool in self.pool:
-                self.add_container_qty(container_qty, pool)
+                # Create the containers requested per pool
+                self.add_container_qty(total_containers_per_pool, pool)
 
             # Run ior on each container sequentially
             for i in [1, 2]:
@@ -113,7 +116,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                     except CommandFailure as error:
                         self.log.info(error)
                 self.save_free_space(i, storage_index)
-                self.test_free_space((i-1), i)
+                self.verify_free_space((i-1), i)
 
             # Enable the aggregation
             for pool in self.pool:
@@ -165,9 +168,10 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
+        :avocado: tags=aggregation
         :avocado: tags=aggregate_single_pool
         """
-        self.test_longrun_aggregation(1, 2)
+        self.longrun_aggregation(1, 2)
 
     def test_aggregation_multiple_pools(self):
         """Jira ID: DAOS-7326
@@ -190,6 +194,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=aggregate_mulitple_pools
+        :avocado: tags=aggregation
+        :avocado: tags=aggregate_multiple_pools
         """
-        self.test_longrun_aggregation(2, 3)
+        self.longrun_aggregation(2, 3)

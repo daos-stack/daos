@@ -56,15 +56,12 @@ ior:
     client_processes:
         np: 12
     test_file: /testFile
-    repetitions: 1
     dfs_destroy: False
-    iorflags:
-        flags: "-v -w -W -r -R -k"
+    flags: "-v -w -W -r -R -k"
     api: DFS
     transfer_size: '1M'
     block_size: '1G'
-    objectclass:
-        dfs_oclass: "EC_2P1G1"
-        dfs_dir_oclass: "EC_2P1G1"
+    dfs_oclass: "EC_2P1G1"
+    dfs_dir_oclass: "EC_2P1G1"
 runtime:
     total_runtime: 800 # total seconds to run
