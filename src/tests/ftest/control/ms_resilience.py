@@ -41,7 +41,7 @@ class ManagementServiceResilience(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Inititialize a ManagementServiceResilience object."""
+        """Initialize a ManagementServiceResilience object."""
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False

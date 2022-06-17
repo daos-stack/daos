@@ -814,7 +814,7 @@ class DaosServer():
 
         if len(procs) != self.engines:
             # Mark this as a warning, but not a failure.  This is currently
-            # expected when running with pre-existing data because the server
+            # expected when running with preexisting data because the server
             # is calling exec.  Do not mark as a test failure for the same
             # reason.
             entry = {}
@@ -2220,7 +2220,7 @@ class posix_tests():
     def test_complex_unlink(self):
         """Test that unlink clears file data correctly.
 
-        Create two files, exchange them in the backend then unlink the one.
+        Create two files, exchange them in the back-end then unlink the one.
 
         The kernel will be unlinking what it thinks is file 1 but it will actually be file 0.
         """
@@ -2361,7 +2361,7 @@ class posix_tests():
 
         # Create a file, read/write to it.
         # Check fstat works.
-        # Rename it from the backend
+        # Rename it from the back-end
         # Check fstat - it should not work.
         # Rename the file into a new directory, this should allow the kernel to 'find' the file
         # again and update the name/parent.
@@ -3356,7 +3356,7 @@ def run_dfuse(server, conf):
 def run_in_fg(server, conf):
     """Run dfuse in the foreground.
 
-    Block until ctrl-c is pressed.
+    Block until Control-C is pressed.
     """
 
     pool = server.get_test_pool_obj()
@@ -3990,11 +3990,8 @@ class AllocFailTest():
 
         return fatal_errors
 
-    def _run_cmd(self,
-                 loc,
-                 valgrind=False):
-        """Run the test with FI enabled
-        """
+    def _run_cmd(self, loc, valgrind=False):
+        """Run the test with fault injection enabled"""
 
         cmd_env = get_base_env()
 
@@ -4127,8 +4124,9 @@ def test_alloc_fail_cat(server, conf):
     dfuse.stop()
     return rc
 
+
 def test_fi_list_attr(server, conf, wf):
-    """Run daos cont list-attr with fi"""
+    """Run daos cont list-attr with fault injection"""
 
     pool = server.get_test_pool()
 
@@ -4157,8 +4155,9 @@ def test_fi_list_attr(server, conf, wf):
     destroy_container(conf, pool, container)
     return rc
 
+
 def test_fi_get_attr(server, conf, wf):
-    """Run daos cont get-attr with fi"""
+    """Run daos cont get-attr with fault injection"""
 
     pool = server.get_test_pool_id()
 
@@ -4189,8 +4188,9 @@ def test_fi_get_attr(server, conf, wf):
     destroy_container(conf, pool, container)
     return rc
 
+
 def test_fi_cont_query(server, conf, wf):
-    """Run daos cont query with fi"""
+    """Run daos cont query with fault injection"""
 
     pool = server.get_test_pool_id()
 
@@ -4215,7 +4215,7 @@ def test_fi_cont_query(server, conf, wf):
 
 
 def test_fi_cont_check(server, conf, wf):
-    """Run daos cont check with fi"""
+    """Run daos cont check with fault injection"""
 
     pool = server.get_test_pool_id()
 
@@ -4238,6 +4238,7 @@ def test_fi_cont_check(server, conf, wf):
     destroy_container(conf, pool, container)
     return rc
 
+
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
@@ -4256,6 +4257,7 @@ def test_alloc_fail(server, conf):
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
     return rc
+
 
 def run(wf, args):
     """Main entry point"""
@@ -4318,7 +4320,7 @@ def run(wf, args):
                 run_daos_cmd(conf, cmd, valgrind=False)
 
     # If the perf-check option is given then re-start everything without much
-    # debugging enabled and run some microbenchmarks to give numbers for use
+    # debugging enabled and run some micro-benchmarks to give numbers for use
     # as a comparison against other builds.
     if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'

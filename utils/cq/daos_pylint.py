@@ -309,7 +309,6 @@ sys.path.append('site_scons')"""
                 continue
             # Skip things that look like command options.
             if f' -{word}' in code or f' --{word}' in code:
-                print(f"Word '{word}' is used with -")
                 continue
             # Skip things which are quoted
             if f"'{word}'" in code:

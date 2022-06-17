@@ -90,7 +90,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         # work.
         escape_to_not[test_strings[-2]] = "`&()\;'\"!<>" # noqa: W605
         escape_to_not[test_strings[-1]] = "aa bb"
-        # Prepare attr-value paris. Use the test_strings in value for the first
+        # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
         attr_values = []
         j = 0

@@ -6,6 +6,7 @@ Ansible
 BW
 Broadwell
 CGO
+Cilk
 DArray
 DDict
 DFS
@@ -297,6 +298,7 @@ ppn
 prebuild
 prebuilding
 prebuilt
+preload
 prepend
 prepended
 prepends
@@ -378,6 +380,7 @@ systemctl
 systemd
 tcp
 teardown
+teardowns
 testcases
 testdata
 testname

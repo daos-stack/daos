@@ -51,7 +51,7 @@ class BoundaryTest(TestWithServers):
             except (DaosTestError, TestFail) as err:
                 msg = "#(3.{}.{}) container IO failed, err: {}".format(pool_num, cont_num, err)
                 self.fail(msg)
-        time.sleep(2)  #to syncup containers before close
+        time.sleep(2)  #to sync-up containers before close
 
         try:
             self.log.info("===(4.%d.%d)create_container_and_test, container closing.",
@@ -64,7 +64,7 @@ class BoundaryTest(TestWithServers):
             self.fail(msg)
 
     def create_containers(self, pool=None, pool_num=10, num_containers=100, with_io=False):
-        """To create number of containers parallelly on pool.
+        """To create number of containers in parallel on pool.
         Args:
             pool(str): pool handle.
             pool_num (int): pool number to create containers.
@@ -90,7 +90,7 @@ class BoundaryTest(TestWithServers):
             self.fail(msg)
 
     def create_pools(self, num_pools=10, num_containers=100, with_io=False):
-        """To create number of pools and containers parallelly.
+        """To create number of pools and containers in parallel.
         Args:
             num_pools (int): number of pools to create.
             num_containers (int): number of containers to create.
