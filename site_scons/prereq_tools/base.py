@@ -1076,7 +1076,7 @@ class PreReqComponent():
         if self.client_requested():
             reqs.extend(client_reqs)
         self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
-                                   'none', reqs))
+                                   'all', reqs))
         if GetOption('deps_only'):
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
