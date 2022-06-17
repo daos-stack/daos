@@ -25,9 +25,11 @@ RUN set -e;                                                      \
         done;                                                    \
         mv daos_ci-el9-artifactory.repo{.tmp,};                  \
     fi;                                                          \
-    dnf --assumeyes install epel-release dnf-plugins-core;       \
+    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
+    dnf --disablerepo \*epel\* install epel-release;             \
+    dnf install epel-release;                                    \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         PT_REPO=daos_ci-rocky8-crb-artifactory;                  \
     else                                                         \
@@ -55,8 +57,6 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
