@@ -1,6 +1,6 @@
 #!/bin/bash
 
-Creates a repository based on the BUILD_URL environmnent variable.
+# Creates a repository based on the BUILD_URL environmnent variable.
 
 set -uex
 
