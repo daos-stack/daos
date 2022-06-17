@@ -109,7 +109,7 @@ jobs:
             ${{ steps.commit-hash.outputs.restore }}
             ${{ steps.commit-hash.outputs.restore_prev }}
           skip-save: true
-      - name: Build in docker.
+      - name: Build in docker with ALT_PREFIX.
         if: ${{ matrix.distro == "fedora" }}
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
