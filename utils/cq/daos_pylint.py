@@ -4,6 +4,7 @@
 import os
 import re
 from collections import Counter
+import tempfile
 import subprocess  # nosec
 import argparse
 from pylint.lint import Run
@@ -17,21 +18,21 @@ from pylint.lint import pylinter
 #  Sets python-path or similar as required
 #  Runs in parallel across whole tree
 #  Supports minimum python version
-#  Supports venv usage
+#  Supports python virtual environment usage
 #  Can be used by atom.io live
-#  Outputs directly to github annotations
+#  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
 #  Can be used as a commit-hook
 #  flake8 style --diff option
 
-# For now this spilts code into one of three types, build (scons), ftest or other.  For build code
+# For now this splits code into one of three types, build (scons), ftest or other.  For build code
 # it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
 # does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
-# that currently exist in the codebase we need to restrict this to modified code.  Spellings can
+# that currently exist in the code-base we need to restrict this to modified code.  Spellings can
 # also be enabled shortly however we have a number to correct or whitelist before enabling.
 
 
@@ -40,17 +41,13 @@ class WrapScript():
 
     def __init__(self, fname):
 
-        # TODO: Use a NamedTemporaryFile file here, it's an easy change to make but there appears
-        # to be some weird utf-8 errors in the tree somewhere which is causing spurious issues.
-
         self.line_map = {}
-        self.wrap_file = f'{fname}.tmp'
-        with open(self.wrap_file, 'w') as outfile:
-            with open(fname, 'r') as infile:
-                self._read_files(infile, outfile)
-
-    def __del__(self):
-        os.unlink(self.wrap_file)
+        # pylint: disable-next=consider-using-with
+        self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
+        self.wrap_file = self._outfile.name
+        with open(fname, 'r') as infile:
+            self._read_files(infile, self._outfile)
+        self._outfile.flush()
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
@@ -112,9 +109,9 @@ class WrapScript():
         """Add code to define fake variables for pylint"""
         newlines = 0
         for variable in variables:
-            outfile.write('# pylint: disable-next=consider-using-f-string\n')
-            outfile.write(f"{prefix}print('%s' % str({variable}))\n")
-            newlines += 2
+            # pylint: disable-next=consider-using-f-string
+            outfile.write("%sprint(f'{%s}')\n" % (prefix, variable))
+            newlines += 1
         return newlines
 
     @staticmethod
@@ -125,8 +122,8 @@ class WrapScript():
         for variable in variables:
             if variable.upper() == 'PREREQS':
                 newlines += 1
-# pylint: disable-next=line-too-long
-                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
+                outfile.write(
+                    f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
@@ -190,6 +187,16 @@ class FileTypeList():
             # There may be more files needed here, but just this one is reporting errors.
             if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
                 return True
+            if filename.endswith('site_scons/stack_analyzer.py'):
+                return True
+            # Needs more work yet, partly on spellings.  Another issue is that in GitHub actions
+            # pylint is called on all files in the tree concurrently so it can resolve calls to
+            # scons as being to fake_scons, where if you call pylint on file file then it cannot.
+            # At some point we need to move fake_scons so that it's checked on it's own, and at that
+            # point also move code that uses scons from the general checks to the scons checks so
+            # they are still checked against fake_scons.
+            # if 'utils/sl/fake_scons' in filename:
+            #     return True
             return False
 
         if is_scons_file(file):
@@ -312,8 +319,9 @@ sys.path.append('site_scons')"""
                 continue
             if vals['category'] == 'warning':
                 continue
-            # pylint: disable-next=line-too-long,consider-using-f-string
-            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
 
     if not types or args.reports == 'n':
         return
@@ -367,10 +375,7 @@ def main():
     except ImportError:
         spellings = False
 
-    if spellings:
-        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc.spellings')
-    else:
-        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
+    rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
     # Args that atom uses.
     parser.add_argument('--msg-template',
@@ -379,6 +384,7 @@ def main():
     parser.add_argument('--output-format', choices=['text'])
     parser.add_argument('--rcfile', default=rcfile)
 
+    # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
     parser.add_argument('--format', choices=['text', 'github'], default='text')
 
@@ -386,6 +392,22 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
+
+    rc_tmp = None
+
+    # If spellings are likely supported and using the default configuration file then enable using
+    # a temporary file.
+    if spellings and args.rcfile == rcfile:
+        # pylint: disable-next=consider-using-with
+        rc_tmp = tempfile.NamedTemporaryFile(mode='w+', prefix='pylintrc')
+        with open(rcfile) as src_file:
+            rc_tmp.write(src_file.read())
+        rc_tmp.flush()
+        rc_tmp.write('[SPELLING]\n')
+        rc_tmp.write('spelling-dict=en_US\n')
+        rc_tmp.write('spelling-private-dict-file=utils/cq/words.dict\n')
+        rc_tmp.flush()
+        args.rcfile = rc_tmp.name
 
     if args.git:
         run_git_files(args, )

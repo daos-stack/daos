@@ -23,23 +23,26 @@ import pprint
 import stat
 import errno
 import argparse
-import tabulate
 import threading
 import functools
 import traceback
-import subprocess #nosec
-import junit_xml
+import subprocess  # nosec
 import tempfile
-import pickle #nosec
-import xattr
+import pickle  # nosec
 from collections import OrderedDict
+import xattr
+import junit_xml
+import tabulate
 import yaml
+
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
+
 class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
+
 
 class NLTestNoFunction(NLTestFail):
     """Used to indicate a function did not log anything"""
@@ -48,17 +51,20 @@ class NLTestNoFunction(NLTestFail):
         super().__init__(self)
         self.function = function
 
+
 class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
 
 instance_num = 0
 
+
 def get_inc_id():
     """Return a unique character"""
     global instance_num
     instance_num += 1
     return '{:04d}'.format(instance_num)
+
 
 def umount(path, bg=False):
     """Umount dfuse from a given path"""
@@ -2737,7 +2743,7 @@ class posix_tests():
         # pylint: disable=consider-using-with
 
         # Create a temporary directory, with one file into it and copy it into
-        # the container.  Check the returncode only, do not verify the data.
+        # the container.  Check the return code only, do not verify the data.
         # tempfile() will remove the directory on completion.
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
         with open(join(src_dir.name, 'file'), 'w') as ofd:
