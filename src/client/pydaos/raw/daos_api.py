@@ -13,7 +13,6 @@ from .. import pydaos_shim
 
 import ctypes
 import threading
-import uuid
 import os
 import inspect
 import sys
@@ -1484,16 +1483,10 @@ class DaosContainer():
         return conversion.c_uuid_to_str(self.uuid)
 
     # pylint: disable=too-many-branches
-    def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
+    def create(self, poh, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
-        if con_uuid is None:
-            conversion.c_uuid(uuid.uuid4(), self.uuid)
-        elif con_uuid == "NULLPTR":
-            self.uuid = None
-        else:
-            conversion.c_uuid(con_uuid, self.uuid)
         self.poh = poh
         if con_prop is not None:
             self.cont_input_values = con_prop
@@ -1574,9 +1567,9 @@ class DaosContainer():
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
             if self.cont_prop is None:
-                ret = func(self.poh, self.uuid, None, None)
+                ret = func(self.poh, ctypes.byref(self.uuid), None, None)
             else:
-                ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                ret = func(self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
                            None)
             if ret != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
@@ -1586,9 +1579,9 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
-                params = [self.poh, self.uuid, None, event]
+                params = [self.poh, ctypes.byref(self.uuid), None, event]
             else:
-                params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
                           None, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -1603,13 +1596,12 @@ class DaosContainer():
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
-        if con_uuid is not None:
-            conversion.c_uuid(con_uuid, self.uuid)
-
         if self.uuid is None:
-            raise DaosApiError("Container uuid is None.")
-        uuid_str = self.get_uuid_str()
-
+            raise DaosApiError("Fail to destroy a container with uuid as none.")
+        if con_uuid is None:
+            uuid_str = self.get_uuid_str()
+        else:
+            uuid_str = str(con_uuid)
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
@@ -2367,7 +2359,7 @@ class DaosContext():
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid2,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,

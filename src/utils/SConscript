@@ -1,9 +1,12 @@
 """Build DAOS utilities"""
+
 import daos_build
-Import('env', 'base_env', 'prereqs')
+
 
 def scons():
     """Execute build"""
+
+    Import('env', 'prereqs')
 
     if not prereqs.client_requested():
         return
@@ -11,8 +14,8 @@ def scons():
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_build.add_build_rpath(env)
-    daos_build.add_build_rpath(base_env)
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('../client/dfs')])
 
     denv = env.Clone()
 
@@ -30,17 +33,11 @@ def scons():
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
-    # Can remove this when pmdk is not needed on client
-    denv.AppendUnique(LIBPATH=["../client/dfs"])
-
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
-    daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs',
-                                        daos_hdlrs_src,
-                                        LIBS=libs)
+    daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
 
-    Export('daos_hdlrs_lib')
 
 if __name__ == "SCons.Script":
     scons()

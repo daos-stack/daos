@@ -236,8 +236,10 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 				   daos_oclass_hints_t hints, uint32_t args);
+#define daos_oclass_grp_off_by_shard(oca, shard)				\
+	(rounddown(shard, daos_oclass_grp_size(oca)))
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -330,37 +332,37 @@ daos_oid_is_oit(daos_obj_id_t oid)
 	return daos_obj_id2type(oid) == DAOS_OT_OIT;
 }
 
-/**
- * For backward compatibility purpose
- */
-static inline enum daos_otype_t
-daos_obj_feat2type(daos_ofeat_t feat)
+static inline int
+is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 {
-	if (feat == (DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64))
-		return DAOS_OT_MULTI_UINT64;
-	else if (feat == DAOS_OF_AKEY_UINT64)
-		return DAOS_OT_AKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_UINT64)
-		return DAOS_OT_DKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_LEXICAL)
-		return DAOS_OT_DKEY_LEXICAL;
-	else if (feat == DAOS_OF_AKEY_LEXICAL)
-		return DAOS_OT_AKEY_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_LEXICAL | DAOS_OF_AKEY_LEXICAL))
-		return DAOS_OT_MULTI_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY))
-		return DAOS_OT_ARRAY;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY_BYTE))
-		return DAOS_OT_ARRAY_BYTE;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT))
-		return DAOS_OT_ARRAY_ATTR;
-	else if (feat == DAOS_OF_KV_FLAT)
-		return DAOS_OT_KV_HASHED;
-	else if (feat == (DAOS_OF_KV_FLAT | DAOS_OF_DKEY_LEXICAL))
-		return DAOS_OT_KV_LEXICAL;
+	int is_type_set = 0;
 
-	/** default */
-	return DAOS_OT_MULTI_HASHED;
+	switch (sub_type) {
+	case DAOS_OT_AKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_AKEY_UINT64))
+			is_type_set = DAOS_OT_AKEY_UINT64;
+		break;
+	case DAOS_OT_DKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_DKEY_UINT64) ||
+		    (type == DAOS_OT_ARRAY) || (type == DAOS_OT_ARRAY_BYTE) ||
+		    (type == DAOS_OT_ARRAY_ATTR))
+			is_type_set = DAOS_OT_DKEY_UINT64;
+		break;
+	case DAOS_OT_AKEY_LEXICAL:
+		if ((type == DAOS_OT_AKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL))
+			is_type_set = DAOS_OT_AKEY_LEXICAL;
+		break;
+	case DAOS_OT_DKEY_LEXICAL:
+		if ((type == DAOS_OT_DKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL) ||
+		    (type == DAOS_OT_KV_LEXICAL))
+			is_type_set = DAOS_OT_DKEY_LEXICAL;
+		break;
+	default:
+		D_ERROR("Unexpected parameter.\n");
+		break;
+	}
+
+	return is_type_set;
 }
 
 /*
@@ -769,6 +771,7 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 struct dc_obj_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	uint64_t		 ui_dkey_hash;
 	daos_iod_t		*ui_iods;
 	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */

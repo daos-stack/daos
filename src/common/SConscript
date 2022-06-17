@@ -18,59 +18,17 @@ def build_daos_common(env, client, prereqs):
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
-        libname = 'libdaos_common'
+        libname = 'daos_common'
     else:
         common_libs.extend(['pmemobj'])
         denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         denv.Append(OBJPREFIX="v_")
-        libname = 'libdaos_common_pmem'
+        libname = 'daos_common_pmem'
         prereqs.require(denv, 'pmdk')
 
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
     return common
-
-
-def build_dpar(env):
-    """Build libdts library"""
-
-    serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
-    env.Install('$PREFIX/lib64/', serial_lib)
-
-    denv = env.Clone()
-
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, [])
-        if mpi is None:
-            print("\nSkipping compilation for libdpar_mpi as no MPI is found")
-            print("Install and load mpich or openmpi\n")
-            return
-
-    mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
-    denv.Install('$PREFIX/lib64/', mpi_lib)
-
-
-def build_dts_library(env, prereqs):
-    """Build libdts library"""
-
-    denv = env.Clone()
-
-    prereqs.require(denv, 'argobots', 'protobufc')
-
-    libraries = ['cmocka', 'daos', 'daos_tests', 'dpar']
-
-    # Add runtime paths for daos libraries
-    denv.AppendUnique(LIBPATH=["../client/api"])
-    denv.AppendUnique(CPPPATH=["../tests/suite"])
-    denv.AppendUnique(CPPPATH=["../mgmt"])
-
-    denv.Replace(SHOBJPREFIX='mpi_')
-    mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
-    Export('mpi_cmd_parser')
-
-    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
-                                 LIBS=libraries)
-    denv.Install('$PREFIX/lib64/', dts_lib)
 
 
 def scons():
@@ -94,8 +52,7 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    common = build_daos_common(denv, True, prereqs)
-    Export('common')
+    build_daos_common(denv, True, prereqs)
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
@@ -110,21 +67,13 @@ def scons():
 
     if not prereqs.test_requested():
         return
-    tlib_env = denv.Clone()
-    tlib_env.AppendUnique(LIBS=['json-c'])
 
-    prereqs.require(tlib_env, 'argobots')
-
-    tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
-    tests_lib = daos_build.library(tlib_env, 'libdaos_tests', tests_lib_src)
-    tlib_env.Install('$PREFIX/lib64/', tests_lib)
-
-    tenv = tlib_env.Clone()
+    tenv = denv.Clone()
     prereqs.require(tenv, 'pmdk')
-    SConscript('tests/SConscript', exports='tenv')
 
-    build_dpar(base_env)
-    build_dts_library(base_env, prereqs)
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    utest_utils = tenv.SharedObject('tests/utest_common.c')
+    Export('utest_utils')
 
 
 if __name__ == "SCons.Script":

@@ -1556,7 +1556,7 @@ d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 	rc = d_hash_rec_insert(htable, (void *)&uhbund, sizeof(uhbund),
 			       &ulink->ul_link.rl_link, true);
 	if (rc)
-		D_ERROR("Error Inserting handle in UUID in-memory hash\n");
+		D_ERROR("Error Inserting handle in UUID in-memory hash: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
