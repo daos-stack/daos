@@ -7,7 +7,7 @@
 # https://github.com/llvm/llvm-project/issues/55407
 BasedOnStyle: LLVM
 IndentWidth: 8
-UseTab: Never
+UseTab: ForContinuationAndIndentation
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
