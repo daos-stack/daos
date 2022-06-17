@@ -10,7 +10,7 @@ def build_dts_library(env, prereqs, dc_credit):
 
     prereqs.require(denv, 'argobots', 'protobufc')
 
-    dts_lib = daos_build.static_library(denv, 'dts', [dc_credit, 'dts.c'])
+    daos_build.static_library(denv, 'dts', [dc_credit, 'dts.c'])
 
 
 def build_tests(prereqs, env, client_libs):
