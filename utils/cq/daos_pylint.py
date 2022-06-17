@@ -333,7 +333,7 @@ sys.path.append('site_scons')"""
         vals = {}
         vals['category'] = msg.category
 
-        # Spelling mistakes. There are a lot of suppressions to handle code blocks and examples
+        # Spelling mistakes. There are a lot of code to silence code blocks and examples
         # in comments.  Be strict for everything but ftest code currently.
         if not scons and msg.msg_id in ('C0401', 'C0402'):
             lines = msg.msg.splitlines()

@@ -2346,10 +2346,11 @@ class posix_tests():
         # Due to DAOS-9671 garbage can be read from still unknown reason.
         # So remove asserts and do not run Unicode codec to avoid
         # exceptions for now ... This allows to continue testing permissions.
-        #assert raw_bytes == b'read-only-data'
-        #data = raw_bytes.decode('utf-8', 'ignore')
-        #assert data == 'read-only-data'
-        #print(data)
+        if raw_bytes != b'read-only-data':
+            print('Check kernel data')
+        # data = raw_bytes.decode('utf-8', 'ignore')
+        # assert data == 'read-only-data'
+        # print(data)
         os.close(fd)
 
         if dfuse.stop():
@@ -3305,8 +3306,8 @@ def run_dfuse(server, conf):
         raise
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
-    subprocess.run(['df', '-h'], check=True) # nosec
-    subprocess.run(['df', '-i', dfuse.dir], check=True) # nosec
+    subprocess.run(['df', '-h'], check=True)  # nosec
+    subprocess.run(['df', '-i', dfuse.dir], check=True)  # nosec
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)

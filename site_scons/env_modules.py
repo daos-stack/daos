@@ -22,17 +22,18 @@
 import os
 import sys
 import errno
-import distro
-import subprocess #nosec
+import subprocess  # nosec
 import shutil
-from subprocess import PIPE, Popen #nosec
+from subprocess import PIPE, Popen  # nosec
+import distro
 
-class _env_module(): # pylint: disable=invalid-name
+
+class _env_module():  # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
-    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
-                "openmpi":['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
-                           'gnu-openmpi', 'mpi/openmpi-x86_64']}
+    _mpi_map = {"mpich": ['mpi/mpich-x86_64', 'gnu-mpich'],
+                "openmpi": ['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
+                            'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing environment variables"""
@@ -40,11 +41,11 @@ class _env_module(): # pylint: disable=invalid-name
         # in it's MODULEPATH, for some unknown reason
         os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),
                                              os.path.join(os.sep, "usr", "share", "modulefiles"),
-                                             os.path.join(os.sep, "etc", "modulefiles")] +
-                                            os.environ.get("MODULEPATH", "").split(":"))
+                                             os.path.join(os.sep, "etc", "modulefiles")]
+                                            + os.environ.get("MODULEPATH", "").split(":"))
         self._module_load = self._init_mpi_module()
 
-    def _module_func(self, command, *arguments): # pylint: disable=no-self-use
+    def _module_func(self, command, *arguments):  # pylint: disable=no-self-use
         num_args = len(arguments)
         cmd = ['/usr/share/lmod/lmod/libexec/lmod', 'python', command]
         if num_args == 1:
@@ -64,7 +65,7 @@ class _env_module(): # pylint: disable=invalid-name
         # pylint: disable=exec-used
         if sys.version_info[0] > 2:
             ns = {}
-            exec(stdout.decode(), ns) # nosec
+            exec(stdout.decode(), ns)  # nosec
 
             return ns['_mlstatus'], stderr.decode()
 
@@ -171,6 +172,7 @@ class _env_module(): # pylint: disable=invalid-name
         """return the mpi map"""
         return self._mpi_map[key]
 
+
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
     # On Ubuntu, MPI stacks use alternatives and need root to change their
@@ -199,11 +201,13 @@ def load_mpi(mpi):
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.load_mpi(mpi)
 
+
 def show_avail():
     """ global function to show the available modules"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.show_avail()
+
 
 def get_module_list(key):
     """ global function to show the modules that map to a key"""
