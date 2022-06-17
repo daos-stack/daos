@@ -6,8 +6,13 @@ Hack to support oneapi version of Intel compilers
 import sys
 import os
 
+# TODO: Should these be in fake_scons
+# pylint: disable=no-name-in-module
+# pylint: disable=import-error
 import SCons.Tool.gcc
 import SCons.Util
+# pylint: enable=import-error
+# pylint: enable=no-name-in-module
 import SCons.Warnings
 import SCons.Errors
 
