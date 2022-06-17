@@ -184,10 +184,10 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 	/*
 	 * ---------------------------------------------------------
-	 * With 2 domains, 2 nodes each, 2 targets each = 8 targets
+	 * With 2 domains, 1 nodes each, 4 targets each = 8 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 2, 2, &po_map, &pl_map);
+	gen_maps(2, 1, 4, &po_map, &pl_map);
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 

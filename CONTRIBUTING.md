@@ -1,7 +1,7 @@
 # Contributing to DAOS
 
 The guidelines for contributing to DAOS can be found in the
-[Contribute](http://wiki.daos.io/spaces/DC/pages/4836655701/Coding+Rules)
+[Contribute](https://wiki.daos.io/spaces/DC/pages/4836655701/Coding+Rules)
 section of the DAOS Community Wiki.
 
 ## Contacts
