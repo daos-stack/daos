@@ -37,7 +37,7 @@ class RbldWithIO(TestWithServers):
         self.add_pool(create=False)
         self.add_container(self.pool, create=False)
         targets = self.params.get("targets", "/run/server_config/*")
-        # data = self.params.get('datasize', "/run/testparams/*")
+        # data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
         server_count = len(self.hostlist_servers)
