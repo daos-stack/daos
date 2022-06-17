@@ -82,17 +82,6 @@ daos_pipeline_check(daos_pipeline_t *pipeline)
 }
 
 static void
-free_parts(daos_filter_part_t **parts, uint32_t nparts)
-{
-	uint32_t i;
-
-	for (i = 0; i < nparts; i++) {
-		D_ASSERT(parts[i] != NULL);
-		D_FREE(parts[i]);
-	}
-}
-
-static void
 free_filters(daos_filter_t **filters, uint32_t nfilters)
 {
 	uint32_t i;
@@ -101,8 +90,6 @@ free_filters(daos_filter_t **filters, uint32_t nfilters)
 		D_ASSERT(filters[i] != NULL);
 		if (filters[i]->num_parts > 0)
 			D_ASSERT(filters[i]->parts != NULL);
-
-		free_parts(filters[i]->parts, filters[i]->num_parts);
 		if (filters[i]->num_parts > 0)
 			D_FREE(filters[i]->parts);
 	}
