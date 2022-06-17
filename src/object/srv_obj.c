@@ -3282,6 +3282,7 @@ static int
 obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 {
 	uint64_t	*flag = agg_arg;
+	uint32_t	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 	int		succeeds = 0;
 	int		allow_failure = 0;
 	int		allow_failure_cnt = 0;
@@ -3292,7 +3293,7 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 	if (*flag & DAOS_COND_PUNCH)
 		allow_failure = -DER_NONEXIST;
 
-	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
+	for (i = 0; i < sub_cnt; i++) {
 		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
 
 		if (sub->dss_result == 0) {
@@ -3316,7 +3317,7 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 		 * due to EC partial update.
 		 */
 		if (result == 0 && succeeds == 0) {
-			D_ASSERT(dlh->dlh_sub_cnt == allow_failure_cnt);
+			D_ASSERT(sub_cnt == allow_failure_cnt);
 			return -DER_NONEXIST;
 		}
 
@@ -4342,7 +4343,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
 			dcsrs = ds_obj_cpd_get_dcsr(dca->dca_rpc, dca->dca_idx);
 
-			if (dlh->dlh_sub_cnt > 0 ||
+			if (dlh->dlh_normal_sub_cnt > 0 || dlh->dlh_delay_sub_cnt > 0 ||
 			    dlh->dlh_handle.dth_modification_cnt > 0)
 				pin = true;
 			else
