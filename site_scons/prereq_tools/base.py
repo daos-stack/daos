@@ -916,7 +916,7 @@ class PreReqComponent():
                   type='choice',
                   choices=['yes', 'no', 'only'],
                   default='no',
-                  help="Automatically download and build sources.  (yes|no|only) [no]")
+                  help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -957,19 +957,24 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
-        if build_deps == 'yes':
+        if build_deps == 'yes' or build_deps == 'only':
             self.download_deps = True
             self.build_deps = True
-        elif build_deps == 'only':
+        elif build_deps == 'build-only':
             self.build_deps = True
+
+    def realpath(self, path):
+        """Resolve the real path"""
+        return os.path.realpath(os.path.join(self.__top_dir, path))
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
-                value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
+                value = []
+                for path in tmp.split(os.pathsep):
+                    value.append(realpath(path))
             else:
                 value = realpath(tmp)
             self.__env[var] = value
