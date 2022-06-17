@@ -1,9 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 timeouts:
   test_telemetry_list: 60
   test_container_telemetry: 230

@@ -2,14 +2,7 @@ setup:
     start_agents_once: False
     start_servers_once: False
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
+  test_servers: 7
 timeouts:
   test_one_pool: 120
   test_two_pools: 160

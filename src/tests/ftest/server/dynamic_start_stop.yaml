@@ -1,15 +1,10 @@
 hosts:
-    test_servers:
-        - server-A
-        - server-B
+    test_servers: 2
 timeout: 140
 server_config:
     name: daos_server
 extra_servers:
-    test_servers:
-        - server-C
-        - server-D
-        - server-E
+    test_servers: 3
 pool:
     scm_size: 1G
     control_method: dmg

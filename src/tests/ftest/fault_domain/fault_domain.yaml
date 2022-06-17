@@ -1,12 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-A
+  test_servers: 5
+  test_clients: 1
 timeout: 600
 fault_path:
   - /fault1

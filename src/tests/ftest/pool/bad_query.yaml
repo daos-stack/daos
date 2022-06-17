@@ -3,8 +3,7 @@
 server_config:
    name: daos_server
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 150
 pool:
   control_method: dmg

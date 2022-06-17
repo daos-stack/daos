@@ -1,13 +1,8 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-test_clients:
-    - client-E
+  test_servers: 2
+  test_clients: 1
 extra_servers:
-  test_servers:
-    - server-C
-    - server-D
+  test_servers: 2
 timeout: 1100
 setup:
   start_servers_once: False

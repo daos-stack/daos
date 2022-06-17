@@ -1,10 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
+  test_servers: 5
 timeout: 90
 pool:
     name: daos_server

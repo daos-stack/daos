@@ -1,7 +1,5 @@
 hosts:
-   test_servers:
-      - server-A
-      - server-B
+   test_servers: 2
 timeouts:
    test_null_ptrs: 240
 server_config:

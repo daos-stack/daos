@@ -958,7 +958,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
         yaml_data = get_yaml_data(yaml_file)
         display(args, "Detected yaml data: {}".format(yaml_data), 3)
         yaml_keys = list(YAML_KEYS.keys())
-        yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict))
+        yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
 
         # Generate a list of values that can be used as replacements
         user_values = OrderedDict()
@@ -978,6 +978,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
         display(args, "  Found values: {}".format(yaml_find))
         display(args, "  User values:  {}".format(dict(user_values)))
 
+        node_mapping = {}
         for key, user_value in user_values.items():
             # If the user did not provide a specific list of replacement
             # test_clients values, use the remaining test_servers values to
@@ -989,21 +990,85 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
             #   - found in the test yaml
             #   - have a user-specified replacement
             if key in yaml_find and user_value:
-                values_to_replace = []
                 if key.startswith("test_"):
                     # The entire server/client test yaml list entry is replaced
                     # by a new test yaml list entry, e.g.
-                    #   '- serverA' --> '- wolf-1'
-                    value_format = "- {}"
-                    values_to_replace = [value_format.format(item) for item in yaml_find[key]]
+                    #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
+                    #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
+                    if not isinstance(yaml_find[key], list):
+                        yaml_find[key] = [yaml_find[key]]
+
+                    for yaml_find_item in yaml_find[key]:
+                        replacement = NodeSet()
+                        try:
+                            # Replace integer placeholders with the number of nodes from the user
+                            # provided list equal to the quantity requested by the test yaml
+                            quantity = int(yaml_find_item)
+                            if args.override and args.test_clients:
+                                # When individual lists of server and client nodes are provided with
+                                # the override flag set use the full list of nodes specified by the
+                                # test_server/test_client arguments
+                                quantity = len(user_value)
+                            elif args.override:
+                                print(
+                                    "Warning: In order to override the node quantity a "
+                                    "'--test_clients' argument must be specified: {}: {}".format(
+                                        key, yaml_find_item))
+                            for _ in range(quantity):
+                                try:
+                                    replacement.add(user_value.pop(0))
+                                except IndexError:
+                                    # Not enough nodes provided for the replacement
+                                    if not args.override:
+                                        replacement = None
+                                    break
+
+                        except ValueError:
+                            try:
+                                # Replace clush-style placeholders with nodes from the user provided
+                                # list using a mapping so that values used more than once yield the
+                                # same replacement
+                                for node in NodeSet(yaml_find_item):
+                                    if node not in node_mapping:
+                                        try:
+                                            node_mapping[node] = user_value.pop(0)
+                                        except IndexError:
+                                            # Not enough nodes provided for the replacement
+                                            if not args.override:
+                                                replacement = None
+                                            break
+                                        display(
+                                            args,
+                                            "  - {} replacement node mapping: {} -> {}".format(
+                                                key, node, node_mapping[node]),
+                                            3)
+                                    replacement.add(node_mapping[node])
+
+                            except TypeError:
+                                # Unsupported format
+                                replacement = None
+
+                        hosts_key = r":\s+".join([key,  str(yaml_find_item)])
+                        hosts_key = hosts_key.replace("[", r"\[")
+                        hosts_key = hosts_key.replace("]", r"\]")
+                        if replacement:
+                            replacements[hosts_key] = ": ".join([key, str(replacement)])
+                        else:
+                            replacements[hosts_key] = None
 
                 elif key == "bdev_list":
                     # Individual bdev_list NVMe PCI addresses in the test yaml
                     # file are replaced with the new NVMe PCI addresses in the
                     # order they are found, e.g.
                     #   0000:81:00.0 --> 0000:12:00.0
-                    value_format = "\"{}\""
-                    values_to_replace = [value_format.format(item) for item in yaml_find[key]]
+                    for yaml_find_item in yaml_find[key]:
+                        bdev_key = "\"{}\"".format(yaml_find_item)
+                        if bdev_key in replacements:
+                            continue
+                        try:
+                            replacements[bdev_key] = "\"{}\"".format(user_value.pop(0))
+                        except IndexError:
+                            replacements[bdev_key] = None
 
                 else:
                     # Timeouts - replace the entire timeout entry (key + value)
@@ -1030,15 +1095,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                                     user_value, timeout_key, replacements[timeout_key]),
                                 3)
 
-                # Add the next user-specified value as a replacement for key
-                for value in values_to_replace:
-                    if value in replacements:
-                        continue
-                    try:
-                        replacements[value] = value_format.format(user_value.pop(0))
-                    except IndexError:
-                        replacements[value] = None
-
         # Display the replacement values
         for value, replacement in list(replacements.items()):
             display(args, "  - Replacement: {} -> {}".format(value, replacement))
@@ -1058,10 +1114,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                 # Replace the host entries with their mapped values
                 display(args, "  - Replacing: {} --> {}".format(key, value))
                 yaml_data = re.sub(key, value, yaml_data)
-            elif args.discard:
-                # Discard any host entries without a replacement value
-                display(args, "  - Removing:  {}".format(key))
-                yaml_data = re.sub(r"\s*[,]?{}".format(key), "", yaml_data)
             else:
                 # Keep track of any placeholders without a replacement value
                 display(args, "  - Missing:   {}".format(key))
@@ -1071,7 +1123,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
             print(
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
-            return None
+            sys.exit(1)
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
@@ -1357,8 +1409,9 @@ def run_tests(test_files, tag_filter, args):
 
 
 def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary, removing any mux tags and ignoring any
-    other tags present.
+    """Get the contents of a yaml file as a dictionary.
+
+    Removes any mux tags and ignores any other tags present.
 
     Args:
         yaml_file (str): yaml file to read
@@ -1371,14 +1424,14 @@ def get_yaml_data(yaml_file):
 
     """
     class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-        """Helper class for parsing avocado yaml files"""
+        """Helper class for parsing avocado yaml files."""
 
         def forward_mux(self, node):
-            """Pass on mux tags unedited"""
+            """Pass on mux tags unedited."""
             return self.construct_mapping(node)
 
         def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
-            """Drop any other tag"""
+            """Drop any other tag."""
             return None
 
     DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
@@ -2340,11 +2393,6 @@ def main():
         action="store_true",
         help="remove daos log files from the test hosts prior to the test")
     parser.add_argument(
-        "-d", "--discard",
-        action="store_true",
-        help="when replacing server/client yaml file placeholders, discard "
-             "any placeholders that do not end up with a replacement value")
-    parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
         help="disable stopping DAOS servers and clients between running tests")
@@ -2402,6 +2450,10 @@ def main():
              "can be used, respectively.  When using 'filter' with VMD controllers, "
              "the filter is applied to devices managed by the controller, therefore "
              "only selecting controllers that manage the matching devices.")
+    parser.add_argument(
+        "-o", "--override",
+        action="store_true",
+        help="override the quantity of replacement values used in the test yaml file.")
     parser.add_argument(
         "-p", "--process_cores",
         action="store_true",

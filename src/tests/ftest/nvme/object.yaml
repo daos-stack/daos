@@ -1,16 +1,8 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
- test_servers:
-  - boro-A
-  - boro-B
-  - boro-C
-  - boro-D
-  - boro-E
-  - boro-F
-  - boro-G
- test_clients:
-  - boro-H
+ test_servers: 7
+ test_clients: 1
 timeouts:
   test_nvme_object_single_pool: 270
   test_nvme_object_multiple_pools: 16000

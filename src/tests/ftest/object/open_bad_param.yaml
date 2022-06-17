@@ -1,6 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 server_config:
   name: daos_server
 pool:

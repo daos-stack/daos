@@ -19,14 +19,8 @@ env_CRT_CTX_SHARE_ADDR: !mux
 hosts: !mux
   hosts_1:
     config: five_node
-    test_servers:
-      - boro-A
-      - boro-B
-      - boro-C
-      - boro-D
-      - boro-E
-    test_clients:
-      - boro-A
+    test_servers: server-[1-5]
+    test_clients: server-1
 timeout: 600
 tests: !mux
   ctl:

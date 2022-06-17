@@ -1,16 +1,8 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-E
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 4
+  test_clients: 4
 timeout: 4000
 timeouts:
   test_daos_dfs_unit: 2000

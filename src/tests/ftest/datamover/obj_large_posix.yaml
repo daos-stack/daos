@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 5
+  test_clients: 3
 timeouts:
     test_dm_obj_large_posix_dcp: 180
     test_dm_obj_large_posix_cont_clone: 540

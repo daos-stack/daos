@@ -1,6 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 135 # 1.5 times of measured time.
 server_config:
   name: daos_server
@@ -9,8 +8,7 @@ server_config:
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
 extra_servers:
-  test_servers:
-    - server-C
+  test_servers: 1
 pool:
   scm_size: 1G
   control_method: dmg

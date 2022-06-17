@@ -1,7 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 timeout: 600
 faults:
     no_faults:

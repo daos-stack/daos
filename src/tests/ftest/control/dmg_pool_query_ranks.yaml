@@ -1,8 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
+  test_servers: 3
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120

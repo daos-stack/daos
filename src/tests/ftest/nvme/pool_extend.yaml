@@ -1,19 +1,12 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-F
-    - client-G
+  test_servers: 2
+  test_clients: 2
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
 extra_servers:
-  test_servers:
-    - server-C
-    - server-D
-    - server-E
+  test_servers: 3
 timeout: 1000
 setup:
   start_servers_once: False

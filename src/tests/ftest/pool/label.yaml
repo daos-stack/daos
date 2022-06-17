@@ -1,6 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 900
 setup:
   start_servers_once: False

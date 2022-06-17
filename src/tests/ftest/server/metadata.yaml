@@ -2,13 +2,8 @@
 # required quantity is indicated by the placeholders
 
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-C
+  test_servers: 4
+  test_clients: 1
 timeouts:
   test_metadata_fillup: 300
   test_metadata_addremove: 900
