@@ -53,6 +53,7 @@ def generate(env):
     """Add Builders and construction variables for Intel Oneapi C++C++ compiler
     to an Environment.
     """
+    # pylint: disable=no-member
     SCons.Tool.gcc.generate(env)
 
     detector = DetectCompiler()

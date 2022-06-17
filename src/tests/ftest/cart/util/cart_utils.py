@@ -564,6 +564,6 @@ class CartTest(TestWithoutServers):
                     self.log.info("Adding %s=%s to environment.", key, value)
                     os.environ[key] = value
 
-            # For compatibility with cart tests, which set env vars in oretrun
+            # For compatibility with cart tests, which set env vars in orterun
             # command via -x options
             self.env = os.environ
