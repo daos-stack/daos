@@ -18,6 +18,10 @@ server_config:
     bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+    env_vars:
+      - D_LOG_FILE_APPEND_PID=1
+      - FI_LOG_LEVEL=warn
+      - D_LOG_STDERR_IN_LOG=1
 testparams:
   ranks_to_kill:
     - [6]
