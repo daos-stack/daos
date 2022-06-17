@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -12,10 +12,6 @@ import subprocess # nosec
 import sys
 import os
 import json
-
-# Get rid of complaints about parens for print statements and short var names
-#pylint: disable=C0103
-#pylint: disable=C0325
 
 TEST_NOT_RUN = -1
 DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')

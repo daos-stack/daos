@@ -114,9 +114,9 @@ class ObjFetchBadParam(TestWithServers):
         try:
             # now try it with a null SGL (iod_size is not set)
             test_hints = ['sglnull']
-            dummy_thedata2 = self.container.read_an_obj(self.datasize,
-                                                        self.dkey, self.akey,
-                                                        self.obj, test_hints)
+            _ = self.container.read_an_obj(self.datasize,
+                                           self.dkey, self.akey,
+                                           self.obj, test_hints)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())

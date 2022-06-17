@@ -2342,6 +2342,7 @@ class posix_tests():
         # file.read() (no size) is doing a fstat() and reads size + 1
         fstat_fd = os.fstat(fd)
         raw_bytes = os.read(fd, fstat_fd.st_size + 1)
+        # pylint: disable=wrong-spelling-in-comment
         # Due to DAOS-9671 garbage can be read from still unknown reason.
         # So remove asserts and do not run Unicode codec to avoid
         # exceptions for now ... This allows to continue testing permissions.
@@ -3315,7 +3316,6 @@ def run_dfuse(server, conf):
     print(pool_stat)
     container = create_cont(server.conf, pool, ctype="POSIX")
     cdir = join(dfuse.dir, pool, container)
-    #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pool, caching=False)

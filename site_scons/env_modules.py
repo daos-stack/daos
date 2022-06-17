@@ -35,7 +35,7 @@ class _env_module(): # pylint: disable=invalid-name
                            'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self):
-        """Load Modules for initializing envirables"""
+        """Load Modules for initializing environment variables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
         os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),

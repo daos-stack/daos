@@ -243,6 +243,47 @@ class FileTypeList():
         return failed
 
 
+def word_is_allowed(word, code):
+    """Return True is misspelling is permitted"""
+
+    # pylint: disable=too-many-return-statements
+
+    # Skip the "Fake" annotations from fake scons.
+    if code.startswith(f'Fake {word}'):
+        return True
+    # Skip things that look like function documentation
+    if code.startswith(f'{word} ('):
+        return True
+    # Skip things that look like command options.
+    if f' -{word}' in code or f' --{word}' in code:
+        return True
+    # Skip things which are quoted
+    if f"'{word}'" in code:
+        return True
+    # Skip things which are quoted the other way
+    if f'"{word}"' in code:
+        return True
+    # Skip things which are in braces
+    if f'({word})' in code:
+        return True
+    # Skip words which appear to be part of a path
+    if f'/{word}/' in code:
+        return True
+    # Skip things are followed by open quotes
+    if f'{word}(' in code:
+        return True
+    # Skip things which look like source files.
+    if f'{word}.c' in code:
+        return True
+    # Skip things are followed by open colon
+    if f'{word}:' in code:
+        return True
+    # Skip test files.
+    if f'{word}.txt' in code:
+        return True
+    return False
+
+
 def parse_file(args, target_file, ftest=False, scons=False):
     """Parse a list of targets.
 
@@ -290,8 +331,10 @@ sys.path.append('site_scons')"""
 
     for msg in results.linter.reporter.messages:
         vals = {}
-        # Spelling mistakes.  Be strict for scons code, but allow spellings if they are quoted
-        # or have a - in front of them, and do not warn for test tags in ftest code.
+        vals['category'] = msg.category
+
+        # Spelling mistakes. There are a lot of suppressions to handle code blocks and examples
+        # in comments.  Be strict for everything but ftest code currently.
         if not scons and msg.msg_id in ('C0401', 'C0402'):
             lines = msg.msg.splitlines()
             header = lines[0]
@@ -301,36 +344,12 @@ sys.path.append('site_scons')"""
             # Skip test-tags, these are likely not words.
             if ftest and code.startswith(':avocado: tags='):
                 continue
-            # Skip the "Fake" annotations from fake scons.
-            if code.startswith(f'Fake {word}'):
+            if word_is_allowed(word, code):
                 continue
-            # Skip things that look like function documentation
-            if code.startswith(f'{word} ('):
-                continue
-            # Skip things that look like command options.
-            if f' -{word}' in code or f' --{word}' in code:
-                continue
-            # Skip things which are quoted
-            if f"'{word}'" in code:
-                continue
-            # Skip things which are quoted the other way
-            if f'"{word}"' in code:
-                continue
-            # Skip things which are in braces
-            if f'({word})' in code:
-                continue
-            # Skip words which appear to be part of a path
-            if f'/{word}/' in code:
-                continue
-            # Skip things are followed by open quotes
-            if f'{word}(' in code:
-                continue
-            # Skip things are followed by open colon
-            if f'{word}:' in code:
-                continue
-            # Skip test files.
-            if f'{word}.txt' in code:
-                continue
+
+            # Finally, promote any spelling mistakes not silenced above or in ftest code to error.
+            if not ftest:
+                vals['category'] = 'error'
 
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
@@ -350,7 +369,6 @@ sys.path.append('site_scons')"""
         # Duplicates, needed for message_template.
         vals['msg'] = msg.msg
         vals['msg_id'] = msg.msg_id
-        vals['category'] = msg.category
 
         # The build/scons code is mostly clean, so only allow f-string warnings.
         if scons and msg.symbol != 'consider-using-f-string':
