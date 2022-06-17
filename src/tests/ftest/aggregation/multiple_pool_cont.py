@@ -78,8 +78,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             container quanties and test aggregation.
         """
         # test params
-        total_runtime = self.params.get("total_runtime",
-                                        '/run/runtime/*')
+        total_runtime = self.params.get('total_runtime', '/run/runtime/*')
         start_time = 0
         finish_time = 0
 
@@ -135,8 +134,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             for pool in self.pool:
                 percentage = int((self.free_space_dict[pool.uuid][1] /
                                   self.free_space_dict[pool.uuid][3]) * 100)
-                self.assertTrue(percentage > 97,
-                                "Aggregation did not reclaim the space")
+                self.assertGreater(percentage > 97,
+                                   "Aggregation did not reclaim the space")
 
             # Destroy all containers and pools and start once again.
             self.destroy_containers(self.container)
