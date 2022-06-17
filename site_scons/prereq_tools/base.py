@@ -35,6 +35,10 @@ import hashlib
 import time
 import errno
 import shutil
+import subprocess  # nosec
+import tarfile
+import copy
+import configparser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -49,16 +53,8 @@ from SCons.Script import WhereIs
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 from SCons.Errors import UserError
-# pylint: enable=no-name-in-module
-# pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess  # nosec
-import tarfile
-import copy
-import configparser
 
 OPTIONAL_COMPS = ['psm2']
 
@@ -1050,7 +1046,7 @@ class PreReqComponent():
     def load_defaults(self, is_arm):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4']
         client_reqs = ['fuse', 'json-c']
         server_reqs = ['pmdk']
@@ -1470,24 +1466,28 @@ class _Component():
     def parse_config(self, env, opts):
         """Parse a pkg-config file"""
         if self.pkgconfig is None:
-            return False
-
+            return
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
-        if self.component_prefix:
+        if (not self.use_installed and self.component_prefix is not None
+                                   and not self.component_prefix == "/usr"):
+            path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
+                path_found = True
                 env.AppendENVPath("PKG_CONFIG_PATH", config)
+            if not path_found:
+                return
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))
         except OSError:
-            return True
+            return
 
-        return False
+        return
 
     # pylint: disable=too-many-branches
     # pylint: disable=too-many-return-statements

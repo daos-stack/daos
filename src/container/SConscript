@@ -1,9 +1,10 @@
 """Build container library"""
 import daos_build
 
+
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
@@ -13,8 +14,7 @@ def scons():
     common = denv.SharedObject(['rpc.c'])
 
     # dc_cont: Container Client
-    dc_co_tgts = denv.SharedObject(['cli.c']) + common
-    Export('dc_co_tgts')
+    libdaos_tgts.extend(denv.SharedObject(['cli.c']) + common)
 
     if not prereqs.server_requested():
         return
@@ -30,6 +30,7 @@ def scons():
                                   'srv_metrics.c', common],
                                  install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
+
 
 if __name__ == "SCons.Script":
     scons()
