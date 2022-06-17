@@ -914,7 +914,7 @@ class PreReqComponent():
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
-                  choices=['yes', 'no', 'only'],
+                  choices=['yes', 'no', 'only', 'build-only'],
                   default='no',
                   help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
@@ -957,7 +957,7 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
-        if build_deps == 'yes' or build_deps == 'only':
+        if build_deps in ('yes', 'only'):
             self.download_deps = True
             self.build_deps = True
         elif build_deps == 'build-only':
