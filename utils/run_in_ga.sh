@@ -51,6 +51,20 @@ utils/check.sh /opt/daos/bin/vos_tests
 utils/check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
+echo ::group::Rebuild, use ALT_PREFIX for ofi
+rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
+scons --deps-only PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=yes DEPS=ofi --jobs $DEPS_JOBS
+scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
+      DEPS=all BUILD_TYPE=dev --jobs $DEPS_JOBS
+utils/check.sh /opt/daos/bin/daos_engine
+utils/check.sh /opt/daos/bin/vos_tests
+utils/check.sh /opt/daos/bin/dmg
+echo ::endgroup::
+
+echo ::group::Config file after ALT_PREFIX build
+cat daos.conf
+echo ::endgroup::
+
 echo ::group::Install pydaos
 cd src/client
 python3 setup.py install
