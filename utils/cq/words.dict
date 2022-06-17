@@ -1,5 +1,6 @@
 ABT
 ACL
+AIO
 APs
 Ansible
 BW
@@ -35,6 +36,7 @@ Omni-Path
 Oneapi
 PCI
 PMem
+PRs
 PoC
 Qemu
 RAS
@@ -138,6 +140,7 @@ dkeys
 dll
 dmg
 dnf
+dockerfile
 docstring
 doneapi
 dpdk
@@ -168,6 +171,7 @@ fuseblk
 gcc
 gdb
 getfattr
+getxattr
 gid
 grp
 hackery
@@ -211,6 +215,7 @@ libdts
 libduns
 libfabric
 libgurt
+libioil
 libs
 libvirt
 llnl
@@ -239,6 +244,7 @@ mountpoint
 mpi
 mpicc
 mpich
+mpifileutils
 mpirun
 msg
 msgs
@@ -251,6 +257,7 @@ mv
 n-th
 namespace
 namespaces
+natively
 nfs
 nosec
 num
@@ -274,6 +281,7 @@ pci
 pda
 pdesc
 perf
+pgrep
 pid
 pids
 pkgconfig
@@ -284,6 +292,7 @@ poh
 posix
 postfix
 pparent
+ppn
 prebuild
 prebuilding
 prebuilt
@@ -331,6 +340,7 @@ scalable
 scancel
 scm
 scons
+scontrol
 sharedctypes
 slurm
 slurmctl
@@ -388,6 +398,7 @@ udp
 uid
 uint
 umount
+umounting
 unicode
 unittest
 unlink
