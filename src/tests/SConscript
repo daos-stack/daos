@@ -20,9 +20,9 @@ def build_tests(prereqs, env):
     compiler_setup.base_setup(denv)
 
     libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
-                   'dpar', 'isal', 'protobuf-c', 'cmocka', 'json-c']
+                   'dpar', 'isal', 'protobuf-c', 'cmocka']
     libs_client = ['dts', 'daos_tests', 'daos', 'daos_common', 'daos_tests', 'gurt', 'cart', 'uuid',
-                   'pthread', 'dpar', 'cmocka', 'json-c']
+                   'pthread', 'dpar', 'cmocka']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
@@ -101,7 +101,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
 
-    libs_client = ['daos_tests', 'daos', 'daos_common', 'gurt', 'cart', 'uuid']
+    libs_client = ['daos_tests', 'daos', 'daos_common', 'gurt', 'uuid']
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)

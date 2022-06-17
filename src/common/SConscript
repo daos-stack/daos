@@ -51,7 +51,7 @@ def scons():
     prereqs.require(env, 'isal_crypto')
 
     denv = env.Clone(LIBS=[])
-    # drpc.pb-c.h should really move to this directory.
+    # generated protoc header should really move to this directory.
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
