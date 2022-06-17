@@ -10,6 +10,7 @@ from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
 from job_manager_utils import Mpirun
 
+
 def uuid_from_obj(obj):
     """Try to get uuid from an object.
 
@@ -23,6 +24,7 @@ def uuid_from_obj(obj):
     if hasattr(obj, "uuid"):
         return obj.uuid
     return obj
+
 
 class MfuCommandBase(ExecutableCommand):
     """Base MpiFileUtils command."""
@@ -66,8 +68,8 @@ class MfuCommandBase(ExecutableCommand):
 
         """
         return {
-            'dst':3,
-            'src':2
+            'dst': 3,
+            'src': 2
         }.get(k, 0)
 
     def get_param_names(self):
@@ -110,6 +112,7 @@ class MfuCommandBase(ExecutableCommand):
         out = job_manager.run()
 
         return out
+
 
 class DcpCommand(MfuCommandBase):
     """Defines an object representing a dcp command."""
