@@ -14,15 +14,21 @@
 #define POOL_SCM_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_SCM])
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
+/* Extra space being reserved to deal with fragmentation issues */
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
 {
 	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
 	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
-	daos_size_t	ovhd;
+	daos_size_t	ovhd = (tot_size * 5) / 100;
 
-	ovhd = (media == DAOS_MEDIA_SCM) ?
-		(tot_size * 5) / 100 : (tot_size * 2) / 100;
+	/*
+	 * Don't reserve NVMe, if NVMe allocation failed due to fragmentations,
+	 * only data coalescing in aggregation will be affected, punch and GC
+	 * won't be affected.
+	 */
+	if (media == DAOS_MEDIA_NVME)
+		return 0;
 
 	/* If caller specified the pool is small, do not enforce a range */
 	if (!small_pool) {

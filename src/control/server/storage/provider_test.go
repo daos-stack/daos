@@ -135,7 +135,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 		cfg        *Config
 		vmdEnabled bool
 		getTopoFn  topologyGetter
-		expReq     BdevWriteConfigRequest
+		expReq     *BdevWriteConfigRequest
 		expErr     error
 	}{
 		"nil config": {
@@ -151,7 +151,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID:       os.Geteuid(),
 				OwnerGID:       os.Getegid(),
 				TierProps:      []BdevTierProperties{},
@@ -168,7 +168,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -187,7 +187,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -210,7 +210,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			},
 			vmdEnabled: true,
 			getTopoFn:  MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -232,7 +232,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				EnableHotplug: true,
 			},
 			getTopoFn: MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -253,7 +253,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			},
 			vmdEnabled: true,
 			getTopoFn:  MockGetTopology,
-			expReq: BdevWriteConfigRequest{
+			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
@@ -264,6 +264,31 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				HotplugBusidBegin: 0x00,
 				HotplugBusidEnd:   0xff,
 				VMDEnabled:        true,
+			},
+		},
+		"accel properties; spdk": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
 			},
 		},
 	} {
