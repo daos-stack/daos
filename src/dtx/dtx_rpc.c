@@ -64,6 +64,8 @@ struct dtx_req_args {
 	d_list_t			*dra_abt_list;
 	/* Pointer to the active DTX list, used for DTX_REFRESH case. */
 	d_list_t			*dra_act_list;
+	/* The committed DTX entries on all related participants, for DTX_COMMIT. */
+	int				*dra_committed;
 };
 
 /* The record for the DTX classify-tree in DRAM.
@@ -128,6 +130,11 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		goto out;
 
 	dout = crt_reply_get(req);
+	if (dra->dra_opc == DTX_COMMIT) {
+		dra->dra_committed += dout->do_misc;
+		D_GOTO(out, rc = dout->do_status);
+	}
+
 	if (dout->do_status != 0 || dra->dra_opc != DTX_REFRESH)
 		D_GOTO(out, rc = dout->do_status);
 
@@ -316,9 +323,7 @@ dtx_req_list_cb(void **args)
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
-			if ((drr->drr_result < 0) &&
-			    (dra->dra_result == 0 ||
-			     dra->dra_result == -DER_NONEXIST))
+			if (dra->dra_result == 0 || dra->dra_result == -DER_NONEXIST)
 				dra->dra_result = drr->drr_result;
 		}
 
@@ -350,7 +355,7 @@ dtx_req_wait(struct dtx_req_args *dra)
 }
 
 static int
-dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
+dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, int *committed, d_list_t *head,
 		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 		  struct ds_cont_child *cont, d_list_t *cmt_list,
 		  d_list_t *abt_list, d_list_t *act_list)
@@ -369,6 +374,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
+	dra->dra_committed = committed;
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &future);
 	if (rc != ABT_SUCCESS) {
@@ -573,7 +579,7 @@ static int
 dtx_rpc_internal(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 		 daos_handle_t *tree_hdl, struct dtx_req_args *dra, struct dtx_id dtis[],
 		 struct dtx_entry **dtes, daos_epoch_t epoch, int count, int opc,
-		 d_rank_t my_rank, uint32_t my_tgtid)
+		 int *committed, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct ds_pool		*pool;
 	int			 length = 0;
@@ -616,7 +622,7 @@ dtx_rpc_internal(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tr
 
 	D_ASSERT(length > 0);
 
-	return dtx_req_list_send(dra, opc, head, length, pool->sp_uuid,
+	return dtx_req_list_send(dra, opc, committed, head, length, pool->sp_uuid,
 				 cont->sc_uuid, epoch, NULL, NULL, NULL, NULL);
 }
 
@@ -631,6 +637,7 @@ struct dtx_helper_args {
 	daos_epoch_t		  dha_epoch;
 	int			  dha_count;
 	int			  dha_opc;
+	int			 *dha_committed;
 	d_rank_t		  dha_rank;
 	uint32_t		  dha_tgtid;
 };
@@ -642,7 +649,7 @@ dtx_rpc_helper(void *arg)
 
 	dtx_rpc_internal(dha->dha_cont, dha->dha_head, dha->dha_tree_root, dha->dha_tree_hdl,
 			 dha->dha_dra, NULL, dha->dha_dtes, dha->dha_epoch, dha->dha_count,
-			 dha->dha_opc, dha->dha_rank, dha->dha_tgtid);
+			 dha->dha_opc, dha->dha_committed, dha->dha_rank, dha->dha_tgtid);
 	D_FREE(dha);
 }
 
@@ -650,7 +657,7 @@ static int
 dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 	     daos_handle_t *tree_hdl, struct dtx_req_args *dra, ABT_thread *helper,
 	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch,
-	     uint32_t count, int opc)
+	     uint32_t count, int opc, int *committed)
 {
 	d_rank_t	my_rank;
 	uint32_t	my_tgtid;
@@ -680,6 +687,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 		dha->dha_epoch = epoch;
 		dha->dha_count = count;
 		dha->dha_opc = opc;
+		dha->dha_committed = committed;
 		dha->dha_rank = my_rank;
 		dha->dha_tgtid = my_tgtid;
 
@@ -695,7 +703,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 		}
 	} else {
 		rc = dtx_rpc_internal(cont, head, tree_root, tree_hdl, dra, dtis, dtes, epoch,
-				      count, opc, my_rank, my_tgtid);
+				      count, opc, committed, my_rank, my_tgtid);
 	}
 
 	return rc;
@@ -745,7 +753,7 @@ dtx_rpc_post(d_list_t *head, daos_handle_t tree_hdl, struct dtx_req_args *dra,
  */
 int
 dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	   struct dtx_cos_key *dcks, int count)
+	   struct dtx_cos_key *dcks, int count, daos_epoch_t epoch)
 {
 	d_list_t		 head;
 	struct btr_root		 tree_root = { 0 };
@@ -756,6 +764,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	bool			*rm_cos = NULL;
 	struct dtx_id		 dti = { 0 };
 	bool			 cos = false;
+	int			 committed = 0;
 	int			 rc;
 	int			 rc1 = 0;
 	int			 rc2 = 0;
@@ -770,8 +779,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, dtis,
-			  dtes, 0, count, DTX_COMMIT);
-	if (rc != 0)
+			  dtes, 0, count, DTX_COMMIT, &committed);
+	if (rc < 0)
 		goto out;
 
 	if (dcks != NULL) {
@@ -795,8 +804,12 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
-	if (rc1 > 0 || rc1 == -DER_NONEXIST)
+	if (rc1 > 0) {
+		committed += rc1;
 		rc1 = 0;
+	} else if (rc1 == -DER_NONEXIST) {
+		rc1 = 0;
+	}
 
 out:
 	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
@@ -810,8 +823,19 @@ out:
 		D_FREE(rm_cos);
 
 log:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_IO, "Commit DTXs "
-		 DF_DTI", count %d: rc %d %d %d\n", DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+	if (rc != 0 || rc1 != 0 || rc2 != 0) {
+		D_ERROR("Failed to commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
+			DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+
+		if (epoch != 0 && committed == 0) {
+			D_ASSERT(count == 1);
+
+			dtx_abort(cont, dtes[0], epoch);
+		}
+	} else {
+		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI", count %d\n",
+			DP_DTI(&dtes[0]->dte_xid), count);
+	}
 
 	return rc != 0 ? rc : (rc1 != 0 ? rc1 : rc2);
 }
@@ -830,7 +854,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	int			rc2;
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, NULL,
-			  &dte, epoch, 1, DTX_ABORT);
+			  &dte, epoch, 1, DTX_ABORT, NULL);
 
 	if (epoch != 0)
 		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch);
@@ -867,7 +891,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 		return DTX_ST_PREPARED;
 
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, NULL,
-			  &dte, epoch, 1, DTX_CHECK);
+			  &dte, epoch, 1, DTX_CHECK, NULL);
 
 	rc1 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
 
@@ -993,7 +1017,7 @@ next:
 	}
 
 	if (len > 0) {
-		rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
+		rc = dtx_req_list_send(&dra, DTX_REFRESH, NULL, &head, len,
 				       pool->sp_uuid, cont->sc_uuid, 0, cont,
 				       cmt_list, abt_list, act_list);
 		if (rc == 0)
@@ -1023,7 +1047,7 @@ next:
 
 			dck.oid = dsp->dsp_oid;
 			dck.dkey_hash = dsp->dsp_dkey_hash;
-			rc = dtx_commit(cont, &pdte, &dck, 1);
+			rc = dtx_commit(cont, &pdte, &dck, 1, 0);
 			if (rc < 0 && rc != -DER_NONEXIST && cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else
