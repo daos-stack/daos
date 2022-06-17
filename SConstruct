@@ -371,8 +371,8 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    if GetOption('deps_only'):
-        print('Exiting because deps-only was set')
+    if GetOption('build_deps') == 'only':
+        print('Exiting because --build-deps=only was set')
         Exit(0)
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')

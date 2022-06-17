@@ -901,12 +901,6 @@ class PreReqComponent():
     def add_options(self):
         """Add common options to environment"""
 
-        AddOption('--deps-only',
-                  dest='deps_only',
-                  action='store_true',
-                  default=False,
-                  help='Download and build dependencies only, do not build daos')
-
         AddOption('--require-optional',
                   dest='require_optional',
                   action='store_true',
@@ -920,9 +914,9 @@ class PreReqComponent():
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
-                  choices=['yes', 'no', 'build-only'],
+                  choices=['yes', 'no', 'only'],
                   default='no',
-                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -966,7 +960,7 @@ class PreReqComponent():
         if build_deps == 'yes':
             self.download_deps = True
             self.build_deps = True
-        elif build_deps == 'build-only':
+        elif build_deps == 'only':
             self.build_deps = True
 
     def setup_path_var(self, var, multiple=False):
@@ -1073,7 +1067,7 @@ class PreReqComponent():
             reqs.extend(client_reqs)
         self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
                                    'all', reqs))
-        if GetOption('deps_only'):
+        if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
