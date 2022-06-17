@@ -391,9 +391,28 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 	RPC_DECREF(rpc_priv);
 }
 
+static void
+crt_ctx_epi_mark_locked(struct crt_ep_inflight *epi, bool dead, int ctx_idx)
+{
+	D_DEBUG(DB_NET, "marking epi (idx=%d rank=%d): dead=%u\n", ctx_idx,
+		epi->epi_ep.ep_rank, dead);
+	epi->epi_dead = dead ? 1 : 0;
+}
+
+static void
+crt_ctx_epi_mark(d_list_t *rlink, bool dead, int ctx_idx)
+{
+	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
+
+	D_MUTEX_LOCK(&epi->epi_mutex);
+	crt_ctx_epi_mark_locked(epi, dead, ctx_idx);
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
+}
+
 /* Flag bits definition for crt_ctx_epi_abort */
 #define CRT_EPI_ABORT_FORCE	(0x1)
 #define CRT_EPI_ABORT_WAIT	(0x2)
+#define CRT_EPI_ABORT_MARK	(0x4)
 
 /* abort the RPCs in inflight queue and waitq in the epi. */
 static int
@@ -403,13 +422,17 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	struct crt_context	*ctx;
 	struct crt_rpc_priv	*rpc_priv, *rpc_next;
 	bool			 msg_logged;
-	int			 flags, force, wait;
+	int			 flags, force, wait, mark;
 	uint64_t		 ts_start, ts_now;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
 	epi = epi_link2ptr(rlink);
+	flags = *(int *)arg;
+	force = flags & CRT_EPI_ABORT_FORCE;
+	wait = flags & CRT_EPI_ABORT_WAIT;
+	mark = flags & CRT_EPI_ABORT_MARK;
 
 	/*
 	 * DAOS-7306: This mutex is needed in order to avoid double
@@ -420,14 +443,14 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	ctx = epi->epi_ctx;
 	D_ASSERT(ctx != NULL);
 
+	if (mark)
+		crt_ctx_epi_mark_locked(epi, true /* dead */, ctx->cc_idx);
+
 	/* empty queue, nothing to do */
 	if (d_list_empty(&epi->epi_req_waitq) &&
 	    d_list_empty(&epi->epi_req_q))
 		D_GOTO(out, rc = 0);
 
-	flags = *(int *)arg;
-	force = flags & CRT_EPI_ABORT_FORCE;
-	wait = flags & CRT_EPI_ABORT_WAIT;
 	if (force == 0) {
 		D_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
 			DF_U64", req_num "DF_U64", reply_num "DF_U64", "
@@ -503,6 +526,14 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			ts_now = d_timeus_secdiff(0);
 			if (ts_now - ts_start > 2 * CRT_DEFAULT_TIMEOUT_US) {
 				D_ERROR("stop progress due to timed out.\n");
+				d_list_for_each_entry(rpc_priv, &epi->epi_req_q, crp_epi_link)
+					RPC_ERROR(rpc_priv,
+						  "inflight: still not aborted: state=%d\n",
+						  rpc_priv->crp_state);
+				d_list_for_each_entry(rpc_priv, &epi->epi_req_waitq, crp_epi_link)
+					RPC_ERROR(rpc_priv,
+						  "waiting: still not aborted: state=%d\n",
+						  rpc_priv->crp_state);
 				rc = -DER_TIMEDOUT;
 				break;
 			}
@@ -639,11 +670,10 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 }
 
 int
-crt_rank_abort(d_rank_t rank)
+crt_rank_epi_op(d_rank_t rank, enum crt_rank_epi_op_type type)
 {
 	struct crt_context	*ctx = NULL;
 	d_list_t		*rlink;
-	int			 flags;
 	int			 rc = 0;
 	d_list_t		*ctx_list;
 
@@ -656,8 +686,17 @@ crt_rank_abort(d_rank_t rank)
 		rlink = d_hash_rec_find(&ctx->cc_epi_table,
 					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
-			flags = CRT_EPI_ABORT_FORCE;
-			rc = crt_ctx_epi_abort(rlink, &flags);
+			if (type == CRT_RANK_EPI_ABORT || type == CRT_RANK_EPI_MARK_DEAD_ABORT) {
+				int flags = CRT_EPI_ABORT_FORCE;
+
+				if (type == CRT_RANK_EPI_MARK_DEAD_ABORT)
+					flags |= CRT_EPI_ABORT_MARK;
+				rc = crt_ctx_epi_abort(rlink, &flags);
+			} else if (type == CRT_RANK_EPI_MARK_ALIVE) {
+				crt_ctx_epi_mark(rlink, false /* dead */, ctx->cc_idx);
+			} else {
+				D_ASSERTF(false, "unknown operation type: %d\n", type);
+			}
 			d_hash_rec_decref(&ctx->cc_epi_table, rlink);
 		}
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
@@ -672,6 +711,12 @@ crt_rank_abort(d_rank_t rank)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
+}
+
+int
+crt_rank_abort(d_rank_t rank)
+{
+	return crt_rank_epi_op(rank, CRT_RANK_EPI_ABORT);
 }
 
 int
@@ -996,6 +1041,30 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		if (rc != 0)
 			D_GOTO(out_unlock, rc);
 
+		/* init the epi_dead field */
+		if (crt_is_service() && crt_gdata.cg_swim_inited) {
+			struct swim_member_state state;
+
+			rc = crt_rank_state_get(grp_priv->gp_primary ? &grp_priv->gp_pub :
+						&grp_priv->gp_priv_prim->gp_pub, ep_rank, &state);
+			if (rc == -DER_NONEXIST) {
+				D_DEBUG(DB_TRACE, "rank %u not found in swim; assuming alive\n",
+					ep_rank);
+				rc = 0;
+				epi->epi_dead = 0;
+			} else if (rc != 0) {
+				D_ERROR("failed to get state of rank %u: "DF_RC"\n", ep_rank,
+					DP_RC(rc));
+				D_GOTO(out_unlock, rc);
+			} else {
+				epi->epi_dead = state.sms_status == SWIM_MEMBER_DEAD ? 1 : 0;
+			}
+		} else {
+			epi->epi_dead = 0;
+		}
+		RPC_TRACE(DB_NET, rpc_priv, "rank=%u dead=%u\n", epi->epi_ep.ep_rank,
+			  epi->epi_dead);
+
 		rc = d_hash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
 				       sizeof(ep_rank), &epi->epi_link,
 				       true /* exclusive */);
@@ -1010,8 +1079,14 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
+
+	if (epi->epi_dead) {
+		RPC_TRACE(DB_NET, rpc_priv, "cancel due to dead rank\n");
+		D_GOTO(out_unlock_epi, rc = -DER_CANCELED);
+	}
+
+	/* add the RPC req to crt_ep_inflight */
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 	crt_set_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
@@ -1048,6 +1123,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rpc_priv->crp_ctx_tracked = 1;
+out_unlock_epi:
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* reference taken by d_hash_rec_find or "epi->epi_ref = 1" above */

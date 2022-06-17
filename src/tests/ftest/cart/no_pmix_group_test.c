@@ -686,9 +686,8 @@ int main(int argc, char **argv)
 	}
 
 	DBG_PRINT("primary modify: Add\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD, 0x0);
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, NULL /* incarnations */, uris,
+				      CRT_GROUP_MOD_OP_ADD, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc = %d\n", rc);
 		assert(0);
@@ -704,9 +703,8 @@ int main(int argc, char **argv)
 	mod_ranks->rl_nr = 5;
 
 	DBG_PRINT("primary modify: Replace\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_REPLACE, 0x0);
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, NULL /* incarnations */, uris,
+				      CRT_GROUP_MOD_OP_REPLACE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -720,9 +718,8 @@ int main(int argc, char **argv)
 	mod_ranks->rl_nr = 2;
 
 	DBG_PRINT("primary modify: Remove\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, NULL,
-				CRT_GROUP_MOD_OP_REMOVE, 0x0);
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, NULL /* incarnations */, NULL,
+				      CRT_GROUP_MOD_OP_REMOVE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -736,9 +733,8 @@ int main(int argc, char **argv)
 	mod_ranks->rl_ranks[2] = 12;
 	mod_ranks->rl_nr = 3;
 
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD, 0x0);
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, NULL /* incarnations */, uris,
+				      CRT_GROUP_MOD_OP_ADD, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);

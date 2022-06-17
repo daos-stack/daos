@@ -20,6 +20,7 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	struct dss_module_info *info = dss_get_module_info();
 	uint32_t		version_current;
 	d_rank_list_t	       *ranks = NULL;
+	uint64_t	       *incarnations = NULL;
 	char		      **uris = NULL;
 	int			i;
 	int			rc;
@@ -42,6 +43,14 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	for (i = 0; i < nservers; i++)
 		ranks->rl_ranks[i] = servers[i].se_rank;
 
+	D_ALLOC_ARRAY(incarnations, nservers);
+	if (incarnations == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	for (i = 0; i < nservers; i++)
+		incarnations[i] = servers[i].se_incarnation;
+
 	D_ALLOC_ARRAY(uris, nservers);
 	if (uris == NULL) {
 		rc = -DER_NOMEM;
@@ -50,8 +59,8 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	for (i = 0; i < nservers; i++)
 		uris[i] = servers[i].se_uri;
 
-	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks, uris,
-				      CRT_GROUP_MOD_OP_REPLACE, version);
+	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks,
+				      incarnations, uris, CRT_GROUP_MOD_OP_REPLACE, version);
 	if (rc != 0) {
 		D_ERROR("failed to update group: %u -> %u: %d\n", version_current, version, rc);
 		goto out;
@@ -61,6 +70,8 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 out:
 	if (uris != NULL)
 		D_FREE(uris);
+	if (incarnations != NULL)
+		D_FREE(incarnations);
 	if (ranks != NULL)
 		d_rank_list_free(ranks);
 	return rc;
