@@ -88,10 +88,7 @@ def _known_deps(env, **kwargs):
         libs = set(env.get('LIBS', []))
 
     known_libs = libs.intersection(set(libraries.keys()))
-    missing_libs = libs - known_libs
-    for item in missing_libs:
-        if item not in missing:
-            missing.add(item)
+    missing.update(libs - known_libs)
     for item in known_libs:
         shared = libraries[item].get('shared', None)
         if shared is not None:
