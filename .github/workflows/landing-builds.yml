@@ -34,7 +34,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15, alma.9]
+        distro: [ubuntu, rocky, fedora, leap.15]
         include:
           - distro: ubuntu
             base: ubuntu
@@ -48,9 +48,6 @@ jobs:
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
-          - distro: alma.9
-            base: el.9
-            with: almalinux:9
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -222,11 +219,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma]
+        distro: [alma.8, alma.9]
         include:
-          - distro: alma
+          - distro: alma.8
             base: el.8
             with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
