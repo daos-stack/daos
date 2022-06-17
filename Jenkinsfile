@@ -532,7 +532,10 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
+                                 inst_rpms: unitPackages(),
+                                 target: 'el8',
+                                 ci_target: 'el8',
+                                 distro_version: '8'
                     }
                     post {
                       always {
@@ -552,7 +555,10 @@ pipeline {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
-                                 inst_rpms: unitPackages()
+                                 inst_rpms: unitPackages(),
+                                 target: 'el8',
+                                 ci_target: 'el8',
+                                 distro_version: '8'
                     }
                     post {
                       always {
@@ -628,36 +634,6 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild()
-                    }
-                    post {
-                        success {
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            coverityPost condition: 'unsuccessful'
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
