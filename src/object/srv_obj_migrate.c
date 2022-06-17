@@ -1241,7 +1241,12 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
 	 * then extent from replication.
+	 *
+	 * Since the parity shard epoch should be higher or equal to the data shard epoch,
+	 * so let's use the minimum epochs of all parity shards as the update epoch of
+	 * this data shard.
 	 */
+
 	if (mrone->mo_iods_num_from_parity > 0) {
 		rc = __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods_from_parity,
 						 mrone->mo_iods_num_from_parity,
@@ -1252,9 +1257,19 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			D_GOTO(out, rc);
 	}
 
+	/* The data, rebuilt from replication, there are two cases,
+	 * 1. If it comes from overwritten, then it should have higher epoch than the above
+	 * data, rebuilt from parity.
+	 * 2. If it just partial update, then its epoch should not higher than the highest replicate
+	 * epoch on the parity shard.
+	 *
+	 * So let's choose minimum epoch + 1 as its update epoch, which is higher than case 1 epoch,
+	 * and also in case 2, there should have multiple different replicate recxs with different
+	 * epoch, so min_epoch + 1 should not be higher than the highest epoch anyway.
+	 */
 	if (mrone->mo_iod_num > 0) {
 		rc = __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods,
-						 mrone->mo_iod_num, mrone->mo_epoch,
+						 mrone->mo_iod_num, mrone->mo_min_epoch + 1,
 						 DIOF_FOR_MIGRATION, ds_cont);
 		if (rc > 0)
 			D_GOTO(out, rc);

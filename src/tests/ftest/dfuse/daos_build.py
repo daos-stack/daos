@@ -6,8 +6,8 @@
 """
 
 import os
-import general_utils
 from collections import OrderedDict
+import general_utils
 import distro
 
 from avocado import skip
