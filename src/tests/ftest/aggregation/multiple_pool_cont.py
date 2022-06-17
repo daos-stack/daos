@@ -83,7 +83,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         # Create requested pools
         self.add_pool_qty(pool_qty, connect=False)
         start_time = time.time()
-        while int(finish_time - start_time) < total_runtime:
+        while int(finish_time - start_time) < int(total_runtime):
             # Since the transfer size is 1M, the objects will be inserted
             # directly into NVMe and hence storage_index = 1
             storage_index = 1
@@ -163,7 +163,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
              - Verify free space after aggregation is almost same
                as free space after first IOR run.
 
-        :avocado: tags=all,manual
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregate_single_pool
         """
@@ -188,7 +188,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
              - Verify free space after aggregation is almost same
                as free space after first IOR run.
 
-        :avocado: tags=all,manual
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregate_mulitple_pools
         """

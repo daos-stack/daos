@@ -9,7 +9,7 @@ hosts:
         - client-C
         - client-D
         - client-E
-timeout: 3600
+timeout: 1300
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -54,8 +54,7 @@ container:
     control_method: daos
 ior:
     client_processes:
-        np_12:
-            np: 12
+        np: 12
     test_file: /testFile
     repetitions: 1
     dfs_destroy: False
@@ -68,4 +67,4 @@ ior:
         dfs_oclass: "EC_2P1G1"
         dfs_dir_oclass: "EC_2P1G1"
 runtime:
-    total_runtime: 1800 # total seconds to run
+    total_runtime: 800 # total seconds to run
