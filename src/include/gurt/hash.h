@@ -157,12 +157,12 @@ enum d_hash_feats {
 	 * The hash table has no lock, it means the hash table is protected
 	 * by external lock, or only accessed by a single thread.
 	 */
-	D_HASH_FT_NOLOCK           = (1 << 0),
+	D_HASH_FT_NOLOCK = (1 << 0),
 
 	/**
 	 * The hash table is protected by pthread_mutex_t.
 	 */
-	D_HASH_FT_MUTEX            = (1 << 1),
+	D_HASH_FT_MUTEX = (1 << 1),
 
 	/**
 	 * It is a read-mostly hash table, so it is protected by RW lock.
@@ -171,7 +171,7 @@ enum d_hash_feats {
 	 * then he should guarantee refcount changes are atomic or protected
 	 * within hop_addref/decref, because RW lock can't protect refcount.
 	 */
-	D_HASH_FT_RWLOCK           = (1 << 2),
+	D_HASH_FT_RWLOCK = (1 << 2),
 
 	/**
 	 * If the EPHEMERAL bit is zero:
@@ -189,14 +189,14 @@ enum d_hash_feats {
 	 *
 	 * Note that if addref/decref are not provided this bit has no effect
 	 */
-	D_HASH_FT_EPHEMERAL        = (1 << 3),
+	D_HASH_FT_EPHEMERAL = (1 << 3),
 
 	/**
 	 * If the LRU bit is set:
 	 * The found in bucket item is moved on top of the list.
 	 * So, next search for it will be much faster.
 	 */
-	D_HASH_FT_LRU              = (1 << 4),
+	D_HASH_FT_LRU = (1 << 4),
 
 	/**
 	 * On an EPHEMERAL hash table then decref will not cause a delete, if this happens
@@ -209,7 +209,7 @@ enum d_hash_feats {
 	 * Use Global Table Lock instead of per bucket locking.
 	 * TODO: should be removed when all will use per bucket locking.
 	 */
-	D_HASH_FT_GLOCK            = (1 << 15),
+	D_HASH_FT_GLOCK = (1 << 15),
 };
 
 union d_hash_lock {
