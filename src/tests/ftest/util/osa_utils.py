@@ -278,7 +278,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
-                                              len(indata)+1)
+                                              len(indata) + 1)
                 if indata != (repr(val.value)[1:-1]):
                     self.d_log.error("ERROR:Data mismatch for "
                                      "dkey = {0}, "
