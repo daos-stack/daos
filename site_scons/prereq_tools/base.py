@@ -35,6 +35,10 @@ import hashlib
 import time
 import errno
 import shutil
+import subprocess  # nosec
+import tarfile
+import copy
+import configparser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -49,16 +53,8 @@ from SCons.Script import WhereIs
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 from SCons.Errors import UserError
-# pylint: enable=no-name-in-module
-# pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess  # nosec
-import tarfile
-import copy
-import configparser
 
 OPTIONAL_COMPS = ['psm2']
 

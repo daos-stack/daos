@@ -8,6 +8,7 @@ from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
 from daos_utils import DaosCommand
 
+
 class RebuildTestParams(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
@@ -186,10 +187,10 @@ class RebuildTestBase(TestWithServers):
 
         # clear container status for the RF issue
         self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+            pool=self.pool.uuid,
+            cont=self.container.uuid,
+            prop="status",
+            value="healthy")
 
         # Refresh local pool and container
         self.pool.check_pool_info()
