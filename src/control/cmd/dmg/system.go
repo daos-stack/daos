@@ -111,8 +111,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	req := new(control.SystemQueryReq)
-	req.Hosts.ReplaceSet(hostSet)
-	req.Ranks.ReplaceSet(rankSet)
+	req.Hosts.Replace(hostSet)
+	req.Ranks.Replace(rankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -173,8 +173,8 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	req := &control.SystemStopReq{Force: cmd.Force}
-	req.Hosts.ReplaceSet(hostSet)
-	req.Ranks.ReplaceSet(rankSet)
+	req.Hosts.Replace(hostSet)
+	req.Ranks.Replace(rankSet)
 
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -217,8 +217,8 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	req := new(control.SystemStartReq)
-	req.Hosts.ReplaceSet(hostSet)
-	req.Ranks.ReplaceSet(rankSet)
+	req.Hosts.Replace(hostSet)
+	req.Ranks.Replace(rankSet)
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

@@ -46,9 +46,10 @@ type Server struct {
 	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                   `yaml:"disable_vfio"`
-	EnableVMD           bool                   `yaml:"enable_vmd"`
+	DisableVMD          bool                   `yaml:"disable_vmd"`
 	EnableHotplug       bool                   `yaml:"enable_hotplug"`
 	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
+	DisableHugepages    bool                   `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile      string                 `yaml:"control_log_file"`
 	ControlLogJSON      bool                   `yaml:"control_log_json,omitempty"`
@@ -222,28 +223,34 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableVMD can be used to set the state of VMD functionality,
-// if enabled then VMD devices will be used if they exist.
-func (cfg *Server) WithEnableVMD(enable bool) *Server {
-	cfg.EnableVMD = enable
+// WithDisableVMD can be used to set the state of VMD functionality,
+// if disabled then VMD devices will not be used if they exist.
+func (cfg *Server) WithDisableVMD(disabled bool) *Server {
+	cfg.DisableVMD = disabled
 	return cfg
 }
 
 // WithEnableHotplug can be used to enable hotplug
-func (cfg *Server) WithEnableHotplug(enable bool) *Server {
-	cfg.EnableHotplug = enable
+func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
+	cfg.EnableHotplug = enabled
 	return cfg
 }
 
 // WithHyperthreads enables or disables hyperthread support.
-func (cfg *Server) WithHyperthreads(enable bool) *Server {
-	cfg.Hyperthreads = enable
+func (cfg *Server) WithHyperthreads(enabled bool) *Server {
+	cfg.Hyperthreads = enabled
 	return cfg
 }
 
 // WithNrHugePages sets the number of huge pages to be used (total for all engines).
 func (cfg *Server) WithNrHugePages(nr int) *Server {
 	cfg.NrHugepages = nr
+	return cfg
+}
+
+// WithDisableHugePages disables the use of huge pages.
+func (cfg *Server) WithDisableHugePages(disabled bool) *Server {
+	cfg.DisableHugepages = disabled
 	return cfg
 }
 
@@ -295,7 +302,6 @@ func DefaultServer() *Server {
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
 		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableVMD:       false, // disabled by default
 		EnableHotplug:   false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
@@ -314,8 +320,9 @@ func (cfg *Server) Load() error {
 	}
 
 	if err = yaml.UnmarshalStrict(bytes, cfg); err != nil {
-		return errors.WithMessage(err, "parse failed; config contains invalid "+
-			"parameters and may be out of date, see server config examples")
+		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples",
+			cfg.Path)
 	}
 
 	// propagate top-level settings to server configs
@@ -422,7 +429,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, cfg.EnableVMD)
+		cfg.EnableHotplug, !cfg.DisableVMD)
 
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
@@ -528,12 +535,12 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
 	}
 
-	if cfg.NrHugepages < -1 || cfg.NrHugepages > math.MaxInt32 {
-		return FaultConfigNrHugepagesOutOfRange
+	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
+		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
 	if cfgHasBdevs {
-		if cfg.NrHugepages == -1 {
+		if cfg.DisableHugepages {
 			return FaultConfigHugepagesDisabled
 		}
 

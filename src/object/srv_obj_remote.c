@@ -88,7 +88,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	uint32_t			 tgt_idx;
 	int				 rc = 0;
 
-	D_ASSERT(idx < dlh->dlh_sub_cnt);
+	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
@@ -127,7 +127,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (split_req != NULL) {
 		tgt_idx = shard_tgt->st_shard;
 		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
-					       dlh->dlh_sub_cnt + 1,
+					       dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt + 1,
 					       tgt_idx - obj_exec_arg->start);
 		D_ASSERT(tgt_oiod != NULL);
 		orw->orw_iod_array.oia_oiods = tgt_oiod->oto_oiods;
@@ -214,7 +214,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	crt_opcode_t			opc;
 	int				rc = 0;
 
-	D_ASSERT(idx < dlh->dlh_sub_cnt);
+	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;
 	D_ALLOC_PTR(remote_arg);
@@ -412,7 +412,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	int				 count;
 	int				 rc = 0;
 
-	D_ASSERT(idx < dlh->dlh_sub_cnt);
+	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
 
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;

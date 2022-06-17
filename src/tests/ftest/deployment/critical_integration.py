@@ -5,21 +5,42 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from general_utils import run_command, DaosTestError
+from datetime import datetime
+from ClusterShell.NodeSet import NodeSet
+
+from general_utils import run_command, DaosTestError, get_journalctl
 from ior_test_base import IorTestBase
-from apricot import TestWithServers
 from exception_utils import CommandFailure
 
+# Imports need to be split or python fails to import
+from apricot import TestWithServers
+from apricot import TestWithoutServers
 
-class CriticalIntegration(TestWithServers):
+
+#TO-DO
+#Provision all daos nodes using provisioning tool provided by HPCM
+
+
+class CriticalIntegrationWithoutServers(TestWithoutServers):
     """Test Class Description: Verify the basic integration of
                                the server nodes with available
                                framework and amongst themselves.
     :avocado: recursive
     """
 
-    #TO-DO
-    #Provision all daos nodes using provisioning tool provided by HPCM
+    def __init__(self, *args, **kwargs):
+        """Initialize a CriticalIntegrationWithoutServers object."""
+        super().__init__(*args, **kwargs)
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
+
+    def setUp(self):
+        """Set up CriticalIntegrationWithoutServers."""
+        super().setUp()
+        self.hostlist_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        self.hostlist_clients = self.get_hosts_from_yaml(
+            "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
 
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
@@ -35,14 +56,14 @@ class CriticalIntegration(TestWithServers):
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
-        failed_nodes = []
+        failed_nodes = NodeSet()
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
             command_for_inter_node = ("clush --nostdin -S -w {}"
-                                      " 'echo hello'".format(','.join(self.hostlist_servers)))
+                                      " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
                 daos_server_version_list.append(out.stdout.split(b' ')[3])
@@ -51,7 +72,7 @@ class CriticalIntegration(TestWithServers):
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check failed on the following nodes.\n {}".format(failed_nodes))
 
@@ -64,7 +85,7 @@ class CriticalIntegration(TestWithServers):
                 dmg_version_list.append(out.stdout.split(b' ')[2])
             except DaosTestError as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check for client nodes failed.\n {}".format(failed_nodes))
 
@@ -85,6 +106,14 @@ class CriticalIntegration(TestWithServers):
             self.log.info("servers: %s", daos_server_version_list)
             self.fail()
 
+
+class CriticalIntegrationWithServers(TestWithServers):
+    """Test Class Description: Verify the basic integration of
+                               the server nodes with available
+                               framework and amongst themselves.
+    :avocado: recursive
+    """
+
     def test_ras(self):
         """
         Test Description: Verify RAS event on all server nodes from testrunner.
@@ -97,13 +126,39 @@ class CriticalIntegration(TestWithServers):
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
-        for rank in rank_list:
-            dmg.system_stop(ranks=rank)
-            if self.server_managers[0].check_rank_state(rank, "stopped", 5):
-                dmg.system_start(ranks=rank)
-                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
-                    self.fail("Rank {} failed to restart".format(rank))
-            else:
-                self.fail("Rank {} failed to stop".format(rank))
+        half_num_ranks = len(rank_list)//2
+        # divide total ranks list into two halves to save time during system stop
+        sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
+        self.log.info("sub_rank_list: %s", sub_rank_list)
+
+        # stop ranks, verify they stopped successfully and restart the stopped ranks
+        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for sub_list in sub_rank_list:
+            ranks_to_stop = ",".join([str(rank) for rank in sub_list])
+            self.log.info("Ranks to stop: %s", ranks_to_stop)
+            dmg.system_stop(ranks=ranks_to_stop)
+            for rank in sub_list:
+                if (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                        self.server_managers[0].check_rank_state(rank, "excluded", 5)):
+                    dmg.system_start(ranks=rank)
+                    if not self.server_managers[0].check_rank_state(rank, "joined", 5):
+                        self.fail("Rank {} failed to restart".format(rank))
+                else:
+                    self.fail("Rank {} failed to stop".format(rank))
+        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # gather journalctl logs for each server host, verify system stop event was sent to logs
+        results = get_journalctl(hosts=self.hostlist_servers, since=since,
+                                 until=until, journalctl_type="daos_server")
+        str_to_match = "daos_engine exited: process exited with 0"
+        for count, host in enumerate(self.hostlist_servers):
+            occurrence = results[count]["data"].count(str_to_match)
+            if occurrence != 2:
+                self.log.info("Occurrence %s for rank stop not as expected for host %s",
+                              occurrence, host)
+                msg = "Rank shut down message not found in journalctl! Output = {}".format(
+                    results[count]["data"])
+                self.fail(msg)
+
         dmg.storage_scan()
         dmg.network_scan()

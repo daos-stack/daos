@@ -204,6 +204,7 @@ struct migrate_pool_tls {
 	/* POOL UUID and pool to be migrated */
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
+	uint64_t		mpt_global_version;
 	unsigned int		mpt_version;
 
 	/* Link to the migrate_pool_tls list */
@@ -511,6 +512,13 @@ int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		    uint32_t fw_cnt, tse_task_t *task);
 
+/* check if a EC obj shard IO request has been re-directed (to parity shard) */
+static inline bool
+obj_shard_redirected(struct shard_auxi_args *auxi)
+{
+	return auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx);
+}
+
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca, uint64_t *tgt_set);
@@ -538,6 +546,7 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+void obj_auxi_set_degfetch(struct obj_auxi_args *obj_auxi);
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
@@ -558,7 +567,7 @@ bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
 int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
-		       unsigned int map_ver, uint8_t *bit_map);
+		       unsigned int map_ver, bool has_condition, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
@@ -588,7 +597,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_SHARDS_OVERLAP ||
+	       err == -DER_NEED_TX ||
 	       daos_crt_network_error(err);
 }
 
@@ -601,10 +610,22 @@ obj_ptr2hdl(struct dc_object *obj)
 	return oh;
 }
 
-static inline void
-dc_io_epoch_set(struct dtx_epoch *epoch)
+static inline int
+shard_task_abort(tse_task_t *task, void *arg)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
+}
+
+static inline void
+dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
+{
+	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
 		epoch->oe_value = crt_hlc_get();
 		epoch->oe_first = epoch->oe_value;
 		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */

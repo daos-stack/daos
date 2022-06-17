@@ -31,7 +31,7 @@ import (
 
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
-	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
+	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
@@ -121,7 +121,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		expErr error
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
-		"socket example config":      {inPath: socketsExample},
+		"socket example config":      {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
@@ -200,7 +200,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
-		WithEnableVMD(true).     // vmd disabled by default
+		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
@@ -209,7 +209,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
-		WithFabricProvider("ofi+verbs").
+		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
@@ -238,7 +238,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs").
+			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
@@ -266,7 +266,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs").
+			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
@@ -448,7 +448,6 @@ func TestServerConfig_Validation(t *testing.T) {
 				// add multiple bdevs for engine 0 to create mismatch
 				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
 					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
-
 				return c
 			},
 			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
@@ -457,7 +456,6 @@ func TestServerConfig_Validation(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				// change engine 0 number of targets to create mismatch
 				c.Engines[0].WithTargetCount(1)
-
 				return c
 			},
 			expErr: FaultConfigTargetCountMismatch(1, 16, 0, 1),
@@ -466,7 +464,6 @@ func TestServerConfig_Validation(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				// change engine 0 number of helper streams to create mismatch
 				c.Engines[0].WithHelperStreamCount(9)
-
 				return c
 			},
 			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
@@ -475,17 +472,17 @@ func TestServerConfig_Validation(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugePages(-2048)
 			},
-			expErr: FaultConfigNrHugepagesOutOfRange,
+			expErr: FaultConfigNrHugepagesOutOfRange(-2048, math.MaxInt32),
 		},
 		"out of range hugepages; high": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugePages(math.MaxInt32 + 1)
 			},
-			expErr: FaultConfigNrHugepagesOutOfRange,
+			expErr: FaultConfigNrHugepagesOutOfRange(math.MaxInt32+1, math.MaxInt32),
 		},
 		"disabled hugepages; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(-1).
+				return c.WithDisableHugePages(true).
 					WithEngines(
 						engine.NewConfig().
 							WithStorage(
@@ -507,7 +504,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(-1).
+				return c.WithDisableHugePages(true).
 					WithEngines(
 						engine.NewConfig().
 							WithStorage(
@@ -530,7 +527,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(-1).
+				return c.WithDisableHugePages(true).
 					WithEngines(
 						engine.NewConfig().
 							WithStorage(
@@ -990,15 +987,34 @@ func TestServerConfig_Parsing(t *testing.T) {
 				if nr != 2 {
 					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
 				}
-
 				want := storage.MustNewBdevBusRange("0x00-0x80")
 				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
 				if want.String() != got.String() {
 					return errors.Errorf("want %s bus-id range, got %s", want, got)
 				}
-
 				return nil
 			},
+		},
+		"legacy storage; empty bdev_list; hugepages disabled": {
+			legacyStorage: true,
+			inTxt:         "telemetry_port: 9191",
+			outTxt:        "disable_hugepages: true",
+			expCheck: func(c *Server) error {
+				if !c.DisableHugepages {
+					return errors.Errorf("expected hugepages to be disabled")
+				}
+				return nil
+			},
+		},
+		"legacy storage; non-empty bdev_list; hugepages disabled": {
+			legacyStorage: true,
+			inTxtList: []string{
+				"  bdev_list: []", "telemetry_port: 9191",
+			},
+			outTxtList: []string{
+				"  bdev_list: [0000:80:00.0]", "disable_hugepages: true",
+			},
+			expValidateErr: FaultConfigHugepagesDisabled,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1032,8 +1048,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 			if tt.expParseErr != nil {
 				return
 			}
-			config = tt.extraConfig(config)
 
+			config = tt.extraConfig(config)
 			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {

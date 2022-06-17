@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,20 +33,12 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
+func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
 	t.Helper()
-	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-			return
-		case <-timer.C:
-			state := "gained"
-			if !gained {
-				state = "lost"
-			}
-			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -117,7 +109,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	}
 }
 
-func TestSystem_Database_Cancel(t *testing.T) {
+func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -142,9 +134,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 15*time.Second)
+	waitForLeadership(ctx, t, db, true)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 15*time.Second)
+	waitForLeadership(ctx, t, db, false)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -555,8 +547,8 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
-func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
-	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+func testMemberWithFaultDomain(t *testing.T, rank Rank, fd *FaultDomain) *Member {
+	return MockMemberFullSpec(t, rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
 		MemberStateJoined).WithFaultDomain(fd)
 }
 
@@ -581,8 +573,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
-
+			m := testMemberWithFaultDomain(t, tc.rank, tc.faultDomain)
 			result := memberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -856,7 +847,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, test.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+				MockMemberFullSpec(t, 2, test.MockUUID(2), "", mockControlAddr(t, 2),
+					MemberStateJoined),
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
