@@ -974,9 +974,9 @@ class PreReqComponent():
             if multiple:
                 value = []
                 for path in tmp.split(os.pathsep):
-                    value.append(realpath(path))
+                    value.append(self.realpath(path))
             else:
-                value = realpath(tmp)
+                value = self.realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
