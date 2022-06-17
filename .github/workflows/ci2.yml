@@ -109,8 +109,8 @@ jobs:
             ${{ steps.commit-hash.outputs.restore }}
             ${{ steps.commit-hash.outputs.restore_prev }}
           skip-save: true
-      - name: Build with ALT_PREFIX in docker.
-        if: ${{ matrix.distro }} == "fedora"
+      - name: Build in docker.
+        if: ${{ matrix.distro == "fedora" }}
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
@@ -120,7 +120,7 @@ jobs:
                             --build-arg DAOS_ALT_PREFIX=yes
                             --tag build-image
       - name: Build in docker.
-        if: ${{ matrix.distro }} != "fedora"
+        if: ${{ matrix.distro != "fedora" }}
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO

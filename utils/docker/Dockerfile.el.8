@@ -77,7 +77,7 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
+RUN mkdir -p /opt/daos /opt/daos/dep /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
@@ -146,9 +146,9 @@ ARG DEPS_JOBS=1
 # Keep it simple, build one dep (ofi) in alternative location.  Set ALT_PREFIX here
 # so it sticks for subsequent commands
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || [ "$DAOS_ALT_PREFIX" != "yes" ] || { \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos_dep       \
+        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos/dep       \
               TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only DEPS=ofi            \
-              ALT_PREFIX=/opt/daos_dep/prereq/$DAOS_TARGET_TYPE/ofi;        \
+              ALT_PREFIX=/opt/daos/dep/prereq/$DAOS_TARGET_TYPE/ofi;        \
     }
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
