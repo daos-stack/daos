@@ -13,15 +13,16 @@ def build_dts_library(env, prereqs, dc_credit):
     daos_build.static_library(denv, 'dts', [dc_credit, 'dts.c'])
 
 
-def build_tests(prereqs, env, client_libs):
+def build_tests(prereqs, env):
     """build the tests"""
     Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'daos_tests',
-                   'pthread', 'dts', 'dpar', 'isal', 'protobuf-c', 'cmocka']
-    libs_client = client_libs + ['pthread', 'dts', 'dpar', 'cmocka']
+    libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
+                   'dpar', 'isal', 'protobuf-c', 'cmocka', 'json-c']
+    libs_client = ['dts', 'daos_tests', 'daos', 'daos_common', 'daos_tests', 'gurt', 'cart', 'uuid',
+                   'pthread', 'dpar', 'cmocka', 'json-c']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
@@ -78,8 +79,6 @@ def scons():
 
     build_dts_library(env, prereqs, dc_credit)
 
-    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'daos_tests']
-
     denv = base_env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
     denv.AppendUnique(LIBPATH=[Dir('../common')])
@@ -91,7 +90,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
-    build_tests(prereqs, denv, libs_client)
+    build_tests(prereqs, denv)
 
     if not base_env_mpi:
         return
@@ -101,6 +100,8 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../common')])
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
+
+    libs_client = ['daos_tests', 'daos', 'daos_common', 'gurt', 'cart', 'uuid']
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
