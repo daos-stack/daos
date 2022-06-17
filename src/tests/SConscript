@@ -19,9 +19,9 @@ def build_tests(prereqs, env, client_libs):
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
-                   'pthread', 'dts', 'dpar', 'isal', 'protobuf-c']
-    libs_client = client_libs + ['pthread', 'dts', 'dpar']
+    libs_server = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'daos_tests',
+                   'pthread', 'dts', 'dpar', 'isal', 'protobuf-c', 'cmocka']
+    libs_client = client_libs + ['pthread', 'dts', 'dpar', 'cmocka']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
@@ -78,7 +78,7 @@ def scons():
 
     build_dts_library(env, prereqs, dc_credit)
 
-    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
+    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'daos_tests']
 
     denv = base_env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
