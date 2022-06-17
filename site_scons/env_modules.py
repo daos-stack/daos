@@ -184,15 +184,14 @@ def load_mpi(mpi):
             return False
         # pylint: disable=consider-using-with
         try:
-            proc = Popen([updatealternatives, '--query', 'mpi'],
-                         stdout=PIPE)
+            proc = Popen([updatealternatives, '--query', 'mpi'], stdout=PIPE)
         except OSError as error:
             print("Error running update-alternatives")
             if error.errno == errno.ENOENT:
                 return False
         for line in proc.stdout.readlines():
             if line.startswith(b"Value:"):
-                if line[line.rfind(b".")+1:-1].decode() == mpi:
+                if line[line.rfind(b".") + 1:-1].decode() == mpi:
                     return True
                 return False
         return False

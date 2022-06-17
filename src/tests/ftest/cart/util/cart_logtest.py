@@ -11,36 +11,43 @@ This provides consistency checking for CaRT log files.
 import sys
 import time
 import argparse
+from collections import OrderedDict, Counter
+
+import cart_logparse
 HAVE_TABULATE = True
 try:
     import tabulate
 except ImportError:
     HAVE_TABULATE = False
-from collections import OrderedDict, Counter
-
-import cart_logparse
 
 # pylint: disable=too-few-public-methods
+
 
 class LogCheckError(Exception):
     """Error in the log parsing code"""
     def __str__(self):
         return self.__doc__
 
+
 class NotAllFreed(LogCheckError):
     """Not all memory allocations freed"""
+
 
 class WarningStrict(LogCheckError):
     """Error for warnings from strict files"""
 
+
 class WarningMode(LogCheckError):
     """Error for warnings in strict mode"""
+
 
 class ActiveDescriptors(LogCheckError):
     """Active descriptors at end of log file"""
 
+
 class LogError(LogCheckError):
     """Errors detected in log file"""
+
 
 class RegionContig():
     """Class to represent a memory region"""
@@ -60,10 +67,12 @@ class RegionContig():
             return False
         return self.start == other.start and self.end == other.end
 
+
 def _ts_to_float(ts):
     int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
     float_part = int(ts[-2:])/100
     return int_part + float_part
+
 
 class RegionCounter():
     """Class to represent regions read/written to a file"""
@@ -136,6 +145,7 @@ shown_logs = set()
 
 wf = None
 
+
 def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
 
@@ -154,6 +164,7 @@ def show_line(line, sev, msg, custom=None):
     elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
+
 
 class hwm_counter():
     """Class to track integer values, with high-water mark"""
@@ -192,8 +203,9 @@ class hwm_counter():
             return
         self.__val -= val
 
-#pylint: disable=too-many-statements
-#pylint: disable=too-many-locals
+
+# pylint: disable=too-many-statements
+# pylint: disable=too-many-locals
 class LogTest():
     """Log testing"""
 
@@ -306,7 +318,7 @@ class LogTest():
             for cpid in client_pids:
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
-#pylint: disable=too-many-branches,too-many-nested-blocks
+    # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self,
                                  pid,
                                  abort_on_warning,
@@ -405,9 +417,8 @@ class LogTest():
                     # results.
                     if line.fac == 'external':
                         show = False
-                    elif show and server_shutdown and \
-                         (line.get_msg().endswith(
-                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or
+                    elif show and server_shutdown and (line.get_msg().endswith(
+                         "DER_SHUTDOWN(-2017): 'Service should shut down'") or
                           line.get_msg().endswith(
                               "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
@@ -536,7 +547,7 @@ class LogTest():
             rpc_r.report()
 
         # This isn't currently used anyway.
-        #if not have_debug:
+        # if not have_debug:
         #    print('DEBUG not enabled, No log consistency checking possible')
 
         total_lines = trace_lines + non_trace_lines
@@ -580,7 +591,8 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-#pylint: enable=too-many-branches,too-many-nested-blocks
+# pylint: enable=too-many-branches,too-many-nested-blocks
+
 
 class rpc_reporting():
     """Class for reporting a summary of RPC states"""
@@ -618,8 +630,7 @@ class rpc_reporting():
             rpc_state = 'DEALLOCATED'
         elif line.endswith('submitted.'):
             rpc_state = 'SUBMITTED'
-        elif line.function == 'crt_hg_req_send' and \
-             line.get_field(-6) == ('sent'):
+        elif line.function == 'crt_hg_req_send' and line.get_field(-6) == ('sent'):
             rpc_state = 'SENT'
         elif line.is_callback():
             rpc = line.descriptor
@@ -645,11 +656,11 @@ class rpc_reporting():
             del self._current_opcodes[rpc]
 
         if opcode not in self._op_state_counters:
-            self._op_state_counters[opcode] = {'ALLOCATED' :0,
+            self._op_state_counters[opcode] = {'ALLOCATED': 0,
                                                'DEALLOCATED': 0,
-                                               'SENT':0,
-                                               'COMPLETED':0,
-                                               'SUBMITTED':0}
+                                               'SENT': 0,
+                                               'COMPLETED': 0,
+                                               'SUBMITTED': 0}
         self._op_state_counters[opcode][rpc_state] += 1
 
     def report(self):
@@ -701,6 +712,7 @@ class rpc_reporting():
 
         for error in errors:
             print(error)
+
 
 def run():
     """Trace a single file"""

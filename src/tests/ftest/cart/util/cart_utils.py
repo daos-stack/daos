@@ -7,13 +7,13 @@
 import time
 import os
 import shlex
-import subprocess #nosec
+import subprocess  # nosec
 import logging
-import cart_logparse
-import cart_logtest
 import socket
 import re
 import glob
+import cart_logparse
+import cart_logtest
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
@@ -35,7 +35,7 @@ class CartTest(TestWithoutServers):
         self.supp_file = "/etc/daos/memcheck-cart.supp"
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
                        os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.abspath(__file__))))))))
+                           os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
 
     def setUp(self):
@@ -251,10 +251,8 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + \
-                       env_CCSA + "_" + \
-                       env_PHY_ADDR_STR + "_" + \
-                       "output.orterun_log"
+        log_filename = test_name + "_" + env_CCSA + "_" + env_PHY_ADDR_STR + "_" + \
+            "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
@@ -465,7 +463,7 @@ class CartTest(TestWithoutServers):
 
         xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(daos_test_shared_dir)))
+                                     os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
             self.convert_xml(daos_test_shared_dir + "/" + filename)
