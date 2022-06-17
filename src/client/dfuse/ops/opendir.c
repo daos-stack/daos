@@ -36,13 +36,11 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 		DFUSE_TRA_INFO(ie, "Caching readdir");
 		fi_out.cache_readdir = 1;
-		fi_out.keep_cache    = 1;
 
 		/* If there are open directory handles already then save this opendir request and
 		 * reply to it later after the closedir has completed.
 		 */
 		D_MUTEX_LOCK(&fs_handle->dpi_op_lock);
-
 		if (oh->doh_ie->ie_odir) {
 			DFUSE_TRA_WARNING(oh, "Delaying opendir reply");
 			oh->doh_od_req = req;
