@@ -610,7 +610,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
+		rc = pl_obj_place(map, &md, DAOS_OO_RO, rpt->rt_rebuild_ver, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
