@@ -2067,8 +2067,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 		       DP_UUID(iter_arg->pool_uuid));
 		D_GOTO(put, rc = 0);
 	}
-	if (iod_eph_total == 0 || tls->mpt_version <= version ||
-	    tls->mpt_fini) {
+	if (iod_eph_total == 0 || tls->mpt_fini) {
 		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
 			" migrate ver %u fini %d\n", iod_eph_total, version,
 			tls->mpt_version, tls->mpt_fini);

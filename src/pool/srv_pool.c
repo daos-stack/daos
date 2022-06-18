@@ -2444,6 +2444,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			D_GOTO(out_svc, rc);
 	}
 
+	ds_rebuild_running_query(in->pci_op.pi_uuid, &out->pco_rebuild_ver);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3247,6 +3248,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 		if (rc != 0)
 			D_GOTO(out_svc, rc);
 	}
+	ds_rebuild_running_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_ver);
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
