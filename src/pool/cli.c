@@ -439,13 +439,14 @@ err:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t leader_rank,
+		    uint32_t map_version, uint32_t rebuild_ver, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t **ranks, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
 		    bool connect)
 {
 	struct pool_map	       *map;
+	unsigned int		up_tgt_cnt = 0;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
@@ -458,7 +459,18 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+	pool_map_find_up_tgts(map, NULL, &up_tgt_cnt);
+	if (up_tgt_cnt > 0 && rebuild_ver == 0) {
+		/* There are UP targets, but no rebuild/reintegration now, let's retry
+		 * until rebuild or reintegration start, so we know the upper version
+		 * to create the object layout.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": UP targets %u, but no rebuild job yet.\n",
+			DP_UUID(pool->dp_pool), up_tgt_cnt);
+		D_GOTO(out_unlock, rc = -DER_AGAIN);
+	}
 
+	pool->dp_rebuild_version = rebuild_ver;
 	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
 		goto out_unlock;
@@ -592,10 +604,17 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_op.po_hint.sh_rank,
+				 pco->pco_rebuild_ver, pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
+		if (rc == -DER_AGAIN) {
+			rc = tse_task_reinit(task);
+			if (rc == 0)
+				put_pool = false;
+			D_GOTO(out, rc);
+		}
+
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: "DF_RC"\n",
 			DP_RC(rc));
@@ -1498,16 +1517,22 @@ pool_query_cb(tse_task_t *task, void *data)
 	ranks_arg = arg->dqa_ranks ? arg->dqa_ranks : &ranks;
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
+				 out->pqo_rebuild_ver,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
 				 ranks_arg, arg->dqa_info,
 				 arg->dqa_prop, out->pqo_prop, false);
-	if (rc == 0) {
-		D_DEBUG(DB_MD, DF_UUID": got ranklist with %u ranks\n",
-			DP_UUID(arg->dqa_pool->dp_pool), (*ranks_arg)->rl_nr);
-		if (ranks_arg == &ranks)
-			d_rank_list_free(ranks);
+	if (rc != 0) {
+		if (rc == -DER_AGAIN) {
+			rc = tse_task_reinit(task);
+			D_GOTO(out, rc);
+		}
+		D_GOTO(out, rc);
 	}
+	D_DEBUG(DB_MD, DF_UUID": got ranklist with %u ranks\n",
+		DP_UUID(arg->dqa_pool->dp_pool), (*ranks_arg)->rl_nr);
+	if (ranks_arg == &ranks)
+		d_rank_list_free(ranks);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1766,6 +1791,7 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	unsigned int			version_cached;
 	struct pool_map		       *map;
 	bool				reinit = false;
+	unsigned int			up_tgt_cnt = 0;
 	int				rc = task->dt_result;
 
 	/*
@@ -1856,6 +1882,20 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
+	pool_map_find_up_tgts(map, NULL, &up_tgt_cnt);
+	if (up_tgt_cnt > 0 && out->tmo_rebuild_ver == 0) {
+		/* There are UP targets, but no rebuild/reintegration now, let's retry
+		 * until rebuild or reintegration start, so we know the upper version
+		 * to create the object layout.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": UP targets %u, but no rebuild job yet.\n",
+			DP_UUID(pool->dp_pool), up_tgt_cnt);
+		D_FREE(map);
+		reinit = true;
+		goto out;
+	}
+
+	pool->dp_rebuild_version = out->tmo_rebuild_ver;
 	rc = dc_pool_map_update(pool, map, false /* connect */);
 	pool_map_decref(map);
 

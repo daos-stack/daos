@@ -1587,6 +1587,11 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 
+	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+		pool->sp_disable_rebuild = 0;
+	else
+		pool->sp_disable_rebuild = 1;
+
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
 		D_ERROR("Failed to parse policy string: %s\n",
@@ -1676,6 +1681,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
+	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 
