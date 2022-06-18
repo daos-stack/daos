@@ -121,13 +121,13 @@ class DaosBuild(DfuseTestBase):
         # not yet work, so run this part in serial.  The VMs have 6 cores so run 12 jobs.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} checkout 46fec32cef5d61da3bedaaae5660f91e8111038a'.format(build_dir),
+                'git -C {} checkout jvolivie/fix_key2str'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs 12 --build-deps=yes --deps-only'.format(build_dir),
-                'scons -C {}'.format(build_dir)]
+                'scons -C {} --jobs 12'.format(build_dir)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
