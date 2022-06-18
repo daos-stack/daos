@@ -212,6 +212,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	struct dc_pool		*pool;
 	struct pl_map		*map;
 	uint32_t		old;
+	uint32_t		rebuild_ver;
 	int			i;
 	int			rc;
 
@@ -228,10 +229,11 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	rebuild_ver = pool->dp_rebuild_version;
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	dc_pool_put(pool);
-	rc = pl_obj_place(map, &obj->cob_md, mode, NULL, &layout);
+	rc = pl_obj_place(map, &obj->cob_md, mode, rebuild_ver, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
@@ -1017,6 +1019,9 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
 	if (obj_shard->do_reintegrating)
 		obj_auxi->reintegrating = 1;
+	if (obj_shard->do_rebuilding)
+		obj_auxi->rebuilding = 1;
+
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -4567,6 +4572,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
 	obj_auxi->reintegrating = 0;
+	obj_auxi->rebuilding = 0;
 	shard_task_list_init(obj_auxi);
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;

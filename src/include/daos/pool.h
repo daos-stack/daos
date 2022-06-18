@@ -83,6 +83,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
 	tse_task_t	       *dp_map_task;
+	uint32_t		dp_rebuild_version;
 	/* highest known pool map version */
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,

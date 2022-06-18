@@ -1984,6 +1984,39 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 	return 0;
 }
 
+static int
+obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
+{
+	if (!obj_is_modification_opc(opc))
+		return 0;
+
+	/* If the incoming I/O is during integration, then it needs to wait the
+	 * vos discard to finish, which otherwise might discard these new inflight
+	 * I/O update.
+	 */
+	if ((flags & ORF_REINTEGRATING_IO) &&
+	    (child->sc_pool->spc_pool->sp_need_discard &&
+	     child->sc_pool->spc_discard_done == 0)) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		return -DER_UPDATE_AGAIN;
+	}
+
+	/* All I/O during rebuilding, needs to wait for the rebuild fence to
+	 * be generated (see rebuild_prepare_one()), which will create a boundry
+	 * for rebuild, so the data after boundry(epoch) should not be rebuilt,
+	 * which otherwise might be written duplicately, which might cause
+	 * the failure in VOS.
+	 */
+	if ((flags & ORF_REBUILDING_IO) &&
+	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
+	      child->sc_pool->spc_rebuild_fence == 0)) {
+		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 /* Various check before access VOS */
 static int
 obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
@@ -1997,12 +2030,9 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		return rc;
 
-	if (obj_is_modification_opc(opc) && (flags & ORF_REINTEGRATING_IO) &&
-	    ioc->ioc_coc->sc_pool->spc_pool->sp_need_discard &&
-	    ioc->ioc_coc->sc_pool->spc_discard_done == 0) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(pool_uuid));
-		D_GOTO(failed, rc = -DER_UPDATE_AGAIN);
-	}
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
+	if (rc != 0)
+		goto failed;
 
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
 			    obj_is_ec_agg_opc(opc) ||
@@ -4652,12 +4682,9 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto reply;
 
-	if ((oci->oci_flags & ORF_REINTEGRATING_IO) &&
-	    ioc.ioc_coc->sc_pool->spc_pool->sp_need_discard &&
-	    ioc.ioc_coc->sc_pool->spc_rebuild_fence == 0) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(oci->oci_pool_uuid));
-		D_GOTO(reply, rc = -DER_UPDATE_AGAIN);
-	}
+	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_flags);
+	if (rc != 0)
+		goto reply;
 
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
