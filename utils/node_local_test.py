@@ -1447,6 +1447,10 @@ def create_cont(conf,
             rc = _create_cont()
 
     assert rc.returncode == 0, rc
+    if label:
+        assert label == rc.json['response']['container_label']
+    else:
+        assert 'container_label' not in rc.json['response'].keys()
     return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container, valgrind=True, log_check=True):
