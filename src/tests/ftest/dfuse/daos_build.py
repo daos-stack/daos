@@ -65,7 +65,7 @@ class DaosBuild(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
-        build_time = 30
+        build_time = 60
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
