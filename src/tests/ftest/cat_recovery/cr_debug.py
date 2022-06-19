@@ -60,7 +60,7 @@ class CatastrophicRecoveryDebugger(IorTestBase):
                 dkey=dkeys_b[-1], akey=akey, value=data, size=c_size)
 
     def run_debug_ior(self, file_name, pool, namespace):
-        """Run IOR command and store the results to results dictionary.
+        """Run IOR command and store the results to the results dictionary.
 
         Create a new IorCommand object instead of using the one in IorTestBase because
         we'll run a test that runs multiple IOR processes at the same time.
