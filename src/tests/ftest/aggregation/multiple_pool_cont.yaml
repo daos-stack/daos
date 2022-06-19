@@ -10,6 +10,8 @@ hosts:
         - client-D
         - client-E
 timeout: 1300
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
