@@ -6,16 +6,16 @@ Hack to support oneapi version of Intel compilers
 import sys
 import os
 
+# TODO: Should these be in fake_scons
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 import SCons.Tool.gcc
 import SCons.Util
-import SCons.Warnings
-import SCons.Errors
 # pylint: enable=import-error
 # pylint: enable=no-name-in-module
-# pylint: disable=no-member
-# pylint: disable=too-few-public-methods
+import SCons.Warnings
+import SCons.Errors
+
 
 class DetectCompiler():
     """Find oneapi compiler"""
@@ -36,22 +36,24 @@ class DetectCompiler():
             if not os.path.exists(path):
                 return
         # pylint: enable=too-many-boolean-expressions
-        self.map = {'root' : root,
-                    'bin' : binp,
-                    'lib' : libp,
-                    'binarch' : binarch,
-                    'libarch' : libarch,
-                    'include' : include,
-                    'icx' : icx}
+        self.map = {'root': root,
+                    'bin': binp,
+                    'lib': libp,
+                    'binarch': binarch,
+                    'libarch': libarch,
+                    'include': include,
+                    'icx': icx}
 
     def __getitem__(self, key):
         """Return key"""
         return self.map.get(key, None)
 
+
 def generate(env):
     """Add Builders and construction variables for Intel Oneapi C++C++ compiler
     to an Environment.
     """
+    # pylint: disable=no-member
     SCons.Tool.gcc.generate(env)
 
     detector = DetectCompiler()
@@ -72,6 +74,7 @@ def generate(env):
     env['CXX'] = 'icpx'
     env['AR'] = 'xiar'
     env['LD'] = 'xild'  # not used by default
+
 
 def exists(_env):
     """Find if icx exists"""

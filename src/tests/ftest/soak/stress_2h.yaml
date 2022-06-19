@@ -81,6 +81,8 @@ soak_stress:
     joblist:
         - ior_stress
         - mdtest_stress
+        - vpic_stress
+        - lammps_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -139,3 +141,30 @@ mdtest_stress:
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
         disable_caching: True
+vpic_stress:
+    job_timeout: 20
+    nodesperjob:
+        - 4
+    taskspernode:
+        - 16
+    cmdline: "/var/hit/daos/builds/vpic-install/bin/harris.Linux"
+    module: mpi/latest
+    posix: true
+    workdir: "/tmp/daos_dfuse/vpic/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "SX"
+lammps_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 4
+    taskspernode:
+        - 16
+    cmdline: "/var/hit/daos/builds/lammps/src/lmp_mpi -i /var/hit/daos/builds/lammps/bench/in.lj"
+    posix: True
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "SX"

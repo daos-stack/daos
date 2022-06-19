@@ -317,13 +317,13 @@ class IorCommand(ExecutableCommand):
             messages = cmdresult.splitlines()
         else:
             messages = cmdresult.stdout_text.splitlines()
-        # Get the index whre the summary starts and add one to
+        # Get the index where the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)
         # idx + 1 is header.
         # idx +2 and idx + 3 will give the write and read metrics.
-        write_metrics = (" ".join(messages[idx+2].split())).split()
-        read_metrics = (" ".join(messages[idx+3].split())).split()
+        write_metrics = (" ".join(messages[idx + 2].split())).split()
+        read_metrics = (" ".join(messages[idx + 3].split())).split()
 
         return (write_metrics, read_metrics)
 
@@ -407,6 +407,7 @@ class IorCommand(ExecutableCommand):
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""
 
+    # pylint: disable=wrong-spelling-in-comment
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt

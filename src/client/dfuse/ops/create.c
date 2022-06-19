@@ -102,6 +102,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_obj_hdl		*oh = NULL;
 	struct fuse_file_info		fi_out = {0};
@@ -151,6 +152,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(ie, parent, "inode");
 	DFUSE_TRA_UP(oh, ie, "open handle");
 	ie->ie_dfs = dfs;
+
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
 
 	rc = _dfuse_mode_update(req, parent, &mode);
 	if (rc != 0)

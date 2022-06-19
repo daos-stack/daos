@@ -156,6 +156,7 @@ class MdtestCommand(ExecutableCommand):
 
         return env
 
+
 class MdtestMetrics():
     # pylint: disable=too-few-public-methods
     """Represents metrics from mdtest output.
