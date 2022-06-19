@@ -126,9 +126,13 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			else
 				D_INFO(DF_TARGET " start reintegration.\n",
 				       DP_TARGET(target));
-			D_DEBUG(DB_MD, "change rank %u to UP\n",
-				dom->do_comp.co_rank);
-			dom->do_comp.co_status = PO_COMP_ST_UP;
+			if (dom->do_comp.co_status == PO_COMP_ST_DOWNOUT ||
+			    dom->do_comp.co_status == PO_COMP_ST_DOWN) {
+				dom->do_comp.co_status = PO_COMP_ST_UP;
+				dom->do_comp.co_in_ver = target->ta_comp.co_in_ver;
+				D_DEBUG(DB_MD, "change rank %u to UP ver %u\n",
+					dom->do_comp.co_rank, dom->do_comp.co_in_ver);
+			}
 			dom->do_comp.co_flags = 0;
 			break;
 		}
@@ -160,6 +164,12 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 						target->ta_comp.co_id);
 			D_ASSERT(rc != 0); /* This target must be findable */
 			target->ta_comp.co_in_ver = ++(*version);
+			if (dom->do_comp.co_status == PO_COMP_ST_UP) {
+				dom->do_comp.co_status = PO_COMP_ST_UPIN;
+				dom->do_comp.co_in_ver = target->ta_comp.co_in_ver;
+				D_DEBUG(DB_MD, "change rank %u to UPIN ver %u\n",
+					dom->do_comp.co_rank, dom->do_comp.co_in_ver);
+			}
 			if (print_changes)
 				D_PRINT(DF_TARGET " is reintegrated.\n",
 					DP_TARGET(target));

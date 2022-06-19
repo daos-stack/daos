@@ -355,7 +355,7 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
-    # are relocating binaries across systems, for example in CI under github actions etc.  There
+    # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
     # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
     # prematurely with SIGILL (-4).
     # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says

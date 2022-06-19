@@ -2255,16 +2255,21 @@ obj_ec_stripe_list_add(struct daos_recx_ep_list *stripe_list,
 			continue;
 		}
 		if (recx_ep->re_ep != stripe_recx->re_ep) {
-			D_ERROR("overlapped recx with different shadow epoch, "
+			D_DEBUG(DB_IO, "overlapped recx with different shadow epoch, "
 				"["DF_U64", "DF_U64"]@"DF_X64", "
 				"["DF_U64", "DF_U64"]@"DF_X64"\n",
 				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
 				recx_ep->re_ep, stripe_recx->re_recx.rx_idx,
 				stripe_recx->re_recx.rx_nr, stripe_recx->re_ep);
-			return -DER_PROTO;
+			/* It is possible that different shard fetches go to different parity
+			 * shards, they got recov_lists with different parity epoch in the case
+			 * vos aggregation happens asynchronously on different parity shards
+			 * that may merge adjacent parity exts to lower epoch. So here can
+			 * just take higher epoch for data recovery.
+			 */
+			recx_ep->re_ep = max(recx_ep->re_ep, stripe_recx->re_ep);
 		}
-		start = min(recx_ep->re_recx.rx_idx,
-			    stripe_recx->re_recx.rx_idx);
+		start = min(recx_ep->re_recx.rx_idx, stripe_recx->re_recx.rx_idx);
 		recx_ep->re_recx.rx_nr =
 			max(recx_ep->re_recx.rx_idx + recx_ep->re_recx.rx_nr,
 			    stripe_recx->re_recx.rx_idx +

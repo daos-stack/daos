@@ -567,7 +567,7 @@ dfs_test_syml_follow(void **state)
 }
 
 static int
-dfs_test_file_gen(const char *name, daos_size_t chunk_size,
+dfs_test_file_gen(const char *name, daos_size_t chunk_size, daos_oclass_id_t cid,
 		  daos_size_t file_size)
 {
 	dfs_obj_t	*obj;
@@ -589,7 +589,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
+		      O_RDWR | O_CREAT, cid, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_punch(dfs_mt, obj, 10, DFS_MAX_FSIZE);
@@ -715,7 +715,7 @@ dfs_test_read_shared_file(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	sprintf(name, "MTA_file_%d", arg->myrank);
-	rc = dfs_test_file_gen(name, chunk_size, file_size);
+	rc = dfs_test_file_gen(name, chunk_size, OC_S1, file_size);
 	assert_int_equal(rc, 0);
 
 	/* usr barrier to all threads start at the same time and start
@@ -1209,9 +1209,14 @@ dfs_test_chown(void **state)
 	char		*filename = "chown_test";
 	char		*symname = "sym_chown_test";
 	struct stat	stbuf;
+	struct stat	stbuf2;
 	uid_t		orig_uid;
 	gid_t		orig_gid;
 	int		rc;
+	char		*filename_file1 = "open_stat1";
+	char		*filename_file2 = "open_stat2";
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 
 	if (arg->myrank != 0)
 		return;
@@ -1298,6 +1303,40 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
+
+	/* Test the open_stat call with passing in uid/gid */
+	/** Create /file1 */
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_uid, getegid());
+
+	/* Now do a create with uid/gid set */
+	stbuf2.st_uid = 14;
+	stbuf2.st_gid = 15;
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(stbuf2.st_uid, 14);
+	assert_int_equal(stbuf2.st_gid, 15);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
 }
 
 static bool
@@ -1376,7 +1415,7 @@ dfs_test_mtime(void **state)
 	assert_int_equal(rc, 0);
 }
 
-#define NUM_IOS 128
+#define NUM_IOS 256
 #define IO_SIZE 8192
 
 struct dfs_test_async_arg {
@@ -1472,7 +1511,7 @@ dfs_test_async_io_th(void **state)
 	assert_int_equal(rc, 0);
 
 	sprintf(name, "file_async_mt_%d", arg->myrank);
-	rc = dfs_test_file_gen(name, 0, IO_SIZE * NUM_IOS);
+	rc = dfs_test_file_gen(name, 0, OC_S1, IO_SIZE * NUM_IOS);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
@@ -1522,6 +1561,94 @@ dfs_test_async_io_th(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+
+#define NUM_ABORTS 64
+#define IO_SIZE_2 1048576
+
+static void
+dfs_test_async_io(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			name[16];
+	dfs_obj_t		*obj;
+	int			i, j;
+	int			rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	sprintf(name, "file_async_%d", arg->myrank);
+	rc = dfs_test_file_gen(name, 0, OC_SX, IO_SIZE_2 * NUM_IOS);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	struct daos_event	evs[NUM_IOS];
+	d_sg_list_t		sgls[NUM_IOS];
+	d_iov_t			iovs[NUM_IOS];
+	daos_size_t		read_sizes[NUM_IOS];
+	char			*bufs[NUM_IOS];
+
+	for (i = 0; i < NUM_IOS; i++) {
+		rc = daos_event_init(&evs[i], arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+
+		D_ALLOC(bufs[i], IO_SIZE_2);
+		D_ASSERT(bufs[i] != NULL);
+
+		d_iov_set(&iovs[i], bufs[i], IO_SIZE_2);
+		sgls[i].sg_nr = 1;
+		sgls[i].sg_nr_out = 1;
+		sgls[i].sg_iovs = &iovs[i];
+	}
+
+	for (j = 0; j < NUM_ABORTS; j++) {
+		for (i = 0; i < NUM_IOS; i++) {
+			bool flag;
+			daos_event_t *ev = &evs[i];
+
+			rc = daos_event_test(ev, DAOS_EQ_NOWAIT, &flag);
+			assert_int_equal(rc, 0);
+
+			if (!flag) {
+				rc = daos_event_abort(ev);
+				assert_int_equal(rc, 0);
+
+				rc = daos_event_test(ev, DAOS_EQ_WAIT, &flag);
+				assert_int_equal(rc, 0);
+			}
+			D_ASSERT(flag == true);
+
+			rc = daos_event_fini(ev);
+			assert_int_equal(rc, 0);
+			rc = daos_event_init(ev, arg->eq, NULL);
+			assert_int_equal(rc, 0);
+
+			rc = dfs_read(dfs_mt, obj, &sgls[i], 0, &read_sizes[i], ev);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	for (i = 0; i < NUM_IOS; i++) {
+		bool flag;
+
+		rc = daos_event_test(&evs[i], DAOS_EQ_WAIT, &flag);
+		assert_int_equal(rc, 0);
+		D_ASSERT(flag == true);
+		daos_event_fini(&evs[i]);
+		evs[i].ev_error = INT_MAX;
+		evs[i].ev_private.space[0] = ULONG_MAX;
+		D_FREE(bufs[i]);
+		D_ASSERT(read_sizes[i] == IO_SIZE_2);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_rm(name);
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1557,6 +1684,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_mtime, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST17: multi-threads async IO",
 	  dfs_test_async_io_th, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST18: async IO",
+	  dfs_test_async_io, async_disable, test_case_teardown},
 };
 
 static int

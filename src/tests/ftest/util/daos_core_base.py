@@ -16,6 +16,7 @@ from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
 from agent_utils import include_local_host
 from job_manager_utils import get_job_manager
+from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
 class DaosCoreBase(TestWithServers):
@@ -116,6 +117,8 @@ class DaosCoreBase(TestWithServers):
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.get_test_param("args", "")
         stopped_ranks = self.get_test_param("stopped_ranks", [])
+        pools_created = self.get_test_param("pools_created", 1)
+        self.increment_timeout(POOL_TIMEOUT_INCREMENT * pools_created)
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
         if self.hostlist_clients:
@@ -171,9 +174,8 @@ class DaosCoreBase(TestWithServers):
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                self.create_results_xml(self.subtest_name, result,
-                                        "Failed to run {}.".format(
-                    self.daos_test))
+                self.create_results_xml(
+                    self.subtest_name, result, "Failed to run {}.".format(self.daos_test))
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
@@ -201,6 +203,6 @@ class DaosCoreBase(TestWithServers):
     </system-err>
   </testcase>
 </testsuite>'''.format(
-    testname, result.result.stdout_text, result.result.stderr_text, error_message))
+                    testname, result.result.stdout_text, result.result.stderr_text, error_message))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)

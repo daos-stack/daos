@@ -1,4 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""Code to handle clang-format when used in the build.
+
+This is used by scons to reformat automatically generated header files to be readable, but also
+outside of scons by the clang-format commit hook to check the version.
+"""
+
 # Copyright 2018-2022 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,12 +24,11 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""SCons extra features"""
-from __future__ import print_function
 
-import subprocess #nosec
+import subprocess  # nosec
 import re
 import os
+import sys
 
 from SCons.Builder import Builder
 from SCons.Script import WhereIs
@@ -32,8 +37,10 @@ from SCons.Script import WhereIs
 # versions older than this it's still used, but without loading our config.
 MIN_FORMAT_VERSION = 12
 
+
 def _supports_custom_format(clang_exe):
-    """Get the version of clang-format"""
+    """Checks if the version of clang-format is new enough to parse the settings used by
+    the config file"""
 
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])
@@ -46,8 +53,33 @@ def _supports_custom_format(clang_exe):
     if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
         return True
 
-    print('Custom .clang-format wants version {}+. Using Mozilla style.'.format(MIN_FORMAT_VERSION))
+    print(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
     return False
+
+
+def _supports_correct_style(clang_exe):
+    """Checks if the version of clang-format is 14.0.5 or newer which is required to correctly
+    reformat code for landing"""
+
+    try:
+        rawbytes = subprocess.check_output([clang_exe, "-version"])
+        output = rawbytes.decode('utf-8')
+    except subprocess.CalledProcessError:
+        return False
+
+    match = re.search(r'version ([\d+\.]+) ', output)
+    if match:
+        parts = match.group(1).split('.')
+        if int(parts[0]) < 14:
+            return False
+        if int(parts[1]) > 0:
+            return True
+        if int(parts[2]) < 5:
+            return False
+        return True
+
+    return False
+
 
 def _find_indent():
     """find clang-format"""
@@ -58,19 +90,20 @@ def _find_indent():
         style = "file"
     else:
         style = "Mozilla"
-    return "%s --style=%s" % (indent, style)
+    return f'{indent} --style={style}'
+
 
 def _pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
     action = []
-    nenv = env.Clone()
-    cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
+    cccom = env.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
         if indent:
-            action.append("%s -E -P %s | %s > %s" % (cccom, src, indent, tgt))
+            action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
         else:
-            action.append("%s -E -P %s > %s" % (cccom, src, tgt))
+            action.append(f'{cccom} -E -P {src} > {tgt}')
     return action
+
 
 def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
@@ -81,14 +114,14 @@ def _preprocess_emitter(source, target, env):
         (base, ext) = os.path.splitext(basename)
         prefix = ""
         for var in ["OBJPREFIX", "OBJSUFFIX", "SHOBJPREFIX", "SHOBJSUFFIX"]:
-            mod = env.subst("$%s" % var)
+            mod = env.subst(f'${var}')
             if var == "OBJSUFFIX" and mod == ".o":
                 continue
             if var == "SHOBJSUFFIX" and mod == ".os":
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        newtarget = os.path.join(dirname, '{}{}_pp{}'.format(prefix, base, ext))
+        newtarget = os.path.join(dirname, f'{prefix}{base}_pp{ext}')
         target.append(newtarget)
     return target, source
 
@@ -100,6 +133,15 @@ def _ch_emitter(source, target, **_kw):
         (base, _ext) = os.path.splitext(src.abspath)
         target.append(f"{base}_check_header$OBJSUFFIX")
     return target, source
+
+
+def main():
+    """Check for a supported version of clang-format"""
+    supported = _supports_correct_style(WhereIs('clang-format'))
+    if not supported:
+        print('Install clang-format version 14.0.5 or newer to reformat code')
+        sys.exit(1)
+    sys.exit(0)
 
 
 def generate(env):
@@ -117,10 +159,17 @@ def generate(env):
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
-    env.Append(BUILDERS={"Preprocess": preprocess})
-    env.Append(BUILDERS={"CheckHeader": check_header})
+    if not env["BUILDERS"].get("Preprocess", False):
+        env.Append(BUILDERS={"Preprocess": preprocess})
+
+    if not env["BUILDERS"].get("CheckHeader", False):
+        env.Append(BUILDERS={"CheckHeader": check_header})
 
 
 def exists(_env):
     """assert existence of tool"""
     return True
+
+
+if __name__ == '__main__':
+    main()
