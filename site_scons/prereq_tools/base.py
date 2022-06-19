@@ -675,7 +675,7 @@ class PreReqComponent():
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
 
-        # Build pre-reqs in sub-dir based on selected build type
+        # Build prerequisites in sub-dir based on selected build type
         build_dir_name = os.path.join(build_dir_name,
                                       self.__env.subst("$TTYPE_REAL"))
 
@@ -785,7 +785,7 @@ class PreReqComponent():
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
     def _setup_intelc(self):
-        """Setup environment to use intel compilers"""
+        """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
