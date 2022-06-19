@@ -793,3 +793,81 @@ func TestServer_getNetDevClass(t *testing.T) {
 		})
 	}
 }
+
+type mockReplicaAddrSrc struct {
+	replicaAddrResult *net.TCPAddr
+	replicaAddrErr    error
+}
+
+func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
+	return m.replicaAddrResult, m.replicaAddrErr
+}
+
+func TestServerUtils_getControlAddr(t *testing.T) {
+	testTCPAddr := &net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 1234,
+	}
+
+	for name, tc := range map[string]struct {
+		params  ctlAddrParams
+		expAddr *net.TCPAddr
+		expErr  error
+	}{
+		"success (not a replica)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
+				},
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"success (replica)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[127.0.0.1]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"resolve fails": {
+			params: ctlAddrParams{
+				resolveAddr: func(_, _ string) (*net.TCPAddr, error) {
+					return nil, errors.New("mock resolve")
+				},
+			},
+			expErr: errors.New("mock resolve"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.params.resolveAddr == nil {
+				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
+					return testTCPAddr, nil
+				}
+			}
+
+			if tc.params.replicaAddrSrc == nil {
+				tc.params.replicaAddrSrc = &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
+				}
+			}
+
+			addr, err := getControlAddr(tc.params)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expAddr.String(), addr.String(), "")
+		})
+	}
+}

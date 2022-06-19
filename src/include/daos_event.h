@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -231,8 +231,9 @@ int
 daos_event_parent_barrier(struct daos_event *ev);
 
 /**
- * Try to abort operations associated with this event.
- * If \a ev is a parent event, this call will abort all child operations.
+ * Try to abort operations associated with this event. The user is still required to wait or poll on
+ * the event after this call.
+ * This currently does not abort any internal DAOS operation and is effectively a no-op.
  *
  * \param ev [IN]	Event (operation) to abort
  *

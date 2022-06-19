@@ -805,7 +805,7 @@ class TelemetryUtils():
                 for rank in sorted(metrics_data[name][host]):
                     value = metrics_data[name][host][rank]
                     invalid = "Metric value in range"
-                    #Verify metrics are within allowable threshold
+                    # Verify metrics are within allowable threshold
                     if min_value is not None and value < min_value:
                         status = False
                         invalid = "Metric value is smaller than {}: {}".format(min_value, value)
