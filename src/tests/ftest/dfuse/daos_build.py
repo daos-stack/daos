@@ -65,7 +65,7 @@ class DaosBuild(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
-        build_time = 60
+        build_time = 90
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
@@ -78,7 +78,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 120
+                build_time = 240
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
@@ -111,7 +111,8 @@ class DaosBuild(DfuseTestBase):
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'INFO'
+            remote_env['D_LOG_MASK'] = 'DEBUG,IL=INFO'
+            remote_env['CRT_TIMEOUT'] = '30'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
