@@ -64,7 +64,7 @@ class DaosBuild(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         # How long to cache things for, if caching is enabled.
-        cache_time = '30m'
+        cache_time = '60m'
         build_time = 90
 
         if cache_mode == 'writeback':
@@ -112,7 +112,6 @@ class DaosBuild(DfuseTestBase):
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'DEBUG,IL=INFO'
-            remote_env['CRT_TIMEOUT'] = '30'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
