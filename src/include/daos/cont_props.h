@@ -43,6 +43,7 @@ struct cont_props {
 	uint32_t	 dcp_compress_type;
 	uint16_t	 dcp_csum_type;
 	uint16_t	 dcp_encrypt_type;
+	uint32_t	 dcp_redun_lvl;
 	uint32_t	 dcp_redun_fac;
 	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_ec_pda;
