@@ -186,7 +186,7 @@ Config file output will not be generated in the following cases:
   devices, taking into account any specified network device class preference
   (Ethernet or InfiniBand).
 
-!!! note
+!!! warning
     Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
     that prevented `ndctl` from being able to report the NUMA affinity for a
     namespace.
@@ -435,8 +435,8 @@ If required, the pmem devices can be destroyed with the command
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
-!!! note
-    Undefined behavior may result if the namespaces/pmem kernel devices are mounted before
+!!! warning
+    Undefined behavior may result if the namespaces/pmem kernel devices are mounted when
     running the reset command (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
@@ -462,7 +462,7 @@ network.
 
 `daos_server storage scan` can be used to query storage on the local host directly.
 
-!!! note
+!!! warning
     'daos_server' should not be running (e.g. as a systemd service under the 'daos_server'
     userid) when the `daos_server storage scan` command is executed, as the NVMe SSDs will then
     already be bound to the 'daos_server' processes and trying to access them (as a
@@ -744,7 +744,7 @@ the physical NVMe backing devices that belong to each VMD endpoint. To disable t
 VMD-enabled host, set `disable_vmd: true` in the global section of the config to fallback to using
 physical NVMe devices only.
 
-!!! note
+!!! warning
     If upgrading from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
     parameter is no longer honoured and instead should be removed (or replaced by
     `disable_vmd: true` if VMD is to be explicitly disabled.
