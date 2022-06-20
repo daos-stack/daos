@@ -469,10 +469,7 @@ class DaosCont():
 
     def __init__(self, cont_uuid, label):
         self.uuid = cont_uuid
-        if label == 'container_label_not_set':
-            self.label = None
-        else:
-            self.label = label
+        self.label = label
 
 class DaosServer():
     """Manage a DAOS server instance"""
