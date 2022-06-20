@@ -7,7 +7,7 @@ A container represents an object address space inside a pool and is identified b
 
 The Container Service (`cont_svc`) stores the metadata for containers and provides an API to query and update the state as well as for managing the life-cycle of a container. Container metadata are organized as a hierarchy of key-value stores (KVS) that is replicated over a number of servers backed by Raft consensus protocol which uses strong leadership; client requests can only be serviced by the service leader while non-leader replicas merely respond with a hint pointing to the current leader for the client to retry. `cont_svc` derives from a generic replicated service module `rsvc` (see: <a href="/src/rsvc/README.md#architecture">Replicated Services: Architecture</a>) whose implementation facilitates the client search for the current leader.
 
-![Container Service Layout](/doc/graph/Fig_070.png "Container Service Layout")
+![Container Service Layout](/docs/graph/Fig_070.png "Container Service Layout")
 
 The top-level KVS `root` has two children:
 
@@ -16,7 +16,7 @@ The top-level KVS `root` has two children:
 
 The container properties KVS is used to store per-container metadata that consists of many mutable and immutable scalar valued properties as well as other KVSs as shown in the figure above.
 
-Users can create, delete and retrieve a list of persistent snapshots, which are essentially epochs that will not be aggregated away. A snapshot remains readable until it is explicitly destroyed. A container can also be rolled back to a particular snapshot. (see: <a href="/doc/overview/storage.md#daos-container">Storage Model: DAOS Container</a> and <a href="/doc/overview/transaction.md#container-snapshot">Transaction Model: Container Snapshot</a>).
+Users can create, delete and retrieve a list of persistent snapshots, which are essentially epochs that will not be aggregated away. A snapshot remains readable until it is explicitly destroyed. A container can also be rolled back to a particular snapshot. (see: <a href="/docs/overview/storage.md#daos-container">Storage Model: DAOS Container</a> and <a href="/docs/overview/transaction.md#container-snapshot">Transaction Model: Container Snapshot</a>).
 
 Users can also define custom attributes for containers which are essentially name-value pairs; with the name being a null-terminated string while the value is an arbitrary sequence of bytes. The Container Service allows clients to retrieve and update multiple attributes at a time as well as to list names of stored attributes.
 
@@ -58,7 +58,7 @@ A container is destroyed when the client sends a `CONT_DESTROY` request to the C
 
 #### Epoch Protocol
 
-The epoch protocol implements the epoch model described in the <a href="/doc/overview/transaction.md">Transaction Model</a>. The Container service manages the epochs of a container; it maintains the definitive epoch state as part of the container metadata, whereas the target services have little knowledge of the global epoch state. Epoch commit, discard, and aggregate procedures are therefore all driven by the container service.
+The epoch protocol implements the epoch model described in the <a href="/docs/overview/transaction.md">Transaction Model</a>. The Container service manages the epochs of a container; it maintains the definitive epoch state as part of the container metadata, whereas the target services have little knowledge of the global epoch state. Epoch commit, discard, and aggregate procedures are therefore all driven by the container service.
 
 On each target, the target service eagerly stores incoming write operations into the matching VOS container. If a container handle discards an epoch, VOS helps discard all write operations associated with that container handle. When a write operation succeeds, it is immediately visible to conflicting operations in equal or higher epochs. A conflicting write operation with the same epoch will be rejected by VOS unless it is associated with the same container handle and has the same content as the one that is already executed.
 

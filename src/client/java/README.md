@@ -198,4 +198,4 @@ file, like capacity-scheduler.xml in yarn.
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and
- [debug logs](./doc/debugging.md).
+ [debug logs](./docs/debugging.md).

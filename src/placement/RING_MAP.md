@@ -15,7 +15,7 @@ This is a concept developed in collaboration with Argonne National Laboratory, s
 <a id="f10.3"></a>
 **Ring Placement Map**
 
-![../../doc/graph/Fig_044.png](../../doc/graph/Fig_044.png "Ring Placement Map")
+![../../docs/graph/Fig_044.png](../../docs/graph/Fig_044.png "Ring Placement Map")
 
 <a id="10.2.3.1"></a>
 ## Fault Tolerance
@@ -34,7 +34,7 @@ To avoid this imbalance, widely distributed striped objects may be placed with "
  <a id="f10.4"></a>
 **Rebuild targets and failure sequence**
 
-![../../doc/graph/Fig_045.png](../../doc/graph/Fig_045.png "Ring Placement Map")
+![../../docs/graph/Fig_045.png](../../docs/graph/Fig_045.png "Ring Placement Map")
 
 Note that after all spare targets in a gap have become rebuild targets, further failures can still be handled by selecting rebuild targets immediately prior to the first member of RDGs affected by failure, albeit at the expense of load balance. This also means that multiple shards of a same object can possibly be stored on the same target. To distinguish these collocated shards from a same object, DSR can construct DSM object ID by appending object shard index to DSR object ID.
 
@@ -57,7 +57,7 @@ When there is no failure, the ring placement map can evenly distribute objects t
 <a id="f10.5"></a>
 **Object distribution on rebuild targets**
 
-![../../doc/graph/Fig_046.png](../../doc/graph/Fig_046.png "Object distribution on rebuild targets")
+![../../docs/graph/Fig_046.png](../../docs/graph/Fig_046.png "Object distribution on rebuild targets")
 
 In the <a href="#f10.5">figure</a> above, if all objects are 3-way replicated, and the layout of each of them is the targets connected by arcs in the same color. When target-4 fails, as each object will choose the prior target as spare target:
 
@@ -84,7 +84,7 @@ As shown in the <a href="#f10.6">figure</a> below, objects placed on the ring sh
 <a id="f10.6"></a>
 **Doubling domains for a ring placement map**
 
-![../../doc/graph/Fig_047.png](../../doc/graph/Fig_047.png "Doubling domains for a ring placement map")
+![../../docs/graph/Fig_047.png](../../docs/graph/Fig_047.png "Doubling domains for a ring placement map")
 
 The shards of objects created before the new domains are added, are no longer contiguous on the ring after doubling to avoid having to move all shards except the first one. This may be achieved by keeping the hash stride between object shards constant. However, this necessitates storing the initial hash stride with the object metadata as described in the next section. Note that the distribution of an object will become increasingly sparse on the placement ring with each extending operation.
 
@@ -98,7 +98,7 @@ To avoid this situation, DAOS doubles the consistent hashing key range. For exam
 <a id="f10.7"></a>
 **Doubling targets within domains**
 
-![../../doc/graph/Fig_048.png](../../doc/graph/Fig_048.png "Doubling targets within domains")
+![../../docs/graph/Fig_048.png](../../docs/graph/Fig_048.png "Doubling targets within domains")
 
 <a id="10.2.4"></a>
 # Multi-Ring Placement Map
@@ -117,7 +117,7 @@ In the example in the <a href="#f10.8">figure</a> below, there are six domains a
 
 <a id="f10.8"></a>
 **Multi-ring placement map**
-![../../doc/graph/Fig_049.png](../../doc/graph/Fig_049.png "Multi-ring placement map")
+![../../docs/graph/Fig_049.png](../../docs/graph/Fig_049.png "Multi-ring placement map")
 
 
 Given a large enough number of rings, each of them is created by a pseudo-random algorithm that selects M domains from the total of N domains, and selects T targets from each domain.
