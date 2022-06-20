@@ -424,8 +424,8 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ## Bug Report
 
-Bugs should be reported through our [issue tracker](http://jira.daos.io/) with a test case
-to reproduce the issue (when applicable) and debug logs.
+Bugs should be reported through our [issue tracker](https://jira.daos.io/)
+with a test case to reproduce the issue (when applicable) and debug logs.
 
 After creating a ticket, logs should be gathered from the locations
 described in the [Log Files](#log-files) section of this document and
