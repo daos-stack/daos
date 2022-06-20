@@ -252,6 +252,16 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
+#ifdef ULT_MMAP_STACK
+	struct stack_pool	*sp;
+	struct dss_xstream *cur_dx = dss_current_xstream();
+
+	/* stack should be allocated from launching XStream pool */
+	if (cur_dx != NULL)
+		sp = cur_dx->dx_sp;
+	else
+		sp = dx->dx_sp;
+#endif
 
 	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
@@ -261,7 +271,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(dx->dx_sp, abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(sp, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
