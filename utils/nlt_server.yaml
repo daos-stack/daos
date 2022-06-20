@@ -1,6 +1,6 @@
 name: daos_server
 port: 10001
-provider: ofi+tcp;ofi_rxm
+provider: ofi+verbs;ofi_rxm
 disable_hugepages: true
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
@@ -8,7 +8,7 @@ engines:
   -
     targets: 4
     nr_xs_helpers: 2
-    fabric_iface: lo
+    fabric_iface: ib0
     fabric_iface_port: 31416
     env_vars:
       - DAOS_MD_CAP=1024
