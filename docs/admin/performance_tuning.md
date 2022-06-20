@@ -36,7 +36,6 @@ An endpoint consists of pair of two values separated by a colon. The first value
 is the rank that matches the engine rank displayed in `dmg system query`. The
 second value is called tag and identified the service thread in the engine.
 The DAOS engine uses the following mapping:
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 - tag 0 is used by the metadata service handling pool and container operations.
 - tag 1 is used for cross-server monitoring (SWIM).
