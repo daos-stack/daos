@@ -84,6 +84,19 @@ func TestSystem_getDistribution(t *testing.T) {
 				},
 			},
 		},
+		"ubuntu-22.04": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/ubuntu22.04-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "ubuntu",
+				Name: "Ubuntu",
+				Version: DistributionVersion{
+					Major: 22,
+					Minor: 4,
+				},
+			},
+		},
 		"opensuse-15.2": {
 			fileMap: map[string]string{
 				"/etc/os-release": "distros/opensuse15.2-os-rel",
@@ -94,6 +107,32 @@ func TestSystem_getDistribution(t *testing.T) {
 				Version: DistributionVersion{
 					Major: 15,
 					Minor: 2,
+				},
+			},
+		},
+		"opensuse-15.3": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/opensuse15.3-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "opensuse-leap",
+				Name: "openSUSE Leap",
+				Version: DistributionVersion{
+					Major: 15,
+					Minor: 3,
+				},
+			},
+		},
+		"opensuse-15.4": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/opensuse15.4-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "opensuse-leap",
+				Name: "openSUSE Leap",
+				Version: DistributionVersion{
+					Major: 15,
+					Minor: 4,
 				},
 			},
 		},

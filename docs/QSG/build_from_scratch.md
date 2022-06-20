@@ -39,16 +39,10 @@ building those tests.
 Scripts to install all the required packages are provided for each supported
 distribution.
 
-### EL (including CentOS)
+### RHEL and Clones
 
-On CentOS7, please run the following command from the DAOS tree as root or via
-sudo.
-
-```bash
-$ ./utils/scripts/install-centos7.sh
-```
-
-For EL8, the following script must be used instead:
+For RHEL8-compatible distributions, the following script must be run as root
+or via sudo:
 
 ```bash
 $ ./utils/scripts/install-el8.sh
@@ -67,7 +61,7 @@ $ ./utils/scripts/install-leap15.sh
 As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu20.sh
+$ ./utils/scripts/install-ubuntu.sh
 ```
 
 ## Build DAOS
@@ -77,6 +71,13 @@ DAOS can be built via the following command:
 
 ```bash
 $ scons-3 --config=force --build-deps=yes install
+```
+
+or, on Linux distributions (like Ubuntu 22.04) that have abandoned SCons
+versions older than 3:
+
+```bash
+$ scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`

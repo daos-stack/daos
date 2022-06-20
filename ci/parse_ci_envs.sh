@@ -23,6 +23,10 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${CHROOT_NAME:="not_applicable"}"
       : "${TARGET:=ubuntu20}"
       ;;
+    *Ubuntu\ 22.04*|*ubuntu2204*)
+      : "${CHROOT_NAME:="not_applicable"}"
+      : "${TARGET:=ubuntu22}"
+      ;;
   esac
 fi
 export CHROOT_NAME

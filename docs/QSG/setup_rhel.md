@@ -1,15 +1,14 @@
 # DAOS Set-Up on RHEL and Clones
 
+The following instructions detail how to install, set up and start DAOS servers
+and clients on two or more nodes.
+This document includes instructions for RHEL8-compatible distributions. This includes
+RHEL8, Rocky Linux and AlmaLinux.
 
-The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.
-This document includes instructions for EL8 and CentOS 7.
-The process is identical for CentOS Linux 7 and EL 8,
-except for the location of the DAOS RPM repository.
 For setup instructions on OpenSuse, refer to
 [OpenSuse setup](setup_suse.md).
 
-For more details reference the [DAOS administration guide](https://docs.daos.io/v2.2/admin/hardware/).
-
+For more details reference the [DAOS administration guide](https://docs.daos.io/v2.4/admin/hardware/).
 
 ## Requirements
 
@@ -28,7 +27,7 @@ All nodes must have:
     commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.2/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.4/admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -62,18 +61,10 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/),
    using the subdirectory that matches the EL/CentOS version of the nodes:
 
-	**For CentOS7:**
-
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
-
-
-	**For EL8:**
-
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/EL8/packages/x86_64/daos_packages.repo'
-
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.4/EL8/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
@@ -190,7 +181,7 @@ Server nodes require the following certificate files:
 -   A copy of the Client certificate (client.crt) owned by the
     daos_server user
 
-See [Certificate Configuration](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration)
+See [Certificate Configuration](https://docs.daos.io/v2.4/admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note

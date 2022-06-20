@@ -10,23 +10,8 @@ from collections import OrderedDict
 import general_utils
 import distro
 
-from avocado import skip
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
-
-
-def skip_on_centos7():
-    """Decorator to allow selective skipping of test"""
-    dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
-        return skip('Newer software distribution needed')
-
-    def _do(func):
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return wrapper
-    return _do
-
 
 class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
@@ -35,7 +20,6 @@ class DaosBuild(DfuseTestBase):
     :avocado: recursive
     """
 
-    @skip_on_centos7()
     def test_daos_build(self):
         """Jira ID: DAOS-8937.
 

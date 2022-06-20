@@ -22,12 +22,8 @@ License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
-%if (0%{?rhel} >= 7)
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
-%else
-BuildRequires: python36-scons >= 2.4
-%endif
 %else
 BuildRequires: scons >= 2.4
 %endif
@@ -47,14 +43,10 @@ BuildRequires: hwloc-devel
 %if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
 %endif
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: boost-python3-devel
-%else
-BuildRequires: boost-python36-devel
-%endif
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
@@ -75,7 +67,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 21.07
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
@@ -90,17 +82,13 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.14
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: python3-distro
-%else
-BuildRequires: python36-distro
-%endif
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -237,15 +225,9 @@ This is the package is a metapackage to install all of the internal test package
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-Requires: python36-distro
-Requires: python36-tabulate
-Requires: python36-defusedxml
-%else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
-%endif
 Requires: fio
 Requires: git
 Requires: dbench
@@ -323,7 +305,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %build
 
 %define conf_dir %{_sysconfdir}/daos
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 %define scons_exe scons-3
 %else
 %define scons_exe scons
@@ -364,13 +346,8 @@ echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
-%if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
-%endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 
@@ -448,7 +425,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/storage_estimator/__pycache__
 %{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
@@ -479,7 +456,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
