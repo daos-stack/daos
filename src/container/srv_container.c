@@ -1756,10 +1756,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	is_healthy = cont_status_is_healthy(prop, &stat_pm_ver);
 	out->coo_op.co_map_version = stat_pm_ver;
 	if (is_healthy) {
-		int	rf;
+		int	rf, rlvl;
 
+		rlvl = daos_cont_prop2redunlvl(prop);
 		rf = daos_cont_prop2redunfac(prop);
-		rc = ds_pool_rf_verify(pool_hdl->sph_pool, stat_pm_ver, rf);
+		rc = ds_pool_rf_verify(pool_hdl->sph_pool, stat_pm_ver, rlvl, rf);
 		if (rc == -DER_RF) {
 			is_healthy = false;
 		} else if (rc) {
@@ -2498,13 +2499,16 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		  uint32_t last_ver)
 {
 	struct daos_prop_entry	*entry;
-	int			 rf;
+	int			 rf, rlvl;
 	int			 rc;
 
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_LVL);
+	D_ASSERT(entry != NULL);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
 	D_ASSERT(entry != NULL);
+	rlvl = daos_cont_prop2redunlvl(prop);
 	rf = daos_cont_prop2redunfac(prop);
-	rc = ds_pool_rf_verify(pool, last_ver, rf);
+	rc = ds_pool_rf_verify(pool, last_ver, rlvl, rf);
 	if (rc == -DER_RF) {
 		rc = 0;
 		cont_status_set_unclean(prop);
@@ -2559,12 +2563,12 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
-		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+		in->cqi_bits |= (DAOS_CO_QUERY_PROP_REDUN_FAC | DAOS_CO_QUERY_PROP_REDUN_LVL);
 
 	/* Currently DAOS_CO_QUERY_TGT not used; code kept for future expansion. */
 	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
 		/* need RF if user query cont_info */
-		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+		in->cqi_bits |= (DAOS_CO_QUERY_PROP_REDUN_FAC | DAOS_CO_QUERY_PROP_REDUN_LVL);
 		rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
 				      in->cqi_op.ci_hdl, out);
 		if (rc)
