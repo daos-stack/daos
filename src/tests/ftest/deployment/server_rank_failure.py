@@ -149,8 +149,10 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         8. Verify that IOR failed.
         9. Restart daos_server service.
         10. Verify the system status by calling dmg system query.
-        11. Verify that the container Health is HEALTHY.
-        12. Run IOR to the same container and verify that it works.
+        11. Call dmg pool query -b to find the disabled ranks.
+        12. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        13. Verify that the container Health is HEALTHY.
+        14. Run IOR to the same container and verify that it works.
 
         Args:
             ior_namespace (str): Yaml namespace that defines the object class used for
@@ -232,12 +234,24 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
                 errors.append(
                     "Server rank {} state isn't joined!".format(member["rank"]))
 
-        # 11. Verify that the container Health is HEALTHY.
+        # 11. Call dmg pool query -b to find the disabled ranks.
+        output = self.get_dmg_command().pool_query(
+            pool=self.pool.identifier, show_disabled=True)
+        disabled_ranks = output["response"]["disabled_ranks"]
+        self.log.info("Disabled ranks = %s", disabled_ranks)
+
+        # 12. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        for disabled_rank in disabled_ranks:
+            self.pool.reintegrate(rank=disabled_rank)
+            self.pool.wait_for_rebuild(to_start=True, interval=5)
+            self.pool.wait_for_rebuild(to_start=False, interval=10)
+
+        # 13. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
                 container=self.container, expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after server restart!")
 
-        # 12. Run IOR and verify that it works.
+        # 14. Run IOR and verify that it works.
         job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",

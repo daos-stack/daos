@@ -6,7 +6,7 @@ hosts:
   test_clients:
     - client-A
 
-timeout: 300
+timeout: 420
 daos_server:
   pattern_timeout: 60
 
@@ -61,13 +61,13 @@ ior: &ior_base
     flags: -k -v -w -W
     api: DFS
     # We wait for a few seconds before excluding a target. If the IOR finishes too
-    # quickly, the test will not work. We use -D (deadlineForStonewalling) 10, so the
-    # process ends in about 10 sec. Adjust the transfer_size - block_size combination
+    # quickly, the test will not work. We use -D (deadlineForStonewalling) 120, so the
+    # process ends in about 120 sec. Adjust the transfer_size - block_size combination
     # based on the system so that it takes longer than the -D value.
     transfer_size: 512K
     # Total size is block_size * ppn.
-    block_size: 50G
-    sw_deadline: 300
+    block_size: 30G
+    sw_deadline: 120
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: SX
