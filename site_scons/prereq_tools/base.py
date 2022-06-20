@@ -914,9 +914,9 @@ class PreReqComponent():
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
-                  choices=['yes', 'no', 'build-only'],
+                  choices=['yes', 'no', 'only', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -957,21 +957,26 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
-        if build_deps == 'yes':
+        if build_deps in ('yes', 'only'):
             self.download_deps = True
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
 
+    def realpath(self, path):
+        """Resolve the real path"""
+        return os.path.realpath(os.path.join(self.__top_dir, path))
+
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
-                value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
+                value = []
+                for path in tmp.split(os.pathsep):
+                    value.append(self.realpath(path))
             else:
-                value = realpath(tmp)
+                value = self.realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -1065,6 +1070,11 @@ class PreReqComponent():
             reqs.extend(server_reqs)
         if self.client_requested():
             reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'all', reqs))
+        if GetOption('build_deps') == 'only':
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
 
     def server_requested(self):
