@@ -364,7 +364,9 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
+    if ARM_PLATFORM:
+        spdk_arch = 'native'
+    elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
         spdk_arch = 'nehalem'
