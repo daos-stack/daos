@@ -127,8 +127,8 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 12 --build-deps=yes --deps-only'.format(build_dir),
-                'scons -C {} --jobs 12'.format(build_dir)]
+                'scons -C {} --jobs 18 --build-deps=yes --deps-only'.format(build_dir),
+                'scons -C {} --jobs 18'.format(build_dir)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
