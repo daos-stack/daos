@@ -1,6 +1,6 @@
 # DAOS Performance Tuning
 
-This section aims at documenting how to validate the performance of the baseline
+This section documents how to validate the performance of the baseline
 building blocks in a DAOS system (i.e. network and storage) and then the full
 stack.
 
@@ -11,8 +11,8 @@ the same context as an application and using the same networks/tuning options
 as regular DAOS.
 
 The CaRT `self_test` can run against the DAOS servers in a production environment
-in a non-destructive manner. The only requirement is to have the DAOS agent
-running on the client node where self\_test is run.
+in a non-destructive manner. The only requirement is to have a formatted DAOS
+system and the DAOS agent running on the client node where self\_test is run.
 
 ### Parameters
 
@@ -39,14 +39,15 @@ The DAOS engine uses the following mapping:
 - tag 0 is used by the metadata service handling pool and container operations.
 - tag 1 is used for cross-server monitoring (SWIM).
 - tags 2 to [#targets + 1] is used by DAOS targets (one tag per target].
-- tags [#targets + 1] to [#targets + #helpers] is used by helper service threads.
+- tags [#targets + 2] to [#targets + #helpers + 1] is used by helper service threads.
 
 As an example, an engine with `targets: 16` and `nr_xs_helpers: 4` would use the
 following tag distributions:
+
 - tag 0: metadata service
 - tag 1: monitoring service
 - tag 2-17: targets 0 to 15 (16 targets total)
-- tag 17-20: helper service
+- tag 18-21: helper service
 
 For a total of 21 endpoints exported by this engine.
 
@@ -70,7 +71,7 @@ determines the number of concurrent RPCs issued simultaneously.
 please run:
 
 ```bash
-$ ./bin/self_test --help
+$ self_test --help
 ```
 
 ### Example: Client-to-Servers
@@ -123,7 +124,7 @@ self_test -u --group-name daos_server --endpoint 0-<MAX_RANK>:0-<MAX_TAG> --mess
 !!! note
     Depending on the HW configuration, the agent might assign a different
     network interface to the self_test application depending on the NUMA node
-    where the process is scheduled. It is thus recommended to use tasket to bind
+    where the process is scheduled. It is thus recommended to use taskset to bind
     the self_test process to a specific core. e.g. taskset -c 1 self_test ...
 
 ### Example: Cross-Servers
@@ -132,7 +133,7 @@ To run self\_test in cross-servers mode:
 
 ```bash
 
-$ ./bin/self_test -u --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+$ self_test -u --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --master-endpoint 0-<MAX_RANK>:0-<MAX_TAG> \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
   --max-inflight-rpcs 16 --repetitions 100
@@ -356,6 +357,9 @@ spdk_nvme_perf -q 16 -o 4096 -w read -c 0xff -t 60
 operation and can be either (rand)read, (rand)write or (rand)rw. The test
 duration (in minutes) is defined by the `-t` parameter.
 
+!!! warning
+    *write and *rw options are destructive.
+
 This command uses all the available SSDs. Specific SSDs can be specified via the
 `--allowed-pci-addr` options followed by the PCIe addresses of the SSDs of
 interest.
@@ -364,7 +368,7 @@ The `-c` option is used to specify the CPU cores used to submit I/O under the
 form of a core mash. `-c 0xff` uses the first 8 cores.
 
 !!! note
-    One storage node using Intel VMD, the `--enable-vmd` must be specified.
+    On storage node using Intel VMD, the `--enable-vmd` option must be specified.
 
 Many more options are available. Please run `spdk_nvme_perf` to see the list of
 parameters that can be tweaked.
