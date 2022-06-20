@@ -339,7 +339,7 @@ chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 }
 
 void
-chk_pools_dump(uint32_t pool_nr, uuid_t pools[])
+chk_pools_dump(int pool_nr, uuid_t pools[])
 {
 	char	 buf[256];
 	char	*ptr = buf;
@@ -371,6 +371,23 @@ chk_pools_dump(uint32_t pool_nr, uuid_t pools[])
 	D_INFO("%s\n", buf);
 }
 
+int
+chk_pool_filter(uuid_t uuid, void *arg)
+{
+	struct chk_pool_filter_args	*cpfa = arg;
+	int				 i;
+
+	if (cpfa->cpfa_pool_nr <= 0)
+		return 0;
+
+	for (i = 0; i < cpfa->cpfa_pool_nr; i++) {
+		if (uuid_compare(uuid, cpfa->cpfa_pools[i]) == 0)
+			return 0;
+	}
+
+	return 1;
+}
+
 void
 chk_stop_sched(struct chk_instance *ins)
 {
@@ -385,7 +402,7 @@ chk_stop_sched(struct chk_instance *ins)
 
 int
 chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		 struct chk_policy *policies, uint32_t pool_nr, uuid_t pools[],
+		 struct chk_policy *policies, int pool_nr, uuid_t pools[],
 		 uint32_t flags, int phase, d_rank_t leader,
 		 struct chk_property *prop, d_rank_list_t **rlist)
 {

@@ -34,11 +34,6 @@ struct chk_traverse_pools_args {
 	uint32_t			 ctpa_status;
 };
 
-struct chk_engine_clues_args {
-	uint32_t			 ceca_pool_nr;
-	uuid_t				*ceca_pools;
-};
-
 struct chk_query_pool_args {
 	struct chk_instance		*cqpa_ins;
 	uint32_t			 cqpa_cap;
@@ -444,7 +439,7 @@ out:
 static int
 chk_engine_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
 			 uint32_t policy_nr, struct chk_policy *policies,
-			 uint32_t pool_nr, uuid_t pools[], uint64_t gen, int phase,
+			 int pool_nr, uuid_t pools[], uint64_t gen, int phase,
 			 uint32_t flags, d_rank_t leader, d_rank_list_t **rlist)
 {
 	struct chk_bookmark	*cbk = &ins->ci_bk;
@@ -681,27 +676,10 @@ out:
 	return rc;
 }
 
-static int
-chk_engine_clues_filter(uuid_t uuid, void *arg)
-{
-	struct chk_engine_clues_args	*ceca = arg;
-	int				 i;
-
-	if (ceca->ceca_pool_nr == 0)
-		return 0;
-
-	for (i = 0; i < ceca->ceca_pool_nr; i++) {
-		if (uuid_compare(uuid, ceca->ceca_pools[i]) == 0)
-			return 0;
-	}
-
-	return 1;
-}
-
 int
 chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
-		 uuid_t pools[], uint32_t flags, int32_t exp_phase, d_rank_t leader,
+		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
+		 uuid_t pools[], uint32_t flags, int exp_phase, d_rank_t leader,
 		 uint32_t *cur_phase, struct ds_pool_clues *clues)
 {
 	struct chk_instance		*ins = chk_engine;
@@ -711,7 +689,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 	struct chk_pool_rec		*cpr;
 	struct chk_pool_rec		*tmp;
 	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_engine_clues_args	 ceca = { 0 };
+	struct chk_pool_filter_args	 cpfa = { 0 };
 	struct umem_attr		 uma = { 0 };
 	uuid_t				 dummy_pool;
 	d_rank_t			 myrank = dss_self_rank();
@@ -838,9 +816,9 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_PREPARE ||
 	    cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
-		ceca.ceca_pool_nr = pool_nr;
-		ceca.ceca_pools = pools;
-		rc = ds_pool_clues_init(chk_engine_clues_filter, &ceca, clues);
+		cpfa.cpfa_pool_nr = pool_nr;
+		cpfa.cpfa_pools = pools;
+		rc = ds_pool_clues_init(chk_pool_filter, &cpfa, clues);
 		if (rc != 0)
 			goto out_bk;
 	}
@@ -880,7 +858,7 @@ out_log:
 	ins->ci_starting = 0;
 
 	if (rc == 0) {
-		D_INFO(DF_ENGINE" started on rank %u with %u ranks, %u pools, "
+		D_INFO(DF_ENGINE" started on rank %u with %u ranks, %d pools, "
 		       "flags %x, phase %d, leader %u\n",
 		       DP_ENGINE(ins), myrank, rank_nr, pool_nr, flags, exp_phase, leader);
 
@@ -893,7 +871,7 @@ out_log:
 	} else if (rc > 0) {
 		*cur_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
 	} else if (rc != -DER_ALREADY) {
-		D_ERROR(DF_ENGINE" failed to start on rank %u with %u ranks, %u pools, flags %x, "
+		D_ERROR(DF_ENGINE" failed to start on rank %u with %u ranks, %d pools, flags %x, "
 			"phase %d, leader %u, gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), myrank,
 			rank_nr, pool_nr, flags, exp_phase, leader, gen, DP_RC(rc));
 	}
@@ -904,7 +882,7 @@ out_log:
 }
 
 int
-chk_engine_stop(uint64_t gen, uint32_t pool_nr, uuid_t pools[])
+chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_property	*prop = &ins->ci_prop;
@@ -954,7 +932,7 @@ out:
 	ins->ci_stopping = 0;
 
 	if (rc == 0) {
-		D_INFO(DF_ENGINE" stopped on rank %u with %u pools\n",
+		D_INFO(DF_ENGINE" stopped on rank %u with %d pools\n",
 		       DP_ENGINE(ins), dss_self_rank(), pool_nr > 0 ? pool_nr : prop->cp_pool_nr);
 
 		if (pool_nr > 0)
@@ -964,7 +942,7 @@ out:
 	} else if (rc == -DER_ALREADY) {
 		rc = 1;
 	} else if (rc < 0) {
-		D_ERROR(DF_ENGINE" failed to stop on rank %u with %u pools, "
+		D_ERROR(DF_ENGINE" failed to stop on rank %u with %d pools, "
 			"gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), dss_self_rank(),
 			pool_nr > 0 ? pool_nr : prop->cp_pool_nr, gen, DP_RC(rc));
 	}
@@ -1127,7 +1105,7 @@ out:
 }
 
 int
-chk_engine_query(uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[],
 		 uint32_t *shard_nr, struct chk_query_pool_shard **shards)
 {
 	struct chk_instance		*ins = chk_engine;
@@ -1165,7 +1143,7 @@ log:
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
-		 DF_ENGINE" on rank %u handle query for %u pools :"DF_RC"\n",
+		 DF_ENGINE" on rank %u handle query for %d pools :"DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), pool_nr, DP_RC(rc));
 
 out:

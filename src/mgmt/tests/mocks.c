@@ -582,20 +582,20 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		    Mgmt__CheckInconsistPolicy **policies, uint32_t pool_nr, uuid_t pools[],
-		    uint32_t flags, int32_t phase)
+		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, uuid_t pools[],
+		    uint32_t flags, int phase)
 {
 	return 0;
 }
 
 int
-ds_mgmt_check_stop(uint32_t pool_nr, uuid_t pools[])
+ds_mgmt_check_stop(int pool_nr, uuid_t pools[])
 {
 	return 0;
 }
 
 int
-ds_mgmt_check_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+ds_mgmt_check_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		    chk_query_pool_cb_t pool_cb, void *buf)
 {
 	return 0;

@@ -919,7 +919,6 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	d_rank_list_t			*ranks = NULL;
 	struct ds_pool_clue		*clue;
 	char				*strs[3];
 	char				 suggested[128] = { 0 };
@@ -1010,7 +1009,8 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				goto report;
 
 			clue = chk_leader_locate_pool_clue(cpr);
-			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label, ranks);
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
 				/* Skip the pool if failed to register to MS. */
@@ -1107,7 +1107,7 @@ report:
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
-		/* Skip the corrupted if failed to interact with admin for further action. */
+		/* Skip the corrupted pool if failed to interact with admin for further action. */
 		cpr->cpr_skip = 1;
 		result = rc;
 	}
@@ -1157,19 +1157,30 @@ ignore:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
-		} else {
-			clue = chk_leader_locate_pool_clue(cpr);
-			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label, ranks);
-			if (result != 0) {
-				cbk->cb_statistics.cs_failed++;
-				/* Skip the pool if failed to register to MS. */
-				cpr->cpr_skip = 1;
-			}
 			/*
-			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
-			 *	We need to start the PS under DICTATE mode in subsequent step.
+			 * Under dryrun mode, we cannot start the PS with DICTATE
+			 * mode, then have to skip it.
 			 */
+			cpr->cpr_skip = 1;
+			break;
 		}
+
+		result = chk_leader_reset_pool_svc(cpr);
+		if (result != 0 || cpr->cpr_exist_on_ms)
+			break;
+
+		clue = chk_leader_locate_pool_clue(cpr);
+		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+					       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
+		if (result != 0) {
+			cbk->cb_statistics.cs_failed++;
+			/* Skip the pool if failed to register to MS. */
+			cpr->cpr_skip = 1;
+		}
+		/*
+		 * XXX: For result == 0 case, it still cannot be regarded as repaired.
+		 *	We need to start the PS under DICTATE mode in subsequent step.
+		 */
 		break;
 	}
 
@@ -1182,7 +1193,6 @@ out:
 	 * pool record and bookmark.
 	 */
 	chk_leader_post_repair(ins, cpr->cpr_uuid, &result, true, cpr->cpr_skip ? true : false);
-	d_rank_list_free(ranks);
 
 	return result;
 }
@@ -1277,9 +1287,242 @@ out:
 }
 
 static int
+chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue,
+			     struct chk_list_pool *clp)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	char				*strs[3];
+	char				 suggested[128] = { 0 };
+	d_iov_t				 iovs[3];
+	d_sg_list_t			 sgl;
+	d_sg_list_t			*details = NULL;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	uint64_t			 seq = 0;
+	uint32_t			 options[3];
+	uint32_t			 option_nr = 0;
+	uint32_t			 detail_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_BAD_LABEL;
+	act = prop->cp_policies[cla];
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * The pool label is mainly used by MS to lookup pool UUID by label.
+		 * The PS recorded label info is just some kind of backup. So trust
+		 * the label info on MS if exist.
+		 */
+		if (clp->clp_label == NULL)
+			goto try_ps;
+
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS:
+		D_FREE(clue->pc_label);
+		if (clp->clp_label != NULL) {
+			clue->pc_label_len = strlen(clp->clp_label) + 1;
+			D_ALLOC(clue->pc_label, clue->pc_label_len);
+			if (clue->pc_label == NULL) {
+				clue->pc_label_len = 0;
+				cbk->cb_statistics.cs_total++;
+				cbk->cb_statistics.cs_failed++;
+				result = -DER_NOMEM;
+				goto report;
+			}
+
+			memcpy(clue->pc_label, clp->clp_label, clue->pc_label_len - 1);
+		} else {
+			clue->pc_label_len = 0;
+		}
+
+		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
+		cpr->cpr_delay_label = 1;
+		goto out;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+
+try_ps:
+		cbk->cb_statistics.cs_total++;
+		seq = ++(ins->ci_seq);
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		cbk->cb_statistics.cs_total++;
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (clp->clp_label == NULL) {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
+			snprintf(suggested, 127,
+				 "Inconsistenct pool label: (null) (MS) vs %s (PS), "
+				 "Trust PS pool label [suggested]", clue->pc_label);
+			strs[1] = "Trust MS pool label.";
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+			snprintf(suggested, 127,
+				 "Inconsistenct pool label: (%s) (MS) vs %s (PS), "
+				 "Trust MS pool label [suggested]", clp->clp_label,
+				 clue->pc_label != NULL ? clue->pc_label : "(null)");
+			strs[1] = "Trust PS pool label.";
+		}
+
+		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 3;
+
+		strs[0] = suggested;
+		strs[2] = "Keep the inconsistent pool label, repair nothing.";
+
+		d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
+		d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
+		d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
+
+		sgl.sg_nr = 3;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs = iovs;
+
+		details = &sgl;
+		detail_nr = 1;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = detail_nr;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	cru.cru_msg = "Check leader detects corrupted pool label";
+	cru.cru_options = options;
+	cru.cru_details = details;
+	cru.cru_result = result;
+
+	rc = chk_leader_report(&cru, &seq, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_LEADER" detects corrupted label for pool "DF_UUIDF", action %u (%s), seq "
+		 DF_X64", MS label %s, PS label %s, handle_rc %d, report_rc %d, decision %d\n",
+		 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), act,
+		 option_nr ? "need interact" : "no interact", seq,
+		 clp->clp_label != NULL ? clp->clp_label : "(null)",
+		 clue->pc_label != NULL ? clue->pc_label : "(null)", result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_total++;
+		cbk->cb_statistics.cs_failed++;
+		/* It is unnecessary to skip the pool if failed to handle label inconsistency. */
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+		D_ERROR(DF_LEADER" got invalid decision %d for corrupted pool label"
+			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
+			DP_LEADER(ins), decision, DP_UUID(cpr->cpr_uuid), seq);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_total++;
+		cbk->cb_statistics.cs_ignored++;
+		/* It is unnecessary to skip the pool if ignore label inconsistency. */
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
+		D_FREE(clue->pc_label);
+		if (clp->clp_label != NULL) {
+			clue->pc_label_len = strlen(clp->clp_label) + 1;
+			D_ALLOC(clue->pc_label, clue->pc_label_len);
+			if (clue->pc_label == NULL) {
+				clue->pc_label_len = 0;
+				cbk->cb_statistics.cs_total++;
+				cbk->cb_statistics.cs_failed++;
+				result = -DER_NOMEM;
+				goto report;
+			}
+
+			memcpy(clue->pc_label, clp->clp_label, clue->pc_label_len - 1);
+		} else {
+			clue->pc_label_len = 0;
+		}
+
+		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
+		cpr->cpr_delay_label = 1;
+		goto out;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		cbk->cb_statistics.cs_total++;
+		seq = ++(ins->ci_seq);
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	/*
+	 * If decide to delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP,
+	 * then it is unnecessary to update the leader bookmark.
+	 */
+	chk_leader_post_repair(ins, cpr->cpr_uuid, &result,
+			       cpr->cpr_delay_label ? false : true, false);
+
+	return result;
+}
+
+static int
 chk_leader_handle_pools_list(struct chk_sched_args *csa)
 {
+	struct chk_pool_filter_args	 cpfa = { 0 };
 	struct chk_property		*prop = &csa->csa_ins->ci_prop;
+	struct ds_pool_clue		*clue = NULL;
 	struct chk_list_pool		*clp = NULL;
 	struct chk_pool_rec		*cpr;
 	struct chk_pool_rec		*tmp;
@@ -1296,47 +1539,64 @@ chk_leader_handle_pools_list(struct chk_sched_args *csa)
 		goto out;
 	}
 
+	cpfa.cpfa_pool_nr = prop->cp_pool_nr;
+	cpfa.cpfa_pools = prop->cp_pools;
+
 	/* Firstly, handle dangling pool(s) based on the comparison between engines and MS. */
 	for (i = 0; i < clp_nr; i++) {
+		/* Skip it the pool that is not in the check list. */
+		if (chk_pool_filter(clp[i].clp_uuid, &cpfa) != 0)
+			continue;
+
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, &clp[i].clp_uuid, sizeof(uuid_t));
 		rc = dbtree_lookup(csa->csa_hdl, &kiov, &riov);
 		if (rc == 0) {
 			cpr = (struct chk_pool_rec *)riov.iov_buf;
-			/*
-			 * As for whether pool service replicas and pool label match MS or not,
-			 * they will be handled in subsequent pass.
-			 */
 			cpr->cpr_exist_on_ms = 1;
-			continue;
-		}
 
-		if (rc == -DER_NONEXIST) {
-			rc = chk_leader_dangling_pool(csa->csa_ins, clp[i].clp_uuid);
+			rc = chk_leader_handle_pool_clues(cpr);
 			if (rc != 0)
 				goto out;
+
+			if (cpr->cpr_skip)
+				continue;
+
+			clue = chk_leader_locate_pool_clue(cpr);
+			if ((clue->pc_label == NULL && clp->clp_label == NULL) ||
+			    (clue->pc_label != NULL && clp->clp_label != NULL &&
+			     strcmp(clue->pc_label, clp->clp_label) == 0))
+				continue;
+
+			rc = chk_leader_handle_pool_label(cpr, clue, &clp[i]);
+		} else if (rc == -DER_NONEXIST) {
+			rc = chk_leader_dangling_pool(csa->csa_ins, clp[i].clp_uuid);
+		} else {
+			D_ERROR("Failed to verify pool "DF_UUIDF" existence with %s: "DF_RC"\n",
+				DP_UUID(clp[i].clp_uuid), (prop->cp_flags &
+				CHK__CHECK_FLAG__CF_FAILOUT) ? "failout" : "continue", DP_RC(rc));
+			if (!(prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+				rc = 0;
 		}
 
-		D_ERROR("Failed to verify pool "DF_UUIDF" existence with %s: "DF_RC"\n",
-			DP_UUID(clp[i].clp_uuid), (prop->cp_flags &
-			CHK__CHECK_FLAG__CF_FAILOUT) ? "failout" : "continue", DP_RC(rc));
-
-		if (prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
+		if (rc != 0)
 			goto out;
 	}
 
-	rc = 0;
-
 	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+		if (cpr->cpr_exist_on_ms || cpr->cpr_skip)
+			continue;
+
 		rc = chk_leader_handle_pool_clues(cpr);
 		if (rc != 0)
 			goto out;
 
-		if (!cpr->cpr_exist_on_ms && !cpr->cpr_skip) {
-			rc = chk_leader_orphan_pool(cpr);
-			if (rc != 0)
-				goto out;
-		}
+		if (cpr->cpr_skip)
+			continue;
+
+		rc = chk_leader_orphan_pool(cpr);
+		if (rc != 0)
+			goto out;
 	}
 
 out:
@@ -1530,7 +1790,7 @@ out:
 static int
 chk_leader_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
 			 uint32_t policy_nr, struct chk_policy *policies,
-			 uint32_t pool_nr, uuid_t pools[], int phase,
+			 int pool_nr, uuid_t pools[], int phase,
 			 uint32_t *flags, d_rank_list_t **rlist)
 {
 	struct chk_property	*prop = &ins->ci_prop;
@@ -1761,7 +2021,7 @@ out:
 int
 chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 		 uint32_t policy_nr, struct chk_policy *policies,
-		 uint32_t pool_nr, uuid_t pools[], uint32_t flags, int32_t phase)
+		 int pool_nr, uuid_t pools[], uint32_t flags, int phase)
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_property	*prop = &ins->ci_prop;
@@ -1909,7 +2169,7 @@ out_log:
 	ins->ci_starting = 0;
 
 	if (rc == 0) {
-		D_INFO("Leader %s check on %u ranks for %u pools with "
+		D_INFO("Leader %s check on %u ranks for %d pools with "
 		       "flags %x, phase %d, leader %u, gen "DF_X64"\n",
 		       (flags & CHK__CHECK_FLAG__CF_RESET) ? "start" : "restart",
 		       rank_nr, pool_nr, flags, phase, myrank, cbk->cb_gen);
@@ -1921,7 +2181,7 @@ out_log:
 		else if (prop->cp_pool_nr > 0)
 			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
 	} else if (rc != -DER_ALREADY) {
-		D_ERROR("Leader failed to start check on %u ranks for %u pools with "
+		D_ERROR("Leader failed to start check on %u ranks for %d pools with "
 			"flags %x, phase %d, leader %u, gen "DF_X64": "DF_RC"\n",
 			rank_nr, pool_nr, flags, phase, myrank, cbk->cb_gen, DP_RC(rc));
 	}
@@ -1947,7 +2207,7 @@ chk_leader_stop_cb(void *args, uint32_t rank, uint32_t phase, int result, void *
 }
 
 int
-chk_leader_stop(uint32_t pool_nr, uuid_t pools[])
+chk_leader_stop(int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_property	*prop = &ins->ci_prop;
@@ -2003,7 +2263,7 @@ out:
 	ins->ci_stopping = 0;
 
 	if (rc == 0) {
-		D_INFO("Leader stopped check with gen "DF_X64" for %u pools\n",
+		D_INFO("Leader stopped check with gen "DF_X64" for %d pools\n",
 		       cbk->cb_gen, pool_nr > 0 ? pool_nr : prop->cp_pool_nr);
 
 		if (pool_nr > 0)
@@ -2011,7 +2271,7 @@ out:
 		else if (prop->cp_pool_nr > 0)
 			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
 	} else {
-		D_ERROR("Leader failed to stop check with gen "DF_X64" for %u pools: "DF_RC"\n",
+		D_ERROR("Leader failed to stop check with gen "DF_X64" for %d pools: "DF_RC"\n",
 			cbk->cb_gen, pool_nr > 0 ? pool_nr : prop->cp_pool_nr, DP_RC(rc));
 	}
 
@@ -2102,7 +2362,7 @@ out:
 }
 
 int
-chk_leader_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		 chk_query_pool_cb_t pool_cb, void *buf)
 {
 	struct chk_instance	*ins = chk_leader;
@@ -2159,7 +2419,7 @@ chk_leader_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 out:
 	chk_csa_put(csa);
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Leader query check with gen "DF_X64" for %u pools: "DF_RC"\n",
+		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n",
 		 cbk->cb_gen, pool_nr, DP_RC(rc));
 	return rc;
 }

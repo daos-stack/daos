@@ -378,6 +378,7 @@ struct chk_pool_rec {
 				 cpr_done:1,
 				 cpr_skip:1,
 				 cpr_healthy:1,
+				 cpr_delay_label:1,
 				 cpr_exist_on_ms:1;
 	int			 cpr_advice;
 	uint32_t		 cpr_phase;
@@ -424,6 +425,11 @@ struct chk_report_unit {
 	uint32_t		 cru_result;
 };
 
+struct chk_pool_filter_args {
+	int32_t			 cpfa_pool_nr;
+	uuid_t			*cpfa_pools;
+};
+
 extern struct crt_proto_format	chk_proto_fmt;
 
 extern struct crt_corpc_ops	chk_start_co_ops;
@@ -440,12 +446,14 @@ extern btr_ops_t		chk_rank_ops;
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
 
-void chk_pools_dump(uint32_t pool_nr, uuid_t pools[]);
+void chk_pools_dump(int pool_nr, uuid_t pools[]);
+
+int chk_pool_filter(uuid_t uuid, void *arg);
 
 void chk_stop_sched(struct chk_instance *ins);
 
 int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy *policies, uint32_t pool_nr, uuid_t pools[],
+		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
 		     uint32_t flags, int phase, d_rank_t leader,
 		     struct chk_property *prop, d_rank_list_t **rlist);
 
@@ -469,13 +477,13 @@ void chk_ins_fini(struct chk_instance *ins);
 /* chk_engine.c */
 
 int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		     uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
-		     uuid_t pools[], uint32_t flags, int32_t exp_phase, d_rank_t leader,
+		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
+		     uuid_t pools[], uint32_t flags, int exp_phase, d_rank_t leader,
 		     uint32_t *cur_phase, struct ds_pool_clues *clues);
 
-int chk_engine_stop(uint64_t gen, uint32_t pool_nr, uuid_t pools[]);
+int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[]);
 
-int chk_engine_query(uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[],
 		     uint32_t *shard_nr, struct chk_query_pool_shard **shards);
 
 int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
@@ -524,14 +532,14 @@ void chk_leader_fini(void);
 /* chk_rpc.c */
 
 int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		     uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
-		     uuid_t pools[], uint32_t flags, int32_t phase, d_rank_t leader,
+		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
+		     uuid_t pools[], uint32_t flags, int phase, d_rank_t leader,
 		     chk_co_rpc_cb_t start_cb, void *args);
 
-int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		    chk_co_rpc_cb_t stop_cb, void *args);
 
-int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		     chk_co_rpc_cb_t query_cb, void *args);
 
 int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version);
@@ -539,7 +547,7 @@ int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint3
 int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
 		   uint32_t act, d_rank_t rank, bool for_all);
 
-int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int32_t result,
+int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
 		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
 		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
@@ -549,7 +557,7 @@ int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t pha
 
 /* chk_updcall.c */
 
-int chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int32_t result,
+int chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
 		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
 		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
