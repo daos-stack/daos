@@ -46,14 +46,14 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 
 ### POSIX Compliance
 
-The following features from POSIX will not be supported:
+The following features from POSIX are not supported:
 
 * Hard links
 * mmap support with MAP\_SHARED will be consistent from single client only. Note
   that this is supported through DFUSE only (i.e. not through the DFS API).
 * Char devices, block devices, sockets and pipes
 * User/group quotas
-* setuid(), setgid() programs, supplementary groups, ACLs are not supported
+* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
   within the DFS namespace.
 * [access/change/modify] time not updated appropriately, potentially on close only.
 * Flock (maybe at dfuse local node level only)
@@ -63,6 +63,16 @@ The following features from POSIX will not be supported:
 * POSIX permissions inside an encapsulated namespace
   * Still enforced at the DAOS pool/container level
   * Effectively means that all files belong to the same "project"
+
+!!! note
+    DFS directories do not include the `.` (current directory) and `..` (parent directory)
+    directory entries that are known from other POSIX filesystems.
+    Commands like `ls -al` will not include these entries in their output.
+    Those directorie entries are not required by POSIX, so this is not a limitation to POSIX
+    compliance. But scripts that parse directory listings under the assumption that those dot
+    directories are present may need to be adapted to to correctly handle this situation.
+    Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
+    containers.
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
 DFS provides two modes that offer different levels of consistency. The modes can
