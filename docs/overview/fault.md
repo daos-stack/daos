@@ -29,7 +29,7 @@ the selected object class.
 ## Fault Detection
 
 DAOS servers are monitored within a DAOS system through a gossip-based protocol
-called [SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)
+called [SWIM](https://doi.org/10.1109/DSN.2002.1028914)
 that provides accurate, efficient, and scalable server fault detection.
 Storage attached to each DAOS target is monitored through periodic local
 health assessment. Whenever a local storage I/O error is returned to the

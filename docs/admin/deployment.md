@@ -618,8 +618,8 @@ list specifying details for each DAOS I/O instance to be started on the host
 (currently a maximum of 2 per host is imposed).
 
 Devices with the same NUMA rating/node/socket should be colocated on
-a single DAOS I/O instance where possible.
-[more details](#server-configuration)
+a single DAOS I/O instance where possible
+([more details](#server-configuration-file)).
 
 - `bdev_list` should be populated with NVMe PCI addresses
 - `scm_list` should be populated with PMem interleaved set namespaces

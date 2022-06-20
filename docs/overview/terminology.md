@@ -40,7 +40,7 @@
 |RDG|Redundancy Group|
 |RPC|Remote Procedure Call|
 |SCM|Storage-Class Memory|
-|[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership|
+|[SWIM](https://doi.org/10.1109/DSN.2002.1028914)|Scalable Weakly-consistent Infection-style process group Membership|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
 |SWIM|Scalable Weakly-consistent Infection-style process group Membership protocol|
