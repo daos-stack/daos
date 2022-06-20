@@ -27,13 +27,6 @@ and the following test scenarios:
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-<<<<<<< HEAD
-### Building CaRT self\_test
-
-The CaRT `self_test` and its tests are delivered as part of the daos-client
-and daos-tests [distribution packages](https://packages.daos.io/).
-It can also be built from scratch.
-=======
 The mode is selected via the `--master-endpoint` option. If this option is
 notified on the command line, then we are in the first mode and the self_test
 binary itself issues the RPCs. If one or several master endpoint are specified,
@@ -53,20 +46,12 @@ The DAOS engine uses the following mapping:
 As an example, an engine with `targets: 16` and `nr_xs_helpers: 4` would use the
 following tag distributions:
 
-<<<<<<< HEAD
-For detailed information, please refer to the
-[DAOS build documentation](https://docs.daos.io/v2.0/QSG/build_from_scratch/)
-section.
-
-### Running CaRT self\_test
-=======
 - tag 0: metadata service
 - tag 1: monitoring service
 - tag 2-17: targets 0 to 15 (16 targets total)
 - tag 18-21: helper service
 
 For a total of 21 endpoints exported by this engine.
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 The RPC flow sent over the network can be configured via the `--message-sizes`
 options that take a list of size tuples. Performance will be reported individually
@@ -77,16 +62,8 @@ the underlying transport mechanism. Available types are:
 - 'i' - I/O vector (IOV)
 - 'b' - Bulk transfer
 
-<<<<<<< HEAD
-`self_test` requires DAOS server to be running before attempt running
-`self_test`. For detailed instruction on how to start DAOS server, please refer
-to the
-[server startup](https://docs.daos.io/v2.0/admin/deployment/#server-startup)
-documentation.
-=======
 For example, (b1000) would transfer 1000 bytes via bulk in both directions. Similarly,
 (i100 b1000) would use IOV to send and bulk to reply.
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 `--repetitions-per-size` can be used to define the Number of samples per message
 size per endpoint with a default value of 10000. `--max-inflight-rpcs`
@@ -99,23 +76,9 @@ please run:
 $ self_test --help
 ```
 
-<<<<<<< HEAD
-**Prepare hostfile**
-
-The list of nodes from which `self_test` will run can be specified in a
-hostfile (referred to as ${hostfile}). Hostfile used here is the same as the
-ones used by OpenMPI. For additional details, please refer to the
-[mpirun documentation](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile).
-
-**Run CaRT self_test**
-
-The example below uses an Ethernet interface and Sockets provider.
-In the `self_test` commands:
-=======
 ### Example: Client-to-Servers
 
 To run self\_test in client-to-servers mode:
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 ```bash
 self_test -u --group-name daos_server --endpoint 0:2 --message-size '(0 b1048578)' --max-inflight-rpcs 16 --repetitions 100000
@@ -140,35 +103,9 @@ following command line:
 self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0)" --max-inflight-rpcs 16 --repetitions 100000
 ```
 
-<<<<<<< HEAD
-**To run self_test in client-to-servers mode:**
-(Assuming sockets provider over eth0)
-```bash
-
-# Specify provider
-export CRT_PHY_ADDR_STR='ofi+sockets'
-
-# Specify interface
-export OFI_INTERFACE=eth0
-
-# Specify domain; usually only required when running over ofi+verbs;ofi_rxm
-# For example in such configuration OFI_DOMAIN might be set to mlx5_0
-# run fi_info --provider='verbs;ofi_rxm' in order to find an appropriate domain
-export OFI_DOMAIN=eth0
-
-# Export additional CART-level environment variables as described in README.env
-# if needed. For example export D_LOG_FILE=/path/to/log will allow dumping of the
-# log into the file instead of stdout/stderr
-
-$ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
-  --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-  --max-inflight-rpcs 16 --repetitions 100 -p /path/to/attach_info
-```
-=======
 0 could be replaced with i2048 for instance to send a payload of 2Kb.
 
 All those 3 tests could be combined in a single and unique run:
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 ```bash
 self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
@@ -176,59 +113,6 @@ self_test -u --group-name daos_server --endpoint 0:2 --message-size "(0 0) (b104
 
 RPCs could also be send to a range of engine ranks and tags as follows:
 
-<<<<<<< HEAD
-DAOS can be benchmarked using several widely used IO benchmarks like IOR,
-mdtest, and FIO. There are several backends that can be used with those
-benchmarks.
-
-### ior
-
-[IOR](https://github.com/hpc/ior) with the following backends:
-
--   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers
-    that are accessed over dfuse. This works without or with the I/O
-    interception library (`libioil`). Performance is significantly better when
-    using `libioil`. For detailed information on dfuse usage with the IO
-    interception library, please refer to the
-    [POSIX DFUSE](https://docs.daos.io/v2.0/user/filesystem/) section.
-
--   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
-    with DAOS support, and selecting API=DFS. This integrates IOR directly with the
-    DAOS File System (`libdfs`), without requiring FUSE or an interception library.
-    Please refer to the [DAOS README][10] in the hpc/ior repository for some basic
-    instructions on how to use the DFS driver.
-
--   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
-    providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
-    and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
-    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository and
-    included with Intel MPI. Please refer to the
-    [MPI-IO documentation](https://docs.daos.io/v2.0/user/mpi-io/).
-
--   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
-    directly to the DAOS data model, and works in conjunction with DAOS containers of
-    `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
-    the other IOR APIs). Please refer the the
-    [HDF5 with DAOS](https://docs.daos.io/v2.0/user/hdf5/) documentation.
-
-IOR has several parameters to characterize performance. The main parameters to
-work with include:
-- transfer size (-t)
-- block size (-b)
-- segment size (-s)
-
-For more use cases, the [IO-500 workloads](https://github.com/IO500/io500)
-are a good starting point to measure
-performance on a system:
-
-### mdtest
-
-mdtest is released in the same repository as IOR. The corresponding backends
-that are listed above support mdtest, except for the MPI-IO and HDF5 backends
-that were only designed to support IOR. The
-[DAOS README](https://github.com/hpc/ior/blob/main/README_DAOS)
-in the hpc/ior repository includes some examples to run mdtest with DAOS.
-=======
 ```bash
 self_test -u --group-name daos_server --endpoint 0-<MAX_RANK>:0-<MAX_TAG> --message-size "(0 0) (b1048578 0) (0 b1048578)" --max-inflight-rpcs 16 --repetitions 100000
 ```
@@ -238,7 +122,6 @@ self_test -u --group-name daos_server --endpoint 0-<MAX_RANK>:0-<MAX_TAG> --mess
     This can be forced by setting the OFI\_INTERFACE and OFI\_DOMAIN environment
     variables manually. e.g. export OFI\_INTERFACE=eth0; export OFI\_DOMAIN=eth0
     or export OFI\_INTERFACE=ib0; export OFI\_DOMAIN=mlx5_0
->>>>>>> e83fbe844 (DAOS-9881 doc: improve perf tuning section (#9374))
 
 !!! note
     Depending on the HW configuration, the agent might assign a different
