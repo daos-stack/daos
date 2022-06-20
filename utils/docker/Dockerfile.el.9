@@ -1,12 +1,12 @@
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2022 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of EL 8 based
+# 'recipe' for Docker to build an image of EL 9 based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-ARG BASE_DISTRO=rockylinux/rockylinux:8
+ARG BASE_DISTRO=almalinux:9
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
@@ -18,27 +18,25 @@ ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
-             "$REPO_FILE_URL"daos_ci-el8-artifactory.repo &&     \
+        curl -k -f -o daos_ci-el9-artifactory.repo.tmp           \
+             "$REPO_FILE_URL"daos_ci-el9-artifactory.repo &&     \
         for file in *.repo; do                                   \
             true > $file;                                        \
         done;                                                    \
-        mv daos_ci-el8-artifactory.repo{.tmp,};                  \
+        mv daos_ci-el9-artifactory.repo{.tmp,};                  \
     fi;                                                          \
     dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --disablerepo \*epel\* install epel-release;         \
-        dnf install epel-release;                                \
-        if [ -n "$REPO_FILE_URL" ]; then                         \
-            PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
-        else                                                     \
-            PT_REPO=powertools;                                  \
-        fi;                                                      \
-        dnf config-manager --enable $PT_REPO;                    \
+    dnf --disablerepo \*epel\* install epel-release;             \
+    dnf install epel-release;                                    \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        PT_REPO=daos_ci-rocky8-crb-artifactory;                  \
+    else                                                         \
+        PT_REPO=crb;                                             \
     fi;                                                          \
-    dnf clean all
+    dnf -y config-manager --enable $PT_REPO;                     \
+    dnf -y clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -55,14 +53,14 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el9/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-el8.sh /tmp/install.sh
+COPY ./utils/scripts/install-el9.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
@@ -134,17 +132,17 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                       \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf clean all;                                                                 \
+        dnf clean all;                                                         \
     }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
-              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
+        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
+              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&          \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root
@@ -174,9 +172,11 @@ ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
+# Build client only for now since some deps couldn't be satisfied yet see
+# install-el9.sh
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE client && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \
@@ -191,13 +191,14 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
-        mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-        mvn clean install -T 1C                                                               \
-            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
-    }
+# Disable Java build for now since it fails
+#RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+#        mkdir /home/daos/.m2 &&                                                               \
+#        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
+#        mvn clean install -T 1C                                                               \
+#            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn                                                   \
+#            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
+#    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
