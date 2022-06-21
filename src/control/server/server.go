@@ -40,7 +40,17 @@ import (
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	return func(l logging.Logger, e *engine.Config) (uint, error) {
-		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		iface, err := e.Fabric.GetPrimaryInterface()
+		if err != nil {
+			return 0, err
+		}
+
+		prov, err := e.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return 0, err
+		}
+
+		fi, err := fis.GetInterfaceOnNetDevice(iface, prov)
 		if err != nil {
 			return 0, err
 		}
@@ -505,7 +515,11 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
 	ifaces := make([]string, 0, len(cfg.Engines))
 	for _, eng := range cfg.Engines {
-		ifaces = append(ifaces, eng.Fabric.Interface)
+		engIfaces, err := eng.Fabric.GetInterfaces()
+		if err != nil {
+			return err
+		}
+		ifaces = append(ifaces, engIfaces...)
 	}
 
 	// Skip wait if no fabric interfaces specified in config.
