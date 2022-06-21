@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
@@ -21,11 +19,10 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 testparams:
-  ranks:
-    rank_to_kill:
-      - 6
-      - 5
-      - [3,4]
+  ranks_to_kill:
+    - [6]
+    - [5]
+    - [3,4]
 pool:
   mode: 146
   name: daos_server
@@ -39,13 +36,13 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
+  properties: "rf:2"
 mdtest:
   api: DFS
   client_processes:
     np: 30
   num_of_files_dirs: 4067         # creating total of 120K files
   test_dir: "/"
-  iteration: 1
   dfs_destroy: False
   dfs_oclass: RP_3G1
   dfs_dir_oclass: RP_3G1

@@ -21,17 +21,17 @@ basic_pda_test(void **state)
 	struct pl_map		*pl_map;
 
 	/* --------------------------------------------------------- */
-	print_message("\nWith 2 domains, 2 nodes each, 2 targets each = 8 targets\n");
-	gen_maps(1, 2, 2, 2, &po_map, &pl_map);
+	print_message("\nWith 2 domains, 1 nodes each, 4 targets each = 8 targets\n");
+	gen_maps(1, 2, 1, 4, &po_map, &pl_map);
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2, 0);
 
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/* --------------------------------------------------------- */
-	print_message("\nWith 4 PDs, 4 domains each PD, 2 nodes each domain, "
-		      "8 targets each node = 256 targets\n");
-	gen_maps(4, 4, 2, 8, &po_map, &pl_map);
+	print_message("\nWith 2 PDs, 4 domains each PD, 2 nodes each domain, "
+		      "16 targets each node = 256 targets\n");
+	gen_maps(2, 4, 2, 16, &po_map, &pl_map);
 	print_message("place OC_RP_4G2 pda 3\n");
 	assert_placement_success_print(pl_map, OC_RP_4G2, 3);
 	print_message("place OC_EC_4P2G2 pda 1\n");

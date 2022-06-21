@@ -2288,7 +2288,7 @@ struct pmap_fail_ver {
 struct pmap_fail_node {
 	struct pmap_fail_ver	 pf_ver_inline[PMAP_FAIL_INLINE_NR];
 	struct pmap_fail_ver	*pf_vers;
-	uint32_t		 pf_co_rank;
+	uint32_t		 pf_co_id;
 	uint32_t		 pf_ver_total;	/* capacity of pf_vers array */
 	uint32_t		 pf_ver_nr;	/* #valid items */
 	uint32_t		 pf_down:1,	/* with DOWN tgt */
@@ -2313,11 +2313,10 @@ struct pmap_fail_stat {
 static void
 pmap_fail_node_init(struct pmap_fail_node *fnode)
 {
+	memset(fnode, 0, sizeof(*fnode));
 	fnode->pf_vers = fnode->pf_ver_inline;
 	fnode->pf_ver_total = PMAP_FAIL_INLINE_NR;
 	fnode->pf_ver_nr = 0;
-	memset(fnode->pf_vers, 0,
-	       sizeof(struct pmap_fail_ver) * fnode->pf_ver_total);
 }
 
 static void
@@ -2365,6 +2364,7 @@ pmap_fail_node_get(struct pmap_fail_stat *fstat)
 
 	D_ASSERT(fstat->pf_node_nr < fstat->pf_node_total);
 	fnode = &fstat->pf_nodes[fstat->pf_node_nr++];
+	pmap_fail_node_init(fnode);
 	return fnode;
 }
 
@@ -2569,7 +2569,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 	if (fnode == NULL || fnode->pf_ver_nr == 0)
 		return 0;
 
-	fnode->pf_co_rank = node_dom->do_comp.co_rank;
+	fnode->pf_co_id = node_dom->do_comp.co_id;
 	daos_array_sort(fnode->pf_vers, fnode->pf_ver_nr, false,
 			&pmap_fver_sort_ops);
 	pmap_fail_ver_merge(fnode);
@@ -2673,24 +2673,24 @@ fail:
  * Check if #concurrent_failures exceeds RF since pool map version \a last_ver.
  */
 int
-pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf)
+pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
 {
 	struct pool_domain	*node_doms;
 	struct pool_domain	*node_dom;
 	struct pmap_fail_stat	 fstat;
 	int			 node_nr, i;
+	int			 com_type;
 	int			 rc = 0;
 
 	pmap_fail_stat_init(&fstat, last_ver, rf);
-	node_nr = pool_map_find_domain(map, PO_COMP_TP_RANK, PO_COMP_ID_ALL,
-				       &node_doms);
+	com_type = rlvl == DAOS_PROP_CO_REDUN_NODE ? PO_COMP_TP_NODE : PO_COMP_TP_RANK;
+	node_nr = pool_map_find_domain(map, com_type, PO_COMP_ID_ALL, &node_doms);
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
 		return -DER_INVAL;
 
 	for (i = 0; i < node_nr; i++) {
 		node_dom = &node_doms[i];
-		D_ASSERT(node_dom->do_children == NULL);
 		rc = pmap_node_check(node_dom, &fstat);
 		if (rc)
 			goto out;

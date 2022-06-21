@@ -359,7 +359,10 @@ enum {
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,
-	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	/* server rank (engine) level */
+	DAOS_PROP_CO_REDUN_RANK	= 1,
+	/* server node level */
+	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
@@ -555,7 +558,8 @@ daos_prop_free(daos_prop_t *prop);
  * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
  * \a prop must be freed with daos_prop_free() to release allocated space.
  * This supports properties that can be modified on container creation only:
- * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *   label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression,
+ *   encryption, rf, ec_cell_sz
  *
  * \param[in]	str	Serialized string of property entries and their values
  * \param[in]	len	Serialized string length

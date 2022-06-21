@@ -76,8 +76,8 @@ nav:
           - 'Use Cases': 'overview/use_cases.md'
           - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-          - 'CentOS': 'QSG/setup_centos.md'
-          - 'openSUSE': 'QSG/setup_suse.md'
+          - 'RHEL and clones': 'QSG/setup_rhel.md'
+          - 'SUSE': 'QSG/setup_suse.md'
           - 'DAOS in Docker': 'QSG/docker.md'
           - 'Build from Scratch': 'QSG/build_from_scratch.md'
           - 'Admin/Client Tools': 'QSG/tour.md'
@@ -93,7 +93,6 @@ nav:
           - 'Environment Variables': 'admin/env_variables.md'
     - Test and Benchmarking:
           - 'Run DAOS Autotest': 'testing/autotest.md'
-          - 'Run CaRT Self_test': 'testing/cartselftest.md'
           - 'Run IOR and mdtest': 'testing/ior.md'
           - 'Run dbench': 'testing/dbench.md'
           - 'Run Datamover test': 'testing/datamover.md'

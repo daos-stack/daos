@@ -1,6 +1,7 @@
 """Build ftest"""
 import os
 
+
 def scons():
     """Execute build"""
     Import('env')
@@ -15,7 +16,7 @@ def scons():
             'daos_test', 'data', 'fault_domain', 'io', 'ior',
             'mdtest', 'network', 'nvme', 'mpiio',
             'object', 'osa', 'pool', 'rebuild', 'security',
-            'server', 'soak', 'unittest', 'erasurecode',
+            'server', 'soak', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness',
             'telemetry', 'deployment', 'performance']
 
@@ -33,6 +34,7 @@ def scons():
 
     # util
     SConscript('util/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

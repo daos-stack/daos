@@ -186,55 +186,7 @@ static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	struct rdb_tx	tx;
-	d_iov_t		value;
-	uint32_t	version;
-	int		rc;
-
-	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
-	if (rc != 0)
-		goto out;
-	ABT_rwlock_rdlock(svc->cs_lock);
-
-	/* Check the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
-	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->cs_pool_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version");
-		rc = -DER_DF_INCOMPT;
-		goto out_lock;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
-			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-		goto out_lock;
-	}
-	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->cs_pool_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version: %u not in "
-				     "[%u, %u]", version,
-				     DS_CONT_MD_VERSION_LOW,
-				     DS_CONT_MD_VERSION);
-		rc = -DER_DF_INCOMPT;
-	}
-
-out_lock:
-	ABT_rwlock_unlock(svc->cs_lock);
-	rdb_tx_end(&tx);
-	if (rc != 0)
-		goto out;
+	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
 	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
@@ -245,7 +197,6 @@ out_lock:
 		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
 
-out:
 	return rc;
 }
 
@@ -317,18 +268,8 @@ int
 ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		      const uuid_t pool_uuid)
 {
-	d_iov_t			value;
-	uint32_t		version = DS_CONT_MD_VERSION;
 	struct rdb_kvs_attr	attr;
 	int			rc;
-
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_update(tx, kvs, &ds_cont_prop_version, &value);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to initialize layout version: %d\n",
-			DP_UUID(pool_uuid), rc);
-		return rc;
-	}
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
@@ -1459,7 +1400,7 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
-		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN,
+		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
 			D_ERROR(DF_UUID": ranks init failed: %d\n",
@@ -1815,10 +1756,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	is_healthy = cont_status_is_healthy(prop, &stat_pm_ver);
 	out->coo_op.co_map_version = stat_pm_ver;
 	if (is_healthy) {
-		int	rf;
+		int	rf, rlvl;
 
+		rlvl = daos_cont_prop2redunlvl(prop);
 		rf = daos_cont_prop2redunfac(prop);
-		rc = ds_pool_rf_verify(pool_hdl->sph_pool, stat_pm_ver, rf);
+		rc = ds_pool_rf_verify(pool_hdl->sph_pool, stat_pm_ver, rlvl, rf);
 		if (rc == -DER_RF) {
 			is_healthy = false;
 		} else if (rc) {
@@ -2557,13 +2499,16 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		  uint32_t last_ver)
 {
 	struct daos_prop_entry	*entry;
-	int			 rf;
+	int			 rf, rlvl;
 	int			 rc;
 
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_LVL);
+	D_ASSERT(entry != NULL);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
 	D_ASSERT(entry != NULL);
+	rlvl = daos_cont_prop2redunlvl(prop);
 	rf = daos_cont_prop2redunfac(prop);
-	rc = ds_pool_rf_verify(pool, last_ver, rf);
+	rc = ds_pool_rf_verify(pool, last_ver, rlvl, rf);
 	if (rc == -DER_RF) {
 		rc = 0;
 		cont_status_set_unclean(prop);
@@ -2618,12 +2563,12 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
-		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+		in->cqi_bits |= (DAOS_CO_QUERY_PROP_REDUN_FAC | DAOS_CO_QUERY_PROP_REDUN_LVL);
 
 	/* Currently DAOS_CO_QUERY_TGT not used; code kept for future expansion. */
 	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
 		/* need RF if user query cont_info */
-		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+		in->cqi_bits |= (DAOS_CO_QUERY_PROP_REDUN_FAC | DAOS_CO_QUERY_PROP_REDUN_LVL);
 		rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
 				      in->cqi_op.ci_hdl, out);
 		if (rc)
@@ -3536,7 +3481,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uint64_t			 pda;
 	int				 rc;
 	bool				 upgraded = false;
-	uint32_t			 global_ver;
+	uint32_t			 global_ver = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	(void)val;
@@ -3577,6 +3522,21 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc)
 		goto out;
+
+	global_ver = DS_POOL_GLOBAL_VERSION;
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_global_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
+	}
+	upgraded = true;
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_GLOBAL_VERSION);
+	D_ASSERT(entry != NULL);
+	D_ASSERT(daos_prop_is_set(entry) == false);
+	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+	entry->dpe_val = global_ver;
 
 	d_iov_set(&value, &pda, sizeof(pda));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,

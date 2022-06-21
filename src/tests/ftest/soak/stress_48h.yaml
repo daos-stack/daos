@@ -73,6 +73,11 @@ pool_reserved:
     scm_size: 3GB
     nvme_size: 50GB
     control_method: dmg
+pool_racer:
+    name: daos_server
+    scm_size: 3GB
+    nvme_size: 10GB
+    control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -103,6 +108,9 @@ soak_stress:
         - daos_racer
         - ior_stress
         - mdtest_stress
+        - vpic_stress
+        - lammps_stress
+        - macsio_stress
     ignore_soak_errors: False
 # Commandline parameters
 # Benchmark and application params
@@ -181,6 +189,34 @@ fio_stress:
     disable_wb_caching: True
 daos_racer:
     runtime: 120
+vpic_stress:
+# Requires opeapi
+    job_timeout: 20
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    module: mpi/latest
+    posix: True
+    workdir: "/tmp/daos_dfuse/vpic/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "EC_2P1GX"
+lammps_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj"
+    posix: True
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "EC_2P1GX"
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 40
@@ -215,6 +251,35 @@ mdtest_stress:
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
+macsio_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    taskspernode:
+        - 16
+    api:
+        - HDF5
+        - HDF5-VOL
+    interface: hdf5
+    parallel_file_mode: SIF 1
+    filebase: daos
+    units_prefix_system: decimal
+    part_size: 10M
+    avg_num_parts: 2.5
+    num_dumps: 2
+    debug_level: 1
+    oclass:
+        - "SX"
+        - "EC_2P1GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/macsio/"
         disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"

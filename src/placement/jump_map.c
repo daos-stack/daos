@@ -45,6 +45,8 @@ struct jm_obj_placement {
 	struct pool_domain	 *jmop_root;
 	unsigned int		  jmop_grp_size;
 	unsigned int		  jmop_grp_nr;
+	pool_comp_type_t	  jmop_fdom_lvl;
+	uint32_t		  jmop_dom_nr;
 	/* #PDs to-be-used for the obj */
 	unsigned int		  jmop_pd_nr;
 	/* For zero jmop_pd_nr, non-sense for below fields */
@@ -268,6 +270,7 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
 	int                     rc;
+	uint32_t		dom_nr;
 	uint32_t		nr_grps;
 
 	jmop->jmop_pd_ptrs = NULL;
@@ -285,7 +288,20 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 				  PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 
-	rc = op_get_grp_size(jmap->jmp_domain_nr, &jmop->jmop_grp_size, oid);
+	if (md->omd_fdom_lvl == 0 || md->omd_fdom_lvl == jmap->jmp_redundant_dom) {
+		dom_nr = jmap->jmp_domain_nr;
+		jmop->jmop_fdom_lvl = jmap->jmp_redundant_dom;
+	} else {
+		D_ASSERT(md->omd_fdom_lvl == PO_COMP_TP_RANK ||
+			 md->omd_fdom_lvl == PO_COMP_TP_NODE);
+		rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, md->omd_fdom_lvl,
+					  PO_COMP_ID_ALL, NULL);
+		D_ASSERT(rc > 0);
+		jmop->jmop_fdom_lvl = md->omd_fdom_lvl;
+		dom_nr = rc;
+	}
+	jmop->jmop_dom_nr = dom_nr;
+	rc = op_get_grp_size(dom_nr, &jmop->jmop_grp_size, oid);
 	if (rc)
 		return rc;
 
@@ -462,7 +478,7 @@ retry:
 		num_doms = get_num_domains(curr_dom, allow_status);
 
 		/* If choosing target (lowest fault domain level) */
-		if (curr_dom->do_children == NULL) {
+		if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl) {
 			uint32_t        fail_num = 0;
 			uint32_t        dom_id;
 			uint32_t        start_tgt;
@@ -557,7 +573,7 @@ retry:
 				grp_shard_nr_left = grp_size - (shard_num % grp_size);
 				grp_dom_nr_used = 0;
 				if (remap || curr_dom_used_by_grp ||
-				    curr_dom->do_comp.co_type != fdom_lvl ||
+				    curr_dom->do_comp.co_type <= fdom_lvl ||
 				    curr_pd != root_pos) {
 					curr_dom = dom_stack[top--];
 					continue;
@@ -803,7 +819,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			curr_pd = jm_obj_shard_pd(jmop, shard_id);
 			get_target(root, curr_pd, &spare_tgt, crc(key, rebuild_key), dom_used,
 				   dom_occupied, dgu->dgu_used, tgts_used, shard_id,
-				   jmop->jmop_grp_size, allow_status, jmap->jmp_redundant_dom,
+				   jmop->jmop_grp_size, allow_status, jmop->jmop_fdom_lvl,
 				   true);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
@@ -1019,7 +1035,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				curr_pd = jm_obj_shard_pd(jmop, k);
 				get_target(root, curr_pd, &target, key, dom_used, dom_occupied,
 					   dom_cur_grp_used, tgts_used, k, jmop->jmop_grp_size,
-					   allow_status, jmap->jmp_redundant_dom, false);
+					   allow_status, jmop->jmop_fdom_lvl, false);
 			}
 
 			if (target == NULL) {

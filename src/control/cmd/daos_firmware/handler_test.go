@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -34,7 +34,7 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 	}
 
 	cmpOpts := []cmp.Option{
-		cmp.Comparer(common.CmpErrBool),
+		cmp.Comparer(test.CmpErrBool),
 	}
 	if diff := cmp.Diff(expPayload, payload, cmpOpts...); diff != "" {
 		t.Errorf("got wrong payload (-want, +got)\n%s\n", diff)
@@ -120,7 +120,7 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, nil)
 			handler := &scmQueryHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -209,7 +209,7 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, nil)
 			handler := &scmUpdateHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -302,7 +302,7 @@ func TestDaosFirmware_NvmeUpdateHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			bp := bdev.NewMockProvider(log, tc.nmbc)
 			handler := &nvmeUpdateHandler{bdevHandler: bdevHandler{bdevProvider: bp}}

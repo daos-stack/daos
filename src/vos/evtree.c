@@ -3462,7 +3462,7 @@ evt_node_delete(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*node;
-	struct evt_node_entry	*ne;
+	struct evt_node_entry	*ne = NULL;
 	void			*data;
 	umem_off_t		*child_offp;
 	umem_off_t		 child_off;
