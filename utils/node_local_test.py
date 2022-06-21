@@ -1416,6 +1416,9 @@ def create_cont(conf,
                 log_check=True):
     """Create a container and return the uuid"""
 
+    print("DBG> -------------------")
+    for line in traceback.format_stack():
+        print(line.strip())
     cmd = ['container', 'create']
 
     if pool:
@@ -1453,6 +1456,10 @@ def create_cont(conf,
     if label:
         assert label == rc.json['response']['container_label']
     else:
+        if 'container_label' in rc.json['response'].keys():
+            print('DBG> Error!!!')
+            for line in traceback.format_stack():
+                print(line.strip())
         assert 'container_label' not in rc.json['response'].keys()
     return rc.json['response']['container_uuid']
 
