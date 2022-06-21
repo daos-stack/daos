@@ -68,7 +68,7 @@ The following features from POSIX are not supported:
     DFS directories do not include the `.` (current directory) and `..` (parent directory)
     directory entries that are known from other POSIX filesystems.
     Commands like `ls -al` will not include these entries in their output.
-    Those directorie entries are not required by POSIX, so this is not a limitation to POSIX
+    Those directory entries are not required by POSIX, so this is not a limitation to POSIX
     compliance. But scripts that parse directory listings under the assumption that those dot
     directories are present may need to be adapted to to correctly handle this situation.
     Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
