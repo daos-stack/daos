@@ -6,6 +6,7 @@ server_config:
   name: daos_server
   servers:
     targets: 1
+    nr_xs_helpers: 0
 pool:
   createset:
     name: daos_server

@@ -2,21 +2,26 @@ hosts:
   test_servers:
     - server-A
 timeout: 90
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
-    name: daos_server
-    control_method: dmg
-    scm_size: 1G
+  name: daos_server
+  control_method: dmg
+  scm_size: 1G
 pool_1:
-    name: daos_server
-    control_method: dmg
-    scm_size: 1G
-    properties: ec_pda:2,rp_pda:4
+  name: daos_server
+  control_method: dmg
+  scm_size: 1G
+  properties: ec_pda:2,rp_pda:4
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 container_1:
-    type: POSIX
-    pda_properties:
-      - 3       # ec_pda
-      - 5       # rp_pda
-    control_method: daos
+  type: POSIX
+  pda_properties:
+    - 3       # ec_pda
+    - 5       # rp_pda
+  control_method: daos

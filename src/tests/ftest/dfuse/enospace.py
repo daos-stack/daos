@@ -34,7 +34,7 @@ class Enospace(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuseenospace
+        :avocado: tags=dfuseenospace,test_enospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)

@@ -4,6 +4,9 @@ hosts:
 timeout: 135 # 1.5 times of measured time.
 server_config:
   name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something

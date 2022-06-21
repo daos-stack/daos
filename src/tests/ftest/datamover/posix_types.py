@@ -229,7 +229,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dcp
+        :avocado: tags=dm_posix_types,dm_posix_types_dcp,test_dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
 
@@ -241,7 +241,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dsync,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dsync
+        :avocado: tags=dm_posix_types,dm_posix_types_dsync,test_dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
 
@@ -254,6 +254,6 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
+        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

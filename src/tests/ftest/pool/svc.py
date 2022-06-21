@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -63,8 +63,9 @@ class PoolSvc(TestWithServers):
         """Test svc arg during pool create.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=medium
-        :avocado: tags=pool,pool_svc,test_pool_svc,svc
+        :avocado: tags=vm
+        :avocado: tags=pool,svc
+        :avocado: tags=pool_svc,test_pool_svc
         :avocado: tags=DAOS_5610
         """
         # parameter used in pool create

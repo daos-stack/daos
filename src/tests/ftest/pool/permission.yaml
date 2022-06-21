@@ -12,22 +12,25 @@ hosts:
     - server-B
 timeout: 300
 server_config:
-    name: daos_server
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
-    control_method: dmg
-    scm_size: 1000000000
-    name: daos_server
+  control_method: dmg
+  scm_size: 1000000000
+  name: daos_server
 createtests:
-    permissions: !mux
-        perm_RO:
-           perm: 0
-           exp_result: FAIL
-        perm_RW:
-           perm: 1
-           exp_result: PASS
-        perm_EX:
-           perm: 2
-           exp_result: PASS
-        perm_invalid:
-           perm: 777
-           exp_result: FAIL
+  permissions: !mux
+    perm_RO:
+      perm: 0
+      exp_result: FAIL
+    perm_RW:
+      perm: 1
+      exp_result: PASS
+    perm_EX:
+      perm: 2
+      exp_result: PASS
+    perm_invalid:
+      perm: 777
+      exp_result: FAIL

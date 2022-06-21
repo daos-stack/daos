@@ -50,7 +50,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_negative,dm_bad_params_dcp
+        :avocado: tags=dm_negative,dm_bad_params_dcp,test_dm_bad_params_dcp
         """
         self.set_tool("DCP")
 

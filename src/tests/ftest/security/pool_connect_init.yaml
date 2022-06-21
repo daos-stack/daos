@@ -3,7 +3,10 @@ hosts:
   - server-A
 timeout: 60
 server_config:
-   name: daos_server
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 # Uncomment following to force the use of certificates
 # regardless of the launch.py --insecure setting.
 #   transport_config:

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,7 +30,10 @@ class BasicTxTest(TestWithServers):
         Not a good test at this point, need to redesign when tx is fully
         working.
 
-        :avocado: tags=all,container,tx,small,smoke,daily_regression,basictx
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=container,smoke
+        :avocado: tags=tx,basictx,test_tx_basics
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool

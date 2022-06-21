@@ -10,6 +10,9 @@ timeout: 1200
 server_config:
   name: daos_server
   port: 10001
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   name: daos_server
   scm_size: 138374182

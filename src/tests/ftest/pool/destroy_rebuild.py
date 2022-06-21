@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,8 +30,9 @@ class DestroyRebuild(TestWithServers):
             Verifying that a pool can be destroyed during rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=medium
-        :avocado: tags=pool,destroy_pool_rebuild
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=destroy_pool_rebuild,test_destroy_while_rebuilding
         """
         # Get the test parameters
         targets = self.params.get("targets", "/run/server_config/servers/*")

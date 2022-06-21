@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,7 +66,10 @@ class ObjOpenBadParam(TestWithServers):
 
         Test Description: Attempt to open a garbage object handle.
 
-        :avocado: tags=all,object,full_regression,tiny,objopenbadhandle
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopenbadhandle,test_bad_obj_handle
         """
         saved_handle = self.obj.obj_handle
         self.obj.obj_handle = 8675309
@@ -88,7 +91,10 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object with a garbage container
                           handle.
 
-        :avocado: tags=all,object,full_regression,tiny,objopenbadcont
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopenbadcont,test_invalid_container_handle
         """
         saved_coh = self.container.coh
         self.container.coh = 8675309
@@ -110,7 +116,10 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           a closed handle.
 
-        :avocado: tags=all,object,full_regression,tiny,objopenclosedcont
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopenclosedcont,test_closed_container_handle
         """
         self.container.close()
 
@@ -132,7 +141,10 @@ class ObjOpenBadParam(TestWithServers):
                           to open an object that's had its handle set to
                           be the same as a valid pool handle.
 
-        :avocado: tags=all,object,full_regression,tiny,objopenbadpool
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopenbadpool,test_pool_handle_as_obj_handle
         """
         saved_oh = self.obj.obj_handle
         self.obj.obj_handle = self.pool.pool.handle
@@ -154,7 +166,10 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           an empty ranklist.
 
-        :avocado: tags=all,object,full_regression,tiny,objopennullrl
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopennullrl,test_null_ranklist
         """
         # null rl
         saved_rl = self.obj.tgt_rank_list
@@ -176,7 +191,10 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           null object id.
 
-        :avocado: tags=all,object,full_regression,tiny,objopennulloid
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopennulloid,test_null_oid
         """
         # null oid
         saved_oid = self.obj.c_oid
@@ -198,7 +216,10 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           null tgt.
 
-        :avocado: tags=all,object,full_regression,tiny,objopennulltgts
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopennulltgts,test_null_tgts
         """
         # null tgts
         saved_ctgts = self.obj.c_tgts
@@ -219,7 +240,11 @@ class ObjOpenBadParam(TestWithServers):
 
         Test Description: Attempt to open an object in a container with
                           null object attributes.
-        :avocado: tags=all,object,full_regression,tiny,objopennullattr
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objopennullattr,test_null_attrs
         """
         # null attr
         saved_attr = self.obj.attr

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -80,9 +80,10 @@ class ObjectDataValidation(TestWithServers):
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=all,full_regression,small
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=invalid_tx
+        :avocado: tags=invalid_tx,test_invalid_tx_commit_close
 
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
@@ -187,9 +188,10 @@ class ObjectDataValidation(TestWithServers):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,small
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=single_object
+        :avocado: tags=single_object,test_single_object_validation
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -242,9 +244,10 @@ class ObjectDataValidation(TestWithServers):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify Array data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,small
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=object,objectvalidation
-        :avocado: tags=array_object
+        :avocado: tags=array_object,test_array_object_validation
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0

@@ -13,6 +13,7 @@ server_config:
   name: daos_server
   servers:
     targets: 1
+    nr_xs_helpers: 0
 pool:
   mode: 511
   name: daos_server

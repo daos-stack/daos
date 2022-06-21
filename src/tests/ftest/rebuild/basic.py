@@ -137,7 +137,7 @@ class RbldBasic(TestWithServers):
             single pool rebuild, single client, various record/object counts
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm,large
+        :avocado: tags=vm
         :avocado: tags=rebuild
         :avocado: tags=pool,rebuild_tests,test_simple_rebuild
         """
@@ -153,7 +153,7 @@ class RbldBasic(TestWithServers):
             multipool rebuild, single client, various object and record counts
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm,large
+        :avocado: tags=vm
         :avocado: tags=rebuild
         :avocado: tags=pool,rebuild_tests,test_multipool_rebuild
         """

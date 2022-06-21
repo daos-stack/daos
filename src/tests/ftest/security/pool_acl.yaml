@@ -7,6 +7,9 @@ timeout: 600
 server_config:
   name: daos_server
   port: 10001
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   control_method: dmg
 # Uncomment following to force the use of certificates

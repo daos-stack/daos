@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -18,6 +18,7 @@ class SameKeyDifferentValue(TestWithServers):
     passed to same akey and dkey.
     :avocado: recursive
     """
+
     def setUp(self):
         super().setUp()
         self.prepare_pool()
@@ -52,8 +53,11 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with array value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
-        :avocado: tags=singletoarray,vm,small
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=singletoarray,samekeydifferentvalue,test_single_to_array_value
         """
 
         # define akey,dkey, single value data and array value data
@@ -157,8 +161,11 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with single value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
-        :avocado: tags=arraytosingle,vm,small
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=arraytosingle,samekeydifferentvalue,test_array_to_single_value
         """
 
         # define akey,dkey, single value data and array value data

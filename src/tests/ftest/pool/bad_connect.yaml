@@ -1,11 +1,14 @@
-server_config:
-  name: daos_server
-
 hosts:
   test_servers:
     - server-A
 
 timeout: 700
+
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 
 pool:
   control_method: dmg

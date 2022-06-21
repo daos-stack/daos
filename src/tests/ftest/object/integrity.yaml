@@ -5,7 +5,10 @@ hosts:
 #JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:
-   name: daos_server
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   mode: 511
   name: daos_server

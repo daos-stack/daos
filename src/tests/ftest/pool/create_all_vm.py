@@ -57,7 +57,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_one_vm
+        :avocado: tags=pool_create_all_one_vm,test_one_pool
         """
         self.log.info("Test  basic pool creation with full storage")
 
@@ -90,7 +90,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_recycle_vm
+        :avocado: tags=pool_create_all_recycle_vm,test_recycle_pools
         """
         self.log.info("Test pool creation and destruction")
 
@@ -171,7 +171,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_two_vm
+        :avocado: tags=pool_create_all_two_vm,test_two_pools
         """
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 

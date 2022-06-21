@@ -24,7 +24,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs
-        :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp
+        :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp,test_dm_posix_symlinks
         """
         self.run_dm_posix_symlinks("DCP")
 

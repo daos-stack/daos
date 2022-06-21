@@ -27,7 +27,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_test
-        :avocado: tags=dfuse_unit
+        :avocado: tags=dfuse_unit,test_daos_dfuse_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfuse_test')
 

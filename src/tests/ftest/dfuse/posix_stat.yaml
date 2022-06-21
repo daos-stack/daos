@@ -5,6 +5,11 @@ hosts:
   test_clients:
     - client-A
 timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   name: daos_server
   scm_size: 1G

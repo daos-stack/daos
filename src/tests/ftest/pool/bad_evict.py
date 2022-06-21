@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -26,8 +26,9 @@ class BadEvictTest(TestWithServers):
             Pass bad parameters to the pool evict clients call.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=tiny
-        :avocado: tags=pool,bad_evict
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=bad_evict,test_evict
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

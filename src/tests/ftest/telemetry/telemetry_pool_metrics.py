@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -141,11 +141,11 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             For RF=0 the sum should be exactly equal to the expected workload
             and for RF=2 (with RP_2GX) sum should be double the size of
             workload for write but same for read.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=telemetry_pool_metrics
-
+        :avocado: tags=telemetry_pool_metrics,test_telemetry_pool_metrics
         """
         # test parameters
         self.threshold_percent = self.params.get("threshold_percent",

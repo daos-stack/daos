@@ -107,7 +107,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_evict
-        :avocado: tags=pool_evict_basic
+        :avocado: tags=pool_evict_basic,test_evict
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []

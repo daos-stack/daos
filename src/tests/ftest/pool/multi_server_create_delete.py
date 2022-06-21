@@ -30,9 +30,9 @@ class MultiServerCreateDeleteTest(TestWithServers):
         Destroy the pool and verify that the directory is deleted.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
+        :avocado: tags=vm
         :avocado: tags=pool,multitarget
-        :avocado: tags=multiserver_create_delete
+        :avocado: tags=multiserver_create_delete,test_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

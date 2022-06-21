@@ -9,6 +9,9 @@ hosts:
 timeout: 180
 server_config:
     name: daos_server
+    servers:
+        targets: 4
+        nr_xs_helpers: 0
 pool:
     mode: 146
     name: daos_server

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +33,8 @@ class FaultDomain(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=fault_domain,fault_domain_different_domains
+        :avocado: tags=fault_domain
+        :avocado: tags=fault_domain_different_domains,test_pools_in_different_domains
         """
         test_passed = True
         rank = None

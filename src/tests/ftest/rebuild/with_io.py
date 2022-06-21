@@ -31,7 +31,10 @@ class RbldWithIO(TestWithServers):
             single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,pool,rebuild,daily_regression,medium,rebuildwithio
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=rebuildwithio,test_rebuild_with_io
         """
         # Get the test params
         self.add_pool(create=False)

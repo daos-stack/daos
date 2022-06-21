@@ -13,8 +13,10 @@ server_config:
   servers: !mux
     1_target:
       targets: 1
+      nr_xs_helpers: 0
     2_targets:
       targets: 2
+      nr_xs_helpers: 0
 pool:
   mode: 511
   name: daos_server

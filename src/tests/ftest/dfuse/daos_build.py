@@ -49,7 +49,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild
+        :avocado: tags=dfusedaosbuild,test_daos_build
         """
 
         # Create a pool, container and start dfuse.
