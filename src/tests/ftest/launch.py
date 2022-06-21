@@ -17,11 +17,11 @@ import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess   # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -82,6 +82,7 @@ PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
+        ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
     ]
 )
@@ -346,7 +347,10 @@ def set_provider_environment(interface, args):
         interface (str): the current interface being used.
     """
     # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if args.provider:
+        provider = args.provider
+    else:
+        provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
         print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
 
@@ -1261,8 +1265,9 @@ def run_tests(test_files, tag_filter, args):
 
             # Stop any agents or servers running via systemd
             if not args.disable_stop_daos:
-                return_code |= stop_daos_agent_services(test_file["py"], args)
-                return_code |= stop_daos_server_service(test_file["py"], args)
+                return_code |= stop_daos_agent_services(test_file, args)
+                return_code |= stop_daos_server_service(test_file, args)
+                return_code |= reset_server_storage(test_file, args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -2111,7 +2116,7 @@ def stop_daos_agent_services(test_file, args):
     """Stop any daos_agent.service running on the hosts running servers.
 
     Args:
-        test_file (str): the test python file
+        test_file (dict): a dictionary of the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2119,23 +2124,22 @@ def stop_daos_agent_services(test_file, args):
 
     """
     service = "daos_agent.service"
-    print("-" * 80)
-    print("Verifying {} after running '{}'".format(service, test_file))
-    if args.test_clients:
-        hosts = list(args.test_clients)
-    else:
-        hosts = list(args.test_servers)
+    client_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_clients"])
     local_host = socket.gethostname().split(".")[0]
-    if local_host not in hosts:
-        hosts.append(local_host)
-    return stop_service(hosts, service)
+    if local_host not in client_hosts:
+        client_hosts.append(local_host)
+    print("-" * 80)
+    print(
+        "Verifying {} on {} after running '{}'".format(
+            service, NodeSet.fromlist(client_hosts), test_file["py"]))
+    return stop_service(client_hosts, service)
 
 
 def stop_daos_server_service(test_file, args):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
-        test_file (str): the test python file
+        test_file (dict): a dictionary of the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2143,9 +2147,12 @@ def stop_daos_server_service(test_file, args):
 
     """
     service = "daos_server.service"
+    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
     print("-" * 80)
-    print("Verifying {} after running '{}'".format(service, test_file))
-    return stop_service(list(args.test_servers), service)
+    print(
+        "Verifying {} on {} after running '{}'".format(
+            service, NodeSet.fromlist(server_hosts), test_file["py"]))
+    return stop_service(server_hosts, service)
 
 
 def stop_service(hosts, service):
@@ -2251,6 +2258,41 @@ def indent_text(indent, text):
     if isinstance(text, (list, tuple)):
         return "\n".join(["{}{}".format(" " * indent, line) for line in text])
     return " " * indent + str(text)
+
+
+def reset_server_storage(test_file, args):
+    """Reset the server storage for the hosts that ran servers in the test.
+
+    This is a workaround to enable binding devices back to nvme or vfio-pci after they are unbound
+    from vfio-pci to nvme.  This should resolve the "NVMe not found" error seen when attempting to
+    start daos engines in the test.
+
+    Args:
+        test_file (dict): a dictionary of the test script/yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
+    print("-" * 80)
+    if server_hosts:
+        commands = [
+            "if lspci | grep -i nvme",
+            "then daos_server storage prepare -n --reset && " +
+            "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
+            "fi"]
+        print(
+            "Resetting server storage on {} after running '{}'".format(
+                NodeSet.fromlist(server_hosts), test_file["py"]))
+        if not spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
+            print(indent_text(2, "Ignoring any errors from these workaround commands"))
+    else:
+        print(
+            "Skipping resetting server storage after running '{}' - no server hosts".format(
+                test_file["py"]))
+    return 0
 
 
 def main():
@@ -2381,6 +2423,14 @@ def main():
         "-p", "--process_cores",
         action="store_true",
         help="process core files from tests")
+    parser.add_argument(
+        "-pr", "--provider",
+        action="store",
+        choices=[None] + list(PROVIDER_KEYS.values()),
+        default=None,
+        type=str,
+        help="default provider to use in the test daos_server config file, e.g. {}".format(
+            ", ".join(list(PROVIDER_KEYS.values()))))
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

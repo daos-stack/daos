@@ -6,7 +6,6 @@ access_points: ['example']  # management service leader (bootstrap)
 provider: ofi+tcp
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
-
 telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
