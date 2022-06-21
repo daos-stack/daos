@@ -439,7 +439,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	 *      -- Check 2: Check that all parts have a correct type.
 	 *      -- Check 3: Check that all parts have a correct number of operands and also that
 	 *                  the number of total parts is correct.
-	 *      -- Check 4: Check that constants have a type.
+	 *      -- Check 4: Check that parts that are not functions have a data type.
 	 *      -- Check 5: Check that constants of type CSTRING always end in '\0'.
 	 *      -- Check 6: Check that constants of type STRING have a sane size.
 	 *      -- Check 7: Check that all parts have a correct data type.
@@ -528,6 +528,8 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			}
 			num_parts += part->num_operands;
 
+			/** 4 */
+
 			if (strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_FUN",
 				    strlen("DAOS_FILTER_FUN")) &&
 			    !part->data_type.iov_len) {
@@ -539,7 +541,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			    !strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_CONST",
 				    strlen("DAOS_FILTER_CONST"))) {
 
-				/** 4, 5 and 6 */
+				/** 5 and 6 */
 
 				rc = do_checks_for_string_constants(i, p, part);
 				if (rc != 0)
