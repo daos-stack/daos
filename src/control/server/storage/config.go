@@ -189,9 +189,19 @@ func (tcs TierConfigs) HaveBdevs() bool {
 	return false
 }
 
-func (tcs TierConfigs) HaveNVMe() bool {
+func (tcs TierConfigs) HaveRealNVMe() bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		if bc.Bdev.DeviceList.Len() > 0 && bc.Class != ClassNvme {
 			return true
 		}
 	}
@@ -729,6 +739,10 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
+		return FaultBdevConfigTypeMismatch
+	}
 
 	fbc := bdevCfgs[0]
 

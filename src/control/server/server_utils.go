@@ -53,7 +53,7 @@ func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceLis
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	bdevCfgs := []*storage.TierConfig{}
 	for _, engineCfg := range cfg.Engines {
-		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers...)
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
 
 	return bdevCfgs
@@ -209,7 +209,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
 
 	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
-	if bdevCfgs.HaveNVMe() && srv.runningUser.Username != "root" {
+	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
 		if srv.cfg.DisableVFIO {
 			return FaultVfioDisabled
 		}
@@ -229,8 +229,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
 	case !srv.cfg.DisableVMD && !iommuEnabled:
-		srv.log.Info("VMD not enabled because IOMMU disabled on system")
+		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
+	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
+		// If no case above matches, set enable VMD flag in request otherwise leave false.
 		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 

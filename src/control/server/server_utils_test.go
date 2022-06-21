@@ -241,7 +241,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
 			WithBdevDeviceList(test.MockPCIAddr(int32(i)))
 	}
-	nonNvmeTier := func(i int) *storage.TierConfig {
+	nonNvmeTier := func() *storage.TierConfig {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassFile.String()).
 			WithBdevFileSize(10).WithBdevDeviceList("bdev1", "bdev2")
 	}
@@ -252,7 +252,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
 	}
 	nonNvmeEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i), nonNvmeTier(i)).WithTargetCount(16)
+		return basicEngineCfg(i).WithStorage(scmTier(i), nonNvmeTier()).WithTargetCount(16)
 	}
 
 	for name, tc := range map[string]struct {
@@ -491,7 +491,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemChkErr: errors.New("could not find hugepage info"),
 		},
 		// prepare will continue even if reset fails
-		"reset fails; 2 engines": {
+		"reset fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -514,7 +514,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"2 engines; vmd disabled": {
+		// VMD not enabled in prepare request.
+		"vmd disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -524,6 +525,21 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
+				TargetUser:    username,
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
+		},
+		// VMD not enabled in prepare request.
+		"non-nvme bdevs; vmd enabled": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(8192).
+					WithEngines(nonNvmeEngine(0))
+			},
+			hugePagesFree: 8194,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
