@@ -3,12 +3,12 @@ hosts:
         - server-A
         - server-B
         - server-C
+        - server-D
     test_clients:
         - client-A
         - client-B
         - client-C
         - client-D
-        - client-E
 timeout: 1300
 setup:
   start_servers_once: False
@@ -17,6 +17,7 @@ server_config:
   engines_per_host: 2
   servers:
     0:
+      targets: 8
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
@@ -31,6 +32,7 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,md,rebuild
     1:
+      targets: 8
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
