@@ -65,7 +65,7 @@ def base_setup(env, prereqs=None):
 
     # common
     env.AppendUnique(CPPDEFINES='CSUM_NO_OP')
-    env.AppendUnique(CPPDEFINES='USE_IOD_BUFFER_INSTEAD_OF_ALLOC')
+    # env.AppendUnique(CPPDEFINES='USE_IOD_BUFFER_INSTEAD_OF_ALLOC')
     env.AppendUnique(CPPDEFINES='NO_KEY_CSUMS')
     # env.AppendUnique(CPPDEFINES='IGNORE_calc_csum_sv')
     # env.AppendUnique(CPPDEFINES='SKIP_ALLOC_POINTER_STUFF')

@@ -1265,6 +1265,15 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct daos_recx_ep_list	*parity_list = NULL;
 	int				 rc = 0;
 
+	struct d_tm_node_t *node = NULL;
+
+	bool with_csum = daos_csummer_initialized(ioc->ioc_coc->sc_csummer);
+	bool is_update = obj_rpc_is_update(rpc);
+	d_tm_add_metric(&node, D_TM_STATS_GAUGE, "", "ns", "ryon/%s/%s",
+			is_update ? "update" : "fetch",
+			with_csum ? "csum" : "no_csum");
+	uint64_t start_time = daos_get_ntime();
+
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
 
 	iods = split_iods == NULL ? orw->orw_iod_array.oia_iods : split_iods;
@@ -1636,6 +1645,11 @@ out:
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
+
+	uint64_t elapse_time = daos_get_ntime() - start_time;
+
+	d_tm_set_gauge(node, elapse_time);
+
 	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
 }
 
