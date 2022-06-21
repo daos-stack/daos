@@ -47,8 +47,8 @@ server_config:
 pool:
     mode: 146 # 146 is RW
     name: daos_server
-    scm_size: 50000000000
-    nvme_size: 500000000000
+    scm_size: 25000000000
+    nvme_size: 250000000000
     svcn: 1
     control_method: dmg
 container:
@@ -62,7 +62,7 @@ ior:
     flags: "-v -w -W -r -R -k"
     api: DFS
     transfer_size: '1M'
-    block_size: '1G'
+    block_size: '512N'
     dfs_oclass: "EC_2P1G1"
     dfs_dir_oclass: "EC_2P1G1"
 runtime:
