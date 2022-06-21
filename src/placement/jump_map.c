@@ -456,7 +456,8 @@ reset_dom_cur_grp(uint8_t *dom_cur_grp_used, uint8_t *dom_occupied, uint32_t dom
 static void
 get_target(struct pool_domain *root_pos, struct pool_domain *curr_pd, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_occupied, uint8_t *dom_cur_grp_used,
-	   uint8_t *tgts_used, int shard_num, uint32_t allow_status, pool_comp_type_t fdom_lvl)
+	   uint8_t *tgts_used, int shard_num, uint32_t grp_size, uint32_t allow_status,
+	   pool_comp_type_t fdom_lvl, bool remap)
 {
 	struct pool_domain	*curr_dom;
 	int                     range_set;
@@ -539,6 +540,15 @@ retry:
 			 */
 			range_set = isset_range(dom_occupied, start_dom, end_dom);
 			if (range_set) {
+				struct pool_domain	*parent_dom;
+				struct pool_domain	*tmp_dom;
+				uint32_t		 grp_shard_nr_left;
+				uint32_t		 grp_dom_nr_used;
+				uint32_t		 num_doms_1, start_dom_1, end_dom_1;
+				uint32_t		 num_doms_2, start_dom_2, end_dom_2;
+				uint32_t		 idx, tgt_nr, selected_tgt;
+				bool			 curr_dom_used_by_grp;
+
 				if (top == -1) {
 					if (curr_pd != root_pos) {
 						/* all domains within the PD occupied, ignore the
@@ -558,7 +568,55 @@ retry:
 				setbit(dom_occupied, curr_dom - root_pos);
 				D_DEBUG(DB_PL, "used up dom %d\n",
 					(int)(curr_dom - root_pos));
+				curr_dom_used_by_grp = isset(dom_cur_grp_used, curr_dom - root_pos);
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
+				grp_shard_nr_left = grp_size - (shard_num % grp_size);
+				grp_dom_nr_used = 0;
+				if (remap || curr_dom_used_by_grp ||
+				    curr_dom->do_comp.co_type <= fdom_lvl ||
+				    curr_pd != root_pos) {
+					curr_dom = dom_stack[top--];
+					continue;
+				}
+				/* For the case that curr_dom is at fault-dom level, its children
+				 * all occupied, but it is not used by current group yet. If mark
+				 * dom_cur_grp_used for this dom, for some cases it possibly cause
+				 * no enough unused doms can be found to place other shards for this
+				 * group. For this case, select an already used (by other group)
+				 * target for this shard, to avoid place multiple shards for this
+				 * group on same dom later.
+				 */
+				D_ASSERT(top >= 0);
+				parent_dom = top > 0 ? dom_stack[top - 1] : root_pos;
+				num_doms_1 = get_num_domains(parent_dom, allow_status);
+				start_dom_1 = (root_pos->do_children) - root_pos;
+				end_dom_1 = start_dom_1 + (num_doms_1 - 1);
+				for (idx = start_dom_1; idx <= end_dom_1; idx++) {
+					if (isset(dom_cur_grp_used, idx)) {
+						grp_dom_nr_used++;
+						continue;
+					}
+					tmp_dom = curr_dom + (idx - (curr_dom - root_pos));
+					if (tmp_dom->do_children == NULL)
+						continue;
+					num_doms_2 = get_num_domains(tmp_dom, allow_status);
+					start_dom_2 = (tmp_dom->do_children) - root_pos;
+					end_dom_2 = start_dom_2 + (num_doms_2 - 1);
+					if (isset_range(dom_cur_grp_used, start_dom_2,
+							end_dom_2)) {
+						grp_dom_nr_used++;
+					}
+				}
+				if (grp_shard_nr_left > num_doms_1 - grp_dom_nr_used) {
+					tgt_nr = curr_dom->do_target_nr;
+					selected_tgt = d_hash_jump(key, tgt_nr);
+					key = crc(key, fail_num++);
+					*target = &curr_dom->do_targets[selected_tgt];
+					D_INFO("reuse tgt %d for shard %d\n",
+					       (*target)->ta_comp.co_id, shard_num);
+					found_target = 1;
+					continue;
+				}
 				curr_dom = dom_stack[top--];
 				continue;
 			}
@@ -760,8 +818,9 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			curr_pd = jm_obj_shard_pd(jmop, shard_id);
 			get_target(root, curr_pd, &spare_tgt, crc(key, rebuild_key), dom_used,
-				   dom_occupied, dgu->dgu_used, tgts_used, shard_id, allow_status,
-				   jmop->jmop_fdom_lvl);
+				   dom_occupied, dgu->dgu_used, tgts_used, shard_id,
+				   jmop->jmop_grp_size, allow_status, jmop->jmop_fdom_lvl,
+				   true);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
 				DP_TARGET(spare_tgt));
@@ -975,8 +1034,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			} else {
 				curr_pd = jm_obj_shard_pd(jmop, k);
 				get_target(root, curr_pd, &target, key, dom_used, dom_occupied,
-					   dom_cur_grp_used, tgts_used, k, allow_status,
-					   jmop->jmop_fdom_lvl);
+					   dom_cur_grp_used, tgts_used, k, jmop->jmop_grp_size,
+					   allow_status, jmop->jmop_fdom_lvl, false);
 			}
 
 			if (target == NULL) {

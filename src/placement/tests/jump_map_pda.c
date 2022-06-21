@@ -64,7 +64,7 @@ test_set_tgt(struct pool_map *po_map, uint32_t id, uint32_t status)
 }
 
 static bool
-layout_with_colocated_shards(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
 {
 	uint32_t	i, j, dom, new_dom, tgt, new_tgt;
 
@@ -76,8 +76,34 @@ layout_with_colocated_shards(struct pl_obj_layout *layout, uint32_t tgts_per_dom
 			assert_true(new_tgt != tgt);
 			assert_true(tgt != -1 && new_tgt != -1);
 			new_dom = new_tgt / tgts_per_dom;
-			if (dom == new_dom)
+			if (dom == new_dom) {
+				print_message("shards %d - %d, on same dom %d\n", i, j, dom);
 				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static bool
+layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t	i, j, dom, new_dom, tgt, new_tgt;
+
+	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt =  layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
+				return true;
+			}
 		}
 	}
 
@@ -109,7 +135,7 @@ pd_use_all_dom(void **state)
 	pda = 3;
 	gen_oid(&oid, 1, UINT64_MAX, OC_RP_4G2);
 	assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
-	assert_true(layout_with_colocated_shards(layout, nodes_per_fdom * vos_per_tgt) == false);
+	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == false);
 	pl_obj_layout_free(layout);
 }
 
@@ -138,7 +164,9 @@ pd_shards_colocated(void **state)
 	pda = 3;
 	gen_oid(&oid, 1, UINT64_MAX, OC_EC_4P2G2);
 	assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
-	assert_true(layout_with_colocated_shards(layout, nodes_per_fdom * vos_per_tgt) == true);
+	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == true);
+	assert_true(layout_with_tgts_on_same_dom_for_same_grp(layout, nodes_per_fdom * vos_per_tgt)
+		    == false);
 	pl_obj_layout_free(layout);
 }
 
@@ -188,10 +216,45 @@ pd_with_failed_dom(void **state)
 	print_message("shard[%d] changed from tgt[%d]/dom[%d] to tgt[%d]/dom[%d]\n",
 		      shard, tgt, fault_dom, new_tgt, new_dom);
 	print_message("checking should not with co-located shards ...\n");
-	assert_true(layout_with_colocated_shards(layout, nodes_per_fdom * vos_per_tgt) == false);
+	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == false);
 
 	pl_obj_layout_free(layout);
 	free_pool_and_placement_map(po_map, pl_map);
+}
+
+static void
+grp_colocated_shard_check(void **state)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		 num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt;
+	uint32_t		 num_tgts, pda, i;
+	daos_obj_id_t		 oid;
+	struct pl_obj_layout	*layout = NULL;
+
+	/* --------------------------------------------------------- */
+	num_pd = 1;
+	fdoms_per_pd = 6;
+	nodes_per_fdom = 1;
+	vos_per_tgt = 8;
+	num_tgts = num_pd * fdoms_per_pd * nodes_per_fdom * vos_per_tgt;
+	print_message("\nWith %d PDs, %d domains each PD, %d node each domain, "
+		      "%d targets each node = %d targets\n", num_pd, fdoms_per_pd,
+		      nodes_per_fdom, vos_per_tgt, num_tgts);
+
+	gen_maps(num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt, &po_map, &pl_map);
+	print_message("place OC_EC_4P1G9 pda 0\n");
+	pda = 0;
+
+	for (i = 0; i < 1000; i++) {
+		layout = NULL;
+		print_message("layout of lo %d\n", i);
+		gen_oid(&oid, i, UINT64_MAX, OC_EC_4P1GX);
+		assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
+		assert_true(layout_with_tgts_on_same_dom_for_same_grp(
+			    layout, nodes_per_fdom * vos_per_tgt) == false);
+		pl_obj_layout_free(layout);
+	}
 }
 
 /*
@@ -226,6 +289,7 @@ static const struct CMUnitTest pda_tests[] = {
 	T("PDA test - use all domains", pd_use_all_dom),
 	T("PDA test - colocated shards", pd_shards_colocated),
 	T("PDA test - PD with failed domain", pd_with_failed_dom),
+	T("PDA test - group co-located shards check", grp_colocated_shard_check),
 };
 
 int
