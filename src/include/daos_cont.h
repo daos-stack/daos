@@ -55,8 +55,10 @@ typedef struct {
 	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
+	/** Redundancy level */
+	uint32_t		ci_redun_lvl;
 	/** Container information pad (not used) */
-	uint64_t		ci_pad[2];
+	uint32_t		ci_pad[3];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
