@@ -546,7 +546,7 @@ dfs_test_syml_follow(void **state)
 }
 
 static int
-dfs_test_file_gen(const char *name, daos_size_t chunk_size,
+dfs_test_file_gen(const char *name, daos_size_t chunk_size, daos_oclass_id_t cid,
 		  daos_size_t file_size)
 {
 	dfs_obj_t	*obj;
@@ -568,7 +568,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
+		      O_RDWR | O_CREAT, cid, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_punch(dfs_mt, obj, 10, DFS_MAX_FSIZE);
@@ -694,7 +694,7 @@ dfs_test_read_shared_file(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	sprintf(name, "MTA_file_%d", arg->myrank);
-	rc = dfs_test_file_gen(name, chunk_size, file_size);
+	rc = dfs_test_file_gen(name, chunk_size, OC_S1, file_size);
 	assert_int_equal(rc, 0);
 
 	/* usr barrier to all threads start at the same time and start
@@ -1030,41 +1030,22 @@ static void
 dfs_test_compat(void **state)
 {
 	test_arg_t	*arg = *state;
-	uuid_t		uuid1;
-	uuid_t		uuid2;
+	uuid_t		uuid;
 	daos_handle_t	coh;
 	dfs_t		*dfs;
 	int		rc;
 	char		uuid_str[37];
 
-	uuid_generate(uuid1);
-	uuid_clear(uuid2);
+	uuid_clear(uuid);
 
 	if (arg->myrank != 0)
 		return;
 
-	print_message("creating DFS container with set uuid "DF_UUIDF" ...\n", DP_UUID(uuid1));
-	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-	uuid_unparse(uuid1, uuid_str);
-	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, 0);
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, 0);
-	rc = dfs_umount(dfs);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-
 	print_message("creating DFS container with a uuid pointer (not set by caller) ...\n");
-	rc = dfs_cont_create(arg->pool.poh, &uuid2, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &uuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
-	uuid_unparse(uuid2, uuid_str);
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
+	uuid_unparse(uuid, uuid_str);
 	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -1075,7 +1056,7 @@ dfs_test_compat(void **state)
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("creating DFS container with a NULL pointer, should fail ...\n");
 	rc = dfs_cont_create(arg->pool.poh, NULL, NULL, &coh, &dfs);
@@ -1186,8 +1167,10 @@ dfs_test_mt_connect(void **state)
 		assert_int_equal(rc, 0);
 	}
 	pthread_barrier_wait(&barrier);
-	for (i = 0; i < dfs_test_thread_nr; i++)
+	for (i = 0; i < dfs_test_thread_nr; i++) {
 		rc = pthread_join(dfs_test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+	}
 
 	for (i = 0; i < dfs_test_thread_nr; i++)
 		assert_int_equal(dfs_test_rc[i], 0);
@@ -1372,7 +1355,7 @@ dfs_test_mtime(void **state)
 	assert_int_equal(rc, 0);
 }
 
-#define NUM_IOS 128
+#define NUM_IOS 256
 #define IO_SIZE 8192
 
 struct dfs_test_async_arg {
@@ -1468,7 +1451,7 @@ dfs_test_async_io_th(void **state)
 	assert_int_equal(rc, 0);
 
 	sprintf(name, "file_async_mt_%d", arg->myrank);
-	rc = dfs_test_file_gen(name, 0, IO_SIZE * NUM_IOS);
+	rc = dfs_test_file_gen(name, 0, OC_S1, IO_SIZE * NUM_IOS);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
@@ -1518,6 +1501,94 @@ dfs_test_async_io_th(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+
+#define NUM_ABORTS 64
+#define IO_SIZE_2 1048576
+
+static void
+dfs_test_async_io(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			name[16];
+	dfs_obj_t		*obj;
+	int			i, j;
+	int			rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	sprintf(name, "file_async_%d", arg->myrank);
+	rc = dfs_test_file_gen(name, 0, OC_SX, IO_SIZE_2 * NUM_IOS);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	struct daos_event	evs[NUM_IOS];
+	d_sg_list_t		sgls[NUM_IOS];
+	d_iov_t			iovs[NUM_IOS];
+	daos_size_t		read_sizes[NUM_IOS];
+	char			*bufs[NUM_IOS];
+
+	for (i = 0; i < NUM_IOS; i++) {
+		rc = daos_event_init(&evs[i], arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+
+		D_ALLOC(bufs[i], IO_SIZE_2);
+		D_ASSERT(bufs[i] != NULL);
+
+		d_iov_set(&iovs[i], bufs[i], IO_SIZE_2);
+		sgls[i].sg_nr = 1;
+		sgls[i].sg_nr_out = 1;
+		sgls[i].sg_iovs = &iovs[i];
+	}
+
+	for (j = 0; j < NUM_ABORTS; j++) {
+		for (i = 0; i < NUM_IOS; i++) {
+			bool flag;
+			daos_event_t *ev = &evs[i];
+
+			rc = daos_event_test(ev, DAOS_EQ_NOWAIT, &flag);
+			assert_int_equal(rc, 0);
+
+			if (!flag) {
+				rc = daos_event_abort(ev);
+				assert_int_equal(rc, 0);
+
+				rc = daos_event_test(ev, DAOS_EQ_WAIT, &flag);
+				assert_int_equal(rc, 0);
+			}
+			D_ASSERT(flag == true);
+
+			rc = daos_event_fini(ev);
+			assert_int_equal(rc, 0);
+			rc = daos_event_init(ev, arg->eq, NULL);
+			assert_int_equal(rc, 0);
+
+			rc = dfs_read(dfs_mt, obj, &sgls[i], 0, &read_sizes[i], ev);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	for (i = 0; i < NUM_IOS; i++) {
+		bool flag;
+
+		rc = daos_event_test(&evs[i], DAOS_EQ_WAIT, &flag);
+		assert_int_equal(rc, 0);
+		D_ASSERT(flag == true);
+		daos_event_fini(&evs[i]);
+		evs[i].ev_error = INT_MAX;
+		evs[i].ev_private.space[0] = ULONG_MAX;
+		D_FREE(bufs[i]);
+		D_ASSERT(read_sizes[i] == IO_SIZE_2);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_rm(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1553,6 +1624,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_mtime, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST17: multi-threads async IO",
 	  dfs_test_async_io_th, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST18: async IO",
+	  dfs_test_async_io, async_disable, test_case_teardown},
 };
 
 static int

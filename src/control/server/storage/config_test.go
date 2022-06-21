@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
@@ -27,6 +28,44 @@ func defConfigCmpOpts() cmp.Options {
 			}
 			return x.Equals(y)
 		}),
+	}
+}
+
+func TestStorage_BdevDeviceList_Devices(t *testing.T) {
+	for name, tc := range map[string]struct {
+		list      *BdevDeviceList
+		expResult []string
+	}{
+		"nil": {
+			expResult: []string{},
+		},
+		"empty": {
+			list:      &BdevDeviceList{},
+			expResult: []string{},
+		},
+		"string set": {
+			list: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("one", "two"),
+			},
+			expResult: []string{"one", "two"},
+		},
+		"PCI addresses": {
+			list: &BdevDeviceList{
+				PCIAddressSet: *hardware.MustNewPCIAddressSet(
+					"0000:01:01.0",
+					"0000:02:02.0",
+				),
+			},
+			expResult: []string{"0000:01:01.0", "0000:02:02.0"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.list.Devices()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -90,7 +129,7 @@ func TestStorage_BdevDeviceList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			list, err := NewBdevDeviceList(tc.devices...)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -157,7 +196,7 @@ func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			list := &BdevDeviceList{}
 			err := yaml.Unmarshal([]byte(tc.input), list)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -205,7 +244,7 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			list := &BdevDeviceList{}
 			err := json.Unmarshal([]byte(tc.input), list)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -269,13 +308,13 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
-			common.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
+			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
 		})
 	}
 }

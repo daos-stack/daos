@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -111,8 +115,19 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	return resp, nil
 }
 
-// getPeerListenAddr combines peer ip from supplied context with input port.
+// getPeerListenAddr provides the resolved TCP address where the peer server is listening.
 func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr, error) {
+	ipAddr, portStr, err := net.SplitHostPort(listenAddrStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "get listening port")
+	}
+
+	if ipAddr != "0.0.0.0" {
+		// If the peer gave us an explicit IP address, just use it.
+		return net.ResolveTCPAddr("tcp", listenAddrStr)
+	}
+
+	// If we got 0.0.0.0, we may be able to harvest the remote IP from the context.
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("peer details not found in context")
@@ -121,12 +136,6 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 	tcpAddr, ok := p.Addr.(*net.TCPAddr)
 	if !ok {
 		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
-	}
-
-	// what port is the input address listening on?
-	_, portStr, err := net.SplitHostPort(listenAddrStr)
-	if err != nil {
-		return nil, errors.Wrap(err, "get listening port")
 	}
 
 	// resolve combined IP/port address
@@ -494,6 +503,49 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	return
 }
 
+// synthesise "Stopped" rank results for any harness host errors
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+	for _, hes := range rr.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
+			for _, rank := range hostRanks[addr] {
+				resp.Results = append(resp.Results,
+					&system.MemberResult{
+						Rank: rank, Msg: hes.HostError.Error(),
+						State: system.MemberStateUnresponsive,
+					})
+			}
+			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
+				hes.HostError)
+		}
+	}
+}
+
+// Remove any duplicate results from response.
+func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
+	seenResults := make(map[uint32]*system.MemberResult)
+	for _, res := range resp.Results {
+		if res == nil {
+			continue
+		}
+		rID := res.Rank.Uint32()
+		if extant, existing := seenResults[rID]; !existing {
+			seenResults[rID] = res
+		} else if !extant.Equals(res) {
+			log.Errorf("nonidentical result for same rank: %+v != %+v", *extant, *res)
+		}
+	}
+
+	if len(seenResults) == len(resp.Results) {
+		return
+	}
+
+	newResults := make(system.MemberResults, 0, len(seenResults))
+	for _, res := range seenResults {
+		newResults = append(newResults, res)
+	}
+	resp.Results = newResults
+}
+
 // rpcFanout sends requests to ranks in list on their respective host
 // addresses through functions implementing UnaryInvoker.
 //
@@ -521,10 +573,31 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
 
+	funcName := func(i interface{}) string {
+		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
+	}
+
+	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
+	finished := system.MustCreateRankSet("")
+	ranksReq.SetReportCb(func(hr *control.HostResponse) {
+		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
+		if !ok {
+			svc.log.Errorf("unexpected message type in HostResponse: %T", hr.Message)
+			return
+		}
+
+		for _, rr := range rs.GetResults() {
+			waiting.Delete(system.Rank(rr.Rank))
+			finished.Add(system.Rank(rr.Rank))
+		}
+
+		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+	})
+
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
 	if ok {
-		ranksReq.SetTimeout(dl.Sub(time.Now()))
+		ranksReq.SetTimeout(time.Until(dl))
 	}
 
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
@@ -535,21 +608,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 
 	resp.Results = ranksResp.RankResults
 
-	// synthesise "Stopped" rank results for any harness host errors
-	hostRanks := svc.membership.HostRanks(req.Ranks)
-	for _, hes := range ranksResp.HostErrors {
-		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
-			for _, rank := range hostRanks[addr] {
-				resp.Results = append(resp.Results,
-					&system.MemberResult{
-						Rank: rank, Msg: hes.HostError.Error(),
-						State: system.MemberStateUnresponsive,
-					})
-			}
-			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], hes.HostError)
-		}
-	}
+	addUnresponsiveResults(svc.log, svc.membership.HostRanks(req.Ranks), ranksResp, resp)
+
+	removeDuplicateResults(svc.log, resp)
 
 	if len(resp.Results) != req.Ranks.Count() {
 		svc.log.Debugf("expected %d results, got %d",

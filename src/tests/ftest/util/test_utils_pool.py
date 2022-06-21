@@ -10,7 +10,7 @@ import ctypes
 import json
 
 from test_utils_base import TestDaosApiBase, LabelGenerator
-from avocado import fail_on
+from avocado import fail_on, TestFail
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
@@ -18,13 +18,84 @@ from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
+POOL_NAMESPACE = "/run/pool/*"
+POOL_TIMEOUT_INCREMENT = 200
+
+
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+    """Add a new TestPool object to the test.
+
+    Args:
+        test (Test): the test to which the pool will be added
+        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to
+            POOL_NAMESPACE.
+        create (bool, optional): should the pool be created. Defaults to True.
+        connect (bool, optional): should the pool be connected. Defaults to True.
+        index (int, optional): Server index for dmg command. Defaults to 0.
+
+    Returns:
+        TestPool: the new pool object
+
+    """
+    pool = TestPool(
+        namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
+        label_generator=test.label_generator)
+    pool.get_params(test)
+    if params:
+        pool.update_params(**params)
+    if create:
+        pool.create()
+    if create and connect:
+        pool.connect()
+
+    # Add a step to remove this pool when the test completes and ensure their is enough time for the
+    # pool destroy to be attempted - accounting for a possible dmg command timeout
+    test.increment_timeout(POOL_TIMEOUT_INCREMENT)
+    test.register_cleanup(remove_pool, test=test, pool=pool)
+
+    return pool
+
+
+def remove_pool(test, pool):
+    """Remove the requested pool from the test.
+
+    Args:
+        test (Test): the test from which to destroy the pool
+        pool (TestPool): the pool to destroy
+
+    Returns:
+        list: a list of any errors detected when removing the pool
+
+    """
+    error_list = []
+    test.test_log.info("Destroying pool %s", pool.identifier)
+
+    # Ensure exceptions are raised for any failed command
+    exit_status_exception = None
+    if pool.dmg is not None:
+        exit_status_exception = pool.dmg.exit_status_exception
+        pool.dmg.exit_status_exception = True
+
+    # Attempt to destroy the pool
+    try:
+        pool.destroy(force=1, disconnect=1)
+    except (DaosApiError, TestFail) as error:
+        test.test_log.info("  {}".format(error))
+        error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
+
+    # Restore raising exceptions for any failed command
+    if exit_status_exception is False:
+        pool.dmg.exit_status_exception = exit_status_exception
+
+    return error_list
+
 
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, crt_timeout=None):
+                 label_generator=None, crt_timeout=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -44,8 +115,9 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
                 commands. Defaults to None.
+            namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__("/run/pool/*", cb_handler, crt_timeout)
+        super().__init__(namespace, cb_handler, crt_timeout)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -147,10 +219,12 @@ class TestPool(TestDaosApiBase):
             str: pool UUID
 
         """
-        uuid = None
-        if self.pool and self.pool.uuid:
-            uuid = self.pool.get_uuid_str()
-        return uuid
+        try:
+            return self.pool.get_uuid_str()
+        except AttributeError:
+            return None
+        except IndexError:
+            return self.pool.uuid
 
     @uuid.setter
     def uuid(self, value):
@@ -200,6 +274,15 @@ class TestPool(TestDaosApiBase):
         if not isinstance(value, DmgCommand):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
+
+    def skip_cleanup(self):
+        """Prevent pool from being removed during cleanup.
+
+        Useful for corner case tests where the pool no longer exists due to a storage format.
+        """
+        self.connected = False
+        if self.pool:
+            self.pool.attached = False
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -398,10 +481,11 @@ class TestPool(TestDaosApiBase):
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
-            self.log.info(
-                "Evict all pool connections for pool: %s", self.identifier)
-
-            self.dmg.pool_evict(self.identifier)
+            self.log.info("Evict all pool connections for pool: %s", self.identifier)
+            try:
+                self.dmg.pool_evict(self.identifier)
+            finally:
+                self.connected = False
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -610,7 +694,8 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the rebuild data. Defaults to True.
 
         Returns:
-            [type]: [description]
+            str: the rebuild state
+
         """
         self.set_query_data()
         try:
@@ -643,7 +728,6 @@ class TestPool(TestDaosApiBase):
         expected_states = ["busy", "done"] if to_start else ["done"]
 
         start = time()
-        # while self.rebuild_complete() == to_start:
         while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
@@ -911,3 +995,20 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
+
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
+
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
+
+        Args:
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
+        """
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)

@@ -73,7 +73,7 @@ class NvmeEnospace(ServerFillUp):
         #List all the container
         kwargs = {"pool": self.pool.uuid}
         data = self.daos_cmd.container_list(**kwargs)
-        containers = [uuid_label["UUID"] for uuid_label in data["response"]]
+        containers = [uuid_label["uuid"] for uuid_label in data["response"]]
 
         #Destroy all the containers
         for _cont in containers:
@@ -409,9 +409,9 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
             print(pool_usage)
             #SCM pool size should be released (some still be used for system)
-            #Pool SCM free % should not be less than 50%
-            if pool_usage['scm'] > 55:
-                self.fail('SCM pool used percentage should be < 55, instead {}'.
+            #Pool SCM free % should not be less than 62%
+            if pool_usage['scm'] > 62:
+                self.fail('SCM pool used percentage should be < 62, instead {}'.
                           format(pool_usage['scm']))
 
         #Run last IO

@@ -1,3 +1,52 @@
+daos (2.1.103-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.103
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 13 Jun 2022 08:00:00 -0100
+
+daos (2.1.102-6) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 08 Jun 2022 13:58:03 -0000
+
+daos (2.1.102-5) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
+daos (2.1.102-4) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com>  Fri, 27 May 2022 15:00:00 -0500
+
+daos (2.1.102-3) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Restrict SPDK version to less than 22
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Fri, 20 May 2022 16:42:54 -0100
+
+daos (2.1.102-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-*-tests-openmpi dependencies from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 9 May 2022 17:48:00 -0400
+
+daos (2.1.102-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.102
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 5 May 2022 15:00:00 +0800
+
+daos (2.1.101-4) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Update UXC Mercury patch to disable unified mode
+
+ -- Joseph Moore <joseph.moore@intel.com>  Wed, 4 May 2022 11:19:00 -0600
+
 daos (2.1.101-3) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.0rc3-1 to include critical performance patches

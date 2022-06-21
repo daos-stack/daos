@@ -19,6 +19,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -288,26 +290,102 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         raise DaosTestError(msg)
 
 
-def run_task(hosts, command, timeout=None):
+def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
 
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
+        verbose (bool, optional): display message for command execution. Defaults to False.
 
     Returns:
         Task: a ClusterShell.Task.Task object for the executed command
 
     """
+    if not isinstance(hosts, NodeSet):
+        hosts = NodeSet.fromlist(hosts)
     task = task_self()
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
+    kwargs = {"command": command, "nodes": hosts}
     if timeout is not None:
         kwargs["timeout"] = timeout
+    if verbose:
+        log = getLogger()
+        log.info("Running on %s: %s", hosts, command)
     task.run(**kwargs)
     return task
+
+
+def check_task(task, logger=None):
+    """Check the results of the executed task and get the output.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    def check_task_log(message):
+        """Log the provided text if a logger is present.
+
+        Args:
+            message (str): text to display
+        """
+        if logger:
+            logger.info(message)
+
+    # Create a dictionary of hosts for each unique return code
+    results = dict(task.iter_retcodes())
+
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if not output_data:
+            output_data = [["<NONE>", results[code]]]
+        for output, o_hosts in output_data:
+            node_set = NodeSet.fromlist(o_hosts)
+            lines = list(output.splitlines())
+            if len(lines) > 1:
+                # Print the sub-header for multiple lines of output
+                check_task_log("    {}: rc={}, output:".format(node_set, code))
+            for number, line in enumerate(lines):
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if len(lines) == 1:
+                    # Print the sub-header and line for one line of output
+                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
+                    continue
+                try:
+                    check_task_log("      {}".format(line))
+                except IOError:
+                    # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
+                    # space of time so catch this and retry.
+                    check_task_log(
+                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
+                        "retry ***".format(*number + 1, len(lines)))
+                    time.sleep(5)
+                    check_task_log("      {}".format(line))
+
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
+
+    # Determine if the command completed successfully across all the hosts
+    return len(results) == 1 and 0 in results
+
+
+def display_task(task):
+    """Display the output for the executed task.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+    """
+    log = getLogger()
+    return check_task(task, log)
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
@@ -507,7 +585,8 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return exit_status
 
 
-def check_file_exists(hosts, filename, user=None, directory=False):
+def check_file_exists(hosts, filename, user=None, directory=False,
+                      sudo=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
@@ -516,6 +595,8 @@ def check_file_exists(hosts, filename, user=None, directory=False):
         hosts (list): list of hosts
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
 
     Returns:
         (bool, NodeSet): A tuple of:
@@ -532,7 +613,10 @@ def check_file_exists(hosts, filename, user=None, directory=False):
     elif directory:
         command = "test -d '{0}'".format(filename)
 
-    task = run_task(hosts, command)
+    if sudo:
+        command = "sudo " + command
+
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))
@@ -602,7 +686,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
+        random_string = "".join(random.choice(include) for _ in range(length))  # nosec
     return random_string
 
 
@@ -642,7 +726,7 @@ def check_pool_files(log, hosts, uuid):
     log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename)
+        result = check_file_exists(hosts, filename, sudo=True)
         if not result[0]:
             log.error("%s: %s not found", result[1], filename)
             status = False
@@ -1315,5 +1399,63 @@ def get_primary_group(user=None):
     """
     if user is None:
         user = getuser()
-    gid = pwd.getpwnam(user).pw_gid
-    return grp.getgrgid(gid).gr_name
+    try:
+        gid = pwd.getpwnam(user).pw_gid
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        # User may not exist on this host, e.g. daos_server, so just return the user name
+        return user
+
+
+def get_journalctl(hosts, since, until, journalctl_type):
+    """Run the journalctl on the hosts.
+
+    Args:
+        hosts (list): List of hosts to run journalctl.
+        since (str): Start time to search the log.
+        until (str): End time to search the log.
+        journalctl_type (str): String to search in the log. -t param for journalctl.
+
+    Returns:
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
+
+    """
+    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
+               "--until=\"{}\"".format(journalctl_type, since, until))
+    err = "Error gathering system log events"
+    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+    return results
+
+
+def get_avocado_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    return settings.get_value(section, key)     # pylint: disable=no-member
+
+
+def set_avocado_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(section, key, str(value))

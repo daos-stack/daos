@@ -574,17 +574,11 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 
-		if (uuid_is_null(ap->c_uuid))
-			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
-		if (uuid_is_null(ap->c_uuid))
-			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
-		else
-			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
@@ -1698,7 +1692,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	char	**names = NULL;
 	void	**buffers = NULL;
 	size_t	*sizes = NULL;
-	void	*handle;
+	void	*handle = NULL;
 	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
 
 	/* Get all user attributes if any exist */
@@ -1732,7 +1726,7 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 		       daos_prop_t **props)
 {
 	int		rc = 0;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
@@ -1760,7 +1754,7 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	char		**names = NULL;
 	void		**buffers = NULL;
 	size_t		*sizes = NULL;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
@@ -1960,16 +1954,7 @@ dm_connect(struct cmd_args_s *ap,
 
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc)
-						D_GOTO(err, rc);
-					rc = dfs_cont_create(ca->dst_poh, cuuid, &attr, NULL, NULL);
-				} else {
-					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
-							     NULL, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
+				rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL, NULL);
 				if (rc != 0) {
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc,
@@ -1977,25 +1962,14 @@ dm_connect(struct cmd_args_s *ap,
 					D_GOTO(err, rc);
 				}
 			} else {
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc == 0)
-						rc = daos_cont_create(ca->dst_poh, cuuid, props,
-								      NULL);
-					else
-						rc = daos_cont_create_with_label(ca->dst_poh,
-										 ca->dst_cont,
-										 props, NULL, NULL);
-				} else {
-					rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
+				rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
 			}
+			uuid_unparse(cuuid, ca->dst_cont);
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {

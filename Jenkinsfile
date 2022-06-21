@@ -40,6 +40,7 @@ def getuid() {
                         returnStdout: true).trim()
     return cached_uid
 }
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -54,6 +55,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+        REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
     }
 
@@ -81,6 +83,12 @@ pipeline {
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
+        string(name: 'TestProvider',
+               defaultValue: "",
+               description: 'Test-provider to use for this run.  Specifies the default provider ' +
+                            'to use the daos_server config file when running functional tests' +
+                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
+                            '"ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -311,11 +319,11 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -339,18 +347,18 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on EL 8') {
+                stage('Build RPM on EL 8.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -381,11 +389,11 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -416,11 +424,11 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.ubuntu.20.04'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -698,7 +706,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -717,7 +725,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -736,7 +744,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -755,7 +763,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -774,7 +782,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -796,6 +804,20 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test EL 8.5 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.5',
+                                daos_pkg_version: daosPackagesVersion("el8", next_version)
+                   }
+                } // stage('Test EL 8.5 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -908,7 +930,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi")
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -928,7 +950,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -948,7 +970,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -968,7 +990,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {

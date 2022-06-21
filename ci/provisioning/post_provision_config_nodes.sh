@@ -25,7 +25,7 @@ add_repo() {
 
     local repo
     # see if a package we know is in the repo is present
-    if repo=$(dnf repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
+    if repo=$(dnf -y repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
         DNF_REPO_ARGS+=" --enablerepo=$repo"
     else
         local repo_url="${REPOSITORY_URL}${add_repo}"
@@ -98,9 +98,24 @@ chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 
+# pin the release
+# shellcheck disable=SC2154
+echo "$release" > /etc/dnf/vars/release
+
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
-post_provision_config_nodes
+if ! post_provision_config_nodes; then
+    rc=${PIPESTATUS[0]}
+    exit "$rc"
+fi
+
+# Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
+# to nvme.  Sometimes the device gets unbound from vfio-pci, but it is not removed the iommu group
+# for that device and future bindings to the device do not work, resulting in messages like, "NVMe
+# SSD [xxxx:xx:xx.x] not found" when starting daos engines.
+if lspci | grep -i nvme; then
+  daos_server storage prepare -n --reset && rmmod vfio_pci && modprobe vfio_pci
+fi
 
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
