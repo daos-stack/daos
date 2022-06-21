@@ -62,16 +62,14 @@ class GlobalHandle(TestWithServers):
             ctypes.POINTER(ctypes.c_byte * cont_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        dummy_cont_handle = container.global2local(
+        _ = container.global2local(
             self.context, cont_glob_handle.iov_len,
             cont_glob_handle.iov_buf_len, buf2)
         # just try one thing to make sure handle is good
         container.query()
 
     def test_global_handle(self):
-        """Test ID: Jira-XXXX.
-
-        Test Description: Use a pool handle in another process.
+        """Test Description: Use a pool handle in another process.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm

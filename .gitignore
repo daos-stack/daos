@@ -46,8 +46,7 @@ test/tool/build/
 foo
 foo2
 foo.o
-src/cart/_structures_from_macros_.h
-src/cart/src/cart/_structures_from_macros_.h
+src/cart/_structures_from_macros.h
 dnt.*.memcheck
 utils/.daos_server.active.yml
 nlt-errors.json
