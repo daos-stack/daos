@@ -858,8 +858,8 @@ information, please refer to the [DAOS build documentation][6].
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
 
-    Pick one host in the system and set `access_points` to list of that host's hostname or IP
-    address (don't need to specify port).
+    Pick an odd number of hosts in the system and set `access_points` to list of that host's
+    hostname or IP address (don't need to specify port).
 
     This will be the host which bootstraps the DAOS management service (MS).
 
