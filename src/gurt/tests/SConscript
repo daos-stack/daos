@@ -19,9 +19,9 @@ def scons():
     Import('env', 'prereqs', 'gurt_targets')
     # pylint: enable=too-many-locals
 
-    #Use full path to wrap_cmocka.h for configure test.  Since standalone
-    #cmocka header can't be included without including other headers,
-    #this test can't be generalized
+    # Use full path to wrap_cmocka.h for configure test.  Since standalone
+    # cmocka header can't be included without including other headers,
+    # this test can't be generalized
     wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
     prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
                    package='libcmocka-devel')

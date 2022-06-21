@@ -5,7 +5,7 @@ def configure_lustre(denv):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
         return denv
-    #If Lustre installed build a Lustre-aware libduns
+    # If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
     if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
