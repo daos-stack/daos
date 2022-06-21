@@ -72,7 +72,7 @@ def build_client_libs_shared(env, prereqs):
     # Now build the interception library
     il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
-    dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
+    dfuse_lib = daos_build.library(ilenv, 'dfuse', common)
 
     gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
@@ -97,16 +97,18 @@ def build_client_libs_static(env, common):
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
-    il_lib_src = ilenv.Library('il/libioil_source', il_obj + common)
+    il_lib_src = daos_build.static_library(ilenv, 'il/libioil_source', il_obj + common)
     il_lib = ilenv.Command('il/libioil.a', il_lib_src,
                            'objcopy --localize-hidden $SOURCE $TARGET')
+    daos_build.add_static_library('ioil', il_lib)
 
     env.Install('$PREFIX/lib64', il_lib)
 
-    # Now build the interception library
-    dfuse_lib_src = ilenv.Library('common/libdfuse_source', common)
+    # Now build the dfuse library
+    dfuse_lib_src = daos_build.static_library(ilenv, 'common/libdfuse_source', common)
     dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
                               'objcopy --localize-hidden $SOURCE $TARGET')
+    daos_build.add_static_library('dfuse', dfuse_lib)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
     return il_lib + dfuse_lib

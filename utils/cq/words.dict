@@ -1,10 +1,12 @@
 ABT
 ACL
+AIO
 APs
 Ansible
 BW
 Broadwell
 CGO
+Cilk
 DArray
 DDict
 DFS
@@ -35,6 +37,7 @@ Omni-Path
 Oneapi
 PCI
 PMem
+PRs
 PoC
 Qemu
 RAS
@@ -86,10 +89,13 @@ bullseye
 bw
 bytearray
 cancelled
+cd
 centric
+chdir
 checksum
 chgrp
 chmod
+chowned
 clush
 cmd
 cmdline
@@ -138,6 +144,7 @@ dkeys
 dll
 dmg
 dnf
+dockerfile
 docstring
 doneapi
 dpdk
@@ -154,6 +161,7 @@ environ
 epcrange
 ethernet
 fchmod
+fcntl
 filename
 filesystem
 findcmd
@@ -165,9 +173,12 @@ fs
 fstat
 ftest
 fuseblk
+fusermount
 gcc
 gdb
+getattr
 getfattr
+getxattr
 gid
 grp
 hackery
@@ -193,6 +204,7 @@ ioengine
 ior
 iotype
 iov
+ip
 iptable
 iptables
 iteratively
@@ -211,6 +223,7 @@ libdts
 libduns
 libfabric
 libgurt
+libioil
 libs
 libvirt
 llnl
@@ -235,10 +248,12 @@ middleware
 mins
 mkdir
 mnt
+modprobe
 mountpoint
 mpi
 mpicc
 mpich
+mpifileutils
 mpirun
 msg
 msgs
@@ -251,6 +266,7 @@ mv
 n-th
 namespace
 namespaces
+natively
 nfs
 nosec
 num
@@ -274,6 +290,7 @@ pci
 pda
 pdesc
 perf
+pgrep
 pid
 pids
 pkgconfig
@@ -284,9 +301,11 @@ poh
 posix
 postfix
 pparent
+ppn
 prebuild
 prebuilding
 prebuilt
+preload
 prepend
 prepended
 prepends
@@ -331,7 +350,10 @@ scalable
 scancel
 scm
 scons
+scontrol
 sharedctypes
+shlex
+simul
 slurm
 slurmctl
 spdk
@@ -340,6 +362,7 @@ src
 srun
 ssd
 ssds
+statfs
 statvfs
 stddev
 stderr
@@ -367,6 +390,8 @@ systemctl
 systemd
 tcp
 teardown
+teardowns
+testcase
 testcases
 testdata
 testname
@@ -388,10 +413,12 @@ udp
 uid
 uint
 umount
+umounting
 unicode
 unittest
 unlink
 unlinked
+unlinking
 unmount
 unwritable
 uri

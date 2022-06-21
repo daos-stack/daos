@@ -24,6 +24,9 @@ def scons():
     Default('self_test')
 
     if prereqs.test_requested():
+        # Build wrapper libraries
+        SConscript('wrap/SConscript')
+
         # Build crt_launch
         SConscript('crt_launch/SConscript')
 
@@ -37,8 +40,6 @@ def scons():
     daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
-
-    Export('daos_hdlrs_lib')
 
 
 if __name__ == "SCons.Script":
