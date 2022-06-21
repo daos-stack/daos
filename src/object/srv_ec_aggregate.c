@@ -2289,6 +2289,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	struct daos_obj_md	 md = { 0 };
 	struct pl_map		*map;
 	struct daos_oclass_attr  oca;
+	struct cont_props	 props;
 	int			 rc = 0;
 
 	/** We should have filtered it if it isn't EC */
@@ -2302,9 +2303,11 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	props = dc_cont_hdl2props(info->api_cont_hdl);
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = info->api_pool->sp_map_version;
-	md.omd_pda = info->api_props.dcp_ec_pda;
+	md.omd_pda = props.dcp_ec_pda;
+	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &agg_entry->ae_obj_layout);
 
 out:

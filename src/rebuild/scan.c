@@ -519,6 +519,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
+	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
 
 	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
 	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
