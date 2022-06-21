@@ -1,19 +1,11 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build CaRT components"""
-
-import os
-import sys
+from datetime import date
 import daos_build
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
-# pylint: disable=ungrouped-imports
 import SCons.Action
-
-HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
@@ -22,36 +14,38 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c', 'crt_hlct.c']
 
-# pylint: disable=unused-argument
-def macro_expand(target, source, env):
-    """Function for PostAction"""
+
+def parse_pp(env, pp_targets):
+    """Use command builder to process each preprocessed file"""
+    results = []
     scope = r"'/struct [^ ]*_\(in\|out\) {/,/};/p'"
     sed_e = r"-e 's/\s\s*/ /g' -e 's/};struct /};\nstruct /g'"
+    for tgt in pp_targets:
+        fname = f"{tgt.abspath}_grep"
+        cmd = f"sed -n {scope} $SOURCE | tr -d '\\n' | sed {sed_e} > $TARGET"
+        results.extend(env.Command(fname, tgt, cmd))
+    return results
+
+
+def copy_header(**kw):
+    """Copy the target file to source directory"""
+    Execute(Copy(Dir("src/cart").srcnode().abspath, kw['target'][0].abspath))
+
+
+def consolidate_pp(env, parsed_targets):
+    """Consolidate parsed headers"""
     sed_d = r"-e 's/\([{;]\) /\1\t/g' -e 's/\([{;]\)/\1\n/g'"
     grepv = r"'struct sockaddr_in {'"
-    tgts = ""
-    for tgt in target:
-        tgts += "%s_grep " % tgt.abspath
-        os.system("sed -n %s %s | tr -d '\\n' | sed %s > %s_grep"
-                  % (scope, tgt.abspath, sed_e, tgt.abspath))
-    h_name = "src/cart/_structures_from_macros_.h"
-    h_file = os.path.join(Dir('#').abspath, h_name)
-    with open(h_file, "w") as outfile:
-        outfile.write("/* Automatically generated with structures\n"
-                      " * expanded from CRT_RPC_DECLARE() macros\n *\n")
-        with open("LICENSE", "r") as infile:
-            for line in infile.readlines():
-                if line == "\n":
-                    outfile.write(" *\n")
-                else:
-                    outfile.write(" * " + line)
-            infile.close()
-        outfile.write(" */\n\n")
-        outfile.close()
-    if tgts != "":
-        os.system("cat %s | grep -v %s | sort -u | sed %s >> %s"
-                  % (tgts, grepv, sed_d, h_file))
-# pylint: enable=unused-argument
+    year = date.today().year
+    sd = {'@YEAR@': year}
+    preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT=sd)
+    parsed_sources = [x.abspath for x in parsed_targets]
+    cmd = (f"cat {preamble[0].abspath} > $TARGET; cat {' '.join(parsed_sources)}"
+           + f" | grep -v {grepv} | sort -u | sed {sed_d} >> $TARGET")
+    header = env.Command('_structures_from_macros.h', preamble + parsed_targets, cmd)
+    env.AddPostAction(header, SCons.Action.Action(copy_header, None))
+    return header
+
 
 def scons():
     """Scons function"""
@@ -60,22 +54,15 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
-    Import('conf_dir', 'base_env')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION', 'conf_dir')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.Alias('install', '$PREFIX')
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'),
-                    os.path.join('../include', 'cart', header))
 
     prereqs.require(env, 'mercury', headers_only=True)
 
@@ -89,36 +76,23 @@ def scons():
     compiler = env.get('COMPILER').lower()
     if compiler != 'covc':
         pp_env = denv.Clone()
+        pp_files = []
+        for src in SRC:
+            # Some day, the preprocess builder should be fixed so it can do multiple commands
+            # in parallel but until then, just submit them one at a time
+            pp_files.extend(pp_env.Preprocess(src))
+        parsed_files = parse_pp(pp_env, pp_files)
+        header = consolidate_pp(pp_env, parsed_files)
 
-        pp_files = pp_env.Preprocess(SRC)
-        pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
+        Depends(cart_targets, header)
 
-        denv.Requires(cart_targets, pp_files)
-
-    cart_lib = daos_build.library(denv, 'libcart', [cart_targets, swim_targets],
+    cart_lib = daos_build.library(denv, 'cart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
-    denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)
-    Export('cart_lib', 'cart_targets')
-
-    if not env.GetOption('clean') and not env.GetOption('help'):
-
-        print("Checking local headers can be included")
-        broken_includes = False
-        config_env = env.Clone()
-        config = Configure(config_env)
-        for header in HEADERS:
-            if not config.CheckHeader(os.path.join('cart', header)):
-                broken_includes = True
-        config.Finish()
-
-        if broken_includes:
-            print("Broken local header files, cannot continue")
-            Exit(2)
-
+    Export('cart_targets')
     Export('env', 'prereqs')
 
     env.Install(conf_dir, ['utils/memcheck-cart.supp',

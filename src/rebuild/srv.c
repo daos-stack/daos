@@ -474,10 +474,23 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
 	if (rgt == NULL) {
 		rs_inlist = rebuild_status_completed_lookup(pool_uuid);
-		if (rs_inlist != NULL)
+		if (rs_inlist != NULL) {
 			memcpy(status, rs_inlist, sizeof(*status));
-		else
-			status->rs_state = DRS_NOT_STARTED;
+		} else {
+			struct ds_pool *pool;
+
+			/* XXX sigh, no easy way check if pool has been through
+			 * rebuild/exclude process, so let's check pool_map_version
+			 * for now.
+			 */
+			pool = ds_pool_lookup(pool_uuid);
+			if (pool == NULL || pool->sp_map_version < 2)
+				status->rs_state = DRS_NOT_STARTED;
+			else
+				status->rs_state = DRS_COMPLETED;
+			if (pool != NULL)
+				ds_pool_put(pool);
+		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
 		status->rs_version = rgt->rgt_rebuild_ver;

@@ -1042,7 +1042,7 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll completion\n");
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
 	} else {
@@ -1229,7 +1229,7 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
 
-	if (biov->bi_addr.ba_type != DAOS_MEDIA_SCM)
+	if (!direct_scm_access(biod, biov))
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);

@@ -1,13 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 import threading
 
-from test_utils_pool import TestPool
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
@@ -77,11 +77,7 @@ class OSAOnlineExtend(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=self.label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Extend the pool_uuid, rank and targets

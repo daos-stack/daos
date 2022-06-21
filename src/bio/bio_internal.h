@@ -346,13 +346,14 @@ struct bio_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
-	unsigned int		 bxc_blob_rw;	/* inflight blob read/write */
+	unsigned int		 bxc_blob_rw;		/* inflight blob read/write */
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
-	unsigned int		 bxc_ready:1;	/* xstream setup finished */
+	unsigned int		 bxc_ready:1,		/* xstream setup finished */
+				 bxc_self_polling;	/* for standalone VOS */
 };
 
 /* Per VOS instance I/O context */
@@ -613,4 +614,5 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 /* bio_config.c */
 int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
 int bio_set_hotplug_filter(const char *nvme_conf);
+int bio_read_accel_props(const char *nvme_conf);
 #endif /* __BIO_INTERNAL_H__ */
