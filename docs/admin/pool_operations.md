@@ -55,19 +55,7 @@ or an explicit list of engine ranks to be used for this pool.
 
 The capacity of the pool can be specified in three different ways:
 
-1. The `--scm-size` parameter (and optionally `--nvme-size`) can
-   be used to specify the SCM capacity (and optionally the NVMe
-   capacity) _per storage engine_ in **Bytes**.
-   The minimum SCM size is 16 MiB per **target**, so for a storage
-   engine with 16 targets the minimum is `--scm-size=256MiB`.
-   The NVMe size can be zero. If it is non-zero then the minimum
-   NVMe size is 1 GiB per **target**, so for a storage engine
-   with 16 targets the minimum non-zero NVMe size is
-   `--nvme-size=16GiB`.
-   To derive the total pool capacity, these per-engine capacities
-   have to be multiplied by the number of participating engines.
-
-2. The `--size` option can be used to specify the _total_ pool
+1. The `--size` option can be used to specify the _total_ pool
    capacity in **Bytes**. This value denotes the sum of the SCM
    and NVMe capacities. The relative contributions of the SCM and
    NVMe storage tiers to the total pool size are determined by the
@@ -76,7 +64,7 @@ The capacity of the pool can be specified in three different ways:
    there will be 6TB of SCM and 94 TB of NVMe storage.
    An SCM-only pool can be created by using `--tier-ratio 100,0`.
 
-3. The `--size` option can be used to specify the _total_ pool
+2. The `--size` option can be used to specify the _total_ pool
    capacity as a **percentage of the currently free capacity**.
    In this case, the tier ratio will be ignored. For example,
    requesting `--size=100%` will allocate 100% of the free SCM
@@ -97,6 +85,18 @@ The capacity of the pool can be specified in three different ways:
      concurrent pool create operations. The command output will
      always list the total capacities in addiiton to the
      requested percentage.
+
+3. The `--scm-size` parameter (and optionally `--nvme-size`) can
+   be used to specify the SCM capacity (and optionally the NVMe
+   capacity) _per storage engine_ in **Bytes**.
+   The minimum SCM size is 16 MiB per **target**, so for a storage
+   engine with 16 targets the minimum is `--scm-size=256MiB`.
+   The NVMe size can be zero. If it is non-zero then the minimum
+   NVMe size is 1 GiB per **target**, so for a storage engine
+   with 16 targets the minimum non-zero NVMe size is
+   `--nvme-size=16GiB`.
+   To derive the total pool capacity, these per-engine capacities
+   have to be multiplied by the number of participating engines.
 
 !!! note
     The suffixes "M", "MB", "G", "GB", "T" or "TB" denote base-10
