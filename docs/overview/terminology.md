@@ -13,11 +13,11 @@
 |COTS|Commercial off-the-shelf|
 |CPU|Central Processing Unit|
 |Daemon|A process offering system-level resources.|
-|[DAOS](http://www.daos.io)|Distributed Asynchronous Object Storage |
+|[DAOS](https://docs.daos.io/)|Distributed Asynchronous Object Storage |
 |PMEM|Intel Optane Persistent Memory|
 |DPDK|Data Plane Development Kit|
 |dRPC|DAOS Remote Procedure Call|
-|[gRPC](https://grpc.io)|gRPC Remote Procedure Calls|
+|[gRPC](https://grpc.io/)|gRPC Remote Procedure Calls|
 |GURT|A common library of Gurt Useful Routines and Types|
 |[HLC](https://cse.buffalo.edu/tech-reports/2014-04.pdf)|Hybrid Logical Clock|
 |HLD|High-level Design|
@@ -42,7 +42,7 @@
 |SCM|Storage-Class Memory|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
-|[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
+|[SWIM](https://doi.org/10.1109/DSN.2002.1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|
 |UUID|Universal Unique Identifier|
