@@ -521,7 +521,7 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on EL 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -532,10 +532,7 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
-                                 inst_rpms: unitPackages(),
-                                 target: 'el8',
-                                 ci_target: 'el8',
-                                 distro_version: '8'
+                                 inst_rpms: unitPackages()
                     }
                     post {
                       always {
@@ -543,7 +540,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT on EL 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -555,10 +552,7 @@ pipeline {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
-                                 inst_rpms: unitPackages(),
-                                 target: 'el8',
-                                 ci_target: 'el8',
-                                 distro_version: '8'
+                                 inst_rpms: unitPackages()
                     }
                     post {
                       always {
