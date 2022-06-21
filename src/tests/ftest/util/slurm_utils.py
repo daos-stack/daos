@@ -23,7 +23,7 @@ class SlurmFailed(Exception):
 
 
 def cancel_jobs(job_id):
-    """Cancel slurms jobs.
+    """Cancel slurm jobs.
 
     Args:
         job_id (int): slurm job id

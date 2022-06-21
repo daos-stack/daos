@@ -1049,7 +1049,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return result
 
     def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None, cont=None):
-        """Generic method to perform varios datamover activities
+        """Generic method to perform various datamover activities
            using ior
         Args:
             tool(str): specify the tool name to be used

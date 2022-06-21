@@ -1044,7 +1044,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                                 # Unsupported format
                                 replacement = None
 
-                        hosts_key = r":\s+".join([key,  str(yaml_find_item)])
+                        hosts_key = r":\s+".join([key, str(yaml_find_item)])
                         hosts_key = hosts_key.replace("[", r"\[")
                         hosts_key = hosts_key.replace("]", r"\]")
                         if replacement:

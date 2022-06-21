@@ -19,7 +19,7 @@ class ManagementServiceFailover(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Inititialize a ManagementServiceFailover object."""
+        """Initialize a ManagementServiceFailover object."""
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False

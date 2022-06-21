@@ -668,7 +668,7 @@ class TestPool(TestDaosApiBase):
         if not done:
             raise DaosTestError(
                 "Pool Free space did not match: actual={},{} expected={},{}".format(
-                scm_fs, nvme_fs, expected_scm, expected_nvme))
+                    scm_fs, nvme_fs, expected_scm, expected_nvme))
 
         return done
 

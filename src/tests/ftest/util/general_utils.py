@@ -450,7 +450,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
@@ -1354,7 +1354,7 @@ def create_string_buffer(value, size=None):
 
     Args:
     value (object): value to pass to ctypes.create_string_buffer()
-    size (int, optional): sze to pass to ctypes.create_string_buffer()
+    size (int, optional): size to pass to ctypes.create_string_buffer()
 
     Returns:
     array: return value from ctypes.create_string_buffer()
