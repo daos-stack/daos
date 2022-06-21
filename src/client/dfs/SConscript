@@ -1,6 +1,7 @@
 """Build FUSE client"""
 import daos_build
 
+
 def configure_lustre(denv):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
@@ -25,6 +26,7 @@ def configure_lustre(denv):
         print("Not building with Lustre bindings.")
     return conf.Finish()
 
+
 def scons():
     """Execute build"""
     Import('env')
@@ -47,6 +49,7 @@ def scons():
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
+
 
 if __name__ == "SCons.Script":
     scons()
