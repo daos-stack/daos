@@ -65,8 +65,8 @@ class PoolManagementRace(TestWithServers):
                             "race condition detected by dmg, retry.. %s", pool_id, error)
                         time.sleep(wait_time)
                         if float(time.time()) - start > max_query_time:
-                            self.fail("#(%d.5.%s.%d)Pool query failed and retry timeout.",
-                                      thread_num, pool_id, test_num)
+                            self.fail("#({}.5.{}.{})Pool query failed and retry timeout.".format(
+                                      thread_num, pool_id, test_num))
                 daos_tool.exit_status_exception = True
                 self.log.info("-->Test thread %d, test_loop %d completed.", thread_num, test_num)
 
