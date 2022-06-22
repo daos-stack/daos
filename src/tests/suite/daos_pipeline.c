@@ -27,7 +27,7 @@ daos_filter_part_t   andfunc_fp;
 d_iov_t              const_iov0;
 char                 const0[]          = "Benny";
 char                 const1[]          = "Benny";
-char                 const3[13];
+char                 const3[14];
 char                 cond_type[]       = "DAOS_FILTER_CONDITION";
 char                 aggr_type[]       = "DAOS_FILTER_AGGREGATION";
 char                 eqfunc_type[]     = "DAOS_FILTER_FUNC_EQ";
@@ -242,9 +242,10 @@ build_with_string_insane_size(void)
 
 	p = build_cor_0();
 	/** making sure the size of the string is not sane */
-	size_ptr  = (size_t *)const3;
-	*size_ptr = (size_t)1000; /* strlen(const0) is 5 */
+	size_ptr   = (size_t *)const3;
+	*size_ptr  = (size_t)1000; /* strlen(const0) is 5 */
 	strncpy(&const3[sizeof(size_t)], const0, strlen(const0));
+	const3[13] = '\0';
 	d_iov_set(p->filters[0]->parts[2]->constant, const3, 13);
 	d_iov_set(&p->filters[0]->parts[2]->data_type, "DAOS_FILTER_TYPE_STRING",
 		  strlen("DAOS_FILTER_TYPE_STRING"));
