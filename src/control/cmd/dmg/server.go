@@ -51,10 +51,14 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 	}
 	req.SetHostList(cmd.hostlist)
 
+	cmd.Debugf("set log masks request: %+v", req)
+
 	resp, err := control.SetEngineLogMasks(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
+
+	cmd.Debugf("set log masks reponse: %+v", resp)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, resp.Errors())
