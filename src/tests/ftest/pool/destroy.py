@@ -171,10 +171,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
-        set_id = self.params.get("setname", '/run/setnames/validsetname/')
+        setname = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
-        self.execute_test(hostlist_servers, set_id, "with a single server")
+        self.execute_test(hostlist_servers, setname, "with a single server")
 
     def test_destroy_multi(self):
         """Test destroying a pool created on two servers.
@@ -185,10 +185,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
-        set_id = self.params.get("setname", '/run/setnames/validsetname/')
+        setname = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
-        self.execute_test(hostlist_servers, set_id, "with multiple servers")
+        self.execute_test(hostlist_servers, setname, "with multiple servers")
 
     def test_destroy_single_loop(self):
         """Destroy and recreate pool multiple times.
@@ -252,10 +252,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
-        set_id = self.params.get("setname", '/run/setnames/validsetname/')
+        setname = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers(self.get_group(set_id, hostlist_servers))
+        self.start_servers(self.get_group(setname, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers)
@@ -287,10 +287,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_invalid_label
         """
         hostlist_servers = self.hostlist_servers[:1]
-        set_id = self.params.get("setname", '/run/setnames/validsetname/')
+        setname = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers(self.get_group(set_id, hostlist_servers))
+        self.start_servers(self.get_group(setname, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers)
