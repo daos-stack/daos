@@ -14,7 +14,6 @@ pool:
   scm_size: 200M
   control_method: dmg
 boundary_test:
-  pool_label_prefix: "Pool_"
   num_pools: 20
   test_loop: 200
   num_query_threads: 5
