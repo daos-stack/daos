@@ -347,7 +347,7 @@ dcv_suit_teardown(void **state)
 #define TEST(test) { #test, test, NULL, NULL }
 
 int
-dvc_tests_run()
+ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
 		TEST(quit_cmd_tests),

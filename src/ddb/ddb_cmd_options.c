@@ -100,10 +100,10 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 
 	index = optind;
 	if (argc - index > 0) {
-		cmd_args->vos_pool_shard = argv[index];
+		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'vos_pool_shard'\n");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
@@ -521,39 +521,197 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return 0;
 	}
 
+	ddb_errorf(ctx, "'%s' is not a valid command. Available commands are:"
+			"'help', "
+			"'quit', "
+			"'ls', "
+			"'open', "
+			"'close', "
+			"'dump_superblock', "
+			"'dump_value', "
+			"'rm', "
+			"'load', "
+			"'dump_ilog', "
+			"'commit_ilog', "
+			"'rm_ilog', "
+			"'dump_dtx', "
+			"'clear_cmt_dtx', "
+			"'smd_sync'\n", cmd);
+
 	return -DER_INVAL;
 }
 
-int
-ddb_run_help(struct ddb_ctx *ctx)
+void
+ddb_commands_help(struct ddb_ctx *ctx)
 {
-	ddb_print(ctx, "Usage:\n");
-	ddb_print(ctx, "ddb [OPTIONS] <command>\n");
+	ddb_print(ctx, "help\n");
+	ddb_print(ctx, "\tShow help message for all the commands.\n");
+
 	ddb_print(ctx, "\n");
-	ddb_print(ctx, "ddb (DAOS Debug) is a tool for connecting to a VOS file for "
-		       "the purpose of investigating and resolving issues.\n");
+	ddb_print(ctx, "quit\n");
+	ddb_print(ctx, "\tQuit interactive mode\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "ls [path]\n");
+	ddb_print(ctx, "\tList containers, objects, dkeys, akeys, and values\n");
+	ddb_print(ctx, "    [path]\n");
+	ddb_print(ctx, "\tOptional, list contents of the provided path\n");
+
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -r, --recursive\n");
+	ddb_print(ctx, "\tRecursively list the contents of the path\n");
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "open <path>\n");
+	ddb_print(ctx, "\tOpens the vos file at <path>\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tPath to the vos file to open. This should be an absolute\n"
+		       "\tpath to the pool shard. Part of the path is used to\n"
+		       "\tdetermine what the pool uuid is.\n");
+
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -w, --write_mode\n");
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the\n"
+		       "\tvos file with the load, commit_ilog, etc commands.\n");
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "close\n");
+	ddb_print(ctx, "\tClose the currently opened vos pool shard\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "dump_superblock\n");
+	ddb_print(ctx, "\tDump the pool superblock information\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "dump_value <path> <dst>\n");
+	ddb_print(ctx, "\tDump a value to a file\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to dump. Should be a complete path\n"
+		       "\tincluding the akey and if the value is an array value it\n"
+		       "\tshould include the extent.\n");
+
+	ddb_print(ctx, "    <dst>\n");
+	ddb_print(ctx, "\tFile path to dump the value to.\n");
+
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "rm <path>\n");
+	ddb_print(ctx, "\tRemove a branch of the VOS tree. The branch can be anything\n"
+		       "\tfrom a container and everything under it, to a single value.\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to remove.\n");
+
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "load <src> <dst>\n");
+	ddb_print(ctx, "\tLoad a value to a vos path. This can be used to update the\n"
+		       "\tvalue of an existing key, or create a new key.\n");
+	ddb_print(ctx, "    <src>\n");
+	ddb_print(ctx, "\tSource file path that contains the data for the value to\n"
+		       "\tload.\n");
+
+	ddb_print(ctx, "    <dst>\n");
+	ddb_print(ctx, "\tDestination vos tree path to the value where the data\n"
+		       "\twill be loaded. If the path currently exists, then the\n"
+		       "\tdestination path must match the value type, meaning, if the\n"
+		       "\tvalue type is an array, then the path must include the extent,\n"
+		       "\totherwise, it must not.\n");
+
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "dump_ilog <path>\n");
+	ddb_print(ctx, "\tDump the ilog\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "commit_ilog <path>\n");
+	ddb_print(ctx, "\tProcess the ilog\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "rm_ilog <path>\n");
+	ddb_print(ctx, "\tRemove all the ilog entries\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "dump_dtx <path>\n");
+	ddb_print(ctx, "\tDump the dtx tables\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to a container.\n");
+
+	ddb_print(ctx, "Options:\n");
+	ddb_print(ctx, "    -a, --active\n");
+	ddb_print(ctx, "\tOnly dump entries from the active table\n");
+	ddb_print(ctx, "    -c, --committed\n");
+	ddb_print(ctx, "\tOnly dump entries from the committed table\n");
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "clear_cmt_dtx <path>\n");
+	ddb_print(ctx, "\tClear the dtx committed table\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to a container.\n");
+
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "smd_sync\n");
+	ddb_print(ctx, "\tRestore the SMD file with backup from blob\n");
+
+	ddb_print(ctx, "\n");
+}
+
+void
+ddb_program_help(struct ddb_ctx *ctx)
+{
+	ddb_print(ctx, "The DAOS Debug Tool (ddb) allows a user to navigate through and modify\n"
+		       "a file in the VOS format. It offers both a command line and interactive\n"
+		       "shell mode. If the '-R' or '-f' options are not provided, then it will\n"
+		       "run in interactive mode. In order to modify the file, the '-w' option\n"
+		       "must be included.\n"
+		       "\n"
+		       "Many of the commands take a vos tree path. The format for this path\n"
+		       "is [cont]/[obj]/[dkey]/[akey]/[extent]. The container is the container\n"
+		       "uuid. The object is the object id.  The keys parts currently only\n"
+		       "support string keys and must be surrounded with a single quote (') unless\n"
+		       "using indexes (explained later). The extent for array values is the\n"
+		       "format {lo-hi}. To make it easier to navigate the tree, indexes can be\n"
+		       "used instead of the path part. The index is in the format [i]\n");
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "Usage:\n");
+	ddb_print(ctx, "ddb [path] [options]\n");
+	ddb_print(ctx, "\n");
+	ddb_print(ctx, "    [path]\n");
+	ddb_print(ctx, "\tPath to the vos file to open. This should be an absolute\n"
+		       "\tpath to the pool shard. Part of the path is used to\n"
+		       "\tdetermine what the pool uuid is. If a path is not provided\n"
+		       "\tinitially, the open command can be used later to open the\n"
+		       "\tvos file.\n");
 
 	ddb_print(ctx, "\nOptions:\n");
 	ddb_print(ctx, "   -w, --write_mode\n");
-	ddb_print(ctx, "   -R, --run_cmd\n");
-	ddb_print(ctx, "   -f, --file_cmd\n");
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying\n"
+		       "\tVOS file with the load,\n"
+		       "\tcommit_ilog, etc commands.\n");
+	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
+	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");
+	ddb_print(ctx, "   -f, --file_cmd <path>\n");
+	ddb_print(ctx, "\tPath to a file container a list of ddb commands, one\n"
+		       "\tcommand per line, then exit.\n");
+	ddb_print(ctx, "   -h, --help\n");
+	ddb_print(ctx, "\tShow tool usage.\n");
 
 	ddb_print(ctx, "Commands:\n");
-	ddb_print(ctx, "   help              Show this help message\n");
+	ddb_print(ctx, "   help              Show help message for all the commands.\n");
 	ddb_print(ctx, "   quit              Quit interactive mode\n");
 	ddb_print(ctx, "   ls                List containers, objects, dkeys, akeys, and values\n");
-	ddb_print(ctx, "   open              Opens the vos_pool_shard\n");
+	ddb_print(ctx, "   open              Opens the vos file at <path>\n");
 	ddb_print(ctx, "   close             Close the currently opened vos pool shard\n");
 	ddb_print(ctx, "   dump_superblock   Dump the pool superblock information\n");
 	ddb_print(ctx, "   dump_value        Dump a value to a file\n");
-	ddb_print(ctx, "   rm                Remove a branch of the VOS tree\n");
-	ddb_print(ctx, "   load              Load an updated or new value\n");
+	ddb_print(ctx, "   rm                Remove a branch of the VOS tree.\n");
+	ddb_print(ctx, "   load              Load a value to a vos path.\n");
 	ddb_print(ctx, "   dump_ilog         Dump the ilog\n");
 	ddb_print(ctx, "   commit_ilog       Process the ilog\n");
 	ddb_print(ctx, "   rm_ilog           Remove all the ilog entries\n");
 	ddb_print(ctx, "   dump_dtx          Dump the dtx tables\n");
 	ddb_print(ctx, "   clear_cmt_dtx     Clear the dtx committed table\n");
 	ddb_print(ctx, "   smd_sync          Restore the SMD file with backup from blob\n");
-
-	return 0;
 }
