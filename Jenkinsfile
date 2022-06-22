@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@DAOS-9989") _
 
 // Should try to figure this out automatically
 String base_branch = "release/2.2"
@@ -25,7 +26,8 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith("weekly-testing") &&
+    (!env.BRANCH_NAME.startsWith("provider-testing") &&
+     !env.BRANCH_NAME.startsWith("weekly-testing") &&
      !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
@@ -36,7 +38,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME.startsWith('provider-testing') ? 'H 2 * * 6' : '')
     }
 
     environment {
@@ -57,14 +59,27 @@ pipeline {
 
     parameters {
         string(name: 'BuildPriority',
+               /* groovylint-disable-next-line UnnecessaryGetter */
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "full_regression",
-               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
-               defaultValue: 'ci_vm9',
-               description: 'Label to use for 9 VM functional tests')
+               defaultValue: 'pr daily_regression',
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestProvider',
+               defaultValue: 'ofi+tcp',
+               description: 'Provider to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. ofi+tcp)')
+        string(name: 'BaseBranch',
+               defaultValue: base_branch,
+               description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+        booleanParam(name: 'CI_small_TEST',
+                     defaultValue: true,
+                     description: 'Run the Small Cluster CI tests')
+        booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the Medium Cluster CI tests')
+        booleanParam(name: 'CI_large_TEST',
+                     defaultValue: true,
+                     description: 'Run the Large Cluster CI tests')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
                description: 'Label to use for 3 node NVMe tests')
@@ -97,102 +112,6 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Functional on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on CentOS 7')
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
                 stage('Functional Hardware Small') {
                     when {
                         beforeAgent true
