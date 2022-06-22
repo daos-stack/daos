@@ -46,7 +46,7 @@ pipeline {
              env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
              /* groovylint-disable-next-line AddEmptyString */
              env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6\n' : '' +
-             env.BRANCH_NAME.startsWith('provider-testing') ? 'H 14 * * 4' : '')
+             env.BRANCH_NAME.startsWith('provider-testing') ? 'H 2 * * 6' : '')
     }
 
     environment {
