@@ -14,6 +14,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@DAOS-9989") _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -89,13 +90,13 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Large Cluster CI tests')
         string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
+               defaultValue: 'ci_ofed3',
                description: 'Label to use for 3 node NVMe tests')
         string(name: 'CI_NVME_5_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node NVMe tests')
         string(name: 'CI_NVME_9_LABEL',
-               defaultValue: 'ci_nvme9',
+               defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node NVMe tests')
     }
 
