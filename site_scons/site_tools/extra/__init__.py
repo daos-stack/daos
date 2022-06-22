@@ -22,4 +22,5 @@
 # SOFTWARE.
 #
 
+# pylint: disable=unused-import
 from .extra import generate, exists  # noqa: F401
