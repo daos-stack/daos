@@ -521,7 +521,7 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8') {
+                stage('Unit Test') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -598,7 +598,7 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck on EL8') {
+                stage('Unit Test with memcheck on EL 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
