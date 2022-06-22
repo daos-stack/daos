@@ -64,7 +64,7 @@ UnitTests = namedtuple('UnitTests',
 
 def build_mock_unit_tests(env, src_list=None, **kwargs):
     """
-    Call im place of Program with the same parameters other than the executable
+    Call in place of Program with the same parameters other than the executable
     name and the source files.
 
     In concert with the _test_source_list this method searches the source

@@ -1591,18 +1591,17 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def destroy(self, force=1, poh=None, cb_func=None):
+    def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
         """Send a container destroy request to the daos server group."""
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
         if self.uuid is None:
             raise DaosApiError("Fail to destroy a container with uuid as none.")
-
-        if self.uuid is None:
-            raise DaosApiError("Container uuid is None.")
-        uuid_str = self.get_uuid_str()
-
+        if con_uuid is None:
+            uuid_str = self.get_uuid_str()
+        else:
+            uuid_str = str(con_uuid)
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
@@ -2302,8 +2301,8 @@ class DaosSnapshot():
         epoch to destroy. We have only one epoch for this single snapshot
         object.
 
-        coh     --ctype.u_long open container handle
-        evnt    --event (may be None)
+        coh:     --ctype.u_long open container handle
+        evnt:    --event (may be None)
         # need container handle coh, and the epoch range
         """
         func = self.context.get_function('destroy-snap')

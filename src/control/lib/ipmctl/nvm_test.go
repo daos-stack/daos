@@ -20,7 +20,7 @@ import (
 )
 
 // NVM API calls will fail if not run as root. We should just skip the tests.
-func skipNoPerms(t *testing.T) {
+func skipNoPerms(t *testing.T) bool {
 	t.Helper()
 	u, err := user.Current()
 	if err != nil {
@@ -29,8 +29,9 @@ func skipNoPerms(t *testing.T) {
 	if u.Uid != "0" {
 		// Alert the user even if they're not running the tests in verbose mode
 		fmt.Printf("%s must be run as root\n", t.Name())
-		t.Skip("test doesn't have NVM API permissions")
+		return true
 	}
+	return false
 }
 
 // Fetch all devices in the system - and skip the test if there are none
@@ -53,7 +54,9 @@ func TestNvmDiscovery(t *testing.T) {
 	log, buf := logging.NewTestLogger("discovery")
 	defer test.ShowBufferOnFailure(t, buf)
 
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
 	mgmt := NvmMgmt{}
 	_, err := mgmt.GetModules(log)
@@ -66,7 +69,9 @@ func TestNvmFwInfo(t *testing.T) {
 	log, buf := logging.NewTestLogger("firmware")
 	defer test.ShowBufferOnFailure(t, buf)
 
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
 	mgmt := NvmMgmt{}
 	devs := discoverDevices(t, log, mgmt)
@@ -113,7 +118,9 @@ func TestNvmFwUpdate(t *testing.T) {
 	log, buf := logging.NewTestLogger("firmware")
 	defer test.ShowBufferOnFailure(t, buf)
 
-	skipNoPerms(t)
+	if skipNoPerms(t) {
+		return
+	}
 
 	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()

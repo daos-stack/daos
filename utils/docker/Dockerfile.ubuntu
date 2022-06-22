@@ -16,7 +16,7 @@ ARG CB0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
-COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
+COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
 RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
@@ -78,9 +78,9 @@ USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
+    { scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE &&                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
