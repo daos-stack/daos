@@ -12,8 +12,6 @@
 #include <daos_pipeline.h>
 #include "daos_test.h"
 
-//static enum daos_otype_t type = DAOS_OT_KV_HASHED;
-
 #define NUM_AKEYS       4
 #define VALUE_MAX_SIZE  10
 
