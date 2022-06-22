@@ -131,46 +131,7 @@ build_cor_1(void)
 
 	return &pipe0;
 }
-/*
-static daos_pipeline_t *
-build_cor_2(void)
-{
-	int rc;
 
-	daos_pipeline_init(&pipe0);
-	daos_filter_init(&comp_eq);
-
-	d_iov_set(&comp_eq.filter_type, cond_type, strlen(cond_type));
-
-	rc = daos_pipeline_add(&pipe0, &comp_eq);
-	assert_rc_equal(rc, 0);
-	rc = daos_filter_add(&comp_eq, &eqfunc_fp);
-	assert_rc_equal(rc, 0);
-	rc = daos_filter_add(&comp_eq, &akey_fp);
-	assert_rc_equal(rc, 0);
-	rc = daos_filter_add(&comp_eq, &const_fp);
-	assert_rc_equal(rc, 0);
-
-	eqfunc_fp = (daos_filter_part_t){ 0 };
-	d_iov_set(&eqfunc_fp.part_type, eqfunc_type, strlen(eqfunc_type));
-	eqfunc_fp.num_operands = 2;
-
-	akey_fp   = (daos_filter_part_t){ 0 };
-	d_iov_set(&akey_fp.part_type, akey_type, strlen(akey_type));
-	d_iov_set(&akey_fp.data_type, str_type, strlen(str_type));
-	d_iov_set(&akey_fp.akey, akeys[0], strlen(akeys[0]));
-	akey_fp.data_len       = VALUE_MAX_SIZE;
-
-	const_fp  = (daos_filter_part_t){ 0 };
-	d_iov_set(&const_fp.part_type, const_type, strlen(const_type));
-	d_iov_set(&const_fp.data_type, str_type, strlen(str_type));
-	const_fp.num_constants = 1;
-	const_fp.constant      = &const_iov0;
-	d_iov_set(&const_iov0, const0, strlen(const0) + 1);
-
-	return &pipe0;
-}
-*/
 static daos_pipeline_t *
 build_incor_parttype(void)
 {
