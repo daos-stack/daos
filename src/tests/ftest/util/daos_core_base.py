@@ -6,12 +6,12 @@
 """
 
 import os
-import write_host_file
 
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
 from general_utils import get_log_file
+from command_utils_base import EnvironmentVariables
 from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
 from agent_utils import include_local_host
@@ -40,12 +40,9 @@ class DaosCoreBase(TestWithServers):
 
         super().setUp()
 
-        # if no client specified update self.hostlist_clients to local host
-        # and create a new self.hostfile_clients.
+        # if no clients are specified update self.hostlist_clients to be the local host
         if self.hostlist_clients is None:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir, None)
 
     def get_test_param(self, name, default=None):
         """Get the test-specific test yaml parameter value.
@@ -114,7 +111,7 @@ class DaosCoreBase(TestWithServers):
             num_clients = self.params.get("num_clients", '/run/daos_tests/*')
 
         scm_size = self.params.get("scm_size", '/run/pool/*')
-        nvme_size = self.params.get("nvme_size", '/run/pool/*')
+        nvme_size = self.params.get("nvme_size", '/run/pool/*', 0)
         args = self.get_test_param("args", "")
         stopped_ranks = self.get_test_param("stopped_ranks", [])
         pools_created = self.get_test_param("pools_created", 1)
@@ -126,34 +123,25 @@ class DaosCoreBase(TestWithServers):
                 get_log_file("daosCA/certs"), self.hostlist_clients)
             dmg.copy_configuration(self.hostlist_clients)
 
-        cmd = " ".join(
-            [
-                "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
-                "--map-by node", "-x", "D_LOG_MASK=DEBUG",
-                "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
-                "-x", "COVFILE=/tmp/test.cov",
-                self.daos_test,
-                "-n", dmg_config_file,
-                "".join(["-", subtest]),
-                str(args)
-            ]
-        )
+        cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
+        env = EnvironmentVariables({
+            "D_LOG_FILE": get_log_file(self.client_log),
+            "D_LOG_MASK": "DEBUG",
+            "DD_MASK": "mgmt,io,md,epc,rebuild",
+            "COVFILE": "/tmp/test.cov",
+            "CMOCKA_XML_FILE": os.path.join(self.outputdir, "%g_cmocka_results.xml"),
+            "CMOCKA_MESSAGE_OUTPUT": "xml",
+            "POOL_SCM_SIZE": str(scm_size),
+            "POOL_NVME_SIZE": str(nvme_size),
+        })
 
+        # Assign the test to run
         job_cmd = ExecutableCommand(namespace=None, command=cmd)
         job = get_job_manager(self, "Orterun", job_cmd, mpi_type="openmpi")
-        # Assign the test to run
-        job.hostfile.update(self.hostfile_clients)
-        job.processes.update(num_clients)
+        job.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job.assign_processes(num_clients)
+        job.assign_environment(env)
         job_str = str(job)
-
-        env = {}
-        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir,
-                                              "%g_cmocka_results.xml")
-        env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
-        env['POOL_SCM_SIZE'] = "{}".format(scm_size)
-        if not nvme_size:
-            nvme_size = 0
-        env['POOL_NVME_SIZE'] = "{}".format(nvme_size)
 
         # Update the expected status for each ranks that will be stopped by this
         # test to avoid a false failure during tearDown().
@@ -170,7 +158,7 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         try:
-            process.run(job_str, env=env)
+            process.run(job_str)
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
