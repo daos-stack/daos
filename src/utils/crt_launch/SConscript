@@ -24,7 +24,6 @@ def scons():
     tenv.AppendUnique(CPPPATH=[Dir('../../include').srcnode()])
     tenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
     tenv.AppendUnique(LIBPATH=[Dir('../../cart')])
-    tenv.AppendUnique(LIBPATH=[Dir('../../common')])
 
     tenv.AppendUnique(LIBS=libs)
     prereqs.require(tenv, 'mercury')
