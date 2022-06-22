@@ -58,7 +58,7 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	cmd.Debugf("set log masks reponse: %+v", resp)
+	cmd.Debugf("set log masks response: %+v", resp)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, resp.Errors())
