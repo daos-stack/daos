@@ -418,20 +418,20 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -443,9 +443,9 @@ pipeline {
                     post {
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc
+                                      mv config.log config.log-el8-gcc
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-el8-gcc',
                                              allowEmptyArchive: true
                         }
                     }
