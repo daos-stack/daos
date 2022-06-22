@@ -15,13 +15,14 @@ test(void **state) { skip(); }
 
 int main(int argc, char **argv)
 {
-	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test),
-		cmocka_unit_test(test),
-	};
-	return cmocka_run_group_tests(tests, NULL, NULL);
+  const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test),
+    cmocka_unit_test(test),
+  };
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }
 """
+
 
 def CheckCmockaSkip(context):
     """Configure check for cmocka bug"""
@@ -49,25 +50,26 @@ def CheckCmockaSkip(context):
         else:
             sys.stdout.write(" (Bug not reproduced) ")
     context.Result(rc)
-    #return 0 means error
+    # return 0 means error
     return not rc
 
-#pylint: disable=no-member
+
+# pylint: disable=no-member
 def configure_cmocka(nenv):
     """configure cmocka environment"""
     if GetOption('help') or GetOption('clean'):
         return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip' : CheckCmockaSkip})
+    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
     conf.env.AppendUnique(LIBS=['cmocka'])
     if not conf.CheckCmockaSkip():
-        #it would be cool to be able to check exit code is effectively 134
+        # it would be cool to be able to check exit code is effectively 134
         #    (for abort() upon skip() bug) but in all error cases we should
         #    decide to use workaround
         conf.env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
         print("libcmocka with broken skip(), using workaround (DAOS-1093).")
     return conf.Finish()
-#pylint: enable=no-member
-#
+
+
 def scons():
     """Execute build"""
     Import('denv', 'base_env')
@@ -123,6 +125,7 @@ def scons():
     denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_4')
     denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

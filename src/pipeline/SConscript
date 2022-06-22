@@ -1,6 +1,6 @@
 """Build objects"""
 import daos_build
-Import('env', 'prereqs')
+Import('env', 'prereqs', 'libdaos_tgts')
 
 def scons():
     """Execute build"""
@@ -16,8 +16,7 @@ def scons():
     # Pipeline client library
     dc_pipeline_tgts = denv.SharedObject(['cli_pipeline.c', 'pipeline_task.c',
                                           'cli_mod.c'])
-    dc_pipeline_tgts += common_tgts
-    Export('dc_pipeline_tgts')
+    libdaos_tgts.extend(dc_pipeline_tgts + common_tgts)
 
     if not prereqs.server_requested():
         return

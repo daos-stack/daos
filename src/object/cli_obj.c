@@ -180,6 +180,31 @@ obj_hdl_unlink(struct dc_object *obj)
 	daos_hhash_link_delete(&obj->cob_hlink);
 }
 
+static uint32_t
+dc_obj_get_redun_lvl(struct dc_object *obj)
+{
+	struct cont_props	props;
+
+	props = dc_cont_hdl2props(obj->cob_coh);
+
+	return props.dcp_redun_lvl;
+}
+
+daos_handle_t
+dc_obj_hdl2cont_hdl(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	daos_handle_t hdl;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return DAOS_HDL_INVAL;
+
+	hdl = obj->cob_coh;
+	obj_decref(obj);
+	return hdl;
+}
+
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
@@ -204,15 +229,18 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	dc_pool_put(pool);
 	rc = pl_obj_place(map, &obj->cob_md, mode, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
-		D_DEBUG(DB_PL, "Failed to generate object layout\n");
+		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
+			DP_OID(obj->cob_md.omd_id), obj->cob_md.omd_fdom_lvl);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", layout->ol_nr,
-		layout->ol_ver);
+	D_DEBUG(DB_PL, DF_OID" Place object on %d targets ver %d, fdom_lvl %d\n",
+		DP_OID(obj->cob_md.omd_id), layout->ol_nr, layout->ol_ver,
+		obj->cob_md.omd_fdom_lvl);
 	D_ASSERT(layout->ol_nr == layout->ol_grp_size * layout->ol_grp_nr);
 
 	if (refresh)
@@ -1409,8 +1437,6 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	 */
 	md->omd_id      = oid;
 	md->omd_ver     = 0;
-	md->omd_padding = 0;
-	md->omd_loff    = 0;
 	return 0;
 }
 
@@ -6676,34 +6702,3 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 
 	return (ord << OC_REDUN_SHIFT) | nr_grp;
 }
-
-daos_handle_t
-dc_obj_hdl2cont_hdl(daos_handle_t oh)
-{
-	struct dc_object *obj;
-	daos_handle_t hdl;
-
-	obj = obj_hdl2ptr(oh);
-	if (obj == NULL)
-		return DAOS_HDL_INVAL;
-
-	hdl = obj->cob_coh;
-	obj_decref(obj);
-	return hdl;
-}
-
-int
-dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md)
-{
-	struct dc_object 	*obj;
-	
-	obj = obj_hdl2ptr(oh);
-	if (obj == NULL)
-	{
-		return -DER_NO_HDL;
-	}
-	*md = obj->cob_md;
-	obj_decref(obj);
-	return 0;
-}
-
