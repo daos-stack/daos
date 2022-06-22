@@ -27,10 +27,10 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
+#    base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
     daos_build.add_build_rpath(env)
     daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(base_env_mpi)
+#    daos_build.add_build_rpath(base_env_mpi)
 
     build_dpar(base_env, base_env_mpi)
 
