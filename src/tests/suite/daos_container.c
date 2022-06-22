@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 #include "daos_iotest.h"
+#include <daos/placement.h>
 
 #define TEST_MAX_ATTR_LEN	(128)
 
@@ -2499,6 +2500,288 @@ co_api_compat(void **state)
 }
 
 static int
+nrank_per_node_get(struct pool_map *poolmap)
+{
+	struct pool_domain	*dom;
+	int			 rc;
+
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &dom);
+	print_message("system with %d domains of PO_COMP_TP_NODE, %d RANKs per NODE\n",
+		      rc, dom->do_comp.co_nr);
+
+	return dom->do_comp.co_nr;
+}
+
+static int
+ranks_on_same_node(struct pool_map *poolmap, int src_rank, int *ranks)
+{
+	struct pool_domain	*node_doms;
+	struct pool_domain	*rank_doms;
+	struct pool_domain	*node_d, *rank_d;
+	int			 nnodes, nrank_per_node;
+	int			 i, j, k;
+	int			 rc;
+
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &node_doms);
+	nnodes = rc;
+	nrank_per_node = node_doms->do_comp.co_nr;
+
+	for (i = 0; i < nnodes; i++) {
+		node_d = node_doms + i;
+		assert_int_equal(node_d->do_comp.co_nr, nrank_per_node);
+		rank_doms = node_d->do_children;
+		for (j = 0; j < nrank_per_node; j++) {
+			rank_d = rank_doms + j;
+			if (rank_d->do_comp.co_rank != src_rank)
+				continue;
+			for (k = 0; k < nrank_per_node; k++) {
+				rank_d = rank_doms + k;
+				ranks[k] = rank_d->do_comp.co_rank;
+				if (ranks[k] != src_rank)
+					print_message("rank %d on same node of rank %d\n",
+						      ranks[k], src_rank);
+			}
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+static void
+co_redun_lvl(void **state)
+{
+#define STACK_BUF_LEN	(128)
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 coh, oh, coh_g2l;
+	d_iov_t			 ghdl = { NULL, 0, 0 };
+	daos_prop_t		*prop = NULL;
+	struct daos_prop_entry	*entry;
+	struct daos_co_status	 stat = { 0 };
+	daos_cont_info_t	 info = { 0 };
+	struct pl_map		*plmap = NULL;
+	struct pool_map		*poolmap = NULL;
+	daos_obj_id_t		 io_oid;
+	daos_handle_t		 io_oh;
+	d_iov_t			 dkey;
+	char			 stack_buf[STACK_BUF_LEN];
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
+	int			 nrank_per_node, ndom;
+	int			 ranks[3];
+	int			 i, rc;
+
+	if (!test_runable(arg0, 8))
+		skip();
+
+	print_message("create container with properties, and query/verify.\n");
+	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	prop = daos_prop_alloc(2);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+	assert_int_equal(rc, 0);
+
+	/* test 1 - cont rf and obj redundancy */
+	print_message("verify cont rf is set and can be queried ...\n");
+	if (arg->myrank == 0) {
+		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	plmap = pl_map_find(arg->pool.pool_uuid, oid);
+	poolmap = plmap->pl_poolmap;
+
+	ndom = pool_map_find_domain(poolmap, PO_COMP_TP_NODE, PO_COMP_ID_ALL, NULL);
+	nrank_per_node = nrank_per_node_get(poolmap);
+	print_message("system with ndom %d, nrank_per_node %d\n", ndom, nrank_per_node);
+
+	/* CI test's ftest/daos_test/suite.yaml with 2 ranks per node */
+	if (nrank_per_node != 2)
+		goto out;
+	rc = ranks_on_same_node(poolmap, 7, ranks);
+	assert_rc_equal(rc, 0);
+	for (i = 5; i > 0; i++) {
+		if (i != ranks[0] && i != ranks[1]) {
+			ranks[2] = i;
+			break;
+		}
+	}
+
+	print_message("verify cont rf and obj open ...\n");
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* test 2 - cont rf and pool map */
+	print_message("verify cont rf and pool map ...\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+
+	/* exclude two engined on same node, as redun_lvl set as DAOS_PROP_CO_REDUN_NODE,
+	 * should not cause RF broken.
+	 */
+	if (arg->myrank == 0) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
+	}
+	par_barrier(PAR_COMM_WORLD);
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, arg->cont_open_flags,
+			    &coh, &arg->co_info, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* IO testing */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	d_iov_set(&sg_iov, stack_buf, STACK_BUF_LEN);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = STACK_BUF_LEN;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	if (ndom < 5) {
+		print_message("OC_EC_4P1G1 obj layout create should fail if ndom < 5\n");
+		io_oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
+		/* grp_size > ndom, should fail in dc_obj_open()->obj_layout_create */
+		rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+	}
+
+	print_message("obj update should success before RF broken\n");
+	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/* exclude one more rank on another NODE dom */
+	if (arg->myrank == 0)
+		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
+	par_barrier(PAR_COMM_WORLD);
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, arg->cont_open_flags, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj update should fail after RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj fetch should fail after RF broken\n");
+	rc = daos_obj_fetch(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_RF);
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		test_rebuild_wait(&arg, 1);
+		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
+		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
+		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
+		test_rebuild_wait(&arg, 1);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("obj update should success after re-integrate\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_close(io_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* clear the UNCLEAN status */
+	rc = daos_cont_status_clear(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+
+out:
+	print_message("cont prop should be able to query for g2l handle\n");
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, arg->cont_open_flags,
+			    &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_local2global(coh, &ghdl);
+	assert_rc_equal(rc, 0);
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+	rc = daos_cont_local2global(coh, &ghdl);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
+	assert_rc_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_query(coh_g2l, &info, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+	}
+
+	rc = daos_cont_close(coh_g2l, NULL);
+	assert_int_equal(rc, 0);
+	free(ghdl.iov_buf);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (plmap != NULL)
+		pl_map_decref(plmap);
+	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static int
 co_setup_sync(void **state)
 {
 	async_disable(state);
@@ -2575,6 +2858,8 @@ static const struct CMUnitTest co_tests[] = {
 	  test_case_teardown},
 	{ "CONT26: container API compat",
 	  co_api_compat, NULL, test_case_teardown},
+	{ "CONT27: container REDUN_LVL and RF test",
+	  co_redun_lvl, NULL, test_case_teardown},
 };
 
 int

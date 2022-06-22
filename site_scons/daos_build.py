@@ -6,10 +6,12 @@ from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
 from SCons.Script import Depends
+from SCons.Script import Exit
 from env_modules import load_mpi
 import compiler_setup
 
 libraries = {}
+missing = set()
 
 
 class DaosLiteral(Literal):
@@ -84,6 +86,7 @@ def _known_deps(env, **kwargs):
         libs = set(env.get('LIBS', []))
 
     known_libs = libs.intersection(set(libraries.keys()))
+    missing.update(libs - known_libs)
     for item in known_libs:
         shared = libraries[item].get('shared', None)
         if shared is not None:
@@ -106,6 +109,9 @@ def _get_libname(*args, **kwargs):
 
 def _add_lib(libtype, libname, target):
     """Add library to our db"""
+    if libname in missing:
+        print(f"Detected that build of {libname} happened after use")
+        Exit(1)
     if libname not in libraries:
         libraries[libname] = {}
     libraries[libname][libtype] = target

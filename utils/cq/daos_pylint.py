@@ -2,6 +2,7 @@
 """Wrapper script for calling pylint"""
 
 import os
+import sys
 import re
 from collections import Counter
 import tempfile
@@ -228,18 +229,67 @@ class FileTypeList():
     def run(self, args):
         """Run pylint against all files"""
         print(self)
+        failed = False
         if self.files:
-            parse_file(args, self.files)
+            if parse_file(args, self.files):
+                failed = True
         if self.ftest_files:
-            parse_file(args, self.ftest_files, ftest=True)
+            if parse_file(args, self.ftest_files, ftest=True):
+                failed = True
         if self.scons_files:
             for file in self.scons_files:
-                parse_file(args, file, scons=True)
+                if parse_file(args, file, scons=True):
+                    failed = True
+        return failed
+
+
+def word_is_allowed(word, code):
+    """Return True is misspelling is permitted"""
+
+    # pylint: disable=too-many-return-statements
+
+    # Skip the "Fake" annotations from fake scons.
+    if code.startswith(f'Fake {word}'):
+        return True
+    # Skip things that look like function documentation
+    if code.startswith(f'{word} ('):
+        return True
+    # Skip things that look like command options.
+    if f' -{word}' in code or f' --{word}' in code:
+        return True
+    # Skip things which are quoted
+    if f"'{word}'" in code:
+        return True
+    # Skip things which are quoted the other way
+    if f'"{word}"' in code:
+        return True
+    # Skip things which are in braces
+    if f'({word})' in code:
+        return True
+    # Skip words which appear to be part of a path
+    if f'/{word}/' in code:
+        return True
+    # Skip things are followed by open quotes
+    if f'{word}(' in code:
+        return True
+    # Skip things which look like source files.
+    if f'{word}.c' in code:
+        return True
+    # Skip things are followed by open colon
+    if f'{word}:' in code:
+        return True
+    # Skip test files.
+    if f'{word}.txt' in code:
+        return True
+    return False
 
 
 def parse_file(args, target_file, ftest=False, scons=False):
-    """Main program"""
+    """Parse a list of targets.
 
+    Returns True if warnings issued to GitHub."""
+
+    failed = False
     rep = CollectingReporter()
     wrapper = None
     init_hook = None
@@ -281,10 +331,26 @@ sys.path.append('site_scons')"""
 
     for msg in results.linter.reporter.messages:
         vals = {}
-        # Spelling mistake, do not complain about message tags.
-        if ftest and msg.msg_id in ('C0401', 'C0402'):
-            if ":avocado:" in msg.msg:
+        vals['category'] = msg.category
+
+        # Spelling mistakes. There are a lot of code to silence code blocks and examples
+        # in comments.  Be strict for everything but ftest code currently.
+        if not scons and msg.msg_id in ('C0401', 'C0402'):
+            lines = msg.msg.splitlines()
+            header = lines[0]
+            code = lines[1].strip()
+            components = header.split("'")
+            word = components[1]
+            # Skip test-tags, these are likely not words.
+            if ftest and code.startswith(':avocado: tags='):
                 continue
+            if word_is_allowed(word, code):
+                continue
+
+            # Finally, promote any spelling mistakes not silenced above or in ftest code to error.
+            if not ftest:
+                vals['category'] = 'error'
+
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
             continue
@@ -303,7 +369,6 @@ sys.path.append('site_scons')"""
         # Duplicates, needed for message_template.
         vals['msg'] = msg.msg
         vals['msg_id'] = msg.msg_id
-        vals['category'] = msg.category
 
         # The build/scons code is mostly clean, so only allow f-string warnings.
         if scons and msg.symbol != 'consider-using-f-string':
@@ -319,17 +384,19 @@ sys.path.append('site_scons')"""
                 continue
             if vals['category'] == 'warning':
                 continue
+            failed = True
             # pylint: disable-next=consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
                 **vals))
 
     if not types or args.reports == 'n':
-        return
+        return failed
     for (mtype, count) in types.most_common():
         print(f'{mtype}:{count}')
 
     for (mtype, count) in symbols.most_common():
         print(f'{mtype}:{count}')
+    return failed
 
 
 def run_git_files(args):
@@ -341,7 +408,9 @@ def run_git_files(args):
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
-    all_files.run(args)
+    if all_files.run(args):
+        print('Errors reported to github')
+        sys.exit(1)
 
 
 def run_input_file(args, input_file):
