@@ -57,15 +57,15 @@ markdown_extensions:
 nav:
     - Intro:
           - 'index.md'
-          - 'Community Wiki': 'http://wiki.daos.io/'
-          - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+          - 'Community Wiki': 'https://wiki.daos.io/'
+          - 'Community Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
           - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-          - 'Issue tracker': 'http://jira.daos.io/'
+          - 'Issue tracker': 'https://jira.daos.io/'
     - Release Information:
           - 'Release Notes v2.4': 'release/release_notes.md'
           - 'Support Matrix v2.4': 'release/support_matrix.md'
           - 'Upgrading to v2.4': 'release/upgrading.md'
-          - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+          - 'Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Overview:
           - 'Architecture': 'overview/architecture.md'
           - 'Storage Model': 'overview/storage.md'
@@ -96,7 +96,7 @@ nav:
           - 'Run IOR and mdtest': 'testing/ior.md'
           - 'Run dbench': 'testing/dbench.md'
           - 'Run Datamover test': 'testing/datamover.md'
-          - 'Run IO500': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
+          - 'Run IO500': 'https://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
           - 'Workflow': 'user/workflow.md'
           - 'Container Management': 'user/container.md'
