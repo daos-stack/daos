@@ -55,7 +55,7 @@ for file in $files; do
 		git reset "$file" || (echo "Unable to un-stage $file" && exit 1)
 		if [ $os == 'Linux' ]
 		then
-			sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+			sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
 		else
 			sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
 		fi
