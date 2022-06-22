@@ -89,13 +89,13 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Large Cluster CI tests')
         string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
+               defaultValue: 'ci_mlnx3',
                description: 'Label to use for 3 node NVMe tests')
         string(name: 'CI_NVME_5_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_mlnx5',
                description: 'Label to use for 5 node NVMe tests')
         string(name: 'CI_NVME_9_LABEL',
-               defaultValue: 'ci_nvme9',
+               defaultValue: 'ci_mlnx9',
                description: 'Label to use for 9 node NVMe tests')
     }
 
