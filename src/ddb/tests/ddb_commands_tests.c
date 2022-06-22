@@ -222,7 +222,6 @@ load_cmd_tests(void **state)
 
 	opt.dst = "/[0]/[0]/[0]/[1]";
 	opt.src = "/tmp/value_src";
-	opt.epoch = "1";
 	dvt_fake_get_file_exists_result = true;
 	snprintf(dvt_fake_read_file_buf, ARRAY_SIZE(dvt_fake_read_file_buf), "Some text");
 	assert_invalid(ddb_run_load(&g_ctx, &opt));
@@ -253,13 +252,6 @@ load_cmd_tests(void **state)
 	dvt_fake_get_file_exists_result = false;
 	assert_invalid(ddb_run_load(&g_ctx, &opt));
 	dvt_fake_get_file_exists_result = true;
-
-	/* invalid epoch */
-	opt.epoch = "a";
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
-	opt.epoch = "1a";
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
-	opt.epoch = "1";
 
 	/* incomplete path */
 	opt.dst = "/[0]/[0]/";

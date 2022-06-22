@@ -173,7 +173,7 @@ typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_
 int dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args);
 
 int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
-int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_epoch_t epoch);
+int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov);
 
 void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 

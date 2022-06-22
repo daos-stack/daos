@@ -157,7 +157,7 @@ do { \
 	dvt_fake_get_file_exists_result = true;
 	dvt_fake_get_file_size_result = 10;
 	dvt_fake_read_file_result = dvt_fake_get_file_size_result;
-	assert_requires_write_mode("load src [0]/[0]/[0]/[1] 1");
+	assert_requires_write_mode("load src [0]/[0]/[0]/[1]");
 
 	assert_requires_write_mode("clear_cmt_dtx [0]");
 }

@@ -789,14 +789,14 @@ verify_correct_params_for_update_value_tests(void **state)
 	struct dv_tree_path	vtp = {};
 	d_iov_t			value_iov = {0};
 
-	assert_rc_equal(-DER_INVAL, dv_update(DAOS_HDL_INVAL, &vtp, &value_iov, 1));
-	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
+	assert_rc_equal(-DER_INVAL, dv_update(DAOS_HDL_INVAL, &vtp, &value_iov));
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov));
 
 	uuid_copy(vtp.vtp_cont, g_uuids[3]);
 	vtp.vtp_oid = g_oids[0];
 	vtp.vtp_dkey = g_dkeys[0];
 	vtp.vtp_akey = g_akeys[0];
-	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov));
 }
 
 static void
@@ -814,7 +814,7 @@ assert_update_existing_path(daos_handle_t poh, struct dv_tree_path *vtp)
 	/* if it's an array path, update so will be same length as new value */
 	if (vtp->vtp_recx.rx_nr > 0)
 		vtp->vtp_recx.rx_nr = value_iov.iov_len;
-	assert_success(dv_update(poh, vtp, &value_iov, 3));
+	assert_success(dv_update(poh, vtp, &value_iov));
 
 	/* Verify that after loading the value_buf, the same value_buf is dumped */
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
@@ -857,7 +857,7 @@ assert_update_new_path(daos_handle_t poh, struct dv_tree_path *vtp)
 
 	d_iov_set(&value_iov, value_buf, strlen(value_buf));
 
-	assert_success(dv_update(poh, vtp, &value_iov, 3));
+	assert_success(dv_update(poh, vtp, &value_iov));
 
 	/* Verify that after loading the value_buf, the same value_buf is dumped */
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
