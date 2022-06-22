@@ -48,10 +48,10 @@ extern "C" {
 #endif
 
 #ifndef likely
-#define likely(x)	__builtin_expect((x), 1)
+#define likely(x)	__builtin_expect((uintptr_t)(x), 1)
 #endif
 #ifndef unlikely
-#define unlikely(x)	__builtin_expect((x), 0)
+#define unlikely(x)	__builtin_expect((uintptr_t)(x), 0)
 #endif
 
 /* Check if bit is set in passed val */
@@ -390,6 +390,7 @@ int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
+int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
@@ -406,6 +407,13 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+char *d_rank_list_to_str(d_rank_list_t *rank_list);
+
+d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
+d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);
+d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list);
+char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
+void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)

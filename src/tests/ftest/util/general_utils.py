@@ -7,7 +7,9 @@
 # pylint: disable=too-many-lines
 
 from logging import getLogger
+import grp
 import os
+import pwd
 import re
 import random
 import string
@@ -17,6 +19,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -262,7 +266,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         # Block until the command is complete or times out
         return process.run(**kwargs)
 
-    except TypeError as error:
+    except (TypeError, FileNotFoundError) as error:
         # Can occur if using env with a non-string dictionary values
         msg = "Error running '{}': {}".format(command, error)
         if env is not None:
@@ -286,26 +290,102 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         raise DaosTestError(msg)
 
 
-def run_task(hosts, command, timeout=None):
+def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
 
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
+        verbose (bool, optional): display message for command execution. Defaults to False.
 
     Returns:
         Task: a ClusterShell.Task.Task object for the executed command
 
     """
+    if not isinstance(hosts, NodeSet):
+        hosts = NodeSet.fromlist(hosts)
     task = task_self()
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
+    kwargs = {"command": command, "nodes": hosts}
     if timeout is not None:
         kwargs["timeout"] = timeout
+    if verbose:
+        log = getLogger()
+        log.info("Running on %s: %s", hosts, command)
     task.run(**kwargs)
     return task
+
+
+def check_task(task, logger=None):
+    """Check the results of the executed task and get the output.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    def check_task_log(message):
+        """Log the provided text if a logger is present.
+
+        Args:
+            message (str): text to display
+        """
+        if logger:
+            logger.info(message)
+
+    # Create a dictionary of hosts for each unique return code
+    results = dict(task.iter_retcodes())
+
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if not output_data:
+            output_data = [["<NONE>", results[code]]]
+        for output, o_hosts in output_data:
+            node_set = NodeSet.fromlist(o_hosts)
+            lines = list(output.splitlines())
+            if len(lines) > 1:
+                # Print the sub-header for multiple lines of output
+                check_task_log("    {}: rc={}, output:".format(node_set, code))
+            for number, line in enumerate(lines):
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if len(lines) == 1:
+                    # Print the sub-header and line for one line of output
+                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
+                    continue
+                try:
+                    check_task_log("      {}".format(line))
+                except IOError:
+                    # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
+                    # space of time so catch this and retry.
+                    check_task_log(
+                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
+                        "retry ***".format(*number + 1, len(lines)))
+                    time.sleep(5)
+                    check_task_log("      {}".format(line))
+
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
+
+    # Determine if the command completed successfully across all the hosts
+    return len(results) == 1 and 0 in results
+
+
+def display_task(task):
+    """Display the output for the executed task.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+    """
+    log = getLogger()
+    return check_task(task, log)
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
@@ -370,7 +450,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
@@ -505,7 +585,8 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return exit_status
 
 
-def check_file_exists(hosts, filename, user=None, directory=False):
+def check_file_exists(hosts, filename, user=None, directory=False,
+                      sudo=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
@@ -514,6 +595,8 @@ def check_file_exists(hosts, filename, user=None, directory=False):
         hosts (list): list of hosts
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
 
     Returns:
         (bool, NodeSet): A tuple of:
@@ -530,7 +613,10 @@ def check_file_exists(hosts, filename, user=None, directory=False):
     elif directory:
         command = "test -d '{0}'".format(filename)
 
-    task = run_task(hosts, command)
+    if sudo:
+        command = "sudo " + command
+
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))
@@ -600,7 +686,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
+        random_string = "".join(random.choice(include) for _ in range(length))  # nosec
     return random_string
 
 
@@ -640,7 +726,7 @@ def check_pool_files(log, hosts, uuid):
     log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename)
+        result = check_file_exists(hosts, filename, sudo=True)
         if not result[0]:
             log.error("%s: %s not found", result[1], filename)
             status = False
@@ -667,8 +753,57 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   dump_ult_stacks=False):
+def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
+    """Signal the engines on each hosts to generate their ULT stacks dump.
+
+    Args:
+        hosts (list): hosts on which to signal the engines
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+        added_filter (str, optional): negative filter to better identify
+            engines.
+
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No engine matched the criteria / No engine signaled.
+                1   One or more engine matched the criteria and a signal was
+                    sent.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Dumping ULT stacks of engines on %s", hosts)
+
+    if added_filter:
+        ps_cmd = "/usr/bin/ps xa | grep daos_engine | grep -vE {}".format(
+            added_filter)
+    else:
+        ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
+
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if " + ps_cmd,
+            "then rc=1",
+            "sudo pkill --signal USR2 daos_engine",
+            # leave some time for ABT info/stacks dump to complete.
+            # at this time there is no way to know when Argobots ULTs stacks
+            # has completed, see DAOS-1452/DAOS-9942.
+            "sleep 30",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout,
+                      None)
+
+    return result
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -679,8 +814,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
-            any other sigs, to dump all ULTs stacks of servers.
 
 
     Returns:
@@ -694,11 +827,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    if dump_ult_stacks is True:
-        log.info("First dumping ULT stacks, then Killing any processes on %s "
-                 "that match: %s", hosts, pattern)
-    else:
-        log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
         ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
@@ -707,22 +836,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if dump_ult_stacks is True and "daos_engine" in pattern:
-            commands_part1 = [
-                "rc=0",
-                "if " + ps_cmd,
-                "then rc=1",
-                "sudo pkill --signal USR2 {}".format(pattern),
-                # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-                "sleep 20",
-                "fi",
-                "exit $rc",
-            ]
-            result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
-                          None)
-
-        # in case dump of ULT stacks is still running it may be interrupted
-        commands_part2 = [
+        commands = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
@@ -738,7 +852,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands_part2), verbose, timeout, None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
     return result
 
 
@@ -991,14 +1105,14 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=10, verbose=True,
+def create_directory(hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
         hosts (list): hosts on which to create the directory
         directory (str): the directory to create
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
@@ -1028,7 +1142,7 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
+def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
@@ -1037,7 +1151,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
@@ -1146,7 +1260,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
         # If requested update the ownership of the destination file
         if owner is not None and result.exit_status == 0:
             change_file_owner(
-                hosts, destination, owner, owner, timeout=timeout,
+                hosts, destination, owner, get_primary_group(owner), timeout=timeout,
                 verbose=verbose, raise_exception=raise_exception, sudo=sudo)
     return result
 
@@ -1241,7 +1355,7 @@ def create_string_buffer(value, size=None):
 
     Args:
     value (object): value to pass to ctypes.create_string_buffer()
-    size (int, optional): sze to pass to ctypes.create_string_buffer()
+    size (int, optional): size to pass to ctypes.create_string_buffer()
 
     Returns:
     array: return value from ctypes.create_string_buffer()
@@ -1299,3 +1413,77 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
+
+
+def get_primary_group(user=None):
+    """Get the name of the user's primary group.
+
+    Args:
+        user (str, optional): the user account name. Defaults to None, which uses the current user.
+
+    Returns:
+        str: the primary group name
+
+    """
+    if user is None:
+        user = getuser()
+    try:
+        gid = pwd.getpwnam(user).pw_gid
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        # User may not exist on this host, e.g. daos_server, so just return the user name
+        return user
+
+
+def get_journalctl(hosts, since, until, journalctl_type):
+    """Run the journalctl on the hosts.
+
+    Args:
+        hosts (list): List of hosts to run journalctl.
+        since (str): Start time to search the log.
+        until (str): End time to search the log.
+        journalctl_type (str): String to search in the log. -t param for journalctl.
+
+    Returns:
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
+
+    """
+    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
+               "--until=\"{}\"".format(journalctl_type, since, until))
+    err = "Error gathering system log events"
+    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+    return results
+
+
+def get_avocado_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    return settings.get_value(section, key)     # pylint: disable=no-member
+
+
+def set_avocado_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(section, key, str(value))

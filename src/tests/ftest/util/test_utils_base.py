@@ -5,8 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
-from os import environ
 from time import sleep
+from threading import Lock
 
 from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
@@ -67,15 +67,13 @@ class TestDaosApiBase(ObjectWithParameters):
     USE_DMG = "dmg"
     USE_DAOS = "daos"
 
-    def __init__(self, namespace, cb_handler=None, crt_timeout=None):
+    def __init__(self, namespace, cb_handler=None):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
-                commands. Defaults to None.
         """
         super().__init__(namespace)
         self.cb_handler = cb_handler
@@ -87,11 +85,6 @@ class TestDaosApiBase(ObjectWithParameters):
         #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
-
-        # Set the CRT_TIMEOUT, if specified, for pydaos commands
-        if crt_timeout is not None:
-            environ["CRT_TIMEOUT"] = str(crt_timeout)
-            self.log.info("Setting CRT_TIMEOUT to %s for pydaos commands", environ["CRT_TIMEOUT"])
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.
@@ -197,26 +190,44 @@ class LabelGenerator():
     # pylint: disable=too-few-public-methods
     """Generates label used for pools and containers."""
 
-    def __init__(self, value=1):
+    def __init__(self, base_label=None, value=1):
         """Constructor.
 
         Args:
-            value (int): Number that's attached after the base_label.
-        """
-        self.value = value
+            base_label (str, optional): Default label prefix. Don't include space.
+                Default is None.
+            value (int, optional): Number that's attached after the base_label.
+                Default is 1.
 
-    def get_label(self, base_label):
+        """
+        self.base_label = base_label
+        self.value = value
+        self._lock = Lock()
+
+    def _next_value(self):
+        """Get the next value. Thread-safe.
+
+        Returns:
+            int: the next value.
+
+        """
+        with self._lock:
+            value = self.value
+            self.value += 1
+            return value
+
+    def get_label(self, base_label=None):
         """Create a label by adding number after the given base_label.
 
         Args:
-            base_label (str): Label prefix. Don't include space.
+            base_label (str, optional): Label prefix. Don't include space.
+                Default is self.base_label.
 
         Returns:
             str: Created label.
 
         """
-        label = base_label
-        if label is not None:
-            label = "_".join([base_label, str(self.value)])
-            self.value += 1
-        return label
+        base_label = base_label or self.base_label
+        if base_label is None:
+            return None
+        return "_".join([base_label, str(self._next_value())])

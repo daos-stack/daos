@@ -74,6 +74,9 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+	ScmNotInterleaved
+	ScmNoModules
+	ScmNamespacesNrMismatch
 )
 
 // Bdev fault codes
@@ -85,6 +88,8 @@ const (
 	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+	BdevAccelEngineUnknown
+	BdevAccelOptionUnknown
 )
 
 // DAOS system fault codes

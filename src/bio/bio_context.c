@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -171,7 +171,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	int	rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
 		D_ASSERT(rc == 0);
@@ -454,8 +454,8 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
 			       &blob_id);
 	if (rc != 0) {
-		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(ctxt->bic_pool_id));
+		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID", tgt:%d\n",
+			xs_ctxt, DP_UUID(ctxt->bic_pool_id), xs_ctxt->bxc_tgt_id);
 		return -DER_NONEXIST;
 	}
 

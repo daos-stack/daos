@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <string.h>
+#include <daos/common.h>
 
 /**
  * Space separated string of CLI options to pass to DPDK when started during
@@ -35,10 +36,31 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
 #define NVME_DEV_STATE_INVALID	(1 << 4)
 
-#define BIT_SET(x, m) (((x)&(m)) == (m))
-#define BIT_UNSET(x, m) (!BIT_SET(x, m))
+/** Env defining the size of a metadata pmem pool/file in MiBs */
+#define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
+/** Default size of a metadata pmem pool/file (128 MiB) */
+#define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 
+/** Utility macros */
+#define CHK_FLAG(x, m) ((x & m) == m)
+#define SET_FLAG(x, m) (x |= m)
+#define UNSET_FLAG(x, m) (x &= ~(m))
 #define STR_EQ(x, m) (strcmp(x, m) == 0)
+
+/** NVMe config keys */
+#define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
+#define NVME_CONF_ENABLE_VMD		"enable_vmd"
+#define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
+#define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
+
+/** Supported acceleration engine settings */
+#define NVME_ACCEL_NONE		"none"
+#define NVME_ACCEL_SPDK		"spdk"
+#define NVME_ACCEL_DML		"dml"
+
+/** Acceleration engine optional capabilities */
+#define NVME_ACCEL_FLAG_MOVE	(1 << 0)
+#define NVME_ACCEL_FLAG_CRC	(1 << 1)
 
 static inline char *
 nvme_state2str(int state)
@@ -47,22 +69,22 @@ nvme_state2str(int state)
 		return "UNKNOWN";
 
 	/** Otherwise, if unplugged, return early */
-	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
+	if (!CHK_FLAG(state, NVME_DEV_FL_PLUGGED))
 		return "UNPLUGGED";
 
 	/** If identify is set, return combination with faulty taking precedence over new */
-	if (BIT_SET(state, NVME_DEV_FL_IDENTIFY)) {
-		if BIT_SET(state, NVME_DEV_FL_FAULTY)
+	if (CHK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
+		if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
 			return "EVICTED|IDENTIFY";
-		if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+		if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
 			return "NEW|IDENTIFY";
 		return "NORMAL|IDENTIFY";
 	}
 
 	/** Otherwise, return single state with faulty taking precedence over new */
-	if BIT_SET(state, NVME_DEV_FL_FAULTY)
+	if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
 		return "EVICTED";
-	if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+	if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
 		return "NEW";
 
 	return "NORMAL";
@@ -100,6 +122,7 @@ struct nvme_stats {
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;
+	uint64_t	 cluster_size;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;

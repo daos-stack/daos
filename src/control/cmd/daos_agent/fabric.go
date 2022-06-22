@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -29,7 +30,11 @@ type FabricInterface struct {
 	Name        string
 	Domain      string
 	NetDevClass hardware.NetDevClass
-	Providers   []string
+	hw          *hardware.FabricInterface
+}
+
+func (f *FabricInterface) Providers() []string {
+	return f.hw.Providers.ToSlice()
 }
 
 func (f *FabricInterface) String() string {
@@ -40,28 +45,9 @@ func (f *FabricInterface) String() string {
 	return fmt.Sprintf("%s%s (%s)", f.Name, dom, f.NetDevClass)
 }
 
-// AddProvider adds a provider to the FabricInterface.
-func (f *FabricInterface) AddProvider(provider string) {
-	if f == nil || provider == "" {
-		return
-	}
-
-	// Avoid adding duplicates
-	if f.HasProvider(provider) {
-		return
-	}
-
-	f.Providers = append(f.Providers, provider)
-}
-
 // HasProvider determines if the FabricInterface supports a given provider.
 func (f *FabricInterface) HasProvider(provider string) bool {
-	for _, p := range f.Providers {
-		if p == provider {
-			return true
-		}
-	}
-	return false
+	return f.hw.SupportsProvider(provider)
 }
 
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
@@ -80,9 +66,8 @@ type NUMAFabric struct {
 
 	numaMap map[int][]*FabricInterface
 
-	// current device idx to use on each NUMA node
-	currentNumaDevIdx map[int]int
-	defaultNumaNode   int
+	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
+	currentNUMANode   int         // current NUMA node to search
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -187,16 +172,19 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
-				fabricIF.Name, fabricIF.NetDevClass, netDevClass)
-			continue
-		}
+		// Manually-provided interfaces can be assumed to support what's needed by the system.
+		if fabricIF.NetDevClass != FabricDevClassManual {
+			if fabricIF.NetDevClass != netDevClass {
+				n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
+					fabricIF.Name, fabricIF.NetDevClass, netDevClass)
+				continue
+			}
 
-		if !fabricIF.HasProvider(provider) {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
-				fabricIF.Name, fabricIF.NetDevClass)
-			continue
+			if !fabricIF.HasProvider(provider) {
+				n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
+					fabricIF.Name, fabricIF.NetDevClass)
+				continue
+			}
 		}
 
 		if err := n.validateDevice(fabricIF); err != nil {
@@ -246,18 +234,27 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 }
 
 func (n *NUMAFabric) findOnAnyNUMA(netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
-	numNodes := n.getNumNUMANodes()
+	nodes := n.getNUMANodes()
+	numNodes := len(nodes)
+
 	for i := 0; i < numNodes; i++ {
-		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass, provider)
+		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
+		fi, err := n.getDeviceFromNUMA(nodes[n.currentNUMANode], netDevClass, provider)
 		if err == nil {
-			// Start the search on this node next time
-			n.defaultNumaNode = numa
-			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, numa)
+			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, n.currentNUMANode)
 			return fi, nil
 		}
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+func (n *NUMAFabric) getNUMANodes() []int {
+	keys := make([]int, 0)
+	for k := range n.numaMap {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }
 
 // getNextDevIndex is a simple round-robin load balancing scheme
@@ -277,14 +274,6 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) int {
 	panic(fmt.Sprintf("no fabric interfaces on NUMA node %d", numaNode))
 }
 
-func (n *NUMAFabric) setDefaultNUMANode() {
-	for numa := range n.numaMap {
-		n.defaultNumaNode = numa
-		n.log.Debugf("The default NUMA node is: %d", numa)
-		break
-	}
-}
-
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
 	return &NUMAFabric{
 		log:               log,
@@ -301,29 +290,44 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.
 		fi, err := scan.GetInterface(name)
 		if err != nil {
 			log.Errorf("unexpected failure getting FI %q from scan: %s", name, err.Error())
+			continue
 		}
 
-		newIF := &FabricInterface{
-			Name:        fi.OSDevice,
-			Domain:      fi.Name,
-			NetDevClass: fi.DeviceClass,
-			Providers:   fi.Providers.ToSlice(),
+		newIFs := fabricInterfacesFromHardware(fi)
+
+		for _, newIF := range newIFs {
+			numa := int(fi.NUMANode)
+			fabric.Add(numa, newIF)
+
+			log.Debugf("Added device %q, domain %q for NUMA %d, device number %d",
+				newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 		}
-
-		numa := int(fi.NUMANode)
-		fabric.Add(numa, newIF)
-
-		log.Debugf("Added device %q, domain %q for NUMA %d, device number %d",
-			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	fabric.setDefaultNUMANode()
-
 	if fabric.NumNUMANodes() == 0 {
-		log.Info("No network devices detected in fabric scan\n")
+		log.Info("No network devices detected in fabric scan")
 	}
 
 	return fabric
+}
+
+func fabricInterfacesFromHardware(fi *hardware.FabricInterface) []*FabricInterface {
+	fis := make([]*FabricInterface, 0)
+	for netIF := range fi.NetInterfaces {
+		newFI := &FabricInterface{
+			Name:        netIF,
+			NetDevClass: fi.DeviceClass,
+			hw:          fi,
+		}
+
+		if fi.Name != netIF {
+			newFI.Domain = fi.Name
+		}
+
+		fis = append(fis, newFI)
+	}
+
+	return fis
 }
 
 // NUMAFabricFromConfig generates a NUMAFabric layout based on a config.
@@ -341,7 +345,6 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 				})
 		}
 	}
-	fabric.setDefaultNUMANode()
 
 	return fabric
 }

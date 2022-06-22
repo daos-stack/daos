@@ -80,6 +80,7 @@ class CartSelfTest(TestWithServers):
         self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
 
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
+        self.server_managers[0].detect_start_via_dmg = True
 
         # Start the daos server
         self.start_server_managers()

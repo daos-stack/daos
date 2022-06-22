@@ -25,6 +25,11 @@
 #include <daos_srv/policy.h>
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -42,6 +47,7 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	uint32_t		sp_global_version;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
@@ -92,6 +98,7 @@ struct ds_pool_hdl {
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
+	uint32_t		sph_global_ver; /* pool global version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -149,7 +156,6 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
-int ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
@@ -181,11 +187,18 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
+int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
 		      daos_pool_info_t *pool_info);
+int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
+			     uint32_t tgt_idx, daos_target_info_t *ti);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
+int ds_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks);
+int ds_pool_failed_add(uuid_t uuid, int rc);
+void ds_pool_failed_remove(uuid_t uuid);
+int ds_pool_failed_lookup(uuid_t uuid);
+
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -218,29 +231,19 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
-int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     struct dtx_memberships *mbs, uint32_t version, int *tgt_id);
-
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 int
-map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       d_rank_list_t *ranks);
+map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 
 void
 map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
-
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
@@ -252,6 +255,8 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uint32_t destroy, uint32_t force,
 			    char *machine, uint32_t *count);
 
+int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
+				uint8_t matched_status, struct pool_target **p_tgt);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
@@ -271,13 +276,13 @@ int dsc_pool_close(daos_handle_t ph);
  * pool map device status.
  */
 static inline int
-ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
 {
 	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	if (last_ver < pool_map_get_version(pool->sp_map))
-		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rlvl, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

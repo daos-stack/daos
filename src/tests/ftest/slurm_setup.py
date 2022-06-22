@@ -1,10 +1,12 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+# TODO: Find out why this is required and remove it.
+# pylint: disable=import-error,no-name-in-module
 
 import argparse
 import getpass
@@ -57,18 +59,10 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = [
-        "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
-            SLURM_CONF),
-        "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-            args.user, SLURM_CONF),
-        "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            SLURM_CONF),
-        ]
-    if not args.sudo:
-        sudo = ""
-    else:
-        sudo = "sudo"
+    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
+                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
+                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
+    sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
@@ -163,6 +157,7 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
+    sudo = "sudo" if args.sudo else ""
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     # exclude the control node
     nodes = NodeSet(str(args.nodes))
@@ -171,8 +166,8 @@ def start_munge(args):
     # copy key to all nodes FROM slurmctl node;
     # change the protections/ownership on the munge dir on all nodes
     cmd_list = [
-        "sudo chmod -R 777 /etc/munge; sudo chown {}. /etc/munge".format(
-            args.user)]
+        "{0} chmod -R 777 /etc/munge; {0} chown {1}. /etc/munge".format(
+            sudo, args.user)]
     if execute_cluster_cmds(all_nodes, cmd_list) > 0:
         return 1
 
@@ -181,25 +176,25 @@ def start_munge(args):
     cmd_list = ["set -Eeu",
                 "rc=0",
                 "if [ ! -f /etc/munge/munge.key ]",
-                "then sudo create-munge-key",
+                "then {} create-munge-key".format(sudo),
                 "fi",
-                "sudo chmod 777 /etc/munge/munge.key",
-                "sudo chown {}. /etc/munge/munge.key".format(args.user)]
+                "{} chmod 777 /etc/munge/munge.key".format(sudo),
+                "{} chown {}. /etc/munge/munge.key".format(sudo, args.user)]
 
     if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
         return 1
     # remove any existing key from other nodes
-    cmd_list = ["sudo rm -f /etc/munge/munge.key",
+    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo),
                 "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
                     args.control)]
     if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
         return 1
     # set the protection back to defaults
     cmd_list = [
-        "sudo chmod 400 /etc/munge/munge.key",
-        "sudo chown munge. /etc/munge/munge.key",
-        "sudo chmod 700 /etc/munge",
-        "sudo chown munge. /etc/munge"]
+        "{} chmod 400 /etc/munge/munge.key".format(sudo),
+        "{} chown munge. /etc/munge/munge.key".format(sudo),
+        "{} chmod 700 /etc/munge".format(sudo),
+        "{} chown munge. /etc/munge".format(sudo)]
     if execute_cluster_cmds(all_nodes, ["; ".join(cmd_list)]) > 0:
         return 1
 
@@ -227,8 +222,7 @@ def start_slurm(args):
         "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
         "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
         "chmod 775 {}".format("/var/spool/slurmctld"),
-        "rm -f /var/spool/slurmctld/clustername"
-        ]
+        "rm -f /var/spool/slurmctld/clustername"]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1

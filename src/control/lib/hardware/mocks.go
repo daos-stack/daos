@@ -153,3 +153,29 @@ func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricIn
 	m.buildPartCalled++
 	return m.buildPartReturn
 }
+
+// MockNetDevStateResult is a structure for injecting results into MockNetDevStateProvider.
+type MockNetDevStateResult struct {
+	State NetDevState
+	Err   error
+}
+
+// MockNetDevStateProvider is a fake NetDevStateProvider for testing.
+type MockNetDevStateProvider struct {
+	GetStateReturn []MockNetDevStateResult
+	GetStateCalled []string
+}
+
+func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, error) {
+	m.GetStateCalled = append(m.GetStateCalled, iface)
+
+	if len(m.GetStateReturn) == 0 {
+		return NetDevStateReady, nil
+	}
+
+	idx := len(m.GetStateCalled) - 1
+	if idx >= len(m.GetStateReturn) {
+		idx = len(m.GetStateReturn) - 1
+	}
+	return m.GetStateReturn[idx].State, m.GetStateReturn[idx].Err
+}

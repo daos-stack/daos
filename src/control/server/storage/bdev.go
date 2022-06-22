@@ -6,12 +6,6 @@
 
 package storage
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"context"
 	"encoding/json"
@@ -25,15 +19,43 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
+)
+
+// JSON config file constants.
+const (
+	ConfBdevSetOptions           = "bdev_set_options"
+	ConfBdevNvmeSetOptions       = "bdev_nvme_set_options"
+	ConfBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
+	ConfBdevAioCreate            = "bdev_aio_create"
+	ConfBdevNvmeAttachController = C.NVME_CONF_ATTACH_CONTROLLER
+	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
+	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
+	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+)
+
+// Acceleration related constants for engine setting and optional capabilities.
+const (
+	AccelEngineNone  = C.NVME_ACCEL_NONE
+	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
+	AccelEngineDML   = C.NVME_ACCEL_DML
+	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
+	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
@@ -129,6 +151,7 @@ type NvmeHealth struct {
 	PllLockLossCnt          uint64 `json:"pll_lock_loss_cnt"`
 	NandBytesWritten        uint64 `json:"nand_bytes_written"`
 	HostBytesWritten        uint64 `json:"host_bytes_written"`
+	ClusterSize             uint64 `json:"cluster_size"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -156,14 +179,15 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID       string       `json:"uuid"`
-	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState  NvmeDevState `json:"-"`
-	Rank       system.Rank  `json:"rank"`
-	TotalBytes uint64       `json:"total_bytes"`
-	AvailBytes uint64       `json:"avail_bytes"`
-	Health     *NvmeHealth  `json:"health"`
-	TrAddr     string       `json:"tr_addr"`
+	UUID        string       `json:"uuid"`
+	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
+	NvmeState   NvmeDevState `json:"-"`
+	Rank        system.Rank  `json:"rank"`
+	TotalBytes  uint64       `json:"total_bytes"`
+	AvailBytes  uint64       `json:"avail_bytes"`
+	ClusterSize uint64       `json:"cluster_size"`
+	Health      *NvmeHealth  `json:"health"`
+	TrAddr      string       `json:"tr_addr"`
 }
 
 // MarshalJSON marshals SmdDevice to JSON.
@@ -410,6 +434,7 @@ type (
 		HotplugBusidEnd   uint8
 		Hostname          string
 		BdevCache         *BdevScanResponse
+		AccelProps        AccelProps
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -508,6 +533,41 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
 
 	return lowAddr.Bus, highAddr.Bus, nil
+}
+
+// filterBdevScanResponse removes controllers that are not in the input list from the scan response.
+// As the response contains controller references which may be shared elsewhere, copy them to avoid
+// accessing the same references in multiple code paths.
+func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
+	oldCtrlrRefs := resp.Controllers
+	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
+
+	for _, oldCtrlrRef := range oldCtrlrRefs {
+		addr, err := hardware.NewPCIAddress(oldCtrlrRef.PciAddr)
+		if err != nil {
+			continue // If we cannot parse the address, leave it out.
+		}
+
+		if addr.IsVMDBackingAddress() {
+			vmdAddr, err := addr.BackingToVMDAddress()
+			if err != nil {
+				return errors.Wrap(err, "converting pci address of vmd backing device")
+			}
+			// If addr is a VMD backing address, use the VMD endpoint instead as that is the
+			// address that will be in the config.
+			addr = vmdAddr
+		}
+
+		// Retain controller details if address is in config.
+		if incBdevs.Contains(addr) {
+			newCtrlrRef := &NvmeController{}
+			*newCtrlrRef = *oldCtrlrRef
+			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
+		}
+	}
+	resp.Controllers = newCtrlrRefs
+
+	return nil
 }
 
 type BdevForwarder struct {

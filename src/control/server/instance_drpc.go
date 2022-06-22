@@ -21,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -104,7 +105,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 	}
 	if resp.GetStatus() != 0 {
 		return system.NewMemberResult(rank,
-			errors.Errorf("rank %s: %s", &rank, drpc.DaosStatus(resp.GetStatus()).Error()),
+			errors.Errorf("rank %s: %s", &rank, daos.Status(resp.GetStatus()).Error()),
 			system.MemberStateErrored)
 	}
 
@@ -175,7 +176,7 @@ func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	}
 
 	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "GetBioHealth response status")
+		return nil, errors.Wrap(daos.Status(resp.Status), "GetBioHealth response status")
 	}
 
 	return resp, nil
@@ -193,7 +194,7 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	}
 
 	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "ListSmdDevices failed")
+		return nil, errors.Wrap(daos.Status(resp.Status), "ListSmdDevices failed")
 	}
 
 	return resp, nil
@@ -266,8 +267,8 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		if err != nil {
 			// Only log error if error indicates non-existent health and the SMD entity
 			// has abnormal state.
-			status, ok := errors.Cause(err).(drpc.DaosStatus)
-			if ok && status == drpc.DaosNonexistant && !smdDev.NvmeState.IsNormal() {
+			status, ok := errors.Cause(err).(daos.Status)
+			if ok && status == daos.Nonexistent && !smdDev.NvmeState.IsNormal() {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
 					msg, smdDev.NvmeState.String())
 			} else {
@@ -278,6 +279,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		}
 
 		// Populate space usage for each SMD device from health stats.
+		smdDev.ClusterSize = pbStats.ClusterSize
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 		msg = fmt.Sprintf("%s: smd usage = %s/%s", msg, humanize.Bytes(smdDev.AvailBytes),

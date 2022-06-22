@@ -88,6 +88,16 @@ enum daos_pool_props {
 	 * of replicated object.
 	 */
 	DAOS_PROP_PO_RP_PDA,
+
+	/**
+	 * Aggregation of pool/container/object/key disk format
+	 * version.
+	 */
+	DAOS_PROP_PO_GLOBAL_VERSION,
+	/**
+	 * Pool upgrade status.
+	 */
+	DAOS_PROP_PO_UPGRADE_STATUS,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -115,6 +125,14 @@ daos_rf_is_valid(unsigned long long rf)
  * object to different PDs.
  */
 #define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+
+/** DAOS pool upgrade status */
+enum {
+	DAOS_UPGRADE_STATUS_NOT_STARTED = 0,
+	DAOS_UPGRADE_STATUS_IN_PROGRESS = 1,
+	DAOS_UPGRADE_STATUS_COMPLETED = 2,
+	DAOS_UPGRADE_STATUS_FAILED = 3,
+};
 
 /**
  * Number of pool property types
@@ -245,6 +263,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_EC_PDA,
 	/**  performance domain affinity level of RP object */
 	DAOS_PROP_CO_RP_PDA,
+	/** immutable container global version */
+	DAOS_PROP_CO_GLOBAL_VERSION,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -339,7 +359,10 @@ enum {
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,
-	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	/* server rank (engine) level */
+	DAOS_PROP_CO_REDUN_RANK	= 1,
+	/* server node level */
+	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
@@ -388,12 +411,18 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
+enum {
+	DAOS_PROP_ENTRY_NOT_SET = (1 << 0),
+};
+
 /** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;
+	/** property flags, eg negative entry*/
+	uint16_t		 dpe_flags;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpe_reserv;
+	uint16_t		 dpe_reserv;
 	/**
 	 * value can be either a uint64_t, or a string, or any other type
 	 * data such as the struct daos_acl pointer.
@@ -484,6 +513,9 @@ daos_label_is_valid(const char *label)
 /** max length of the policy string */
 #define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
 
+/* default policy string */
+#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+
 /** daos properties, for pool or container */
 typedef struct {
 	/** number of entries */
@@ -526,7 +558,8 @@ daos_prop_free(daos_prop_t *prop);
  * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
  * \a prop must be freed with daos_prop_free() to release allocated space.
  * This supports properties that can be modified on container creation only:
- * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *   label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression,
+ *   encryption, rf, ec_cell_sz
  *
  * \param[in]	str	Serialized string of property entries and their values
  * \param[in]	len	Serialized string length
@@ -672,6 +705,23 @@ daos_prop_has_str(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
+
+/**
+ * Check if a DAOS prop entry is set or not.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Entry is set
+ *			false		Entry is not set.
+ */
+static inline bool
+daos_prop_is_set(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_flags & DAOS_PROP_ENTRY_NOT_SET)
+		return false;
+
+	return true;
+}
 
 #if defined(__cplusplus)
 }

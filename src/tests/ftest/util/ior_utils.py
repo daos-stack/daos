@@ -4,17 +4,65 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import re
 import uuid
 import time
 from enum import IntEnum
 
-from command_utils_base import FormattedParameter
+from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from general_utils import get_subprocess_stdout
+
+
+def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
+            intercept=None, plugin_path=None, dfuse=None, display_space=True, fail_on_warning=False,
+            namespace="/run/ior/*", ior_params=None):
+    # pylint: disable=too-many-arguments
+    """Run IOR on multiple hosts.
+
+    Args:
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        log (str): log file.
+        hosts (list): hostfile list of hosts
+        path (str, optional): hostfile path. Defaults to None.
+        slots (int, optional): hostfile number of slots per host. Defaults to None.
+        group (str): DAOS server group name
+        pool (TestPool): DAOS test pool object
+        container (TestContainer): DAOS test container object.
+        processes (int): number of processes to run
+        ppn (int, optional): number of processes per node to run.  If specified it will override
+            the processes input. Defaults to None.
+        intercept (str, optional): path to interception library. Defaults to None.
+        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
+            working directory which is needed to run vol connector for DAOS. Default is None.
+        dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
+            Defaults to None.
+        display_space (bool, optional): Whether to display the pool space. Defaults to True.
+        fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
+            is found. Default is False.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Raises:
+        CommandFailure: if there is an error running the ior command
+
+    Returns:
+        CmdResult: result of the ior command
+
+    """
+    ior = Ior(test, manager, log, hosts, path, slots, namespace)
+    if ior_params:
+        for name, value in ior_params.items():
+            ior_attr = getattr(ior.command, name, None)
+            if ior_attr:
+                if isinstance(ior_attr, BasicParameter):
+                    ior_attr.update(value, ".".join(["ior", name]))
+    return ior.run(
+        group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
+        fail_on_warning)
 
 
 class IorCommand(ExecutableCommand):
@@ -35,9 +83,13 @@ class IorCommand(ExecutableCommand):
         >>> mpirun.run()
     """
 
-    def __init__(self):
-        """Create an IorCommand object."""
-        super().__init__("/run/ior/*", "ior")
+    def __init__(self, namespace="/run/ior/*"):
+        """Create an IorCommand object.
+
+        Args:
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        """
+        super().__init__(namespace, "ior")
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -204,6 +256,7 @@ class IorCommand(ExecutableCommand):
         # Account for any replicas, except for the ones with no replication
         # i.e all object classes starting with "S". Eg: S1,S2,...,SX.
         if not self.dfs_oclass.value.startswith("S"):
+            replica_qty = 1
             try:
                 # Extract the replica quantity from the object class string
                 replica_qty = int(re.findall(r"\d+", self.dfs_oclass.value)[0])
@@ -211,7 +264,7 @@ class IorCommand(ExecutableCommand):
                 # If the daos object class is undefined (TypeError) or it does
                 # not contain any numbers (IndexError) then there is only one
                 # replica.
-                replica_qty = 1
+                pass
             finally:
                 total *= replica_qty
 
@@ -264,13 +317,13 @@ class IorCommand(ExecutableCommand):
             messages = cmdresult.splitlines()
         else:
             messages = cmdresult.stdout_text.splitlines()
-        # Get the index whre the summary starts and add one to
+        # Get the index where the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)
         # idx + 1 is header.
         # idx +2 and idx + 3 will give the write and read metrics.
-        write_metrics = (" ".join(messages[idx+2].split())).split()
-        read_metrics = (" ".join(messages[idx+3].split())).split()
+        write_metrics = (" ".join(messages[idx + 2].split())).split()
+        read_metrics = (" ".join(messages[idx + 3].split())).split()
 
         return (write_metrics, read_metrics)
 
@@ -289,8 +342,7 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command,
-                                    pattern_timeout=10):
+    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=10):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -355,6 +407,7 @@ class IorCommand(ExecutableCommand):
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""
 
+    # pylint: disable=wrong-spelling-in-comment
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
@@ -386,3 +439,150 @@ class IorMetrics(IntEnum):
     aggs_MiB = 24
     API = 25
     RefNum = 26
+
+
+class Ior:
+    """Defines a class that runs the ior command through a job manager, e.g. mpirun."""
+
+    def __init__(self, test, manager, log, hosts, path=None, slots=None, namespace="/run/ior/*"):
+        """Initialize an Ior object.
+
+        Args:
+            test (Test): avocado Test object
+            manager (JobManager): command to manage the multi-host execution of ior
+            log (str): log file.
+            hosts (list): hostfile list of hosts
+            path (str, optional): hostfile path. Defaults to None.
+            slots (int, optional): hostfile number of slots per host. Defaults to None.
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        """
+        self.manager = manager
+        self.manager.assign_hosts(hosts, path, slots)
+        self.manager.job = IorCommand(namespace)
+        self.manager.job.get_params(test)
+        self.manager.output_check = "combined"
+        self.timeout = test.params.get("timeout", namespace, None)
+        self.env = self.command.get_default_env(str(self.manager), log)
+
+    @property
+    def command(self):
+        """Get the IorCommand object.
+
+        Returns:
+            IorCommand: the IorCommand object managed by the JobManager
+
+        """
+        return self.manager.job
+
+    @staticmethod
+    def display_pool_space(pool):
+        """Display the current pool space.
+
+        If the TestPool object has a DmgCommand object assigned, also display
+        the free pool space per target.
+
+        Args:
+            pool (TestPool): The pool for which to display space.
+        """
+        pool.display_pool_daos_space()
+        if pool.dmg:
+            pool.set_query_data()
+
+    def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
+            dfuse=None, display_space=True, fail_on_warning=False):
+        # pylint: disable=too-many-arguments
+        """Run ior.
+
+        Args:
+            group (str): DAOS server group name
+            pool (TestPool): DAOS test pool object
+            container (TestContainer): DAOS test container object.
+            processes (int): number of processes to run
+            ppn (int, optional): number of processes per node to run.  If specified it will override
+                the processes input. Defaults to None.
+            intercept (str, optional): path to interception library. Defaults to None.
+            plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
+                working directory which is needed to run vol connector for DAOS. Default is None.
+            dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
+                Defaults to None.
+            display_space (bool, optional): Whether to display the pool space. Defaults to True.
+            fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
+                is found. Default is False.
+
+        Raises:
+            CommandFailure: if there is an error running the ior command
+
+        Returns:
+            CmdResult: result of the ior command
+
+        """
+        result = None
+        error_message = None
+
+        self.command.set_daos_params(group, pool, container.uuid)
+
+        if intercept:
+            self.env["LD_PRELOAD"] = intercept
+            if "D_LOG_MASK" not in self.env:
+                self.env["D_LOG_MASK"] = "INFO"
+            if "D_IL_REPORT" not in self.env:
+                self.env["D_IL_REPORT"] = "1"
+
+        if plugin_path:
+            self.env["HDF5_VOL_CONNECTOR"] = "daos"
+            self.env["HDF5_PLUGIN_PATH"] = str(plugin_path)
+            if dfuse:
+                self.manager.working_dir.value = dfuse.mount_dir.value
+            else:
+                raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
+
+        if ppn is None:
+            self.manager.assign_processes(processes)
+        else:
+            self.manager.ppn.update(ppn, "{}.ppn".format(self.manager.command))
+            self.manager.processes.update(None, "{}.np".format(self.manager.command))
+
+        self.manager.assign_environment(self.env)
+
+        if fail_on_warning and "WARNING" not in self.manager.check_results_list:
+            self.manager.check_results_list.append("WARNING")
+
+        try:
+            if display_space:
+                self.display_pool_space(pool)
+            result = self.manager.run()
+
+        except CommandFailure as error:
+            error_message = "IOR Failed:\n  {}".format("\n  ".join(str(error).split("\n")))
+
+        finally:
+            if not self.manager.run_as_subprocess and display_space:
+                self.display_pool_space(pool)
+
+        if error_message:
+            raise CommandFailure(error_message)
+
+        return result
+
+    def stop(self, pool=None):
+        """Stop the ior command when the job manager was run as a subprocess .
+
+        Args:
+            pool (TestPool, optional): if provided the pool space will be displayed after attempting
+                to stop the ior command . Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error stopping the ior subprocess
+
+        """
+        if self.manager.run_as_subprocess:
+            error_message = None
+            try:
+                self.manager.stop()
+            except CommandFailure as error:
+                error_message = "IOR Failed: {}".format(error)
+            finally:
+                if pool:
+                    self.display_pool_space(pool)
+            if error_message:
+                raise CommandFailure(error_message)

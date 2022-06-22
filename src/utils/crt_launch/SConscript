@@ -5,24 +5,25 @@
 #
 """Build crt_launch"""
 import os
-import sys
 import daos_build
 
 CRT_LAUNCH = 'crt_launch.c'
 
+
 def scons():
     """scons function"""
-    Import('base_env', 'prereqs')
+    Import('base_env_mpi', 'prereqs')
 
-    tenv = base_env.Clone()
+    if base_env_mpi is None:
+        return
 
-    libs = ['cart', 'gurt', 'pthread', 'm']
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(tenv, libs)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
+    tenv = base_env_mpi.Clone()
+
+    libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
+
+    tenv.AppendUnique(CPPPATH=[Dir('../../include').srcnode()])
+    tenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
+    tenv.AppendUnique(LIBPATH=[Dir('../../cart')])
 
     tenv.AppendUnique(LIBS=libs)
     prereqs.require(tenv, 'mercury')
@@ -31,6 +32,7 @@ def scons():
     crt_launch = daos_build.program(tenv, CRT_LAUNCH, LIBS=libs)
 
     tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
+
 
 if __name__ == "SCons.Script":
     scons()

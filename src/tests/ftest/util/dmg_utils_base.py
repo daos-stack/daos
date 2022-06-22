@@ -323,6 +323,8 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool query command object."""
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = FormattedParameter("{}", None)
+                self.show_enabled = FormattedParameter("--show-enabled", False)
+                self.show_disabled = FormattedParameter("--show-disabled", False)
 
         class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""
@@ -381,7 +383,6 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg storage format command object."""
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
-                self.reformat = FormattedParameter("--reformat", False)
                 self.force = FormattedParameter("--force", False)
 
         class QuerySubCommand(CommandWithSubCommand):
@@ -410,9 +411,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query target-health object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/target-health/*",
-                            "target-health")
+                    super().__init__("/run/dmg/storage/query/target-health/*", "target-health")
                     self.rank = FormattedParameter("-r {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
 
@@ -421,9 +420,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query device-health object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/device-health/*",
-                            "device-health")
+                    super().__init__("/run/dmg/storage/query/device-health/*", "device-health")
                     self.uuid = FormattedParameter("-u {}", None)
 
             class ListDevicesSubCommand(CommandWithParameters):
@@ -431,9 +428,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-devices object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/list-devices/*",
-                            "list-devices")
+                    super().__init__("/run/dmg/storage/query/list-devices/*", "list-devices")
                     self.rank = FormattedParameter("-r {}", None)
                     self.uuid = FormattedParameter("-u {}", None)
                     self.health = FormattedParameter("-b", False)
@@ -443,9 +438,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-pools object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/list-pools/*",
-                            "list-pools")
+                    super().__init__("/run/dmg/storage/query/list-pools/*", "list-pools")
                     self.rank = FormattedParameter("-r {}", None)
                     self.uuid = FormattedParameter("-u {}", None)
                     self.verbose = FormattedParameter("--verbose", False)
@@ -479,9 +472,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage set nvme-faulty object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/device-state/*",
-                            "nvme-faulty")
+                    super().__init__("/run/dmg/storage/query/device-state/*", "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
                     self.force = FormattedParameter("--force", False)
 

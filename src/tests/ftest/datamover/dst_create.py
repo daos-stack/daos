@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,6 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join
 from pydaos.raw import DaosApiError
 import avocado
+
 
 class DmvrDstCreate(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
@@ -28,8 +29,7 @@ class DmvrDstCreate(DataMoverTestBase):
         super().setUp()
 
         # Get the parameters
-        self.ior_flags = self.params.get(
-            "ior_flags", "/run/ior/*")
+        self.ior_flags = self.params.get("ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
         # For dataset_gen and dataset_verify
@@ -43,10 +43,8 @@ class DmvrDstCreate(DataMoverTestBase):
             Create pool1.
             Create POSIX cont1 in pool1.
             Create small dataset in cont1.
-            Copy cont1 to a new cont in pool1, with a supplied UUID.
             Copy cont1 to a new cont in pool1, without a supplied UUID.
             Create pool2.
-            Copy cont1 to a new cont in pool2, with a supplied UUID.
             Copy cont1 to a new cont in pool2, without a supplied UUID.
             For each copy, very container properties and user attributes.
             Repeat, but with container type Unknown.
@@ -67,15 +65,6 @@ class DmvrDstCreate(DataMoverTestBase):
         # Create source data
         src_props = self.write_cont(cont1)
 
-        cont2_uuid = self.gen_uuid()
-        self.run_datamover(
-            self.test_id + " cont1 to cont2 (same pool) (supplied cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool1, cont2_uuid)
-        cont2 = self.get_cont(pool1, cont2_uuid)
-        cont2.type.update(cont1.type.value, "type")
-        self.verify_cont(cont2, api, check_props, src_props)
-
         result = self.run_datamover(
             self.test_id + " cont1 to cont3 (same pool) (empty cont)",
             "DAOS", "/", pool1, cont1,
@@ -88,15 +77,6 @@ class DmvrDstCreate(DataMoverTestBase):
         # Create another pool
         pool2 = self.create_pool()
         pool2.connect(2)
-
-        cont4_uuid = self.gen_uuid()
-        self.run_datamover(
-            self.test_id + " cont1 to cont4 (different pool) (supplied cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool2, cont4_uuid)
-        cont4 = self.get_cont(pool2, cont4_uuid)
-        cont4.type.update(cont1.type.value, "type")
-        self.verify_cont(cont4, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont5 (different pool) (empty cont)",
@@ -113,15 +93,6 @@ class DmvrDstCreate(DataMoverTestBase):
             posix_path = join(self.new_posix_test_path(), self.test_file)
             self.run_ior_with_params(
                 "POSIX", posix_path, flags=self.ior_flags[0])
-
-            cont6_uuid = self.gen_uuid()
-            self.run_datamover(
-                self.test_id + " posix to cont6 (supplied cont)",
-                "POSIX", posix_path, None, None,
-                "DAOS", "/", pool1, cont6_uuid)
-            cont6 = self.get_cont(pool1, cont6_uuid)
-            cont6.type.update(cont1.type.value, "type")
-            self.verify_cont(cont6, api, False)
 
             result = self.run_datamover(
                 self.test_id + " posix to cont7 (empty cont)",
@@ -196,14 +167,12 @@ class DmvrDstCreate(DataMoverTestBase):
             cont (TestContainer): the container to get props of.
 
         Returns:
-            list: string list of properties and values from daos command.
+            list: list of dictionaries that contain properties and values from daos
+                command.
 
         """
-        prop_result = self.daos_cmd.container_get_prop(
-            cont.pool.uuid, cont.uuid)
-        prop_text = prop_result.stdout_text
-        prop_list = prop_text.split('\n')[1:]
-        return prop_list
+        prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
+        return prop_result["response"]
 
     def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
@@ -212,7 +181,6 @@ class DmvrDstCreate(DataMoverTestBase):
         Args:
             cont (TestContainer): the container to verify.
             prop_list (list): list of properties from get_cont_prop.
-
         """
         actual_list = self.get_cont_prop(cont)
 
@@ -225,7 +193,7 @@ class DmvrDstCreate(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if api == "DFS" and "OID" in prop_list[prop_idx]:
+            if api == "DFS" and "OID" in str(prop["description"]):
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",
@@ -281,7 +249,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
@@ -295,7 +264,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
@@ -309,7 +279,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
@@ -323,7 +294,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,fs_copy
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

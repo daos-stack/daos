@@ -112,7 +112,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, 0);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -133,22 +133,31 @@ next:
 	return rc;
 }
 
-static int
-dtx_target_alive(struct ds_pool *pool, uint32_t id)
+/* Get leader from dtx */
+int
+dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, struct pool_target **p_tgt)
 {
-	struct pool_target	*target;
-	int			 rc;
+	int	i;
+	int	rc = 0;
 
-	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_find_target(pool->sp_map, id, &target);
-	if (rc != 1) {
-		D_WARN("Cannot find target %u because of empty pool map\n", id);
-		ABT_rwlock_unlock(pool->sp_lock);
-		return -DER_UNINIT;
+	D_ASSERT(mbs != NULL);
+	/* The first UPIN target is the leader of the DTX */
+	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
+		rc = ds_pool_target_status_check(pool, mbs->dm_tgts[i].ddt_id,
+						 (uint8_t)PO_COMP_ST_UPIN, p_tgt);
+		if (rc < 0)
+			D_GOTO(out, rc);
+
+		if (rc == 1) {
+			rc = 0;
+			break;
+		}
 	}
-	ABT_rwlock_unlock(pool->sp_lock);
 
-	return target->ta_comp.co_status == PO_COMP_ST_UPIN ? 1 : 0;
+	if (i == mbs->dm_tgt_cnt)
+		rc = -DER_NONEXIST;
+out:
+	return rc;
 }
 
 static int
@@ -156,31 +165,18 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	      struct dtx_resync_entry *dre)
 {
 	struct dtx_memberships	*mbs = dre->dre_dte.dte_mbs;
-	struct pool_target	*target;
-	d_rank_t		 myrank;
-	int			 leader_tgt;
-	int			 rc;
+	struct pool_target	*target = NULL;
+	d_rank_t		myrank;
+	int			rc;
 
-	/* Old leader is still alive, then current server is not the leader. */
-	if (mbs->dm_flags & DMF_CONTAIN_LEADER) {
-		rc = dtx_target_alive(pool, mbs->dm_tgts[0].ddt_id);
-		if (rc < 0)
-			goto out;
-		if (rc > 0)
-			return 0;
-	}
+	if (mbs == NULL)
+		return 1;
 
-	rc = ds_pool_elect_dtx_leader(pool, &dre->dre_oid, mbs, pool->sp_map_version, &leader_tgt);
-	if (rc < 0)
-		goto out;
-
-	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
+	rc = dtx_leader_get(pool, mbs, &target);
 	if (rc < 0)
 		D_GOTO(out, rc);
 
-	if (rc != 1)
-		D_GOTO(out, rc = -DER_INVAL);
-
+	D_ASSERT(target != NULL);
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc < 0)
 		D_GOTO(out, rc);
@@ -223,7 +219,8 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 				continue;
 			}
 
-			rc = dtx_target_alive(pool, group->drg_ids[j]);
+			rc = ds_pool_target_status_check(pool, group->drg_ids[j],
+							 (uint8_t)PO_COMP_ST_UPIN, NULL);
 			if (rc < 0)
 				return rc;
 

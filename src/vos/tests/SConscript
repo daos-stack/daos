@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils', 'conf_dir')
+    Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'cart', 'uuid', 'pthread',
@@ -22,8 +22,7 @@ def scons():
                     '../../object/srv_csum.c', '../../object/srv_io_map.c']
     vos_tests = daos_build.program(denv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
-    denv.AppendUnique(CPPPATH=["../../common/tests"])
-    Import('cmd_parser')
+    denv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils,
                                  cmd_parser], LIBS=libraries)
 

@@ -15,16 +15,23 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
+	cleanup, err := Load()
+	if err != nil {
+		t.Skipf("libfabric not installed (%s)", err.Error())
+	}
+	defer cleanup()
+
 	// Can't mock the underlying libfabric calls, but we can make sure it doesn't crash or
 	// error on the normal happy path.
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -80,19 +87,20 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 			},
 			expResult: &hardware.FabricInterface{
 				Name:      "fi0_domain",
+				OSName:    "fi0_domain",
 				Providers: common.NewStringSet("provider_x"),
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 
 			result, err := p.infoToFabricInterface(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
@@ -157,8 +165,8 @@ func TestLibfabric_libFabricProviderListToExt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			out, err := libFabricProviderListToExt(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expOut, out, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expOut, out, "")
 		})
 	}
 }

@@ -105,12 +105,14 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_delete_acl);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_query);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_query_targets);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_devs);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_pools);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_bio_health_query);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_list_cont);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_cont_set_owner);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_upgrade);
 }
 
 static daos_prop_t *
@@ -1176,6 +1178,7 @@ setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
 	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
 
 	req.id = uuid;
+	req.include_enabled_ranks = true;
 	pack_pool_query_req(call, &req);
 }
 
@@ -1348,6 +1351,7 @@ test_drpc_pool_query_success(void **state)
 		return;
 	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
+	assert_non_null(ds_mgmt_pool_query_ranks_out);
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DPI_ALL);
 
 	expect_query_resp_with_info(&exp_info,
@@ -1438,6 +1442,160 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * Pool query targets test setup/teardown
+ */
+static int
+drpc_pool_query_targets_setup(void **state)
+{
+	mock_ds_mgmt_pool_query_targets_setup();
+	return 0;
+}
+
+static int
+drpc_pool_query_targets_teardown(void **state)
+{
+	mock_ds_mgmt_pool_query_targets_teardown();
+	return 0;
+}
+
+/*
+ * dRPC pool query targets tests
+ */
+static void
+pack_pool_query_targets_req(Drpc__Call *call, Mgmt__PoolQueryTargetReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_query_target_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_query_target_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_pool_query_targets_drpc_call(Drpc__Call *call, char *uuid, uint32_t n_tgts, uint32_t *tgts)
+{
+	Mgmt__PoolQueryTargetReq req = MGMT__POOL_QUERY_TARGET_REQ__INIT;
+
+	req.id = uuid;
+	req.n_targets = n_tgts;
+	req.targets = tgts;
+	pack_pool_query_targets_req(call, &req);
+}
+
+static void
+expect_drpc_pool_query_targets_resp_with_error(Drpc__Response *resp, int expected_err)
+{
+	Mgmt__PoolQueryTargetResp *pqt_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pqt_resp = mgmt__pool_query_target_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pqt_resp);
+	assert_int_equal(pqt_resp->status, expected_err);
+	assert_int_equal(pqt_resp->n_infos, 0);
+
+	mgmt__pool_query_target_resp__free_unpacked(pqt_resp, NULL);
+}
+
+static void
+expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
+						 daos_target_info_t *infos,
+						 uint32_t exp_infos_len)
+{
+	Mgmt__PoolQueryTargetResp	*pqt_resp = NULL;
+	uint32_t			 i;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pqt_resp = mgmt__pool_query_target_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pqt_resp);
+	assert_int_equal(pqt_resp->status, 0);
+
+	/* number of targets in response == expected value. */
+	assert_int_equal(pqt_resp->n_infos, exp_infos_len);
+
+	for (i = 0; i < exp_infos_len; i++) {
+		uint32_t	j;
+
+		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
+		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
+		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
+
+		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
+			Mgmt__StorageTargetUsage *space = pqt_resp->infos[i]->space[j];
+
+			assert_int_equal(space->total, infos[i].ta_space.s_total[j]);
+			assert_int_equal(space->free, infos[i].ta_space.s_free[j]);
+		}
+	}
+
+	mgmt__pool_query_target_resp__free_unpacked(pqt_resp, NULL);
+}
+
+static void
+test_drpc_pool_query_targets_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_pool_query_targets_drpc_call(&call, "BAD", 0 /* n_tgts */, NULL /* tgts */);
+
+	ds_mgmt_drpc_pool_query_targets(&call, &resp);
+
+	expect_drpc_pool_query_targets_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_targets_mgmt_svc_fails(void **state)
+{
+	const uint32_t	n_tgts = 4;
+	uint32_t	tgts[] = {0, 1, 2, 3};
+	Drpc__Call	 call = DRPC__CALL__INIT;
+	Drpc__Response	 resp = DRPC__RESPONSE__INIT;
+
+	setup_pool_query_targets_drpc_call(&call, TEST_UUID, n_tgts, tgts);
+	ds_mgmt_pool_query_targets_return = -DER_TIMEDOUT;
+
+	ds_mgmt_drpc_pool_query_targets(&call, &resp);
+
+	expect_drpc_pool_query_targets_resp_with_error(&resp, ds_mgmt_pool_query_targets_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_targets_with_targets(void **state)
+{
+	const uint32_t	n_tgts = 8;
+	uint32_t	tgts[] = {0, 1, 2, 3, 4, 5, 6, 7};
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_pool_query_targets_drpc_call(&call, TEST_UUID, n_tgts, tgts);
+	mock_ds_mgmt_pool_query_targets_gen_infos(n_tgts);
+
+	ds_mgmt_drpc_pool_query_targets(&call, &resp);
+
+	expect_drpc_pool_query_targets_resp_with_targets(&resp,
+							 ds_mgmt_pool_query_targets_info_out,
+							 n_tgts);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
 /*
  * dRPC pool create tests
  */
@@ -2301,6 +2459,109 @@ test_drpc_cont_set_owner_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * Pool upgrade test setup
+ */
+static int
+drpc_upgrade_setup(void **state)
+{
+	mock_ds_mgmt_pool_upgrade_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool upgrade tests
+ */
+static void
+pack_pool_upgrade_req(Drpc__Call *call, Mgmt__PoolUpgradeReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_upgrade_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_upgrade_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_upgrade_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
+{
+	Mgmt__PoolUpgradeReq req = MGMT__POOL_UPGRADE_REQ__INIT;
+
+	req.id = uuid;
+	req.sys = sys_name;
+	pack_pool_upgrade_req(call, &req);
+}
+
+static void
+expect_drpc_upgrade_resp_with_status(Drpc__Response *resp, int exp_status)
+{
+	Mgmt__PoolUpgradeResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__pool_upgrade_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_status);
+
+	mgmt__pool_upgrade_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+test_drpc_pool_upgrade_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_upgrade_drpc_call(&call, "BAD", "DaosSys");
+
+	ds_mgmt_drpc_pool_upgrade(&call, &resp);
+
+	expect_drpc_upgrade_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_upgrade_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_upgrade_drpc_call(&call, TEST_UUID, "DaosSys");
+	ds_mgmt_pool_upgrade_return = -DER_MISC;
+
+	ds_mgmt_drpc_pool_upgrade(&call, &resp);
+	expect_drpc_upgrade_resp_with_status(&resp,
+					     ds_mgmt_pool_upgrade_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_upgrade_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_upgrade_drpc_call(&call, TEST_UUID, "DaosSys");
+	ds_mgmt_drpc_pool_upgrade(&call, &resp);
+
+	expect_drpc_upgrade_resp_with_status(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -2320,6 +2581,10 @@ test_drpc_cont_set_owner_success(void **state)
 #define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_query_setup)
 
+#define QUERY_TARGETS_TEST(x)	cmocka_unit_test_setup_teardown(x, \
+						drpc_pool_query_targets_setup, \
+						drpc_pool_query_targets_teardown)
+
 #define EXCLUDE_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_exclude_setup)
 
@@ -2335,6 +2600,9 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_evict_setup)
+
+#define POOL_UPGRADE_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_upgrade_setup)
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
@@ -2393,6 +2661,9 @@ main(void)
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_busy),
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
+		QUERY_TARGETS_TEST(test_drpc_pool_query_targets_bad_uuid),
+		QUERY_TARGETS_TEST(test_drpc_pool_query_targets_mgmt_svc_fails),
+		QUERY_TARGETS_TEST(test_drpc_pool_query_targets_with_targets),
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
 		POOL_EVICT_TEST(test_drpc_pool_evict_bad_uuid),
 		POOL_EVICT_TEST(test_drpc_pool_evict_mgmt_svc_fails),
@@ -2404,6 +2675,9 @@ main(void)
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_pool_uuid),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_failed),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),
+		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_bad_uuid),
+		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_mgmt_svc_fails),
+		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_success),
 	};
 
 	return cmocka_run_group_tests_name("mgmt_srv_drpc", tests, NULL, NULL);

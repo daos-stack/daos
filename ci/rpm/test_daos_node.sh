@@ -1,7 +1,11 @@
 #!/bin/bash
 
 YUM=dnf
-if [ "$(lsb_release -si)" = "CentOS" ]; then
+id="$(lsb_release -si)"
+if [ "$id" = "CentOS" ] ||
+   [ "$id" = "AlmaLinux" ] ||
+   [ "$id" = "Rocky" ] ||
+   [ "$id" = "RedHatEnterpriseServer" ]; then
     if [[ $(lsb_release -sr) = 8* ]]; then
         OPENMPI_RPM=openmpi
         OPENMPI=mpi/openmpi-x86_64
@@ -31,6 +35,10 @@ if rpm -q $OPENMPI_RPM; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
 fi
+if ! rpm -q daos-admin; then
+    echo "daos-admin should be installed as a dependency of daos-client-tests"
+    exit 1
+fi
 if ! sudo $YUM -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
     $YUM history
@@ -41,12 +49,16 @@ if rpm -q $OPENMPI_RPM; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
 fi
+if ! rpm -q daos-admin; then
+    echo "daos-admin should be installed as a dependency of daos-server-tests"
+    exit 1
+fi
 if ! sudo $YUM -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
     $YUM history
     exit 1
 fi
-sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install --exclude ompi daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 if ! rpm -q daos-client; then
   echo "daos-client RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
@@ -57,10 +69,6 @@ if rpm -q daos-server; then
 fi
 if ! rpm -q daos-client-tests; then
   echo "daos-client-tests RPM should be installed as a dependency of daos-client-tests-openmpi"
-  exit 1
-fi
-if ! rpm -q $OPENMPI_RPM; then
-  echo "$OPENMPI_RPM RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
 fi
 if ! sudo $YUM -y history undo last; then
@@ -74,7 +82,7 @@ if rpm -q daos-client; then
   exit 1
 fi
 
-sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install --exclude ompi daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 
 me=$(whoami)
 for dir in server agent; do
@@ -105,6 +113,7 @@ if ! module load $OPENMPI; then
     module list
     exit 1
 fi
+
 coproc SERVER { exec daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
 trap 'set -x; kill -INT $SERVER_PID' EXIT
 line=""

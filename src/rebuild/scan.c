@@ -322,6 +322,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
+	struct cont_props		co_props;
 	int				snapshot_cnt;
 	uint32_t			yield_freq;
 };
@@ -494,13 +495,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		return 1;
 	}
 
-	if (--arg->yield_freq == 0) {
-		arg->yield_freq = DEFAULT_YIELD_FREQ;
-		ABT_thread_yield();
-		*acts |= VOS_ITER_CB_YIELD;
-		return 0;
-	}
-
 	/* If the OID is invisible, then snapshots must be created on the object. */
 	D_ASSERTF(!(ent->ie_vis_flags & VOS_VIS_FLAG_COVERED) || arg->snapshot_cnt > 0,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
@@ -524,6 +518,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
+	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
 
 	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
 	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
@@ -654,6 +649,15 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
+	if (--arg->yield_freq == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
+			DP_UUID(rpt->rt_pool_uuid), rc);
+		arg->yield_freq = DEFAULT_YIELD_FREQ;
+		if (rc == 0)
+			dss_sleep(0);
+		*acts |= VOS_ITER_CB_YIELD;
+	}
+
 	return rc;
 }
 
@@ -690,7 +694,17 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
+	if (rc) {
+		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
 		return rc;
 	}
 
@@ -811,13 +825,19 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u < %u\n",
+	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
-		rpt->rt_rebuild_ver);
+		rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
 
 	/* Wait for dtx resync to finish */
-	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
-		ABT_thread_yield();
+	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_INFO("shutdown rebuild "DF_UUID": "DF_RC"\n",
+			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
+			D_GOTO(out, rc = -DER_SHUTDOWN);
+		}
+		dss_sleep(2 * 1000);
+	}
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
@@ -860,9 +880,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
+	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d gen %u\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver);
+		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -880,7 +900,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	}
 
 	/* check if the rebuild is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
 			D_WARN("the previous rebuild "DF_UUID"/%d"
@@ -923,8 +943,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.
 			 */
-			ds_rebuild_leader_stop(rsi->rsi_pool_uuid,
-					       rsi->rsi_rebuild_ver);
+			ds_rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+					       rsi->rsi_rebuild_gen);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;

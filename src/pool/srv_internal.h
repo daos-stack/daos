@@ -19,15 +19,16 @@
  * Global pool metrics
  */
 struct pool_metrics {
-	struct d_tm_node_t	*open_hdl_gauge;
+	struct d_tm_node_t	*connect_total;
+	struct d_tm_node_t	*disconnect_total;
+	struct d_tm_node_t	*query_total;
+	struct d_tm_node_t	*query_space_total;
+	struct d_tm_node_t	*evict_total;
 };
 
-/**
- * DSM server thread local storage structure
- */
+/* Pool thread-local storage */
 struct pool_tls {
-	/* in-memory structures TLS instance */
-	struct d_list_head	dt_pool_list;
+	struct d_list_head	dt_pool_list;	/* of ds_pool_child objects */
 };
 
 extern struct dss_module_key pool_module_key;
@@ -39,7 +40,7 @@ pool_tls_get()
 	struct dss_thread_local_storage	*dtc;
 
 	dtc = dss_tls_get();
-	tls = (struct pool_tls *)dss_module_key_get(dtc, &pool_module_key);
+	tls = dss_module_key_get(dtc, &pool_module_key);
 	return tls;
 }
 
@@ -62,6 +63,8 @@ struct pool_iv_prop {
 	uint32_t	pip_redun_fac;
 	uint32_t	pip_ec_pda;
 	uint32_t	pip_rp_pda;
+	uint32_t	pip_global_version;
+	uint32_t	pip_upgrade_status;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -74,6 +77,7 @@ struct pool_iv_conn {
 	uint64_t	pic_flags;
 	uint64_t	pic_capas;
 	uint32_t	pic_cred_size;
+	uint32_t	pic_global_ver;
 	char		pic_creds[0];
 };
 
@@ -115,6 +119,7 @@ void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
+int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
@@ -134,6 +139,7 @@ void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
+void ds_pool_upgrade_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -142,6 +148,7 @@ int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
+void ds_pool_hdl_delete_all(void);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
@@ -172,7 +179,8 @@ int ds_pool_iv_fini(void);
 void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
-			       uint64_t flags, uint64_t capas, d_iov_t *cred);
+			       uint64_t flags, uint64_t capas, d_iov_t *cred,
+			       uint32_t global_ver);
 
 int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);

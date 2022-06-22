@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
@@ -24,12 +26,12 @@ type networkCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	cfgCmd
-	logCmd
+	cmdutil.LogCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
 func (cmd *networkScanCmd) Execute(_ []string) error {
-	fabricScanner := hwprov.DefaultFabricScanner(cmd.log)
+	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
 	results, err := fabricScanner.Scan(context.Background())
 	if err != nil {
@@ -50,7 +52,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -68,18 +70,21 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			continue
 		}
 
-		name := fi.OSDevice
-		if name == "" {
-			name = fi.Name
+		netIFs := common.NewStringSet(fi.NetInterfaces.ToSlice()...)
+		if len(fi.NetInterfaces) == 0 {
+			netIFs.Add(fi.Name)
 		}
-		for _, provider := range fi.Providers.ToSlice() {
-			if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
-				hf.AddInterface(&control.HostFabricInterface{
-					Provider:    provider,
-					Device:      name,
-					NumaNode:    uint32(fi.NUMANode),
-					NetDevClass: fi.DeviceClass,
-				})
+
+		for _, name := range netIFs.ToSlice() {
+			for _, provider := range fi.Providers.ToSlice() {
+				if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+					hf.AddInterface(&control.HostFabricInterface{
+						Provider:    provider,
+						Device:      name,
+						NumaNode:    uint32(fi.NUMANode),
+						NetDevClass: fi.DeviceClass,
+					})
+				}
 			}
 		}
 	}

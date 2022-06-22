@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,7 @@ extern "C" {
  * be defined for each non-contiguous range
  */
 
+/** Preprocessor macro defining GURT errno values and internal definition of d_errstr */
 #define D_FOREACH_GURT_ERR(ACTION)					\
 	/** no permission */						\
 	ACTION(DER_NO_PERM,		(DER_ERR_GURT_BASE + 1),	\
@@ -160,6 +161,7 @@ extern "C" {
 	       incompatible user or group permissions)
 	/** TODO: add more error numbers */
 
+/** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
 #define D_FOREACH_DAOS_ERR(ACTION)					\
 	/** Generic I/O error */					\
 	ACTION(DER_IO,			(DER_ERR_DAOS_BASE + 1),	\
@@ -248,9 +250,9 @@ extern "C" {
 	/** Agent is incompatible with libdaos */			\
 	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
 	       Agent is incompatible with libdaos)			\
-	/** Multiple shards locate on the same target */		\
-	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)						\
+	/** Needs to be handled via distributed transaction. */		\
+	ACTION(DER_NEED_TX,		(DER_ERR_DAOS_BASE + 30),	\
+	       To be handled via distributed transaction)		\
 	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
 	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
 	       Failures exceed RF)					\
@@ -259,7 +261,7 @@ extern "C" {
 	       Fetch again)						\
 	/** Hit uncertain DTX, may need to try with other replica. */	\
 	ACTION(DER_TX_UNCERTAIN,	(DER_ERR_DAOS_BASE + 33),	\
-	       TX status is uncertaion)					\
+	       TX status is uncertain)					\
 	/** Communicatin issue with agent. */				\
 	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
 	       Agent communication error)				\
@@ -269,16 +271,27 @@ extern "C" {
 	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
 	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
 		Retry with other target)				\
+	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
+	       Operation not supported)					\
+	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
+	       One or more control plane components are incompatible)	\
+	/** No service available */					\
+	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
+	       No service available)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\
 	ACTION(DAOS,	2000)
 
+/** Preprocessor machinery for defining error numbers */
 #define D_DEFINE_ERRNO(name, value, desc) name = value,
+/** Preprocessor machinery for defining error number strings */
 #define D_DEFINE_ERRSTR(name, value, desc) #name,
+/** Preprocessor machinery for defining error descriptions */
 #define D_DEFINE_ERRDESC(name, value, desc) #desc,
 
+/** Preprocessor machinery to define a consecutive range of error numbers */
 #define D_DEFINE_RANGE_ERRNO(name, base)			\
 	enum {							\
 		DER_ERR_##name##_BASE		=	(base),	\
@@ -286,6 +299,7 @@ extern "C" {
 		DER_ERR_##name##_LIMIT,				\
 	};
 
+/** Preprocessor machinery to define error strings for a consecutive range of error numbers */
 #define D_DEFINE_RANGE_ERRSTR(name)				\
 	static const char * const g_##name##_error_strings[] = {\
 		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)		\
@@ -307,7 +321,9 @@ D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
 #define D_DEREGISTER_RANGE(name)			\
 	d_errno_deregister_range(DER_ERR_##name##_BASE)
 
+/** Return value representing success */
 #define DER_SUCCESS	0
+/** Unknown error */
 #define DER_UNKNOWN	(DER_ERR_GURT_BASE + 500000)
 
 /** Return a string associated with a registered gurt errno

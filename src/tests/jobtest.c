@@ -36,7 +36,7 @@ int pause_for_keypress(void)
 	return scanf("%c", &ch);
 }
 
-void cleanup_handles(uuid_t *pool_uuids, int num_pools,
+void cleanup_handles(char **pool_ids, int num_pools,
 		     daos_handle_t **pool_handles, int handles_per_pool,
 		     daos_handle_t **cont_handles)
 {
@@ -45,32 +45,34 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 	for (i = 0; i < num_pools; i++) {
 		int j;
 
-		if (uuid_is_null(pool_uuids[i])) {
+		if (pool_ids[i] == NULL) {
 			continue;
 		}
 		for (j = 0; j < handles_per_pool; j++) {
-			if (daos_handle_is_inval(pool_handles[i][j])) {
+			if (daos_handle_is_inval(pool_handles[i][j]))
 				continue;
-			}
-			rc = daos_cont_close(cont_handles[i][j], NULL);
-			if (rc) {
-				uuid_t		cont;
-				uuid_t		hdl;
-				char		cont_str[64];
-				char		hdl_str[64];
 
-				dc_cont_hdl2uuid(cont_handles[i][j], &hdl, &cont);
-				uuid_unparse_lower(cont, cont_str);
-				uuid_unparse_lower(hdl, hdl_str);
-				printf("disconnect handle %s from container %s "
-					"failed: %d\n", hdl_str, cont_str, rc);
+			if (!daos_handle_is_inval(cont_handles[i][j])) {
+				rc = daos_cont_close(cont_handles[i][j], NULL);
+				if (rc) {
+					uuid_t		cont;
+					uuid_t		hdl;
+					char		cont_str[DAOS_UUID_STR_SIZE];
+					char		hdl_str[DAOS_UUID_STR_SIZE];
+
+					dc_cont_hdl2uuid(cont_handles[i][j], &hdl, &cont);
+					uuid_unparse_lower(cont, cont_str);
+					uuid_unparse_lower(hdl, hdl_str);
+					printf("disconnect handle %s from container %s "
+						"failed: %d\n", hdl_str, cont_str, rc);
+				}
 			}
 
 			rc = daos_pool_disconnect(pool_handles[i][j], NULL);
 			if (rc) {
 				struct dc_pool	*pool;
-				char		pool_str[64];
-				char		hdl_str[64];
+				char		pool_str[DAOS_UUID_STR_SIZE];
+				char		hdl_str[DAOS_UUID_STR_SIZE];
 
 				pool = dc_hdl2pool(pool_handles[i][j]);
 				if (pool) {
@@ -82,57 +84,64 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 				}
 			}
 		}
+		free(pool_ids[i]);
 		free(pool_handles[i]);
 		free(cont_handles[i]);
+		pool_ids[i] = NULL;
 		pool_handles[i] = NULL;
 		cont_handles[i] = NULL;
 	}
 }
 
 /*
- * Takes in a comma separated list of UUIDs and turns them into a list of
- * UUID structures. It will return the number of entries on success and -1 on
+ * Takes in a comma separated list of pool IDs and turns them into a list of
+ * pool ID strings. It will return the number of entries on success and -1 on
  * failure
  */
-int parse_pool_handles(char *hndl_str, uuid_t **handles)
+int parse_pool_ids(char *pools_str, char ***pool_ids)
 {
 	char		*idx, *pool_str;
 	const char	delim[2] = ",";
-	int		hdl_count = 1 /* we have at least 1 */;
+	int		pool_count = 1 /* we have at least 1 */;
 	int		i = 0;
 	int		rc;
-	uuid_t		*hndls = NULL;
+	char		**ids = NULL;
 
 	/* Figure out how many handles are in the string */
-	idx = strchr(hndl_str, ',');
+	idx = strchr(pools_str, ',');
 	while (idx != NULL) {
-		hdl_count++;
+		pool_count++;
 		idx = strchr(idx + 1, ',');
 	}
 
-	hndls = calloc(hdl_count, sizeof(uuid_t));
-	if (!hndls) {
-		perror("Unable to allocate space for pool handle list");
+	ids = calloc(pool_count, sizeof(char *));
+	if (!ids) {
+		perror("Unable to allocate space for pool ID list");
 		return -1;
 	}
 
-	/* Parse the UUIDS into their structures */
-	pool_str = strtok(hndl_str, delim);
+	/* Parse the IDs */
+	pool_str = strtok(pools_str, delim);
 	while (pool_str != NULL) {
-		if (uuid_parse(pool_str, hndls[i]) != 0) {
-			printf("Invalid pool uuid: %s\n", pool_str);
+		ids[i] = strdup(pool_str);
+		if (!ids[i]) {
+			perror("Unable to allocate space for pool ID");
 			rc = -1;
 			goto out_err;
 		}
 		i++;
 		pool_str = strtok(NULL, delim);
 	}
-	rc = hdl_count;
-	*handles = hndls;
+	rc = pool_count;
+	*pool_ids = ids;
 	goto out;
 
 out_err:
-	free(hndls);
+	for (i = 0; i < pool_count; i++) {
+		if (ids[i])
+			free(ids[i]);
+	}
+	free(ids);
 out:
 	return rc;
 }
@@ -145,15 +154,19 @@ main(int argc, char **argv)
 	int		abnormal_exit = 0; /* whether to kill the process*/
 	int		handles_per_pool = 5; /* Number of pool connections*/
 	int		well_behaved = 0; /* Whether to disconnect at the end*/
+	int		use_handles = 0; /* Whether to use handles */
 	int		interactive = 0; /* Program needs manual advancement*/
-	char		*pool_str = NULL;
-	uuid_t		*pool_uuids = NULL;
+	char		*pools_str = NULL;
+	char		**pool_ids = NULL;
 	daos_handle_t	**pool_handles = NULL;
 	daos_handle_t	**cont_handles = NULL;
 
 	progname = argv[0];
-	while ((opt = getopt(argc, argv, "xs:h:wip:")) != -1) {
+	while ((opt = getopt(argc, argv, "uxs:h:wip:")) != -1) {
 		switch (opt) {
+		case 'u':
+			use_handles = 1;
+			break;
 		case 'x':
 			abnormal_exit = 1;
 			break;
@@ -164,7 +177,7 @@ main(int argc, char **argv)
 			handles_per_pool = atoi(optarg);
 			break;
 		case 'p':
-			pool_str = strdup(optarg);
+			pools_str = strdup(optarg);
 			break;
 		case 'w':
 			well_behaved = 1;
@@ -185,13 +198,12 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	if (!pool_str) {
+	if (!pools_str) {
 		print_usage();
 		exit(-1);
 	}
 
-
-	num_pools = parse_pool_handles(pool_str, &pool_uuids);
+	num_pools = parse_pool_ids(pools_str, &pool_ids);
 	if (num_pools <= 0) {
 		perror("Unable to parse pool handle string");
 		exit(-1);
@@ -228,14 +240,15 @@ main(int argc, char **argv)
 	for (i = 0; i < num_pools; i++) {
 		int j;
 
-		for (j = 0; j < handles_per_pool; j++) {
-			char str[37];
+		printf("Making %d connections to pool %s\n",
+		       handles_per_pool, pool_ids[i]);
 
-			uuid_unparse(pool_uuids[i], str);
-			rc = daos_pool_connect(str, NULL, DAOS_PC_RW,
+		for (j = 0; j < handles_per_pool; j++) {
+			rc = daos_pool_connect(pool_ids[i], NULL, DAOS_PC_RW,
 					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
-				printf("Unable to connect to %s rc: %d", str, rc);
+				printf("Unable to connect to %s rc: %d",
+				       pool_ids[i], rc);
 				/* Force well behaved cleanup since we're
 				 * erroring out
 				 */
@@ -245,55 +258,63 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (interactive) {
-		rc = pause_for_keypress();
-	} else {
-		/** Give a sleep grace period then exit based on -x switch */
-		sleep(sleep_seconds);
-	}
+	/* Use our handles */
+	if (use_handles) {
+		printf("\n");
+		for (i = 0; i < num_pools; i++) {
+			int j;
 
-	/* User our handles by creating pools and connecting to them */
-	for (i = 0; i < num_pools; i++) {
-		int j;
+			for (j = 0; j < handles_per_pool; j++) {
+				uuid_t c_uuid;
+				char cstr[DAOS_UUID_STR_SIZE];
 
-		for (j = 0; j < handles_per_pool; j++) {
-			uuid_t c_uuid;
-			char cstr[64];
+				uuid_generate(c_uuid);
+				printf("Creating container using handle %" PRIu64 "\n",
+				       pool_handles[i][j].cookie);
+				rc = daos_cont_create(pool_handles[i][j], &c_uuid, NULL, NULL);
+				if (rc != 0) {
+					printf("Unable to create container using handle"
+					       " %" PRIu64 " rc: %d\n",
+					       pool_handles[i][j].cookie, rc);
+				}
 
-			printf("Creating container using handle %" PRIu64 "\n",
-			       pool_handles[i][j].cookie);
-			rc = daos_cont_create(pool_handles[i][j], &c_uuid, NULL,
-					      NULL);
-			if (rc != 0) {
-				printf("Unable to create container using handle"
-				       " %" PRIu64 " rc: %d\n",
-				       pool_handles[i][j].cookie, rc);
-			}
-
-			uuid_unparse(c_uuid, cstr);
-			printf("Opening container %s\n", cstr);
-			rc = daos_cont_open(pool_handles[i][j], cstr,
-						DAOS_COO_RW,
-						&cont_handles[i][j],
-						NULL, NULL);
-			if (rc != 0) {
-				char		uuid_str[DAOS_UUID_STR_SIZE];
-
-				uuid_unparse(pool_uuids[i], uuid_str);
-				printf("Unable to open container %s rc: %d",
-				       uuid_str, rc);
+				uuid_unparse(c_uuid, cstr);
+				printf("Opening container %s\n", cstr);
+				rc = daos_cont_open(pool_handles[i][j], cstr,
+						    DAOS_COO_RW, &cont_handles[i][j],
+						    NULL, NULL);
+				if (rc != 0) {
+					printf("Unable to open container %s rc: %d",
+					       pool_ids[i], rc);
+				}
 			}
 		}
 	}
 
-	if (abnormal_exit)
+	if (interactive) {
+		rc = pause_for_keypress();
+	} else {
+		/** Give a sleep grace period then exit based on -x switch */
+		printf("\nSleeping for %d seconds...\n", sleep_seconds);
+		sleep(sleep_seconds);
+	}
+
+	printf("\n");
+	if (abnormal_exit) {
+		printf("Simulating application crash!\n");
+		fflush(stdout);
 		exit(-1);
+	}
 
 cleanup:
 	if (well_behaved) {
-		cleanup_handles(pool_uuids, num_pools,
+		printf("Cleaning up %d pool/cont handles\n",
+		       num_pools * handles_per_pool);
+		cleanup_handles(pool_ids, num_pools,
 				pool_handles, handles_per_pool,
 				cont_handles);
+	} else {
+		printf("Not cleaning up pool/cont handles prior to exit\n");
 	}
 
 	/** shutdown the local DAOS stack */

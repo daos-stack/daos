@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -152,6 +152,7 @@ func (m MgmtMethod) String() string {
 		MethodReplaceStorage:       "ReplaceStorage",
 		MethodListContainers:       "ListContainers",
 		MethodPoolQuery:            "PoolQuery",
+		MethodPoolQueryTarget:      "PoolQueryTarget",
 		MethodPoolSetProp:          "PoolSetProp",
 		MethodContSetOwner:         "ContSetOwner",
 		MethodGroupUpdate:          "GroupUpdate",
@@ -160,6 +161,7 @@ func (m MgmtMethod) String() string {
 		MethodNotifyExit:           "NotifyExit",
 		MethodIdentifyStorage:      "IdentifyStorage",
 		MethodPoolGetProp:          "PoolGetProp",
+		MethodPoolUpgrade:          "PoolUpgrade",
 	}[m]; ok {
 		return s
 	}
@@ -237,6 +239,8 @@ const (
 	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
 	MethodPoolQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY
+	// MethodPoolQueryTarget defines a method for querying a pool engine's targets
+	MethodPoolQueryTarget MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY_TARGETS
 	// MethodPoolSetProp defines a method for setting a pool property
 	MethodPoolSetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
@@ -253,6 +257,8 @@ const (
 	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodPoolUpgrade defines a method for upgrade pool
+	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 )
 
 type srvMethod int32

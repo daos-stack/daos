@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+
+	. "github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestCommon_getHugePageInfo(t *testing.T) {
@@ -110,7 +112,9 @@ func TestCommon_CalcMinHugePages(t *testing.T) {
 			expErr:     errors.New("invalid system hugepage size"),
 		},
 		"no targets": {
-			input:  &HugePageInfo{},
+			input: &HugePageInfo{
+				PageSizeKb: 2048,
+			},
 			expErr: errors.New("numTargets"),
 		},
 		"2KB pagesize; 16 targets": {

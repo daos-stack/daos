@@ -398,9 +398,8 @@ read by BIOS.
 PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
-as resource allocations on any available PMem modules (one region per NUMA
-node/socket). The regions are activated after BIOS reads the new resource
-allocations.
+as resource allocations on any available PMem modules (one region per socket).
+The regions are activated after BIOS reads the new resource allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
@@ -417,27 +416,61 @@ Example usage:
 - `clush -w wolf-[118-121,130-133] reboot`
 
 - `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
-  after running, PMem devices (/dev/pmemX namespaces created on the new SCM
+  after running, PMem namespaces (/dev/pmemX block devices created on the new SCM
   regions) should be available on each of the hosts.
 
 On the second run, one namespace per region is created, and each namespace may
-take up to a few minutes to create. Details of the pmem devices will be
+take up to a few minutes to create. Details of the PMem namespaces will be
 displayed in JSON format on command completion.
 
-Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
+Upon successful creation of the PMem namespaces, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
-If required, the pmem devices can be destroyed with the command
+If required, the PMem namespaces can be destroyed with the command
 `daos_server storage prepare --scm-only --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
 Note that undefined behavior may result if the namespaces/pmem kernel
-devices are mounted before running reset (as per the printed warning).
+block devices are mounted when running reset (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
+
+#### Multiple PMem namespaces per socket (Experimental)
+
+By default the `daos_server storage prepare --scm-only` command will create one PMem namespace on
+each PMem region. A single PMem AppDirect region will be created for each NUMA node (typically one
+NUMA node per CPU socket) in interleaved mode (which indicates that all PMem modules attached
+to a particular socket will be used in a single set/region). Therefore by default on a dual-socket
+platform, two regions and two namespaces will be created.
+
+Multiple PMem namespaces can be created on a single region (one per socket) by specifying a value
+of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server storage prepare --scm-only`
+subcommand.
+
+Example usage:
+
+```bash
+$ daos_server storage prepare -s -f -S 4
+Prepare locally-attached SCM...
+Memory allocation goals for PMem will be changed and namespaces modified, this may be a destructive
+operation. Please ensure namespaces are unmounted and locally attached PMem modules are not in use.
+Please be patient as it may take several minutes and subsequent reboot maybe required.
+SCM Namespace Socket ID Capacity
+------------- --------- --------
+pmem0         0         796 GB
+pmem0.1       0         796 GB
+pmem0.2       0         796 GB
+pmem0.3       0         796 GB
+pmem1         1         796 GB
+pmem1.1       1         796 GB
+pmem1.2       1         796 GB
+pmem1.3       1         796 GB
+```
+!!! note
+    This feature is in a beta phase and not supported in production deployments.
 
 ### Storage Discovery and Selection
 
@@ -452,14 +485,19 @@ storage selection.
 
 #### Discovery
 
-`dmg storage scan` can be run to query remote running `daos_server`
-processes over the management network.
+DAOS tools will discover NVMe SSDs and Persistent Memory Modules using the storage scan commands.
 
-`daos_server storage scan` can be used to query local `daos_server` instances
-directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
-by DAOS).
-NVMe SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only`.
+`dmg storage scan` can be run to query remote running `daos_server` processes over the management
+network.
+
+`daos_server storage scan` can be used to query storage on local hosts directly.
+
+NVMe SSDs need to be made accessible first by running `daos_server storage prepare --nvme-only`.
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `--disable-vfio` in the storage prepare command to
+fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
+
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -714,6 +752,17 @@ For class == "dcpm", the following parameters should be populated:
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
+
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `disable-vfio: true` in the global section of the
+server config file to fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
+
+If VMD is enabled on a host, its usage will be enabled by default meaning that the `bdev_list`
+device addresses will be interpreted as VMD endpoints and storage scan will report the details of
+the physical NVMe backing devices that belong to each VMD endpoint. To disable the use of VMD on a
+VMD-enabled host, set `disable-vmd: true` in the global section of the config to fallback to using
+physical NVMe devices only.
 
 #### Example Configurations
 
