@@ -64,6 +64,7 @@ UnitTests = namedtuple('UnitTests',
 
 
 def build_mock_unit_tests(env, src_list=None, **kwargs):
+    # pylint: disable=wrong-spelling-in-docstring
     """
     Call in place of Program with the same parameters other than the executable
     name and the source files.

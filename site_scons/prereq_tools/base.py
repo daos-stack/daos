@@ -500,9 +500,9 @@ def check_flag_helper(context, compiler, ext, flag):
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
         # remove -no- for test
-        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
+        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass '-Wno'
         # options to the compiler even if it doesn't understand them but.  This would be tricky
-        # to fix gcc only complains about unknown -Wno- warning options if the compile Fails
+        # to fix gcc only complains about unknown '-Wno' warning options if the compile Fails
         # for other reasons anyway.
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
@@ -581,9 +581,9 @@ def ensure_dir_exists(dirname, dry_run):
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
+
 # pylint: disable=too-many-public-methods
-
-
+# pylint: disable-next=function-redefined
 class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
@@ -592,7 +592,7 @@ class PreReqComponent():
     to allow compilation from from multiple systems in one source tree
     """
 
-# pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches
 
     def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
