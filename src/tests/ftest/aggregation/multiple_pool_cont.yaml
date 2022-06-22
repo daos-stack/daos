@@ -64,7 +64,7 @@ ior:
     flags: "-v -w -W -r -R -k"
     api: DFS
     transfer_size: '1M'
-    block_size: '512N'
+    block_size: '512M'
     dfs_oclass: "EC_2P1G1"
     dfs_dir_oclass: "EC_2P1G1"
 runtime:
