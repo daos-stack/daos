@@ -474,8 +474,8 @@ server package e.g. 'rsyslog'.
 
 ## Bug Report
 
-Bugs should be reported through our issue tracker[^1] with a test case
-to reproduce the issue (when applicable) and debug logs.
+Bugs should be reported through our [issue tracker](https://jira.daos.io/)
+with a test case to reproduce the issue (when applicable) and debug logs.
 
 After creating a ticket, logs should be gathered from the locations
 described in the [Log Files](#log-files) section of this document and
@@ -484,4 +484,3 @@ attached to the ticket.
 To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
 
-[^1]: http://jira.daos.io
