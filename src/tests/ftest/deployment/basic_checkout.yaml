@@ -62,6 +62,12 @@ ior_dfs_sx:
   dfs_oclass: SX
   dfs_chunk: 1MiB
   transfer_size: 1MiB
+ior_dfs_ec_8p2gx:
+  <<: *ior_easy_base
+  api: DFS
+  dfs_oclass: EC_8P2GX
+  dfs_chunk: 8MiB
+  transfer_size: 8MiB
 ior_dfs_ec_16p2gx:
   <<: *ior_easy_base
   api: DFS
@@ -88,6 +94,11 @@ mdtest_dfs_s1:
   dfs_oclass: S1
   dfs_dir_oclass: SX
   dfs_chunk: 1MiB
+mdtest_dfs_ec_8p2g1:
+  <<: *mdtest_easy_base
+  dfs_oclass: EC_8P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 8MiB
 mdtest_dfs_ec_16p2g1:
   <<: *mdtest_easy_base
   dfs_oclass: EC_16P2G1

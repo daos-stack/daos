@@ -9,6 +9,8 @@ from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
 
+import oclass_utils
+
 class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
@@ -32,11 +34,19 @@ class BasicCheckout(PerformanceTestBase):
 
         # ior easy
         self.run_performance_ior(namespace="/run/ior_dfs_sx/*", use_stonewalling_read=True)
-        self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*", use_stonewalling_read=True)
+        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2GX'):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*",
+                                     use_stonewalling_read=True)
+        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2GX'):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*",
+                                     use_stonewalling_read=True)
 
         # mdtest easy
         self.run_performance_mdtest(namespace="/run/mdtest_dfs_s1/*")
-        self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
+        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2G1'):
+            self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
+        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2G1'):
+            self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_8p2g1/*")
 
         #run autotest
         self.log.info("Autotest start")
