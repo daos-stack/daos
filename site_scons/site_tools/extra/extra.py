@@ -138,7 +138,7 @@ def generate(env):
     indent = _find_indent()
 
     # pylint: disable-next=unused-argument
-    def __pp_gen(source, target, env, for_signature):
+    def _pp_gen(source, target, env, for_signature):
         """generate commands for preprocessor builder"""
         action = []
         cccom = env.subst("$CCCOM").replace(" -o ", " ")
@@ -150,7 +150,7 @@ def generate(env):
         return action
 
     # Only handle C for now
-    preprocess = Builder(generator=__pp_gen, emitter=_preprocess_emitter)
+    preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
