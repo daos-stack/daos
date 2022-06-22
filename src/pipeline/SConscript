@@ -1,9 +1,9 @@
 """Build objects"""
 import daos_build
-Import('env', 'prereqs', 'libdaos_tgts')
 
 def scons():
     """Execute build"""
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
