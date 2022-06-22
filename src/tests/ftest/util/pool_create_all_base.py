@@ -19,7 +19,7 @@ class PoolCreateAllTestBase(TestWithServers):
         """Initialize a PoolCreateAllBaseTests object."""
         super().__init__(*args, **kwargs)
 
-        self.epsilon_bytes = 1 << 20 # 1MiB
+        self.epsilon_bytes = 1 << 20  # 1MiB
         # Maximal size of DAOS metadata stored for one pool on a SCM device:
         #   - 1 GiB for the control plane RDB
         #   - 16 MiB for the other metadata
@@ -40,7 +40,7 @@ class PoolCreateAllTestBase(TestWithServers):
         self.pool[index].create()
         end_time = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
         self.assertEqual(self.pool[index].dmg.result.exit_status, 0,
-                "Pool {} could not be created".format(index))
+                         "Pool {} could not be created".format(index))
 
         return end_time - start_time
 
@@ -57,7 +57,7 @@ class PoolCreateAllTestBase(TestWithServers):
         self.log.info("Destroying pool %d", index)
         self.pool[0].destroy()
         self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "Pool {} could not be destroyed".format(index))
+                         "Pool {} could not be destroyed".format(index))
 
     def create_first_of_two_pools(self):
         """Create first pool with 50% the available storage capacity"""

@@ -23,11 +23,13 @@ import (
 func TestSyslogOutput(t *testing.T) {
 	journalctl, err := exec.LookPath("journalctl")
 	if err != nil {
-		t.Skip("unable to locate journalctl -- not running this test")
+		t.Log("unable to locate journalctl -- not running this test")
+		return
 	}
 	cmd := exec.Command(journalctl, "--system")
 	if err := cmd.Run(); err != nil {
-		t.Skip("current user does not have permissions to view system log")
+		t.Log("current user does not have permissions to view system log")
+		return
 	}
 
 	rand.Seed(time.Now().UnixNano())

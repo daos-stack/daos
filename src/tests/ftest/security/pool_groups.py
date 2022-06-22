@@ -12,6 +12,7 @@ from pool_security_test_base import PoolSecurityTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
+
 class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
 
@@ -36,7 +37,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             Create pool with pass-in user on primary and secondary group
             acl permission, verify pool user and group read, write, read-write
             and none permissions enforcement with all forms of input under
-            different test sceanrios.
+            different test scenarios
         :avocado: tags=all,full_regression,security,pool_acl,sec_acl_groups
         '''
         user_gid = os.getegid()
@@ -51,8 +52,8 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         if primary_grp_perm.lower() == "none":
             primary_grp_perm = ""
         if primary_grp_perm not in PERMISSIONS:
-            self.fail("##primary_grp_perm %s is invalid, valid permissions are:"
-                      "'none', 'r', w', 'rw'", primary_grp_perm)
+            self.fail("##primary_grp_perm {} is invalid, valid permissions are:"
+                      "'none', 'r', w', 'rw'".format(primary_grp_perm))
 
         self.log.info("==Starting self.pool_acl_verification")
         self.log.info(" =acl_entries = %s", acl_entries)

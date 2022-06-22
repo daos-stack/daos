@@ -133,11 +133,10 @@ typedef struct {
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
-	uint32_t		omd_padding;
-	union {
-		uint32_t	omd_split;
-		uint64_t	omd_loff;
-	};
+	/* Fault domain level - PO_COMP_TP_RANK, or PO_COMP_TP_RANK. If it is zero then will
+	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
+	 */
+	uint32_t		omd_fdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -238,6 +237,8 @@ int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 				   daos_oclass_hints_t hints, uint32_t args);
+#define daos_oclass_grp_off_by_shard(oca, shard)				\
+	(rounddown(shard, daos_oclass_grp_size(oca)))
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -769,6 +770,7 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 struct dc_obj_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	uint64_t		 ui_dkey_hash;
 	daos_iod_t		*ui_iods;
 	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */

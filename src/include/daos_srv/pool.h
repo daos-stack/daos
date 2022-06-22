@@ -236,14 +236,8 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 int
-map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       d_rank_list_t *ranks);
+map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 
 void
 map_ranks_fini(d_rank_list_t *ranks);
@@ -282,13 +276,13 @@ int dsc_pool_close(daos_handle_t ph);
  * pool map device status.
  */
 static inline int
-ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
 {
 	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	if (last_ver < pool_map_get_version(pool->sp_map))
-		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rlvl, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

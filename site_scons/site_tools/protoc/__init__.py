@@ -1,4 +1,4 @@
-#!/usr/bin/python
+"""Module for setting up protoc in scons"""
 # Copyright 2018-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,26 +18,30 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# -*- coding: utf-8 -*-
 
-import SCons.Builder
 import os
+import SCons.Builder
+# pylint: disable=too-few-public-methods,missing-class-docstring
 
 
 class ToolProtocWarning(SCons.Warnings.Warning):
     pass
 
+
 class ProtocCompilerNotFound(ToolProtocWarning):
     pass
 
+
 class GoProtocCompilerNotFound(ToolProtocWarning):
     pass
+
 
 class PythonGRPCCompilerNotFound(ToolProtocWarning):
     pass
 
 
 SCons.Warnings.enableWarningClass(ToolProtocWarning)
+
 
 def _detect(env):
     """ Try to detect the various protoc components """
@@ -49,8 +53,8 @@ def _detect(env):
     if "PROTOC" in env:
         protoc_found = True
     else:
-        #Check to see if we have a compiled protoc
-        protoc = "%s/bin/protoc" % env['PROTOBUF_PREFIX']
+        # Check to see if we have a compiled protoc
+        protoc = os.path.join(env['PROTOBUF_PREFIX'], 'bin', 'protoc')
         if os.path.isfile(protoc) and os.access(protoc, os.X_OK):
             env['PROTOC'] = protoc
             protoc_found = True
@@ -60,7 +64,8 @@ def _detect(env):
                 env['PROTOC'] = protoc
                 protoc_found = True
 
-    # Make sure we have protoc-gen-go installed and in the path (Should mean GOPATH/bin is in the path)
+    # Make sure we have protoc-gen-go installed and in the path
+    # (Should mean GOPATH/bin is in the path)
     if "PROTOC-GEN-GO" in env:
         protoc_gen_go_found = True
     else:
@@ -70,25 +75,26 @@ def _detect(env):
 
     try:
         # pylint: disable=unused-import,import-outside-toplevel
-        import grpc_tools.protoc # noqa: F401
+        import grpc_tools.protoc  # noqa: F401
         grpc_tools_found = True
     except ImportError:
         grpc_tools_found = False
 
     if protoc_found and protoc_gen_go_found and grpc_tools_found:
         return True
-    else:
-        if not protoc_found:
-            raise SCons.Errors.StopError(ProtocCompilerNotFound,
-                                         "Could not detect protoc compiler")
-        if not protoc_gen_go_found:
-            raise SCons.Errors.StopError(GoProtocCompilerNotFound,
-                                         "Could not detect protoc-gen-go")
-        if not grpc_tools_found:
-            raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
-                                         "grpc_tools.protoc python module is not installed")
-        return None
+    if not protoc_found:
+        raise SCons.Errors.StopError(ProtocCompilerNotFound,
+                                     "Could not detect protoc compiler")
+    if not protoc_gen_go_found:
+        raise SCons.Errors.StopError(GoProtocCompilerNotFound,
+                                     "Could not detect protoc-gen-go")
+    if not grpc_tools_found:
+        raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
+                                     "grpc_tools.protoc python module is not installed")
+    return None
 
+
+# pylint: disable-next=missing-function-docstring
 def run_python(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
@@ -104,6 +110,8 @@ _grpc_python_builder = SCons.Builder.Builder(
     single_source=1
 )
 
+
+# pylint: disable-next=missing-function-docstring
 def run_go(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
@@ -119,15 +127,17 @@ _grpc_go_builder = SCons.Builder.Builder(
     single_source=1
 )
 
-def generate(env, **kwargs):
 
+def generate(env, **_kwargs):
+    """Callback to setup module"""
     _detect(env)
 
     env.SetDefault(
         PYTHON_SUFFIX='_pb2_grpc.py',
         GO_SUFFIX='.pb.go',
         PROTO_SUFFIX='.proto',
-        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
+        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES ' +
+        '--python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
         PYTHON_COMSTR='',
         GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
         GO_COMSTR=''
@@ -135,5 +145,7 @@ def generate(env, **kwargs):
     env['BUILDERS']['GRPCPython'] = _grpc_python_builder
     env['BUILDERS']['GRPCGo'] = _grpc_go_builder
 
+
 def exists(env):
+    """Callback to setup module"""
     return _detect(env)
