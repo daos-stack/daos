@@ -47,6 +47,9 @@ ACTIVE_CONFIG="${CONFIG_DIR}/active_config.sh"
 # bastion host for the IO500 example.
 SSH_CONFIG_FILE="${IO500_TMP}/ssh_config"
 
+# Use internal IP for SSH connection with the first daos client
+USE_INTERNAL_IP=0
+
 ERROR_MSGS=()
 
 
@@ -69,6 +72,8 @@ Options:
   [ -v --version  DAOS_VERSION ]  Version of DAOS to install
 
   [ -u --repo-baseurl DAOS_REPO_BASE_URL ] Base URL of a repo.
+
+  [ -i --internal-ip ]            Use internal IP for SSH to the first client
 
   [ -f --force ]                  Force images to be re-built
 
@@ -151,6 +156,10 @@ opts() {
         fi
         export CONFIG_FILE
         shift 2
+      ;;
+      --internal-ip|-i)
+        USE_INTERNAL_IP=1
+        shift
       ;;
       --version|-v)
         DAOS_VERSION="${2}"
@@ -297,7 +306,7 @@ run_terraform() {
   popd
 }
 
-configure_first_client_nat_ip() {
+configure_first_client_ip() {
 
   log "Wait for DAOS client instances"
   gcloud compute instance-groups managed wait-until ${TF_VAR_client_template_name} \
@@ -305,25 +314,32 @@ configure_first_client_nat_ip() {
     --project="${TF_VAR_project_id}" \
     --zone="${TF_VAR_zone}"
 
-  # Check to see if first client instance has an external IP.
-  # If it does, then don't attempt to add an external IP again.
-  FIRST_CLIENT_IP=$(gcloud compute instances describe "${DAOS_FIRST_CLIENT}" \
-    --project="${TF_VAR_project_id}" \
-    --zone="${TF_VAR_zone}" \
-    --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
-
-  if [[ -z "${FIRST_CLIENT_IP}" ]]; then
-    log "Add external IP to first client"
-
-    gcloud compute instances add-access-config "${DAOS_FIRST_CLIENT}" \
+  if [[ "${USE_INTERNAL_IP}" -eq 1 ]]; then
+    FIRST_CLIENT_IP=$(gcloud compute instances describe "${DAOS_FIRST_CLIENT}" \
       --project="${TF_VAR_project_id}" \
       --zone="${TF_VAR_zone}" \
-      && sleep 10
-
+      --format="value(networkInterfaces[0].networkIP)")
+  else
+    # Check to see if first client instance has an external IP.
+    # If it does, then don't attempt to add an external IP again.
     FIRST_CLIENT_IP=$(gcloud compute instances describe "${DAOS_FIRST_CLIENT}" \
       --project="${TF_VAR_project_id}" \
       --zone="${TF_VAR_zone}" \
       --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+
+    if [[ -z "${FIRST_CLIENT_IP}" ]]; then
+      log "Add external IP to first client"
+
+      gcloud compute instances add-access-config "${DAOS_FIRST_CLIENT}" \
+        --project="${TF_VAR_project_id}" \
+        --zone="${TF_VAR_zone}" \
+        && sleep 10
+
+      FIRST_CLIENT_IP=$(gcloud compute instances describe "${DAOS_FIRST_CLIENT}" \
+        --project="${TF_VAR_project_id}" \
+        --zone="${TF_VAR_zone}" \
+        --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+    fi
   fi
 }
 
@@ -536,7 +552,7 @@ main() {
   create_hosts_files
   build_disk_images
   run_terraform
-  configure_first_client_nat_ip
+  configure_first_client_ip
   configure_ssh
   copy_files_to_first_client
   propagate_ssh_keys_to_all_nodes
