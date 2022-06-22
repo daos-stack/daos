@@ -7,6 +7,7 @@ server_config:
   servers:
     targets: 4
     nr_xs_helpers: 0
+    scm_size: 4
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something

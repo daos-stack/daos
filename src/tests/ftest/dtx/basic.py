@@ -32,8 +32,8 @@ class BasicTxTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=container,smoke
-        :avocado: tags=tx,basictx,test_tx_basics
+        :avocado: tags=container,smoke,tx
+        :avocado: tags=basictx,test_tx_basics
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool

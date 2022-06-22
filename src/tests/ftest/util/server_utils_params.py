@@ -440,7 +440,7 @@ class DaosServerYamlParameters(YamlParameters):
             #       AIO /tmp/aiofile AIO1 4096
             self.scm_mount = BasicParameter(None, "/mnt/daos")
             self.scm_class = BasicParameter(None, "ram")
-            self.scm_size = BasicParameter(None, 4)
+            self.scm_size = BasicParameter(None, 16)
             self.scm_list = BasicParameter(None)
             self.bdev_class = BasicParameter(None)
             self.bdev_list = BasicParameter(None)

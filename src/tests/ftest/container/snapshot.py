@@ -142,8 +142,8 @@ class Snapshot(TestWithServers):
         Use Cases: Combinations with minimum 1 client and 1 server.
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=container,smoke
-        :avocado: tags=snap,snapshot_negative,snapshotcreate_negative,test_snapshot_negativecases
+        :avocado: tags=container,smoke,snap,snapshot
+        :avocado: tags=snapshot_negative,snapshotcreate_negative,test_snapshot_negativecases
         """
 
         # DAOS-1322 Create a new container, verify snapshot state as expected
@@ -320,8 +320,8 @@ class Snapshot(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container,smoke
-        :avocado: tags=snap,snapshots,test_snapshots
+        :avocado: tags=container,smoke,snap,snapshot
+        :avocado: tags=snapshots,test_snapshots
         """
 
         test_data = []

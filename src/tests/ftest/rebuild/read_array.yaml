@@ -10,13 +10,14 @@ hosts:
 timeout: 240
 server_config:
   name: daos_server
-  servers: !mux
-    1_target:
-      targets: 1
-      nr_xs_helpers: 0
-    2_targets:
-      targets: 2
-      nr_xs_helpers: 0
+  servers:
+    targets_count: !mux
+      1_target:
+        targets: 1
+      2_targets:
+        targets: 2
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
   mode: 511
   name: daos_server

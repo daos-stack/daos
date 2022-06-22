@@ -11,11 +11,11 @@ server_config:
   name: daos_server
   servers:
     0:
+      targets: 4
+      nr_xs_helpers: 0
       scm_class: ram
       scm_mount: /mnt/daos
       scm_size: 6
-      targets: 4
-      nr_xs_helpers: 0
 pool:
   name: daos_server
   control_method: dmg

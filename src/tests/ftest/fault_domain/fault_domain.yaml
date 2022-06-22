@@ -17,9 +17,9 @@ fault_path:
 server_config:
   name: daos_server
   servers:
-    scm_size: 10
     targets: 4
     nr_xs_helpers: 0
+    scm_size: 10
 number_pools: 5
 pool_0:
   name: daos_server

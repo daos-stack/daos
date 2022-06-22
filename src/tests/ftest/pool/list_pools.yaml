@@ -12,6 +12,7 @@ server_config:
   servers:
     targets: 8
     nr_xs_helpers: 0
+    scm_size: 4
 pool:
   control_method: dmg
   size: 1G

@@ -29,7 +29,8 @@ class LlnlMpi4py(MpiioTests):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=mpiio,smoke,mpich,llnl,test_llnl
+        :avocado: tags=mpiio,smoke,mpich,llnl
+        :avocado: tags=test_llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
@@ -47,7 +48,8 @@ class LlnlMpi4py(MpiioTests):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=mpiio,mpich,mpi4py,test_mpi4py
+        :avocado: tags=mpiio,mpich,mpi4py
+        :avocado: tags=test_mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")

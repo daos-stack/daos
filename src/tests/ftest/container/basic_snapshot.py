@@ -47,8 +47,8 @@ class BasicSnapshot(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=container
-        :avocado: tags=snap,basicsnap,test_basic_snapshot
+        :avocado: tags=container,snap,snapshot
+        :avocado: tags=basicsnap,test_basic_snapshot
         """
         # Set up the pool and container.
         try:
