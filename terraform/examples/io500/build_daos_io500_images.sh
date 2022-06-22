@@ -53,6 +53,7 @@ done
 IMAGES_DIR="${SCRIPT_DIR}/../../../images"
 FORCE_REBUILD="${FORCE_REBUILD:-0}"
 BUILD_WORKER_POOL="${BUILD_WORKER_POOL:-""}"
+USE_IAP="${USE_IAP:-"true"}"
 ERROR_MSGS=()
 
 show_help() {
@@ -91,6 +92,9 @@ Options:
                                Specify a worker pool for the build to run in.
                                Format: projects/{project}/locations/
                                         {region}/workerPools/{workerPool}
+    
+    -i --use-iap  USE_IAP      Whether to use an IAP proxy for Packer.
+                               Possible values: true, false. Default: true.
 
     -f --force                 Force images to be built if there are already
                                existing images
@@ -330,6 +334,14 @@ opts() {
         fi
         shift 2
       ;;
+      --use-iap|-i)
+        USE_IAP="${2}"
+        if [[ "${USE_IAP}" == -* ]] || [[ "${USE_IAP}" = "" ]] || [[ -z ${USE_IAP} ]]; then
+          ERROR_MSGS+=("ERROR: Missing USE_IAP value for -i or --use-iap")
+          break
+        fi
+        shift 2
+      ;;
       --force|-f)
         FORCE_REBUILD=1
         shift
@@ -385,6 +397,7 @@ opts() {
   export DAOS_INSTALL_TYPE
   export FORCE_REBUILD
   export BUILD_WORKER_POOL
+  export USE_IAP
 }
 
 main() {

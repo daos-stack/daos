@@ -24,4 +24,5 @@ steps:
       -var daos_version=${_DAOS_VERSION} \
       -var project_id=${_PROJECT_ID} \
       -var zone=${_ZONE} \
+      -var use_iap=${_USE_IAP} \
       daos-server-image.pkr.hcl

@@ -30,6 +30,7 @@ source "${SCRIPT_DIR}/daos_version.sh"
 DAOS_VERSION="${DAOS_VERSION:-${DEFAULT_DAOS_VERSION}}"
 DAOS_REPO_BASE_URL="${DAOS_REPO_BASE_URL:-${DEFAULT_DAOS_REPO_BASE_URL}}"
 FORCE_REBUILD=0
+USE_IAP="${USE_IAP:-"true"}"
 BUILD_WORKER_POOL="${BUILD_WORKER_POOL:-""}"
 ERROR_MSGS=()
 
@@ -60,6 +61,9 @@ Options:
   [ -w --worker-pool BUILD_WORKER_POOL ]   Specify a worker pool for the build to run in.
                                            Format: projects/{project}/locations/
                                                     {region}/workerPools/{workerPool}
+
+  [ -i --use-iap     USE_IAP    ]          Whether to use an IAP proxy for Packer.
+                                           Possible values: true, false. Default: true.
 
   [ -h --help ]                     Show help
 
@@ -203,6 +207,14 @@ opts() {
         fi
         shift 2
       ;;
+      --use-iap|-i)
+        USE_IAP="${2}"
+        if [[ "${USE_IAP}" == -* ]] || [[ "${USE_IAP}" = "" ]] || [[ -z ${USE_IAP} ]]; then
+          ERROR_MSGS+=("ERROR: Missing USE_IAP value for -i or --use-iap")
+          break
+        fi
+        shift 2
+      ;;
       --help|-h)
         show_help
         exit 0
@@ -332,14 +344,14 @@ build_images() {
   if [[ "${DAOS_INSTALL_TYPE}" =~ ^(all|server)$ ]]; then
     log "Building server image"
     gcloud builds submit --timeout=1800s \
-    --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL}" \
+    --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL},_USE_IAP=${USE_IAP}" \
     --config=packer_cloudbuild-server.yaml $BUILD_OPTIONAL_ARGS .
   fi
 
   if [[ "${DAOS_INSTALL_TYPE}" =~ ^(all|client)$ ]]; then
     log "Building client image"
     gcloud builds submit --timeout=1800s \
-    --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL}" \
+    --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL},_USE_IAP=${USE_IAP}" \
     --config=packer_cloudbuild-client.yaml $BUILD_OPTIONAL_ARGS .
   fi
 }

@@ -33,6 +33,9 @@ variable "project_id" {
 variable "zone" {
   type = string
 }
+variable "use_iap" {
+  type = bool
+}
 
 source "googlecompute" "daos-client-hpc-centos-7" {
   disk_size               = "20"
@@ -52,7 +55,7 @@ source "googlecompute" "daos-client-hpc-centos-7" {
   state_timeout           = "10m"
   use_internal_ip         = true
   omit_external_ip        = false
-  use_iap                 = true
+  use_iap                 = var.use_iap
 }
 
 build {
