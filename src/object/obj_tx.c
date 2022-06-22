@@ -216,7 +216,7 @@ dc_tx_free(struct d_hlink *hlink)
 	D_FREE(tx->tx_req_cache);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
-	D_FREE_PTR(tx);
+	D_FREE(tx);
 }
 
 static struct d_hlink_ops tx_h_ops = {
@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
 	if (rc != 0) {
 		D_FREE(tx->tx_req_cache);
-		D_FREE_PTR(tx);
+		D_FREE(tx);
 		return rc;
 	}
 
@@ -1737,7 +1737,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_head.dcs_type = DCST_HEAD;
 	tx->tx_head.dcs_nr = 1;
 	tx->tx_head.dcs_buf = dcsh;
-
 
 	/* XXX: Currently, we only pack single DTX per CPD RPC, then elect
 	 *	the first targets in the dispatch list as the leader.

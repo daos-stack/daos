@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -121,14 +121,14 @@ static void free_session(struct st_session **session)
 		D_FREE(free_entry->buf);
 		if (free_entry->bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(free_entry->bulk_hdl);
-		D_FREE_PTR(free_entry);
+		D_FREEfree_entry);
 
 		free_entry = (*session)->buf_list;
 	}
 
 	D_SPIN_DESTROY(&(*session)->buf_list_lock);
 
-	D_FREE_PTR(*session);
+	D_FREE(*session);
 }
 
 static inline void
