@@ -133,7 +133,7 @@ build_cor_1(void)
 
 	return &pipe0;
 }
-
+/*
 static daos_pipeline_t *
 build_cor_2(void)
 {
@@ -172,7 +172,7 @@ build_cor_2(void)
 
 	return &pipe0;
 }
-
+*/
 static daos_pipeline_t *
 build_incor_parttype(void)
 {
