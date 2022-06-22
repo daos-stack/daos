@@ -30,6 +30,7 @@ source "${SCRIPT_DIR}/daos_version.sh"
 DAOS_VERSION="${DAOS_VERSION:-${DEFAULT_DAOS_VERSION}}"
 DAOS_REPO_BASE_URL="${DAOS_REPO_BASE_URL:-${DEFAULT_DAOS_REPO_BASE_URL}}"
 FORCE_REBUILD=0
+BUILD_WORKER_POOL="${BUILD_WORKER_POOL:-""}"
 ERROR_MSGS=()
 
 show_help() {
@@ -55,6 +56,10 @@ Options:
 
   [ -z --zone         GCP_ZONE    ]        Google Cloud Platform Compute Zone
                                            Default: Cloud SDK default zone
+
+  [ -w --worker-pool BUILD_WORKER_POOL ]   Specify a worker pool for the build to run in.
+                                           Format: projects/{project}/locations/
+                                                    {region}/workerPools/{workerPool}
 
   [ -h --help ]                     Show help
 
@@ -190,6 +195,14 @@ opts() {
         FORCE_REBUILD=1
         shift
       ;;
+      --worker-pool|-w)
+        BUILD_WORKER_POOL="${2}"
+        if [[ "${BUILD_WORKER_POOL}" == -* ]] || [[ "${BUILD_WORKER_POOL}" = "" ]] || [[ -z ${BUILD_WORKER_POOL} ]]; then
+          ERROR_MSGS+=("ERROR: Missing BUILD_WORKER_POOL value for -w or --worker-pool")
+          break
+        fi
+        shift 2
+      ;;
       --help|-h)
         show_help
         exit 0
@@ -298,19 +311,36 @@ configure_gcp_project() {
 }
 
 build_images() {
+  BUILD_OPTIONAL_ARGS=""
+
+  if [[ ${BUILD_WORKER_POOL} ]]; then
+    # When worker pool is specified then region needs to match the one of the pool.
+    # Need to parse the correct region to use it instead of the default one "global".
+    # Format: projects/{project}/locations/{region}/workerPools/{workerPool}
+    BUILD_WORKER_POOL_ARRAY=(${BUILD_WORKER_POOL//// })
+    BUILD_REGION=${BUILD_WORKER_POOL_ARRAY[3]}
+    BUILD_OPTIONAL_ARGS+=" --worker-pool=${BUILD_WORKER_POOL}"
+
+    log "Using build worker pool ${BUILD_WORKER_POOL}, region ${BUILD_REGION}"
+  fi
+
+  if [[ ${BUILD_REGION} ]] ; then
+    BUILD_OPTIONAL_ARGS+=" --region=${BUILD_REGION}"
+  fi
+
   # Increase timeout to 1hr to make sure we don't time out
   if [[ "${DAOS_INSTALL_TYPE}" =~ ^(all|server)$ ]]; then
     log "Building server image"
     gcloud builds submit --timeout=1800s \
     --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL}" \
-    --config=packer_cloudbuild-server.yaml .
+    --config=packer_cloudbuild-server.yaml $BUILD_OPTIONAL_ARGS .
   fi
 
   if [[ "${DAOS_INSTALL_TYPE}" =~ ^(all|client)$ ]]; then
     log "Building client image"
     gcloud builds submit --timeout=1800s \
     --substitutions="_PROJECT_ID=${GCP_PROJECT},_ZONE=${GCP_ZONE},_DAOS_VERSION=${DAOS_VERSION},_DAOS_REPO_BASE_URL=${DAOS_REPO_BASE_URL}" \
-    --config=packer_cloudbuild-client.yaml .
+    --config=packer_cloudbuild-client.yaml $BUILD_OPTIONAL_ARGS .
   fi
 }
 

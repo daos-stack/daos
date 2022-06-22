@@ -52,6 +52,7 @@ done
 
 IMAGES_DIR="${SCRIPT_DIR}/../../../images"
 FORCE_REBUILD="${FORCE_REBUILD:-0}"
+BUILD_WORKER_POOL="${BUILD_WORKER_POOL:-""}"
 ERROR_MSGS=()
 
 show_help() {
@@ -84,6 +85,12 @@ Options:
                                This is the URL up to the version.
                                If the repo is at https://example.com/foo/v${DAOS_VERSION}
                                then -u "https://example.com/foo"
+
+
+    -w --worker-pool BUILD_WORKER_POOL
+                               Specify a worker pool for the build to run in.
+                               Format: projects/{project}/locations/
+                                        {region}/workerPools/{workerPool}
 
     -f --force                 Force images to be built if there are already
                                existing images
@@ -315,6 +322,14 @@ opts() {
         fi
         shift 2
       ;;
+      --worker-pool|-w)
+        BUILD_WORKER_POOL="${2}"
+        if [[ "${BUILD_WORKER_POOL}" == -* ]] || [[ "${BUILD_WORKER_POOL}" = "" ]] || [[ -z ${BUILD_WORKER_POOL} ]]; then
+          ERROR_MSGS+=("ERROR: Missing BUILD_WORKER_POOL value for -w or --worker-pool")
+          break
+        fi
+        shift 2
+      ;;
       --force|-f)
         FORCE_REBUILD=1
         shift
@@ -369,6 +384,7 @@ opts() {
   export GCP_ZONE
   export DAOS_INSTALL_TYPE
   export FORCE_REBUILD
+  export BUILD_WORKER_POOL
 }
 
 main() {
