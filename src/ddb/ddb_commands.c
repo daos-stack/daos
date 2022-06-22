@@ -421,19 +421,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 	struct dv_tree_path_builder	pb;
 	d_iov_t				iov = {0};
 	size_t				file_size;
-	uint32_t			epoch;
 	int				rc;
-	char				*end;
-
-	if (opt->epoch == NULL) {
-		ddb_error(ctx, "Epoch is not set\n");
-		return -DER_INVAL;
-	}
-	epoch = strtol(opt->epoch, &end, 10);
-	if (epoch == 0 || *end != '\0') {
-		ddb_errorf(ctx, "Epoch '%s' is not valid\n", opt->epoch);
-		return -DER_INVAL;
-	}
 
 	rc = init_path(ctx->dc_poh, opt->dst, &pb);
 	if (rc == -DER_NONEXIST) {
@@ -446,7 +434,6 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		ddb_error(ctx, "Invalid VOS path\n");
 		D_GOTO(done, rc);
 	}
-
 
 	if (!dvp_is_complete(&pb.vtp_path)) {
 		ddb_error(ctx, "Invalid path");
@@ -478,7 +465,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		D_GOTO(done, rc = -DER_UNKNOWN);
 	}
 
-	rc = dv_update(ctx->dc_poh, &pb.vtp_path, &iov, epoch);
+	rc = dv_update(ctx->dc_poh, &pb.vtp_path, &iov);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to update path: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);

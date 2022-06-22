@@ -49,7 +49,6 @@ struct rm_options {
 struct load_options {
 	char *src;
 	char *dst;
-	char *epoch;
 };
 
 struct dump_ilog_options {
