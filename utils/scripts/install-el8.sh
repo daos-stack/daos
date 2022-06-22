@@ -52,8 +52,14 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    python3-defusedxml \
     python3-devel \
+    python3-distro \
+    python3-junit_xml \
     python3-pip \
+    python3-pyxattr \
+    python3-pyyaml \
+    python3-tabulate \
     sg3_utils \
     sudo \
     systemd \

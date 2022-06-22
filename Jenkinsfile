@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@sre-97") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -770,18 +771,19 @@ pipeline {
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true)
+                                                                deps_build: true) +
+                                                ' --build-arg DAOS_KEEP_SRC=yes'
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
@@ -789,7 +791,7 @@ pipeline {
                         sconsBuild parallel_build: true,
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
-                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                        sh (script:"""./utils/docker_nlt.sh --class-name el8.fault-injection fi""",
                             label: 'Fault injection testing using NLT')
                     }
                     post {
@@ -811,7 +813,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                         }
                     }
                 } // stage('Fault inection testing')
