@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,7 @@ class DaosPerfCommand(ExecutableCommand):
         # daos_perf command line options:
         #
         #   -P <number/string>
-        #       Pool SCM partition size, which can have M(megatbytes) or
+        #       Pool SCM partition size, which can have M(megabytes) or
         #       G(gigabytes) as postfix of number. E.g. -P 512M, -P 8G.
         self.pool_scm_size = FormattedParameter("-P {}")
 

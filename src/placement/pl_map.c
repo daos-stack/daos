@@ -343,7 +343,11 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-/** XXX should be fetched from property */
+/**
+ * The default value for pl_map_init_attr when creating pool pl_map, later when placing object
+ * will based on container's DAOS_PROP_CO_REDUN_LVL property to set the fault domain level for
+ * that object's layout calculating.
+ */
 #define PL_DEFAULT_DOMAIN	PO_COMP_TP_RANK
 
 static void

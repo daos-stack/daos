@@ -1336,7 +1336,7 @@ dfs_test_chown(void **state)
 	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
-	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
+	assert_int_equal(stbuf.st_gid, stbuf2.st_gid);
 }
 
 static bool

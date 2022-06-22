@@ -2301,8 +2301,8 @@ class DaosSnapshot():
         epoch to destroy. We have only one epoch for this single snapshot
         object.
 
-        coh     --ctype.u_long open container handle
-        evnt    --event (may be None)
+        coh:     --ctype.u_long open container handle
+        evnt:    --event (may be None)
         # need container handle coh, and the epoch range
         """
         func = self.context.get_function('destroy-snap')
