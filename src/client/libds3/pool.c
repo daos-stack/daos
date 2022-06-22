@@ -67,8 +67,8 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
-	int			ret;
-	ds3_t			*ds3_tmp;
+	int    ret;
+	ds3_t *ds3_tmp;
 
 	D_ALLOC_PTR(ds3_tmp);
 	if (ds3_tmp == NULL)
@@ -86,17 +86,17 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 	ret = dfs_cont_create_with_label(ds3_tmp->poh, METADATA_BUCKET, NULL, NULL,
 					 &ds3_tmp->meta_coh, &ds3_tmp->meta_dfs);
 	if (ret == 0) {
-		/** Create inner directories */
-		#define X(a, b)						\
-		do {							\
-			ret = create_metadir(ds3_tmp->meta_dfs, b);	\
-			if (ret)					\
-				goto err;				\
-		} while (0);
+/** Create inner directories */
+#define X(a, b)                                                                                    \
+	do {                                                                                       \
+		ret = create_metadir(ds3_tmp->meta_dfs, b);                                        \
+		if (ret)                                                                           \
+			goto err;                                                                  \
+	} while (0);
 
 		METADATA_DIR_LIST
 
-		#undef X
+#undef X
 	} else if (ret == EEXIST) {
 		/** Metadata container exists, mount it */
 		ret = daos_cont_open(ds3_tmp->poh, METADATA_BUCKET, DAOS_COO_RW, &ds3_tmp->meta_coh,
@@ -122,27 +122,27 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		goto err_poh;
 	}
 
-	/** Open metadata dirs */
-	#define  X(a, b)								\
-	do {										\
-		ret = open_metadir(ds3_tmp->meta_dfs, b, &ds3_tmp->meta_dirs[a]);	\
-		if (ret)								\
-			goto err;							\
+/** Open metadata dirs */
+#define X(a, b)                                                                                    \
+	do {                                                                                       \
+		ret = open_metadir(ds3_tmp->meta_dfs, b, &ds3_tmp->meta_dirs[a]);                  \
+		if (ret)                                                                           \
+			goto err;                                                                  \
 	} while (0);
 
 	METADATA_DIR_LIST
 
-	#undef X
+#undef X
 
 	*ds3 = ds3_tmp;
 	return 0;
 
 err:
-	#define  X(a, b) close_metadir(b, ds3_tmp->meta_dirs[a]);
+#define X(a, b) close_metadir(b, ds3_tmp->meta_dirs[a]);
 
 	METADATA_DIR_LIST
 
-	#undef X
+#undef X
 
 	dfs_umount(ds3_tmp->meta_dfs);
 err_coh:

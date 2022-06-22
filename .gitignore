@@ -60,3 +60,4 @@ docs/doxygen/
 venv
 .yamllint
 utils/githooks/*.d/*-user-*
+.vscode

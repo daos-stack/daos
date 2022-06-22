@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-
 #include "ds3_internal.h"
 
 int

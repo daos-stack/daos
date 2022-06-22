@@ -22,13 +22,13 @@ extern "C" {
 #include <daos/event.h>
 
 /** DAOS S3 Pool handle */
-typedef struct ds3		ds3_t;
+typedef struct ds3        ds3_t;
 
 /** DAOS S3 Bucket handle */
-typedef struct ds3_bucket	ds3_bucket_t;
+typedef struct ds3_bucket ds3_bucket_t;
 
 /** DAOS S3 Object handle */
-typedef struct ds3_obj		ds3_obj_t;
+typedef struct ds3_obj    ds3_obj_t;
 
 /** S3 User information */
 struct ds3_user_info {
