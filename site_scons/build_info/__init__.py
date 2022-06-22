@@ -22,4 +22,4 @@
 """Module for getting information about a build"""
 
 # pylint: disable=wildcard-import
-from .base import * # noqa: F403,F401
+from .base import *  # noqa: F403,F401

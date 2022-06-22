@@ -173,7 +173,13 @@ class FileTypeList():
     def __init__(self):
         self.ftest_files = []
         self.scons_files = []
+        self.fake_scons = []
         self.files = []
+
+    def file_count(self):
+        """Return the number of files to be checked"""
+        return len(self.ftest_files) + len(self.scons_files) \
+            + len(self.files) + len(self.fake_scons)
 
     def add(self, file):
         """Add a filename to the correct list"""
@@ -181,39 +187,35 @@ class FileTypeList():
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
 
-            if filename == 'SConstruct':
+            if filename == 'SConstruct' or filename.endswith('SConscript'):
                 return True
-            if filename.endswith('SConscript'):
-                return True
-            # There may be more files needed here, but just this one is reporting errors.
-            if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
-                return True
-            if filename.endswith('site_scons/stack_analyzer.py'):
-                return True
-            # Needs more work yet, partly on spellings.  Another issue is that in GitHub actions
-            # pylint is called on all files in the tree concurrently so it can resolve calls to
-            # scons as being to fake_scons, where if you call pylint on file file then it cannot.
-            # At some point we need to move fake_scons so that it's checked on it's own, and at that
-            # point also move code that uses scons from the general checks to the scons checks so
-            # they are still checked against fake_scons.
-            # if 'utils/sl/fake_scons' in filename:
-            #     return True
-            return False
+
+            if not file.endswith('.py'):
+                return False
+
+            return 'site_scons' in filename
 
         if is_scons_file(file):
             self.scons_files.append(file)
             return
+
         if not file.endswith('.py'):
-            return
-        if 'src/control/vendor' in file:
-            return
-        if 'src/vos/storage_estimator' in file:
             return
 
         # If files are in a subdir under ftest then they need to be treated differently.
         if 'src/tests/ftest/' in file:
             self.ftest_files.append(file)
             return
+
+        if 'fake_scons' in file:
+            self.fake_scons.append(file)
+            return
+
+        if 'src/control/vendor' in file:
+            return
+        if 'src/vos/storage_estimator' in file:
+            return
+
         self.files.append(file)
 
     def __str__(self):
@@ -222,6 +224,8 @@ class FileTypeList():
             desc += f'files: {",".join(self.files)}\n'
         if self.ftest_files:
             desc += f'ftest files: {",".join(self.ftest_files)}\n'
+        if self.fake_scons:
+            desc += f'fake scons files: {",".join(self.fake_scons)}\n'
         if self.scons_files:
             desc += f'scons files: {",".join(self.scons_files)}\n'
         return desc
@@ -235,6 +239,9 @@ class FileTypeList():
                 failed = True
         if self.ftest_files:
             if parse_file(args, self.ftest_files, ftest=True):
+                failed = True
+        if self.fake_scons:
+            if parse_file(args, self.fake_scons, fake_scons=True):
                 failed = True
         if self.scons_files:
             for file in self.scons_files:
@@ -284,7 +291,7 @@ def word_is_allowed(word, code):
     return False
 
 
-def parse_file(args, target_file, ftest=False, scons=False):
+def parse_file(args, target_file, ftest=False, scons=False, fake_scons=False):
     """Parse a list of targets.
 
     Returns True if warnings issued to GitHub."""
@@ -297,15 +304,22 @@ def parse_file(args, target_file, ftest=False, scons=False):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])
     elif scons:
+        # Do not warn on module name for SConstruct files, we don't get to pick their name.
+        ignore = ['invalid-name', 'ungrouped-imports']
+        if target_file.endswith('__init__.py'):
+            ignore.append('relative-beyond-top-level')
         wrapper = WrapScript(target_file)
         target = [wrapper.wrap_file]
-        # Do not warn on module name for SConstruct files, we don't get to pick their name.
-        target.extend(['--disable', 'invalid-name'])
+        target.extend(['--disable', ','.join(ignore)])
         init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
     else:
         target = [target_file]
+
+    if fake_scons:
+        # Do not warn on module name for fake_scons files, we don't get to pick their name.
+        target.extend(['--disable', 'invalid-name,too-few-public-methods'])
 
     if ftest:
         target.extend(['--disable', 'consider-using-f-string'])
@@ -399,12 +413,16 @@ sys.path.append('site_scons')"""
     return failed
 
 
-def run_git_files(args):
+def run_git_files(args, directory=None):
     """Run pylint on contents of 'git ls-files'"""
 
     all_files = FileTypeList()
 
-    ret = subprocess.run(['git', 'ls-files'], check=True, capture_output=True)
+    cmd = ['git', 'ls-files']
+    if directory:
+        cmd.append(directory)
+
+    ret = subprocess.run(cmd, check=True, capture_output=True)
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
@@ -479,15 +497,34 @@ def main():
         args.rcfile = rc_tmp.name
 
     if args.git:
-        run_git_files(args, )
+        run_git_files(args)
         return
     if args.from_file:
         run_input_file(args, args.from_file)
         return
     all_files = FileTypeList()
+    all_dirs = []
     for file in args.files:
-        all_files.add(file)
-    all_files.run(args)
+        if os.path.isfile(file):
+            all_files.add(file)
+        elif os.path.isdir(file):
+            all_dirs.append(file)
+        else:
+            parser.print_usage()
+            sys.exit(1)
+    if all_dirs:
+        if len(all_dirs) == 1 and all_files.file_count() == 0:
+            run_git_files(args, directory=all_dirs[0])
+        else:
+            print('Only one directory can be shown at once')
+            parser.print_usage()
+            sys.exit(1)
+    elif all_files.file_count() == 0:
+        print('You must specify input file')
+        parser.print_usage()
+        sys.exit(1)
+    else:
+        all_files.run(args)
 
 
 if __name__ == "__main__":

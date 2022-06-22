@@ -28,7 +28,6 @@
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
-from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
@@ -1481,7 +1480,7 @@ class _Component():
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if (not self.use_installed and self.component_prefix is not None
-                                   and not self.component_prefix == "/usr"):
+           and not self.component_prefix == "/usr"):
             path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
