@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -80,8 +80,21 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	fmt.Fprintf(ew, "name %s\n", cmd.cfg.SystemName)
 	fmt.Fprintf(ew, "size %d\n", len(resp.ServiceRanks))
 	fmt.Fprintln(ew, "all")
+	fmt.Fprintf(ew, "primary provider: %s\n", resp.ClientNetHint.Provider)
 	for _, psr := range resp.ServiceRanks {
 		fmt.Fprintf(ew, "%d %s\n", psr.Rank, psr.Uri)
+	}
+	if len(resp.AlternateClientNetHints) > 0 {
+		fmt.Fprintln(ew, "secondary providers:")
+		for _, hint := range resp.AlternateClientNetHints {
+			fmt.Fprintf(ew, "%s\n", hint.Provider)
+		}
+	}
+	if len(resp.AlternateServiceRanks) > 0 {
+		fmt.Fprintln(ew, "secondary provider ranks:")
+		for _, psr := range resp.AlternateServiceRanks {
+			fmt.Fprintf(ew, "%s: %d %s\n", psr.Provider, psr.Rank, psr.Uri)
+		}
 	}
 
 	return ew.Err

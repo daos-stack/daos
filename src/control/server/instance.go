@@ -188,15 +188,18 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
-	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
-		UUID:        superblock.UUID,
-		Rank:        r,
-		URI:         ready.GetUri(),
-		NumContexts: ready.GetNctxs(),
-		FaultDomain: ei.hostFaultDomain,
-		InstanceIdx: ei.Index(),
-		Incarnation: ready.GetIncarnation(),
-	})
+	joinReq := &control.SystemJoinReq{
+		UUID:          superblock.UUID,
+		Rank:          r,
+		URI:           ready.GetUri(),
+		SecondaryURIs: ready.GetSecondaryUris(),
+		NumContexts:   ready.GetNctxs(),
+		FaultDomain:   ei.hostFaultDomain,
+		InstanceIdx:   ei.Index(),
+		Incarnation:   ready.GetIncarnation(),
+	}
+
+	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err

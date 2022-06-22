@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,7 +162,10 @@ drpc_notify_ready(void)
 	size_t			reqb_size;
 	Drpc__Response	       *dresp;
 	uint64_t		incarnation;
+	size_t			nr_sec_uris;
+	char		      **sec_uris = NULL;
 	int			rc;
+	int			i;
 
 	rc = crt_self_uri_get(0 /* tag */, &req.uri);
 	if (rc != 0)
@@ -170,6 +173,26 @@ drpc_notify_ready(void)
 	rc = crt_self_incarnation_get(&incarnation);
 	if (rc != 0)
 		goto out_uri;
+
+	nr_sec_uris = crt_get_nr_secondary_providers();
+	if (nr_sec_uris > 0) {
+		D_ALLOC_ARRAY(sec_uris, nr_sec_uris);
+		if (sec_uris == NULL)
+			goto out_uri;
+		for (i = 0; i < nr_sec_uris; i++) {
+			rc = crt_self_uri_get_secondary(0, &sec_uris[i]);
+			if (rc != 0) {
+				D_ERROR("failed to get secondary provider URI, rc=%d", rc);
+				nr_sec_uris = i;
+				goto out_sec_uri;
+			}
+			D_DEBUG(DB_MGMT, "secondary provider URI: %s\n", sec_uris[i]);
+		}
+
+		D_DEBUG(DB_MGMT, "setting secondary provider URIs");
+		req.secondaryuris = sec_uris;
+		req.n_secondaryuris = nr_sec_uris;
+	}
 
 	req.incarnation = incarnation;
 	req.nctxs = DSS_CTX_NR_TOTAL;
@@ -181,7 +204,7 @@ drpc_notify_ready(void)
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL)
-		D_GOTO(out_uri, rc = -DER_NOMEM);
+		D_GOTO(out_sec_uri, rc = -DER_NOMEM);
 	srv__notify_ready_req__pack(&req, reqb);
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
@@ -197,6 +220,10 @@ drpc_notify_ready(void)
 	drpc_response_free(dresp);
 out_reqb:
 	D_FREE(reqb);
+out_sec_uri:
+	for (i = 0; i < nr_sec_uris; i++)
+		D_FREE(sec_uris[i]);
+	D_FREE(sec_uris);
 out_uri:
 	D_FREE(req.uri);
 out:
