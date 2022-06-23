@@ -30,7 +30,8 @@ dump_envariables(void)
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
-		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
+		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
+		"CRT_SECONDARY_PROVIDER"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -161,6 +162,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
+	uint32_t	is_secondary;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -190,12 +192,22 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
 
+	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
 		d_getenv_int("CRT_ENABLE_MEM_PIN", &mem_pin_enable);
 		if (mem_pin_enable == 1)
 			mem_pin_workaround();
+	} else {
+		/*
+		 * Client-side envariable to indicate that the cluster
+		 * is running using a secondary provider
+		 */
+		d_getenv_int("CRT_SECONDARY_PROVIDER", &is_secondary);
+
 	}
+
+	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
 	timeout = 0;
 

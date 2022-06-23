@@ -117,6 +117,8 @@ handler_ping(crt_rpc_t *rpc)
 	struct RPC_PING_out	*output;
 	crt_context_t		*ctx;
 	int			rc = 0;
+	bool			primary_origin = false;
+
 
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
@@ -126,8 +128,17 @@ handler_ping(crt_rpc_t *rpc)
 
 	ctx = rpc->cr_ctx;
 
-	DBG_PRINT("RPC arived on a %s context\n",
-		  crt_context_is_primary(ctx) ? "primary" : "secondary");
+
+	rc = crt_req_src_provider_is_primary(rpc, &primary_origin);
+
+	if (rc != 0) {
+		D_ERROR("crt_req_src_provider_is_primary() failed. rc=%d\n", rc);
+		error_exit();
+	}
+
+	DBG_PRINT("RPC arived on a %s context; origin was %s\n",
+		  crt_context_is_primary(ctx) ? "primary" : "secondary",
+		  primary_origin ? "primary" : "secondary");
 
 	/* TODO: Change this to rank == 2 when bulk support is added */
 	if (g_my_rank == 100002) {
