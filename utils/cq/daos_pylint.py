@@ -520,7 +520,7 @@ def main():
             parser.print_usage()
             sys.exit(1)
     elif all_files.file_count() == 0:
-        print('You must specify input file')
+        print('You must specify at least one input file')
         parser.print_usage()
         sys.exit(1)
     else:
