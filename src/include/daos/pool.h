@@ -53,6 +53,11 @@
 	 DAOS_PO_QUERY_PROP_POLICY | DAOS_PO_QUERY_PROP_GLOBAL_VERSION | \
 	 DAOS_PO_QUERY_PROP_UPGRADE_STATUS)
 
+/*
+ * Aggregation of pool/container/object/keys disk format change.
+ * Please update pool_max_supported_version array when you bump version.
+ */
+#define DAOS_POOL_GLOBAL_VERSION		1
 
 int dc_pool_init(void);
 void dc_pool_fini(void);

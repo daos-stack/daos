@@ -3508,10 +3508,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc && rc != -DER_NONEXIST)
 		goto out;
 	/* latest container, nothing to update */
-	if (rc == 0 && global_ver == DS_POOL_GLOBAL_VERSION)
+	if (rc == 0 && global_ver == DAOS_POOL_GLOBAL_VERSION)
 		goto out;
 
-	if (global_ver > DS_POOL_GLOBAL_VERSION) {
+	if (global_ver > DAOS_POOL_GLOBAL_VERSION) {
 		D_ERROR("Downgrading pool/cont: "DF_CONTF" not supported\n",
 			DP_CONT(ap->pool_uuid, cont_uuid));
 		rc = -DER_NOTSUPPORTED;
@@ -3523,7 +3523,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc)
 		goto out;
 
-	global_ver = DS_POOL_GLOBAL_VERSION;
+	global_ver = DAOS_POOL_GLOBAL_VERSION;
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_cont_global_version, &value);
 	if (rc) {

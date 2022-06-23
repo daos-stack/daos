@@ -551,14 +551,14 @@ struct pool_connect_arg {
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
-	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
-	struct dc_pool		*pool = dc_task_get_priv(task);
-	daos_pool_info_t	*info = arg->pca_info;
-	struct pool_buf		*map_buf = arg->pca_map_buf;
-	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
-	struct pool_connect_out	*pco = crt_reply_get(arg->rpc);
-	bool			 put_pool = true;
-	int			 rc = task->dt_result;
+	struct pool_connect_arg   *arg = (struct pool_connect_arg *)data;
+	struct dc_pool		  *pool = dc_task_get_priv(task);
+	daos_pool_info_t	  *info = arg->pca_info;
+	struct pool_buf		  *map_buf = arg->pca_map_buf;
+	struct pool_connect_1_in  *pci = crt_req_get(arg->rpc);
+	struct pool_connect_1_out *pco = crt_reply_get(arg->rpc);
+	bool			   put_pool = true;
+	int			   rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &pco->pco_op, task);
@@ -675,13 +675,13 @@ static int
 dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 			 const char *label, daos_handle_t *poh)
 {
-	struct dc_pool		*pool;
-	crt_endpoint_t		 ep;
-	crt_rpc_t		*rpc;
-	struct pool_connect_in	*pci;
-	struct pool_buf		*map_buf;
-	struct pool_connect_arg	 con_args;
-	int			 rc;
+	struct dc_pool		 *pool;
+	crt_endpoint_t		  ep;
+	crt_rpc_t		 *rpc;
+	struct pool_connect_1_in *pci;
+	struct pool_buf		 *map_buf;
+	struct pool_connect_arg	  con_args;
+	int			  rc;
 
 	pool = dc_task_get_priv(task);
 	/** Choose an endpoint and create an RPC. */
@@ -719,6 +719,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_flags = pool->dp_capas;
 	pci->pci_query_bits = pool_query_bits(info, NULL);
+	pci->pci_pool_version = DAOS_POOL_GLOBAL_VERSION;
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));

@@ -37,8 +37,9 @@
 		0, &CQF_pool_create,					\
 		ds_pool_create_handler, NULL),				\
 	X(POOL_CONNECT,							\
-		0, &CQF_pool_connect,					\
-		ds_pool_connect_handler, NULL),				\
+	  0, ver == 0 ? &CQF_pool_connect_0 : &CQF_pool_connect_1,	\
+	  ver == 0 ? ds_pool_connect_handler_0 :			\
+	  ds_pool_connect_handler_1, NULL),				\
 	X(POOL_DISCONNECT,						\
 		0, &CQF_pool_disconnect,				\
 		ds_pool_disconnect_handler, NULL),			\
@@ -175,7 +176,7 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
 CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
-#define DAOS_ISEQ_POOL_CONNECT	/* input fields */		 \
+#define DAOS_ISEQ_POOL_CONNECT_0 /* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
 	((d_iov_t)		(pci_cred)		CRT_VAR) \
 	((uint64_t)		(pci_flags)		CRT_VAR) \
@@ -189,7 +190,17 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DECLARE(pool_connect_0, DAOS_ISEQ_POOL_CONNECT_0, DAOS_OSEQ_POOL_CONNECT)
+
+#define DAOS_ISEQ_POOL_CONNECT_1 /* input fields */		 \
+	((struct pool_op_in)	(pci_op)		CRT_VAR) \
+	((d_iov_t)		(pci_cred)		CRT_VAR) \
+	((uint64_t)		(pci_flags)		CRT_VAR) \
+	((uint64_t)		(pci_query_bits)	CRT_VAR) \
+	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR) \
+	((uint32_t)		(pci_pool_version)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_connect_1, DAOS_ISEQ_POOL_CONNECT_1, DAOS_OSEQ_POOL_CONNECT)
 
 #define DAOS_ISEQ_POOL_DISCONNECT /* input fields */		 \
 	((struct pool_op_in)	(pdi_op)		CRT_VAR)
