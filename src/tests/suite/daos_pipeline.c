@@ -198,12 +198,14 @@ build_with_string_insane_size(void)
 {
 	size_t           *size_ptr;
 	daos_pipeline_t  *p;
+	char             *const3_strpart;
 
 	p = build_cor_0();
 	/** making sure the size of the string is not sane */
-	size_ptr   = (size_t *)const3;
-	*size_ptr  = (size_t)1000; /* strlen(const0) is 5 */
-	strncpy(&const3[sizeof(size_t)], const0, strlen(const0) + 1);
+	size_ptr       = (size_t *)const3;
+	*size_ptr      = (size_t)1000; /* strlen(const0) is 5 */
+	const3_strpart = &const3[sizeof(size_t)];
+	strncpy(const3_strpart, const0, 6);
 	d_iov_set(p->filters[0]->parts[2]->constant, const3, 13);
 	d_iov_set(&p->filters[0]->parts[2]->data_type, "DAOS_FILTER_TYPE_STRING",
 		  strlen("DAOS_FILTER_TYPE_STRING"));
