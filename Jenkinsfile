@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@DAOS-9989") _
 
 // Should try to figure this out automatically
 String base_branch = "release/2.2"
@@ -73,22 +72,22 @@ pipeline {
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Small test stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Medium Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Medium test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Large Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Large test stage')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
+               description: 'Label to use for 3 node Functional Hardware Small stage')
         string(name: 'CI_NVME_5_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
+               description: 'Label to use for 5 node Functional Hardware Medium stage')
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large stage')
     }
 
     stages {
