@@ -62,7 +62,7 @@ class OSAOnlineReintegration(OSAUtils):
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank.
-                                 Defults to False.
+                                 Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8").
                            Defaults to None.
         """
