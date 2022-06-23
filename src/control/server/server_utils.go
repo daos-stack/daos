@@ -197,7 +197,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
-// required for emulated file launchedNVMe.
+// required for emulated NVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
