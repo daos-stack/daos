@@ -430,6 +430,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg DAOS_KEEP_SRC=yes' +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
