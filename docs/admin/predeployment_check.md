@@ -295,6 +295,10 @@ Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
 stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
 allocation method.
 
+vm.max_map_count default value (65530) needs to be bumped to a much more higher
+value (1M) to better fit with the DAOS needs for the expected huge number of
+concurrent ULTs if we want all their stacks to be mmap()'ed.
+
 For RPM installations, this is achieved through installed
 `/etc/sysctl.d/10-daos_server.conf` file.
 

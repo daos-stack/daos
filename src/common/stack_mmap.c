@@ -52,8 +52,8 @@ enum AbtThreadCreateType {
 };
 
 static int call_abt_method(void *arg, enum AbtThreadCreateType flag,
-		    void (*thread_func)(void *), void *thread_arg,
-		    ABT_thread_attr attr, ABT_thread *newthread)
+			   void (*thread_func)(void *), void *thread_arg,
+			   ABT_thread_attr attr, ABT_thread *newthread)
 {
 	int rc;
 
