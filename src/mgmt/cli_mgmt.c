@@ -349,7 +349,6 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
-
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)

@@ -41,26 +41,22 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const scanMinHugePageCount = 128
 
-func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
+func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceList {
 	bdevs := []string{}
-	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+	for _, bc := range bdevCfgs {
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
 	return storage.MustNewBdevDeviceList(bdevs...)
 }
 
-func cfgGetBdevs(cfg *config.Server) *storage.BdevDeviceList {
-	bdevs := []string{}
+func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
+	bdevCfgs := []*storage.TierConfig{}
 	for _, engineCfg := range cfg.Engines {
-		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg).Devices()...)
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
 
-	return storage.MustNewBdevDeviceList(bdevs...)
-}
-
-func cfgHasBdevs(cfg *config.Server) bool {
-	return cfgGetBdevs(cfg).Len() != 0
+	return bdevCfgs
 }
 
 func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
@@ -104,19 +100,39 @@ func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
 	return err
 }
 
-func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
-	ctlAddr, err := resolver("tcp", fmt.Sprintf("0.0.0.0:%d", ctlPort))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to resolve daos_server control address")
+type replicaAddrGetter interface {
+	ReplicaAddr() (*net.TCPAddr, error)
+}
+
+type ctlAddrParams struct {
+	port           int
+	replicaAddrSrc replicaAddrGetter
+	resolveAddr    resolveTCPFn
+}
+
+func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
+	ipStr := "0.0.0.0"
+
+	if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
+		ipStr = repAddr.IP.String()
 	}
 
+	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving control address")
+	}
+
+	return ctlAddr, nil
+}
+
+func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp4", ctlAddr.String())
+	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to listen on management interface")
+		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
 
-	return ctlAddr, lis, nil
+	return lis, nil
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
@@ -179,26 +195,27 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	return nodes
 }
 
+// Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
+// are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
+// required for emulated file launchedNVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
-	hasBdevs := cfgHasBdevs(srv.cfg)
-
-	if hasBdevs {
-		// Perform these checks to avoid even trying a prepare if the system isn't
-		// configured properly.
-		if srv.runningUser.Username != "root" {
-			if srv.cfg.DisableVFIO {
-				return FaultVfioDisabled
-			}
-
-			if !iommuEnabled {
-				return FaultIommuDisabled
-			}
-		}
-	} else if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
+	if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as disable_hugepages: true in config")
 		return nil
+	}
+
+	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+
+	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
+	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
+		if srv.cfg.DisableVFIO {
+			return FaultVfioDisabled
+		}
+		if !iommuEnabled {
+			return FaultIommuDisabled
+		}
 	}
 
 	prepReq := storage.BdevPrepareRequest{
@@ -212,12 +229,15 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
 	case !srv.cfg.DisableVMD && !iommuEnabled:
-		srv.log.Info("VMD not enabled because IOMMU disabled on system")
+		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
+	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
+		// If no case above matches, set enable VMD flag in request otherwise leave false.
 		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 
-	if hasBdevs {
+	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
 		// of hugepages equally across each engine's numa node (as validation ensures that
 		// TargetsCount is equal for each engine).
@@ -271,7 +291,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  cfgGetBdevs(srv.cfg),
+		DeviceList:  getBdevDevicesFromCfgs(getBdevCfgsFromSrvCfg(srv.cfg)),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
@@ -290,7 +310,7 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	ei.RLock()
 	engineCfg := ei.runner.GetConfig()
 	engineIdx := engineCfg.Index
-	if engineCfgGetBdevs(engineCfg).Len() == 0 {
+	if getBdevDevicesFromCfgs(engineCfg.Storage.Tiers.BdevConfigs()).Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
 		ei.RUnlock()
 		return nil

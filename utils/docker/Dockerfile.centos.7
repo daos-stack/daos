@@ -136,8 +136,8 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
-                TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&        \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
+                TARGET_TYPE=$DAOS_TARGET_TYPE  &&                   \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root

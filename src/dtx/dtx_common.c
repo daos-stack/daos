@@ -22,6 +22,8 @@ uint32_t dtx_agg_thd_cnt_up;
 uint32_t dtx_agg_thd_cnt_lo;
 uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
+uint32_t dtx_batched_ult_max;
+
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
@@ -470,11 +472,14 @@ static void
 dtx_batched_commit_one(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_batched_cont_args	*dbca = arg;
 	struct ds_cont_child		*cont = dbca->dbca_cont;
 
 	if (dbca->dbca_commit_req == NULL)
 		goto out;
+
+	tls->dt_batched_ult_cnt++;
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_commit_req) &&
@@ -496,7 +501,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
@@ -518,6 +523,7 @@ dtx_batched_commit_one(void *arg)
 	}
 
 	dbca->dbca_commit_done = 1;
+	tls->dt_batched_ult_cnt--;
 
 out:
 	dtx_put_dbca(dbca);
@@ -527,6 +533,7 @@ void
 dtx_batched_commit(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_batched_cont_args	*dbca;
 	struct sched_req_attr		 attr;
 	uuid_t				 anonym_uuid;
@@ -572,6 +579,7 @@ dtx_batched_commit(void *arg)
 		}
 
 		if (dtx_cont_opened(cont) && dbca->dbca_commit_req == NULL &&
+		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
@@ -1120,7 +1128,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		D_ASSERT(0);
 	}
 
-	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared) {
+	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
 		/* We do not know whether some other participants have
 		 * some active entry for this DTX, consider distributed
 		 * transaction case, the other participants may execute
@@ -1241,13 +1249,13 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1);
-		if (rc != 0) {
+		rc = dtx_commit(cont, &dte, NULL, 1, dth->dth_epoch);
+		if (rc != 0)
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(abort, result = rc);
-		}
+
+		D_GOTO(out, result = rc);
 	}
 
 abort:
@@ -1443,7 +1451,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
@@ -2064,7 +2072,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));

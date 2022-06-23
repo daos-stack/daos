@@ -18,12 +18,9 @@ def define_compress_timing(build, env):
 
 def scons():
     """Execute build"""
-    Import('tenv')
+    Import('tenv', 'utest_utils')
 
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-
-    utest_utils = tenv.SharedObject('utest_common.c')
-    Export('utest_utils')
 
     daos_build.test(tenv, 'btree', ['btree.c', utest_utils],
                     LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])

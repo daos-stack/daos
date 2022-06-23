@@ -23,7 +23,7 @@
 #include <daos/common.h>
 #include <daos/credit.h>
 #include <daos/tests_lib.h>
-#include <daos_test.h>
+#include "suite/daos_test.h"
 #include <daos/dts.h>
 #include <daos/dpar.h>
 

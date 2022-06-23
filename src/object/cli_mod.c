@@ -112,7 +112,6 @@ dc_obj_init(void)
 	num_ranks = dc_mgmt_net_get_num_srv_ranks();
 	oproto->ep.ep_rank = rand() % num_ranks;
 
-
 	rc = crt_proto_query_with_ctx(&oproto->ep, obj_proto_fmt_0.cpf_base, ver_array, 2, query_cb,
 				      oproto, ctx);
 	if (rc) {
