@@ -230,6 +230,23 @@ clear_cmt_dtx_options_parsing(void **state)
 	assert_non_null(options->path);
 }
 
+static void
+update_vea_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct update_vea_options	*options = &info.dci_cmd_option.dci_update_vea;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("update_vea", "offset", "blk_cnt", "extra"); /* too many argument */
+	test_run_inval_cmd("update_vea", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "update_vea", "offset", "blk_cnt");
+	assert_non_null(options->offset);
+	assert_non_null(options->blk_cnt);
+
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -250,6 +267,7 @@ ddb_cmd_options_tests_run()
 		TEST(rm_ilog_options_parsing),
 		TEST(dump_dtx_options_parsing),
 		TEST(clear_cmt_dtx_options_parsing),
+		TEST(update_vea_options_parsing),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,
