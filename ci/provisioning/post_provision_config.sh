@@ -66,3 +66,10 @@ git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
 retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
                                          "mount wolf-2:/export/scratch /scratch"
+
+# test that orterun works:
+IFS=" " read -r -a nodes <<< "${NODELIST//,/ }"
+# shellcheck disable=SC2029
+ssh root@"${nodes[0]}" "set -eux
+    module load mpi/openmpi-x86_64
+    \$(command -v orterun) -H ${nodes[1]}  -np 1   lsb_release -a"
