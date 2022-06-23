@@ -1045,7 +1045,7 @@ const struct CMUnitTest dv_test_cases[] = {
 };
 
 int
-dv_tests_run()
+ddb_vos_tests_run()
 {
 	return cmocka_run_group_tests_name("DDB VOS Interface Tests", dv_test_cases,
 					   dv_suit_setup, dv_suit_teardown);

@@ -19,6 +19,7 @@ struct program_args {
 	char *pa_r_cmd_run;
 	char *pa_pool_path;
 	bool  pa_write_mode;
+	bool  pa_get_help;
 };
 
 struct vos_file_parts {

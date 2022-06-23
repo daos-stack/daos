@@ -14,6 +14,15 @@
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 
 int
+ddb_run_help(struct ddb_ctx *ctx)
+{
+	ddb_commands_help(ctx);
+
+	return 0;
+}
+
+
+int
 ddb_run_quit(struct ddb_ctx *ctx)
 {
 	ctx->dc_should_quit = true;
@@ -23,7 +32,7 @@ ddb_run_quit(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
-	return dv_pool_open(opt->vos_pool_shard, &ctx->dc_poh);
+	return dv_pool_open(opt->path, &ctx->dc_poh);
 }
 
 int ddb_run_close(struct ddb_ctx *ctx)
