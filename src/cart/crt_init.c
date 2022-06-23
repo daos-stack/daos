@@ -53,7 +53,8 @@ dump_opt(crt_init_options_t *opt)
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, char *interface, char *domain, char *port);
+crt_na_config_init(bool primary, crt_provider_t provider,
+		   char *interface, char *domain, char *port);
 
 /* Workaround for CART-890 */
 static void
@@ -440,7 +441,7 @@ out:
 }
 
 static int
-prov_settings_apply(crt_provider_t prov, crt_init_options_t *opt)
+prov_settings_apply(crt_provider_t prov, bool primary, crt_init_options_t *opt)
 {
 	char	*srx_env;
 	int	rc = 0;
@@ -448,10 +449,10 @@ prov_settings_apply(crt_provider_t prov, crt_init_options_t *opt)
 	/* rxm and verbs providers only works with regular EP */
 	if ((prov == CRT_PROV_OFI_VERBS_RXM ||
 	     prov == CRT_PROV_OFI_TCP_RXM) &&
-	    crt_provider_is_sep(prov)) {
+	    crt_provider_is_sep(prov, primary)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
-		crt_provider_set_sep(prov, false);
+		crt_provider_set_sep(prov, primary, false);
 	}
 
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
@@ -611,44 +612,45 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
-			D_GOTO(out, rc = -DER_NONEXIST);
+			D_GOTO(cleanup, rc = -DER_NONEXIST);
 		}
 
 		rc = __split_arg(interface_env, &iface0, &iface1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		rc = __split_arg(domain_env, &domain0, &domain1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 
-		prov_data_init(&crt_gdata.cg_prov_gdata[primary_provider],
+		prov_data_init(&crt_gdata.cg_prov_gdata_primary,
 			       primary_provider, true, opt);
-		prov_settings_apply(primary_provider, opt);
+		prov_settings_apply(true, primary_provider, opt);
 		crt_gdata.cg_primary_prov = primary_provider;
 
-		rc = crt_na_config_init(primary_provider, iface0, domain0, port0);
+		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		}
 
 		if (secondary_provider != CRT_PROV_UNKNOWN) {
 			num_secondaries = 1;
+			crt_gdata.cg_num_secondary_provs = num_secondaries;
 
 			if (port1 == NULL || port1[0] == '\0') {
 				port1 = port0;
@@ -656,7 +658,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
 			if (crt_gdata.cg_secondary_provs == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+				D_GOTO(cleanup, rc = -DER_NOMEM);
+
+			D_ALLOC_ARRAY(crt_gdata.cg_prov_gdata_secondary, num_secondaries);
+			if (crt_gdata.cg_prov_gdata_secondary == NULL)
+				D_GOTO(cleanup, rc = -DER_NOMEM);
 
 			crt_gdata.cg_secondary_provs[0] = secondary_provider;
 		}
@@ -664,17 +670,16 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (i = 0;  i < num_secondaries; i++) {
 			tmp_prov = crt_gdata.cg_secondary_provs[i];
 
-			prov_data_init(&crt_gdata.cg_prov_gdata[tmp_prov],
+			prov_data_init(&crt_gdata.cg_prov_gdata_secondary[i],
 				       tmp_prov, false, opt);
-			prov_settings_apply(tmp_prov, opt);
+			prov_settings_apply(false, tmp_prov, opt);
 
-			rc = crt_na_config_init(tmp_prov, iface1, domain1, port1);
+			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1);
 			if (rc != 0) {
 				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(cleanup, rc);
 			}
 		}
-		crt_gdata.cg_num_secondary_provs = num_secondaries;
 
 		rc = crt_hg_init();
 		if (rc != 0) {
@@ -736,7 +741,10 @@ cleanup:
 	if (crt_gdata.cg_opc_map != NULL)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
-	crt_na_config_fini(crt_gdata.cg_primary_prov);
+	crt_na_config_fini(true, crt_gdata.cg_primary_prov);
+
+	D_FREE(crt_gdata.cg_secondary_provs);
+	D_FREE(crt_gdata.cg_prov_gdata_secondary);
 
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -750,6 +758,7 @@ out:
 	D_FREE(iface0);
 	D_FREE(domain0);
 	D_FREE(provider_str0);
+
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
@@ -785,7 +794,7 @@ crt_finalize(void)
 		crt_self_test_fini();
 
 		/* TODO: Needs to happen for every initialized provider */
-		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov];
+		prov_data = &crt_gdata.cg_prov_gdata_primary;
 
 		if (prov_data->cpg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(crt_gdata.cg_primary_prov,
@@ -830,12 +839,15 @@ crt_finalize(void)
 		crt_gdata.cg_inited = 0;
 		gdata_init_flag = 0;
 
-		crt_na_config_fini(crt_gdata.cg_primary_prov);
+		crt_na_config_fini(true, crt_gdata.cg_primary_prov);
 
 		if (crt_gdata.cg_secondary_provs != NULL) {
 			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
-				crt_na_config_fini(crt_gdata.cg_secondary_provs[i]);
+				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
+
+		D_FREE(crt_gdata.cg_secondary_provs);
+		D_FREE(crt_gdata.cg_prov_gdata_secondary);
 	} else {
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
@@ -1004,7 +1016,8 @@ out:
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, char *interface, char *domain, char *port_str)
+crt_na_config_init(bool primary, crt_provider_t provider,
+		   char *interface, char *domain, char *port_str)
 {
 	struct crt_na_config		*na_cfg;
 	int				rc = 0;
@@ -1013,7 +1026,7 @@ crt_na_config_init(crt_provider_t provider, char *interface, char *domain, char 
 	if (provider == CRT_PROV_SM)
 		return 0;
 
-	na_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_config;
+	na_cfg = crt_provider_get_na_config(primary, provider);
 	D_STRNDUP(na_cfg->noc_interface, interface, 64);
 	if (!na_cfg->noc_interface)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -1057,11 +1070,11 @@ out:
 	return rc;
 }
 
-void crt_na_config_fini(crt_provider_t provider)
+void crt_na_config_fini(bool primary, crt_provider_t provider)
 {
 	struct crt_na_config *na_cfg;
 
-	na_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_config;
+	na_cfg = crt_provider_get_na_config(primary, provider);
 	D_FREE(na_cfg->noc_interface);
 	D_FREE(na_cfg->noc_domain);
 	na_cfg->noc_port = 0;

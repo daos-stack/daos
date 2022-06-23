@@ -742,7 +742,7 @@ static void crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		uint64_t hlc = ctx->cc_last_unpack_hlc;
 

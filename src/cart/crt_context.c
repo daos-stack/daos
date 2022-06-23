@@ -223,9 +223,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	sep_mode = crt_provider_is_sep(provider);
-	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
-	max_ctx_num = crt_provider_get_max_ctx_num(provider);
+	sep_mode = crt_provider_is_sep(primary, provider);
+	cur_ctx_num = crt_provider_get_cur_ctx_num(primary, provider);
+	max_ctx_num = crt_provider_get_max_ctx_num(primary, provider);
 
 	if (sep_mode &&
 	    cur_ctx_num >= max_ctx_num) {
@@ -248,7 +248,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	ctx->cc_primary = primary;
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num, primary);
 
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -268,10 +268,10 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	ctx->cc_idx = cur_ctx_num;
 
-	ctx_list = crt_provider_get_ctx_list(provider);
+	ctx_list = crt_provider_get_ctx_list(primary, provider);
 
 	d_list_add_tail(&ctx->cc_link, ctx_list);
-	crt_provider_inc_cur_ctx_num(provider);
+	crt_provider_inc_cur_ctx_num(primary, provider);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -654,7 +654,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	crt_provider_dec_cur_ctx_num(provider);
+	crt_provider_dec_cur_ctx_num(ctx->cc_primary, provider);
 	d_list_del(&ctx->cc_link);
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -714,7 +714,7 @@ crt_rank_abort(d_rank_t rank)
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	/* TODO: Do we need to handle secondary providers? */
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
@@ -1257,36 +1257,60 @@ crt_context_lookup_locked(int ctx_idx)
 {
 	struct crt_context	*ctx;
 	d_list_t		*ctx_list;
+	int			i;
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx)
 			return ctx;
 	}
 
+	for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
+		ctx_list = crt_provider_get_ctx_list(false, crt_gdata.cg_secondary_provs[i]);
+
+		d_list_for_each_entry(ctx, ctx_list, cc_link) {
+			if (ctx->cc_idx == ctx_idx) {
+				return ctx;
+			}
+		}
+	}
 	return NULL;
 }
 
-/* TODO: Need per-provider call */
 crt_context_t
 crt_context_lookup(int ctx_idx)
 {
 	struct crt_context	*ctx;
 	bool			found = false;
+	int			i;
 	d_list_t		*ctx_list;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
 			found = true;
-			break;
+			D_GOTO(unlock, 0);
 		}
 	}
+
+	for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
+		ctx_list = crt_provider_get_ctx_list(false, crt_gdata.cg_secondary_provs[i]);
+
+		d_list_for_each_entry(ctx, ctx_list, cc_link) {
+			if (ctx->cc_idx == ctx_idx) {
+				found = true;
+				break;
+			}
+		}
+	}
+
+unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
 
 	return (found == true) ? ctx : NULL;
 }
@@ -1308,6 +1332,26 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx)
 
 out:
 	return rc;
+}
+
+int
+crt_self_uri_get_secondary(int secondary_idx, char **uri)
+{
+	char *addr;
+
+	if (secondary_idx != 0) {
+		D_ERROR("Only index=0 supported for now\n");
+		return -DER_NONEXIST;
+	}
+
+	addr = crt_gdata.cg_prov_gdata_secondary[secondary_idx].cpg_addr;
+
+	D_STRNDUP(*uri, addr, CRT_ADDR_STR_MAX_LEN - 1);
+
+	if (!*uri)
+		return -DER_NOMEM;
+
+	return DER_SUCCESS;
 }
 
 int
@@ -1344,7 +1388,7 @@ crt_context_num(int *ctx_num)
 		return -DER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov].cpg_ctx_num;
+	*ctx_num = crt_gdata.cg_prov_gdata_primary.cpg_ctx_num;
 	return 0;
 }
 
@@ -1356,7 +1400,7 @@ crt_context_empty(int provider, int locked)
 	if (locked == 0)
 		D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	rc = d_list_empty(&crt_gdata.cg_prov_gdata[provider].cpg_ctx_list);
+	rc = d_list_empty(&crt_gdata.cg_prov_gdata_primary.cpg_ctx_list);
 
 	if (locked == 0)
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);

@@ -100,7 +100,7 @@ struct crt_hg_context {
 /* crt_hg.c */
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
@@ -126,15 +126,16 @@ int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
 bool crt_provider_is_contig_ep(int provider);
 bool crt_provider_is_port_based(int provider);
-bool crt_provider_is_sep(int provider);
-void crt_provider_set_sep(int provider, bool enable);
-int crt_provider_get_cur_ctx_num(int provider);
-void crt_provider_inc_cur_ctx_num(int provider);
-void crt_provider_dec_cur_ctx_num(int provider);
 char *crt_provider_name_get(int provider);
-
-int crt_provider_get_max_ctx_num(int provider);
-d_list_t *crt_provider_get_ctx_list(int provider);
+bool crt_provider_is_sep(bool primary, int provider);
+void crt_provider_set_sep(bool primary, int provider, bool enable);
+int crt_provider_get_cur_ctx_num(bool primary, int provider);
+void crt_provider_inc_cur_ctx_num(bool primary, int provider);
+void crt_provider_dec_cur_ctx_num(bool primary, int provider);
+int crt_provider_get_max_ctx_num(bool primary, int provider);
+d_list_t *crt_provider_get_ctx_list(bool primary, int provider);
+struct crt_na_config*
+crt_provider_get_na_config(bool primary, int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)
