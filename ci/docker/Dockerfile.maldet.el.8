@@ -62,15 +62,15 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
     done
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./ci/rpm/install-base-el8.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade &&           \
+# Install OS updates and package.
+# We need sudo for running the scan and git for backward
+# compatibility.
+RUN dnf upgrade &&                                       \
     if [ -n "$REPO_FILE_URL" ]; then                     \
         true > /etc/yum.repos.d/epel.repo;               \
         true > /etc/yum.repos.d/epel-modular.repo;       \
     fi &&                                                \
-    /tmp/install.sh && dnf clean all &&                  \
-    rm -f /tmp/install.sh
+   dnf install git sudo && dnf clean all
 
 ARG UID=1000
 
@@ -88,19 +88,15 @@ RUN /tmp/install_maldet.sh
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                           \
-        dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        if [ -n "$REPO_FILE_URL" ]; then                                               \
-            true > /etc/yum.repos.d/epel.repo;                                         \
-            true > /etc/yum.repos.d/epel-modular.repo;                                 \
-        fi &&                                                                          \
-        dnf clean all;                                                                 \
+RUN [ -z "$CACHEBUST" ] || {                             \
+        dnf upgrade &&                                   \
+        if [ -n "$REPO_FILE_URL" ]; then                 \
+            true > /etc/yum.repos.d/epel.repo;           \
+            true > /etc/yum.repos.d/epel-modular.repo;   \
+        fi &&                                            \
+        dnf clean all;                                   \
     }
 
 ARG BUILD_URL
-# The BUILD_URL argument is a docker build cache buster.
-# files copied to /tmp in a previously cached layer may get
-# deleted before this point if they are too old.
 COPY ci/rpm/build_url_repo.sh /tmp/build_url_repo.sh
-COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
 RUN /tmp/build_url_repo.sh

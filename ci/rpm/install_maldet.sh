@@ -14,7 +14,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "$mydir/distro_info.sh"
 
 if command -v dnf; then
-  dnf --assumeyes install clamav clamav-devel
+  dnf install clamav clamav-devel
 elif command -v apt-get; then
   apt-get --assume-yes install clamav libclamav-dev
   service clamav-freshclam stop || true

@@ -6,6 +6,8 @@
 
 # Pull base image
 ARG BASE_DISTRO=opensuse/leap:15.3
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
@@ -21,7 +23,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
         zypper addrepo                                           \
-          "${REPO_FILE_URL%/*/}"/opensuse-proxy/distribution/leap/${BASE_DISTRO#*:}/repo/oss \
+          "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO#*:}/repo/oss" \
           opensuse_oss_proxy;                                    \
         zypper --non-interactive install curl;                   \
         mkdir -p /etc/zypp/repos.d &&                            \
@@ -73,9 +75,9 @@ gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
     done
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./ci/rpm/install-base-leap15.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
+# We need sudo for running the scan and git for backward
+# compatibility.
+RUN dnf upgrade &&                                      \
     if [ -n "$REPO_FILE_URL" ]; then                    \
         cd /etc/dnf/repos.d/ &&                         \
         mv daos_ci-leap15-artifactory.repo{,.tmp};      \
@@ -84,8 +86,8 @@ RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
             done;                                       \
             mv daos_ci-leap15-artifactory.repo{.tmp,};  \
         fi &&                                           \
-    /tmp/install.sh && dnf clean all &&                 \
-    rm -f /tmp/install.sh
+    dnf install git sudo && dnf clean All
+
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
                /etc/profile.d/lmod.sh;                                     \
@@ -109,24 +111,19 @@ RUN /tmp/install_maldet.sh
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                 \
-        dnf upgrade                                                                          \
-            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        if [ -n "$REPO_FILE_URL" ]; then                                                     \
-            cd /etc/dnf/repos.d/ &&                                                          \
-            mv daos_ci-leap15-artifactory.repo{,.tmp};                                       \
-            for file in *.repo; do                                                           \
-                true > $file;                                                                \
-            done;                                                                            \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};                                       \
-        fi &&                                                                                \
-        dnf clean all;                                                                       \
+RUN [ -z "$CACHEBUST" ] || {                            \
+        dnf upgrade &&                                  \
+        if [ -n "$REPO_FILE_URL" ]; then                \
+            cd /etc/dnf/repos.d/ &&                     \
+            mv daos_ci-leap15-artifactory.repo{,.tmp};  \
+            for file in *.repo; do                      \
+                true > $file;                           \
+            done;                                       \
+            mv daos_ci-leap15-artifactory.repo{.tmp,};  \
+        fi &&                                           \
+        dnf clean all;                                  \
     }
 
 ARG BUILD_URL
-# The BUILD_URL argument is a docker build cache buster.
-# files copied to /tmp in a previously cached layer may get
-# deleted before this point if they are too old.
 COPY ci/rpm/build_url_repo.sh /tmp/build_url_repo.sh
-COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
 RUN /tmp/build_url_repo.sh
