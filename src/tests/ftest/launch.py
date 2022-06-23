@@ -696,7 +696,7 @@ def get_test_list(tags):
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
-        tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
+        tagged_tests = re.findall(r"(?:avocado-instrumented|INSTRUMENTED)\s+(.+):", get_output(command))
         test_list = list(set(tagged_tests))
 
     return test_tags, test_list
