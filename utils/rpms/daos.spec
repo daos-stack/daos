@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.1-1
+%global mercury_version 2.2.0~rc5-1%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
