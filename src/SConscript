@@ -111,9 +111,6 @@ def scons():
     # Build DAOS client libraries
     SConscript('client/SConscript')
 
-    # Build the common test code that requires client library
-    SConscript('common/SConscript.test')
-
     # Build cart utilities library
     SConscript('cart/utils/SConscript')
 
