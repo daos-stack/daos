@@ -19,6 +19,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
     tenv.AppendUnique(CPPPATH=[Dir('../../../src/mgmt').srcnode()])
     tenv.AppendUnique(CPPPATH=[Dir('../../cart').srcnode()])
+    tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
     prereqs.require(tenv, 'mercury', 'protobufc')
 
