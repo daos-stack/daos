@@ -604,7 +604,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_ring.domain  = PO_COMP_TP_RANK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
@@ -691,7 +691,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_ring.domain  = PO_COMP_TP_RANK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);

@@ -39,7 +39,7 @@ MIN_FORMAT_VERSION = 12
 
 
 def _supports_custom_format(clang_exe):
-    """Checks if the version of clang-foramt is new enough to parse the settings used by
+    """Checks if the version of clang-format is new enough to parse the settings used by
     the config file"""
 
     try:

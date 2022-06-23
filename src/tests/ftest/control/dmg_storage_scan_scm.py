@@ -17,7 +17,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     (TR-1.0.34) admin can use daos_shell to collect information and create yaml
     file by himself. This means that daos_shell allows to list:
     SCM module and NVMe SSDs with NUMA affinity
-    network adaptor with NUMA affinity
+    network adapter with NUMA affinity
 
     This test focuses on the correctness of SCM info obtained by dmg storage
     scan (so that the admin can create a yaml file correctly). First, it

@@ -470,6 +470,9 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
+	case len(cfg.AccessPoints) == 1:
+		log.Infof("WARNING: Configuration includes only one access point. This is provides no redundancy " +
+			"in the event of an access point failure.")
 	}
 
 	switch {
@@ -527,7 +530,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			ec.LegacyStorage = engine.LegacyStorage{}
 		}
 
-		if ec.Storage.Tiers.CfgHasBdevs() {
+		if ec.Storage.Tiers.HaveBdevs() {
 			cfgHasBdevs = true
 			if ec.TargetCount == 0 {
 				return errors.Errorf("engine %d: Target count cannot be zero if "+

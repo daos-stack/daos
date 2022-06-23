@@ -44,6 +44,7 @@ def scons():
     # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
+    prereqs.require(env, 'argobots')
 
     # Arm can build ISA-L
     prereqs.require(env, 'isal')
@@ -68,12 +69,21 @@ def scons():
     if not prereqs.test_requested():
         return
 
+    tlibenv = env.Clone(LIBS=[])
+    prereqs.require(tlibenv, 'isal', 'isal_crypto', 'protobufc')
+    tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
+
+    tests_lib = daos_build.library(tlibenv, 'daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
+
+    tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
     prereqs.require(tenv, 'pmdk')
 
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     utest_utils = tenv.SharedObject('tests/utest_common.c')
     Export('utest_utils')
+
+    SConscript('tests/SConscript', exports='tenv')
 
 
 if __name__ == "SCons.Script":
