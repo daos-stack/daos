@@ -519,12 +519,6 @@ dss_srv_handler(void *arg)
 			goto crt_destroy;
 		}
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
-
-		if (dx->dx_ctx_id != 0) {
-			D_ERROR("Invalid secondary context ID: %d\n", dx->dx_ctx_id);
-			rc = -DER_INVAL;
-			goto crt_destroy;
-		}
 	} else if (dx->dx_comm) {
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);

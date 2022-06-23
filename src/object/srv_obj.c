@@ -265,14 +265,22 @@ obj_bulk_args_init(struct obj_bulk_args *args)
 static void *
 rpc2orig_ctx(crt_rpc_t *rpc, bool *is_primary)
 {
+	int	rc;
+
 	/*
 	 * TODO:
-	 * - Use new Cart API to query the original provider is primary or secondary
-	 *   through RPC;
-	 * - Use new Cart API to query if remote bulk is originally from secondary or
-	 *   primary (for forwarded bulk transfer);
+	 * For forwarded RPC (server always uses primary context to create forward RPC),
+	 * we need some new cart API to query if the RPC is originated from a secondary
+	 * client, considering multiple secondary contexts need be supported, the new
+	 * API may need to return context ID as well. Then IO engine will be able to get
+	 * the proper secondary context by 'is_primary' and 'context id'.
 	 */
-	*is_primary = true;
+	rc = crt_req_src_provider_is_primary(rpc, is_primary);
+	if (rc) {
+		D_ERROR("Failed to query provider info. "DF_RC"\n", DP_RC(rc));
+		*is_primary = true;
+	}
+
 	return rpc->cr_ctx;
 }
 
