@@ -500,9 +500,18 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+					if system.IsNotLeader(err) {
+						// If we've lost leadership while processing the event,
+						// attempt to re-forward it to the new leader.
+						evt = evt.WithForwarded(false).WithForwardable(true)
+						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
+						srv.evtForwarder.OnEvent(ctx, evt)
+					}
+					return
 				}
+				srv.mgmtSvc.reqGroupUpdate(ctx, false)
 			}
 		}))
 
