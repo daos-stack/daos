@@ -152,7 +152,7 @@ do_ioctl(void **state)
 	int                     fd;
 	int                     rc;
 	struct dfuse_user_reply dur  = {};
-	int                     root = open(test_dir, O_PATH | O_DIRECTORY);
+	int                     root = open(test_dir, O_DIRECTORY);
 
 	assert_return_code(root, errno);
 
