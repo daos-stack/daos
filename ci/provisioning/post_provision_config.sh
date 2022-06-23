@@ -70,6 +70,6 @@ retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
 # test that orterun works:
 IFS=" " read -r -a nodes <<< "${NODELIST//,/ }"
 # shellcheck disable=SC2029
-ssh root@"${nodes[0]}" "set -eux
+ssh -i ci_key -l jenkins "${nodes[0]}" "set -eux
     module load mpi/openmpi-x86_64
     \$(command -v orterun) -H ${nodes[1]}  -np 1   lsb_release -a"
