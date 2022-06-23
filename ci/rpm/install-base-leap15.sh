@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-# that come from the core repo.
+# Install packages as required for installing DAOS on SUSE distros.
+# Include basic tools and daos dependencies that come from the core repos.
 # This is for a daos test install environment, not a build environment.
 # Switch to dnf as it seems a bit faster.
 # *** Keep these in as much alphbetical order as possible ***

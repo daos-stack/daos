@@ -11,7 +11,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "$mydir/distro_info.sh"
 
 if command -v dnf; then
-  sudo dnf -y install \
+  sudo dnf install \
     daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 elif command -v apt-get; then
   echo "Ubuntu not implemented yet."

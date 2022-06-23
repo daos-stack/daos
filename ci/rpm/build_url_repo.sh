@@ -17,14 +17,7 @@ if command -v dnf; then
     repo="${repo_url#*://}"
     repo="${repo//%/}"
     repo="${repo//\//_}"
-    # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf config-manager --save --setopt="$repo".gpgcheck=1
     dnf config-manager --save --setopt="$repo".gpgcheck=0
-    # but even that seems to be not enough, so just brute-force it
-    if [ -d /etc/yum.repos.d ] &&
-       ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
-        echo "gpgcheck=0" >> /etc/yum.repos.d/"$repo".repo
-    fi
   fi
 elif command -v apt-get; then
   echo "Ubuntu list files not yet implemented."

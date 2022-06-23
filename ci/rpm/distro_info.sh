@@ -11,11 +11,7 @@ source /etc/os-release
 MAJOR_VERSION="${VERSION_ID%%.*}"
 export MAJOR_VERSION
 if [[ $ID_LIKE == *rhel* ]]; then
-  if [ "$MAJOR_VERSION" -eq 7 ]; then
-    PUBLIC_DISTRO=centos
-  else
-    PUBLIC_DISTRO=el
-  fi
+  PUBLIC_DISTRO=el
 elif [[ $ID == *leap* ]]; then
   PUBLIC_DISTRO=leap
 fi

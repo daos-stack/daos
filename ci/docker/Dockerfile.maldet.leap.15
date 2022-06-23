@@ -21,7 +21,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
         zypper addrepo                                           \
-          "${REPO_FILE_URL%/*/}"/opensuse-proxy/distribution/leap/15.3/repo/oss \
+          "${REPO_FILE_URL%/*/}"/opensuse-proxy/distribution/leap/${BASE_DISTRO#*:}/repo/oss \
           opensuse_oss_proxy;                                    \
         zypper --non-interactive install curl;                   \
         mkdir -p /etc/zypp/repos.d &&                            \

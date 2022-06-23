@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
-# Install OS updates and packages as required for building DAOS on EL 8 and
-# derivatives.  Include basic tools and daos dependencies that come from the core repos.
+# Install packages as required for installing DAOS on EL 8 and derivatives.
+# Include basic tools and daos dependencies that come from the core repos.
 # This is for a daos test install environment, not a build environment.
 
 # This script use used by docker but can be invoked from elsewhere, in order to run it

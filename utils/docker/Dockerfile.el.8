@@ -34,7 +34,8 @@ RUN set -e;                                                      \
         dnf install epel-release;                                \
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
-            dnf config-manager --disable epel-\*;                \
+            true > /etc/yum.repos.d/epel.repo;                   \
+            true > /etc/yum.repos.d/epel-modular.repo;           \
         else                                                     \
             PT_REPO=powertools;                                  \
         fi;                                                      \
@@ -67,7 +68,8 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade &&           \
     if [ -n "$REPO_FILE_URL" ]; then                     \
-        dnf config-manager --disable epel-\* ;      \
+        true > /etc/yum.repos.d/epel.repo;               \
+        true > /etc/yum.repos.d/epel-modular.repo;       \
     fi &&                                                \
     /tmp/install.sh && dnf clean all &&                  \
     rm -f /tmp/install.sh
@@ -146,7 +148,8 @@ USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         if [ -n "$REPO_FILE_URL" ]; then                                               \
-            dnf config-manager --disable epel-\*;                                      \
+            true > /etc/yum.repos.d/epel.repo;                                         \
+            true > /etc/yum.repos.d/epel-modular.repo;                                 \
         fi &&                                                                          \
         dnf clean all;                                                                 \
     }
@@ -166,7 +169,8 @@ ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         if [ -n "$REPO_FILE_URL" ]; then                                               \
-            dnf config-manager --disable epel-\*;                                      \
+            true > /etc/yum.repos.d/epel.repo;                                         \
+            true > /etc/yum.repos.d/epel-modular.repo;                                 \
         fi &&                                                                          \
         dnf clean all;                                                                 \
     }
