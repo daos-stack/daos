@@ -272,6 +272,13 @@ int main(int argc, char **argv)
 		}
 	}
 
+	rc = crt_self_uri_get_secondary(0, &uri);
+	if (rc != 0)
+		error_exit();
+
+	printf("Secondary uri for context0 = %s\n", uri);
+
+
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
 		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);

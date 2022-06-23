@@ -60,6 +60,7 @@ struct crt_prov_gdata {
 				cpg_inited		: 1;
 };
 
+#define MAX_NUM_SECONDARY_PROVS 2
 
 /* CaRT global data */
 struct crt_gdata {
@@ -69,7 +70,10 @@ struct crt_gdata {
 	int			*cg_secondary_provs;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_PROV_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata_primary;
+
+	/** */
+	struct crt_prov_gdata	*cg_prov_gdata_secondary;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -289,6 +293,6 @@ struct crt_opc_map {
 };
 
 
-void crt_na_config_fini(int provider);
+void crt_na_config_fini(bool primary, int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

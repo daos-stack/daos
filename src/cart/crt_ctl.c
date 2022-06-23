@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -204,9 +204,9 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	/* TODO: Need to derive provider from rpc struct */
 	provider = crt_gdata.cg_primary_prov;
 
-	ctx_list = crt_provider_get_ctx_list(provider);
+	ctx_list = crt_provider_get_ctx_list(true, provider);
 
-	out_args->cel_ctx_num = crt_provider_get_cur_ctx_num(provider);
+	out_args->cel_ctx_num = crt_provider_get_cur_ctx_num(true, provider);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;

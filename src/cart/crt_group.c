@@ -865,7 +865,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_provider_is_sep(crt_ctx->cc_hg_ctx.chc_provider))
+	if (crt_provider_is_sep(true, crt_ctx->cc_hg_ctx.chc_provider))
 		tag = 0;
 
 	grp_priv = passed_grp_priv;
@@ -937,7 +937,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	provider = crt_gdata.cg_primary_prov;
 
 	/* TODO: Derive from context */
-	if (crt_provider_is_sep(provider))
+	if (crt_provider_is_sep(true, provider))
 		tag = 0;
 
 	default_grp_priv = grp_priv;
@@ -1904,8 +1904,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	rank = grp_priv->gp_self;
 
-	/* TODO: Per provider address needs to be stored in future */
-	addr = crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov].cpg_addr;
+	addr = crt_gdata.cg_prov_gdata_primary.cpg_addr;
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2531,7 +2530,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
