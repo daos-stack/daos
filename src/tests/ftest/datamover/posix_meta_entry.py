@@ -148,7 +148,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         Args:
             path1 (str): The left-hand side to compare.
             path2 (str): The right-hand side to compare.
-            cmp_filetype (bool, optional): Whether to compare the filetype.
+            cmp_filetype (bool, optional): Whether to compare the file-type.
                 Default is True.
             cmp_perms (bool, optional): Whether to compare the permissions.
                 Default is True.
