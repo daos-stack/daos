@@ -2126,7 +2126,8 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
-		if (strncmp(value.iov_buf, DEFAULT_CONT_LABEL, sizeof(DEFAULT_CONT_LABEL))) {
+		/* sizeof(DEFAULT_CONT_LABEL) includes \0 at the end */
+		if (strncmp(value.iov_buf, DEFAULT_CONT_LABEL, sizeof(DEFAULT_CONT_LABEL)-1)) {
 			if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
 				D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
 					DAOS_PROP_LABEL_MAX_LEN);
