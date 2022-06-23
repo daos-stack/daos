@@ -1,3 +1,9 @@
+daos (2.3.100-13) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Distro cleanups for 2.4 release
+
+ -- Johann Lombardi <johann.lombardi@intel.com> Thu, 23 Jun 2022 09:00:00 -0000
+
 daos (2.3.100-12) unstable; urgency=medium
   [ Jeff Olivier ]
   * Make ucx required for build on all platforms
