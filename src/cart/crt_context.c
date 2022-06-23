@@ -1293,23 +1293,22 @@ crt_context_lookup(int ctx_idx)
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
 			found = true;
-			break;
+			D_GOTO(unlock, 0);
 		}
 	}
 
-	if (!found) {
-		for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
-			ctx_list = crt_provider_get_ctx_list(false, crt_gdata.cg_secondary_provs[i]);
+	for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
+		ctx_list = crt_provider_get_ctx_list(false, crt_gdata.cg_secondary_provs[i]);
 
-			d_list_for_each_entry(ctx, ctx_list, cc_link) {
-				if (ctx->cc_idx == ctx_idx) {
-					found = true;
-					break;
-				}
+		d_list_for_each_entry(ctx, ctx_list, cc_link) {
+			if (ctx->cc_idx == ctx_idx) {
+				found = true;
+				break;
 			}
 		}
 	}
 
+unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 

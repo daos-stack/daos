@@ -745,7 +745,7 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
 		idx, addr_str);
 
-	/* If address for this provider isnt filled yet*/
+	/* If address for this provider isn't filled yet*/
 	if (prov_data->cpg_addr[0] == '\0')
 		strncpy(prov_data->cpg_addr, addr_str, str_size);
 
