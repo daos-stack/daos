@@ -263,7 +263,9 @@ int main(int argc, char **argv)
 			D_ERROR("crt_context_uri_get(%d) failed; rc=%d\n", i, rc);
 			error_exit();
 		}
+
 		printf("Secondary context[%d] uri=%s\n", i, uri);
+		D_FREE(uri);
 
 		rc = pthread_create(&secondary_progress_thread[i], 0,
 				    progress_fn, &secondary_ctx[i]);
@@ -278,6 +280,7 @@ int main(int argc, char **argv)
 
 	printf("Secondary uri for context0 = %s\n", uri);
 
+	D_FREE(uri);
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {

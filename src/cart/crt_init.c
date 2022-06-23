@@ -612,29 +612,29 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
-			D_GOTO(out, rc = -DER_NONEXIST);
+			D_GOTO(cleanup, rc = -DER_NONEXIST);
 		}
 
 		rc = __split_arg(interface_env, &iface0, &iface1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		rc = __split_arg(domain_env, &domain0, &domain1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 
 		prov_data_init(&crt_gdata.cg_prov_gdata_primary,
@@ -645,7 +645,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			D_GOTO(cleanup, rc);
 		}
 
 		if (secondary_provider != CRT_PROV_UNKNOWN) {
@@ -658,11 +658,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
 			if (crt_gdata.cg_secondary_provs == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+				D_GOTO(cleanup, rc = -DER_NOMEM);
 
 			D_ALLOC_ARRAY(crt_gdata.cg_prov_gdata_secondary, num_secondaries);
 			if (crt_gdata.cg_prov_gdata_secondary == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+				D_GOTO(cleanup, rc = -DER_NOMEM);
 
 			crt_gdata.cg_secondary_provs[0] = secondary_provider;
 		}
@@ -677,7 +677,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1);
 			if (rc != 0) {
 				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(cleanup, rc);
 			}
 		}
 
@@ -743,6 +743,9 @@ cleanup:
 
 	crt_na_config_fini(true, crt_gdata.cg_primary_prov);
 
+	D_FREE(crt_gdata.cg_secondary_provs);
+	D_FREE(crt_gdata.cg_prov_gdata_secondary);
+
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -755,6 +758,7 @@ out:
 	D_FREE(iface0);
 	D_FREE(domain0);
 	D_FREE(provider_str0);
+
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
@@ -841,6 +845,9 @@ crt_finalize(void)
 			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
 				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
+
+		D_FREE(crt_gdata.cg_secondary_provs);
+		D_FREE(crt_gdata.cg_prov_gdata_secondary);
 	} else {
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
