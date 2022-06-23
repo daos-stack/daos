@@ -26,6 +26,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <sys/ioctl.h>
+
+#include "dfuse_ioctl.h"
+
 static void
 print_usage()
 {
@@ -142,6 +146,40 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 }
 
+void
+do_ioctl(void **state)
+{
+	int                     fd;
+	int                     rc;
+	struct dfuse_user_reply dur  = {};
+	int                     root = open(test_dir, O_PATH | O_DIRECTORY);
+
+	assert_return_code(root, errno);
+
+	/* Open a file in dfuse and call the ioctl on it and verify the uid/gids match */
+	fd = openat(root, "ioctl_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+	assert_return_code(rc, errno);
+
+	assert_int_equal(dur.uid, geteuid());
+	assert_int_equal(dur.gid, getegid());
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* Now do the same test but on the directory itself */
+	rc = ioctl(root, DFUSE_IOCTL_DFUSE_USER, &dur);
+	assert_return_code(rc, errno);
+
+	assert_int_equal(dur.uid, geteuid());
+	assert_int_equal(dur.gid, getegid());
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -150,8 +188,9 @@ main(int argc, char **argv)
 	struct option           long_options[] = {{"test-dir", required_argument, NULL, 'M'},
 						  {NULL, 0, NULL, 0} };
 
-	const struct CMUnitTest tests[]        = {
-		   cmocka_unit_test(do_openat),
+	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(do_openat),
+	    cmocka_unit_test(do_ioctl),
 	};
 
 	while ((opt = getopt_long(argc, argv, "M:", long_options, &index)) != -1) {
