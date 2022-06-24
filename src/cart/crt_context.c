@@ -1351,7 +1351,7 @@ crt_self_uri_get_secondary(int secondary_idx, char **uri)
 	}
 
 	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
-	   (secondary_idx >= crt_gdata.cg_num_secondary_provs)) {
+	    (secondary_idx >= crt_gdata.cg_num_secondary_provs)) {
 		return -DER_NONEXIST;
 	}
 
