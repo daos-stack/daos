@@ -41,26 +41,22 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const scanMinHugePageCount = 128
 
-func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
+func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceList {
 	bdevs := []string{}
-	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+	for _, bc := range bdevCfgs {
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
 	return storage.MustNewBdevDeviceList(bdevs...)
 }
 
-func cfgGetBdevs(cfg *config.Server) *storage.BdevDeviceList {
-	bdevs := []string{}
+func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
+	bdevCfgs := []*storage.TierConfig{}
 	for _, engineCfg := range cfg.Engines {
-		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg).Devices()...)
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
 
-	return storage.MustNewBdevDeviceList(bdevs...)
-}
-
-func cfgHasBdevs(cfg *config.Server) bool {
-	return cfgGetBdevs(cfg).Len() != 0
+	return bdevCfgs
 }
 
 func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
@@ -199,26 +195,27 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	return nodes
 }
 
+// Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
+// are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
+// required for emulated file launchedNVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
-	hasBdevs := cfgHasBdevs(srv.cfg)
-
-	if hasBdevs {
-		// Perform these checks to avoid even trying a prepare if the system isn't
-		// configured properly.
-		if srv.runningUser.Username != "root" {
-			if srv.cfg.DisableVFIO {
-				return FaultVfioDisabled
-			}
-
-			if !iommuEnabled {
-				return FaultIommuDisabled
-			}
-		}
-	} else if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
+	if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as disable_hugepages: true in config")
 		return nil
+	}
+
+	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+
+	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
+	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
+		if srv.cfg.DisableVFIO {
+			return FaultVfioDisabled
+		}
+		if !iommuEnabled {
+			return FaultIommuDisabled
+		}
 	}
 
 	prepReq := storage.BdevPrepareRequest{
@@ -232,12 +229,15 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
 	case !srv.cfg.DisableVMD && !iommuEnabled:
-		srv.log.Info("VMD not enabled because IOMMU disabled on system")
+		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
+	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
+		// If no case above matches, set enable VMD flag in request otherwise leave false.
 		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 
-	if hasBdevs {
+	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
 		// of hugepages equally across each engine's numa node (as validation ensures that
 		// TargetsCount is equal for each engine).
@@ -291,7 +291,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  cfgGetBdevs(srv.cfg),
+		DeviceList:  getBdevDevicesFromCfgs(getBdevCfgsFromSrvCfg(srv.cfg)),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
@@ -310,7 +310,7 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	ei.RLock()
 	engineCfg := ei.runner.GetConfig()
 	engineIdx := engineCfg.Index
-	if engineCfgGetBdevs(engineCfg).Len() == 0 {
+	if getBdevDevicesFromCfgs(engineCfg.Storage.Tiers.BdevConfigs()).Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
 		ei.RUnlock()
 		return nil
