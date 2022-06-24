@@ -43,7 +43,6 @@ cont_df_rec_msize(int alloc_overhead)
 	return alloc_overhead + sizeof(struct vos_cont_df);
 }
 
-
 static void
 cont_df_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
@@ -238,12 +237,9 @@ exit:
 	return rc;
 }
 
-
-
 static int
-cont_lookup(struct d_uuid *key, struct d_uuid *pkey,
-	    struct vos_container **cont) {
-
+cont_lookup(struct d_uuid *key, struct d_uuid *pkey, struct vos_container **cont)
+{
 	struct d_ulink *ulink;
 
 	ulink = d_uhash_link_lookup(vos_cont_hhash_get(), key, pkey);
@@ -272,7 +268,6 @@ cont_addref(struct vos_container *cont)
 int
 vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 {
-
 	struct vos_pool		*vpool = NULL;
 	struct cont_df_args	 args;
 	struct d_uuid		 ukey;
@@ -316,7 +311,6 @@ exit:
 int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 {
-
 	int				rc = 0;
 	struct vos_pool			*pool = NULL;
 	struct d_uuid			ukey;
@@ -537,7 +531,6 @@ vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
 int
 vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 {
-
 	struct vos_pool		*pool;
 	struct vos_container	*cont;
 	struct cont_df_args	 args;
@@ -575,7 +568,6 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 			D_GOTO(exit, rc = -DER_BUSY);
 		}
 	}
-
 
 	rc = cont_df_lookup(pool, &key, &args);
 	if (rc) {
@@ -776,10 +768,10 @@ cont_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 }
 
 struct vos_iter_ops vos_cont_iter_ops = {
-	.iop_prepare = cont_iter_prep,
-	.iop_finish  = cont_iter_fini,
-	.iop_probe   = cont_iter_probe,
-	.iop_next    = cont_iter_next,
-	.iop_fetch   = cont_iter_fetch,
-	.iop_process  = cont_iter_process,
+    .iop_prepare = cont_iter_prep,
+    .iop_finish  = cont_iter_fini,
+    .iop_probe   = cont_iter_probe,
+    .iop_next    = cont_iter_next,
+    .iop_fetch   = cont_iter_fetch,
+    .iop_process = cont_iter_process,
 };

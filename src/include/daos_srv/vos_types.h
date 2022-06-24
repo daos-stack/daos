@@ -215,8 +215,8 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 typedef enum {
-	VOS_ITER_PROC_OP_UNKNOWN = 0,
-	VOS_ITER_PROC_OP_DELETE = 1,
+	VOS_ITER_PROC_OP_UNKNOWN      = 0,
+	VOS_ITER_PROC_OP_DELETE       = 1,
 	VOS_ITER_PROC_OP_MARK_CORRUPT = 2,
 } vos_iter_proc_op_t;
 

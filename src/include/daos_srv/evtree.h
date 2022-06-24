@@ -22,7 +22,6 @@
 /** Maximum tree order for an evtree */
 #define EVT_MAX_ORDER	128
 
-
 enum {
 	EVT_UMEM_TYPE	= 150,
 	EVT_UMEM_ROOT	= (EVT_UMEM_TYPE + 0),
@@ -709,6 +708,7 @@ enum evt_iter_opc {
 	EVT_ITER_FIRST,
 	EVT_ITER_FIND,
 };
+
 /**
  * Based on the \a opc, this function can do various things:
  * - set the cursor of the iterator to the first extent in the evtree.
@@ -765,7 +765,8 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent);
  *
  * \param ih		[IN]	Iterator open handle.
  */
-int evt_iter_corrupt(daos_handle_t ih);
+int
+    evt_iter_corrupt(daos_handle_t ih);
 
 /**
  * Fetch the extent and its data address from the current iterator position.

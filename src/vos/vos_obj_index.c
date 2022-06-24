@@ -394,7 +394,6 @@ out:
 	return rc;
 }
 
-
 static int
 oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 			  struct vos_iter_info *info)
@@ -821,13 +820,13 @@ exit:
 }
 
 struct vos_iter_ops vos_oi_iter_ops = {
-	.iop_prepare		= oi_iter_prep,
-	.iop_nested_tree_fetch	= oi_iter_nested_tree_fetch,
-	.iop_finish		= oi_iter_fini,
-	.iop_probe		= oi_iter_probe,
-	.iop_next		= oi_iter_next,
-	.iop_fetch		= oi_iter_fetch,
-	.iop_process		= oi_iter_process,
+    .iop_prepare           = oi_iter_prep,
+    .iop_nested_tree_fetch = oi_iter_nested_tree_fetch,
+    .iop_finish            = oi_iter_fini,
+    .iop_probe             = oi_iter_probe,
+    .iop_next              = oi_iter_next,
+    .iop_fetch             = oi_iter_fetch,
+    .iop_process           = oi_iter_process,
 };
 
 /**

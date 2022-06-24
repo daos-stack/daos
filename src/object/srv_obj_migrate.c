@@ -54,7 +54,7 @@ struct migrate_one {
 	daos_epoch_t             mo_epoch;
 
 	/* Epochs per recx in mo_iods, used for parity extent rebuild. */
-        daos_epoch_t		**mo_iods_update_ephs;
+	daos_epoch_t           **mo_iods_update_ephs;
 
 	/* IOD for replicate recxs migration */
 	daos_iod_t		*mo_iods;
@@ -680,17 +680,15 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64
-		" fetch %s\n", DP_UOID(mrone->mo_oid), mrone,
-		DP_KEY(&mrone->mo_dkey), mrone->mo_iod_num,
-		mrone->mo_epoch, fetch ? "yes":"no");
+	D_DEBUG(DB_REBUILD, DF_UOID " mrone %p dkey " DF_KEY " nr %d eph " DF_U64 " fetch %s\n",
+		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), mrone->mo_iod_num,
+		mrone->mo_epoch, fetch ? "yes" : "no");
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
 		return 0;
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
-
 
 	if (fetch) {
 		if (!daos_oclass_is_ec(&mrone->mo_oca)) {
@@ -881,7 +879,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
 		D_ALLOC(data, size);
 		if (data == NULL)
-			D_GOTO(out, rc =-DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		d_iov_set(&iov[i], data, size);
 		sgls[i].sg_nr = 1;
@@ -979,7 +977,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		D_ASSERT(size != -1);
 		D_ALLOC(data, size);
 		if (data == NULL)
-			D_GOTO(out, rc =-DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		d_iov_set(&iov[i], data, size);
 		sgls[i].sg_nr = 1;
@@ -1002,8 +1000,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	rc = mrone_obj_fetch(mrone, oh, sgls, mrone->mo_iods, mrone->mo_iod_num,
 			     mrone->mo_epoch, DIOF_FOR_MIGRATION, p_csum_iov);
 	if (rc == -DER_CSUM) {
-		D_ERROR("migrate dkey "DF_KEY" failed because of checksum "
-			"error ("DF_RC"). Don't fail whole rebuild.\n",
+		D_ERROR("migrate dkey " DF_KEY " failed because of checksum "
+			"error (" DF_RC "). Don't fail whole rebuild.\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
 		D_GOTO(out, rc = 0);
 	}
@@ -1831,7 +1829,6 @@ rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t *ephs, d_sg
 					parity_nr, nr);
 			}
 		}
-
 
 		if (parity_nr > 0) {
 			rc = migrate_insert_recxs_sgl(mrone->mo_iods_from_parity, NULL,
@@ -2703,7 +2700,7 @@ migrate_obj_ult(void *data)
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {
-		epr.epr_lo = i > 0 ? arg->snaps[i-1] + 1 : 0;
+		epr.epr_lo = i > 0 ? arg->snaps[i - 1] + 1 : 0;
 		epr.epr_hi = arg->snaps[i];
 		rc = migrate_one_epoch_object(&epr, tls, arg);
 		if (rc)

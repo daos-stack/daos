@@ -1243,7 +1243,6 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 			prop_entry->dpe_val_ptr = NULL;
 		}
 		prop_entry->dpe_type = DAOS_PROP_CO_ACL;
-
 	}
 	if (bits & DAOS_CO_QUERY_PROP_OWNER) {
 		prop_entry = &prop->dpp_entries[i++];
@@ -1281,8 +1280,8 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
-		prop_entry = &prop->dpp_entries[i++];
-		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry           = &prop->dpp_entries[i++];
+		prop_entry->dpe_val  = iv_prop->cip_scrubbing_disabled;
 		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	}
 out:

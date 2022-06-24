@@ -86,7 +86,7 @@ static pthread_rwlock_t		psfl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /* tracking failed pool service */
 D_LIST_HEAD(pool_svc_failed_list);
 
-static bool pool_disable_exclude = false;
+static bool pool_disable_exclude;
 static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
 static int pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc,
@@ -430,26 +430,20 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_PO_SCRUB_MODE:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_sched,
-					   &value);
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_sched, &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_freq,
-					   &value);
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_freq, &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_PO_SCRUB_THRESH:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_thresh,
-					   &value);
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_thresh, &value);
 			if (rc)
 				return rc;
 			break;
@@ -1276,7 +1270,7 @@ check_map:
 			 */
 			D_DEBUG(DB_MD, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
+			rc = + DER_UNINIT;
 		} else {
 			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
 				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -1832,9 +1826,9 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	daos_prop_t	*prop;
 	d_iov_t	 value;
 	uint64_t	 val;
-	uint64_t	 bit;
+	uint64_t         bit;
 	uint32_t	 idx = 0, nr = 0, val32 = 0, global_ver;
-	int		 rc;
+	int              rc;
 
 	for (bit = DAOS_PO_QUERY_PROP_BIT_START;
 	     bit <= DAOS_PO_QUERY_PROP_BIT_END; bit++) {
@@ -2101,35 +2095,32 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_MODE) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_sched,
-				   &value);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_sched, &value);
 		if (rc != 0)
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
-		prop->dpp_entries[idx].dpe_val = val;
+		prop->dpp_entries[idx].dpe_val  = val;
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_FREQ) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_freq,
-				   &value);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_freq, &value);
 		if (rc != 0)
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_FREQ;
-		prop->dpp_entries[idx].dpe_val = val;
+		prop->dpp_entries[idx].dpe_val  = val;
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_THRESH) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_thresh,
-				   &value);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_thresh, &value);
 		if (rc != 0)
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_THRESH;
-		prop->dpp_entries[idx].dpe_val = val;
+		prop->dpp_entries[idx].dpe_val  = val;
 		idx++;
 	}
 
@@ -3260,7 +3251,6 @@ out:
 static daos_target_state_t
 enum_pool_comp_state_to_tgt_state(int tgt_state)
 {
-
 	switch (tgt_state) {
 	case PO_COMP_ST_UNKNOWN: return DAOS_TS_UNKNOWN;
 	case PO_COMP_ST_NEW: return DAOS_TS_NEW;
@@ -6246,7 +6236,6 @@ out:
 	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-
 }
 
 void
@@ -6369,7 +6358,6 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 			    0, 0, NULL);
 	return rc;
 }
-
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bits,
 		       daos_prop_t **prop_out)

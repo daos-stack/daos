@@ -58,9 +58,9 @@ struct pool_iv_prop {
 	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
-	uint64_t	pip_scrub_mode;
-	uint64_t	pip_scrub_freq;
-	uint64_t	pip_scrub_thresh;
+	uint64_t         pip_scrub_mode;
+	uint64_t         pip_scrub_freq;
+	uint64_t         pip_scrub_thresh;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
 	uint32_t	pip_redun_fac;
@@ -192,9 +192,8 @@ int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
-int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
-				     uuid_t *srv_cont_hdl,
-				     uuid_t *srv_pool_hdl);
+int
+ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl, uuid_t *srv_pool_hdl);
 
 /*
  * srv_metrics.c

@@ -261,8 +261,8 @@ pool_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1])
 	};
-	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
+	int                      n                     = (int)ARRAY_SIZE(names);
+	int                      m                     = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -310,7 +310,7 @@ pool_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_pool_list_attr(poh, out_buf, &total_size, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -521,7 +521,7 @@ pool_properties(void **state)
 	assert_ptr_not_equal(arg->pool_label, NULL);
 
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
-	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_MODE_TIMED;
+	prop->dpp_entries[1].dpe_val  = DAOS_SCRUB_MODE_TIMED;
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	/* change daos_prop_alloc() above, specify 2 entries not 1 */
@@ -1030,7 +1030,6 @@ list_containers_test(void **state)
 				  NULL /* conts */, NULL /* ev */);
 	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
-
 
 	/*** Tests that can only run with multiple containers ***/
 	if (lcarg->nconts > 1) {

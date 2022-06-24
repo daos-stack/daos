@@ -85,7 +85,6 @@ serialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 	hid_t		attr_dspace = 0;
 	hid_t		usr_attr = 0;
 
-
 	if (entry == NULL || entry->dpe_val_ptr == NULL) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -144,7 +143,6 @@ out:
 static int
 serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
-
 	int	rc = 0;
 	hid_t	status = 0;
 	hsize_t	attr_dims[1];
@@ -210,7 +208,6 @@ serialize_uint(hid_t file_id, uint64_t val, const char *prop_str)
 	hid_t	attr_dtype = 0;
 	hid_t	attr_dspace = 0;
 	hid_t	usr_attr = 0;
-
 
 	attr_dims[0] = 1;
 	attr_dtype = H5Tcopy(H5T_NATIVE_UINT64);
@@ -342,22 +339,15 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
-		} else if (type == DAOS_PROP_CO_LAYOUT_TYPE ||
-			   type == DAOS_PROP_CO_LAYOUT_VER ||
-			   type == DAOS_PROP_CO_CSUM ||
-			   type == DAOS_PROP_CO_CSUM_CHUNK_SIZE ||
+		} else if (type == DAOS_PROP_CO_LAYOUT_TYPE || type == DAOS_PROP_CO_LAYOUT_VER ||
+			   type == DAOS_PROP_CO_CSUM || type == DAOS_PROP_CO_CSUM_CHUNK_SIZE ||
 			   type == DAOS_PROP_CO_CSUM_SERVER_VERIFY ||
-			   type == DAOS_PROP_CO_REDUN_FAC ||
-			   type == DAOS_PROP_CO_REDUN_LVL ||
-			   type == DAOS_PROP_CO_SNAPSHOT_MAX ||
-			   type == DAOS_PROP_CO_COMPRESS ||
-			   type == DAOS_PROP_CO_ENCRYPT ||
-			   type == DAOS_PROP_CO_DEDUP ||
+			   type == DAOS_PROP_CO_REDUN_FAC || type == DAOS_PROP_CO_REDUN_LVL ||
+			   type == DAOS_PROP_CO_SNAPSHOT_MAX || type == DAOS_PROP_CO_COMPRESS ||
+			   type == DAOS_PROP_CO_ENCRYPT || type == DAOS_PROP_CO_DEDUP ||
 			   type == DAOS_PROP_CO_DEDUP_THRESHOLD ||
-			   type == DAOS_PROP_CO_EC_CELL_SZ ||
-			   type == DAOS_PROP_CO_EC_PDA ||
-			   type == DAOS_PROP_CO_RP_PDA ||
-			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
+			   type == DAOS_PROP_CO_EC_CELL_SZ || type == DAOS_PROP_CO_EC_PDA ||
+			   type == DAOS_PROP_CO_RP_PDA || type == DAOS_PROP_CO_GLOBAL_VERSION ||
 			   type == DAOS_PROP_CO_ALLOCED_OID ||
 			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
 			entry = &prop_query->dpp_entries[i];
@@ -762,7 +752,6 @@ out:
 static int
 deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_t *cont_type)
 {
-
 	int			rc = 0;
 	bool			deserialize_label = false;
 	bool			close_cont = true;
@@ -1040,11 +1029,10 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		prop_num++;
 	}
 	if (H5Aexists(file_id, "DAOS_PROP_CO_SCRUBBER_DISABLED") > 0) {
-		type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		type                                 = DAOS_PROP_CO_SCRUBBER_DISABLED;
 		prop->dpp_entries[prop_num].dpe_type = type;
-		entry = &prop->dpp_entries[prop_num];
-		rc = deserialize_uint(file_id, &entry->dpe_val,
-				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
+		entry                                = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val, "DAOS_PROP_CO_SCRUBBER_DISABLED");
 		if (rc != 0)
 			D_GOTO(out, rc);
 		prop_num++;
@@ -1183,7 +1171,6 @@ out:
 	return rc;
 }
 
-
 int
 daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 			    char ***names, void ***buffers, size_t **sizes)
@@ -1191,7 +1178,6 @@ daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 	int			rc = 0;
 	hid_t			file_id = 0;
 	htri_t			usr_attrs_exist;
-
 
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);

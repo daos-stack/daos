@@ -993,8 +993,7 @@ struct vos_iter_ops {
 	int	(*iop_copy)(struct vos_iterator *iter,
 			    vos_iter_entry_t *it_entry, d_iov_t *iov_out);
 	/** Delete the record that the cursor points to */
-	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
-			       void *args);
+	int (*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args);
 	/**
 	 * Optional, the iterator has no element.
 	 *
@@ -1297,6 +1296,7 @@ enum {
 	VOS_SLAB_EVT_NODE_SM	= 6,
 	VOS_SLAB_MAX		= 7
 };
+
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
 static inline umem_off_t

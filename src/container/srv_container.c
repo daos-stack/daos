@@ -696,11 +696,8 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs,
-					   &ds_cont_prop_scrubber_disabled,
-					   &value);
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_scrubber_disabled, &value);
 			if (rc)
 				return rc;
 			break;
@@ -2206,14 +2203,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	}
 	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &cont->c_prop,
-				   &ds_cont_prop_scrubber_disabled, &value);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type =
-			DAOS_PROP_CO_SCRUBBER_DISABLED;
-		prop->dpp_entries[idx].dpe_val = val;
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[idx].dpe_val  = val;
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_REDUN_FAC) {

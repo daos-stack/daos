@@ -90,11 +90,11 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(((char *)key_iov.iov_buf)[key_iov.iov_len - 1] ==
 		 ((char *)entry->ie_key.iov_buf)[key_iov.iov_len - 1]);
 	umm = vos_obj2umm(kinfo->ki_obj);
-	rc = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*(kinfo->ki_known_key)));
+	rc  = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*kinfo->ki_known_key));
 	if (rc != 0)
 		return rc;
 
-	*(kinfo->ki_known_key) = umem_ptr2off(umm, rbund.rb_krec);
+	*kinfo->ki_known_key = umem_ptr2off(umm, rbund.rb_krec);
 
 	kinfo->ki_non_empty = true;
 
@@ -442,7 +442,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			if (flags & VOS_OF_COND_PUNCH)
 				cflags |= VOS_TS_READ_OBJ;
 		}
-
 	}
 
 	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr, dth);
@@ -784,7 +783,6 @@ static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	       daos_anchor_t *anchor, bool check_existence, uint32_t flags)
 {
-
 	uint64_t		 start_seq;
 	vos_iter_desc_t		 desc;
 	struct vos_rec_bundle	 rbund;
@@ -1439,6 +1437,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	key_tree_release(ak_toh, false);
 	return rc;
 }
+
 static int
 recx_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
@@ -1976,15 +1975,15 @@ exit:
 static int
 sv_iter_corrupt(struct vos_obj_iter *oiter)
 {
-	struct umem_instance	*umm;
-	struct vos_svt_key	 skey = {0};
-	struct vos_rec_bundle	 rbund = {0};
-	struct bio_iov		 biov = {0};
-	daos_anchor_t		 anchor = {0};
-	d_iov_t			 key, val;
-	size_t			 addr_offset;
-	struct vos_irec_df	*irec;
-	int			 rc = 0;
+	struct umem_instance *umm;
+	struct vos_svt_key    skey   = {0};
+	struct vos_rec_bundle rbund  = {0};
+	struct bio_iov        biov   = {0};
+	daos_anchor_t         anchor = {0};
+	d_iov_t               key, val;
+	size_t                addr_offset;
+	struct vos_irec_df   *irec;
+	int                   rc = 0;
 
 	umm = vos_obj2umm(oiter->it_obj);
 
@@ -2000,16 +1999,15 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 	/* Fetch the key/value for the current iter cursor */
 	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
 	if (rc != 0) {
-		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("dbtree_iter_fetch failed: " DF_RC "\n", DP_RC(rc));
 		rc = umem_tx_end(umm, rc);
 		return rc;
 	}
 
 	addr_offset = offsetof(struct vos_irec_df, ir_ex_addr);
-	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
-			 sizeof(*irec) - addr_offset);
+	rc          = umem_tx_add(umm, rbund.rb_off + addr_offset, sizeof(*irec) - addr_offset);
 	if (rc != 0) {
-		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("umem_tx_add failed: " DF_RC "\n", DP_RC(rc));
 		rc = umem_tx_end(umm, rc);
 		return rc;
 	}
@@ -2071,6 +2069,7 @@ exit:
 
 	return rc;
 }
+
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
@@ -2134,8 +2133,7 @@ exit:
 }
 
 static int
-vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
-		     void *args)
+vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -2184,18 +2182,19 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 	}
 }
 
-struct vos_iter_ops	vos_obj_iter_ops = {
-	.iop_prepare		= vos_obj_iter_prep,
-	.iop_nested_tree_fetch	= vos_obj_iter_nested_tree_fetch,
-	.iop_nested_prepare	= vos_obj_iter_nested_prep,
-	.iop_finish		= vos_obj_iter_fini,
-	.iop_probe		= vos_obj_iter_probe,
-	.iop_next		= vos_obj_iter_next,
-	.iop_fetch		= vos_obj_iter_fetch,
-	.iop_copy		= vos_obj_iter_copy,
-	.iop_process		= vos_obj_iter_process,
-	.iop_empty		= vos_obj_iter_empty,
+struct vos_iter_ops vos_obj_iter_ops = {
+    .iop_prepare           = vos_obj_iter_prep,
+    .iop_nested_tree_fetch = vos_obj_iter_nested_tree_fetch,
+    .iop_nested_prepare    = vos_obj_iter_nested_prep,
+    .iop_finish            = vos_obj_iter_fini,
+    .iop_probe             = vos_obj_iter_probe,
+    .iop_next              = vos_obj_iter_next,
+    .iop_fetch             = vos_obj_iter_fetch,
+    .iop_copy              = vos_obj_iter_copy,
+    .iop_process           = vos_obj_iter_process,
+    .iop_empty             = vos_obj_iter_empty,
 };
+
 /**
  * @} vos_obj_iters
  */

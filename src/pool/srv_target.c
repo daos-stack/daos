@@ -1511,11 +1511,10 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	}
 	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
-	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
-		iv_prop->pip_scrub_mode);
-	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
+	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n", iv_prop->pip_scrub_mode);
+	pool->sp_scrub_mode     = iv_prop->pip_scrub_mode;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
-	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
+	pool->sp_scrub_thresh   = iv_prop->pip_scrub_thresh;
 
 	return ret;
 }

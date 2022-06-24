@@ -16,17 +16,17 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
-#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags & BIO_FLAG_HOLE)
+#define BIO_ADDR_IS_HOLE(addr)       ((addr)->ba_flags & BIO_FLAG_HOLE)
 #define BIO_ADDR_SET_HOLE(addr) ((addr)->ba_flags |= BIO_FLAG_HOLE)
-#define BIO_ADDR_CLEAR_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
-#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags & BIO_FLAG_DEDUP)
+#define BIO_ADDR_CLEAR_HOLE(addr)    ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
+#define BIO_ADDR_IS_DEDUP(addr)      ((addr)->ba_flags & BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
-#define BIO_ADDR_CLEAR_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+#define BIO_ADDR_CLEAR_DEDUP(addr)   ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
 #define BIO_ADDR_IS_DEDUP_BUF(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
 #define BIO_ADDR_SET_DEDUP_BUF(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
 #define BIO_ADDR_SET_NOT_DEDUP_BUF(addr)	\
 			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
-#define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_CORRUPTED(addr)  ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
 
 /* Can support up to 16 flags for a BIO address */
@@ -738,7 +738,6 @@ int bio_get_dev_state(struct nvme_stats *dev_state,
  */
 void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
 
-
 /*
  * Helper function to set the device health state to FAULTY, and trigger device
  * state transition.
@@ -775,8 +774,8 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  * \param led_state	[IN]	State to set the LED to
  *				(ie identify, off, fault/on)
  * \param reset		[IN]	Reset flag indicates that the led_state
- * 				will be determined by the saved state in
- * 				bio_bdev (bb_led_state)
+ *				will be determined by the saved state in
+ *				bio_bdev (bb_led_state)
  *
  * \return                      Zero on success, negative value on error
  */

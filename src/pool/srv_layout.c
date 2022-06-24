@@ -46,64 +46,77 @@ RDB_STRING_KEY(ds_pool_prop_, scrub_thresh);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
-	{
-		.dpe_type	= DAOS_PROP_PO_LABEL,
-		.dpe_str	= "pool_label_not_set",
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SPACE_RB,
-		.dpe_val	= 0,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SELF_HEAL,
-		.dpe_val	= DAOS_SELF_HEAL_AUTO_EXCLUDE |
-				  DAOS_SELF_HEAL_AUTO_REBUILD,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_RECLAIM,
-		.dpe_val	= DAOS_RECLAIM_LAZY,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_ACL,
-		.dpe_val_ptr	= NULL, /* generated dynamically */
-	}, {
-		.dpe_type	= DAOS_PROP_PO_OWNER,
-		.dpe_str	= "NOBODY@",
-	}, {
-		.dpe_type	= DAOS_PROP_PO_OWNER_GROUP,
-		.dpe_str	= "NOBODY@",
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SVC_LIST,
-		.dpe_val_ptr	= NULL,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_EC_CELL_SZ,
-		.dpe_val	= DAOS_EC_CELL_DEF,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_REDUN_FAC,
-		.dpe_val	= DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_EC_PDA,
-		.dpe_val	= DAOS_PROP_PO_EC_PDA_DEFAULT,
+    {
+	.dpe_type = DAOS_PROP_PO_LABEL,
+	.dpe_str  = "pool_label_not_set",
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SPACE_RB,
+	.dpe_val  = 0,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SELF_HEAL,
+	.dpe_val  = DAOS_SELF_HEAL_AUTO_EXCLUDE | DAOS_SELF_HEAL_AUTO_REBUILD,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_RECLAIM,
+	.dpe_val  = DAOS_RECLAIM_LAZY,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_ACL, .dpe_val_ptr = NULL, /* generated dynamically */
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_OWNER,
+	.dpe_str  = "NOBODY@",
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_OWNER_GROUP,
+	.dpe_str  = "NOBODY@",
+    },
+    {
+	.dpe_type    = DAOS_PROP_PO_SVC_LIST,
+	.dpe_val_ptr = NULL,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_EC_CELL_SZ,
+	.dpe_val  = DAOS_EC_CELL_DEF,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_REDUN_FAC,
+	.dpe_val  = DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_EC_PDA,
+	.dpe_val  = DAOS_PROP_PO_EC_PDA_DEFAULT,
 
-	}, {
-		.dpe_type	= DAOS_PROP_PO_RP_PDA,
-		.dpe_val	= DAOS_PROP_PO_RP_PDA_DEFAULT,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_POLICY,
-		.dpe_str	= DAOS_PROP_POLICYSTR_DEFAULT,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_GLOBAL_VERSION,
-		.dpe_val	= DS_POOL_GLOBAL_VERSION,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
-		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_MODE,
-		.dpe_val	= DAOS_SCRUB_MODE_OFF,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_FREQ,
-		.dpe_val	= 604800, /* 1 week in seconds */
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_THRESH,
-		.dpe_val	= 0,
-	}
-};
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_RP_PDA,
+	.dpe_val  = DAOS_PROP_PO_RP_PDA_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_POLICY,
+	.dpe_str  = DAOS_PROP_POLICYSTR_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_GLOBAL_VERSION,
+	.dpe_val  = DS_POOL_GLOBAL_VERSION,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_UPGRADE_STATUS,
+	.dpe_val  = DAOS_UPGRADE_STATUS_NOT_STARTED,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SCRUB_MODE,
+	.dpe_val  = DAOS_SCRUB_MODE_OFF,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SCRUB_FREQ, .dpe_val = 604800, /* 1 week in seconds */
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SCRUB_THRESH,
+	.dpe_val  = 0,
+    } };
 
 daos_prop_t pool_prop_default = {
 	.dpp_nr		= DAOS_PROP_PO_NUM,

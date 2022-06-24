@@ -172,9 +172,9 @@ enum {
  * It is expected that these stay contiguous.
  */
 enum {
-	DAOS_SCRUB_MODE_OFF = 0,
-	DAOS_SCRUB_MODE_LAZY = 1,
-	DAOS_SCRUB_MODE_TIMED = 2,
+	DAOS_SCRUB_MODE_OFF     = 0,
+	DAOS_SCRUB_MODE_LAZY    = 1,
+	DAOS_SCRUB_MODE_TIMED   = 2,
 	DAOS_SCRUB_MODE_INVALID = 3,
 };
 
@@ -214,9 +214,9 @@ enum daos_cont_props {
 	 */
 	DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 	/**
-	* Checksum verification on server. Value = ON/OFF
-	* default = DAOS_PROP_CO_CSUM_SV_OFF
-	*/
+	 * Checksum verification on server. Value = ON/OFF
+	 * default = DAOS_PROP_CO_CSUM_SV_OFF
+	 */
 	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 	/**
 	 * Redundancy factor:

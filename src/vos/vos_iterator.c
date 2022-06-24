@@ -424,8 +424,8 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
 int
 vos_iter_process(daos_handle_t ih, vos_iter_proc_op_t op, void *args)
 {
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	int			 rc = 0;
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int                  rc   = 0;
 
 	if (iter->it_ops->iop_process == NULL)
 		return -DER_NOSYS;
@@ -648,7 +648,6 @@ out:
 	return rc;
 }
 
-
 static inline int
 vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
@@ -808,7 +807,6 @@ probe:
 				rc = -DER_INVAL;
 				goto out;
 			}
-
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,

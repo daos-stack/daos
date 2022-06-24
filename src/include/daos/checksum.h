@@ -247,8 +247,8 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 			  uint8_t *b, uint32_t csum_len);
 
 int
-daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
-			  uint8_t *csum_buf, uint16_t csum_buf_len);
+daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov, uint8_t *csum_buf,
+			  uint16_t csum_buf_len);
 
 int
 daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
@@ -493,7 +493,6 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 uint64_t
 ci2csum(struct dcs_csum_info ci);
 
-
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a
  * buffer
@@ -554,7 +553,6 @@ ci_move_next_iov(struct dcs_csum_info *obj, d_iov_t *iov);
 uint32_t
 daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 		      uint32_t chunk_size);
-
 
 /** Helper function for dividing a range (lo-hi) into number of chunks, using
  * absolute alignment
