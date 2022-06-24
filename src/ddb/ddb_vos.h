@@ -174,7 +174,7 @@ int dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args);
 
 typedef int (*dv_vea_extent_handler)(void *cb_arg, struct vea_free_extent *free_extent);
 int dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg);
-int dv_update_vea(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt);
+int dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt);
 int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
 int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov);
 

@@ -707,10 +707,20 @@ update_vea_verify_region_cb(void *cb_arg, struct vea_free_extent *vfe)
 	return 0;
 }
 
+static int
+verify_free(struct ddb_ctx *ctx, uint64_t offset, uint32_t blk_cnt)
+{
+	struct update_vea_verify_region_cb_args args = {0};
+
+	args.potential_extent.vfe_blk_off = offset;
+	args.potential_extent.vfe_blk_cnt = blk_cnt;
+	args.ctx = ctx;
+	return dv_enumerate_vea(ctx->dc_poh, update_vea_verify_region_cb, &args);
+}
+
 int
 ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
 {
-	struct update_vea_verify_region_cb_args args = {0};
 	uint64_t				offset;
 	uint32_t				blk_cnt;
 	int					rc;
@@ -726,15 +736,14 @@ ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
 		return -DER_INVAL;
 	}
 
-	args.potential_extent.vfe_blk_off = offset;
-	args.potential_extent.vfe_blk_cnt = blk_cnt;
-	args.ctx = ctx;
-	rc = dv_enumerate_vea(ctx->dc_poh, update_vea_verify_region_cb, &args);
+	rc = verify_free(ctx, offset, blk_cnt);
 	if (!SUCCESS(rc))
-		return -DER_INVAL;
+		return rc;
 
 	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
-	rc = dv_update_vea(ctx->dc_poh, offset, blk_cnt);
+	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
+	if (!SUCCESS(rc))
+		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

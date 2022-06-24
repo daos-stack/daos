@@ -49,9 +49,6 @@ def scons():
     # blob stores
     denv.AppendUnique(CPPPATH=[Dir('../bio/').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../bio/')])
-    # And VEA internal knowledge
-    denv.AppendUnique(CPPPATH=[Dir('../vea/').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../vea/')])
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 

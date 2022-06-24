@@ -8,7 +8,6 @@
 #include <libpmemobj/types.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
-#include <vea_internal.h>
 #include <vos_internal.h>
 #include <daos_srv/smd.h>
 #include "ddb_common.h"
@@ -1643,12 +1642,9 @@ struct vea_cb_args {
 };
 
 static int
-vea_free_extent_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
+vea_free_extent_cb(void *cb_arg, struct vea_free_extent *vfe)
 {
 	struct vea_cb_args	*args = cb_arg;
-	struct vea_free_extent	*vfe;
-
-	vfe = (struct vea_free_extent *)val->iov_buf;
 
 	if (args->vca_cb)
 		return args->vca_cb(args->vca_cb_args, vfe);
@@ -1669,17 +1665,21 @@ dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg)
 	if (vsi == NULL)
 		return -DER_NONEXIST;
 
-	rc = dbtree_iterate(vsi->vsi_md_free_btr, 0, false, vea_free_extent_cb, &args);
-
+	rc = vea_enumerate_free(vsi, vea_free_extent_cb, &args);
+	if (!SUCCESS(rc))
+		D_ERROR("vea_enumerate_free failed: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
 int
-dv_update_vea(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt)
+dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt)
 {
 	struct vos_pool		*pool;
 	struct vea_space_info	*vsi;
 	int			 rc;
+
+	if (offset == 0)
+		return -DER_INVAL;
 
 	pool = vos_hdl2pool(poh);
 	vsi = pool->vp_vea_info;
