@@ -922,7 +922,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 			if (offset + size == recx->rx_idx) {
 				size += recx->rx_nr;
-				parity_eph = iod_ephs[j];
+				parity_eph = max(parity_eph, iod_ephs[j]);
 				continue;
 			}
 
