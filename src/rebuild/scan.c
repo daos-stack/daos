@@ -308,7 +308,6 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
 		}
-
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -500,8 +499,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
-		D_ERROR(DF_UOID"Cannot find valid placement map"
-			DF_UUID"\n", DP_UOID(oid),
+		D_ERROR(DF_UOID ": Cannot find valid placement map" DF_UUID "\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -903,10 +901,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild "DF_UUID"/%d"
+			D_WARN("the previous rebuild " DF_UUID "/%d"
 			       " is not cleanup yet\n",
-			       DP_UUID(rsi->rsi_pool_uuid),
-		               rsi->rsi_rebuild_ver);
+			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 			D_GOTO(out, rc = -DER_BUSY);
 		}
 
