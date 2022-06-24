@@ -86,7 +86,7 @@ RUN dnf upgrade &&                                      \
             done;                                       \
             mv daos_ci-leap15-artifactory.repo{.tmp,};  \
         fi &&                                           \
-    dnf install git sudo && dnf clean All
+    dnf install git sudo && dnf clean all
 
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
