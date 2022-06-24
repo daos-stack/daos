@@ -52,7 +52,7 @@ hold during rebuild process.
 
 <a id="f10.18"></a>
 **Rebuild Protocol**
-![../../doc/graph/Fig_059.png](../../doc/graph/Fig_059.png "Rebuild Protocol")
+![../../docs/graph/Fig_059.png](../../docs/graph/Fig_059.png "Rebuild Protocol")
 
 The <a href="#f10.18">figure</a> above is an example of this process:
 There are five objects in the cluster: object A is 3-way replicated,
@@ -101,7 +101,7 @@ The following <a href="#f10.20">figure</a> is an example of this protocol.
 
 <a id="f10.20"></a>
 **Multi-failure protocol**
-![../../doc/graph/Fig_061.png](../../doc/graph/Fig_061.png "Multi-failure protocol")
+![../../docs/graph/Fig_061.png](../../docs/graph/Fig_061.png "Multi-failure protocol")
 
 - In this example, object A is 2-way replicated, object B, C and D are 3-way
 replicated.

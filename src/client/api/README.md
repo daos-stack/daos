@@ -18,7 +18,7 @@ details about the functionality they support except for APIs to support
 non-blocking operations which is discussed here.
 
 The libdaos API is available under [/src/include/daos\_\*](/src/include/) and
-associated man pages under [/doc/man/man3/](/doc/man/man3/).
+associated man pages under [/docs/man/man3/](/docs/man/man3/).
 
 ## Event & Event Queue
 

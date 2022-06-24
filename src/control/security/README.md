@@ -54,7 +54,7 @@ handle additional properties and authentication methods.
 Certificates are used in several locations to provide authentication and
 validation of user identity in a DAOS system.
 For information on how to set up the certificates in a DAOS system, see the
-[Admin Guide](/doc/admin/deployment.md#certificate-configuration).
+[Admin Guide](/docs/admin/deployment.md#certificate-configuration).
 
 ### Certificate Generation
 

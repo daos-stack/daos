@@ -4,7 +4,7 @@ The proto directory contains
 [protocol buffer](https://developers.google.com/protocol-buffers) definitions
 for the messaging format used in communication over the gRPC and dRPC channels.
 For information on using protobuf tools for development see
-[here](../../doc/dev/development.md#protobuf-compiler).
+[here](../../docs/dev/development.md#protobuf-compiler).
 
 ## Directory structure
 

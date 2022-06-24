@@ -25,7 +25,7 @@ The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-g
 ### Storage Performance Development Kit (SPDK)
 SPDK is an open source C library that when used in a storage application, can provide a significant performance increase of more than 7X over the standard NVMe kernel driver. SPDK's high performance can mainly be attributed to the user space NVMe driver, eliminating all syscalls and enabling zero-copy access from the application. In SPDK, the hardware is polled for completions as opposed to relying on interrupts, lowering both total latency and latency variance. SPDK also offers a block device layer called bdev which sits immediately above the device drivers like in a traditional kernel storage stack. This module offers pluggable module APIs for implementing block devices that interface with different types of block storage devices. This includes driver modules for NVMe, Malloc (ramdisk), Linux AIO, Ceph RBD, and others.
 
-![/doc/graph/Fig_065.png](/doc/graph/Fig_065.png "SPDK Software Stack")
+![/docs/graph/Fig_065.png](/docs/graph/Fig_065.png "SPDK Software Stack")
 
 #### SPDK NVMe Driver
 The NVMe driver is a C library linked to a storage application providing direct, zero-copy data transfer to and from NVMe SSDs. Other benefits of the SPDK NVMe driver are that it is entirely in user space, operates in polled-mode vs. interrupt-dependent, is asynchronous and lock-less.
@@ -64,7 +64,7 @@ BIO internally manages a per-xstream DMA safe buffer for SPDK DMA transfer over 
   - Device Owner Xstream: In the case there is no direct 1:1 mapping of VOS XStream to NVMe SSD, the VOS xstream that first opens the SPDK blobstore will be named the 'Device Owner'. The Device Owner Xstream is responsible for maintaining and updating the blobstore health data, handling device state transitions, and also media error events. All non-owner xstreams will forward events to the device owner.
   - Init Xstream: The first started VOS xstream is termed the 'Init Xstream'. The init xstream is responsible for initializing and finalizing the SPDK bdev, registering the SPDK hotplug poller, handling and periodically checking for new NVMe SSD hot remove and hotplug events, and handling all VMD LED device events.
 
-![/doc/graph/NVME_Threading_Model_Final](/doc/graph/NVME_Threading_Model_Final.PNG "NVMe Threading Model")
+![/docs/graph/NVME_Threading_Model_Final](/docs/graph/NVME_Threading_Model_Final.PNG "NVMe Threading Model")
 
 Above is a diagram of the current NVMe threading model. The 'Device Owner' xstream is responsible for all faulty device and device reintegration callbacks, as well as updating device health data. The 'Init' xstream is responsible for registering the SPDK hotplug poller and maintaining the current device list of SPDK bdevs as well as evicted and unplugged devices. Any device metadata operations or media error events that do not occur on either of these two xstreams will be forwarded to the appropriate xstream using the SPDK event framework for lockless inter-thread communication. All xstreams will periodically poll for I/O statistics (if enabled in server config), but only the device owner xstream will poll for device events, making necessary state transitions, and update device health stats, and the init xstream will poll for any device removal or device hot plug events.
 
@@ -111,14 +111,14 @@ The SSD identification feature is a way to quickly and visually locate a device.
 ### Intel Volume Management Device (VMD)
 Intel VMD is a technology embedded in the processor silicon that aggregates the NVMe PCIe SSDs attached to its root port, acting as an HBA does for SATA and SAS. Currently, PCIe storage lacks a standardized method to blink LEDs and indicated the status of a device. Intel VMD, along with NVMe, provides this support for LED management.
 
-![/doc/graph/Intel_VMD.png](/doc/graph/Intel_VMD.png "Intel VMD Technology")
+![/docs/graph/Intel_VMD.png](/docs/graph/Intel_VMD.png "Intel VMD Technology")
 Intel VMD places a control point in the PCIe root complex of the servers, meaning that NVMe drives can be hot-swapped, and the status LED is always reliable.
 
-![/doc/graph/VMD_Amber_LED.png](/doc/graph/VMD_Amber_LED.png "Status Amber VMD LED")
+![/docs/graph/VMD_Amber_LED.png](/docs/graph/VMD_Amber_LED.png "Status Amber VMD LED")
 The Amber LED (status LED) is what VMD provides. It represents the LED coming from the slot on the backplane. The Green LED is the activity LED.
 
 The status LED on the VMD device has four states: OFF, FAULT, REBUILD, and IDENTIFY. These are communicated by blinking patterns specified in the IBPI standard (SFF-8489).
-![/doc/graph/VMD_LED_states.png](/doc/graph/VMD_LED_states.png "Status LED states")
+![/docs/graph/VMD_LED_states.png](/docs/graph/VMD_LED_states.png "Status LED states")
 
 #### Locate a Health Device
 Upon issuing a device identify command with a specified device ID, an admin now can quickly identify a device in question. The status LED on the VMD device would be set to an IDENTIFY state, represented by a quick, 4Hz blinking amber light. The device would quickly blink by default for 60 seconds and then return to the default OFF state.
@@ -137,7 +137,7 @@ The device states that are returned from a device query by the admin are depende
   - UNPLUGGED: A device previously used by DAOS is unplugged.
   - NEW: A new device is available for use by DAOS.
 
-![/doc/graph/dmg_device_states.png](/doc/graph/dmg_device_states.png "Device States")
+![/docs/graph/dmg_device_states.png](/docs/graph/dmg_device_states.png "Device States")
 
  Useful admin command to query device states:
    - <a href="#31">dmg storage query list-devices</a> [used to query NVMe SSD device states]

@@ -160,7 +160,7 @@ is contained within `/src/control/server/ctl_storage*.go` files.
 Storage is required to be formatted before the DAOS data plane can be
 started.
 
-![Storage format diagram](/doc/graph/storage_format_detail.png)
+![Storage format diagram](/docs/graph/storage_format_detail.png)
 
 If storage has not been previously formatted, `daos_server` will halt on
 start-up waiting for storage format to be triggered by issuing the `dmg storage
@@ -198,7 +198,7 @@ server has been formatted.
 
 A view of DAOS' software component architecture:
 
-![Architecture diagram](/doc/graph/system_architecture.png)
+![Architecture diagram](/docs/graph/system_architecture.png)
 
 ## Running
 

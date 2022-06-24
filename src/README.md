@@ -2,8 +2,8 @@
 
 The purpose of this document is to describe the internal code structure and
 major algorithms used by DAOS. It assumes prior knowledge of
-the <a href="/doc/overview/storage.md">DAOS storage model</a>
-and <a href="/doc/overview/terminology.md">acronyms</a>.
+the <a href="/docs/overview/storage.md">DAOS storage model</a>
+and <a href="/docs/overview/terminology.md">acronyms</a>.
 This document contains the following sections:
 
 - <a href="#1">DAOS Components</a>
@@ -34,7 +34,7 @@ a high-performant fabric for data access. In practice, the same network
 can be used for both management and data access. IP over fabric can also
 be used as the management network.
 
-![DAOS SDS Components](/doc/graph/system_architecture.png)
+![DAOS SDS Components](/docs/graph/system_architecture.png)
 
 <a id="11"></a>
 ### DAOS System
@@ -181,7 +181,7 @@ As shown in the diagram below, the DAOS stack is structured as a collection
 of storage services over a client/server architecture.
 Examples of DAOS services are the pool, container, object and rebuild services.
 
-![DAOS Internal Services & Libraries](/doc/graph/services.png)
+![DAOS Internal Services & Libraries](/docs/graph/services.png)
 
 A DAOS service can be spread across the control and data planes and
 communicate internally through dRPC. Most services have client and server
@@ -261,7 +261,7 @@ For further reading on those infrastructure libraries, please see:
 
 The diagram below shows the internal layering of the DAOS services and
 interactions with the different libraries mentioned above.
-![DAOS Internal Layering](/doc/graph/layering.png)
+![DAOS Internal Layering](/docs/graph/layering.png)
 
 Vertical boxes represent DAOS services whereas horizontal ones are for
 infrastructure libraries.

@@ -1,7 +1,7 @@
 
 # Versioning Object Store
 
-The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/doc/storage_model.md#DAOS_Pool">DAOS pool</a>.
+The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/docs/storage_model.md#DAOS_Pool">DAOS pool</a>.
 It maintains its metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
 It must provide this functionality with minimum overhead so that performance can approach the theoretical performance of the underlying hardware as closely as possible, both with respect to latency and bandwidth.
 Its internal data structures, in both persistent and non-persistent memory, must also support the highest levels of concurrency so that throughput scales over the cores of modern processor architectures.
@@ -123,7 +123,7 @@ Note that "punch" of an extent of an array object is logged as zeroed extents, r
 This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggressively remove objects, keys, and values that are no longer accessible at a known snapshot.
 
 <a id="7a"></a>
-![../../doc/graph/Fig_067.png](../../doc/graph/Fig_067.png "VOS Pool storage layout")
+![../../docs/graph/Fig_067.png](../../docs/graph/Fig_067.png "VOS Pool storage layout")
 
 When performing lookup on a single value in an object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key.
 If a value or negative entry is found, it is returned.
@@ -307,7 +307,7 @@ For explanation purposes, representative keys and values are used in the example
 
 <a id="7d"></a>
 
-![../../doc/graph/Fig_011.png](../../doc/graph/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
+![../../docs/graph/Fig_011.png](../../docs/graph/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
 
 The red-black tree, like any traditional binary tree, organizes the keys lesser than the root to the left subtree and keys greater than the root to the right subtree.
 Value pointers are stored along with the keys in each node.
@@ -368,7 +368,7 @@ In this example, the different lines represent the actual data stored in the res
 
 <b>Example of extents and epochs in a Key Array object</b>
 
-![../../doc/graph/Fig_012.png](../../doc/graph/Fig_012.png "Example of extents and epochs in a byte array object")
+![../../docs/graph/Fig_012.png](../../docs/graph/Fig_012.png "Example of extents and epochs in a byte array object")
 
 In the <a href="7f">above</a> example, there is significant overlap between different extent ranges.
 VOS supports nearest-epoch access, which necessitates reading the latest value for any given extent range.
@@ -405,7 +405,7 @@ TODO: Create a new figure
 <a id="7k"></a>
 <b>Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table <a href="#7g">above</a></b>
 
-![../../doc/graph/Fig_016.png](../../doc/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../../docs/graph/Fig_016.png](../../docs/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 The figure <a href="7l">below</a> shows the rectangles constructed with splitting and trimming operations of EV-Tree for the example in the previous <a href="#7g">table</a> with an additional write at offset {0 - 100} introduced to consider the case for extensive splitting.
 The figure <a href="#7k">above</a> shows the EV-Tree construction for the same example.
@@ -414,7 +414,7 @@ The figure <a href="#7k">above</a> shows the EV-Tree construction for the same e
 
 <b>Tree (order - 4) for the example in Table 6 3 (pictorial representation shown in the figure <a href="#7g">above</a></b>
 
-![../../doc/graph/Fig_017.png](../../doc/graph/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../../docs/graph/Fig_017.png](../../docs/graph/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 Inserts in an EV-Tree locate the appropriate leaf-node to insert, by checking for overlap.
 If multiple bounding boxes overlap, the bounding box with the least enlargement is chosen.
@@ -516,7 +516,7 @@ the corresponding key or object.
 <a id="8a"></a>
 <b>Scenarios illustrating utility of write timestamp cache</b>
 
-![../../doc/graph/uncertainty.png](../../doc/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
+![../../docs/graph/uncertainty.png](../../docs/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
 
 <a id="824"></a>
 ### MVCC Rules
@@ -718,7 +718,7 @@ The size needed for checksums is included while allocating memory for the persis
 
 The following diagram illustrates the overall VOS layout and where checksums will be stored. Note that the checksum type isn't actually stored in vos_cont_df yet.
 
-![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "How checksum fits into the VOS Layout")
+![../../docs/graph/Fig_021.png](../../docs/graph/Fig_021.png "How checksum fits into the VOS Layout")
 
 
 ### Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
@@ -804,7 +804,7 @@ the DTX model.
 
 <b>Modify multiple replicated object under DTX model</b>
 
-![../../doc/graph/Fig_066.png](../../doc/graph/Fig_066.png ">Modify multiple replicated object under DTX model")
+![../../docs/graph/Fig_066.png](../../docs/graph/Fig_066.png ">Modify multiple replicated object under DTX model")
 
 <a id="812"></a>
 
