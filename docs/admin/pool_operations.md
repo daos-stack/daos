@@ -3,9 +3,7 @@
 A DAOS pool is a storage reservation that can span any number of storage engines in a
 DAOS system. Pools are managed by the administrator. The amount of space allocated
 to a pool is decided at creation time with the `dmg pool create` command.
-Pools can be expanded at a later time with the `dmg pool expand` command
-that adds additional engine ranks to the existing pool's storage allocation.
-The DAOS management API also provides these capabilities.
+The DAOS management API also provides this capability.
 
 
 ## Pool Basics
@@ -22,9 +20,6 @@ Its subcommands can be grouped into the following areas:
 * Commands to manage failures and other non-standard scenarios.
   This includes draining, excluding and re-integrating targets,
   and evicting client connections to a pool.
-
-* An upgrade command to upgrade a pool's format version
-  after a DAOS software upgrade.
 
 ### Creating a Pool
 
@@ -53,7 +48,7 @@ To limit the pool to only a subset of the engines, those two options
 can be used to specify either the desired number of engines,
 or an explicit list of engine ranks to be used for this pool.
 
-The capacity of the pool can be specified in three different ways:
+The capacity of the pool can be specified in two different ways:
 
 1. The `--size` option can be used to specify the _total_ pool
    capacity in **Bytes**. This value denotes the sum of the SCM
@@ -64,29 +59,7 @@ The capacity of the pool can be specified in three different ways:
    there will be 6TB of SCM and 94 TB of NVMe storage.
    An SCM-only pool can be created by using `--tier-ratio 100,0`.
 
-2. The `--size` option can be used to specify the _total_ pool
-   capacity as a **percentage of the currently free capacity**.
-   In this case, the tier ratio will be ignored. For example,
-   requesting `--size=100%` will allocate 100% of the free SCM
-   capacity and 100% of the free NVMe capacity to the pool,
-   regardless of the ratio of those two free capacity values.
-
-   * This implies that it is not possible to create an SCM-only
-     pool by using a percentage size (unless there is no NVMe
-     storage in the system at all, and all pools are SCM-only).
-
-   * If the amount of free space is different across the
-     participating engines, then the _minimum_ free space is
-     used to calculate the space that is allocated per engine.
-
-   * Because the percentage numbers refer to currently free
-     space and not total space, the absolute size of a pool
-     created with `--size=percentage%` will be impacted by other
-     concurrent pool create operations. The command output will
-     always list the total capacities in addition to the
-     requested percentage.
-
-3. The `--scm-size` parameter (and optionally `--nvme-size`) can
+2. The `--scm-size` parameter (and optionally `--nvme-size`) can
    be used to specify the SCM capacity (and optionally the NVMe
    capacity) _per storage engine_ in **Bytes**.
    The minimum SCM size is 16 MiB per **target**, so for a storage
