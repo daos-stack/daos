@@ -493,36 +493,49 @@ func (o *object) blockDevice() (*hardware.BlockDevice, error) {
 		Type: o.objSubTypeString(),
 	}
 	// https://www.open-mpi.org/projects/hwloc/doc/v2.7.0/a00365.php (OS Device Information)
-	infoKeys := map[string]unsafe.Pointer{
-		"LinuxDeviceID": unsafe.Pointer(&bd.LinuxDeviceID),
-		"Vendor":        unsafe.Pointer(&bd.Vendor),
-		"Model":         unsafe.Pointer(&bd.Model),
-		"Revision":      unsafe.Pointer(&bd.Revision),
-		"SerialNumber":  unsafe.Pointer(&bd.SerialNumber),
-		"Size":          unsafe.Pointer(&bd.Size),
-		"SectorSize":    unsafe.Pointer(&bd.SectorSize),
+	stringFields := map[string]*string{
+		"LinuxDeviceID": &bd.LinuxDeviceID,
+		"Vendor":        &bd.Vendor,
+		"Model":         &bd.Model,
+		"Revision":      &bd.Revision,
+		"SerialNumber":  &bd.SerialNumber,
+	}
+	uint64Fields := map[string]*uint64{
+		"Size":       &bd.Size,
+		"SectorSize": &bd.SectorSize,
 	}
 
-	for key, ptr := range infoKeys {
+	getVal := func(key string) string {
 		keyStr := C.CString(key)
 		defer C.free(unsafe.Pointer(keyStr))
 		cVal := C.hwloc_obj_get_info_by_name(o.cObj, keyStr)
 		if cVal == nil {
+			return ""
+		}
+		return C.GoString(cVal)
+	}
+
+	for key, ptr := range stringFields {
+		goVal := getVal(key)
+		if goVal == "" {
 			continue
 		}
-		goVal := C.GoString(cVal)
 
-		switch key {
-		case "Size", "SectorSize":
-			size, err := strconv.ParseUint(goVal, 10, 64)
-			if err != nil {
-				return nil, errors.Errorf("device %q has invalid size %q", o.name(), goVal)
-			}
-			*(*uint64)(ptr) = size
-		default:
-			*(*string)(ptr) = goVal
-		}
+		*ptr = goVal
 	}
+
+	for key, ptr := range uint64Fields {
+		goVal := getVal(key)
+		if goVal == "" {
+			continue
+		}
+		size, err := strconv.ParseUint(goVal, 10, 64)
+		if err != nil {
+			return nil, errors.Errorf("device %q has invalid size %q", o.name(), goVal)
+		}
+		*ptr = size
+	}
+
 	return bd, nil
 }
 
