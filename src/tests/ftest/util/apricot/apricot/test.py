@@ -11,6 +11,7 @@ import os
 import json
 import re
 from time import time
+from deprecated import deprecated
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -1685,6 +1686,7 @@ class TestWithServers(TestWithoutServers):
         """
         return DaosCommand(self.bin)
 
+    @deprecated
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
 

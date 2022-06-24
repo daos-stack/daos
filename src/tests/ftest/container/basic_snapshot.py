@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +10,7 @@ from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_bytes
 
+# test
 
 class BasicSnapshot(TestWithServers):
     """DAOS-1370 Basic snapshot test.
