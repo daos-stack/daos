@@ -104,7 +104,8 @@ pool_hop_free(struct d_ulink *hlink)
 	D_ASSERT(!gc_have_pool(pool));
 
 	if (pool->vp_io_ctxt != NULL) {
-		rc = bio_ioctxt_close(pool->vp_io_ctxt);
+		rc = bio_ioctxt_close(pool->vp_io_ctxt,
+				      pool->vp_pool_df->pd_nvme_sz == 0);
 		if (rc)
 			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID" : "
 				DF_RC"\n", pool->vp_io_ctxt,
@@ -196,7 +197,7 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 	int			 rc;
 
 	/* Create a bio_io_context to get the blob */
-	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool, false);
 	if (rc) {
 		D_ERROR("Failed to create an I/O context for writing blob "
 			"header: "DF_RC"\n", DP_RC(rc));
@@ -209,7 +210,7 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
 			blob_hdr->bbh_blob_id, DP_RC(rc));
 
-	rc = bio_ioctxt_close(ioctxt);
+	rc = bio_ioctxt_close(ioctxt, false);
 	if (rc)
 		D_ERROR("Failed to free I/O context: "DF_RC"\n", DP_RC(rc));
 
@@ -357,7 +358,7 @@ end:
 	}
 
 	/* SCM only pool or NVMe device isn't configured */
-	if (nvme_sz == 0 || xs_ctxt == NULL)
+	if (nvme_sz == 0 || !bio_nvme_configured())
 		goto open;
 
 	/* Create SPDK blob on NVMe device */
@@ -452,7 +453,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
 	/* NVMe device is configured */
-	if (xs_ctxt) {
+	if (bio_nvme_configured()) {
 		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		rc = bio_blob_delete(uuid, xs_ctxt);
@@ -659,11 +660,12 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		D_GOTO(failed, rc);
 	}
 
-	xs_ctxt = pool_df->pd_nvme_sz == 0 ? NULL : vos_xsctxt_get();
+	xs_ctxt = vos_xsctxt_get();
 
 	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
-	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
+	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid,
+			     pool_df->pd_nvme_sz == 0);
 	if (rc) {
 		D_ERROR("Failed to open VOS I/O context for xs:%p "
 			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),
@@ -671,7 +673,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		goto failed;
 	}
 
-	if (xs_ctxt != NULL) {
+	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context unmap_ctxt;
 
 		/* set unmap callback fp */

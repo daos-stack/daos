@@ -229,7 +229,7 @@ vos_dedup_lookup(struct vos_pool *pool, struct dcs_csum_info *csum,
 	entry = dedup_rlink2entry(rlink);
 	if (biov) {
 		biov->bi_addr = entry->de_addr;
-		biov->bi_addr.ba_dedup = true;
+		BIO_ADDR_SET_DEDUP(&biov->bi_addr);
 		biov->bi_data_len = entry->de_data_len;
 		D_DEBUG(DB_IO, "Found dedup entry\n");
 	}
@@ -247,7 +247,9 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 {
 	struct dedup_entry	*entry;
 
-	if (!ci_is_valid(csum) || csum_len == 0 || biov->bi_addr.ba_dedup)
+
+	if (!ci_is_valid(csum) || csum_len == 0 ||
+	    BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 		return;
 
 	if (bio_addr_is_hole(&biov->bi_addr))
@@ -1461,7 +1463,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
+	/* Don't make this flag persistent */
+	BIO_ADDR_SET_NOT_DEDUP(&ent.ei_addr);
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
@@ -1762,7 +1765,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 	ioc->ic_iov_at++;
 	bsgl->bs_nr_out++;
 
-	D_DEBUG(DB_TRACE, "media %hu offset "DF_U64" size %zd\n",
+	D_DEBUG(DB_TRACE, "media %d offset "DF_U64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
 		bio_iov2len(biov));
 	return 0;
@@ -2299,8 +2302,7 @@ int
 vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 		   struct bio_sglist *bsgl_dup)
 {
-	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
-	int			 i, rc;
+	int	i, rc;
 
 	D_ASSERT(daos_handle_is_valid(ioh));
 	D_ASSERT(bsgl != NULL);
@@ -2315,30 +2317,26 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
-		PMEMoid		 oid;
 
 		if (bio_iov2buf(biov) == NULL)
 			continue;
 
 		*biov_dup = *biov;
 		/* Original biov isn't deduped, don't duplicate buffer */
-		if (!biov->bi_addr.ba_dedup)
+		if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			continue;
 
 		D_ASSERT(bio_iov2len(biov) != 0);
-		/* Support SCM only for this moment */
-		rc = pmemobj_alloc(vos_ioc2umm(ioc)->umm_pool, &oid,
-				   bio_iov2len(biov), UMEM_TYPE_ANY, NULL,
-				   NULL);
-		if (rc) {
-			D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
+		D_ALLOC(biov_dup->bi_buf, bio_iov2len(biov));
+		if (biov_dup->bi_buf) {
+			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
 			return -DER_NOMEM;
 		}
 
-		biov_dup->bi_addr.ba_off = umem_id2off(vos_ioc2umm(ioc), oid);
-		biov_dup->bi_buf = umem_off2ptr(vos_ioc2umm(ioc),
-						bio_iov2off(biov_dup));
+		BIO_ADDR_SET_NOT_DEDUP(&biov_dup->bi_addr);
+		BIO_ADDR_SET_DEDUP_BUF(&biov_dup->bi_addr);
+		biov_dup->bi_addr.ba_off = UMOFF_NULL;
 	}
 
 	return 0;
@@ -2347,23 +2345,133 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 void
 vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
 {
-	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
-	int			 i;
+	int	i;
 
 	D_ASSERT(daos_handle_is_valid(ioh));
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		PMEMoid		 oid;
 
-		if (UMOFF_IS_NULL(bio_iov2off(biov)))
+		if (biov->bi_buf == NULL)
 			continue;
+
 		/* Not duplicated buffer, don't free it */
-		if (!biov->bi_addr.ba_dedup)
+		D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
+		if (!BIO_ADDR_IS_DEDUP_BUF(&biov->bi_addr))
 			continue;
 
-		oid = umem_off2id(vos_ioc2umm(ioc), bio_iov2off(biov));
-		pmemobj_free(&oid);
+		D_FREE(biov->bi_buf);
 	}
+}
+
+/*
+ * Check if the dedup data is identical to the RDMA data in a temporal
+ * allocated DRAM extent, if memcmp fails, allocate a new SCM extent and
+ * update it's address in VOS tree, otherwise, keep using the original
+ * dedup data address in VOS tree.
+ */
+int
+vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup)
+{
+	struct vos_io_context	*ioc;
+	struct bio_sglist	*bsgl, *bsgl_dup;
+	int			 i, j, rc;
+	PMEMoid			 oid;
+
+	D_ASSERT(daos_handle_is_valid(ioh));
+	D_ASSERT(bsgls_dup != NULL);
+	ioc = vos_ioh2ioc(ioh);
+
+	for (i = 0; i < ioc->ic_iod_nr; i++) {
+		bsgl = vos_iod_sgl_at(ioh, i);
+		D_ASSERT(bsgl != NULL);
+		bsgl_dup = &bsgls_dup[i];
+
+		D_ASSERT(bsgl->bs_nr_out == bsgl_dup->bs_nr_out);
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			struct bio_iov	*biov = &bsgl->bs_iovs[j];
+			struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[j];
+			bio_addr_t	*addr = &biov->bi_addr;
+			bio_addr_t	*addr_dup = &biov_dup->bi_addr;
+
+			/* Hole */
+			if (bio_iov2buf(biov) == NULL) {
+				D_ASSERT(bio_iov2buf(biov_dup) == NULL);
+				continue;
+			}
+
+			/* Non-deduped extent */
+			if (!BIO_ADDR_IS_DEDUP(addr)) {
+				D_ASSERT(!BIO_ADDR_IS_DEDUP(addr_dup));
+				D_ASSERT(!BIO_ADDR_IS_DEDUP_BUF(addr_dup));
+				continue;
+			}
+			D_ASSERT(BIO_ADDR_IS_DEDUP_BUF(addr_dup));
+
+			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
+
+			if (rc == 0) {	/* verify succeeded */
+				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
+				continue;
+			}
+
+			/*
+			 * Allocate new extent and replace the deduped address
+			 * with new allocated address, so that the new address
+			 * will be updated in VOS tree in later tx commit.
+			 *
+			 * TODO:
+			 * - Support NVMe;
+			 * - Deal with SCM leak on tx commit failure or server
+			 *   crash;
+			 */
+			rc = pmemobj_alloc(vos_ioc2umm(ioc)->umm_pool, &oid,
+					   bio_iov2len(biov), UMEM_TYPE_ANY,
+					   NULL, NULL);
+			if (rc) {
+				D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
+					bio_iov2len(biov));
+				goto error;
+			}
+
+			biov->bi_addr.ba_off = umem_id2off(vos_ioc2umm(ioc),
+							   oid);
+			biov->bi_buf = umem_off2ptr(vos_ioc2umm(ioc),
+						bio_iov2off(biov));
+			BIO_ADDR_SET_NOT_DEDUP(&biov->bi_addr);
+
+			pmemobj_memcpy_persist(vos_ioc2umm(ioc)->umm_pool,
+					       biov->bi_buf, biov_dup->bi_buf,
+					       bio_iov2len(biov));
+
+			/* For error cleanup */
+			biov_dup->bi_addr.ba_off = biov->bi_addr.ba_off;
+
+			D_DEBUG(DB_IO, "Verify dedup extents failed, "
+				"use newly allocated extent\n");
+		}
+	}
+
+	return 0;
+error:
+	for (i = 0; i < ioc->ic_iod_nr; i++) {
+		bsgl_dup = &bsgls_dup[i];
+
+		for (j = 0; j < bsgl_dup->bs_nr_out; j++) {
+			struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[j];
+
+			if (bio_iov2off(biov_dup) == UMOFF_NULL)
+				continue;
+
+			oid = umem_off2id(vos_ioc2umm(ioc),
+					  bio_iov2off(biov_dup));
+			pmemobj_free(&oid);
+			biov_dup->bi_addr.ba_off = UMOFF_NULL;
+		}
+	}
+
+	return -DER_NOSPACE;
 }
 
 /**
@@ -2385,7 +2493,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	int rc, err;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
-	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
