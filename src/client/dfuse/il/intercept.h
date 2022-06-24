@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,8 @@
 	ACTION(ssize_t, pread,     (int, void *, size_t, off_t))              \
 	ACTION(ssize_t, pwrite,    (int, const void *, size_t, off_t))        \
 	ACTION(off_t,   lseek,     (int, off_t, int))                         \
+	ACTION(int,     fseek,     (FILE *, long, int))                       \
+	ACTION(int,     fseeko,    (FILE *, off_t, int))                      \
 	ACTION(ssize_t, preadv,    (int, const struct iovec *, int, off_t))   \
 	ACTION(ssize_t, pwritev,   (int, const struct iovec *, int, off_t))   \
 	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))
@@ -54,7 +56,15 @@
 	ACTION(int,     fcntl,     (int, int, ...))                           \
 	ACTION(FILE *,  fdopen,    (int, const char *))                       \
 	ACTION(int,     __fxstat,  (int, int, struct stat *))                 \
-	ACTION(int,     mkstemp,   (char *))
+	ACTION(int,     mkstemp,   (char *))                                  \
+	ACTION(int,     ferror,    (FILE *))                                  \
+	ACTION(void,    clearerr,  (FILE *))                                  \
+	ACTION(int,     feof,      (FILE *))                                  \
+	ACTION(long,    ftell,     (FILE *))                                  \
+	ACTION(void,    rewind,    (FILE *))                                  \
+	ACTION(off_t,   ftello,    (FILE *))                                  \
+	ACTION(size_t,  fread,     (void *, size_t, size_t, FILE *))          \
+	ACTION(size_t,  fwrite,    (const void *ptr, size_t size, size_t nmemb, FILE *stream))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

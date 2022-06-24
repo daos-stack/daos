@@ -280,8 +280,10 @@ def scons():
     daos_build.add_rpaths(aenv, None, True, True)
     adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
+    ssdbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_ssd",
+                               "daos_ssd")
 
-    AlwaysBuild([serverbin, adminbin])
+    AlwaysBuild([serverbin, adminbin, ssdbin])
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
