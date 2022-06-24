@@ -88,11 +88,6 @@ RUN dnf upgrade &&                                      \
         fi &&                                           \
     dnf install git sudo && dnf clean all
 
-RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
-        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
-               /etc/profile.d/lmod.sh;                                     \
-    fi
-
 RUN update-ca-certificates
 
 ARG UID=1000
