@@ -100,13 +100,14 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 		{ "write_mode", no_argument, NULL,	'w' },
 		{ "run_cmd", required_argument, NULL,	'R' },
 		{ "cmd_file", required_argument, NULL,	'f' },
+		{ "help", required_argument, NULL,	'h' },
 		{ NULL }
 	};
 	int		index = 0, opt;
 
 	optind = 0; /* Reinitialize getopt */
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "wR:f:h", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'w':
 			pa->pa_write_mode = true;
@@ -116,6 +117,9 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 			break;
 		case 'f':
 			pa->pa_cmd_file = optarg;
+			break;
+		case 'h':
+			pa->pa_get_help = true;
 			break;
 		case '?':
 			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);

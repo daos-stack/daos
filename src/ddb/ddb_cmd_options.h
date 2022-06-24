@@ -34,7 +34,7 @@ struct ls_options {
 
 struct open_options {
 	bool write_mode;
-	char *vos_pool_shard;
+	char *path;
 };
 
 struct dump_value_options {
@@ -107,5 +107,8 @@ int ddb_run_rm_ilog(struct ddb_ctx *ctx, struct rm_ilog_options *opt);
 int ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt);
 int ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt);
 int ddb_run_smd_sync(struct ddb_ctx *ctx);
+
+void ddb_program_help(struct ddb_ctx *ctx);
+void ddb_commands_help(struct ddb_ctx *ctx);
 
 #endif /* __DDB_RUN_CMDS_H */

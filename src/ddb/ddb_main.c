@@ -55,7 +55,7 @@ run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 
 	switch (info.dci_cmd) {
 	case DDB_CMD_UNKNOWN:
-		ddb_print(ctx, "Unknown command\n");
+		ddb_error(ctx, "Unknown command\n");
 		ddb_run_help(ctx);
 		rc = -DER_INVAL;
 		break;
@@ -167,7 +167,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	struct program_args	 pa = {0};
 	uint32_t		 input_buf_len = 1024;
 	char			*input_buf;
-	int			 rc = 0;
+	int			 rc;
 	struct ddb_ctx		 ctx = {0};
 
 	D_ASSERT(io_ft);
@@ -180,6 +180,11 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
+
+	if (pa.pa_get_help) {
+		ddb_program_help(&ctx);
+		D_GOTO(done, rc);
+	}
 
 	ctx.dc_write_mode = pa.pa_write_mode;
 
@@ -214,6 +219,10 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	while (!ctx.dc_should_quit) {
 		io_ft->ddb_print_message("$ ");
 		io_ft->ddb_get_input(input_buf, input_buf_len);
+
+		/* Remove newline */
+		if (input_buf[strlen(input_buf) - 1] == '\n')
+			input_buf[strlen(input_buf) - 1] = '\0';
 
 		rc = run_cmd(&ctx, input_buf, pa.pa_write_mode);
 		if (!SUCCESS(rc)) {

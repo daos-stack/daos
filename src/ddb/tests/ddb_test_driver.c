@@ -597,9 +597,9 @@ int main(int argc, char *argv[])
 #endif
 		RUN_TEST_SUIT('a', ddb_parse_tests_run);
 		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
-		RUN_TEST_SUIT('c', dv_tests_run);
-		RUN_TEST_SUIT('d', dvc_tests_run);
-		RUN_TEST_SUIT('e', ddb_main_tests);
+		RUN_TEST_SUIT('c', ddb_vos_tests_run);
+		RUN_TEST_SUIT('d', ddb_commands_tests_run);
+		RUN_TEST_SUIT('e', ddb_main_tests_run);
 		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
 
 done:

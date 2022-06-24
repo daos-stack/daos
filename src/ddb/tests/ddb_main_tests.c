@@ -225,6 +225,13 @@ option_f_and_option_R_is_invalid_tests(void **state)
 	assert_invalid_main(tctx->dvt_pmem_file, "-R", "ls", "-f", "file_path");
 }
 
+static void
+get_help_tests(void **state)
+{
+	assert_main("-R", "help");
+	assert_main("-h");
+}
+
 static int
 ddb_main_suit_setup(void **state)
 {
@@ -254,7 +261,7 @@ ddb_main_suit_teardown(void **state)
 
 #define TEST(x) { #x, x, NULL, NULL }
 int
-ddb_main_tests()
+ddb_main_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
 		TEST(interactive_mode_tests),
@@ -262,6 +269,7 @@ ddb_main_tests()
 		TEST(only_modify_with_option_w_tests),
 		TEST(run_many_commands_with_option_f_tests),
 		TEST(option_f_and_option_R_is_invalid_tests),
+		TEST(get_help_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB CLI tests", tests, ddb_main_suit_setup,

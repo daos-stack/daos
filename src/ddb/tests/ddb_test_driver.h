@@ -42,9 +42,9 @@ int ddb_test_setup_vos(void **state);
 int ddb_teardown_vos(void **state);
 
 int ddb_parse_tests_run(void);
-int dv_tests_run(void);
-int dvc_tests_run(void);
-int ddb_main_tests(void);
+int ddb_vos_tests_run(void);
+int ddb_commands_tests_run(void);
+int ddb_main_tests_run(void);
 int ddb_cmd_options_tests_run(void);
 int ddb_commands_print_tests_run(void);
 

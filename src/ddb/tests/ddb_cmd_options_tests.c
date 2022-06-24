@@ -86,17 +86,17 @@ open_options_parsing(void **state)
 	struct open_options	*options = &info.dci_cmd_option.dci_open;
 
 	/* test invalid arguments and options */
-	test_run_inval_cmd("open", "vos_pool_shard", "extra"); /* too many argument */
+	test_run_inval_cmd("open", "path", "extra"); /* too many argument */
 	test_run_inval_cmd("open", "-z"); /* invalid option */
 
 	/* test all arguments */
-	test_run_cmd(&info, "open", "vos_pool_shard");
-	assert_non_null(options->vos_pool_shard);
+	test_run_cmd(&info, "open", "path");
+	assert_non_null(options->path);
 	assert_false(options->write_mode);
 
 	/* test all options and arguments */
-	test_run_cmd(&info, "open", "-w", "vos_pool_shard");
-	assert_non_null(options->vos_pool_shard);
+	test_run_cmd(&info, "open", "-w", "path");
+	assert_non_null(options->path);
 	assert_true(options->write_mode);
 }
 
