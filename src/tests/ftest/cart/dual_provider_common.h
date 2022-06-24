@@ -118,7 +118,8 @@ handler_ping(crt_rpc_t *rpc)
 	crt_context_t		*ctx;
 	int			rc = 0;
 	bool			primary_origin = false;
-
+	int			my_tag;
+	uint32_t		hdr_dst_tag;
 
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
@@ -128,7 +129,6 @@ handler_ping(crt_rpc_t *rpc)
 
 	ctx = rpc->cr_ctx;
 
-
 	rc = crt_req_src_provider_is_primary(rpc, &primary_origin);
 
 	if (rc != 0) {
@@ -136,8 +136,21 @@ handler_ping(crt_rpc_t *rpc)
 		error_exit();
 	}
 
-	DBG_PRINT("RPC arived on a %s context; origin was %s\n",
+	rc = crt_req_dst_tag_get(rpc, &hdr_dst_tag);
+	if (rc != 0) {
+		D_ERROR("crt_req_dst_tag_get() failed; rc=%d\n", rc);
+		error_exit();
+	}
+
+	rc = crt_context_idx(rpc->cr_ctx, &my_tag);
+	if (rc != 0) {
+		D_ERROR("crt_context_idx() failed; rc=%d\n", rc);
+		error_exit();
+	}
+
+	DBG_PRINT("RPC arived on a %s context (idx=%d intended_tag=%d); origin was %s\n",
 		  crt_context_is_primary(ctx) ? "primary" : "secondary",
+		  my_tag, hdr_dst_tag,
 		  primary_origin ? "primary" : "secondary");
 
 	/* TODO: Change this to rank == 2 when bulk support is added */

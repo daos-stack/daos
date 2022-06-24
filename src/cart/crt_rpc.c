@@ -251,7 +251,8 @@ crt_internal_rpc_register(bool server)
 		return rc;
 	}
 
-	/* TODO: The self-test protocols should not be registered on the client
+	/*
+	 * TODO: The self-test protocols should not be registered on the client
 	 * by default.
 	 */
 
@@ -480,8 +481,9 @@ crt_rpc_priv_set_ep(struct crt_rpc_priv *rpc_priv, crt_endpoint_t *tgt_ep)
 	} else {
 		rpc_priv->crp_pub.cr_ep.ep_grp = tgt_ep->ep_grp;
 	}
-	rpc_priv->crp_pub.cr_ep.ep_rank = tgt_ep->ep_rank;
+
 	rpc_priv->crp_pub.cr_ep.ep_tag = tgt_ep->ep_tag;
+	rpc_priv->crp_pub.cr_ep.ep_rank = tgt_ep->ep_rank;
 	rpc_priv->crp_have_ep = 1;
 }
 
@@ -524,6 +526,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	if (tgt_ep != NULL) {
 		rc = check_ep(tgt_ep, &grp_priv);
+
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1104,6 +1107,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	crt_phy_addr_t		 uri = NULL;
 	int			 rc = 0;
 	crt_phy_addr_t		 base_addr = NULL;
+	int			 dst_tag;
 
 	req = &rpc_priv->crp_pub;
 	ctx = req->cr_ctx;
@@ -1112,22 +1116,32 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	*uri_exists = false;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 
+	dst_tag = tgt_ep->ep_tag;
+
+	if (!crt_gdata.cg_provider_is_primary) {
+		/*
+		 * TODO: Add API to set number of destination tags
+ 		 * for the secondary provider
+ 		 */
+		dst_tag = 0;
+	}
+
 	crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
-			  tgt_ep->ep_rank, tgt_ep->ep_tag, &base_addr,
+			  tgt_ep->ep_rank, dst_tag, &base_addr,
 			  &rpc_priv->crp_hg_addr);
 
 	if (base_addr == NULL && rpc_priv->crp_hg_addr == NULL) {
 		if (crt_req_is_self(rpc_priv)) {
-			rc = crt_self_uri_get(tgt_ep->ep_tag, &uri);
+			rc = crt_self_uri_get(dst_tag, &uri);
 			if (rc != DER_SUCCESS) {
 				D_ERROR("crt_self_uri_get(tag: %d) failed, "
-					"rc %d\n", tgt_ep->ep_tag, rc);
+					"rc %d\n", dst_tag, rc);
 				D_GOTO(out, rc);
 			}
 
 			rc = crt_grp_lc_uri_insert(grp_priv,
 						   tgt_ep->ep_rank,
-						   tgt_ep->ep_tag, base_addr);
+						   dst_tag, base_addr);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -1155,7 +1169,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	if (base_addr == NULL && !crt_is_service()) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
-		    tgt_ep->ep_tag == 0) {
+		    dst_tag == 0) {
 			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
 				  CRT_ADDR_STR_MAX_LEN);
 			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -1701,6 +1715,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		if (pri_root == self_rank)
 			skip_check = true;
 	}
+
+	/* Skip check for secondary provider clients */
+	if (!rpc_priv->crp_req_hdr.cch_src_is_primary)
+		skip_check = true;
 
 	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
 	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
