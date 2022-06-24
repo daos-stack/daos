@@ -199,4 +199,3 @@ WORKDIR /home/daos
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
-RUN ls /home/daos
