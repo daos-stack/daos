@@ -328,29 +328,18 @@ Three options are supported:
 
 ### Self-healing Policy (self\_heal)
 
-<<<<<<< HEAD
-This property defines whether a failing node is automatically evicted from the
-pool. Once excluded, the self-healing mechasnism will be triggered to restore
-the pool data redundancy on the surviving storage nodes.
-=======
 This property defines whether a failing engine is automatically evicted from the
 pool. Once excluded, the self-healing mechanism will be triggered to restore
 the pool data redundancy on the surviving storage engines.
 Two options are supported: "exclude" (default strategy) and "rebuild".
->>>>>>> 910cd1c4e (DAOS-10039 doc: improve pool create documentation)
 
 ### Reserve Space (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
-<<<<<<< HEAD
-node for self-healing purpose. The reserved space cannot be consumed by the
-applications.
-=======
 engine for self-healing purpose. The reserved space cannot be consumed by
 applications. Valid values are 0% to 100%, the default is 0%.
 When setting this property, specifying the percentage symbol is optional:
 `space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
->>>>>>> 910cd1c4e (DAOS-10039 doc: improve pool create documentation)
 
 ### EC Cell Size (ec\_cell\_sz)
 
@@ -525,13 +514,8 @@ $ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_lab
 
 The pool target exclude command accepts 2 parameters:
 
-<<<<<<< HEAD
-* The rank of the target(s) to be excluded.
-* The target Indices of the targets to be excluded from that rank (optional).
-=======
 * The engine rank of the target(s) to be excluded.
 * The target indices of the targets to be excluded from that engine rank (optional).
->>>>>>> 910cd1c4e (DAOS-10039 doc: improve pool create documentation)
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines.
@@ -556,13 +540,8 @@ $ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
 
 The pool target drain command accepts 2 parameters:
 
-<<<<<<< HEAD
-* The rank of the target(s) to be drained.
-* The target Indices of the targets to be drained from that rank (optional).
-=======
 * The engine rank of the target(s) to be drained.
 * The target indices of the targets to be drained from that engine rank (optional).
->>>>>>> 910cd1c4e (DAOS-10039 doc: improve pool create documentation)
 
 ### Reintegration
 
