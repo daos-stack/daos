@@ -901,8 +901,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild " DF_UUID "/%d"
-			       " is not cleanup yet\n",
+			D_WARN("the previous rebuild " DF_UUID "/%d is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 			D_GOTO(out, rc = -DER_BUSY);
 		}
