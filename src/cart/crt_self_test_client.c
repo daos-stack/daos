@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -759,7 +759,7 @@ static void free_g_data(void)
 				 * Free and zero the actual pointer, not
 				 * the local copy
 				 */
-				D_FREE_PTR(g_data->cb_args_ptrs[alloc_idx]);
+				D_FREE(g_data->cb_args_ptrs[alloc_idx]);
 			}
 		}
 
