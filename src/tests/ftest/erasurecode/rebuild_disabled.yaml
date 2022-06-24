@@ -7,6 +7,8 @@ hosts:
     10_server:
       test_servers: server-[1-5]
   test_clients: 3
+setup:
+  start_servers_once: False
 timeout: 3500
 server_config:
   engines_per_host: 2
