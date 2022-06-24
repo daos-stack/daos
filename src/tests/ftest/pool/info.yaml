@@ -14,9 +14,9 @@ pool:
   control_method: dmg
   createsize: !mux
     size1gb:
-      scm_size: 1073741824
-    size3gb:
-      scm_size: 3221225472
+      scm_size: 1G
+    size2gb:
+      scm_size: 2G
 test:
   poolconnect: !mux
     ro:

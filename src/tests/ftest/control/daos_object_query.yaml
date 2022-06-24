@@ -13,7 +13,7 @@ server_config:
         scm_size: 4
 pool:
     name: daos_server
-    scm_size: 4G
+    scm_size: 3G
     control_method: dmg
 container:
     control_method: daos

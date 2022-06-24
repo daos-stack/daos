@@ -15,4 +15,4 @@ server_config:
     scm_size: 4
 pool:
   control_method: dmg
-  size: 1G
+  size: 512M

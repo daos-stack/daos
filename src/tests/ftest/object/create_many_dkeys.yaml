@@ -12,9 +12,8 @@ server_config:
     nr_xs_helpers: 0
     scm_size: 4
 pool:
-  mode: 511
   name: daos_server
-  scm_size: 8000000000
+  scm_size: 3G
   control_method: dmg
 dkeys:
   number_of_dkeys: 1000000

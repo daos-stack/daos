@@ -12,14 +12,13 @@ server_config:
     nr_xs_helpers: 0
     scm_size: 4
 pool:
-    mode: 511
     name: daos_server
     control_method: dmg
     scm_size_mux: !mux
         size1gb:
-            scm_size: 1073741824
-        size7gb:
-            scm_size: 7516192768
+            scm_size: 1G
+        size3gb:
+            scm_size: 3G
 object_class: !mux
     OC_S1:
         obj_class: OC_S1
