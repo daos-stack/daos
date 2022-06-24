@@ -83,7 +83,7 @@ The capacity of the pool can be specified in three different ways:
      space and not total space, the absolute size of a pool
      created with `--size=percentage%` will be impacted by other
      concurrent pool create operations. The command output will
-     always list the total capacities in addiiton to the
+     always list the total capacities in addition to the
      requested percentage.
 
 3. The `--scm-size` parameter (and optionally `--nvme-size`) can
