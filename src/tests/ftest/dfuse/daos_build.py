@@ -6,8 +6,8 @@
 """
 
 import os
-import general_utils
 from collections import OrderedDict
+import general_utils
 import distro
 
 from avocado import skip
@@ -125,7 +125,7 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 50 build --build-deps=yes --deps-only'.format(build_dir),
+                'scons -C {} --jobs 50 build --build-deps=only'.format(build_dir),
                 'scons -C {} build'.format(build_dir)]
         for cmd in cmds:
             try:

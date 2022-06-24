@@ -28,10 +28,10 @@ class ThreadResult():
         self.result = result
 
     def __str__(self):
-        """Return the string respresentation of this object.
+        """Return the string representation of this object.
 
         Returns:
-            str: the string respresentation of this object
+            str: the string representation of this object
 
         """
         def get_result(result):
@@ -156,7 +156,7 @@ class ThreadManager():
         return len(failed)
 
     def check_run(self):
-        """Run the threads and check thr result.
+        """Run the threads and check the result.
 
         Returns:
             int: number of threads that failed

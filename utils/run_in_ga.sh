@@ -5,7 +5,7 @@ cd daos
 # Probably not needed now, but leave on PRs until we have confidence of landings builds.
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
-scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=yes --deps-only
+scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"
@@ -49,6 +49,24 @@ scons install
 utils/check.sh /opt/daos/bin/daos_engine
 utils/check.sh /opt/daos/bin/vos_tests
 utils/check.sh /opt/daos/bin/dmg
+echo ::endgroup::
+
+echo ::group::Rebuild ofi in alternative location
+rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
+scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
+      "$DEPS_JOBS"
+echo ::endgroup::
+
+echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
+scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
+      DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
+utils/check.sh /opt/daos/bin/daos_engine
+utils/check.sh /opt/daos/bin/vos_tests
+utils/check.sh /opt/daos/bin/dmg
+echo ::endgroup::
+
+echo ::group::Config file after ALT_PREFIX build
+cat daos.conf
 echo ::endgroup::
 
 echo ::group::Install pydaos

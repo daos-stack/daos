@@ -2,8 +2,10 @@
 """Wrapper script for calling pylint"""
 
 import os
+import sys
 import re
 from collections import Counter
+import tempfile
 import subprocess  # nosec
 import argparse
 from pylint.lint import Run
@@ -17,21 +19,21 @@ from pylint.lint import pylinter
 #  Sets python-path or similar as required
 #  Runs in parallel across whole tree
 #  Supports minimum python version
-#  Supports venv usage
+#  Supports python virtual environment usage
 #  Can be used by atom.io live
-#  Outputs directly to github annotations
+#  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
 #  Can be used as a commit-hook
 #  flake8 style --diff option
 
-# For now this spilts code into one of three types, build (scons), ftest or other.  For build code
+# For now this splits code into one of three types, build (scons), ftest or other.  For build code
 # it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
 # does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
-# that currently exist in the codebase we need to restrict this to modified code.  Spellings can
+# that currently exist in the code-base we need to restrict this to modified code.  Spellings can
 # also be enabled shortly however we have a number to correct or whitelist before enabling.
 
 
@@ -40,17 +42,13 @@ class WrapScript():
 
     def __init__(self, fname):
 
-        # TODO: Use a NamedTemporaryFile file here, it's an easy change to make but there appears
-        # to be some weird utf-8 errors in the tree somewhere which is causing spurious issues.
-
         self.line_map = {}
-        self.wrap_file = f'{fname}.tmp'
-        with open(self.wrap_file, 'w') as outfile:
-            with open(fname, 'r') as infile:
-                self._read_files(infile, outfile)
-
-    def __del__(self):
-        os.unlink(self.wrap_file)
+        # pylint: disable-next=consider-using-with
+        self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
+        self.wrap_file = self._outfile.name
+        with open(fname, 'r') as infile:
+            self._read_files(infile, self._outfile)
+        self._outfile.flush()
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
@@ -112,9 +110,9 @@ class WrapScript():
         """Add code to define fake variables for pylint"""
         newlines = 0
         for variable in variables:
-            outfile.write('# pylint: disable-next=consider-using-f-string\n')
-            outfile.write(f"{prefix}print('%s' % str({variable}))\n")
-            newlines += 2
+            # pylint: disable-next=consider-using-f-string
+            outfile.write("%sprint(f'{%s}')\n" % (prefix, variable))
+            newlines += 1
         return newlines
 
     @staticmethod
@@ -125,8 +123,8 @@ class WrapScript():
         for variable in variables:
             if variable.upper() == 'PREREQS':
                 newlines += 1
-# pylint: disable-next=line-too-long
-                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
+                outfile.write(
+                    f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
@@ -190,6 +188,16 @@ class FileTypeList():
             # There may be more files needed here, but just this one is reporting errors.
             if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
                 return True
+            if filename.endswith('site_scons/stack_analyzer.py'):
+                return True
+            # Needs more work yet, partly on spellings.  Another issue is that in GitHub actions
+            # pylint is called on all files in the tree concurrently so it can resolve calls to
+            # scons as being to fake_scons, where if you call pylint on file file then it cannot.
+            # At some point we need to move fake_scons so that it's checked on it's own, and at that
+            # point also move code that uses scons from the general checks to the scons checks so
+            # they are still checked against fake_scons.
+            # if 'utils/sl/fake_scons' in filename:
+            #     return True
             return False
 
         if is_scons_file(file):
@@ -221,18 +229,67 @@ class FileTypeList():
     def run(self, args):
         """Run pylint against all files"""
         print(self)
+        failed = False
         if self.files:
-            parse_file(args, self.files)
+            if parse_file(args, self.files):
+                failed = True
         if self.ftest_files:
-            parse_file(args, self.ftest_files, ftest=True)
+            if parse_file(args, self.ftest_files, ftest=True):
+                failed = True
         if self.scons_files:
             for file in self.scons_files:
-                parse_file(args, file, scons=True)
+                if parse_file(args, file, scons=True):
+                    failed = True
+        return failed
+
+
+def word_is_allowed(word, code):
+    """Return True is misspelling is permitted"""
+
+    # pylint: disable=too-many-return-statements
+
+    # Skip the "Fake" annotations from fake scons.
+    if code.startswith(f'Fake {word}'):
+        return True
+    # Skip things that look like function documentation
+    if code.startswith(f'{word} ('):
+        return True
+    # Skip things that look like command options.
+    if f' -{word}' in code or f' --{word}' in code:
+        return True
+    # Skip things which are quoted
+    if f"'{word}'" in code:
+        return True
+    # Skip things which are quoted the other way
+    if f'"{word}"' in code:
+        return True
+    # Skip things which are in braces
+    if f'({word})' in code:
+        return True
+    # Skip words which appear to be part of a path
+    if f'/{word}/' in code:
+        return True
+    # Skip things are followed by open quotes
+    if f'{word}(' in code:
+        return True
+    # Skip things which look like source files.
+    if f'{word}.c' in code:
+        return True
+    # Skip things are followed by open colon
+    if f'{word}:' in code:
+        return True
+    # Skip test files.
+    if f'{word}.txt' in code:
+        return True
+    return False
 
 
 def parse_file(args, target_file, ftest=False, scons=False):
-    """Main program"""
+    """Parse a list of targets.
 
+    Returns True if warnings issued to GitHub."""
+
+    failed = False
     rep = CollectingReporter()
     wrapper = None
     init_hook = None
@@ -274,10 +331,26 @@ sys.path.append('site_scons')"""
 
     for msg in results.linter.reporter.messages:
         vals = {}
-        # Spelling mistake, do not complain about message tags.
-        if ftest and msg.msg_id in ('C0401', 'C0402'):
-            if ":avocado:" in msg.msg:
+        vals['category'] = msg.category
+
+        # Spelling mistakes. There are a lot of code to silence code blocks and examples
+        # in comments.  Be strict for everything but ftest code currently.
+        if not scons and msg.msg_id in ('C0401', 'C0402'):
+            lines = msg.msg.splitlines()
+            header = lines[0]
+            code = lines[1].strip()
+            components = header.split("'")
+            word = components[1]
+            # Skip test-tags, these are likely not words.
+            if ftest and code.startswith(':avocado: tags='):
                 continue
+            if word_is_allowed(word, code):
+                continue
+
+            # Finally, promote any spelling mistakes not silenced above or in ftest code to error.
+            if not ftest:
+                vals['category'] = 'error'
+
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
             continue
@@ -296,7 +369,6 @@ sys.path.append('site_scons')"""
         # Duplicates, needed for message_template.
         vals['msg'] = msg.msg
         vals['msg_id'] = msg.msg_id
-        vals['category'] = msg.category
 
         # The build/scons code is mostly clean, so only allow f-string warnings.
         if scons and msg.symbol != 'consider-using-f-string':
@@ -312,16 +384,19 @@ sys.path.append('site_scons')"""
                 continue
             if vals['category'] == 'warning':
                 continue
-            # pylint: disable-next=line-too-long,consider-using-f-string
-            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
+            failed = True
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
 
     if not types or args.reports == 'n':
-        return
+        return failed
     for (mtype, count) in types.most_common():
         print(f'{mtype}:{count}')
 
     for (mtype, count) in symbols.most_common():
         print(f'{mtype}:{count}')
+    return failed
 
 
 def run_git_files(args):
@@ -333,7 +408,9 @@ def run_git_files(args):
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
-    all_files.run(args)
+    if all_files.run(args):
+        print('Errors reported to github')
+        sys.exit(1)
 
 
 def run_input_file(args, input_file):
@@ -367,10 +444,7 @@ def main():
     except ImportError:
         spellings = False
 
-    if spellings:
-        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc.spellings')
-    else:
-        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
+    rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
     # Args that atom uses.
     parser.add_argument('--msg-template',
@@ -379,6 +453,7 @@ def main():
     parser.add_argument('--output-format', choices=['text'])
     parser.add_argument('--rcfile', default=rcfile)
 
+    # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
     parser.add_argument('--format', choices=['text', 'github'], default='text')
 
@@ -386,6 +461,22 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
+
+    rc_tmp = None
+
+    # If spellings are likely supported and using the default configuration file then enable using
+    # a temporary file.
+    if spellings and args.rcfile == rcfile:
+        # pylint: disable-next=consider-using-with
+        rc_tmp = tempfile.NamedTemporaryFile(mode='w+', prefix='pylintrc')
+        with open(rcfile) as src_file:
+            rc_tmp.write(src_file.read())
+        rc_tmp.flush()
+        rc_tmp.write('[SPELLING]\n')
+        rc_tmp.write('spelling-dict=en_US\n')
+        rc_tmp.write('spelling-private-dict-file=utils/cq/words.dict\n')
+        rc_tmp.flush()
+        args.rcfile = rc_tmp.name
 
     if args.git:
         run_git_files(args, )

@@ -585,6 +585,30 @@ out:
 	return rc;
 }
 
+/**
+ * Create a ranged string representation of a rank list.
+ *
+ * \param[in]  rank_list	the rank list to represent
+ *
+ * \return			a ranged string (caller must free)
+ */
+char *
+d_rank_list_to_str(d_rank_list_t *rank_list)
+{
+	char			*str;
+	bool			 truncated = false;
+	d_rank_range_list_t	*range_list;
+
+	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	if (range_list == NULL)
+		return NULL;
+	str = d_rank_range_list_str(range_list, &truncated);
+
+	d_rank_range_list_free(range_list);
+
+	return str;
+}
+
 d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {

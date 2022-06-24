@@ -3,6 +3,7 @@ import daos_build
 
 SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
 
+
 def get_objects(cache, *args):
     """Retrieve built objects from the object cache"""
     built = []
@@ -10,9 +11,10 @@ def get_objects(cache, *args):
         built.append(cache[arg])
     return built
 
+
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
@@ -27,6 +29,7 @@ def scons():
     # dc_security: Security Client
     dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
     Export('dc_security_tgts')
+    libdaos_tgts.extend(dc_security_tgts)
 
     if not prereqs.server_requested():
         return
@@ -43,6 +46,7 @@ def scons():
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

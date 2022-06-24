@@ -86,12 +86,12 @@ def scons():
     check_install_header(env, 'include/daos.h')
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    Export('env', 'CART_VERSION')
+    libdaos_tgts = []
+    Export('env', 'CART_VERSION', 'libdaos_tgts')
 
+    # Generate common libraries used by multiple components
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
-    Default('gurt')
-    # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
     SConscript('vea/SConscript')
@@ -108,11 +108,11 @@ def scons():
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
 
-    # Build cart utilities library
-    SConscript('cart/utils/SConscript')
-
     # Build DAOS client libraries
     SConscript('client/SConscript')
+
+    # Build cart utilities library
+    SConscript('cart/utils/SConscript')
 
     # rdb unit test rdbt depends on libdaos
     SConscript('rdb/SConscript')
@@ -127,7 +127,9 @@ def scons():
     SConscript('control/SConscript')
 
     # Build test
+    SConscript('placement/tests/SConscript')
     SConscript('tests/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()
