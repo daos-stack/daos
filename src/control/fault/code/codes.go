@@ -90,6 +90,7 @@ const (
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
+	BdevConfigTypeMismatch
 )
 
 // DAOS system fault codes

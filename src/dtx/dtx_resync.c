@@ -788,5 +788,5 @@ dtx_resync_ult(void *data)
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
 	ds_pool_put(pool);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
