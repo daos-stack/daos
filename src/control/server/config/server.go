@@ -46,7 +46,7 @@ type Server struct {
 	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                   `yaml:"disable_vfio"`
-	DisableVMD          bool                   `yaml:"disable_vmd"`
+	DisableVMD          *bool                  `yaml:"disable_vmd"`
 	EnableHotplug       bool                   `yaml:"enable_hotplug"`
 	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
 	DisableHugepages    bool                   `yaml:"disable_hugepages"`
@@ -73,6 +73,9 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
+
+	// Legacy config file parameters stored in a separate struct.
+	Legacy ServerLegacy `yaml:",inline"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -226,7 +229,7 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 // WithDisableVMD can be used to set the state of VMD functionality,
 // if disabled then VMD devices will not be used if they exist.
 func (cfg *Server) WithDisableVMD(disabled bool) *Server {
-	cfg.DisableVMD = disabled
+	cfg.DisableVMD = &disabled
 	return cfg
 }
 
@@ -308,7 +311,7 @@ func DefaultServer() *Server {
 	}
 }
 
-// Load reads the serialized configuration from disk and validates it.
+// Load reads the serialized configuration from disk and validates file syntax.
 func (cfg *Server) Load() error {
 	if cfg.Path == "" {
 		return FaultConfigNoPath
@@ -323,6 +326,11 @@ func (cfg *Server) Load() error {
 		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples",
 			cfg.Path)
+	}
+
+	// Update server config based on legacy parameters.
+	if err := updateFromLegacyParams(cfg); err != nil {
+		return errors.Wrap(err, "updating config from legacy parameters")
 	}
 
 	// propagate top-level settings to engine configs
@@ -428,8 +436,14 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			"\"engines\" instead")
 	}
 
+	// Set DisableVMD reference if unset in config file.
+	if cfg.DisableVMD == nil {
+		f := false
+		cfg.DisableVMD = &f
+	}
+
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, !cfg.DisableVMD)
+		cfg.EnableHotplug, !(*cfg.DisableVMD))
 
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))

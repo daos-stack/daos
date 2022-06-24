@@ -179,6 +179,7 @@ access_points:
 - hostX:10002
 fault_cb: ""
 hyperthreads: false
+enable_vmd: null
 `
 	)
 
@@ -187,6 +188,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
+		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
