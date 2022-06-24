@@ -4,11 +4,11 @@ hosts:
         - server-B
         - server-C
         - server-D
+        - server-E
     test_clients:
         - client-A
         - client-B
         - client-C
-        - client-D
 timeout: 1300
 setup:
   start_servers_once: False
