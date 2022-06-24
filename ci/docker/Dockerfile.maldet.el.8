@@ -70,7 +70,7 @@ RUN dnf upgrade &&                                       \
         true > /etc/yum.repos.d/epel.repo;               \
         true > /etc/yum.repos.d/epel-modular.repo;       \
     fi &&                                                \
-   dnf install git sudo && dnf clean all
+   dnf install git gzip sudo && dnf clean all
 
 ARG UID=1000
 
