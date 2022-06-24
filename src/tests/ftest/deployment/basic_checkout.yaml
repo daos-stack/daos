@@ -38,7 +38,7 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  size: 25%
+  size: 50%
   control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
