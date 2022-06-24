@@ -8,7 +8,9 @@
 #define __DAOS_IOSRV_CHECKSUM_H__
 
 #include <daos_srv/bio.h>
+#include <daos_srv/pool.h>
 #include <daos/checksum.h>
+#include <gurt/telemetry_producer.h>
 
 /**
  * Process the bsgl and create new checksums or use the stored
@@ -48,5 +50,10 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 
 void
 ds_iom_free(daos_iom_t **p_maps, uint64_t map_nr);
+
+
+/* For the pool target to start and stop the scrubbing ult */
+int ds_start_scrubbing_ult(struct ds_pool_child *child);
+void ds_stop_scrubbing_ult(struct ds_pool_child *child);
 
 #endif

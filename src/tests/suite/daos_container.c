@@ -429,6 +429,12 @@ co_properties(void **state)
 	}
 	D_FREE(exp_owner_grp);
 
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
+	if (entry == NULL || entry->dpe_val == true) {
+		print_message("scrubber disabled failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);

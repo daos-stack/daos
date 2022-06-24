@@ -32,19 +32,18 @@ protected, however, the approach is slightly different. For the two different
 value types, single and array, the approach is also slightly different.
 
 ### Keys
-On an update and fetch, the client calculates a checksum for the data used
-as the distribution and attribute keys and will send it to the server within the
-RPC. The server verifies the keys with the checksum.
-While enumerating keys, the server will calculate checksums for the keys and
-pack within the RPC message to the client. The client will verify the keys
-received.
+On an update and fetch, the client calculates a checksum for the data used as
+the distribution and attribute keys and will send it to the server within the
+RPC. The server verifies the keys with the checksum. While enumerating keys, the
+server will calculate checksums for the keys and pack within the RPC message to
+the client. The client will verify the keys received.
 
-!!! note
-    Checksums for keys are not stored on the server. A hash of the key is
-    calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
-    It is also expected that keys are stored only in Storage Class Memory which
-    has reliable data integrity protection.
+!!! note Checksums for keys are not stored on the server. A hash of the key is
+calculated and used to index the key in the server tree of the keys
+(
+see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores))
+. It is also expected that keys are stored only in Storage Class Memory which
+has reliable data integrity protection.
 
 ### Values
 On an update, the client will calculate a checksum for the data of the value and
@@ -59,13 +58,13 @@ for more info about checksum management and storage in VOS.
 
 On a fetch, the server will return the stored checksum to the client with the
 values fetched so the client can verify the values received. If the checksums
-don't match, then the client will fetch from another replica if available in
-an attempt to get uncorrupted data.
+don't match, then the client will fetch from another replica if available in an
+attempt to get uncorrupted data.
 
-There are some slight variations to this approach for the two different types
-of values. The following diagram illustrates a basic example.
- (See [Storage Model](storage.md) for more details about the single value
- and array value types)
+There are some slight variations to this approach for the two different types of
+values. The following diagram illustrates a basic example.
+(See [Storage Model](storage.md) for more details about the single value and
+array value types)
 
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
@@ -119,17 +118,18 @@ for more details about the checksum process on object update and fetch)
 
 ## Checksum calculations
 The actual checksum calculations are done by the
- [isa-l](https://github.com/intel/isa-l)
+[isa-l](https://github.com/intel/isa-l)
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
 [common checksum library](https://github.com/daos-stack/daos/blob/master/src/common/README.md#checksum)
 
 ## Performance Impact
+
 Calculating checksums can be CPU intensive and will impact performance. To
- mitigate performance impact, checksum types with hardware acceleration should
- be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
- accelerated via SIMD.
+mitigate performance impact, checksum types with hardware acceleration should be
+chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
+accelerated via SIMD.
 
 ## Quality
 Unit and functional testing is performed at many layers.
@@ -148,10 +148,126 @@ Unit and functional testing is performed at many layers.
 ./commont_test
 ./vos_test -z
 ./srv_checksum_tests
+./pool_scrubbing_tests
 ```
+
 **With daos_server running**
+
 ```
 export DAOS_CSUM_TEST_ALL_TYPE=1
 ./daos_server -z
 ./daos_server -i --csum_type crc64
+```
+
+---
+
+# Checksum Scrubbing
+
+A background task will scan (when the storage server is idle to limit
+performance impact) the Version Object Store (VOS) trees to verify the data
+integrity with the checksums. Corrective actions can be taken when corruption is
+detected.
+
+## High Level Design
+
+- Per Pool ULT (I/O xstream) that will iterate containers. If checksums and
+  scrubber is enabled then iterate the object tree. If a record value (SV or
+  array) is not already marked corrupted then scan.
+  - Fetch the data.
+  - Calculate checksu for the data
+  - Compare calculated checksum with stored checksum.
+
+### Silent Data Corruption
+
+When silent data corruption has been detected the following actions will be
+taken:
+
+- Mark the record as corrupt
+- Raise an event using the DAOS RAS Notification system
+- Increment checksum error counters
+- If a configurable threshold of corruption has been reached, initiate a
+  rebuild/drain operation
+
+### Checksum Scrubbing Properties
+
+- **Pool Scrubber Mode** (scrub) - How the scrubber will run for each pool
+  target. The container configuration can disable scrubbing for the container,
+  but it cannot alter the mode.
+  - **OFF** - The Scrubber will not run.
+  - **Lazy** - Trigger the scrubber only when there is no IO activity. Trigger
+    aggregation regularly despite of IO activities.
+  - **Timed** - Trigger the scrubber regularly despite IO activities.
+- **Pool Scrubber Frequency** (scrub-freq) - How frequently the scrubber should
+  scrub a pool. This value indicates the regularity of scrubbing activity when
+  the Scrubber Mode is set to Timed.
+- **Threshold** (scrub-thresh) - Number of checksum errors when the pool target
+  is evicted. A value of 0 disables auto eviction
+
+The command to create a pool with scrubbing enabled might look like this:
+
+```bash
+dmg pool create --scm-size 1G --properties=scrub:lazy
+# or
+dmg pool create --scm-size 1G
+dmg pool set-prop ${POOL} --properties=scrub:timed
+```
+
+### Container Properties (-> doc/user/container.md)
+
+- **Container Disable Scrubbing** - If scrubbing is enabled for a pool, a
+  container can disable it for itself.
+
+### Telemetry
+
+The following telemetry metrics are gathered and can be reported for better
+understanding of how the scrubber is running.
+
+- Scrubber ULT Start - datetime the scrubber service started
+- Scrubber Current Start - datetime the current scrubbing job started
+- Last Duration - how long the last scrubber took to run to completion.
+- Checksum Counts - Total, last and current number of checksums calculated over
+  the life of the scrubber.
+- Data scrubbed - The total, last, and current number of bytes the scrubber has
+  scanned.
+- Silent Data Corruption Counts - Total and current number of silent data
+  corruption found while scrubbing object values.
+
+## Design Details
+
+### Pool ULT
+
+The code for the pool ULT is found in `srv_pool_scrub.c`. It can be a bit
+difficult to follow because there are several layers of callback functions due
+to the nature of how ULTs and the vos_iterator work, but the file is organized
+such that functions typically call the function above it (either directly or
+indirectly as a callback). For example (~> is an indirect call, -> is a direct
+call):
+
+```
+ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
+    scrub_cont ~> obj_iter_scrub_cb ...
+```
+
+### VOS
+
+- In order to mark data as corrupted a flag field is added to bio_addr_t which
+  includes a CORRUPTED bit.
+- The vos update api already accepts a flag, so a CORRUPTED flag is added and
+  handled during an update so that, if set, the bio address will be updated to
+  be corrupted. (Documented in src/vos/README.md)
+- On fetch, if a value is already marked corrupted, return -DER_CSUM
+
+## Testing
+
+- pool_scrubbing_tests
+- daos_test -z
+
+## Debugging
+
+- In the server.yml configuration file set the following env_vars
+
+```
+- D_LOG_MASK=DEBUG
+- DD_SUBSYS=pool
+- DD_MASK=csum
 ```

@@ -16,16 +16,18 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
-#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags == BIO_FLAG_HOLE)
+#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags & BIO_FLAG_HOLE)
 #define BIO_ADDR_SET_HOLE(addr) ((addr)->ba_flags |= BIO_FLAG_HOLE)
-#define BIO_ADDR_SET_NOT_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
-#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP)
+#define BIO_ADDR_CLEAR_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
+#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags & BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
-#define BIO_ADDR_SET_NOT_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+#define BIO_ADDR_CLEAR_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
 #define BIO_ADDR_IS_DEDUP_BUF(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
 #define BIO_ADDR_SET_DEDUP_BUF(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
 #define BIO_ADDR_SET_NOT_DEDUP_BUF(addr)	\
 			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
+#define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
@@ -35,6 +37,7 @@ enum BIO_FLAG {
 	BIO_FLAG_DEDUP = (1 << 1),
 	/* The address is a buffer for dedup verify */
 	BIO_FLAG_DEDUP_BUF = (1 << 2),
+	BIO_FLAG_CORRUPTED = (1 << 3),
 };
 
 typedef struct {
@@ -133,7 +136,7 @@ static inline void
 bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 {
 	if (hole == 0)
-		BIO_ADDR_SET_NOT_HOLE(addr);
+		BIO_ADDR_CLEAR_HOLE(addr);
 	else
 		BIO_ADDR_SET_HOLE(addr);
 }

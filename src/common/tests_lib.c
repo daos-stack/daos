@@ -204,6 +204,7 @@ v_dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 		arg = va_arg(valist, char *);
 	}
+	sgl->sg_nr_out = count;
 }
 
 void
@@ -225,4 +226,13 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	va_start(valist, d);
 	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
 	va_end(valist);
+}
+
+void
+dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size)
+{
+	d_sgl_init(sgl, 1);
+	D_ALLOC(sgl->sg_iovs[0].iov_buf, size);
+	D_ASSERT(sgl->sg_iovs[0].iov_buf != NULL);
+	sgl->sg_iovs[0].iov_buf_len = size;
 }
