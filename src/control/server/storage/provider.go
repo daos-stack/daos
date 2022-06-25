@@ -236,6 +236,8 @@ func (p *Provider) UpdateScmFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmware
 
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
+	p.log.Debugf("calling bdev storage provider prep: %+v", req)
+
 	resp, err := p.bdev.Prepare(req)
 
 	p.Lock()
