@@ -67,6 +67,7 @@ dc_obj_init(void)
 	struct dc_mgmt_sys	*sys;
 	struct obj_proto	*oproto = NULL;
 	crt_context_t		ctx = daos_get_crt_ctx();
+	int			num_ranks;
 	int			rc;
 
 	d_getenv_int("DAOS_IO_MODE", &srv_io_mode);
