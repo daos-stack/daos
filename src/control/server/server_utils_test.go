@@ -241,18 +241,11 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
 			WithBdevDeviceList(test.MockPCIAddr(int32(i)))
 	}
-	nonNvmeTier := func() *storage.TierConfig {
-		return storage.NewTierConfig().WithStorageClass(storage.ClassFile.String()).
-			WithBdevFileSize(10).WithBdevDeviceList("bdev1", "bdev2")
-	}
 	scmEngine := func(i int) *engine.Config {
 		return basicEngineCfg(i).WithStorage(scmTier(i)).WithTargetCount(8)
 	}
 	nvmeEngine := func(i int) *engine.Config {
 		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
-	}
-	nonNvmeEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i), nonNvmeTier()).WithTargetCount(16)
 	}
 
 	for name, tc := range map[string]struct {
@@ -291,21 +284,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"non-nvme bdevs; vfio disabled": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithDisableVFIO(true).
-					WithEngines(nonNvmeEngine(0))
-			},
-			hugePagesFree: 8192,
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
-				HugeNodes:     "0",
-				TargetUser:    username,
-				DisableVFIO:   true,
-			},
-			expMemSize:      16384,
-			expHugePageSize: 2,
-		},
 		"iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -324,20 +302,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
-			},
-			expMemSize:      16384,
-			expHugePageSize: 2,
-		},
-		"non-nvme bdevs; iommu disabled": {
-			iommuDisabled: true,
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(nonNvmeEngine(0))
-			},
-			hugePagesFree: 8192,
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
-				HugeNodes:     "0",
-				TargetUser:    username,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -491,7 +455,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemChkErr: errors.New("could not find hugepage info"),
 		},
 		// prepare will continue even if reset fails
-		"reset fails": {
+		"reset fails; 2 engines": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -514,8 +478,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		// VMD not enabled in prepare request.
-		"vmd disabled": {
+		"2 engines; vmd disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -525,21 +488,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
-				TargetUser:    username,
-			},
-			expMemSize:      16384,
-			expHugePageSize: 2,
-		},
-		// VMD not enabled in prepare request.
-		"non-nvme bdevs; vmd enabled": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(8192).
-					WithEngines(nonNvmeEngine(0))
-			},
-			hugePagesFree: 8194,
-			expPrepCall: &storage.BdevPrepareRequest{
-				HugePageCount: 8194,
-				HugeNodes:     "0",
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
@@ -635,8 +583,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 }
 
-// TestServer_scanBdevStorage validates that an error is returned in the case that a SSD is not
-// found and doesn't return an error if SPDK fails to init.
+// TestServer_scanBdevStorage validates that an error it returned in the case that a SSD is not
+// found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
+// also be covered.
 func TestServer_scanBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		disableHugepages bool

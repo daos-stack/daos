@@ -466,19 +466,6 @@ func TestConfig_BdevValidation(t *testing.T) {
 				),
 			expCls: storage.ClassFile,
 		},
-		"mix of emulated and non-emulated device classes": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("nvme").
-						WithBdevDeviceList(test.MockPCIAddr(1)),
-					storage.NewTierConfig().
-						WithStorageClass("file").
-						WithBdevFileSize(10).
-						WithBdevDeviceList("bdev1", "bdev2"),
-				),
-			expErr: errors.New("mix of emulated and non-emulated NVMe"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.CmpErr(t, tc.expErr, tc.cfg.Validate())

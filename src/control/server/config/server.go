@@ -520,7 +520,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			ec.LegacyStorage = engine.LegacyStorage{}
 		}
 
-		if ec.Storage.Tiers.HaveBdevs() {
+		if ec.Storage.Tiers.CfgHasBdevs() {
 			cfgHasBdevs = true
 			if ec.TargetCount == 0 {
 				return errors.Errorf("engine %d: Target count cannot be zero if "+

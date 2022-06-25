@@ -179,29 +179,9 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) HaveBdevs() bool {
+func (tcs TierConfigs) CfgHasBdevs() bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (tcs TierConfigs) HaveRealNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (tcs TierConfigs) HaveEmulatedNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class != ClassNvme {
 			return true
 		}
 	}
@@ -218,7 +198,7 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
-func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
+func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
 	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -228,7 +208,7 @@ func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
 	return
 }
 
-func (tcs TierConfigs) BdevConfigs() (out TierConfigs) {
+func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
 	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
@@ -739,10 +719,6 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-
-	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
-		return FaultBdevConfigTypeMismatch
-	}
 
 	fbc := bdevCfgs[0]
 
