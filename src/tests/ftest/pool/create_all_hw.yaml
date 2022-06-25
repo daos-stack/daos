@@ -20,7 +20,7 @@ server_config:
     0:
       targets_count: !mux
         1_target:
-          targets: 2
+          targets: 1
         2_targets:
           targets: 2
         3_targets:
