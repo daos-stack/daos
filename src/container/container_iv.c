@@ -561,8 +561,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_PROP) {
 			daos_prop_t		*prop = NULL;
-			struct daos_prop_entry	*iv_entry;
-			struct daos_co_status	 co_stat = {0};
 
 			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
@@ -571,20 +569,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 			}
 
-			iv_entry = daos_prop_entry_get(prop,
-						       DAOS_PROP_CO_STATUS);
-			if (iv_entry != NULL) {
-				daos_prop_val_2_co_status(iv_entry->dpe_val,
-							  &co_stat);
-				rc = ds_cont_status_pm_ver_update(
-					entry->ns->iv_pool_uuid,
-					civ_ent->cont_uuid,
-					co_stat.dcs_pm_ver);
-				if (rc) {
-					daos_prop_free(prop);
-					goto out;
-				}
-			}
+			rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid,
+						     civ_ent->cont_uuid, prop);
 			daos_prop_free(prop);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP &&
 			   civ_ent->iv_snap.snap_cnt != (uint64_t)(-1)) {
