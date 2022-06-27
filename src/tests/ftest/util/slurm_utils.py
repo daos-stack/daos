@@ -23,7 +23,7 @@ class SlurmFailed(Exception):
 
 
 def cancel_jobs(job_id):
-    """Cancel slurms jobs.
+    """Cancel slurm jobs.
 
     Args:
         job_id (int): slurm job id
@@ -133,7 +133,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
     if uniq is None:
-        uniq = random.randint(1, 100000) #nosec
+        uniq = random.randint(1, 100000)  # nosec
     if not os.path.exists(path):
         os.makedirs(path)
     scriptfile = path + '/jobscript' + "_" + str(uniq) + ".sh"
@@ -306,7 +306,7 @@ def srun(hosts, cmd, srun_params=None, timeout=60):
             the srun command
 
     """
-    srun_time = max(int(timeout/60), 1)
+    srun_time = max(int(timeout / 60), 1)
     cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
     try:
         result = run_command(cmd, timeout)

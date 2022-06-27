@@ -178,7 +178,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
                 dst[0], dst[1], dst[2], dst[3])
 
             if self.tool == "DSYNC":
-                # The source directory is sync'ed TO the destination.
+                # The source directory is synced TO the destination.
                 dst_path = dst[1]
             else:
                 # The source directory is created IN the destination
@@ -188,8 +188,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
 
             # The cases below use a UNS sub path, which is
             # not supported by FS_COPY
-            if (self.tool == "FS_COPY" and
-                    src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
+            if (self.tool == "FS_COPY" and src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
                 continue
 
             # file -> file variation

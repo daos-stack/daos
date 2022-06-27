@@ -363,7 +363,7 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 	D_ASSERT(dce != NULL);
 
 	rec->rec_off = UMOFF_NULL;
-	D_FREE_PTR(dce);
+	D_FREE(dce);
 
 	return 0;
 }
