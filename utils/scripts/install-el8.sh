@@ -59,6 +59,7 @@ dnf --nodocs install \
     python3-pip \
     python3-pyxattr \
     python3-pyyaml \
+    python3-scons \
     python3-tabulate \
     sg3_utils \
     sudo \
