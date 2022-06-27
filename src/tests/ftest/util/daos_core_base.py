@@ -10,7 +10,7 @@ import os
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
-from general_utils import get_log_file
+from general_utils import get_log_file, get_clush_command, run_command
 from command_utils_base import EnvironmentVariables
 from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
@@ -29,6 +29,7 @@ class DaosCoreBase(TestWithServers):
         """Initialize the DaosCoreBase object."""
         super().__init__(*args, **kwargs)
         self.subtest_name = None
+        self.remote_cmocka_files = True
 
     def setUp(self):
         """Set up before each test."""
@@ -43,6 +44,7 @@ class DaosCoreBase(TestWithServers):
         # if no clients are specified update self.hostlist_clients to be the local host
         if self.hostlist_clients is None:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
+            self.remote_cmocka_files = False
 
     def get_test_param(self, name, default=None):
         """Get the test-specific test yaml parameter value.
@@ -167,6 +169,14 @@ class DaosCoreBase(TestWithServers):
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
+        finally:
+            if self.remote_cmocka_files:
+                # Copy any remote cmocka files back to this host
+                command = "{} cp {} {}".format(
+                    get_clush_command(self.hostlist_clients, "-S -v --rcopy"),
+                    os.path.join(self.outputdir, "*_cmocka_results.xml"),
+                    self.outputdir)
+                result = run_command(command, self.get_remaining_time() - 5)
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
