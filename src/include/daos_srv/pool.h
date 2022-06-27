@@ -33,7 +33,7 @@
  * Each individual object layout format, like oid layout, dkey to group,
  * dkey to EC group start.
  */
-#define DS_POOL_OBJ_VERSION		0
+#define DS_POOL_OBJ_VERSION		1
 
 /*
  * Pool object
@@ -290,6 +290,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking

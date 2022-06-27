@@ -1376,27 +1376,30 @@ done:
 				DP_UUID(task->dst_pool_uuid));
 			D_GOTO(out_pool, rc);
 		}
-	} else {
-		if (task->dst_tgts.pti_number <= 0 ||
-		    rgt->rgt_status.rs_errno != 0)
-			goto iv_stop;
+	} else if (rgt->rgt_status.rs_errno == 0) {
+		if (task->dst_rebuild_op == RB_OP_UPGRADE) {
+			rc = ds_pool_mark_upgrade_completed(pool->sp_uuid,
+							    rgt->rgt_status.rs_errno);
+			D_INFO("Mark upgraded complete "DF_UUID": %d\n",
+			       DP_UUID(task->dst_pool_uuid), rc);
+		} else {
+			if (task->dst_tgts.pti_number <= 0)
+				goto iv_stop;
 
-		if (task->dst_rebuild_op == RB_OP_FAIL
-		    || task->dst_rebuild_op == RB_OP_DRAIN) {
-			rc = ds_pool_tgt_exclude_out(pool->sp_uuid,
-						     &task->dst_tgts);
-			D_INFO("mark failed target %d of "DF_UUID
-				" as DOWNOUT: "DF_RC"\n",
-				task->dst_tgts.pti_ids[0].pti_id,
-				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-		} else if (task->dst_rebuild_op == RB_OP_REINT ||
-			   task->dst_rebuild_op == RB_OP_EXTEND) {
-			rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
-			D_INFO("mark added target %d of "DF_UUID
-				" UPIN: "DF_RC"\n",
-				task->dst_tgts.pti_ids[0].pti_id,
-				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-		}/* No change needed for RB_OP_RECLAIM */
+			if (task->dst_rebuild_op == RB_OP_FAIL ||
+			    task->dst_rebuild_op == RB_OP_DRAIN) {
+				rc = ds_pool_tgt_exclude_out(pool->sp_uuid, &task->dst_tgts);
+				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
+				       task->dst_tgts.pti_ids[0].pti_id,
+				       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+			} else if (task->dst_rebuild_op == RB_OP_REINT ||
+				   task->dst_rebuild_op == RB_OP_EXTEND) {
+				rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
+				D_INFO("mark added target %d of "DF_UUID " UPIN: "DF_RC"\n",
+				       task->dst_tgts.pti_ids[0].pti_id,
+				       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+			}
+		} /* No change needed for RB_OP_RECLAIM */
 	}
 iv_stop:
 	/* NB: even if there are some failures, the leader should
