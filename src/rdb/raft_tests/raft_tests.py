@@ -54,6 +54,7 @@ def number_of_failures():
         failures = TEST_NOT_RUN
     return failures
 
+
 def main():
     """
     Run the raft tests, report success or failure, and cleanup the extraneous
