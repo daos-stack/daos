@@ -629,7 +629,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	}
 	if (daos_oclass_is_ec(oca)) {
 		D_DEBUG(DB_PL, "EC objects not supported for pipelines\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 	}
 
 	/** Not supporting EC objects yet, so #groups x #replicas = #shards */
