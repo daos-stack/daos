@@ -123,6 +123,10 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline
 	tse_task_t *task;
 	int         rc;
 
+	rc = dc_pipeline_check(pipeline);
+	if (rc != 0)
+		return rc; /** bad pipeline */
+
 	rc = dc_pipeline_run_task_create(coh, oh, th, pipeline, flags, dkey, nr_iods, iods, anchor,
 					 nr_kds, kds, sgl_keys, sgl_recx, recx_size, sgl_agg,
 					 scanned, ev, NULL, &task);
