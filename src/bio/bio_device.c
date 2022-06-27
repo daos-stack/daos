@@ -842,13 +842,13 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 skip_led_str:
 	if (opts.led_state == SPDK_VMD_LED_STATE_UNKNOWN) {
 		D_ERROR("LED state is not valid or supported\n");
-		return -DER_OP_UNEXP_RESULT;
+		return -DER_INVAL;
 	}
 
 	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
 	if (rc != 0) {
 		D_ERROR("Unable to get traddr for device %s\n", bio_dev->bb_name);
-		return -DER_OP_FAILED;
+		return -DER_INVAL;
 	}
 
 	rc = spdk_pci_addr_parse(&opts.pci_addr, b_info.bdi_traddr);
@@ -866,7 +866,7 @@ skip_led_str:
 	}
 	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device with traddr %s could not be found\n", b_info.bdi_traddr);
-		D_GOTO(free_traddr, rc = -DER_INVAL);
+		D_GOTO(free_traddr, rc = -DER_NONEXIST);
 	}
 
 	/* Update current LED state after action */
