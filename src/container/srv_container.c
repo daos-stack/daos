@@ -1125,9 +1125,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct ownership		owner;
 	struct daos_acl		       *acl;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: force=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc,
-		in->cdi_force);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, in->cdi_force);
 
 	/* Fetch the container props to check access for delete */
 	rc = cont_prop_read(tx, cont,
@@ -1209,7 +1208,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 out_prop:
 	daos_prop_free(prop);
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -1697,18 +1696,16 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uint64_t		sec_capas = 0;
 	uint32_t		snap_count;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
-		DF_X64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc,
-		DP_UUID(in->coi_op.ci_hdl), in->coi_flags);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " flags=" DF_X64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
+		in->coi_flags);
 
 	/* See if this container handle already exists. */
 	d_iov_set(&key, in->coi_op.ci_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_CONT"/"DF_UUID": "
-				 "Container handle already open.\n",
+		D_DEBUG(DB_MD, DF_CONT "/" DF_UUID ": Container handle already open.\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid),
 			DP_UUID(in->coi_op.ci_hdl));
 		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
@@ -1735,19 +1732,16 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = ds_sec_cont_get_capabilities(in->coi_flags, &pool_hdl->sph_cred,
 					  &owner, acl, &sec_capas);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": refusing attempt to open with flags "
-			DF_X64" error: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-			in->coi_flags, DP_RC(rc));
+		D_ERROR(DF_CONT ": refusing attempt to open with flags " DF_X64 " error: " DF_RC
+				"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->coi_flags, DP_RC(rc));
 		daos_prop_free(prop);
 		D_GOTO(out, rc);
 	}
 
 	if (!ds_sec_cont_can_open(sec_capas)) {
-		D_ERROR(DF_CONT": permission denied opening with flags "
-			DF_X64"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-			in->coi_flags);
+		D_ERROR(DF_CONT ": permission denied opening with flags " DF_X64 "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->coi_flags);
 		daos_prop_free(prop);
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
@@ -1861,7 +1855,7 @@ out:
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
 					      in->coi_op.ci_hdl,
 					      CRT_IV_SYNC_EAGER);
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -2005,7 +1999,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_tgt_close_rec	rec;
 	int				rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc,
 		DP_UUID(in->cci_op.ci_hdl));
 
@@ -2038,7 +2032,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = cont_close_one_hdl(tx, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
 
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -2529,7 +2523,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	int			snap_count;
 	int			rc = 0;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
@@ -2968,7 +2962,7 @@ ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct cont_prop_set_in		*in  = crt_req_get(rpc);
 	daos_prop_t			*prop_in = in->cpsi_prop;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cpsi_op.ci_uuid), rpc,
 		DP_UUID(in->cpsi_op.ci_hdl));
 
@@ -3047,7 +3041,7 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_acl			*acl = NULL;
 	struct daos_ace			*ace;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->caui_op.ci_uuid), rpc,
 		DP_UUID(in->caui_op.ci_hdl));
 
@@ -3089,7 +3083,7 @@ ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_acl			*acl = NULL;
 	int				 rc = 0;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cadi_op.ci_uuid), rpc,
 		DP_UUID(in->cadi_op.ci_hdl));
 
@@ -3120,9 +3114,9 @@ cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_attr_set_in		*in = crt_req_get(rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
-		rpc, DP_UUID(in->casi_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid), rpc,
+		DP_UUID(in->casi_op.ci_hdl));
 
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to set container attr\n",
@@ -3141,9 +3135,9 @@ cont_attr_del(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_attr_del_in		*in = crt_req_get(rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cadi_op.ci_uuid),
-		rpc, DP_UUID(in->cadi_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cadi_op.ci_uuid), rpc,
+		DP_UUID(in->cadi_op.ci_hdl));
 
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to del container attr\n",
@@ -3162,9 +3156,9 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_attr_get_in		*in = crt_req_get(rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
-		rpc, DP_UUID(in->cagi_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid), rpc,
+		DP_UUID(in->cagi_op.ci_hdl));
 
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to get container attr\n",
@@ -3185,9 +3179,9 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct cont_attr_list_in	*in	    = crt_req_get(rpc);
 	struct cont_attr_list_out	*out	    = crt_reply_get(rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cali_op.ci_uuid),
-		rpc, DP_UUID(in->cali_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cali_op.ci_uuid), rpc,
+		DP_UUID(in->cali_op.ci_hdl));
 
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to list container attr\n",
@@ -3869,9 +3863,8 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
 
 	/*
 	 * TODO: How to map to the correct container service among those
@@ -3881,9 +3874,9 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": rpc %p: hdl="DF_UUID" opc=%u find leader\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			rpc, DP_UUID(in->ci_hdl), opc);
+		D_ERROR(DF_CONT ": rpc: %p hdl=" DF_UUID " opc=%u find leader\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
+			opc);
 		D_GOTO(out_pool_hdl, rc);
 	}
 
@@ -3896,18 +3889,18 @@ out_pool_hdl:
 		struct cont_open_bylabel_in	*lin = crt_req_get(rpc);
 		struct cont_open_bylabel_out	*lout = crt_reply_get(rpc);
 
-		D_DEBUG(DB_MD, DF_CONT":%s: replying rpc %p: hdl="DF_UUID" opc=%u "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, lout->colo_uuid),
-			lin->coli_label, rpc, DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+		D_DEBUG(DB_MD, DF_CONT ":%s: replying rpc: %p hdl=" DF_UUID " opc=%u " DF_RC "\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, lout->colo_uuid), lin->coli_label, rpc,
+			DP_UUID(in->ci_hdl), opc, DP_RC(rc));
 	} else if (opc == CONT_DESTROY_BYLABEL) {
 		struct cont_destroy_bylabel_in	*lin = crt_req_get(rpc);
 
-		D_DEBUG(DB_MD, DF_UUID":%s: replying rpc %p: opc=%u, "DF_RC"\n",
+		D_DEBUG(DB_MD, DF_UUID ":%s: replying rpc: %p opc=%u, " DF_RC "\n",
 			DP_UUID(pool_hdl->sph_pool->sp_uuid), lin->cdli_label, rpc, opc, DP_RC(rc));
 	} else {
-		D_DEBUG(DB_MD, DF_CONT": replying rpc %p: hdl="DF_UUID " opc=%u "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-			DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+		D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p hdl=" DF_UUID " opc=%u " DF_RC "\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
+			opc, DP_RC(rc));
 	}
 	ds_pool_hdl_put(pool_hdl);
 out:
@@ -4124,7 +4117,7 @@ out_svc:
 	ds_rsvc_set_hint(svc->cs_rsvc, &out->cpso_op.co_hint);
 	cont_svc_put_leader(svc);
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: rc=%d\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p rc=%d\n",
 		DP_CONT(pool_uuid, in->cpsi_op.ci_uuid), rpc, rc);
 
 	out->cpso_op.co_rc = rc;

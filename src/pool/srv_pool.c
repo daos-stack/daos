@@ -86,7 +86,7 @@ static pthread_rwlock_t		psfl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /* tracking failed pool service */
 D_LIST_HEAD(pool_svc_failed_list);
 
-static bool pool_disable_exclude = false;
+static bool pool_disable_exclude;
 static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
 static int pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc,
@@ -1243,7 +1243,7 @@ check_map:
 			 */
 			D_DEBUG(DB_MD, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
+			rc = + DER_UNINIT;
 		} else {
 			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
 				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -2199,8 +2199,8 @@ out_svc:
 	pool_svc_put(svc);
 out:
 	out->pro_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pri_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pri_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2271,7 +2271,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc,
@@ -2490,8 +2490,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pco_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pci_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pci_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2606,7 +2606,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	struct pool_hdl			hdl = {0};
 	int				rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(pdi->pdi_op.pi_uuid, &svc,
@@ -2653,8 +2653,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	pdo->pdo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(pdi->pdi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2906,7 +2906,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	struct pool_hdl			 hdl = {0};
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->plci_op.pi_uuid), rpc, DP_UUID(in->plci_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->plci_op.pi_uuid, &svc,
@@ -2980,8 +2980,7 @@ out_svc:
 out:
 	out->plco_op.po_rc = rc;
 	out->plco_ncont = ncont;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->plci_op.pi_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->plci_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
@@ -3001,7 +3000,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_hdl		hdl = {0};
 	int			rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pqi_op.pi_uuid, &svc,
@@ -3180,8 +3179,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pqi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
 }
@@ -3190,7 +3189,6 @@ out:
 static daos_target_state_t
 enum_pool_comp_state_to_tgt_state(int tgt_state)
 {
-
 	switch (tgt_state) {
 	case PO_COMP_ST_UNKNOWN: return DAOS_TS_UNKNOWN;
 	case PO_COMP_ST_NEW: return DAOS_TS_NEW;
@@ -3261,7 +3259,7 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 	int				 tgt_state;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pqii_op.pi_uuid), rpc, DP_UUID(in->pqii_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pqii_op.pi_uuid, &svc,
@@ -3313,8 +3311,8 @@ out:
 	out->pqio_rank = in->pqii_rank;
 	out->pqio_tgt = in->pqii_tgt;
 
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pqii_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pqii_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -3604,8 +3602,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pgo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pgi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pgi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
 }
@@ -3899,8 +3897,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pso_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->psi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
@@ -4287,8 +4284,7 @@ ds_pool_upgrade_handler(crt_rpc_t *rpc)
 	rc = ds_pool_upgrade_if_needed(in->poi_op.pi_uuid,
 				       &out->poo_op.po_hint, NULL, rpc);
 	out->poo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->poi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->poi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
@@ -4485,8 +4481,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->puo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pui_op.pi_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->pui_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
@@ -4633,8 +4628,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pdo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pdi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->pdi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
@@ -5300,8 +5294,8 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 				  ndomains, domains, &out->peo_op.po_map_version);
 
 	out->peo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pei_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -5319,8 +5313,8 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	    in->pti_addr_list.ca_count == 0)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: ntargets=%zu\n",
-		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_addr_list.ca_count);
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p ntargets=%zu\n", DP_UUID(in->pti_op.pi_uuid),
+		rpc, in->pti_addr_list.ca_count);
 
 	rc = pool_svc_lookup_leader(in->pti_op.pi_uuid, &svc,
 				    &out->pto_op.po_hint);
@@ -5343,8 +5337,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pto_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pti_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pti_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 	pool_target_addr_list_free(&inval_list_out);
 }
@@ -5610,8 +5604,8 @@ out_svc:
 out:
 	out->pvo_op.po_rc = rc;
 	out->pvo_n_hdls_evicted = n_hdl_uuids;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pvi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pvi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -5927,8 +5921,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 	struct pool_svc			*svc;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_UUID ": processing rpc %p:\n",
-		DP_UUID(in->prgi_op.pi_uuid), rpc);
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p\n", DP_UUID(in->prgi_op.pi_uuid), rpc);
 
 	rc = pool_svc_lookup_leader(in->prgi_op.pi_uuid, &svc,
 				    &out->prgo_op.po_hint);
@@ -5973,8 +5966,8 @@ out_svc:
 out:
 	out->prgo_op.po_rc = rc;
 	out->prgo_nranks = nranks;
-	D_DEBUG(DB_MD, DF_UUID ": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->prgi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->prgi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -5994,8 +5987,8 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_stop_leader(DS_RSVC_CLASS_POOL, &id, &out->pso_op.po_hint);
 
 	out->pso_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->psi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->psi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -6070,7 +6063,7 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc)
 	struct rdb_tx		  tx;
 	int			  rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_UUID(in->pasi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pasi_op.pi_uuid, &svc, &out->po_hint);
@@ -6097,8 +6090,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pasi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -6111,7 +6104,7 @@ ds_pool_attr_del_handler(crt_rpc_t *rpc)
 	struct rdb_tx		  tx;
 	int			  rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->padi_op.pi_uuid), rpc, DP_UUID(in->padi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->padi_op.pi_uuid, &svc, &out->po_hint);
@@ -6138,8 +6131,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->padi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->padi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -6152,7 +6145,7 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 	struct rdb_tx		  tx;
 	int			  rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_UUID(in->pagi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pagi_op.pi_uuid, &svc, &out->po_hint);
@@ -6173,10 +6166,9 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pagi_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
-
 }
 
 void
@@ -6188,7 +6180,7 @@ ds_pool_attr_list_handler(crt_rpc_t *rpc)
 	struct rdb_tx			 tx;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pali_op.pi_uuid), rpc, DP_UUID(in->pali_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pali_op.pi_uuid, &svc,
@@ -6210,8 +6202,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->palo_op.po_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pali_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pali_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -6299,7 +6291,6 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 			    0, 0, NULL);
 	return rc;
 }
-
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bits,
 		       daos_prop_t **prop_out)
