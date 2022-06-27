@@ -1740,8 +1740,10 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	}
 
 	if (!ds_sec_cont_can_open(sec_capas)) {
-		D_ERROR(DF_CONT ": permission denied opening with flags " DF_X64 "\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->coi_flags);
+		D_ERROR(DF_CONT": permission denied opening with flags "
+			DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			in->coi_flags);
 		daos_prop_free(prop);
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
