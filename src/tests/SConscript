@@ -2,23 +2,30 @@
 import daos_build
 import compiler_setup
 
-def build_tests(prereqs, env, client_libs):
+
+def build_dts_library(env, prereqs, dc_credit):
+    """Build libdts library"""
+
+    denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc')
+
+    daos_build.static_library(denv, 'dts', [dc_credit, 'dts.c'])
+
+
+def build_tests(prereqs, env):
     """build the tests"""
+    Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
-                   'pthread', 'dts', 'dpar']
-    libs_client = client_libs + ['pthread', 'dts', 'dpar']
+    libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
+                   'dpar', 'isal', 'protobuf-c', 'cmocka']
+    libs_client = ['dts', 'daos_tests', 'daos', 'daos_common', 'daos_tests', 'gurt', 'cart', 'uuid',
+                   'pthread', 'dpar', 'cmocka']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
-    denv.AppendUnique(LIBPATH=[Dir('../vos')])
-    denv.AppendUnique(LIBPATH=[Dir('../bio')])
-    denv.AppendUnique(LIBPATH=[Dir('../gurt')])
-    denv.AppendUnique(LIBPATH=[Dir('../cart')])
-    denv.AppendUnique(LIBPATH=[Dir('../common')])
-    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('.')])
 
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
@@ -38,13 +45,12 @@ def build_tests(prereqs, env, client_libs):
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
     vos_perf = daos_build.program(denv, 'vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine],
+                                  ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
                                   LIBS=libs_server)
     denv.Install('$PREFIX/bin/', vos_perf)
 
-    Import('mpi_cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine],
+                                 ['obj_ctl.c', cmd_parser, vos_engine] + libdaos_tgts,
                                  LIBS=libs_server)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
@@ -66,19 +72,25 @@ def build_tests(prereqs, env, client_libs):
 
 def scons():
     """Execute build"""
-    Import('base_env', 'base_env_mpi', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'dc_credit')
 
     if not prereqs.test_requested():
         return
 
-    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
+    build_dts_library(env, prereqs, dc_credit)
 
     denv = base_env.Clone()
+    denv.AppendUnique(LIBPATH=[Dir('../gurt')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../cart')])
+    denv.AppendUnique(LIBPATH=[Dir('../vos')])
+    denv.AppendUnique(LIBPATH=[Dir('../bio')])
+    denv.AppendUnique(LIBPATH=[Dir('../utils/wrap/mpi')])
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    denv.Append(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
-    build_tests(prereqs, denv, libs_client)
+    build_tests(prereqs, denv)
 
     if not base_env_mpi:
         return
@@ -89,8 +101,11 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
 
+    libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid']
+
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
+
 
 if __name__ == "SCons.Script":
     scons()

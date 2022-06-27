@@ -264,7 +264,7 @@ test_daos_prop_from_str(void **state)
 	char		*COMP		= "compression:lz4";
 	char		*ENC		= "encryption:aes-xts128";
 	char		*RF		= "rf:2";
-	char		*EC_CELL	= "ec_cell:2021";
+	char		*EC_CELL	= "ec_cell_sz:2021";
 	char		*EC_PDA		= "ec_pda:1";
 	char		*RP_PDA		= "rp_pda:4";
 

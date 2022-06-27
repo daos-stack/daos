@@ -35,6 +35,10 @@ import hashlib
 import time
 import errno
 import shutil
+import subprocess  # nosec
+import tarfile
+import copy
+import configparser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -49,16 +53,8 @@ from SCons.Script import WhereIs
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 from SCons.Errors import UserError
-# pylint: enable=no-name-in-module
-# pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess  # nosec
-import tarfile
-import copy
-import configparser
 
 OPTIONAL_COMPS = ['psm2']
 
@@ -679,7 +675,7 @@ class PreReqComponent():
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
 
-        # Build pre-reqs in sub-dir based on selected build type
+        # Build prerequisites in sub-dir based on selected build type
         build_dir_name = os.path.join(build_dir_name,
                                       self.__env.subst("$TTYPE_REAL"))
 
@@ -789,7 +785,7 @@ class PreReqComponent():
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
     def _setup_intelc(self):
-        """Setup environment to use intel compilers"""
+        """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
@@ -918,9 +914,9 @@ class PreReqComponent():
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
-                  choices=['yes', 'no', 'build-only'],
+                  choices=['yes', 'no', 'only', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -961,21 +957,26 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
-        if build_deps == 'yes':
+        if build_deps in ('yes', 'only'):
             self.download_deps = True
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
 
+    def realpath(self, path):
+        """Resolve the real path"""
+        return os.path.realpath(os.path.join(self.__top_dir, path))
+
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
-                value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
+                value = []
+                for path in tmp.split(os.pathsep):
+                    value.append(self.realpath(path))
             else:
-                value = realpath(tmp)
+                value = self.realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -1050,7 +1051,7 @@ class PreReqComponent():
     def load_defaults(self, is_arm):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4']
         client_reqs = ['fuse', 'json-c']
         server_reqs = ['pmdk']
@@ -1069,6 +1070,11 @@ class PreReqComponent():
             reqs.extend(server_reqs)
         if self.client_requested():
             reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'all', reqs))
+        if GetOption('build_deps') == 'only':
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
 
     def server_requested(self):
@@ -1470,24 +1476,28 @@ class _Component():
     def parse_config(self, env, opts):
         """Parse a pkg-config file"""
         if self.pkgconfig is None:
-            return False
-
+            return
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
-        if self.component_prefix:
+        if (not self.use_installed and self.component_prefix is not None
+                                   and not self.component_prefix == "/usr"):
+            path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
+                path_found = True
                 env.AppendENVPath("PKG_CONFIG_PATH", config)
+            if not path_found:
+                return
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))
         except OSError:
-            return True
+            return
 
-        return False
+        return
 
     # pylint: disable=too-many-branches
     # pylint: disable=too-many-return-statements
