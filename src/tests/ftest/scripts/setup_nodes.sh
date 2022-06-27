@@ -59,6 +59,8 @@ fi
 if [ \"\$(ulimit -l)\" != \"unlimited\" ]; then
     echo \"*  soft  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
     echo \"*  hard  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
+    echo \"daos_se+  soft  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
+    echo \"daos_se+  hard  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
 fi
 if [ \"\$(ulimit -n)\" != \"1048576\" ]; then
     echo \"*  soft  nofile 1048576\" >> /etc/security/limits.d/80_daos_limits.conf
