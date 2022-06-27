@@ -45,7 +45,9 @@ dnf --nodocs install \
     Lmod \
     lz4-devel \
     make \
+    meson \
     ndctl \
+    ninja-build \
     numactl \
     numactl-devel \
     openmpi-devel \
