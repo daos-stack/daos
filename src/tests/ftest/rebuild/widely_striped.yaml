@@ -28,7 +28,6 @@ pool:
   name: daos_server
   scm_size: 10G
   nvme_size: 60G
-  svcn: 1
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
