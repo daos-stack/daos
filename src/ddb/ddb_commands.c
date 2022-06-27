@@ -10,7 +10,6 @@
 #include "ddb_cmd_options.h"
 #include "ddb_vos.h"
 #include "ddb_printer.h"
-#include "../vea/vea_internal.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 
