@@ -661,9 +661,16 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			}
 			break;
 		case DAOS_PROP_CO_OBJ_VERSION:
-			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_cont_obj_version,
-					   &value);
+			if (entry->dpe_val <= UINT_MAX) {
+				uint32_t obj_ver = (uint32_t)entry->dpe_val;
+
+				d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_cont_obj_version,
+						   &value);
+				D_DEBUG(DB_MD, "update obj_version = %u\n", obj_ver);
+			} else {
+				rc = -DER_INVAL;
+			}
 			break;
 		case DAOS_PROP_CO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
@@ -2470,16 +2477,19 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_OBJ_VERSION) {
-		d_iov_set(&value, &val, sizeof(val));
+		uint32_t obj_ver;
+
+		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_obj_version,
 				   &value);
 		if (rc == -DER_NONEXIST)
-			val = 0;
+			obj_ver = 0;
 		else  if (rc != 0)
 			D_GOTO(out, rc);
+
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
-		prop->dpp_entries[idx].dpe_val = val;
+		prop->dpp_entries[idx].dpe_val = obj_ver;
 		if (rc == -DER_NONEXIST) {
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 			negative_nr++;
@@ -3547,7 +3557,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uint64_t			 pda;
 	int				 rc;
 	bool				 upgraded = false;
-	uint32_t			 global_ver = 0;
+	uint64_t			 global_ver = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	(void)val;
@@ -3597,6 +3607,17 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid));
 		goto out;
 	}
+
+	obj_ver = DS_POOL_OBJ_VERSION;
+	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_obj_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container obj version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
+	}
+
 	upgraded = true;
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_GLOBAL_VERSION);
 	D_ASSERT(entry != NULL);
@@ -3675,6 +3696,8 @@ out:
 		}
 	}
 out_free_prop:
+	D_DEBUG(DB_MD, "pool/cont: "DF_CONTF" upgrade: "DF_RC"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 	if (prop)
 		daos_prop_free(prop);
 	cont_put(cont);
@@ -3700,7 +3723,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 		rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
 					    NULL /* hint **/);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_svc, rc);
 		need_put_leader = true;
 	}
 
@@ -3721,6 +3744,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	rdb_tx_end(&tx);
 
 out_svc:
+	D_DEBUG(DB_MD, DF_UUID" upgrade all container: rc %d\n", DP_UUID(pool_uuid), rc);
 	if (need_put_leader)
 		cont_svc_put_leader(svc);
 

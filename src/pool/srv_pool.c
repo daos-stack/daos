@@ -2147,7 +2147,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 
 		D_ASSERT(idx < nr);
 		/* get pool global version */
-		d_iov_set(&value, &val32, sizeof(val32));
+		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_obj_version,
 				   &value);
 		if (rc == -DER_NONEXIST && global_ver <= 1) {
@@ -2155,8 +2155,6 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
 			return rc;
-		} else {
-			obj_ver = val32;
 		}
 
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OBJ_VERSION;
@@ -4385,13 +4383,14 @@ out_free:
 	return rc;
 }
 
-static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
-					  struct pool_svc *svc, int rc)
+static int
+__ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 {
 	struct rdb_tx			tx;
 	d_iov_t				value;
 	uint32_t			upgrade_status;
 	uint32_t			global_version;
+	uint32_t			obj_version;
 	uint32_t			connectable;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
@@ -4426,6 +4425,16 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
 		}
+		obj_version = DS_POOL_OBJ_VERSION;
+		d_iov_set(&value, &obj_version, sizeof(obj_version));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root,
+				    &ds_pool_prop_obj_version, &value);
+		if (rc1) {
+			D_ERROR(DF_UUID": failed to upgrade global version "
+				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
+			D_GOTO(out_tx, rc1);
+		}
+
 		connectable = 1;
 		d_iov_set(&value, &connectable, sizeof(connectable));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_connectable,
@@ -4457,7 +4466,69 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out:
+	D_DEBUG(DB_MD, DF_UUID "mark upgrade complete.: %d/%d\n", DP_UUID(pool_uuid), rc1, rc);
 	return rc1;
+}
+
+/* check and upgrade the object layout if needed.
+ * rc = 0 does not need upgrade.
+ * rc = 1 schedule upgrade job.
+ * other  failure.
+ */
+static int
+pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc)
+{
+	d_iov_t		value;
+	uint32_t	current_layout_ver = 0;
+	int		rc = 0;
+
+	d_iov_set(&value, &current_layout_ver, sizeof(current_layout_ver));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_obj_version, &value);
+	if (rc && rc != -DER_NONEXIST)
+		return rc;
+	else if (rc == -DER_NONEXIST)
+        	current_layout_ver = 0;
+
+	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
+		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, 0,
+					 0, DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE, 0);
+		if (rc == 0)
+			rc = 1;
+	}
+	return rc;
+}
+
+static int
+ds_pool_mark_upgrade_completed_internal(struct pool_svc *svc, int ret)
+{
+	int rc;
+
+	if (ret == 0)
+		ret = ds_cont_upgrade(svc->ps_uuid, svc->ps_cont_svc);
+
+	rc = __ds_pool_mark_upgrade_completed(svc->ps_uuid, svc, ret);
+	if (rc == 0 && ret)
+		rc = ret;
+
+	return rc;
+}
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret)
+{
+	struct pool_svc	*svc;
+	int		rc;
+
+	/* XXX check if the whole upgrade progress is really completed */
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = ds_pool_mark_upgrade_completed_internal(svc, ret);
+
+	pool_svc_put_leader(svc);
+
+	return rc;
 }
 
 static int
@@ -4468,7 +4539,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	d_iov_t				value;
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
-	int				rc, rc1;
+	int				rc;
 	bool				upgraded = false;
 	bool				need_put_leader = false;
 
@@ -4577,18 +4648,26 @@ out_upgrade:
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
 	rc = pool_upgrade_props(&tx, svc, pool_uuid, rpc);
-	upgraded = true;
+	if (rc)
+		D_GOTO(out_tx, rc);
+
+	rc = pool_check_upgrade_object_layout(&tx, svc);
+	if (rc < 0)
+		D_GOTO(out_tx, rc);
+
+	if (rc != 1)
+		upgraded = true;
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
 	if (upgraded) {
+		int rc1;
+
 		if (rc == 0 && need_put_leader &&
 		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
 			D_GOTO(out_put_leader, rc = -DER_AGAIN);
-		if (rc == 0)
-			rc = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
-		rc1 = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc);
+		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
 		if (rc == 0 && rc1)
 			rc = rc1;
 	}
