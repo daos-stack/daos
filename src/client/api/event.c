@@ -328,8 +328,6 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 	if (eqx != NULL)
 		eq = daos_eqx2eq(eqx);
-	else
-		D_MUTEX_LOCK(&evx->evx_lock);
 
 	evx->evx_status = DAOS_EVS_COMPLETED;
 	rc = daos_event_complete_cb(evx, rc);
@@ -385,8 +383,6 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	}
 
 out:
-	if (eq == NULL)
-		D_MUTEX_UNLOCK(&evx->evx_lock);
 	return 0;
 }
 
@@ -421,6 +417,8 @@ daos_event_launch(struct daos_event *ev)
 			rc = -DER_NONEXIST;
 			goto out;
 		}
+	} else {
+		D_MUTEX_LOCK(&evx->evx_lock);
 	}
 
 	daos_event_launch_locked(eqx, evx);
@@ -434,12 +432,13 @@ daos_event_launch(struct daos_event *ev)
 		D_ASSERT(evx->evx_nchild_running == 0);
 		daos_event_complete_locked(eqx, evx, rc);
 	}
- out:
-	if (eqx != NULL)
+out:
+	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
-
-	if (eqx != NULL)
 		daos_eq_putref(eqx);
+	} else {
+		D_MUTEX_UNLOCK(&evx->evx_lock);
+	}
 
 	return rc;
 }
@@ -474,6 +473,8 @@ daos_event_complete(struct daos_event *ev, int rc)
 		D_ASSERT(eqx != NULL);
 
 		D_MUTEX_LOCK(&eqx->eqx_lock);
+	} else {
+		D_MUTEX_LOCK(&evx->evx_lock);
 	}
 
 	if (evx->evx_status == DAOS_EVS_READY ||
@@ -489,6 +490,8 @@ out:
 	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		daos_eq_putref(eqx);
+	} else {
+		D_MUTEX_UNLOCK(&evx->evx_lock);
 	}
 }
 
