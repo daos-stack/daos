@@ -98,7 +98,10 @@
 		ds_pool_list_cont_handler, NULL),			\
 	X(POOL_TGT_QUERY_MAP,						\
 		0, &CQF_pool_tgt_query_map,				\
-		ds_pool_tgt_query_map_handler, NULL)
+		ds_pool_tgt_query_map_handler, NULL),			\
+	X(POOL_UPGRADE,							\
+		0, &CQF_pool_upgrade,					\
+		ds_pool_upgrade_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_DISCONNECT,						\
@@ -131,10 +134,6 @@
 	X(POOL_RANKS_GET,						\
 		0, &CQF_pool_ranks_get,					\
 		ds_pool_ranks_get_handler,				\
-		NULL),							\
-	X(POOL_UPGRADE,							\
-		0, &CQF_pool_upgrade,					\
-		ds_pool_upgrade_handler,				\
 		NULL),							\
 	X(POOL_TGT_DISCARD,						\
 		0, &CQF_pool_tgt_discard,				\

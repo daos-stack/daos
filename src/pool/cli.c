@@ -3164,3 +3164,64 @@ int dc_pool_get_redunc(daos_handle_t poh)
 
 	return rf;
 }
+
+/* Do pool upgrade, only for testing purpose for now. */
+int
+dc_pool_upgrade(uuid_t pool_uuid)
+{
+	struct dc_pool		*pool;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc;
+	struct pool_upgrade_in	*in;
+	struct pool_upgrade_out	*out;
+	int			rc;
+
+	if (!daos_uuid_valid(pool_uuid))
+		return -DER_INVAL;
+
+	/** allocate and fill in pool connection */
+	rc = init_pool(NULL, pool_uuid, 0, NULL, &pool);
+	if (rc)
+		return rc;
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+retry:
+	/** Choose an endpoint and create an RPC. */
+	rc = dc_pool_choose_svc_rank(NULL, pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		D_GOTO(out_put, rc);
+	}
+
+	/** Pool connect RPC by UUID (provided, or looked up by label above) */
+	rc = pool_req_create(daos_get_crt_ctx(), &ep, POOL_UPGRADE, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_put, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->poi_op.pi_uuid, pool->dp_pool);
+
+	crt_req_addref(rpc);
+	rc = daos_rpc_send_wait(rpc);
+	out = crt_reply_get(rpc);
+	if (rc || out->poo_op.po_rc) {
+		D_MUTEX_LOCK(&pool->dp_client_lock);
+		rc = rsvc_client_complete_rpc(&pool->dp_client, &ep, rc, out->poo_op.po_rc,
+					      &out->poo_op.po_hint);
+		D_MUTEX_UNLOCK(&pool->dp_client_lock);
+		if (rc == RSVC_CLIENT_RECHOOSE ||
+		    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->poo_op.po_rc))) {
+			crt_req_decref(rpc);
+			goto retry;
+		}
+	}
+
+	crt_req_decref(rpc); /* free req */
+out_put:
+	dc_pool_put(pool);
+	return rc;
+}
