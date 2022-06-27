@@ -252,8 +252,7 @@ int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
-int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
-				 uint32_t pm_ver);
+int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
 /* oid_iv.c */
 int ds_oid_iv_init(void);
