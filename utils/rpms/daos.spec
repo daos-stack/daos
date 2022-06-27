@@ -1,5 +1,4 @@
-% -h
-`efine daoshome %{_exec_prefix}/lib/%{name}
+%define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
