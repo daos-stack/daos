@@ -1,9 +1,9 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import os
 import traceback
 import random
 import base64
@@ -42,7 +42,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10) #nosec
+            size = random.randint(1, 10) # nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
@@ -154,7 +154,7 @@ class UpgradeDowngradeTest(IorTestBase):
         for cmd in cmds:
             self.log.info("==cmd= %s", cmd)
             result = run_pcmd(hosts, cmd)
-        self.log.info("==sleeping 5 seconds")
+        self.log.info("==sleeping 5 more seconds")
         time.sleep(5)
         self.log.info("==pcmd yum upgrade/downgrade result= %s", result)
 
@@ -167,7 +167,7 @@ class UpgradeDowngradeTest(IorTestBase):
         cmds = [
                 "daos version",
                 "dmg version",
-                "daos pool query 'TestLabel_1'"
+                "daos pool query {}".format(self.pool.identifier)
                ]
         for cmd in cmds:
             self.log.info("==cmd= %s", cmd)
@@ -200,7 +200,12 @@ class UpgradeDowngradeTest(IorTestBase):
                  (9)Create new pool after rpms Upgraded
                  (10)Downgrade and cleanup
                  (11)Restart servers and agent
-        :avocado: tags=interop, not_run_on_CI
+        To launch test:
+                 (1)sudo yum install all needed RPMs to all hosts
+                 (2)define RPMs to updown_grade.yaml
+                 (3)./launch.py upgrade_downgrade -ts boro-[..] -tc boro-[..]
+        :avocado: tags=manual
+        :avocado: tags=interop
         :avocado: tags=upgrade_downgrade
         """
         #(1)Setup
@@ -210,12 +215,14 @@ class UpgradeDowngradeTest(IorTestBase):
         upgd_rpms = self.params.get("upgrade_rpms", '/run/interop/*')
         downgd_rpms = self.params.get("downgrade_rpms", '/run/interop/*')
         num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
+        mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
         self.log.info("(1)==Show rpm, dmg and daos versions on all hosts.")
         self.show_daos_version(all_hosts, hosts_client)
 
         #(2)Create pool containers and attributes
         self.log.info("(2)==Create pool containers and attributes.")
         self.add_pool(connect=False)
+        pool_id = self.pool.identifier
         self.add_container(self.pool)
         self.container.open()
         self.daos_cmd = DaosCommand(self.bin)
@@ -243,27 +250,33 @@ class UpgradeDowngradeTest(IorTestBase):
 
         #IOR before upgrade
         self.log.info("(2.1)==Setup and run IOR.")
-        result = run_pcmd(hosts_client, "mkdir -p /tmp/daos_dfuse1")
+        result = run_pcmd(hosts_client, "mkdir -p {}".format(mount_dir))
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
         dfs_oclass = self.params.get("dfs_oclass", '/run/ior/*')
+        testfile = os.path.join(mount_dir, "testfile")
+        testfile_sav = os.path.join(mount_dir, "testfile_sav")
+        testfile_sav2 = os.path.join(mount_dir, "testfile_sav2")
+        symlink_testfile = os.path.join(mount_dir, "symlink_testfile")
         self.ior_cmd.dfs_oclass.update(dfs_oclass)
         self.ior_cmd.flags.update(iorflags_write)
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
-        result = run_pcmd(hosts_client, "cd /tmp/daos_dfuse1/")
-        result = run_pcmd(hosts_client, "ls -l /tmp/daos_dfuse1/testfile")
-        result = run_pcmd(hosts_client, "cp /tmp/daos_dfuse1/testfile /tmp/testfile_sav")
-        result = run_pcmd(hosts_client, "cp /tmp/daos_dfuse1/testfile /tmp/testfile_sav2")
-        result = run_pcmd(
-            hosts_client, "ln -vs /tmp/testfile_sav2 /tmp/daos_dfuse1/symlink_testfile")
-        result = run_pcmd(hosts_client, "diff /tmp/daos_dfuse1/testfile /tmp/testfile_sav")
+        result = run_pcmd(hosts_client, "cd {}".format(mount_dir))
+        result = run_pcmd(hosts_client, "ls -l {}".format(testfile))
+        result = run_pcmd(hosts_client, "cp {0} {1}".format(testfile, testfile_sav))
         self.check_result(result)
-        result = run_pcmd(hosts_client, "ls -l /tmp/daos_dfuse1/symlink_testfile")
+        result = run_pcmd(hosts_client, "cp {0} {1}".format(testfile, testfile_sav2))
+        self.check_result(result)
+        result = run_pcmd(
+            hosts_client, "ln -vs {0} {1}".format(testfile_sav2, symlink_testfile))
+        result = run_pcmd(hosts_client, "diff {0} {1}".format(testfile, testfile_sav))
+        self.check_result(result)
+        result = run_pcmd(hosts_client, "ls -l {}".format(symlink_testfile))
         self.check_result(result)
         self.container.close()
         self.pool.disconnect()
-        result = run_pcmd(hosts_client, "fusermount3 -u /tmp/daos_dfuse1")
+        result = run_pcmd(hosts_client, "fusermount3 -u {}".format(mount_dir))
         self.check_result(result)
 
         #(3)dmg system stop
@@ -289,8 +302,8 @@ class UpgradeDowngradeTest(IorTestBase):
         self.show_daos_version(all_hosts, hosts_client)
 
         self.get_dmg_command().pool_list(verbose=True)
-        self.get_dmg_command().pool_query(pool='TestLabel_1')
-        self.get_daos_command().pool_query(pool='TestLabel_1')
+        self.get_dmg_command().pool_query(pool=pool_id)
+        self.get_daos_command().pool_query(pool=pool_id)
 
         #   Verify pool container attributes
         self.log.info("(6.2)====Verifying container attributes after upgrade.")
@@ -305,8 +318,8 @@ class UpgradeDowngradeTest(IorTestBase):
         self.log.info("(6.3)====Verifying container IOR data and symlink.")
         result = run_pcmd(
             hosts_client,
-            "dfuse --mountpoint /tmp/daos_dfuse1 --pool TestLabel_1 --container {0}".format(
-                self.container))
+            "dfuse --mountpoint /tmp/daos_dfuse1 --pool {0} --container {1}".format(
+                pool_id, self.container))
         self.check_result(result)
         result = run_pcmd(hosts_client, "diff /tmp/daos_dfuse1/testfile /tmp/testfile_sav")
         self.check_result(result)
@@ -316,23 +329,24 @@ class UpgradeDowngradeTest(IorTestBase):
 
         #(7)Dmg pool get-prop
         self.log.info("(7)==Dmg pool get-prop after RPMs upgraded before Pool upgraded")
-        result = run_pcmd(hosts_client, "dmg pool get-prop TestLabel_1")
+        result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool_id))
         self.check_result(result)
 
         #(8)Pool property verification after upgraded
         self.log.info("(8)==Dmg pool upgrade and get-prop after RPMs upgraded")
-        result = run_pcmd(hosts_client, "dmg pool upgrade TestLabel_1")
+        result = run_pcmd(hosts_client, "dmg pool upgrade {}".format(pool_id))
         self.check_result(result)
-        result = run_pcmd(hosts_client, "dmg pool get-prop TestLabel_1")
+        result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool_id))
         self.check_result(result)
 
         #(9)Create new pool
         self.log.info("(9)==Create new pool after rpms Upgraded")
         self.add_pool(connect=False)
+        pool2_id = self.pool.identifier
         self.get_dmg_command().pool_list(verbose=True)
-        self.get_dmg_command().pool_query(pool='TestLabel_2')
-        self.get_daos_command().pool_query(pool='TestLabel_2')
-        result = run_pcmd(hosts_client, "dmg pool get-prop TestLabel_2")
+        self.get_dmg_command().pool_query(pool=pool2_id)
+        self.get_daos_command().pool_query(pool=pool2_id)
+        result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool2_id))
         self.check_result(result)
 
         #(10)Downgrade and cleanup
@@ -352,6 +366,3 @@ class UpgradeDowngradeTest(IorTestBase):
         self.restart_servers()
         self._start_manager_list("agent", self.agent_managers)
         self.show_daos_version(all_hosts, hosts_client)
-
-        #self.container.destroy()
-        #()destroy container hang  --- DAOS-10395
