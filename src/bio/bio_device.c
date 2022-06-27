@@ -866,7 +866,7 @@ skip_led_str:
 	}
 	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device with traddr %s could not be found\n", b_info.bdi_traddr);
-		D_GOTO(free_traddr, rc = opts.status);
+		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	/* Update current LED state after action */
