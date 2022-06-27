@@ -21,7 +21,7 @@ pushd "$TMP_DIR"
 
 set +e
 
-sudo --preserve-env=VIRTUAL_ENV ./node_local_test.py \
+sudo --preserve-env=VIRTUAL_ENV,PATH ./node_local_test.py \
     --no-root --memcheck no --server-debug WARN "$@"
 
 RC=$?
