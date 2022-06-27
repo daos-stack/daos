@@ -308,6 +308,11 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
+	if (cmd == TIOCGWINSZ) {
+		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGWINSZ ioctl");
+		D_GOTO(out_err, rc = ENOTTY);
+	}
+
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
 		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);

@@ -8,7 +8,7 @@ timeout: 10800
 server_config:
   name: daos_server
 pool:
-  size: 5GiB
+  size: 8GiB
   control_method: dmg
 container:
   type: POSIX

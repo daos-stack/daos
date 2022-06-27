@@ -46,8 +46,8 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
         """
@@ -117,16 +117,21 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
+        build_jobs = 18
+        if intercept:
+            build_jobs = 1
+
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work, so run this part in serial.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
+                'git -C {} checkout jvolivie/fix_key2str'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 50 build --build-deps=only'.format(build_dir),
-                'scons -C {} build'.format(build_dir)]
+                'scons -C {} --jobs 18 --build-deps=only'.format(build_dir),
+                'scons -C {} --jobs {}'.format(build_dir, build_jobs)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
