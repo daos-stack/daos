@@ -277,16 +277,7 @@ extern "C" {
 	       One or more control plane components are incompatible)	\
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)					\
-	/** Requested operation failed */				\
-	ACTION(DER_OP_FAILED,		(DER_ERR_DAOS_BASE + 40),	\
-	       Requested operation failed)				\
-	/** Unable to verify operation result */			\
-	ACTION(DER_OP_NOT_VERIFIED,	(DER_ERR_DAOS_BASE + 41),	\
-	       Cannot verify operation result)				\
-	/** Unexpected operation result */				\
-	ACTION(DER_OP_UNEXP_RESULT,	(DER_ERR_DAOS_BASE + 42),	\
-	       Unexpected operation result)
+	       No service available)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

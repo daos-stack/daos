@@ -720,7 +720,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
 	if (rc != 0) {
 		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerror(-rc));
-		opts->status = -DER_OP_FAILED;
+		opts->status = -DER_INVAL;
 		return;
 	}
 
@@ -729,7 +729,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to retrieve the state of the LED on %s (%s)\n", addr_buf,
 			spdk_strerror(-rc));
-		opts->status = -DER_OP_FAILED;
+		opts->status = -DER_NOSYS;
 		return;
 	}
 
@@ -774,14 +774,14 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
 			spdk_strerror(-rc));
-		opts->status = -DER_OP_FAILED;
+		opts->status = -DER_NOSYS;
 		return;
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
 	if (rc != 0) {
 		D_ERROR("Failed to get the VMD LED state (%s)\n", spdk_strerror(-rc));
-		opts->status = -DER_OP_NOT_VERIFIED;
+		opts->status = -DER_NOSYS;
 		return;
 	}
 
@@ -789,7 +789,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (cur_led_state != opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
 			g_led_states[opts->led_state], g_led_states[cur_led_state]);
-		opts->status = -DER_OP_UNEXP_RESULT;
+		opts->status = -DER_INVAL;
 	}
 }
 
