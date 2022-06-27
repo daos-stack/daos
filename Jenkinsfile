@@ -782,8 +782,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
-                                                ' --build-arg DAOS_KEEP_SRC=yes'
+                                                                deps_build: true)
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
