@@ -59,6 +59,7 @@ dnf --nodocs install \
     python3-distro \
     python3-junit_xml \
     python3-pip \
+    python3-pyelftools \
     python3-pyxattr \
     python3-pyyaml \
     python3-scons \
