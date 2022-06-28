@@ -9,7 +9,7 @@ hosts:
     - server-G
   test_clients:
     - client-B
-timeout: 120
+timeout: 360
 server_config:
   name: daos_server
   servers:
@@ -17,5 +17,5 @@ server_config:
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a"]
 server_manager:
-  storage_prepare_timeout: 60
-  storage_format_timeout: 60
+  storage_prepare_timeout: 180
+  storage_format_timeout: 190
