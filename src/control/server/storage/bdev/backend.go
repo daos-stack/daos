@@ -66,7 +66,7 @@ func (w *spdkWrapper) suppressOutput() (restore restoreFn, err error) {
 		return
 	}
 
-	if err = syscall.Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
+	if err = Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
 		return
 	}
 
@@ -77,7 +77,7 @@ func (w *spdkWrapper) suppressOutput() (restore restoreFn, err error) {
 		if err := devNull.Close(); err != nil {
 			panic(err)
 		}
-		if err := syscall.Dup2(realStdout, syscall.Stdout); err != nil {
+		if err := Dup2(realStdout, syscall.Stdout); err != nil {
 			panic(err)
 		}
 	}
