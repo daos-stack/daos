@@ -2972,8 +2972,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	for (token = strtok_r(rem, "/", &sptr);
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
-		if (is_root)
-			is_root = false;
+		is_root = false;
 lookup_rel_path_loop:
 
 		/*
