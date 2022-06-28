@@ -78,14 +78,14 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 120
+                build_time = 60
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
-            build_time = 210
+            build_time = 45
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -112,6 +112,7 @@ class DaosBuild(DfuseTestBase):
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'WARN,IL=INFO'
+            remote_env['FI_LOG_LEVEL'] = 'warn'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
