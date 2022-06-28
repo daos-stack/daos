@@ -125,7 +125,6 @@ class DaosBuild(DfuseTestBase):
         # not yet work, so run this part in serial.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} checkout jvolivie/fix_key2str'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
