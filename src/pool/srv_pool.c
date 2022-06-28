@@ -2170,7 +2170,7 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_mutex, rc);
 
 	if (svc->ps_rsvc.s_state == DS_RSVC_UP_EMPTY) {
 		/*
