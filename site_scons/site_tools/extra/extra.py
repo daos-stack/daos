@@ -93,18 +93,6 @@ def _find_indent():
     return f'{indent} --style={style}'
 
 
-def _pp_gen(source, target, env, indent):
-    """generate commands for preprocessor builder"""
-    action = []
-    cccom = env.subst("$CCCOM").replace(" -o ", " ")
-    for src, tgt in zip(source, target):
-        if indent:
-            action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
-        else:
-            action.append(f'{cccom} -E -P {src} > {tgt}')
-    return action
-
-
 def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
@@ -149,13 +137,20 @@ def generate(env):
 
     indent = _find_indent()
 
-    # In order to pass the indent function to the generator and only execute _find_indent
-    # once, we create a lambda function to wrap our own that takes indent as argument.
-    pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
-                                                                      indent)  # noqa
+    # pylint: disable-next=unused-argument
+    def _pp_gen(source, target, env, for_signature):
+        """generate commands for preprocessor builder"""
+        action = []
+        cccom = env.subst("$CCCOM").replace(" -o ", " ")
+        for src, tgt in zip(source, target):
+            if indent:
+                action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
+            else:
+                action.append(f'{cccom} -E -P {src} > {tgt}')
+        return action
 
     # Only handle C for now
-    preprocess = Builder(generator=pp_generator, emitter=_preprocess_emitter)
+    preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 

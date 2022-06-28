@@ -20,8 +20,6 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
-from __future__ import print_function
-
 import os
 import sys
 import datetime
