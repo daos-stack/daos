@@ -38,27 +38,25 @@ const (
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort     int                       `yaml:"port"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	// Detect outdated "servers" config, to direct users to change their config file
-	Servers             []*engine.Config       `yaml:"servers,omitempty"`
-	Engines             []*engine.Config       `yaml:"engines"`
-	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool                   `yaml:"disable_vfio"`
-	DisableVMD          *bool                  `yaml:"disable_vmd"`
-	EnableHotplug       bool                   `yaml:"enable_hotplug"`
-	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
-	DisableHugepages    bool                   `yaml:"disable_hugepages"`
-	ControlLogMask      common.ControlLogLevel `yaml:"control_log_mask"`
-	ControlLogFile      string                 `yaml:"control_log_file"`
-	ControlLogJSON      bool                   `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                 `yaml:"helper_log_file"`
-	FWHelperLogFile     string                 `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool                   `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string                 `yaml:"fault_path"`
-	TelemetryPort       int                    `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter      uint8                  `yaml:"core_dump_filter,omitempty"`
+	ControlPort         int                       `yaml:"port"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	Engines             []*engine.Config          `yaml:"engines"`
+	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool                      `yaml:"disable_vfio"`
+	DisableVMD          *bool                     `yaml:"disable_vmd"`
+	EnableHotplug       bool                      `yaml:"enable_hotplug"`
+	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
+	DisableHugepages    bool                      `yaml:"disable_hugepages"`
+	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile      string                    `yaml:"control_log_file"`
+	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
+	RecreateSuperblocks bool                      `yaml:"recreate_superblocks,omitempty"`
+	FaultPath           string                    `yaml:"fault_path"`
+	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -431,7 +429,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}()
 
 	// The config file format no longer supports "servers"
-	if len(cfg.Servers) > 0 {
+	if len(cfg.Legacy.Servers) > 0 {
 		return errors.New("\"servers\" server config file parameter is deprecated, use " +
 			"\"engines\" instead")
 	}

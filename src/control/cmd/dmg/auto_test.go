@@ -179,7 +179,6 @@ access_points:
 - hostX:10002
 fault_cb: ""
 hyperthreads: false
-enable_vmd: null
 `
 	)
 

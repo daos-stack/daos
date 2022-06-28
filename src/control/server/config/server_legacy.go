@@ -6,12 +6,16 @@
 
 package config
 
+import "github.com/daos-stack/daos/src/control/server/engine"
+
 // ServerLegacy describes old configuration options that should be supported for backward
 // compatibility and may be deprecated in future releases.
 // See utils/config/daos_server.yml for parameter descriptions.
 type ServerLegacy struct {
 	// Detect outdated "enable_vmd" config parameter and direct users to update config file.
-	EnableVMD *bool `yaml:"enable_vmd"`
+	EnableVMD *bool `yaml:"enable_vmd,omitempty"`
+	// Detect outdated "servers" config, to direct users to change their config file.
+	Servers []*engine.Config `yaml:"servers,omitempty"`
 }
 
 // WithEnableVMD can be used to set the state of VMD functionality,
