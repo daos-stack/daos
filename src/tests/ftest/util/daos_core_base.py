@@ -6,6 +6,7 @@
 """
 
 import os
+from pathlib import Path
 
 from avocado import fail_on
 from avocado.utils import process
@@ -29,7 +30,6 @@ class DaosCoreBase(TestWithServers):
         """Initialize the DaosCoreBase object."""
         super().__init__(*args, **kwargs)
         self.subtest_name = None
-        self.remote_cmocka_files = True
 
     def setUp(self):
         """Set up before each test."""
@@ -44,7 +44,6 @@ class DaosCoreBase(TestWithServers):
         # if no clients are specified update self.hostlist_clients to be the local host
         if self.hostlist_clients is None:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
-            self.remote_cmocka_files = False
 
     def get_test_param(self, name, default=None):
         """Get the test-specific test yaml parameter value.
@@ -126,12 +125,13 @@ class DaosCoreBase(TestWithServers):
             dmg.copy_configuration(self.hostlist_clients)
 
         cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
+        cmocka_dir = os.path.join(self.test_dir, "cmocka")
         env = EnvironmentVariables({
             "D_LOG_FILE": get_log_file(self.client_log),
             "D_LOG_MASK": "DEBUG",
             "DD_MASK": "mgmt,io,md,epc,rebuild",
             "COVFILE": "/tmp/test.cov",
-            "CMOCKA_XML_FILE": os.path.join(self.outputdir, "%g_cmocka_results.xml"),
+            "CMOCKA_XML_FILE": os.path.join(cmocka_dir, "%g_cmocka_results.xml"),
             "CMOCKA_MESSAGE_OUTPUT": "xml",
             "POOL_SCM_SIZE": str(scm_size),
             "POOL_NVME_SIZE": str(nvme_size),
@@ -170,13 +170,21 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
-            if self.remote_cmocka_files:
-                # Copy any remote cmocka files back to this host
-                command = "{} cp {} {}".format(
-                    get_clush_command(self.hostlist_clients, "-S -v --rcopy"),
-                    os.path.join(self.outputdir, "*_cmocka_results.xml"),
-                    self.outputdir)
-                result = run_command(command, self.get_remaining_time() - 5)
+            # Copy any remote cmocka files back to this host
+            command = "{} cp {} {}".format(
+                get_clush_command(self.hostlist_clients, "-S -v --rcopy"),
+                os.path.join(cmocka_dir, "*_cmocka_results.xml"), cmocka_dir)
+            run_command(command)
+
+            # Move local files to the avocado test variant data directory
+            for cmocka_file in os.listdir(cmocka_dir):
+                if "_cmocka_results." in cmocka_file:
+                    # Rename *_cmocka_results.xml.node1 to *_cmocka_results.node1.xml
+                    cmocka_path = Path(cmocka_file)
+                    rename = cmocka_file.name.replace(
+                        "".join(cmocka_path.suffixes), "".join(reversed(cmocka_path.suffixes)))
+                    command = "mv {} {}".format(cmocka_file, os.path.join(self.outputdir, rename))
+                    run_command(command)
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
