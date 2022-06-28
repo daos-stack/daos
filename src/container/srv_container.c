@@ -641,11 +641,17 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs,
-					   &ds_cont_prop_cont_global_version,
-					   &value);
+			/* type of the property in rdb is uint32_t */
+			if (entry->dpe_val <= UINT_MAX) {
+				uint32_t cont_ver = (uint32_t)entry->dpe_val;
+
+				d_iov_set(&value, &cont_ver, sizeof(cont_ver));
+				rc = rdb_tx_update(tx, kvs,
+						   &ds_cont_prop_cont_global_version, &value);
+				D_DEBUG(DB_MD, "wrote cont_global_version = %u\n", cont_ver);
+			} else {
+				rc = -DER_INVAL;
+			}
 			break;
 		case DAOS_PROP_CO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
@@ -2413,12 +2419,16 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
-		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_global_version,
-				   &value);
-		if (rc == -DER_NONEXIST)
+		/* type of the property in rdb is uint32_t */
+		uint32_t cont_ver;
+
+		d_iov_set(&value, &cont_ver, sizeof(cont_ver));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_global_version, &value);
+		if (rc == 0)
+			val = cont_ver;
+		else if (rc == -DER_NONEXIST)
 			val = 0;
-		else  if (rc != 0)
+		else
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
