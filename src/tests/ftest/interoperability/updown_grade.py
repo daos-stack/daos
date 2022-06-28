@@ -241,7 +241,6 @@ class UpgradeDowngradeTest(IorTestBase):
         result = run_pcmd(hosts_client, "mkdir -p {}".format(mount_dir))
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
-        dfs_oclass = self.params.get("dfs_oclass", '/run/ior/*')
         testfile = os.path.join(mount_dir, "testfile")
         testfile_sav = os.path.join(mount_dir, "testfile_sav")
         testfile_sav2 = os.path.join(mount_dir, "testfile_sav2")
