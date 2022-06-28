@@ -53,7 +53,7 @@ for file in $files; do
 		errors=$((errors + 1))
 	elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
 		git reset "$file" || (echo "Unable to un-stage $file" && exit 1)
-		if [ $os == 'Linux' ]
+		if [ "$os" == 'Linux' ]
 		then
 			sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
 		else
