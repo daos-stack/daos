@@ -127,7 +127,7 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -221,4 +221,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
