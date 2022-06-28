@@ -111,7 +111,7 @@ class DaosBuild(DfuseTestBase):
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'DEBUG,IL=INFO'
+            remote_env['D_LOG_MASK'] = 'INFO'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
@@ -125,7 +125,6 @@ class DaosBuild(DfuseTestBase):
         # not yet work, so run this part in serial.  The VMs have 6 cores so run 12 jobs.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} checkout jvolivie/fix_key2str'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
