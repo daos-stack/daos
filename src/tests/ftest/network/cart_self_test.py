@@ -55,7 +55,8 @@ class CartSelfTest(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        share_addr = self.params.get("share_addr", "/run/test_params/*")
+        # Most providers (tcp, verbs) don't support SEP mode
+        share_addr = 0
 
         # Configure the daos server
         self.add_server_manager()
