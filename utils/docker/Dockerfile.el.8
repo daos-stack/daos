@@ -14,7 +14,8 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 # Use local repo server if present
-# installs/upgrades of epel-release can re-enable the distro repos for epel.
+# installs/upgrades of epel-release add repos
+# Disable mirrorlist check when using local repos.
 ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
@@ -31,14 +32,16 @@ RUN set -e;                                                      \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ ! -f /etc/fedora-release ]; then                        \
         dnf --disablerepo \*epel\* install epel-release;         \
-        dnf install epel-release;                                \
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
             true > /etc/yum.repos.d/epel.repo;                   \
             true > /etc/yum.repos.d/epel-modular.repo;           \
+            sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+                -i /etc/dnf/dnf.conf;                            \
         else                                                     \
             PT_REPO=powertools;                                  \
         fi;                                                      \
+        dnf install epel-release;                                \
         dnf config-manager --enable $PT_REPO;                    \
     fi;                                                          \
     dnf clean all
@@ -147,10 +150,6 @@ ARG DAOS_TARGET_TYPE=release
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        if [ -n "$REPO_FILE_URL" ]; then                                               \
-            true > /etc/yum.repos.d/epel.repo;                                         \
-            true > /etc/yum.repos.d/epel-modular.repo;                                 \
-        fi &&                                                                          \
         dnf clean all;                                                                 \
     }
 USER daos_server:daos_server
@@ -168,10 +167,6 @@ USER root:root
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        if [ -n "$REPO_FILE_URL" ]; then                                               \
-            true > /etc/yum.repos.d/epel.repo;                                         \
-            true > /etc/yum.repos.d/epel-modular.repo;                                 \
-        fi &&                                                                          \
         dnf clean all;                                                                 \
     }
 USER daos_server:daos_server

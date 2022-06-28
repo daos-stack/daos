@@ -20,6 +20,7 @@ ARG CB0
 # be reached, have to bootstrap in an environment to get curl installed
 # to then install the pre-built repo file.
 ARG REPO_FILE_URL
+COPY ./utils/scripts/repo-helper-leap15.sh /tmp/repo-helper.sh
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
@@ -46,14 +47,7 @@ RUN set -e;                                                      \
     zypper --non-interactive clean --all;                        \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        cd /etc/dnf/repos.d/ &&                                  \
-        mv daos_ci-leap15-artifactory.repo{,.tmp};               \
-        for file in *.repo; do                                   \
-            true > $file;                                        \
-        done;                                                    \
-        mv daos_ci-leap15-artifactory.repo{.tmp,};               \
-    fi
+    chmod +x /tmp/repo-helper.sh  && /tmp/repo-helper.sh
 
 ARG JENKINS_URL
 ARG REPOS
@@ -79,14 +73,7 @@ gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
-    if [ -n "$REPO_FILE_URL" ]; then                    \
-        cd /etc/dnf/repos.d/ &&                         \
-        mv daos_ci-leap15-artifactory.repo{,.tmp};      \
-        for file in *.repo; do                          \
-            true > $file;                               \
-            done;                                       \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};  \
-        fi &&                                           \
+    /tmp/repo-helper.sh &&                               \
     /tmp/install.sh && dnf clean all &&                 \
     rm -f /tmp/install.sh
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
@@ -158,14 +145,6 @@ USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                     \
         dnf upgrade                                                                          \
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        if [ -n "$REPO_FILE_URL" ]; then                                                     \
-            cd /etc/dnf/repos.d/ &&                                                          \
-            mv daos_ci-leap15-artifactory.repo{,.tmp};                                       \
-            for file in *.repo; do                                                           \
-                true > $file;                                                                \
-            done;                                                                            \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};                                       \
-        fi &&                                                                                \
         dnf clean all;                                                                       \
     }
 USER daos_server:daos_server
@@ -204,14 +183,6 @@ ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                               \
         dnf upgrade                                                                        \
           --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        if [ -n "$REPO_FILE_URL" ]; then                                                   \
-            cd /etc/dnf/repos.d/ &&                                                        \
-            mv daos_ci-leap15-artifactory.repo{,.tmp};                                     \
-            for file in *.repo; do                                                         \
-                true > $file;                                                              \
-            done;                                                                          \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};                                     \
-        fi &&                                                                              \
         dnf clean all;                                                                     \
     }
 USER daos_server:daos_server
