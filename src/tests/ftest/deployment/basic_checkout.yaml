@@ -94,7 +94,7 @@ ior_dm:
       flags: "-w -F -k"
       signature: "5"
       transfer_size: 1M
-      block_size: 1M
+      block_size: 256K
       dfs_oclass: "EC_2P2GX"
       test_file: "/testFile"
       dfs_destroy: False
@@ -109,13 +109,13 @@ mdtest:
   manager: "MPICH"
   mdtest_params:
 #     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
-    - [POSIX, 0, 0, 1, 1000, 0, ' ']
-    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 1, 25, 0, ' ']
+    - [DFS, 4096, 4096, 1, 25, 20, ' ']
+    - [POSIX, 0, 0, 1, 25, 0, ' ']
+    - [POSIX, 0, 0, 1, 25, 20, ' ']
     - [DFS, 4096, 4096, 2, 10, 5, ' ']
     - [POSIX, 4096, 4096, 2, 10, 5, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
+    - [DFS, 4096, 4096, 1, 25, 20, '-u']
     - [POSIX, 0, 0, 2, 10, 5, '-u']
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
