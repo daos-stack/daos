@@ -85,6 +85,7 @@ const (
 	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+	BdevConfigTypeMismatch
 )
 
 // DAOS system fault codes
