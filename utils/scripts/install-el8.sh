@@ -59,7 +59,6 @@ dnf --nodocs install \
     python3-distro \
     python3-junit_xml \
     python3-pip \
-    python3-pyelftools \
     python3-pyxattr \
     python3-pyyaml \
     python3-scons \
@@ -70,6 +69,12 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+: ${REPO_FILE_URL:=}
+if [ -n "$REPO_FILE_URL" ]; then
+    dnf --nodocs install \
+        python3-pyelftools
+fi
 
 # For fedora, java-11 is installed along with maven if we install maven from
 # repo. But we need java-8 (1.8). The 'devel' package also needs to be
