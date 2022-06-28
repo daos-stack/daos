@@ -13,7 +13,7 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'types.h', 'atomic.h', 'slab.h',
                 'telemetry_consumer.h', 'telemetry_common.h']
 HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
-
+HEADERS_PMFS = ['pmfs.h', 'pmfs_cmd.h', 'vos_tasks.h', 'vos_target_fs.h', 'vos_target_engine.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.9.0"
@@ -83,6 +83,10 @@ def scons():
         check_install_header(env, os.path.join('include', 'cart', header))
     check_install_header(env, 'include/daos.h')
 
+    for header in HEADERS_PMFS:
+        env.Install(os.path.join('$PREFIX', 'include', 'pmfs'),
+                    'include/pmfs/%s' % header)
+
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     libdaos_tgts = []
     Export('env', 'CART_VERSION', 'libdaos_tgts')
@@ -94,6 +98,7 @@ def scons():
     SConscript('bio/SConscript')
     SConscript('vea/SConscript')
     SConscript('vos/SConscript')
+    SConscript('pmfs/SConscript')
 
     # Build each DAOS component
     SConscript('rsvc/SConscript')

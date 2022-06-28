@@ -27,7 +27,7 @@ def build_tests(prereqs, env):
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
+    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal','spdk')
 
     daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c'],
@@ -56,6 +56,15 @@ def build_tests(prereqs, env):
 
     jobtest = daos_build.program(denv, 'jobtest', ['jobtest.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', jobtest)
+
+    libs_pmfs = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'pthread', 'isal']
+    libs_pmfs += ['pmfs', 'spdk_util', 'vos', 'bio']
+    pmfs_unittest = daos_build.program(denv, 'pmfs_unittest', ['pmfs_unittest.c'],
+					LIBS=libs_pmfs)
+    pmfs_demo = daos_build.program(denv, 'pmfs_demo', ['pmfs_demo.c'],
+					LIBS=libs_pmfs)
+    denv.Install('$PREFIX/bin/',pmfs_unittest)
+    denv.Install('$PREFIX/bin/',pmfs_demo)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
