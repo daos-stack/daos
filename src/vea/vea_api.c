@@ -694,3 +694,30 @@ vea_flush(struct vea_space_info *vsi, bool force)
 
 	return 1;
 }
+
+struct vea_cb_args {
+	vea_free_callback_t	 vca_cb;
+	void			*vca_cb_args;
+};
+
+static int
+vea_free_extent_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
+{
+	struct vea_cb_args	*args = cb_arg;
+	struct vea_free_extent	*vfe;
+
+	vfe = (struct vea_free_extent *)val->iov_buf;
+
+	if (args->vca_cb)
+		return args->vca_cb(args->vca_cb_args, vfe);
+
+	return 0;
+}
+
+int
+vea_enumerate_free(struct vea_space_info *vsi, vea_free_callback_t cb, void *cb_arg)
+{
+	struct vea_cb_args	 args = { .vca_cb = cb, .vca_cb_args = cb_arg };
+
+	return dbtree_iterate(vsi->vsi_md_free_btr, 0, false, vea_free_extent_cb, &args);
+}

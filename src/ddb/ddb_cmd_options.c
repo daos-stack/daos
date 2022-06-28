@@ -25,6 +25,8 @@
 #define COMMAND_NAME_DUMP_DTX "dump_dtx"
 #define COMMAND_NAME_CLEAR_CMT_DTX "clear_cmt_dtx"
 #define COMMAND_NAME_SMD_SYNC "smd_sync"
+#define COMMAND_NAME_DUMP_VEA "dump_vea"
+#define COMMAND_NAME_UPDATE_VEA "update_vea"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -445,6 +447,51 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	return 0;
 }
 
+/* Parse command line options for the 'update_vea' command */
+static int
+update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args,
+			uint32_t argc, char **argv)
+{
+	char		 *options_short = "";
+	int		  index = 0;
+	struct option	  options_long[] = {
+		{ NULL }
+	};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->offset = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'offset'\n");
+		return -DER_INVAL;
+	}
+	if (argc - index > 0) {
+		cmd_args->blk_cnt = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'blk_cnt'\n");
+		return -DER_INVAL;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
@@ -520,6 +567,15 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		info->dci_cmd = DDB_CMD_SMD_SYNC;
 		return 0;
 	}
+	if (same(cmd, COMMAND_NAME_DUMP_VEA)) {
+		info->dci_cmd = DDB_CMD_DUMP_VEA;
+		return 0;
+	}
+	if (same(cmd, COMMAND_NAME_UPDATE_VEA)) {
+		info->dci_cmd = DDB_CMD_UPDATE_VEA;
+		return update_vea_option_parse(ctx, &info->dci_cmd_option.dci_update_vea,
+		       argc, argv);
+	}
 
 	ddb_errorf(ctx, "'%s' is not a valid command. Available commands are:"
 			"'help', "
@@ -536,7 +592,9 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 			"'rm_ilog', "
 			"'dump_dtx', "
 			"'clear_cmt_dtx', "
-			"'smd_sync'\n", cmd);
+			"'smd_sync', "
+			"'dump_vea', "
+			"'update_vea'\n", cmd);
 
 	return -DER_INVAL;
 }
@@ -544,117 +602,137 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 void
 ddb_commands_help(struct ddb_ctx *ctx)
 {
+	/* Command: help */
 	ddb_print(ctx, "help\n");
 	ddb_print(ctx, "\tShow help message for all the commands.\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: quit */
 	ddb_print(ctx, "quit\n");
 	ddb_print(ctx, "\tQuit interactive mode\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: ls */
 	ddb_print(ctx, "ls [path]\n");
 	ddb_print(ctx, "\tList containers, objects, dkeys, akeys, and values\n");
 	ddb_print(ctx, "    [path]\n");
 	ddb_print(ctx, "\tOptional, list contents of the provided path\n");
-
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -r, --recursive\n");
 	ddb_print(ctx, "\tRecursively list the contents of the path\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: open */
 	ddb_print(ctx, "open <path>\n");
 	ddb_print(ctx, "\tOpens the vos file at <path>\n");
 	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tPath to the vos file to open. This should be an absolute\n"
-		       "\tpath to the pool shard. Part of the path is used to\n"
-		       "\tdetermine what the pool uuid is.\n");
-
+	ddb_print(ctx, "\tPath to the vos file to open. This should be an absolute path to the\n"
+		       "\tpool shard. Part of the path is used to determine what the pool uuid\n"
+		       "\tis.\n");
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -w, --write_mode\n");
-	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the\n"
-		       "\tvos file with the load, commit_ilog, etc commands.\n");
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the vos\n"
+		       "\tfile with the load, commit_ilog, etc commands.\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: close */
 	ddb_print(ctx, "close\n");
 	ddb_print(ctx, "\tClose the currently opened vos pool shard\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: dump_superblock */
 	ddb_print(ctx, "dump_superblock\n");
 	ddb_print(ctx, "\tDump the pool superblock information\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: dump_value */
 	ddb_print(ctx, "dump_value <path> <dst>\n");
 	ddb_print(ctx, "\tDump a value to a file\n");
 	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tVOS tree path to dump. Should be a complete path\n"
-		       "\tincluding the akey and if the value is an array value it\n"
-		       "\tshould include the extent.\n");
-
+	ddb_print(ctx, "\tVOS tree path to dump. Should be a complete path including the akey\n"
+		       "\tand if the value is an array value it should include the extent.\n");
 	ddb_print(ctx, "    <dst>\n");
 	ddb_print(ctx, "\tFile path to dump the value to.\n");
-
-
 	ddb_print(ctx, "\n");
+
+	/* Command: rm */
 	ddb_print(ctx, "rm <path>\n");
-	ddb_print(ctx, "\tRemove a branch of the VOS tree. The branch can be anything\n"
-		       "\tfrom a container and everything under it, to a single value.\n");
+	ddb_print(ctx, "\tRemove a branch of the VOS tree. The branch can be anything from a\n"
+		       "\tcontainer and everything under it, to a single value.\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to remove.\n");
-
-
 	ddb_print(ctx, "\n");
+
+	/* Command: load */
 	ddb_print(ctx, "load <src> <dst>\n");
-	ddb_print(ctx, "\tLoad a value to a vos path. This can be used to update the\n"
-		       "\tvalue of an existing key, or create a new key.\n");
+	ddb_print(ctx, "\tLoad a value to a vos path. This can be used to update the value of an\n"
+		       "\texisting key, or create a new key.\n");
 	ddb_print(ctx, "    <src>\n");
-	ddb_print(ctx, "\tSource file path that contains the data for the value to\n"
-		       "\tload.\n");
-
+	ddb_print(ctx, "\tSource file path that contains the data for the value to load.\n");
 	ddb_print(ctx, "    <dst>\n");
-	ddb_print(ctx, "\tDestination vos tree path to the value where the data\n"
-		       "\twill be loaded. If the path currently exists, then the\n"
-		       "\tdestination path must match the value type, meaning, if the\n"
-		       "\tvalue type is an array, then the path must include the extent,\n"
-		       "\totherwise, it must not.\n");
-
-
+	ddb_print(ctx, "\tDestination vos tree path to the value where the data will be loaded.\n"
+		       "\tIf the path currently exists, then the destination path must match the\n"
+		       "\tvalue type, meaning, if the value type is an array, then the path must\n"
+		       "\tinclude the extent, otherwise, it must not.\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: dump_ilog */
 	ddb_print(ctx, "dump_ilog <path>\n");
 	ddb_print(ctx, "\tDump the ilog\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: commit_ilog */
 	ddb_print(ctx, "commit_ilog <path>\n");
 	ddb_print(ctx, "\tProcess the ilog\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: rm_ilog */
 	ddb_print(ctx, "rm_ilog <path>\n");
 	ddb_print(ctx, "\tRemove all the ilog entries\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: dump_dtx */
 	ddb_print(ctx, "dump_dtx <path>\n");
 	ddb_print(ctx, "\tDump the dtx tables\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
-
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -a, --active\n");
 	ddb_print(ctx, "\tOnly dump entries from the active table\n");
 	ddb_print(ctx, "    -c, --committed\n");
 	ddb_print(ctx, "\tOnly dump entries from the committed table\n");
 	ddb_print(ctx, "\n");
+
+	/* Command: clear_cmt_dtx */
 	ddb_print(ctx, "clear_cmt_dtx <path>\n");
 	ddb_print(ctx, "\tClear the dtx committed table\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
-
 	ddb_print(ctx, "\n");
+
+	/* Command: smd_sync */
 	ddb_print(ctx, "smd_sync\n");
 	ddb_print(ctx, "\tRestore the SMD file with backup from blob\n");
+	ddb_print(ctx, "\n");
 
+	/* Command: dump_vea */
+	ddb_print(ctx, "dump_vea\n");
+	ddb_print(ctx, "\tDump information from the vea tree about free regions on NVMe SSDs\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: update_vea */
+	ddb_print(ctx, "update_vea <offset> <blk_cnt>\n");
+	ddb_print(ctx, "\tAlter the VEA tree to mark a region as free.\n");
+	ddb_print(ctx, "    <offset>\n");
+	ddb_print(ctx, "\tBlock offset of the region to mark free.\n");
+	ddb_print(ctx, "    <blk_cnt>\n");
+	ddb_print(ctx, "\tTotal blocks of the region to mark free.\n");
 	ddb_print(ctx, "\n");
 }
 
@@ -687,14 +765,14 @@ ddb_program_help(struct ddb_ctx *ctx)
 
 	ddb_print(ctx, "\nOptions:\n");
 	ddb_print(ctx, "   -w, --write_mode\n");
-	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying\n"
-		       "\tVOS file with the load,\n"
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the\n"
+		       "\tvos file with the load,\n"
 		       "\tcommit_ilog, etc commands.\n");
 	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
 	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");
 	ddb_print(ctx, "   -f, --file_cmd <path>\n");
-	ddb_print(ctx, "\tPath to a file container a list of ddb commands, one\n"
-		       "\tcommand per line, then exit.\n");
+	ddb_print(ctx, "\tPath to a file container a list of ddb commands, one command\n"
+		       "\tper line, then exit.\n");
 	ddb_print(ctx, "   -h, --help\n");
 	ddb_print(ctx, "\tShow tool usage.\n");
 
@@ -714,4 +792,6 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   dump_dtx          Dump the dtx tables\n");
 	ddb_print(ctx, "   clear_cmt_dtx     Clear the dtx committed table\n");
 	ddb_print(ctx, "   smd_sync          Restore the SMD file with backup from blob\n");
+	ddb_print(ctx, "   dump_vea          Dump information from the vea about free regions\n");
+	ddb_print(ctx, "   update_vea        Alter the VEA tree to mark a region as free.\n");
 }

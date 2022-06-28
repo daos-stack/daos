@@ -52,7 +52,6 @@ run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 	rc = ddb_parse_cmd_args(ctx, parse_args.ap_argc, parse_args.ap_argv, &info);
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
-
 	switch (info.dci_cmd) {
 	case DDB_CMD_UNKNOWN:
 		ddb_error(ctx, "Unknown command\n");
@@ -126,6 +125,12 @@ run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 		break;
 	case DDB_CMD_SMD_SYNC:
 		rc = ddb_run_smd_sync(ctx);
+		break;
+	case DDB_CMD_DUMP_VEA:
+		rc = ddb_run_dump_vea(ctx);
+		break;
+	case DDB_CMD_UPDATE_VEA:
+		rc = ddb_run_update_vea(ctx, &info.dci_cmd_option.dci_update_vea);
 		break;
 	}
 done:
