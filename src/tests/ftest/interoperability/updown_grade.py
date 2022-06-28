@@ -310,7 +310,6 @@ class UpgradeDowngradeTest(IorTestBase):
         self.check_result(result)
         result = run_pcmd(hosts_client, "diff {0} {1}".format(testfile, testfile_sav))
         self.check_result(result)
-        result = run_pcmd(
         result = run_pcmd(hosts_client, "diff {0} {1}".format(symlink_testfile, testfile_sav2))
         self.check_result(result)
 
