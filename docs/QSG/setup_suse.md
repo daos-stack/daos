@@ -124,7 +124,7 @@ SSDs will be prepared and configured to be used by DAOS.
 
 1.     Prepare the pmem devices on Server nodes:
 
-		daos_server storage prepare --scm-only
+		daos_server storage prep-scm
 
 	Sample Script:
 
@@ -146,7 +146,7 @@ SSDs will be prepared and configured to be used by DAOS.
 
 9.  Run the prepare cmdline again:
 
-		daos_server storage prepare --scm-only
+		daos_server storage prep-scm
 
 	Sample Script:
 
@@ -159,7 +159,7 @@ SSDs will be prepared and configured to be used by DAOS.
 
 17. Prepare the NVME devices on Server nodes:
 
-		daos_server storage prepare --nvme-only -u root
+		daos_server storage prep-nvme -u root
 		Preparing locally-attached NVMe storage\...
 
 19. Scan the available storage on the Server nodes:
