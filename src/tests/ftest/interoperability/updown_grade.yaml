@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
@@ -41,7 +39,6 @@ ior:
     ior_timeout: 120
     client_processes:
         np: 2
-    repetitions: 1
     test_file: daos:/testFile
     api: POSIX
     dfs_oclass: "RP_2GX"

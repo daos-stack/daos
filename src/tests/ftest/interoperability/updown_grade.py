@@ -11,12 +11,11 @@ import time
 
 from general_utils import get_random_bytes, pcmd, run_pcmd
 from pydaos.raw import DaosApiError
-from daos_utils import DaosCommand
 from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 
-# pylint: disable = global-variable-not-assigned, global-statement
+# pylint: disable=global-variable-not-assigned,global-statement
 # pylint: disable=too-many-ancestors
 class UpgradeDowngradeTest(IorTestBase):
     """
@@ -27,7 +26,6 @@ class UpgradeDowngradeTest(IorTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a ContainerAttributeTest object."""
         super().__init__(*args, **kwargs)
-        self.expected_cont_uuid = None
         self.daos_cmd = None
 
     @staticmethod
@@ -35,7 +33,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """Create the large attribute dictionary.
 
         Args:
-            num_attributes: number of attributes to be created on container.
+            num_attributes (int): number of attributes to be created on container.
         Returns:
             dict: a large attribute dictionary
 
@@ -52,16 +50,11 @@ class UpgradeDowngradeTest(IorTestBase):
         Verify the length of the Attribute names
 
         Args:
-            indata: Dict used to set attr
-            attributes_list: List obtained from list attr
+            indata (dict): Dict used to set attr
+            attributes_list (list): List obtained from list attr
         """
-        length = 0
-        for key in indata.keys():
-            length += len(key)
-
-        size = 0
-        for attr in attributes_list:
-            size += len(attr)
+        length = sum(map(len, indata.keys()))
+        size = sum(map(len, attributes_list))
 
         self.log.info("Verifying list_attr output:")
         self.log.info("  set_attr names:  %s", list(indata.keys()))
@@ -71,16 +64,11 @@ class UpgradeDowngradeTest(IorTestBase):
 
         if length != size:
             self.fail(
-                "FAIL: Size is not matching for Names in list attr, Expected "
+                "FAIL: Size does not matching for Names in list attr, Expected "
                 "len={} and received len={}".format(length, size))
         # verify the Attributes names in list_attr retrieve
-        for key in list(indata.keys()):
-            found = False
-            for attr in attributes_list:
-                if key.decode() == attr:
-                    found = True
-                    break
-            if not found:
+        for key in indata.keys():
+            if key.decode() not in attributes_list:
                 self.fail(
                     "FAIL: Name does not match after list attr, Expected "
                     "buf={} and received buf={}".format(key, attributes_list))
@@ -90,8 +78,8 @@ class UpgradeDowngradeTest(IorTestBase):
         verify the Attributes value after get_attr
 
         Args:
-             indata: In data item of container get_attr.
-             outdata: Out data from container get_attr.
+             indata (dict): In data item of container get_attr.
+             outdata (dict): Out data from container get_attr.
         """
         decoded = {}
         for key, val in outdata.items():
@@ -115,7 +103,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """check for command result, raise failure when error cncountered
 
         Args:
-             result(dict): dictionary of result to check.
+             result (dict): dictionary of result to check.
         """
         self.log.info("--check_result, result= %s", result)
         if result[0]['exit_status'] != 0:
@@ -127,8 +115,8 @@ class UpgradeDowngradeTest(IorTestBase):
         """show daos version
 
         Args:
-            all_hosts (list of String): all hosts.
-            hosts_client (list of String): client hosts to show daos and dmg version.
+            all_hosts (list): all hosts.
+            hosts_client (list): client hosts to show daos and dmg version.
         """
         result = run_pcmd(all_hosts, "rpm -qa | grep daos")
         self.check_result(result)
@@ -141,9 +129,9 @@ class UpgradeDowngradeTest(IorTestBase):
         """Upgrade downgrade hosts
 
         Args:
-            hosts (list of String): test hosts.
-            updown (String): upgrade or downgrade
-            rpms (list of String): full path of RPMs to be upgrade or downgrade
+            hosts (list): test hosts.
+            updown (str): upgrade or downgrade
+            rpms (list): full path of RPMs to be upgrade or downgrade
         """
         cmds = []
         for rpm in rpms:
@@ -162,7 +150,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """To display daos and dmg version, and check for error.
 
         Args:
-            host (String): test host.
+            host (str): test host.
         """
         cmds = [
                 "daos version",
@@ -208,7 +196,7 @@ class UpgradeDowngradeTest(IorTestBase):
         :avocado: tags=interop
         :avocado: tags=upgrade_downgrade
         """
-        #(1)Setup
+        # (1)Setup
         hosts_client = self.hostlist_clients
         hosts_server = self.hostlist_servers
         all_hosts = include_local_host(hosts_server)
@@ -219,13 +207,13 @@ class UpgradeDowngradeTest(IorTestBase):
         self.log.info("(1)==Show rpm, dmg and daos versions on all hosts.")
         self.show_daos_version(all_hosts, hosts_client)
 
-        #(2)Create pool containers and attributes
+        # (2)Create pool containers and attributes
         self.log.info("(2)==Create pool containers and attributes.")
         self.add_pool(connect=False)
         pool_id = self.pool.identifier
         self.add_container(self.pool)
         self.container.open()
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
         attr_dict = self.create_data_set(num_attributes)
 
         try:
@@ -248,7 +236,7 @@ class UpgradeDowngradeTest(IorTestBase):
         self.container.close()
         self.pool.disconnect()
 
-        #IOR before upgrade
+        # IOR before upgrade
         self.log.info("(2.1)==Setup and run IOR.")
         result = run_pcmd(hosts_client, "mkdir -p {}".format(mount_dir))
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
@@ -258,7 +246,6 @@ class UpgradeDowngradeTest(IorTestBase):
         testfile_sav = os.path.join(mount_dir, "testfile_sav")
         testfile_sav2 = os.path.join(mount_dir, "testfile_sav2")
         symlink_testfile = os.path.join(mount_dir, "symlink_testfile")
-        self.ior_cmd.dfs_oclass.update(dfs_oclass)
         self.ior_cmd.flags.update(iorflags_write)
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
@@ -279,33 +266,33 @@ class UpgradeDowngradeTest(IorTestBase):
         result = run_pcmd(hosts_client, "fusermount3 -u {}".format(mount_dir))
         self.check_result(result)
 
-        #(3)dmg system stop
+        # (3)dmg system stop
         self.log.info("(3)==Dmg system stop.")
         self.get_dmg_command().system_stop()
         errors = []
         errors.extend(self._stop_managers(self.server_managers, "servers"))
         errors.extend(self._stop_managers(self.agent_managers, "agents"))
 
-        #(4)Upgrade
+        # (4)Upgrade
         self.log.info("(4)==Upgrade RPMs to .")
         self.updowngrade(all_hosts, "upgrade", upgd_rpms)
 
-        #(5)Restart servers
+        # (5)Restart servers
         self.log.info("(5)==Restart servers.")
         self.restart_servers()
 
-        #(6)Verification after upgraded
+        # (6)Verification after upgraded
         self.log.info("(6)==verify pool and container attributes after upgraded.")
-        #   Restart agent
+        # Restart agent
         self.log.info("(6.1)====Restarting rel_2.2 agent after upgrade.")
         self._start_manager_list("agent", self.agent_managers)
         self.show_daos_version(all_hosts, hosts_client)
 
         self.get_dmg_command().pool_list(verbose=True)
         self.get_dmg_command().pool_query(pool=pool_id)
-        self.get_daos_command().pool_query(pool=pool_id)
+        self.daos_cmd.pool_query(pool=pool_id)
 
-        #   Verify pool container attributes
+        # Verify pool container attributes
         self.log.info("(6.2)====Verifying container attributes after upgrade.")
         data = self.daos_cmd.container_list_attrs(
             pool=self.pool.uuid,
@@ -314,44 +301,44 @@ class UpgradeDowngradeTest(IorTestBase):
         self.verify_get_attr(attr_dict, data['response'])
         self.daos_ver_after_upgraded(hosts_client)
 
-        #   Verify IOR data and symlink
+        # Verify IOR data and symlink
         self.log.info("(6.3)====Verifying container IOR data and symlink.")
         result = run_pcmd(
             hosts_client,
-            "dfuse --mountpoint /tmp/daos_dfuse1 --pool {0} --container {1}".format(
-                pool_id, self.container))
+            "dfuse --mountpoint {0} --pool {1} --container {2}".format(
+                mount_dir, pool_id, self.container))
         self.check_result(result)
-        result = run_pcmd(hosts_client, "diff /tmp/daos_dfuse1/testfile /tmp/testfile_sav")
+        result = run_pcmd(hosts_client, "diff {0} {1}".format(testfile, testfile_sav))
         self.check_result(result)
         result = run_pcmd(
-            hosts_client, "diff /tmp/daos_dfuse1/symlink_testfile /tmp/testfile_sav2")
+        result = run_pcmd(hosts_client, "diff {0} {1}".format(symlink_testfile, testfile_sav2))
         self.check_result(result)
 
-        #(7)Dmg pool get-prop
+        # (7)Dmg pool get-prop
         self.log.info("(7)==Dmg pool get-prop after RPMs upgraded before Pool upgraded")
         result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool_id))
         self.check_result(result)
 
-        #(8)Pool property verification after upgraded
+        # (8)Pool property verification after upgraded
         self.log.info("(8)==Dmg pool upgrade and get-prop after RPMs upgraded")
         result = run_pcmd(hosts_client, "dmg pool upgrade {}".format(pool_id))
         self.check_result(result)
         result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool_id))
         self.check_result(result)
 
-        #(9)Create new pool
+        # (9)Create new pool
         self.log.info("(9)==Create new pool after rpms Upgraded")
         self.add_pool(connect=False)
         pool2_id = self.pool.identifier
         self.get_dmg_command().pool_list(verbose=True)
         self.get_dmg_command().pool_query(pool=pool2_id)
-        self.get_daos_command().pool_query(pool=pool2_id)
+        self.daos_cmd.pool_query(pool=pool2_id)
         result = run_pcmd(hosts_client, "dmg pool get-prop {}".format(pool2_id))
         self.check_result(result)
 
-        #(10)Downgrade and cleanup
+        # (10)Downgrade and cleanup
         self.log.info("(10)==Downgrade and cleanup.")
-        result = run_pcmd(hosts_client, "fusermount3 -u /tmp/daos_dfuse1")
+        result = run_pcmd(hosts_client, "fusermount3 -u {}".format(mount_dir))
         self.check_result(result)
         self.container.close()
         self.pool.disconnect()
@@ -361,7 +348,7 @@ class UpgradeDowngradeTest(IorTestBase):
         errors.extend(self._stop_managers(self.agent_managers, "agents"))
         self.updowngrade(all_hosts, "downgrade", downgd_rpms)
 
-        #(11)Restart server and agent for the cleanup
+        # (11)Restart server and agent for the cleanup
         self.log.info("(11)==Restart 2.0 servers and agent.")
         self.restart_servers()
         self._start_manager_list("agent", self.agent_managers)
