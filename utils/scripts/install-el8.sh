@@ -70,7 +70,7 @@ dnf --nodocs install \
     which \
     yasm
 
-: ${REPO_FILE_URL:=}
+: "${REPO_FILE_URL:=}"
 if [ -n "$REPO_FILE_URL" ]; then
     dnf --nodocs install \
         python3-pyelftools
