@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -355,7 +354,7 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
-    # are relocating binaries across systems, for example in CI under github actions etc.  There
+    # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
     # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
     # prematurely with SIGILL (-4).
     # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
@@ -364,7 +363,9 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
+    if ARM_PLATFORM:
+        spdk_arch = 'native'
+    elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
         spdk_arch = 'nehalem'
