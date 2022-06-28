@@ -9,8 +9,8 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node for the
-first time, `daos_server storage prepare --scm-only` will set PMem storage
-into the necessary state for use with DAOS when run on each host.
+first time, `daos_server storage prep-scm` will set PMem storage into the
+necessary state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
 before starting DAOS I/O engine processes that will operate across the fabric.
@@ -397,27 +397,27 @@ PMem preparation is required once per DAOS installation.
 This step requires a reboot to enable PMem resource allocation changes to be
 read by BIOS.
 
-PMem preparation can be performed with `daos_server storage prepare --scm-only`.
+PMem preparation can be performed with `daos_server storage prep-scm`.
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per socket).
 The regions are activated after BIOS reads the new resource allocations.
-Upon completion, the storage prepare command will prompt the admin to reboot
+Upon completion, the storage prep-scm command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
-The storage prepare command does not initiate the reboot itself.
+The storage prep-scm command does not initiate the reboot itself.
 
 After running the command a reboot will be required, the command will then need
 to be run for a second time to expose the namespace device to be used by DAOS.
 
 Example usage:
 
-- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
+- `clush -w wolf-[118-121,130-133] daos_server storage prep-scm`
   after running, the user should be prompted for a reboot.
 
 - `clush -w wolf-[118-121,130-133] reboot`
 
-- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
+- `clush -w wolf-[118-121,130-133] daos_server storage prep-scm`
   after running, PMem namespaces (/dev/pmemX block devices created on the new SCM
   regions) should be available on each of the hosts.
 
@@ -429,7 +429,7 @@ Upon successful creation of the PMem namespaces, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
 If required, the PMem namespaces can be destroyed with the command
-`daos_server storage prepare --scm-only --reset`.
+`daos_server storage prep-scm --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -443,20 +443,21 @@ allocations.
 
 #### Multiple PMem namespaces per socket (Experimental)
 
-By default the `daos_server storage prepare --scm-only` command will create one PMem namespace on
-each PMem region. A single PMem AppDirect region will be created for each NUMA node (typically one
-NUMA node per CPU socket) in interleaved mode (which indicates that all PMem modules attached
-to a particular socket will be used in a single set/region). Therefore by default on a dual-socket
-platform, two regions and two namespaces will be created.
+By default the `daos_server storage prep-scm` command will create one PMem namespace on each PMem
+region.
+A single PMem AppDirect region will be created for each NUMA node (typically one NUMA node per CPU
+socket) in interleaved mode (which indicates that all PMem modules attached to a particular socket
+will be used in a single set/region).
+Therefore by default on a dual-socket platform, two regions and two namespaces will be created.
 
 Multiple PMem namespaces can be created on a single region (one per socket) by specifying a value
-of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server storage prepare --scm-only`
+of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server storage prep-scm`
 subcommand.
 
 Example usage:
 
 ```bash
-$ daos_server storage prepare -s -f -S 4
+$ daos_server storage prep-scm -f -S 4
 Prepare locally-attached SCM...
 Memory allocation goals for PMem will be changed and namespaces modified, this may be a destructive
 operation. Please ensure namespaces are unmounted and locally attached PMem modules are not in use.
@@ -501,9 +502,9 @@ network.
     already be bound to the 'daos_server' processes and trying to access them (as a
     non-'daos_server' user, even as root) will cause access failures.
 
-NVMe SSDs need to be made accessible first by running `daos_server storage prepare --nvme-only`.
+NVMe SSDs need to be made accessible first by running `daos_server storage prep-nvme`.
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
-To use an alternative driver with SPDK, set `--disable-vfio` in the storage prepare command to
+To use an alternative driver with SPDK, set `--disable-vfio` in the storage prep-nvme command to
 fallback to using UIO user-space driver with SPDK instead.
 
 !!! note

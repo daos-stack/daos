@@ -16,9 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -35,14 +33,13 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		noForce    bool
-		zeroNrNs   bool
-		reset      bool
-		prepResp   *storage.ScmPrepareResponse
-		prepErr    error
-		expErr     error
-		expScanErr error
-		expLogMsg  string
+		noForce   bool
+		zeroNrNs  bool
+		reset     bool
+		prepResp  *storage.ScmPrepareResponse
+		prepErr   error
+		expErr    error
+		expLogMsg string
 	}{
 		"no modules": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -50,16 +47,16 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNoModules,
 				},
 			},
-			expScanErr: storage.FaultScmNoModules,
+			expErr: storage.FaultScmNoModules,
 		},
 		"prepare fails": {
-			prepErr:    errors.New("fail"),
-			expScanErr: errors.New("fail"),
+			prepErr: errors.New("fail"),
+			expErr:  errors.New("fail"),
 		},
 		"create regions; no consent": {
 			noForce: true,
 			// prompts for confirmation and gets EOF
-			expScanErr: errors.New("consent not given"),
+			expErr: errors.New("consent not given"),
 		},
 		"create regions; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -67,7 +64,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNoRegions,
 				},
 			},
-			expScanErr: errors.New("failed to create regions"),
+			expErr: errors.New("failed to create regions"),
 		},
 		"create regions; reboot required": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -86,7 +83,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNotInterleaved,
 				},
 			},
-			expScanErr: errors.New("unexpected state"),
+			expErr: errors.New("unexpected state"),
 		},
 		"invalid number of namespaces per socket": {
 			zeroNrNs: true,
@@ -98,7 +95,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmFreeCap,
 				},
 			},
-			expScanErr: errors.New("failed to create namespaces"),
+			expErr: errors.New("failed to create namespaces"),
 		},
 		"create namespaces; no namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -106,7 +103,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expScanErr: errors.New("failed to find namespaces"),
+			expErr: errors.New("failed to find namespaces"),
 		},
 		"create namespaces; namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -121,7 +118,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			reset:   true,
 			noForce: true,
 			// prompts for confirmation and gets EOF
-			expScanErr: errors.New("consent not given"),
+			expErr: errors.New("consent not given"),
 		},
 		"reset; remove regions; reboot required": {
 			reset: true,
@@ -149,7 +146,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNotInterleaved,
 				},
 			},
-			expScanErr: errors.New("unexpected state"),
+			expErr: errors.New("unexpected state"),
 		},
 		"reset; free capacity": {
 			reset: true,
@@ -158,7 +155,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmFreeCap,
 				},
 			},
-			expScanErr: errors.New("unexpected state"),
+			expErr: errors.New("unexpected state"),
 		},
 		"reset; no free capacity": {
 			reset: true,
@@ -167,46 +164,35 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 					State: storage.ScmNoFreeCap,
 				},
 			},
-			expScanErr: errors.New("unexpected state"),
+			expErr: errors.New("unexpected state"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			spc := commands.StoragePrepareCmd{
-				ScmOnly: true,
-				Force:   !tc.noForce,
-				Reset:   tc.reset,
+			cmd := storagePrepSCMCmd{
+				LogCmd: cmdutil.LogCmd{
+					Logger: log,
+				},
+				Force: !tc.noForce,
+				Reset: tc.reset,
 			}
 			nrNs := uint(1)
 			if tc.zeroNrNs {
 				nrNs = 0
 			}
-			spc.NrNamespacesPerSocket = nrNs
+			cmd.NrNamespacesPerSocket = nrNs
 
-			cmd := &storagePrepareCmd{
-				StoragePrepareCmd: spc,
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
-			}
-			scanErrors := make(errs, 0, 2)
 			mockScmPrep := func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
 				return tc.prepResp, tc.prepErr
 			}
 
-			err := cmd.prepScm(&scanErrors, mockScmPrep)
+			err := cmd.prepSCM(mockScmPrep)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
-
-			var se error
-			if len(scanErrors) > 0 {
-				se = common.ConcatErrors(scanErrors, nil)
-			}
-			test.CmpErr(t, tc.expScanErr, se)
 
 			if tc.expLogMsg != "" {
 				if !strings.Contains(buf.String(), tc.expLogMsg) {
@@ -224,25 +210,22 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 	// bdev mock commands
-	newBdevPrepCmd := func() *commands.StoragePrepareCmd {
-		cmd := &commands.StoragePrepareCmd{
-			NvmeOnly: true,
+	newBdevPrepCmd := func() *storagePrepNVMeCmd {
+		return &storagePrepNVMeCmd{
+			NrHugepages: testNrHugePages,
+			TargetUser:  username,
+			PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+				storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+			PCIBlockList: test.MockPCIAddr(1),
 		}
-		cmd.NrHugepages = testNrHugePages
-		cmd.TargetUser = username
-		cmd.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-			storage.BdevPciAddrSep, test.MockPCIAddr(2))
-		cmd.PCIBlockList = test.MockPCIAddr(1)
-		return cmd
 	}
 	bdevResetCmd := newBdevPrepCmd()
 	bdevResetCmd.Reset = true
 
 	for name, tc := range map[string]struct {
-		prepCmd       *commands.StoragePrepareCmd
+		prepCmd       *storagePrepNVMeCmd
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
-		expLogMsg     string
 		expErr        error
 		expPrepCall   *storage.BdevPrepareRequest
 		expResetCall  *storage.BdevPrepareRequest
@@ -253,13 +236,6 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 				// always set in local storage prepare to allow automatic detection
 				EnableVMD: true,
 			},
-		},
-		"setting nvme-only and scm-only should fail": {
-			prepCmd: &commands.StoragePrepareCmd{
-				ScmOnly:  true,
-				NvmeOnly: true,
-			},
-			expErr: errors.New("should not be set"),
 		},
 		"nvme prep succeeds; user params": {
 			prepCmd: newBdevPrepCmd(),
@@ -342,22 +318,17 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
+			msp := scm.NewMockProvider(log, nil, nil)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			if tc.prepCmd == nil {
-				tc.prepCmd = &commands.StoragePrepareCmd{}
+				tc.prepCmd = &storagePrepNVMeCmd{}
 			}
-			tc.prepCmd.NrNamespacesPerSocket = 1 // default applied by goflags
-
-			cmd := &storagePrepareCmd{
-				StoragePrepareCmd: *tc.prepCmd,
-				LogCmd: cmdutil.LogCmd{
-					Logger: log,
-				},
-				scs: server.NewMockStorageControlService(log, nil, nil,
-					scm.NewMockProvider(log, nil, nil), mbp),
+			tc.prepCmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
 			}
 
-			gotErr := cmd.prepNvme(cmd.scs.NvmePrepare, !tc.iommuDisabled)
+			gotErr := tc.prepCmd.prepNVMe(scs.NvmePrepare, !tc.iommuDisabled)
 
 			mbb.RLock()
 			if tc.expPrepCall == nil {
@@ -396,13 +367,6 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
-			}
-
-			if tc.expLogMsg != "" {
-				if !strings.Contains(buf.String(), tc.expLogMsg) {
-					t.Fatalf("expected to see %q in log, got %q",
-						tc.expLogMsg, buf.String())
-				}
 			}
 		})
 	}
