@@ -1909,6 +1909,9 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	struct sched_info	*info = &dx->dx_sched_info;
 	ABT_thread		 thread;
 	void			 (*thread_func)(void *);
+#ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t		*desc;
+#endif
 	int			 rc;
 
 	if (!watchdog_enabled(dx))
@@ -1917,8 +1920,14 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
+#ifdef ULT_MMAP_STACK
+	rc = ABT_thread_get_arg(thread, (void **)&desc);
+	D_ASSERT(rc == ABT_SUCCESS);
+	thread_func = desc->thread_func;
+#else
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
+#endif
 	info->si_ult_func = thread_func;
 }
 

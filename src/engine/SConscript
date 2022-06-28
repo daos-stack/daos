@@ -34,7 +34,6 @@ def scons():
 
     if denv["STACK_MMAP"] == 1:
         denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-        sources += ['stack_mmap_XStream.c']
 
     # Generate I/O Engine program
     engine = daos_build.program(denv, 'daos_engine',

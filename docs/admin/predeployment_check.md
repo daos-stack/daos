@@ -291,15 +291,24 @@ specific document but the instructions apply to most Linux distributions).
 
 ### Memory mapped areas
 
+The DAOS engine heavily uses mmap(2) to access persistent memory and to
+allocate stacks for asynchronous request processing via Argobots.
+The Linux kernel imposes a maximum limit (i.e. vm.max_map_count) on the
+number of mmap regions that a process can create.
+
 Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
 stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
 allocation method.
 
-For RPM installations, this is achieved through installed
+vm.max_map_count default value (65530) needs to be bumped to a much more higher
+value (1M) to better fit with the DAOS needs for the expected huge number of
+concurrent ULTs if we want all their stacks to be mmap()'ed.
+
+For RPM installations, vm.max_map_count is raised through installed
 `/etc/sysctl.d/10-daos_server.conf` file.
 
-For non-RPM installations, this may need to be bumped (usual default of
-65530 is too low for non-testing configurations), and the best way to do
+For non-RPM installations, vm.max_map_count may need to be bumped (usual default
+of 65530 is too low for non-testing configurations), and the best way to do
 so is to copy `utils/rpms/10-daos_server.conf` into `/usr/lib/sysctl.d/`
 to apply the setting automatically on boot.
 Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
