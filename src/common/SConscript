@@ -29,7 +29,7 @@ def build_daos_common(env, client, prereqs):
 
     if denv["STACK_MMAP"] == 1:
         common_libs.extend(['abt'])
-        STACK_MMAP_FILES = ['stack_mmap.c', 'stack_mmap_noXStream.c']
+        STACK_MMAP_FILES = ['stack_mmap.c']
         prereqs.require(denv, 'argobots')
         denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +51,8 @@ enum AbtThreadCreateType {
 	ON_XSTREAM
 };
 
-static int call_abt_method(void *arg, enum AbtThreadCreateType flag,
+static int
+call_abt_method(void *arg, enum AbtThreadCreateType flag,
 			   void (*thread_func)(void *), void *thread_arg,
 			   ABT_thread_attr attr, ABT_thread *newthread)
 {
@@ -71,89 +72,25 @@ static int call_abt_method(void *arg, enum AbtThreadCreateType flag,
 	return rc;
 }
 
-static int compare_stack_size(const void *arg1, const void *arg2)
+/* wrapper for ULT main function, mainly to register mmap()'ed stack
+ * descriptor as ABT_key to ensure stack pooling or munmap() upon ULT exit
+ */
+void mmap_stack_wrapper(void *arg)
 {
-	struct stack_pool_by_size *size1 = (struct stack_pool_by_size *)arg1;
-	struct stack_pool_by_size *size2 = (struct stack_pool_by_size *)arg2;
+	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
 
-	if (size1->stack_size < size2->stack_size)
-		return -1;
-	else if (size1->stack_size > size2->stack_size)
-		return 1;
-	else
-		return 0;
+	ABT_key_set(stack_key, desc);
+
+	D_DEBUG(DB_MEM,
+		"New ULT with stack_desc %p running on CPU=%d\n",
+		desc, sched_getcpu());
+	desc->thread_func(desc->thread_arg);
 }
 
-void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size *spb)
-{
-	void *item;
-	mmap_stack_desc_t *desc;
-
-	D_ASSERT(sp->nb_sizes != 0 && (!d_list_empty(&sp->stack_size_list) || sp->nb_sizes == 1));
-	while ((desc = d_list_pop_entry(&spb->stack_free_list, mmap_stack_desc_t,
-					stack_list)) != NULL) {
-		D_DEBUG(DB_MEM,
-			"Draining a mmap()'ed stack at %p of size %zd, sub-pool=%p, pool=%p, remaining free stacks in pool="DF_U64"\n",
-			desc->stack, desc->stack_size, spb, sp, sp->free_stacks);
-		munmap(desc->stack, desc->stack_size);
-		--sp->free_stacks;
-		atomic_fetch_sub(&nb_mmap_stacks, 1);
-		atomic_fetch_sub(&nb_free_stacks, 1);
-	}
-	D_INFO("%d remaining freed stacks, %d remaining allocated\n",
-	       atomic_load_relaxed(&nb_free_stacks), atomic_load_relaxed(&nb_mmap_stacks));
-	item = tdelete(spb, &sp->root, compare_stack_size);
-	if (item == NULL)
-		D_ERROR("Size %zu not found in stack_pool %p\n", spb->stack_size, sp);
-	d_list_del(&spb->size_list);
-	sp->nb_sizes--;
-	D_FREE(spb);
-}
-
-int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_by_size **spb,
-				      size_t size)
-{
-	void *item;
-	struct stack_pool_by_size dummy = {.stack_size = size};
-
-	item = tfind((void *)&dummy, &sp->root, compare_stack_size);
-	if (item != NULL) {
-		*spb = *((void **)item);
-		D_DEBUG(DB_MEM, "sub-pool by-size %p has been found in pool %p for size %zu\n",
-			*spb, sp, size);
-		return 0;
-	}
-
-	/* size not found, create it */
-	D_ALLOC(*spb, sizeof(struct stack_pool_by_size));
-	if (*spb == NULL)
-		return -DER_NOMEM;
-	D_INIT_LIST_HEAD(&(*spb)->stack_free_list);
-	D_INIT_LIST_HEAD(&(*spb)->size_list);
-	(*spb)->stack_size = size;
-	item = tsearch((void *)(*spb), &sp->root, compare_stack_size);
-	if (item == NULL) {
-		return -DER_NOMEM;
-	} else if (*((void **)item) == (void *)(*spb)) {
-		/* new stack size has been added to the btree */
-		sp->nb_sizes++;
-		d_list_add_tail(&(*spb)->size_list, &sp->stack_size_list);
-		D_DEBUG(DB_MEM, "sub-pool by-size %p has been created in pool %p for size %zu\n",
-			*spb, sp, size);
-	} else {
-		/* this should not happen, size finally exists! so no need new/same one */
-		D_DEBUG(DB_MEM,
-			"sub-pool by-size %p of size %zu already exists in pool %p finally..., so freeing %p\n",
-			*((void **)item), size, sp, *spb);
-		D_FREE(*spb);
-		*spb = *((void **)item);
-	}
-
-	return 0;
-}
-
-int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateType flag,
-				    void *arg, void (*thread_func)(void *), void *thread_arg,
+static int
+mmap_stack_thread_create_common(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
+				    enum AbtThreadCreateType flag, void *arg,
+				    void (*thread_func)(void *), void *thread_arg,
 				    ABT_thread_attr attr, ABT_thread *newthread)
 {
 	ABT_thread_attr new_attr = ABT_THREAD_ATTR_NULL;
@@ -161,26 +98,32 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 	void *stack;
 	mmap_stack_desc_t *mmap_stack_desc = NULL;
 	size_t stack_size = MMAPED_ULT_STACK_SIZE, usable_stack_size;
-	struct stack_pool_by_size *spb = NULL;
 
 	if (daos_ult_mmap_stack == false) {
+		/* let's use Argobots standard way ... */
 		rc = call_abt_method(arg, flag, thread_func, thread_arg,
 				     attr, newthread);
-		return rc;
+		if (unlikely(rc != ABT_SUCCESS))
+			D_ERROR("Failed to create ULT : %d\n", rc);
+		D_GOTO(out_err, rc);
 	}
 
 	if (attr != ABT_THREAD_ATTR_NULL) {
 		ABT_thread_attr_get_stack(attr, &stack, &stack_size);
 		if (stack != NULL) {
 			/* an other external stack allocation method is being
-			 * used, nothing to do
+			 * used, nothing to do, let's try Argobots standard way ...
 			 */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
-			return rc;
+			if (unlikely(rc != ABT_SUCCESS))
+				D_ERROR("Failed to create ULT : %d\n", rc);
+			D_GOTO(out_err, rc);
 		}
-		if (stack_size < MMAPED_ULT_STACK_SIZE)
-			stack_size = MMAPED_ULT_STACK_SIZE;
+		/* only one mmap()'ed stack size allowed presently */
+		if (stack_size > MMAPED_ULT_STACK_SIZE)
+			D_WARN("We do not support stacks > %u\n", MMAPED_ULT_STACK_SIZE);
+		stack_size = MMAPED_ULT_STACK_SIZE;
 	} else {
 		rc = ABT_thread_attr_create(&new_attr);
 		if (rc != ABT_SUCCESS) {
@@ -194,27 +137,17 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 	 * but will be freed on the running one ...
 	 */
 
-	rc = stack_pool_by_size_find_or_create(sp, &spb, stack_size);
-	if (rc != 0) {
-		D_ERROR("unable to find/create stack sub-pool in pool %p for size %zu : %d\n",
-			sp, stack_size, rc);
-		/* let's try Argobots standard way ... */
-		rc = call_abt_method(arg, flag, thread_func, thread_arg,
-				     attr, newthread);
-		D_GOTO(out_err, rc);
-	}
-
-	if ((mmap_stack_desc = d_list_pop_entry(&spb->stack_free_list,
+	if ((mmap_stack_desc = d_list_pop_entry(&sp_alloc->sp_stack_free_list,
 						mmap_stack_desc_t,
 						stack_list)) != NULL) {
-		D_ASSERT(sp->free_stacks != 0);
-		--sp->free_stacks;
+		D_ASSERT(sp_alloc->sp_free_stacks != 0);
+		--sp_alloc->sp_free_stacks;
 		atomic_fetch_sub(&nb_free_stacks, 1);
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd from free list, in pool=%p / sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			stack, stack_size, sp, spb, sp->free_stacks, sched_getcpu());
+			"mmap()'ed stack %p of size %zd from free list, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+			stack, stack_size, sp_alloc, sp_alloc->sp_free_stacks, sched_getcpu());
 	} else {
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
 		 * high enough it does not matter as we do not expect so many
@@ -222,11 +155,13 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 		 * nb_mmap_stacks to significantly exceed max_nb_mmap_stacks ...
 		 */
 		if (nb_mmap_stacks >= max_nb_mmap_stacks) {
-			/* use Argobots standard way !! */
 			D_INFO("nb_mmap_stacks (%d) > max_nb_mmap_stacks (%d), so using Argobots standard method for stack allocation\n",
 			       nb_mmap_stacks, max_nb_mmap_stacks);
+			/* let's try Argobots standard way ... */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
+			if (unlikely(rc != ABT_SUCCESS))
+				D_ERROR("Failed to create ULT : %d\n", rc);
 			D_GOTO(out_err, rc);
 		}
 
@@ -234,11 +169,13 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p / sub-pool=%p, on CPU=%d\n",
-				stack_size, strerror(errno), sp, spb, sched_getcpu());
+			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p, on CPU=%d\n",
+				stack_size, strerror(errno), sp_alloc, sched_getcpu());
 			/* let's try Argobots standard way ... */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
+			if (unlikely(rc != ABT_SUCCESS))
+				D_ERROR("Failed to create ULT : %d\n", rc);
 			D_GOTO(out_err, rc);
 		}
 
@@ -252,11 +189,11 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		/* store target XStream */
-		mmap_stack_desc->sp = sp;
+		mmap_stack_desc->sp = sp_free;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd has been allocated, in pool=%p / sub-pool=%p, on CPU=%d\n",
-			stack, stack_size, sp, spb, sched_getcpu());
+			"mmap()'ed stack %p of size %zd has been allocated, in pool=%p, on CPU=%d\n",
+			stack, stack_size, sp_alloc, sched_getcpu());
 	}
 
 	/* continue to fill/update descriptor */
@@ -277,7 +214,7 @@ int mmap_stack_thread_create_common(struct stack_pool *sp, enum AbtThreadCreateT
 	 */
 	rc = call_abt_method(arg, flag, mmap_stack_wrapper, mmap_stack_desc,
 			     attr, newthread);
-	if (rc != ABT_SUCCESS) {
+	if (unlikely(rc != ABT_SUCCESS)) {
 		D_ERROR("Failed to create ULT : %d\n", rc);
 		D_GOTO(out_err, rc);
 	}
@@ -295,81 +232,32 @@ out_err:
  * becomes we will also have to introduce a corresponding wrapper
  */
 
-int mmap_stack_thread_create(struct stack_pool *sp, ABT_pool pool,
-			     void (*thread_func)(void *), void *thread_arg,
+int
+mmap_stack_thread_create(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
+			     ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
 			     ABT_thread_attr attr, ABT_thread *newthread)
 {
-	return mmap_stack_thread_create_common(sp, MAIN, (void *)pool, thread_func,
+	return mmap_stack_thread_create_common(sp_alloc, sp_free, MAIN, (void *)pool, thread_func,
 					       thread_arg, attr, newthread);
 }
 
-int mmap_stack_thread_create_on_xstream(struct stack_pool *sp, ABT_xstream xstream,
-					void (*thread_func)(void *), void *thread_arg,
-					ABT_thread_attr attr, ABT_thread *newthread)
+int
+mmap_stack_thread_create_on_xstream(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
+					ABT_xstream xstream, void (*thread_func)(void *),
+					void *thread_arg, ABT_thread_attr attr,
+					ABT_thread *newthread)
 {
-	return mmap_stack_thread_create_common(sp, ON_XSTREAM, (void *)xstream, thread_func,
-					       thread_arg, attr, newthread);
+	return mmap_stack_thread_create_common(sp_alloc, sp_free, ON_XSTREAM, (void *)xstream,
+					       thread_func, thread_arg, attr, newthread);
 }
 
-int stack_pool_create(struct stack_pool **sp)
+/* callback to free stack upon ULT exit during stack_key deregister */
+void
+free_stack(void *arg)
 {
-	D_ALLOC(*sp, sizeof(struct stack_pool));
-	if (*sp == NULL) {
-		D_DEBUG(DB_MEM, "unable to allocate a stack pool\n");
-		return -DER_NOMEM;
-	}
-	(*sp)->root = NULL;
-	(*sp)->nb_sizes = 0;
-	(*sp)->free_stacks = 0;
-	D_INIT_LIST_HEAD(&(*sp)->stack_size_list);
-	D_DEBUG(DB_MEM, "pool %p has been allocated\n", *sp);
-	return 0;
-}
-
-/* simplified version of stack_pool_by_size_destroy() as no (struct stack_pool *)
- * is available ...
- */
-void free_stack_pool_by_size(void *arg)
-{
-	struct stack_pool_by_size *spb = (struct stack_pool_by_size *)arg;
-	mmap_stack_desc_t *desc;
-
-	D_ERROR("orphan sub-pool %p found\n", spb);
-	/* unmapping its free stacks in pool anyway */
-
-	while ((desc = d_list_pop_entry(&spb->stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
-		D_DEBUG(DB_MEM,
-			"Draining a mmap()'ed stack at %p of size %zd, sub-pool=%p\n",
-			desc->stack, desc->stack_size, spb);
-		munmap(desc->stack, desc->stack_size);
-		atomic_fetch_sub(&nb_mmap_stacks, 1);
-		atomic_fetch_sub(&nb_free_stacks, 1);
-	}
-	D_INFO("%d remaining freed stacks, %d remaining allocated\n",
-	       atomic_load_relaxed(&nb_free_stacks), atomic_load_relaxed(&nb_mmap_stacks));
-	d_list_del(&spb->size_list);
-	D_FREE(spb);
-}
-
-void stack_pool_destroy(struct stack_pool *sp)
-{
-	struct stack_pool_by_size *spb;
-
-	while ((spb = d_list_pop_entry(&sp->stack_size_list, struct stack_pool_by_size, size_list)) != NULL)
-		stack_pool_by_size_destroy(sp, spb);
-	/* destroy btree, should be empty after calling stack_pool_by_size_destroy() for each
-	 * size.
-	 */
-	tdestroy(sp->root, free_stack_pool_by_size);
-	D_ASSERT(sp->nb_sizes == 0 && d_list_empty(&sp->stack_size_list) && sp->root == NULL);
-	D_DEBUG(DB_MEM, "pool %p has been freed\n", sp);
-	D_FREE(sp);
-}
-
-void free_stack_in_pool(mmap_stack_desc_t *desc, struct stack_pool *sp)
-{
+	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
+	struct stack_pool *sp = desc->sp;
 	bool do_munmap = false;
-	struct stack_pool_by_size *spb = NULL;
 	int rc;
 
 	/* XXX
@@ -382,41 +270,63 @@ void free_stack_in_pool(mmap_stack_desc_t *desc, struct stack_pool *sp)
 	 */
 
 	/* too many free stacks in pool ? */
-	if (sp->free_stacks > MAX_NUMBER_FREE_STACKS &&
-	    sp->free_stacks / nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
+	if (sp->sp_free_stacks > MAX_NUMBER_FREE_STACKS &&
+	    sp->sp_free_stacks / nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
 		do_munmap = true;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 	} else {
-		rc = stack_pool_by_size_find_or_create(sp, &spb, desc->stack_size);
-		if (rc != 0) {
-			D_ERROR("unable to find/create stack sub-pool in pool %p for size %zu : %d\n",
-				sp, desc->stack_size, rc);
-			/* thus munmap() it ... */
-			do_munmap = true;
-			atomic_fetch_sub(&nb_mmap_stacks, 1);
-		} else {
-			d_list_add_tail(&desc->stack_list, &spb->stack_free_list);
-			++sp->free_stacks;
-			atomic_fetch_add(&nb_free_stacks, 1);
-		}
+		d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
+		++sp->sp_free_stacks;
+		atomic_fetch_add(&nb_free_stacks, 1);
 	}
 	if (do_munmap) {
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p / sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, spb, sp->free_stacks,
+			"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+			desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
 			sched_getcpu());
 		rc = munmap(desc->stack, desc->stack_size);
-		/* XXX
-		 * should we re-queue it on free list instead to leak it ?
-		 */
-		if (rc != 0)
+		if (rc != 0) {
 			D_ERROR("Failed to munmap() %p stack of size %zd : %s\n",
 				desc->stack, desc->stack_size, strerror(errno));
+			/* re-queue it on free list instead to leak it */
+			d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
+			++sp->sp_free_stacks;
+			atomic_fetch_add(&nb_free_stacks, 1);
+		}
 	} else {
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd on free list, in pool=%p / sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, spb, sp->free_stacks,
+			"mmap()'ed stack %p of size %zd on free list, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+			desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
 			sched_getcpu());
 	}
+}
+
+int
+stack_pool_create(struct stack_pool **sp)
+{
+	D_ALLOC(*sp, sizeof(struct stack_pool));
+	if (*sp == NULL) {
+		D_DEBUG(DB_MEM, "unable to allocate a stack pool\n");
+		return -DER_NOMEM;
+	}
+	(*sp)->sp_free_stacks = 0;
+	D_INIT_LIST_HEAD(&(*sp)->sp_stack_free_list);
+	D_DEBUG(DB_MEM, "pool %p has been allocated\n", *sp);
+	return 0;
+}
+
+void stack_pool_destroy(struct stack_pool *sp)
+{
+	mmap_stack_desc_t *desc;
+
+	while ((desc = d_list_pop_entry(&sp->sp_stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
+		munmap(desc->stack, desc->stack_size);
+		--sp->sp_free_stacks;
+		atomic_fetch_sub(&nb_mmap_stacks, 1);
+		atomic_fetch_sub(&nb_free_stacks, 1);
+	}
+	D_ASSERT(sp->sp_free_stacks == 0);
+	D_DEBUG(DB_MEM, "pool %p has been freed\n", sp);
+	D_FREE(sp);
 }
 #endif

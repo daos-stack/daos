@@ -81,7 +81,7 @@ struct dss_xstream {
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 #ifdef ULT_MMAP_STACK
-	/* per-xstream pool of free stacks */
+	/* per-xstream pool/list of free stacks */
 	struct stack_pool	*dx_sp;
 #endif
 	bool			dx_progress_started;	/* Network poll started */
@@ -253,14 +253,11 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 #ifdef ULT_MMAP_STACK
-	struct stack_pool	*sp;
 	struct dss_xstream *cur_dx = dss_current_xstream();
 
 	/* stack should be allocated from launching XStream pool */
-	if (cur_dx != NULL)
-		sp = cur_dx->dx_sp;
-	else
-		sp = dx->dx_sp;
+	if (cur_dx == NULL)
+		cur_dx = dx;
 #endif
 
 	if (sched_xstream_stopping())
@@ -271,7 +268,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(sp, abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(cur_dx->dx_sp, dx->dx_sp, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
