@@ -18,6 +18,7 @@
 #include <getopt.h>
 #include <errno.h>
 #include <execinfo.h>
+#include <sys/prctl.h>
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
@@ -1103,6 +1104,17 @@ main(int argc, char **argv)
 	sigset_t	set;
 	int		sig;
 	int		rc;
+
+	/**
+	 * Disable transparent huge pages (THP) early before any allocations
+ 	 * see https://github.com/pmodels/argobots/issues/369 for more
+ 	 * information
+ 	 */
+	rc = prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0);
+	if (rc < 0) {
+		perror("failed to disable transparent hugepages");
+		exit(EXIT_FAILURE);
+	}
 
 	/** parse command line arguments */
 	rc = parse(argc, argv);
