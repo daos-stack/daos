@@ -8,6 +8,8 @@
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 
+arch=$(uname -i)
+
 dnf --nodocs install \
     boost-devel \
     bzip2 \
@@ -25,7 +27,6 @@ dnf --nodocs install \
     graphviz \
     gzip \
     hwloc-devel \
-    ipmctl-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
@@ -55,3 +56,9 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+# ipmctl is only available on x86_64
+if [[ $arch == x86_64* ]]; then
+    dnf --nodocs install \
+        ipmctl
+fi

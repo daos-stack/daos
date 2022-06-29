@@ -8,6 +8,8 @@
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
 
+arch=$(uname -i)
+
 dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
@@ -29,13 +31,11 @@ dnf --nodocs install \
     graphviz \
     help2man \
     hwloc-devel \
-    ipmctl \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
     libcmocka-devel \
     libevent-devel \
-    libipmctl-devel \
     libiscsi-devel \
     libtool \
     libtool-ltdl-devel \
@@ -60,6 +60,13 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+# ipmctl is only available on x86_64
+if [[ $arch == x86_64* ]]; then
+    dnf --nodocs install \
+        ipmctl \
+        libipmctl-devel
+fi
 
 # For fedora, java-11 is installed along with maven if we install maven from
 # repo. But we need java-8 (1.8). The 'devel' package also needs to be

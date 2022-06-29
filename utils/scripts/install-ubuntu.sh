@@ -10,6 +10,8 @@
 # interactively then these this commands can be used to set apt-get into automatic mode.
 # echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 
+arch=$(uname -i)
+
 apt-get install \
     autoconf \
     build-essential \
@@ -28,7 +30,6 @@ apt-get install \
     libfuse3-dev \
     libhwloc-dev \
     libibverbs-dev \
-    libipmctl-dev \
     libjson-c-dev \
     liblz4-dev \
     libnuma-dev \
@@ -50,3 +51,9 @@ apt-get install \
     uuid-dev \
     valgrind \
     yasm
+
+# ipmctl is only available on x86_64
+if [[ $arch == x86_64* ]]; then
+    dnf --nodocs install \
+        libipmctl-dev
+fi
