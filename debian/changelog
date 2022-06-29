@@ -1,3 +1,9 @@
+daos (2.3.100-13) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove libdts.so, make it build time static
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Fri, 17 Jun 2022 10:30:00 -0500
+
 daos (2.3.100-12) unstable; urgency=medium
   [ Jeff Olivier ]
   * Make ucx required for build on all platforms
