@@ -47,7 +47,7 @@ def build_tests(prereqs, env):
     if denv["STACK_MMAP"] == 1:
         new_env = denv.Clone()
         new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-        vos_perf = daos_build.program(denv, 'vos_perf',
+        vos_perf = daos_build.program(new_env, 'vos_perf',
                                       ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
                                       LIBS=libs_server)
     else:
