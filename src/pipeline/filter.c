@@ -284,16 +284,17 @@ exit:
 static int
 compile_filters(daos_filter_t **ftrs, uint32_t nftrs, struct filter_compiled_t *c_ftrs)
 {
-	uint32_t            part_idx;
-	uint32_t            comp_part_idx;
-	uint32_t            comp_num_parts;
-	uint32_t            i, j;
-	char               *type;
-	size_t              type_len;
-	int                 rc = 0;
-	daos_filter_part_t *part;
+	uint32_t             part_idx;
+	uint32_t             comp_part_idx;
+	uint32_t             comp_num_parts;
+	uint32_t             i               = 0;
+	uint32_t             j, k;
+	char                *type;
+	size_t               type_len;
+	int                  rc;
+	daos_filter_part_t  *part;
 
-	for (i = 0; i < nftrs; i++) {
+	for (; i < nftrs; i++) {
 		comp_num_parts = ftrs[i]->num_parts;
 
 		for (j = 0; j < ftrs[i]->num_parts; j++) {
@@ -305,7 +306,7 @@ compile_filters(daos_filter_t **ftrs, uint32_t nftrs, struct filter_compiled_t *
 
 		D_ALLOC_ARRAY(c_ftrs[i].parts, comp_num_parts);
 		if (c_ftrs[i].parts == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
+			D_GOTO(error, rc = -DER_NOMEM);
 
 		c_ftrs[i].num_parts = comp_num_parts;
 		part_idx            = 0;
@@ -315,16 +316,21 @@ compile_filters(daos_filter_t **ftrs, uint32_t nftrs, struct filter_compiled_t *
 		rc = compile_filter(ftrs[i], &c_ftrs[i], &part_idx, &comp_part_idx, &type,
 				    &type_len);
 		if (rc != 0)
-			D_GOTO(exit, rc);
+			D_GOTO(error, rc);
 	}
-exit:
+	return 0;
+error:
+	for (k = 0; k <= i; k++) {
+		if (c_ftrs[k].parts != NULL)
+			D_FREE(c_ftrs[k].parts);
+	}
 	return rc;
 }
 
 int
 pipeline_compile(daos_pipeline_t *pipe, struct pipeline_compiled_t *comp_pipe)
 {
-	int rc                      = 0;
+	int rc;
 
 	comp_pipe->num_filters      = 0;
 	comp_pipe->filters          = NULL;
@@ -334,25 +340,30 @@ pipeline_compile(daos_pipeline_t *pipe, struct pipeline_compiled_t *comp_pipe)
 	if (pipe->num_filters > 0) {
 		D_ALLOC_ARRAY(comp_pipe->filters, pipe->num_filters);
 		if (comp_pipe->filters == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
+			D_GOTO(error, rc = -DER_NOMEM);
 
 		comp_pipe->num_filters = pipe->num_filters;
 		rc = compile_filters(pipe->filters, pipe->num_filters, comp_pipe->filters);
 		if (rc != 0)
-			D_GOTO(exit, rc);
+			D_GOTO(error, rc);
 	}
 	if (pipe->num_aggr_filters > 0) {
 		D_ALLOC_ARRAY(comp_pipe->aggr_filters, pipe->num_aggr_filters);
 		if (comp_pipe->aggr_filters == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
+			D_GOTO(error, rc = -DER_NOMEM);
 
 		comp_pipe->num_aggr_filters = pipe->num_aggr_filters;
 		rc = compile_filters(pipe->aggr_filters, pipe->num_aggr_filters,
 				     comp_pipe->aggr_filters);
 		if (rc != 0)
-			D_GOTO(exit, rc);
+			D_GOTO(error, rc);
 	}
-exit:
+	return 0;
+error:
+	if (comp_pipe->filters != NULL)
+		D_FREE(comp_pipe->filters);
+	if (comp_pipe->aggr_filters != NULL)
+		D_FREE(comp_pipe->aggr_filters);
 	return rc;
 }
 
