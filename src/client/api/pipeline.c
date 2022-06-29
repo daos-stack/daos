@@ -26,6 +26,12 @@ daos_filter_init(daos_filter_t *filter)
 	bzero((void *)filter, sizeof(daos_filter_t));
 }
 
+/**
+ * TODO: We shouldn't be calling realloc here for every single filter and part addition.
+ *       A better idea is to have some kind of pre-allocated buffer and only realloc it when
+ *       the pipeline object needs it (unsually large pipelines).
+ */
+
 int
 daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 {
