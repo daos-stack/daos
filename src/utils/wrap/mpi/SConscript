@@ -8,7 +8,7 @@ def build_dpar(env, mpi_env):
     serial_lib = daos_build.library(env, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     env.Install('$PREFIX/lib64/', serial_lib)
 
-    if mpi_env is None:
+    if not mpi_env:
         return
 
     denv = mpi_env.Clone()
@@ -30,7 +30,9 @@ def scons():
     base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
     daos_build.add_build_rpath(env)
     daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(base_env_mpi)
+    if base_env_mpi:
+        base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
+        daos_build.add_build_rpath(base_env_mpi)
 
     build_dpar(base_env, base_env_mpi)
 
