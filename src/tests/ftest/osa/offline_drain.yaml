@@ -105,7 +105,6 @@ mdtest:
   depth: 0
 test_obj_class:
   oclass:
-    - RP_2G8
     - RP_4G1
     - EC_2P1G1
 aggregation:
@@ -120,4 +119,4 @@ test_ranks:
   rank_list: ["2","5"]
 pool_capacity:
   pool_fillup: 10
-  pool_test_oclass: RP_3GX
+  pool_test_oclass: RP_3G6
