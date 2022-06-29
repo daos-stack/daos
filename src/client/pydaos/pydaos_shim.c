@@ -90,6 +90,9 @@ do {									\
 	}								\
 } while (0)
 
+static daos_handle_t	glob_eq;
+static int		use_glob_eq;
+
 /**
  * Implementations of baseline shim functions
  */
@@ -98,8 +101,28 @@ static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
+	int ret;
+	char *provider;
+	char *override;
 
 	rc = daos_init();
+
+	/* Event Queue creation is expensive with verbs provider */
+	if ((rc == 0) && (use_glob_eq == 0)) {
+		provider = getenv("CRT_PHY_ADDR_STR");
+		override = getenv("PYDAOS_GLOB_EQ");
+		if ((provider != NULL) && (strstr(provider, "verbs") != NULL))
+			use_glob_eq = 1;
+		if (override != NULL)
+			use_glob_eq = strcmp(override, "0") ? 1 : 0;
+		if (use_glob_eq) {
+			ret = daos_eq_create(&glob_eq);
+			if (ret) {
+				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
+				use_glob_eq = 0;
+			}
+		}
+	}
 
 	return PyInt_FromLong(rc);
 }
@@ -108,6 +131,13 @@ static PyObject *
 __shim_handle__daos_fini(PyObject *self, PyObject *args)
 {
 	int rc;
+
+	if (use_glob_eq) {
+		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
+		if (rc)
+			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
+		use_glob_eq = 0;
+	}
 
 	rc = daos_fini();
 
@@ -653,7 +683,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	struct kv_op	*op;
 	daos_event_t	*evp;
 	int		 i = 0;
-	int		 rc;
+	int		 rc = 0;
 	int		 ret;
 	size_t		 v_size;
 
@@ -661,9 +691,13 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type,
 				       &daos_dict, &v_size);
 
-	rc = daos_eq_create(&eq);
-	if (rc)
-		return PyInt_FromLong(rc);
+	if (!use_glob_eq) {
+		rc = daos_eq_create(&eq);
+		if (rc)
+			return PyInt_FromLong(rc);
+	} else {
+		eq = glob_eq;
+	}
 
 	D_ALLOC_ARRAY(kv_array, MAX_INFLIGHT);
 	if (kv_array == NULL) {
@@ -809,14 +843,18 @@ out:
 	D_FREE(kv_array);
 
 	/** destroy event queue */
-	ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
-	if (rc == DER_SUCCESS && ret < 0)
-		rc = ret;
+	if (!use_glob_eq) {
+		ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
+		if (rc == DER_SUCCESS && ret < 0)
+			rc = ret;
+	}
 
 	/* Populate return list */
 	return PyInt_FromLong(rc);
 
 err:
+	if (!use_glob_eq)
+		daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 	D_FREE(kv_array);
 
 	return NULL;
@@ -834,16 +872,20 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	daos_event_t	 ev_array[MAX_INFLIGHT];
 	daos_event_t	*evp;
 	int		 i = 0;
-	int		 rc;
+	int		 rc = 0;
 	int		 ret;
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
 				       &PyDict_Type, &daos_dict);
 
-	rc = daos_eq_create(&eq);
-	if (rc)
-		return PyInt_FromLong(rc);
+	if (!use_glob_eq) {
+		rc = daos_eq_create(&eq);
+		if (rc)
+			return PyInt_FromLong(rc);
+	} else {
+		eq = glob_eq;
+	}
 
 	while (PyDict_Next(daos_dict, &pos, &key, &value)) {
 		char		*buf;
@@ -925,13 +967,16 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		rc = ret;
 
 	/** destroy event queue */
-	ret = daos_eq_destroy(eq, 0);
-	if (rc == DER_SUCCESS && ret < 0)
-		rc = ret;
+	if (!use_glob_eq) {
+		ret = daos_eq_destroy(eq, 0);
+		if (rc == DER_SUCCESS && ret < 0)
+			rc = ret;
+	}
 
 	return PyInt_FromLong(rc);
 err:
-	daos_eq_destroy(eq, 0);
+	if (!use_glob_eq)
+		daos_eq_destroy(eq, 0);
 	return NULL;
 }
 
