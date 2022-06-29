@@ -288,7 +288,7 @@ compile_filters(daos_filter_t **ftrs, uint32_t nftrs, struct filter_compiled_t *
 	uint32_t            comp_part_idx;
 	uint32_t            comp_num_parts;
 	uint32_t            i, j;
-	char	       *type;
+	char               *type;
 	size_t              type_len;
 	int                 rc = 0;
 	daos_filter_part_t *part;
