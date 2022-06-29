@@ -79,7 +79,7 @@ def scons():
 
     dfuse_env = base_env.Clone()
     compiler_setup.base_setup(dfuse_env)
-    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
+    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS=['cmocka'])
     denv.Install('$PREFIX/bin/', dfusetest)
 
     denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])

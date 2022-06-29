@@ -36,7 +36,7 @@ OPS_SRC = ['create',
            'write',
            'statfs']
 
-IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+IOIL_SRC = ['int_posix.c']
 
 
 def build_common(env, files, is_shared):
@@ -60,7 +60,6 @@ def build_client_libs_shared(env, prereqs):
     ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
     ilenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     ilenv.AppendUnique(LIBPATH=[Dir('../api')])
-    ilenv.AppendUnique(LIBS=['dfs'])
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
@@ -70,8 +69,10 @@ def build_client_libs_shared(env, prereqs):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
-    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
+    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj)
+    env.Install(os.path.join("$PREFIX", 'lib64'), il_lib)
+    il_lib2 = daos_build.library(ilenv, 'il/libioil_bad', il_obj, LIBS=['daos_common'])
+    env.Install(os.path.join("$PREFIX", 'lib64'), il_lib2)
     dfuse_lib = daos_build.library(ilenv, 'dfuse', common)
 
     gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
@@ -97,7 +98,7 @@ def build_client_libs_static(env, common):
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
-    il_lib_src = daos_build.static_library(ilenv, 'il/libioil_source', il_obj + common)
+    il_lib_src = ilenv.Library('il/libioil_source', il_obj)
     il_lib = ilenv.Command('il/libioil.a', il_lib_src,
                            'objcopy --localize-hidden $SOURCE $TARGET')
     daos_build.add_static_library('ioil', il_lib)
@@ -194,7 +195,7 @@ def scons():
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
-    gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
+    gcc_env.AppendUnique(LIBS=['pthread'])
 
     libs = build_client_libs_shared(gcc_env, prereqs)
 
@@ -228,8 +229,8 @@ def scons():
 
     Export('dfuse_env')
 
-    if prereqs.test_requested():
-        SConscript('test/SConscript')
+    #if prereqs.test_requested():
+        #SConscript('test/SConscript')
 
 
 if __name__ == "SCons.Script":

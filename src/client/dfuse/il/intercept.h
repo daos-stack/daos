@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
-#include "dfuse_log.h"
 #include "ioil_io.h"
 #include "ioil_api.h"
 
