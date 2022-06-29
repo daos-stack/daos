@@ -33,6 +33,9 @@ ET.SubElement = SubElement
 ET.tostring = tostring
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+DAOS_STORAGE_PREPARE_TIMEOUT = 40
+DAOS_STORAGE_FORMAT_TIMEOUT = 40
+
 YAML_KEYS = OrderedDict(
     [
         ("test_servers", "test_servers"),
@@ -368,6 +371,19 @@ def set_provider_environment(interface, args):
             sys.exit(1)
 
         print("  Found {} provider for {}".format(provider, interface))
+
+    # Use extended timeouts for server start detection when using ucx
+    timeout_multiplier = 5 if "ucx" in provider else 1
+
+    # Update env definitions
+    os.environ["CRT_PHY_ADDR_STR"] = provider
+    os.environ["DAOS_STORAGE_FORMAT_TIMEOUT"] = str(DAOS_STORAGE_FORMAT_TIMEOUT * timeout_multiplier)
+    os.environ["DAOS_STORAGE_PREPARE_TIMEOUT"] = str(DAOS_STORAGE_PREPARE_TIMEOUT * timeout_multiplier)
+    for name in ("CRT_PHY_ADDR_STR", "DAOS_STORAGE_FORMAT_TIMEOUT", "DAOS_STORAGE_PREPARE_TIMEOUT"):
+        try:
+            print("Testing with {}={}".format(name, os.environ[name]))
+        except KeyError:
+            print("Testing with {} unset".format(name))
 
     # Update env definitions
     os.environ["CRT_PHY_ADDR_STR"] = provider
