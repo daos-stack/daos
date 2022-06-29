@@ -168,7 +168,7 @@ static uint32_t
 calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
 {
 	daos_filter_part_t *child_part;
-	char	       *part_type;
+	char               *part_type;
 	size_t              part_type_s;
 	uint32_t            nops;
 
