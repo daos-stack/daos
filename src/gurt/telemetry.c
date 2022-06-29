@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1258,8 +1258,8 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 
 		d_tm_print_metadata(desc, units, format, stream);
 	}
-	D_FREE_PTR(desc);
-	D_FREE_PTR(units);
+	D_FREE(desc);
+	D_FREE(units);
 
 	if (node->dtn_type != D_TM_DIRECTORY)
 		fprintf(stream, "\n");
@@ -1355,7 +1355,7 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 
 		d_tm_print_my_children(ctx, node, level + 1, filter,
 				       fullpath, format, opt_fields, stream);
-		D_FREE_PTR(fullpath);
+		D_FREE(fullpath);
 		node = node->dtn_sibling;
 		node = conv_ptr(shmem, node);
 	}
@@ -1551,7 +1551,6 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 void
 d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
 {
-
 	if (unlikely(metric == NULL))
 		return;
 
@@ -3144,7 +3143,6 @@ list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 
 out:
 	return rc;
-
 }
 
 /**
@@ -3174,7 +3172,7 @@ d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	struct d_tm_nodeList_t	*cur = NULL;
 
 	/** add +1 to max_depth to account for the root node */
-	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
+	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth + 1, 1);
 	if (rc != DER_SUCCESS)
 		return rc;
 
@@ -3233,7 +3231,7 @@ d_tm_list_free(struct d_tm_nodeList_t *nodeList)
 
 	while (nodeList) {
 		head = nodeList->dtnl_next;
-		D_FREE_PTR(nodeList);
+		D_FREE(nodeList);
 		nodeList = head;
 	}
 }

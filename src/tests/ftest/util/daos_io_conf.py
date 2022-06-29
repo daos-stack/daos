@@ -98,7 +98,7 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         record_size(Number): Record Size to fill the data.
         filename (string): Filename (with/without path) for creating the data set.
     """
-    rand_ofs_end = random.randint(1, record_size - 1) #nosec
+    rand_ofs_end = random.randint(1, record_size - 1)  # nosec
     rand_ofs_start = rand_ofs_end - 1
     file_data = (
         "test_lvl daos",
