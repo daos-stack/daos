@@ -907,7 +907,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d, task %p failed, "DF_RC"\n", opc, task, DP_RC(ret));
+		D_ERROR("RPC %d, task %p failed, rc: " DF_RC ", ret:" DF_RC "\n", opc, task,
+			DP_RC(rc), DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
