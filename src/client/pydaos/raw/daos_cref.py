@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -148,7 +147,7 @@ class ContInfo(ctypes.Structure):
 class DaosEvent(ctypes.Structure):
     """Represents struct: daos_event_t"""
     _fields_ = [("ev_error", ctypes.c_int),
-                ("ev_private", ctypes.c_ulonglong * 19),
+                ("ev_private", ctypes.c_ulonglong * 20),
                 ("ev_debug", ctypes.c_ulonglong)]
 
 

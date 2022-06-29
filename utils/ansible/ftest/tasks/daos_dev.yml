@@ -1,0 +1,69 @@
+# Ansible scripts for deploying a DAOS development node
+# yamllint disable rule:line-length
+
+- name: Checking required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_runtime_dir
+    - daos_source_dir
+
+- name: Client DAOS configuration
+  import_tasks: daos_clients.yml
+
+- name: Add DAOS server groups
+  remote_user: root
+  group:
+    name: "{{ item }}"
+    state: present
+    system: true
+  loop:
+    - daos_metrics
+    - daos_server
+
+- name: Add DAOS server user
+  remote_user: root
+  user:
+    name: daos_server
+    state: present
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    group: daos_server
+    groups:
+      - daos_metrics
+      - daos_daemons
+
+- name: Create client certificate daos-server configuration file tree
+  remote_user: root
+  file:
+    path: /etc/daos/certs/clients
+    state: directory
+    owner: daos_server
+    group: daos_server
+    mode: 0700
+
+- name: Install dependencies packages
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/devs_dependencies.yml"
+
+- name: Create DAOS runtime directory
+  file:
+    path: "{{ daos_runtime_dir }}"
+    state: directory
+    mode: '0755'
+    recurse: true
+
+- name: Install DAOS make helper script
+  template:
+    src: daos-make.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-make.sh"
+
+- name: Install DAOS launch helper script
+  template:
+    src: daos-launch.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch.sh"

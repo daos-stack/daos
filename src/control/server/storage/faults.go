@@ -38,6 +38,12 @@ func FaultScmNamespacesNrMismatch(nrExpPerNUMA, nrNUMA, nrExisting uint) *fault.
 			"required number of PMem regions")
 }
 
+// FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
+// non-emulated NVMe devices are present in the storage config.
+var FaultBdevConfigTypeMismatch = storageFault(code.BdevConfigTypeMismatch,
+	"A mix of emulated and non-emulated NVMe devices are specified in config",
+	"Change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
+
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {
@@ -47,6 +53,25 @@ func FaultBdevNotFound(bdevs ...string) *fault.Fault {
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist",
 			common.Pluralise("", len(bdevs)), bdevs),
 	)
+}
+
+// FaultBdevAccelEngineUnknown creates a Fault when an unrecognized acceleration engine setting is
+// detected.
+func FaultBdevAccelEngineUnknown(input string, options ...string) *fault.Fault {
+	return storageFault(
+		code.BdevAccelEngineUnknown,
+		fmt.Sprintf("unknown acceleration engine setting %q", input),
+		fmt.Sprintf("supported settings are %v, update server config file and restart daos_server",
+			options))
+}
+
+// FaultBdevAccelOptUnknown creates a Fault when an unrecognized acceleration option is detected.
+func FaultBdevAccelOptionUnknown(input string, options ...string) *fault.Fault {
+	return storageFault(
+		code.BdevAccelOptionUnknown,
+		fmt.Sprintf("unknown acceleration option %q", input),
+		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
+			options))
 }
 
 func storageFault(code code.Code, desc, res string) *fault.Fault {

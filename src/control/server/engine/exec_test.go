@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -78,8 +79,11 @@ func createFakeBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// stash this to restore after scrubbing the rest of the env
+	ld_library_path := os.Getenv("LD_LIBRARY_PATH")
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
+	os.Setenv("LD_LIBRARY_PATH", ld_library_path)
 }
 
 func TestRunnerContextExit(t *testing.T) {
@@ -89,7 +93,7 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar)
@@ -126,10 +130,10 @@ func TestRunnerNormalExit(t *testing.T) {
 	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv).
+		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv, "LD_LIBRARY_PATH").
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").

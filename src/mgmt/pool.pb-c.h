@@ -46,6 +46,10 @@ typedef struct _Mgmt__PoolGetPropReq Mgmt__PoolGetPropReq;
 typedef struct _Mgmt__PoolGetPropResp Mgmt__PoolGetPropResp;
 typedef struct _Mgmt__PoolUpgradeReq Mgmt__PoolUpgradeReq;
 typedef struct _Mgmt__PoolUpgradeResp Mgmt__PoolUpgradeResp;
+typedef struct _Mgmt__PoolQueryTargetReq Mgmt__PoolQueryTargetReq;
+typedef struct _Mgmt__StorageTargetUsage Mgmt__StorageTargetUsage;
+typedef struct _Mgmt__PoolQueryTargetInfo Mgmt__PoolQueryTargetInfo;
+typedef struct _Mgmt__PoolQueryTargetResp Mgmt__PoolQueryTargetResp;
 
 
 /* --- enums --- */
@@ -56,6 +60,59 @@ typedef enum _Mgmt__PoolRebuildStatus__State {
   MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 2
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__STATE)
 } Mgmt__PoolRebuildStatus__State;
+typedef enum _Mgmt__PoolQueryTargetInfo__TargetType {
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN = 0,
+  /*
+   * Rotating disk
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__HDD = 1,
+  /*
+   * Flash-based
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__SSD = 2,
+  /*
+   * Persistent memory
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__PM = 3,
+  /*
+   * Volatile memory
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__VM = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE)
+} Mgmt__PoolQueryTargetInfo__TargetType;
+typedef enum _Mgmt__PoolQueryTargetInfo__TargetState {
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN = 0,
+  /*
+   * Not available
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__DOWN_OUT = 1,
+  /*
+   * Not available, may need rebuild
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__DOWN = 2,
+  /*
+   * Up
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__UP = 3,
+  /*
+   * Up and running
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__UP_IN = 4,
+  /*
+   * Intermediate state for pool map change
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__NEW = 5,
+  /*
+   * Being drained
+   */
+  MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__DRAIN = 6
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE)
+} Mgmt__PoolQueryTargetInfo__TargetState;
+typedef enum _Mgmt__StorageMediaType {
+  MGMT__STORAGE_MEDIA_TYPE__SCM = 0,
+  MGMT__STORAGE_MEDIA_TYPE__NVME = 1
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__STORAGE_MEDIA_TYPE)
+} Mgmt__StorageMediaType;
 
 /* --- messages --- */
 
@@ -284,11 +341,11 @@ struct  _Mgmt__PoolExcludeReq
    */
   char *sys;
   /*
-   * uuid or label of pool to add target up to
+   * uuid or label of pool to exclude some targets
    */
   char *id;
   /*
-   * target to move to the up state
+   * target to move to the down state
    */
   uint32_t rank;
   /*
@@ -334,11 +391,11 @@ struct  _Mgmt__PoolDrainReq
    */
   char *sys;
   /*
-   * uuid or label of pool to add target up to
+   * uuid or label of pool to drain some targets
    */
   char *id;
   /*
-   * rank to move to the up state
+   * rank to move to the down state
    */
   uint32_t rank;
   /*
@@ -646,11 +703,11 @@ struct  _Mgmt__StorageUsageStats
   uint64_t min;
   uint64_t max;
   uint64_t mean;
-  uint32_t media_type;
+  Mgmt__StorageMediaType media_type;
 };
 #define MGMT__STORAGE_USAGE_STATS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__storage_usage_stats__descriptor) \
-    , 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, MGMT__STORAGE_MEDIA_TYPE__SCM }
 
 
 /*
@@ -712,10 +769,6 @@ struct  _Mgmt__PoolQueryResp
   size_t n_tier_stats;
   Mgmt__StorageUsageStats **tier_stats;
   /*
-   * total nodes in pool
-   */
-  uint32_t total_nodes;
-  /*
    * latest pool map version
    */
   uint32_t version;
@@ -724,17 +777,21 @@ struct  _Mgmt__PoolQueryResp
    */
   uint32_t leader;
   /*
-   * Optional set of ranks enabled
+   * optional set of ranks enabled
    */
   char *enabled_ranks;
   /*
-   * Optional set of ranks disabled
+   * optional set of ranks disabled
    */
   char *disabled_ranks;
+  /*
+   * total engines in pool
+   */
+  uint32_t total_engines;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 typedef enum {
@@ -893,6 +950,114 @@ struct  _Mgmt__PoolUpgradeResp
 #define MGMT__POOL_UPGRADE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_upgrade_resp__descriptor) \
     , 0 }
+
+
+/*
+ * PoolQueryTargetReq represents a pool query target(s) request.
+ */
+struct  _Mgmt__PoolQueryTargetReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * Pool label or UUID
+   */
+  char *id;
+  /*
+   * Engine rank with targets to query
+   */
+  uint32_t rank;
+  /*
+   * indices of targets to be queried
+   */
+  size_t n_targets;
+  uint32_t *targets;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_QUERY_TARGET_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+
+
+/*
+ * StorageTargetUsage represent's a target's capacity and usage
+ */
+struct  _Mgmt__StorageTargetUsage
+{
+  ProtobufCMessage base;
+  /*
+   * total space in bytes
+   */
+  uint64_t total;
+  /*
+   * free space in bytes
+   */
+  uint64_t free;
+  /*
+   * see daos_media_type_t (e.g., SCM, NVME)
+   */
+  Mgmt__StorageMediaType media_type;
+};
+#define MGMT__STORAGE_TARGET_USAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__storage_target_usage__descriptor) \
+    , 0, 0, MGMT__STORAGE_MEDIA_TYPE__SCM }
+
+
+/*
+ * PoolQueryTargetInfo represents pool target query info for a single target.
+ * The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
+ */
+struct  _Mgmt__PoolQueryTargetInfo
+{
+  ProtobufCMessage base;
+  /*
+   * Target type jsee enum daos_target_type_t
+   */
+  Mgmt__PoolQueryTargetInfo__TargetType type;
+  /*
+   * target state see enum daos_target_state_t
+   */
+  Mgmt__PoolQueryTargetInfo__TargetState state;
+  /*
+   * TODO: target performance data
+   */
+  /*
+   * this target's usage per storage tier
+   */
+  size_t n_space;
+  Mgmt__StorageTargetUsage **space;
+};
+#define MGMT__POOL_QUERY_TARGET_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
+    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL }
+
+
+/*
+ * PoolQueryTargetResp represents a pool target query response
+ */
+struct  _Mgmt__PoolQueryTargetResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * Per-target information
+   */
+  size_t n_infos;
+  Mgmt__PoolQueryTargetInfo **infos;
+};
+#define MGMT__POOL_QUERY_TARGET_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_resp__descriptor) \
+    , 0, 0,NULL }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -1452,6 +1617,82 @@ Mgmt__PoolUpgradeResp *
 void   mgmt__pool_upgrade_resp__free_unpacked
                      (Mgmt__PoolUpgradeResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryTargetReq methods */
+void   mgmt__pool_query_target_req__init
+                     (Mgmt__PoolQueryTargetReq         *message);
+size_t mgmt__pool_query_target_req__get_packed_size
+                     (const Mgmt__PoolQueryTargetReq   *message);
+size_t mgmt__pool_query_target_req__pack
+                     (const Mgmt__PoolQueryTargetReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_target_req__pack_to_buffer
+                     (const Mgmt__PoolQueryTargetReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryTargetReq *
+       mgmt__pool_query_target_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_target_req__free_unpacked
+                     (Mgmt__PoolQueryTargetReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__StorageTargetUsage methods */
+void   mgmt__storage_target_usage__init
+                     (Mgmt__StorageTargetUsage         *message);
+size_t mgmt__storage_target_usage__get_packed_size
+                     (const Mgmt__StorageTargetUsage   *message);
+size_t mgmt__storage_target_usage__pack
+                     (const Mgmt__StorageTargetUsage   *message,
+                      uint8_t             *out);
+size_t mgmt__storage_target_usage__pack_to_buffer
+                     (const Mgmt__StorageTargetUsage   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__StorageTargetUsage *
+       mgmt__storage_target_usage__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__storage_target_usage__free_unpacked
+                     (Mgmt__StorageTargetUsage *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryTargetInfo methods */
+void   mgmt__pool_query_target_info__init
+                     (Mgmt__PoolQueryTargetInfo         *message);
+size_t mgmt__pool_query_target_info__get_packed_size
+                     (const Mgmt__PoolQueryTargetInfo   *message);
+size_t mgmt__pool_query_target_info__pack
+                     (const Mgmt__PoolQueryTargetInfo   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_target_info__pack_to_buffer
+                     (const Mgmt__PoolQueryTargetInfo   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryTargetInfo *
+       mgmt__pool_query_target_info__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_target_info__free_unpacked
+                     (Mgmt__PoolQueryTargetInfo *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryTargetResp methods */
+void   mgmt__pool_query_target_resp__init
+                     (Mgmt__PoolQueryTargetResp         *message);
+size_t mgmt__pool_query_target_resp__get_packed_size
+                     (const Mgmt__PoolQueryTargetResp   *message);
+size_t mgmt__pool_query_target_resp__pack
+                     (const Mgmt__PoolQueryTargetResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_target_resp__pack_to_buffer
+                     (const Mgmt__PoolQueryTargetResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryTargetResp *
+       mgmt__pool_query_target_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_target_resp__free_unpacked
+                     (Mgmt__PoolQueryTargetResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -1547,12 +1788,25 @@ typedef void (*Mgmt__PoolUpgradeReq_Closure)
 typedef void (*Mgmt__PoolUpgradeResp_Closure)
                  (const Mgmt__PoolUpgradeResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolQueryTargetReq_Closure)
+                 (const Mgmt__PoolQueryTargetReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__StorageTargetUsage_Closure)
+                 (const Mgmt__StorageTargetUsage *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolQueryTargetInfo_Closure)
+                 (const Mgmt__PoolQueryTargetInfo *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolQueryTargetResp_Closure)
+                 (const Mgmt__PoolQueryTargetResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
 
 /* --- descriptors --- */
 
+extern const ProtobufCEnumDescriptor    mgmt__storage_media_type__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
@@ -1585,6 +1839,12 @@ extern const ProtobufCMessageDescriptor mgmt__pool_get_prop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_get_prop_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_upgrade_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_upgrade_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_target_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__storage_target_usage__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_type__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_state__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

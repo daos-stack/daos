@@ -34,6 +34,7 @@ type (
 		MountErr        error
 		UnmountErr      error
 		MkfsErr         error
+		ChmodErr        error
 		GetfsStr        string
 		GetfsErr        error
 		SourceToTarget  map[string]string
@@ -112,6 +113,10 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 
 func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
 	return msp.cfg.MkfsErr
+}
+
+func (msp *MockSysProvider) Chmod(string, os.FileMode) error {
+	return msp.cfg.ChmodErr
 }
 
 func (msp *MockSysProvider) Getfs(_ string) (string, error) {

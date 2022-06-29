@@ -114,6 +114,12 @@ bio_spdk_env_init(void)
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
+
+		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 	}
 
 	rc = spdk_env_init(&opts);
@@ -1278,7 +1284,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 int
-bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
@@ -1290,6 +1296,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+	ctxt->bxc_self_polling = self_polling;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {
