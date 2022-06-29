@@ -18,7 +18,7 @@ def rebasing():
 
 
 def submodule_check(modname, msg_file):
-    """Determines if a submodule has been updated"""
+    """Determines if a sub-module has been updated"""
     modified = False
 
     with subprocess.Popen(['git', 'status', '--porcelain'], stdout=subprocess.PIPE) as p:

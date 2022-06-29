@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -92,8 +91,7 @@ class DaosPool():
 
             if ret != 0:
                 self.handle = 0
-                raise DaosApiError("Pool connect returned non-zero. "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError("Pool connect returned non-zero. RC: {0}".format(ret))
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
@@ -113,8 +111,7 @@ class DaosPool():
         if cb_func is None:
             ret = func(self.handle, None)
             if ret != 0:
-                raise DaosApiError("Pool disconnect returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Pool disconnect returned non-zero. RC: {0}".format(ret))
             self.connected = 0
         else:
             event = daos_cref.DaosEvent()
@@ -137,8 +134,7 @@ class DaosPool():
         func = self.context.get_function("convert-plocal")
         ret = func(self.handle, ctypes.byref(c_glob))
         if ret != 0:
-            raise DaosApiError("Pool local2global returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Pool local2global returned non-zero. RC: {0}".format(ret))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
@@ -161,8 +157,7 @@ class DaosPool():
         local_handle = ctypes.c_uint64(0)
         ret = func(c_glob, ctypes.byref(local_handle))
         if ret != 0:
-            raise DaosApiError("Pool global2local returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Pool global2local returned non-zero. RC: {0}".format(ret))
         self.handle = local_handle
         return local_handle
 
@@ -177,8 +172,7 @@ class DaosPool():
         if cb_func is None:
             ret = func(self.handle, None)
             if ret != 0:
-                raise DaosApiError("Pool svc_Stop returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Pool svc_Stop returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
@@ -200,8 +194,7 @@ class DaosPool():
             ret = func(self.handle, None, ctypes.byref(self.pool_info),
                        None, None)
             if ret != 0:
-                raise DaosApiError("Pool query returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
             return self.pool_info
 
         event = daos_cref.DaosEvent()
@@ -225,8 +218,7 @@ class DaosPool():
             ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
                        None)
             if ret != 0:
-                raise DaosApiError("Pool query returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
             return self.target_info
 
         event = daos_cref.DaosEvent()
@@ -1075,8 +1067,8 @@ class IORequest():
         for tup in data:
 
             sgl_iov = daos_cref.IOV()
-            sgl_iov.iov_len = ctypes.c_size_t(len(tup[1])+1)
-            sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1])+1)
+            sgl_iov.iov_len = ctypes.c_size_t(len(tup[1]) + 1)
+            sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1]) + 1)
             sgl_iov.iov_buf = ctypes.cast(tup[1], ctypes.c_void_p)
 
             sgl_list[i].sg_nr_out = 1
@@ -1087,7 +1079,7 @@ class IORequest():
             iods[i].iod_name.iov_buf_len = ctypes.sizeof(tup[0])
             iods[i].iod_name.iov_len = ctypes.sizeof(tup[0])
             iods[i].iod_type = 1
-            iods[i].iod_size = len(tup[1])+1
+            iods[i].iod_size = len(tup[1]) + 1
             iods[i].iod_flags = 0
             iods[i].iod_nr = 1
             i += 1
@@ -1133,9 +1125,9 @@ class IORequest():
         iods = (daos_cref.DaosIODescriptor * count)()
         for key in keys:
             sgl_iov = daos_cref.IOV()
-            sgl_iov.iov_len = ctypes.c_ulong(key[1].value+1)
-            sgl_iov.iov_buf_len = ctypes.c_ulong(key[1].value+1)
-            buf = ctypes.create_string_buffer(key[1].value+1)
+            sgl_iov.iov_len = ctypes.c_ulong(key[1].value + 1)
+            sgl_iov.iov_buf_len = ctypes.c_ulong(key[1].value + 1)
+            buf = ctypes.create_string_buffer(key[1].value + 1)
             sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
 
             sgl_list[i].sg_nr_out = 1
@@ -1146,7 +1138,7 @@ class IORequest():
             iods[i].iod_name.iov_buf_len = ctypes.sizeof(key[0])
             iods[i].iod_name.iov_len = ctypes.sizeof(key[0])
             iods[i].iod_type = 1
-            iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
+            iods[i].iod_size = ctypes.c_ulong(key[1].value + 1)
             iods[i].iod_flags = 0
 
             iods[i].iod_nr = 1
@@ -1392,9 +1384,7 @@ class IORequest():
             if nr_val.value == 0:
                 continue
 
-            akeys.extend(
-                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
-                buf=buf))
+            akeys.extend(self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds, buf=buf))
 
         return akeys
 
@@ -1408,7 +1398,7 @@ class DaosContProperties(ctypes.Structure):
     future for setting other container properties
     (if needed)
     """
-    _fields_ = [("type", ctypes.c_char*10),
+    _fields_ = [("type", ctypes.c_char * 10),
                 ("enable_chksum", ctypes.c_bool),
                 ("srv_verify", ctypes.c_bool),
                 ("chksum_type", ctypes.c_uint64),
@@ -1591,18 +1581,17 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def destroy(self, force=1, poh=None, cb_func=None):
+    def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
         """Send a container destroy request to the daos server group."""
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
         if self.uuid is None:
             raise DaosApiError("Fail to destroy a container with uuid as none.")
-
-        if self.uuid is None:
-            raise DaosApiError("Container uuid is None.")
-        uuid_str = self.get_uuid_str()
-
+        if con_uuid is None:
+            uuid_str = self.get_uuid_str()
+        else:
+            uuid_str = str(con_uuid)
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
@@ -2302,8 +2291,8 @@ class DaosSnapshot():
         epoch to destroy. We have only one epoch for this single snapshot
         object.
 
-        coh     --ctype.u_long open container handle
-        evnt    --event (may be None)
+        coh:     --ctype.u_long open container handle
+        evnt:    --event (may be None)
         # need container handle coh, and the epoch range
         """
         func = self.context.get_function('destroy-snap')

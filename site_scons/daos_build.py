@@ -5,8 +5,13 @@ from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
+from SCons.Script import Depends
+from SCons.Script import Exit
 from env_modules import load_mpi
 import compiler_setup
+
+libraries = {}
+missing = set()
 
 
 class DaosLiteral(Literal):
@@ -57,13 +62,11 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
             env.AppendUnique(RPATH=[path])
 
     if set_cgo_ld:
-        env.AppendENVPath("CGO_LDFLAGS",
-                          env.subst("$_LIBDIRFLAGS " "$_RPATH"),
-                          sep=" ")
+        env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
 
 
 def add_build_rpath(env, pathin="."):
-    """Add a build directory with -Wl,-rpath-link"""
+    """Add a build directory to rpath"""
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
     env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
@@ -73,12 +76,79 @@ def add_build_rpath(env, pathin="."):
     env.AppendENVPath("LD_LIBRARY_PATH", path)
 
 
+def _known_deps(env, **kwargs):
+    """Get list of known libraries"""
+    shared_libs = []
+    static_libs = []
+    if 'LIBS' in kwargs:
+        libs = set(kwargs['LIBS'])
+    else:
+        libs = set(env.get('LIBS', []))
+
+    known_libs = libs.intersection(set(libraries.keys()))
+    missing.update(libs - known_libs)
+    for item in known_libs:
+        shared = libraries[item].get('shared', None)
+        if shared is not None:
+            shared_libs.append(shared)
+            continue
+        static_libs.append(libraries[item].get('static'))
+    return (static_libs, shared_libs)
+
+
+def _get_libname(*args, **kwargs):
+    """Work out the basic library name from library builder args"""
+    if 'target' in kwargs:
+        libname = os.path.basename(kwargs['target'])
+    else:
+        libname = os.path.basename(args[0])
+    if libname.startswith('lib'):
+        libname = libname[3:]
+    return libname
+
+
+def _add_lib(libtype, libname, target):
+    """Add library to our db"""
+    if libname in missing:
+        print(f"Detected that build of {libname} happened after use")
+        Exit(1)
+    if libname not in libraries:
+        libraries[libname] = {}
+    libraries[libname][libtype] = target
+
+
+def run_command(env, target, sources, daos_libs, command):
+    """Run Command builder"""
+    static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
+    result = env.Command(target, sources + static_deps + shared_deps, command)
+    # Libraries in this case are used to force rebuild, so use Depends
+    Depends(result, static_deps + shared_deps)
+    return result
+
+
+def static_library(env, *args, **kwargs):
+    """build SharedLibrary with relative RPATH"""
+    lib = env.StaticLibrary(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    _add_lib('static', libname, lib)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
+    return lib
+
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
-    return denv.SharedLibrary(*args, **kwargs)
+    lib = denv.SharedLibrary(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    _add_lib('shared', libname, lib)
+    static_deps, shared_deps = _known_deps(denv, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
+    return lib
 
 
 def program(env, *args, **kwargs):
@@ -86,7 +156,11 @@ def program(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
-    return denv.Program(*args, **kwargs)
+    prog = denv.Program(*args, **kwargs)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(prog, static_deps)
+    env.Requires(prog, shared_deps)
+    return prog
 
 
 def test(env, *args, **kwargs):
@@ -94,7 +168,16 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
-    return denv.Program(*args, **kwargs)
+    testbuild = denv.Program(*args, **kwargs)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(testbuild, static_deps)
+    env.Requires(testbuild, shared_deps)
+    return testbuild
+
+
+def add_static_library(name, target):
+    """Add a static library to our db"""
+    _add_lib('static', name, target)
 
 
 def install(env, subdir, files):

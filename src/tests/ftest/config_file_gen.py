@@ -1,9 +1,13 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+# TODO: Find out why this is required and remove it.
+# pylint: disable=import-error,no-name-in-module
+
 import logging
 import sys
 

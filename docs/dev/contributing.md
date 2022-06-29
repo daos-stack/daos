@@ -3,7 +3,7 @@
 Your contributions are most welcome! There are several good ways to suggest new
 features, offer to add a feature, or just begin a dialog about DAOS:
 
-- Open an issue in [jira](http://jira.daos.io)
+- Open an issue in [jira](https://jira.daos.io/)
 - Suggest a feature, ask a question, start a discussion, etc. in our
   [community mailing list](https://daos.groups.io/g/daos)
 - Chat with members of the DAOS community real-time on [slack](https://daos-stack.slack.com/).
@@ -12,7 +12,7 @@ features, offer to add a feature, or just begin a dialog about DAOS:
 
 ## Coding Rules
 
-Please check the [coding conventions](http://wiki.daos.io/spaces/DC/pages/4836655701/Coding+Rules)
+Please check the [coding conventions](https://wiki.daos.io/spaces/DC/pages/4836655701/Coding+Rules)
 for code contribution.
 
 ## Commit Comments

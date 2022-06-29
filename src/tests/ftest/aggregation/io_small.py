@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,7 @@ class DaosAggregationIOSmall(IorTestBase):
         """Jira ID: DAOS-3750.
 
         Test Description:
-            Purpose of this test is to run ior wht < 4k transfer size
+            Purpose of this test is to run ior with < 4k transfer size
             and verify the data is initially written into SCM and later
             moved to SSD NV DIMMs.
 

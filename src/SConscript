@@ -18,6 +18,7 @@ HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.9.0"
 
+
 def generate_daos_version_header(env):
     """Generate daos_version.h from a template file"""
 
@@ -28,9 +29,10 @@ def generate_daos_version_header(env):
           '@TMPL_PKG_MAJOR@': env['DAOS_VERSION_MAJOR'],
           '@TMPL_PKG_MINOR@': env['DAOS_VERSION_MINOR'],
           '@TMPL_PKG_FIX@': env['DAOS_VERSION_FIX'],
-          '@Template for @' : ""}
+          '@Template for @': ""}
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
+
 
 def check_install_header(env, header):
     """Runs a builder to ensure the header can standalone compile and installs it"""
@@ -40,14 +42,13 @@ def check_install_header(env, header):
     Default(result)
     env.Install(os.path.join('$PREFIX', os.path.dirname(header)), header)
 
+
 def scons():
     """Execute build"""
 
     Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
-    # For Common library (tse.h)
-    env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
-    base_env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
+    # For Common library and headers.
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     # Generic DAOS includes
@@ -83,12 +84,12 @@ def scons():
     check_install_header(env, 'include/daos.h')
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    Export('env', 'CART_VERSION')
+    libdaos_tgts = []
+    Export('env', 'CART_VERSION', 'libdaos_tgts')
 
+    # Generate common libraries used by multiple components
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
-    Default('gurt')
-    # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
     SConscript('vea/SConscript')
@@ -105,11 +106,11 @@ def scons():
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
 
-    # Build cart utilities library
-    SConscript('cart/utils/SConscript')
-
     # Build DAOS client libraries
     SConscript('client/SConscript')
+
+    # Build cart utilities library
+    SConscript('cart/utils/SConscript')
 
     # rdb unit test rdbt depends on libdaos
     SConscript('rdb/SConscript')
@@ -124,7 +125,9 @@ def scons():
     SConscript('control/SConscript')
 
     # Build test
+    SConscript('placement/tests/SConscript')
     SConscript('tests/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

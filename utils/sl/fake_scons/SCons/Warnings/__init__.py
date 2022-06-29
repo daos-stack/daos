@@ -19,12 +19,20 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
+
 def warningAsException(flag=1):
     """Fake warningAsException"""
     return flag
 
+
 def enableWarningClass(_name):
     """Fake enableWarningClass"""
 
+
 class MissingSConscriptWarning(Exception):
     """Fake MissingSConscriptWarning"""
+
+
+# pylint: disable-next=redefined-builtin,too-few-public-methods
+class Warning():
+    """Fake Warning"""

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
+
+#if HAVE_CACHE_READDIR
+	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
+#else
+	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
+#endif
 
 	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
 		       conn->capable);
@@ -180,11 +186,36 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
+	if (inode->ie_dfs->dfc_attr_timeout && (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
+		struct timespec now;
+		struct timespec left;
+		double          age;
+		double          timeout;
+
+		rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+		if (rc != 0)
+			D_GOTO(err, rc = EIO);
+
+		left.tv_sec  = now.tv_sec - inode->ie_attr_last_update.tv_sec;
+		left.tv_nsec = now.tv_nsec - inode->ie_attr_last_update.tv_nsec;
+		if (left.tv_nsec < 0) {
+			left.tv_sec--;
+			left.tv_nsec += 1000000000;
+		}
+		age     = left.tv_sec + ((double)left.tv_nsec / 1000000000);
+		timeout = inode->ie_dfs->dfc_attr_timeout - age;
+		if (timeout > 0) {
+			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+			D_GOTO(done, 0);
+		}
+	}
+
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
+done:
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 
