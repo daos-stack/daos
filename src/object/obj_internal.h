@@ -427,6 +427,7 @@ struct ec_bulk_spec {
 	uint64_t is_skip:	1;
 	uint64_t len:		63;
 };
+
 D_CASSERT(sizeof(struct ec_bulk_spec) == sizeof(uint64_t));
 
 static inline void
@@ -448,6 +449,7 @@ ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
+
 #define DOVA_NUM	32
 #define DOVA_BUF_LEN	4096
 
@@ -491,7 +493,6 @@ struct dc_obj_verify_args {
 int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		  enum daos_otype_t otype, daos_oclass_hints_t hints,
 		  enum daos_obj_redun *ord, uint32_t *nr);
-
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
@@ -585,12 +586,10 @@ obj_get_shard(void *data, int idx)
 static inline bool
 obj_retry_error(int err)
 {
-	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       daos_crt_network_error(err);
+	return err == -DER_TIMEDOUT || err == -DER_STALE || err == -DER_INPROGRESS ||
+	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
+	       err == -DER_NOTLEADER;
 }
 
 static inline daos_handle_t
