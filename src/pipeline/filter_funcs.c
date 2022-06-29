@@ -11,8 +11,8 @@
 #include "pipeline_internal.h"
 
 /**
- * Definition of getdata functions. Get data functions are used to return the data for akeys,
- * constants, and dkeys.
+ * Definition of high level getdata functions. Get data functions are used to return the data
+ * for akeys, constants, and dkeys.
  */
 
 #define DEFINE_FILTER_FUNC_GETDATA(type, ctype)                                                    \

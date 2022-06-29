@@ -10,7 +10,11 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
-#define getdata_func_dkey(typename, size, typec, outtypename, outtypec)                            \
+/**
+ * getdata functions for dkeys, akeys, and constants.
+ */
+
+#define DEFINE_GETDATA_FUNC_DKEY(typename, size, typec, outtypename, outtypec)                     \
 	int getdata_func_dkey_##typename##size(struct filter_part_run_t *args)                     \
 	{                                                                                          \
 		char  *buf;                                                                        \
@@ -23,16 +27,16 @@
 		return 0;                                                                          \
 	}
 
-getdata_func_dkey(u, 1, uint8_t, u, uint64_t)
-getdata_func_dkey(u, 2, uint16_t, u, uint64_t)
-getdata_func_dkey(u, 4, uint32_t, u, uint64_t)
-getdata_func_dkey(u, 8, uint64_t, u, uint64_t)
-getdata_func_dkey(i, 1, int8_t, i, int64_t)
-getdata_func_dkey(i, 2, int16_t, i, int64_t)
-getdata_func_dkey(i, 4, int32_t, i, int64_t)
-getdata_func_dkey(i, 8, int64_t, i, int64_t)
-getdata_func_dkey(r, 4, float, d, double)
-getdata_func_dkey(r, 8, double, d, double)
+DEFINE_GETDATA_FUNC_DKEY(u, 1, uint8_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_DKEY(u, 2, uint16_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_DKEY(u, 4, uint32_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_DKEY(u, 8, uint64_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_DKEY(i, 1, int8_t, i, int64_t)
+DEFINE_GETDATA_FUNC_DKEY(i, 2, int16_t, i, int64_t)
+DEFINE_GETDATA_FUNC_DKEY(i, 4, int32_t, i, int64_t)
+DEFINE_GETDATA_FUNC_DKEY(i, 8, int64_t, i, int64_t)
+DEFINE_GETDATA_FUNC_DKEY(r, 4, float, d, double)
+DEFINE_GETDATA_FUNC_DKEY(r, 8, double, d, double)
 
 int
 getdata_func_dkey_raw(struct filter_part_run_t *args)
@@ -165,7 +169,7 @@ exit:
 	args->data_len_out = len;
 }
 
-#define getdata_func_akey(typename, size, typec, outtypename, outtypec)                            \
+#define DEFINE_GETDATA_FUNC_AKEY(typename, size, typec, outtypename, outtypec)                     \
 	int getdata_func_akey_##typename##size(struct filter_part_run_t *args)                     \
 	{                                                                                          \
 		char *buf;                                                                         \
@@ -177,16 +181,16 @@ exit:
 		return 0;                                                                          \
 	}
 
-getdata_func_akey(u, 1, uint8_t, u, uint64_t)
-getdata_func_akey(u, 2, uint16_t, u, uint64_t)
-getdata_func_akey(u, 4, uint32_t, u, uint64_t)
-getdata_func_akey(u, 8, uint64_t, u, uint64_t)
-getdata_func_akey(i, 1, int8_t, i, int64_t)
-getdata_func_akey(i, 2, int16_t, i, int64_t)
-getdata_func_akey(i, 4, int32_t, i, int64_t)
-getdata_func_akey(i, 8, int64_t, i, int64_t)
-getdata_func_akey(r, 4, float, d, double)
-getdata_func_akey(r, 8, double, d, double)
+DEFINE_GETDATA_FUNC_AKEY(u, 1, uint8_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_AKEY(u, 2, uint16_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_AKEY(u, 4, uint32_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_AKEY(u, 8, uint64_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_AKEY(i, 1, int8_t, i, int64_t)
+DEFINE_GETDATA_FUNC_AKEY(i, 2, int16_t, i, int64_t)
+DEFINE_GETDATA_FUNC_AKEY(i, 4, int32_t, i, int64_t)
+DEFINE_GETDATA_FUNC_AKEY(i, 8, int64_t, i, int64_t)
+DEFINE_GETDATA_FUNC_AKEY(r, 4, float, d, double)
+DEFINE_GETDATA_FUNC_AKEY(r, 8, double, d, double)
 
 int
 getdata_func_akey_raw(struct filter_part_run_t *args)
@@ -232,7 +236,7 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 	return 0;
 }
 
-#define getdata_func_const(typename, size, typec, outtypename, outtypec)                           \
+#define DEFINE_GETDATA_FUNC_CONST(typename, size, typec, outtypename, outtypec)                    \
 	int getdata_func_const_##typename##size(struct filter_part_run_t *args)                    \
 	{                                                                                          \
 		args->data_out                  = (char *)args->parts[args->part_idx].iov->iov_buf;\
@@ -240,16 +244,16 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 		return 0;                                                                          \
 	}
 
-getdata_func_const(u, 1, uint8_t, u, uint64_t)
-getdata_func_const(u, 2, uint16_t, u, uint64_t)
-getdata_func_const(u, 4, uint32_t, u, uint64_t)
-getdata_func_const(u, 8, uint64_t, u, uint64_t)
-getdata_func_const(i, 1, int8_t, i, int64_t)
-getdata_func_const(i, 2, int16_t, i, int64_t)
-getdata_func_const(i, 4, int32_t, i, int64_t)
-getdata_func_const(i, 8, int64_t, i, int64_t)
-getdata_func_const(r, 4, float, d, double)
-getdata_func_const(r, 8, double, d, double)
+DEFINE_GETDATA_FUNC_CONST(u, 1, uint8_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_CONST(u, 2, uint16_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_CONST(u, 4, uint32_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_CONST(u, 8, uint64_t, u, uint64_t)
+DEFINE_GETDATA_FUNC_CONST(i, 1, int8_t, i, int64_t)
+DEFINE_GETDATA_FUNC_CONST(i, 2, int16_t, i, int64_t)
+DEFINE_GETDATA_FUNC_CONST(i, 4, int32_t, i, int64_t)
+DEFINE_GETDATA_FUNC_CONST(i, 8, int64_t, i, int64_t)
+DEFINE_GETDATA_FUNC_CONST(r, 4, float, d, double)
+DEFINE_GETDATA_FUNC_CONST(r, 8, double, d, double)
 
 int
 getdata_func_const_raw(struct filter_part_run_t *args)
