@@ -88,6 +88,8 @@ typedef struct {
 
 void free_stack(void *arg);
 
+void mmap_stack_wrapper(void *arg);
+
 int mmap_stack_thread_create(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
 			     ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
 			     ABT_thread_attr attr, ABT_thread *newthread);

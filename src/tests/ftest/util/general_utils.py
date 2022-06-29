@@ -19,6 +19,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -448,7 +450,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
@@ -614,7 +616,7 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     if sudo:
         command = "sudo " + command
 
-    task = run_task(hosts, command)
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))
@@ -1353,7 +1355,7 @@ def create_string_buffer(value, size=None):
 
     Args:
     value (object): value to pass to ctypes.create_string_buffer()
-    size (int, optional): sze to pass to ctypes.create_string_buffer()
+    size (int, optional): size to pass to ctypes.create_string_buffer()
 
     Returns:
     array: return value from ctypes.create_string_buffer()
@@ -1425,8 +1427,12 @@ def get_primary_group(user=None):
     """
     if user is None:
         user = getuser()
-    gid = pwd.getpwnam(user).pw_gid
-    return grp.getgrgid(gid).gr_name
+    try:
+        gid = pwd.getpwnam(user).pw_gid
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        # User may not exist on this host, e.g. daos_server, so just return the user name
+        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
@@ -1450,3 +1456,34 @@ def get_journalctl(hosts, since, until, journalctl_type):
     results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
     return results
+
+
+def get_avocado_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    return settings.get_value(section, key)     # pylint: disable=no-member
+
+
+def set_avocado_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(section, key, str(value))

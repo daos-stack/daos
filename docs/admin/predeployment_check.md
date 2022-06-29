@@ -104,8 +104,7 @@ Some special configuration is required for the `verbs` provider to use librdmacm
 with multiple interfaces, and the same configuration is required for the `tcp` provider.
 
 First, the accept_local feature must be enabled on the network interfaces
-to be used by DAOS. This can be done using the following command (<ifaces> must
-be replaced with the interface names):
+to be used by DAOS. This can be done using the following command:
 
 ```
 $ sudo sysctl -w net.ipv4.conf.all.accept_local=1
@@ -130,7 +129,8 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
 CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
-true even if the configuration uses a single logical subnet.
+true even if the configuration uses a single logical subnet. <ifaces> must be replaced with
+the interface names)
 
 ```
 $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2

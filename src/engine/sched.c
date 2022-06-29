@@ -1920,13 +1920,19 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
-#ifdef ULT_MMAP_STACK
-	rc = ABT_thread_get_arg(thread, (void **)&desc);
-	D_ASSERT(rc == ABT_SUCCESS);
-	thread_func = desc->thread_func;
-#else
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
+#ifdef ULT_MMAP_STACK
+	/* has ULT stack been allocated using mmap() or using
+	 * Argobots standard way ? With the later case the ULT
+	 * argument could not be used to address the mmap()'ed
+	 * stack descriptor !
+	 */
+	if (likely(thread_func == mmap_stack_wrapper)) {
+		rc = ABT_thread_get_arg(thread, (void **)&desc);
+		D_ASSERT(rc == ABT_SUCCESS);
+		thread_func = desc->thread_func;
+	}
 #endif
 	info->si_ult_func = thread_func;
 }

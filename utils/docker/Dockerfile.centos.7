@@ -33,8 +33,8 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf -y update epel-release;                                  \
-    dnf -y clean all
+    dnf update epel-release;                                     \
+    dnf clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -100,16 +100,19 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
+USER daos_server:daos_server
 
-# Do not setup a python venv on CentOS 7 as Jenkins builds do not honor PATH, so install as root
-# instead.  Install latest versions of python tools.
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir --disable-pip-version-check install --requirement requirements.txt
-
-USER daos_server:daos_server
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -136,8 +139,8 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
-                TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&        \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
+                TARGET_TYPE=$DAOS_TARGET_TYPE  &&                   \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root
@@ -195,4 +198,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
