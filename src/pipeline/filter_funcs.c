@@ -10,6 +10,11 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
+/**
+ * Definition of getdata functions. Get data functions are used to return the data for akeys,
+ * constants, and dkeys.
+ */
+
 #define DEFINE_FILTER_FUNC_GETDATA(type, ctype)                                                    \
 	static int filter_func_getdata_##type(struct filter_part_run_t *args, _##ctype * data)     \
 	{                                                                                          \
@@ -43,6 +48,10 @@ filter_func_getdata_st(struct filter_part_run_t *args, char **st, size_t *st_len
 	*st_len = args->data_len_out;
 	return 0;
 }
+
+/**
+ * Definition of logical functions for different types.
+ */
 
 #define DEFINE_LOGFUNC_EQ(type, ctype)                                                             \
 	static bool logfunc_eq_##type(_##ctype left, _##ctype right) { return left == right; }
@@ -231,6 +240,10 @@ DEFINE_FILTER_FUNC_LOG_ST(le)
 DEFINE_FILTER_FUNC_LOG_ST(ge)
 DEFINE_FILTER_FUNC_LOG_ST(gt)
 
+/**
+ * Definition of arithmetic functions for different types.
+ */
+
 #define DEFINE_ARITHFUNC_ADD(type, ctype)                                                          \
 	static int arithfunc_add_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
@@ -327,6 +340,10 @@ exit:                                                                           
 DEFINE_FILTER_FUNC_BITAND(u, uint64_t)
 DEFINE_FILTER_FUNC_BITAND(i, int64_t)
 
+/**
+ * like function for strings
+ */
+
 int
 filter_func_like(struct filter_part_run_t *args)
 {
@@ -407,6 +424,10 @@ exit:
 	return 0;
 }
 
+/**
+ * ==NULL and !=NULL
+ */
+
 int
 filter_func_isnull(struct filter_part_run_t *args)
 {
@@ -436,6 +457,10 @@ filter_func_isnotnull(struct filter_part_run_t *args)
 	args->log_out = (args->data_out != NULL);
 	return 0;
 }
+
+/**
+ * general logical operators
+ */
 
 int
 filter_func_not(struct filter_part_run_t *args)

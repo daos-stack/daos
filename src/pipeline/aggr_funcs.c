@@ -10,6 +10,11 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
+/**
+ * These macros define the SUM(), MAX(), and MIN() functions for the three main types: unsigned
+ * int, integer, and double.
+ */
+
 #define DEFINE_AGGR_FUNC_SUM(type)                                                                 \
 	int aggr_func_sum_##type(struct filter_part_run_t *args)                            \
 	{                                                                                          \
