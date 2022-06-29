@@ -10,8 +10,8 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
-#define aggr_func_sum(type)                                                                        \
-	int aggr_func_sum_##type(struct filter_part_run_t *args)                                   \
+#define DEFINE_AGGR_FUNC_SUM(type)                                                                 \
+	int aggr_func_sum_##type(struct filter_part_run_t *args)                            \
 	{                                                                                          \
 		double *aggr;                                                                      \
 		int     rc;                                                                        \
@@ -26,11 +26,11 @@
 		return 0;                                                                          \
 	}
 
-aggr_func_sum(u)
-aggr_func_sum(i)
-aggr_func_sum(d)
+DEFINE_AGGR_FUNC_SUM(u)
+DEFINE_AGGR_FUNC_SUM(i)
+DEFINE_AGGR_FUNC_SUM(d)
 
-#define aggr_func_max(type)                                                                        \
+#define DEFINE_AGGR_FUNC_MAX(type)                                                                 \
 	int aggr_func_max_##type(struct filter_part_run_t *args)                                   \
 	{                                                                                          \
 		double  val;                                                                       \
@@ -49,11 +49,11 @@ aggr_func_sum(d)
 		return 0;                                                                          \
 	}
 
-aggr_func_max(u)
-aggr_func_max(i)
-aggr_func_max(d)
+DEFINE_AGGR_FUNC_MAX(u)
+DEFINE_AGGR_FUNC_MAX(i)
+DEFINE_AGGR_FUNC_MAX(d)
 
-#define aggr_func_min(type)                                                                        \
+#define DEFINE_AGGR_FUNC_MIN(type)                                                                 \
 	int aggr_func_min_##type(struct filter_part_run_t *args)                                   \
 	{                                                                                          \
 		double  val;                                                                       \
@@ -72,6 +72,6 @@ aggr_func_max(d)
 		return 0;                                                                          \
 	}
 
-aggr_func_min(u)
-aggr_func_min(i)
-aggr_func_min(d)
+DEFINE_AGGR_FUNC_MIN(u)
+DEFINE_AGGR_FUNC_MIN(i)
+DEFINE_AGGR_FUNC_MIN(d)

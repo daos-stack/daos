@@ -10,7 +10,7 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
-#define filter_func_getdata(type, ctype)                                                           \
+#define DEFINE_FILTER_FUNC_GETDATA(type, ctype)                                                    \
 	static int filter_func_getdata_##type(struct filter_part_run_t *args, _##ctype * data)     \
 	{                                                                                          \
 		int rc;                                                                            \
@@ -24,9 +24,9 @@
 		return 0;                                                                          \
 	}
 
-filter_func_getdata(u, uint64_t)
-filter_func_getdata(i, int64_t)
-filter_func_getdata(d, double)
+DEFINE_FILTER_FUNC_GETDATA(u, uint64_t)
+DEFINE_FILTER_FUNC_GETDATA(i, int64_t)
+DEFINE_FILTER_FUNC_GETDATA(d, double)
 
 static int
 filter_func_getdata_st(struct filter_part_run_t *args, char **st, size_t *st_len)
@@ -44,49 +44,49 @@ filter_func_getdata_st(struct filter_part_run_t *args, char **st, size_t *st_len
 	return 0;
 }
 
-#define logfunc_eq(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_EQ(type, ctype)                                                             \
 	static bool logfunc_eq_##type(_##ctype left, _##ctype right) { return left == right; }
 
-logfunc_eq(u, uint64_t)
-logfunc_eq(i, int64_t)
-logfunc_eq(d, double)
+DEFINE_LOGFUNC_EQ(u, uint64_t)
+DEFINE_LOGFUNC_EQ(i, int64_t)
+DEFINE_LOGFUNC_EQ(d, double)
 
-#define logfunc_ne(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_NE(type, ctype)                                                             \
 	static bool logfunc_ne_##type(_##ctype left, _##ctype right) { return left != right; }
 
-logfunc_ne(u, uint64_t)
-logfunc_ne(i, int64_t)
-logfunc_ne(d, double)
+DEFINE_LOGFUNC_NE(u, uint64_t)
+DEFINE_LOGFUNC_NE(i, int64_t)
+DEFINE_LOGFUNC_NE(d, double)
 
-#define logfunc_lt(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_LT(type, ctype)                                                             \
 	static bool logfunc_lt_##type(_##ctype left, _##ctype right) { return left < right; }
 
-logfunc_lt(u, uint64_t)
-logfunc_lt(i, int64_t)
-logfunc_lt(d, double)
+DEFINE_LOGFUNC_LT(u, uint64_t)
+DEFINE_LOGFUNC_LT(i, int64_t)
+DEFINE_LOGFUNC_LT(d, double)
 
-#define logfunc_le(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_LE(type, ctype)                                                             \
 	static bool logfunc_le_##type(_##ctype left, _##ctype right) { return left <= right; }
 
-logfunc_le(u, uint64_t)
-logfunc_le(i, int64_t)
-logfunc_le(d, double)
+DEFINE_LOGFUNC_LE(u, uint64_t)
+DEFINE_LOGFUNC_LE(i, int64_t)
+DEFINE_LOGFUNC_LE(d, double)
 
-#define logfunc_ge(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_GE(type, ctype)                                                             \
 	static bool logfunc_ge_##type(_##ctype left, _##ctype right) { return left >= right; }
 
-logfunc_ge(u, uint64_t)
-logfunc_ge(i, int64_t)
-logfunc_ge(d, double)
+DEFINE_LOGFUNC_GE(u, uint64_t)
+DEFINE_LOGFUNC_GE(i, int64_t)
+DEFINE_LOGFUNC_GE(d, double)
 
-#define logfunc_gt(type, ctype)                                                                    \
+#define DEFINE_LOGFUNC_GT(type, ctype)                                                             \
 	static bool logfunc_gt_##type(_##ctype left, _##ctype right) { return left > right; }
 
-logfunc_gt(u, uint64_t)
-logfunc_gt(i, int64_t)
-logfunc_gt(d, double)
+DEFINE_LOGFUNC_GT(u, uint64_t)
+DEFINE_LOGFUNC_GT(i, int64_t)
+DEFINE_LOGFUNC_GT(d, double)
 
-#define filter_func_log(op, type, ctype)                                                           \
+#define DEFINE_FILTER_FUNC_LOG(op, type, ctype)                                                    \
 	int filter_func_##op##_##type(struct filter_part_run_t *args)                              \
 	{                                                                                          \
 		_##ctype left  = (_##ctype)0;                                                      \
@@ -117,26 +117,26 @@ exit:                                                                           
 		return 0;                                                                          \
 	}
 
-filter_func_log(eq, u, uint64_t)
-filter_func_log(ne, u, uint64_t)
-filter_func_log(lt, u, uint64_t)
-filter_func_log(le, u, uint64_t)
-filter_func_log(ge, u, uint64_t)
-filter_func_log(gt, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(eq, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(ne, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(lt, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(le, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(ge, u, uint64_t)
+DEFINE_FILTER_FUNC_LOG(gt, u, uint64_t)
 
-filter_func_log(eq, i, int64_t)
-filter_func_log(ne, i, int64_t)
-filter_func_log(lt, i, int64_t)
-filter_func_log(le, i, int64_t)
-filter_func_log(ge, i, int64_t)
-filter_func_log(gt, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(eq, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(ne, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(lt, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(le, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(ge, i, int64_t)
+DEFINE_FILTER_FUNC_LOG(gt, i, int64_t)
 
-filter_func_log(eq, d, double)
-filter_func_log(ne, d, double)
-filter_func_log(lt, d, double)
-filter_func_log(le, d, double)
-filter_func_log(ge, d, double)
-filter_func_log(gt, d, double)
+DEFINE_FILTER_FUNC_LOG(eq, d, double)
+DEFINE_FILTER_FUNC_LOG(ne, d, double)
+DEFINE_FILTER_FUNC_LOG(lt, d, double)
+DEFINE_FILTER_FUNC_LOG(le, d, double)
+DEFINE_FILTER_FUNC_LOG(ge, d, double)
+DEFINE_FILTER_FUNC_LOG(gt, d, double)
 
 static bool logfunc_eq_st(char *l, size_t ll, char *r, size_t rl)
 {
@@ -191,7 +191,7 @@ logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 	return (memcmp(l, r, len) > 0);
 }
 
-#define filter_func_log_st(op)                                                                     \
+#define DEFINE_FILTER_FUNC_LOG_ST(op)                                                              \
 	int filter_func_##op##_st(struct filter_part_run_t *args)                                  \
 	{                                                                                          \
 		char  *left       = NULL;                                                          \
@@ -224,47 +224,47 @@ exit:                                                                           
 		return 0;                                                                          \
 	}
 
-filter_func_log_st(eq)
-filter_func_log_st(ne)
-filter_func_log_st(lt)
-filter_func_log_st(le)
-filter_func_log_st(ge)
-filter_func_log_st(gt)
+DEFINE_FILTER_FUNC_LOG_ST(eq)
+DEFINE_FILTER_FUNC_LOG_ST(ne)
+DEFINE_FILTER_FUNC_LOG_ST(lt)
+DEFINE_FILTER_FUNC_LOG_ST(le)
+DEFINE_FILTER_FUNC_LOG_ST(ge)
+DEFINE_FILTER_FUNC_LOG_ST(gt)
 
-#define arithfunc_add(type, ctype)                                                                 \
+#define DEFINE_ARITHFUNC_ADD(type, ctype)                                                          \
 	static int arithfunc_add_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left + right;                                                               \
 		return 0;                                                                          \
 	}
 
-arithfunc_add(u, uint64_t)
-arithfunc_add(i, int64_t)
-arithfunc_add(d, double)
+DEFINE_ARITHFUNC_ADD(u, uint64_t)
+DEFINE_ARITHFUNC_ADD(i, int64_t)
+DEFINE_ARITHFUNC_ADD(d, double)
 
-#define arithfunc_sub(type, ctype)                                                                 \
+#define DEFINE_ARITHFUNC_SUB(type, ctype)                                                          \
 	static int arithfunc_sub_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left - right;                                                               \
 		return 0;                                                                          \
 	}
 
-arithfunc_sub(u, uint64_t)
-arithfunc_sub(i, int64_t)
-arithfunc_sub(d, double)
+DEFINE_ARITHFUNC_SUB(u, uint64_t)
+DEFINE_ARITHFUNC_SUB(i, int64_t)
+DEFINE_ARITHFUNC_SUB(d, double)
 
-#define arithfunc_mul(type, ctype)                                                                 \
+#define DEFINE_ARITHFUNC_MUL(type, ctype)                                                          \
 	static int arithfunc_mul_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left * right;                                                               \
 		return 0;                                                                          \
 	}
 
-arithfunc_mul(u, uint64_t)
-arithfunc_mul(i, int64_t)
-arithfunc_mul(d, double)
+DEFINE_ARITHFUNC_MUL(u, uint64_t)
+DEFINE_ARITHFUNC_MUL(i, int64_t)
+DEFINE_ARITHFUNC_MUL(d, double)
 
-#define arithfunc_div(type, ctype)                                                                 \
+#define DEFINE_ARITHFUNC_DIV(type, ctype)                                                          \
 	static int arithfunc_div_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		if (right == (_##ctype)0)                                                          \
@@ -273,11 +273,11 @@ arithfunc_mul(d, double)
 		return 0;                                                                          \
 	}
 
-arithfunc_div(u, uint64_t)
-arithfunc_div(i, int64_t)
-arithfunc_div(d, double)
+DEFINE_ARITHFUNC_DIV(u, uint64_t)
+DEFINE_ARITHFUNC_DIV(i, int64_t)
+DEFINE_ARITHFUNC_DIV(d, double)
 
-#define filter_func_arith(op, type, ctype)                                                         \
+#define DEFINE_FILTER_FUNC_ARITH(op, type, ctype)                                                  \
 	int filter_func_##op##_##type(struct filter_part_run_t *args)                              \
 	{                                                                                          \
 		_##ctype left  = (_##ctype)0;                                                      \
@@ -294,20 +294,20 @@ exit:                                                                           
 		return rc;                                                                         \
 	}
 
-filter_func_arith(add, u, uint64_t)
-filter_func_arith(add, i, int64_t)
-filter_func_arith(add, d, double)
-filter_func_arith(sub, u, uint64_t)
-filter_func_arith(sub, i, int64_t)
-filter_func_arith(sub, d, double)
-filter_func_arith(mul, u, uint64_t)
-filter_func_arith(mul, i, int64_t)
-filter_func_arith(mul, d, double)
-filter_func_arith(div, u, uint64_t)
-filter_func_arith(div, i, int64_t)
-filter_func_arith(div, d, double)
+DEFINE_FILTER_FUNC_ARITH(add, u, uint64_t)
+DEFINE_FILTER_FUNC_ARITH(add, i, int64_t)
+DEFINE_FILTER_FUNC_ARITH(add, d, double)
+DEFINE_FILTER_FUNC_ARITH(sub, u, uint64_t)
+DEFINE_FILTER_FUNC_ARITH(sub, i, int64_t)
+DEFINE_FILTER_FUNC_ARITH(sub, d, double)
+DEFINE_FILTER_FUNC_ARITH(mul, u, uint64_t)
+DEFINE_FILTER_FUNC_ARITH(mul, i, int64_t)
+DEFINE_FILTER_FUNC_ARITH(mul, d, double)
+DEFINE_FILTER_FUNC_ARITH(div, u, uint64_t)
+DEFINE_FILTER_FUNC_ARITH(div, i, int64_t)
+DEFINE_FILTER_FUNC_ARITH(div, d, double)
 
-#define filter_func_bitand(type, ctype)                                                            \
+#define DEFINE_FILTER_FUNC_BITAND(type, ctype)                                                     \
 	int filter_func_bitand_##type(struct filter_part_run_t *args)                              \
 	{                                                                                          \
 		_##ctype left  = 0;                                                                \
@@ -324,8 +324,8 @@ exit:                                                                           
 		return rc;                                                                         \
 	}
 
-filter_func_bitand(u, uint64_t)
-filter_func_bitand(i, int64_t)
+DEFINE_FILTER_FUNC_BITAND(u, uint64_t)
+DEFINE_FILTER_FUNC_BITAND(i, int64_t)
 
 int
 filter_func_like(struct filter_part_run_t *args)
