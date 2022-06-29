@@ -29,8 +29,9 @@ following steps:
 
 - [Validate](#system-validation) that the DAOS system is operational
 
-Note that starting the DAOS server instances can be performed automatically
-on boot if start-up scripts are registered with systemd.
+!!! note
+    Starting the DAOS server instances can be performed automatically on boot if start-up scripts
+    are registered with systemd.
 
 The following subsections will cover each step in more detail.
 
@@ -185,10 +186,11 @@ Config file output will not be generated in the following cases:
   devices, taking into account any specified network device class preference
   (Ethernet or InfiniBand).
 
-!!! note
+!!! warning
     Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
     that prevented `ndctl` from being able to report the NUMA affinity for a
     namespace.
+
     This prevents generation of dual engine configs using `dmg config generate`
     when running with one of the above-mentioned affected kernels.
 
@@ -433,8 +435,9 @@ If required, the pmem devices can be destroyed with the command
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
-Note that undefined behavior may result if the namespaces/pmem kernel
-devices are mounted before running reset (as per the printed warning).
+!!! warning
+    Undefined behavior may result if the namespaces/pmem kernel devices are mounted when
+    running the reset command (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
@@ -452,14 +455,27 @@ storage selection.
 
 #### Discovery
 
-`dmg storage scan` can be run to query remote running `daos_server`
-processes over the management network.
+DAOS tools will discover NVMe SSDs and Persistent Memory Modules using the storage scan commands.
 
-`daos_server storage scan` can be used to query local `daos_server` instances
-directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
-by DAOS).
-NVMe SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only`.
+`dmg storage scan` can be run to query remote running `daos_server` processes over the management
+network.
+
+`daos_server storage scan` can be used to query storage on the local host directly.
+
+!!! warning
+    'daos_server' should not be running (e.g. as a systemd service under the 'daos_server'
+    userid) when the `daos_server storage scan` command is executed, as the NVMe SSDs will then
+    already be bound to the 'daos_server' processes and trying to access them (as a
+    non-'daos_server' user, even as root) will cause access failures.
+
+NVMe SSDs need to be made accessible first by running `daos_server storage prepare --nvme-only`.
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `--disable-vfio` in the storage prepare command to
+fallback to using UIO user-space driver with SPDK instead.
+
+!!! note
+    If UIO user-space driver is used instead of VFIO, 'daos_server' needs to be run as root.
+
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -715,6 +731,27 @@ For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
 
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `disable_vfio: true` in the global section of the
+server config file to fallback to using UIO user-space driver with SPDK instead.
+
+!!! note
+    If UIO user-space driver is used instead of VFIO, 'daos_server' needs to be run as root.
+
+If VMD is enabled on a host, its usage will be enabled by default meaning that the `bdev_list`
+device addresses will be interpreted as VMD endpoints and storage scan will report the details of
+the physical NVMe backing devices that belong to each VMD endpoint. To disable the use of VMD on a
+VMD-enabled host, set `disable_vmd: true` in the global section of the config to fallback to using
+physical NVMe devices only.
+
+!!! warning
+    If upgrading from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
+    parameter is no longer honoured and instead should be removed (or replaced by
+    `disable_vmd: true` if VMD is to be explicitly disabled).
+
+    Otherwise 'daos_server' may fail config validation and not start after an update from 2.0 to a
+    greater version.
+
 #### Example Configurations
 
 To illustrate, assume a cluster with homogeneous hardware configurations that
@@ -784,16 +821,15 @@ engines:
 There are a few optional providers that are not built by default. For detailed
 information, please refer to the [DAOS build documentation][6].
 
->**_NOTE_**
->
->DAOS Control Servers will need to be restarted on all hosts after
->updates to the server configuration file.
->
->Pick one host in the system and set `access_points` to list of that
->host's hostname or IP address (don't need to specify port).
->This will be the host which bootstraps the DAOS management service
->(MS).
->
+!!! note
+    DAOS Control Servers will need to be restarted on all hosts after updates to the server
+    configuration file.
+
+    Pick an odd number of hosts in the system and set `access_points` to list of that host's
+    hostname or IP address (don't need to specify port).
+
+    This will be the host which bootstraps the DAOS management service (MS).
+
 >The support of the optional providers is not guarantee and can be removed
 >without further notification.
 
@@ -1039,7 +1075,9 @@ for details on creating the necessary certificates.
 
 !!! note
     It is possible to disable the use of certificates for testing purposes.
+
     This should *never* be done in production environments.
+
     Running in insecure mode will allow arbitrary un-authenticated user processes
     to access and potentially damage the DAOS storage.
 
