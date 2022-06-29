@@ -3,23 +3,43 @@ hosts:
         - server-A
     test_clients:
         - client-B
-timeout: 7200
+timeout: 1000
 server_config:
+    engines_per_host: 2
     name: daos_server
+    crt_timeout: 60
     servers:
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+      0:
+        pinned_numa_node: 0
+        nr_xs_helpers: 4
+        fabric_iface: ib0
+        fabric_iface_port: 31317
+        log_file: daos_server0.log
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
+        scm_mount: /mnt/daos0
         env_vars:
-            - CRT_SWIM_RPC_TIMEOUT=20
-            - SWIM_PING_TIMEOUT=1800
-            - SWIM_SUSPECT_TIMEOUT=16000
+          - D_LOG_FILE_APPEND_PID=1
+          - FI_LOG_LEVEL=warn
+          - D_LOG_STDERR_IN_LOG=1
+      1:
+        pinned_numa_node: 1
+        nr_xs_helpers: 4
+        fabric_iface: ib1
+        fabric_iface_port: 31417
+        log_file: daos_server1.log
+        scm_class: dcpm
+        scm_list: ["/dev/pmem1"]
+        scm_mount: /mnt/daos1
+        env_vars:
+          - D_LOG_FILE_APPEND_PID=1
+          - FI_LOG_LEVEL=warn
+          - D_LOG_STDERR_IN_LOG=1
 pool:
     control_method: dmg
     mode: 511
     name: daos_server
-    scm_size: 100G
+    scm_size: 200G
     nvme_size: 200G
 container:
     type: POSIX
