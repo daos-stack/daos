@@ -48,6 +48,7 @@ message PoolDestroyReq {
 	string id = 2; // uuid or label of pool to destroy
 	bool force = 3; // destroy regardless of active connections
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
+	bool recursive = 5; // destroy regardless of any child containers
 }
 
 // PoolDestroyResp returns resultant state of destroy operation.

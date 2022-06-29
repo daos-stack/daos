@@ -278,17 +278,19 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 // PoolDestroyReq contains the parameters for a pool destroy request.
 type PoolDestroyReq struct {
 	poolRequest
-	ID    string
-	Force bool
+	ID        string
+	Recursive bool // Remove pool and any child containers.
+	Force     bool
 }
 
 // PoolDestroy performs a pool destroy operation on a DAOS Management Server instance.
 func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyReq) error {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:   req.getSystem(rpcClient),
-			Id:    req.ID,
-			Force: req.Force,
+			Sys:       req.getSystem(rpcClient),
+			Id:        req.ID,
+			Recursive: req.Recursive,
+			Force:     req.Force,
 		})
 	})
 

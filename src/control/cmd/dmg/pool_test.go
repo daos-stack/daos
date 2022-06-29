@@ -472,6 +472,17 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Destroy pool with recursive",
+			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --recursive",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDestroyReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Recursive: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Evict pool",
 			"pool evict 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
