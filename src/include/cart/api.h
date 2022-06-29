@@ -2097,6 +2097,14 @@ int crt_self_uri_get(int tag, char **uri);
 int crt_self_uri_get_secondary(int idx, char **uri);
 
 /**
+ * Returns number of secondary providers initialized.
+ *
+ * \return                      Number of secondary providers.
+ */
+int
+crt_get_nr_secondary_providers(void);
+
+/**
  * Retrieve incarnation of self.
  *
  * \param[out] incarnation      Returned incarnation

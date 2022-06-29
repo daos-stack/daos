@@ -1330,12 +1330,23 @@ out:
 }
 
 int
+crt_get_nr_secondary_providers(void)
+{
+	return crt_gdata.cg_num_secondary_provs;
+}
+
+int
 crt_self_uri_get_secondary(int secondary_idx, char **uri)
 {
 	char *addr;
 
 	if (secondary_idx != 0) {
 		D_ERROR("Only index=0 supported for now\n");
+		return -DER_NONEXIST;
+	}
+
+	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
+	    (secondary_idx >= crt_gdata.cg_num_secondary_provs)) {
 		return -DER_NONEXIST;
 	}
 

@@ -25,9 +25,3 @@ self_test:
       message_sizes: "\"0 b1048576\""
     large_io_bulk_get:
       message_sizes: "\"b1048576 0\""
-test_params:
-  share_addr_mux: !mux
-    on:
-      share_addr: 1
-    off:
-      share_addr: 0
