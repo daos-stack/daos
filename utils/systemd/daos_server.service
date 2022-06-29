@@ -1,6 +1,5 @@
 [Unit]
 Description=DAOS Server
-StartLimitIntervalSec=60
 Wants=network-online.target
 After=network-online.target
 
@@ -35,9 +34,6 @@ CoredumpFilter=default private-dax
 OOMScoreAdjust=-900
 # increase priority
 Nice=-10
-# bind the daos_server to the first CPU
-# the engine affinity is controlled via the yaml file
-CPUAffinity=0
 
 [Install]
 WantedBy = multi-user.target
