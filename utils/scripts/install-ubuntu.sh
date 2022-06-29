@@ -56,6 +56,6 @@ apt-get install \
 
 # ipmctl is only available on x86_64
 if [[ $arch == x86_64* ]]; then
-    dnf --nodocs install \
+    apt-get install \
         libipmctl-dev
 fi

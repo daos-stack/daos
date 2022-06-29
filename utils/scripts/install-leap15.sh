@@ -62,5 +62,5 @@ dnf --nodocs install \
 # ipmctl is only available on x86_64
 if [[ $arch == x86_64* ]]; then
     dnf --nodocs install \
-        ipmctl
+        ipmctl-devel
 fi
