@@ -25,12 +25,13 @@ free_filter_data(daos_filter_t **filters, uint32_t nfilters)
 	}
 }
 
-void
+int
 free_pipeline(daos_pipeline_t *pipe)
 {
 	daos_filter_t  **filters_to_free;
 	uint32_t         total_filters;
 	uint32_t         i;
+	int              rc;
 
 	/** saving filter ptrs so we can free them later */
 	total_filters   = pipe->num_filters + pipe->num_aggr_filters;
@@ -45,10 +46,14 @@ free_pipeline(daos_pipeline_t *pipe)
 	free_filter_data(pipe->aggr_filters, pipe->num_aggr_filters);
 
 	/** freeing objects allocated by DAOS */
-	daos_pipeline_free(pipe);
+	rc = daos_pipeline_free(pipe);
+	if (rc != 0)
+		return rc;
 
 	/** freeing filters */
 	for (i = 0; i < total_filters; i++)
 		free(filters_to_free[i]);
 	free(filters_to_free);
+
+	return 0;
 }

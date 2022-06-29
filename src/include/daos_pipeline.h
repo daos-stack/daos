@@ -244,7 +244,7 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *
  * \param[in,out]	pipeline	Pipeline object.
  */
-void
+int
 daos_pipeline_free(daos_pipeline_t *pipeline);
 
 /**

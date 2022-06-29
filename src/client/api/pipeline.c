@@ -87,36 +87,49 @@ daos_pipeline_check(daos_pipeline_t *pipeline)
 	return dc_pipeline_check(pipeline);
 }
 
-static void
+static int
 free_filters(daos_filter_t **filters, uint32_t nfilters)
 {
 	uint32_t i;
 
 	for (i = 0; i < nfilters; i++) {
-		D_ASSERT(filters[i] != NULL);
-		if (filters[i]->num_parts > 0)
-			D_ASSERT(filters[i]->parts != NULL);
-		if (filters[i]->num_parts > 0)
+		if (filters[i] == NULL)
+			return -DER_INVAL;
+		if (filters[i]->num_parts > 0) {
+			if (filters[i]->parts == NULL)
+				return -DER_INVAL;
 			D_FREE(filters[i]->parts);
+		}
 	}
+
+	return 0;
 }
 
-void
+int
 daos_pipeline_free(daos_pipeline_t *pipeline)
 {
-	D_ASSERT(pipeline != NULL);
-	if (pipeline->num_filters > 0)
-		D_ASSERT(pipeline->filters != NULL);
-	if (pipeline->num_aggr_filters > 0)
-		D_ASSERT(pipeline->aggr_filters != NULL);
+	int rc;
 
-	free_filters(pipeline->filters, pipeline->num_filters);
+	if (pipeline == NULL)
+		return -DER_INVAL;
+	if (pipeline->num_filters > 0 && pipeline->filters == NULL)
+		return -DER_INVAL;
+	if (pipeline->num_aggr_filters > 0 && pipeline->aggr_filters == NULL)
+		return -DER_INVAL;
+
+	rc = free_filters(pipeline->filters, pipeline->num_filters);
+	if (rc != 0)
+		return rc;
 	D_FREE(pipeline->filters);
 
-	free_filters(pipeline->aggr_filters, pipeline->num_aggr_filters);
+	rc = free_filters(pipeline->aggr_filters, pipeline->num_aggr_filters);
+	if (rc != 0)
+		return rc;
 	D_FREE(pipeline->aggr_filters);
 
 	daos_pipeline_init(pipeline);
+
+	return 0;
 }
 
 int

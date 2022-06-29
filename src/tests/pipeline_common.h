@@ -21,7 +21,7 @@ extern "C" {
 		}                                                                                  \
 	} while (0)
 
-void
+int
 free_pipeline(daos_pipeline_t *pipe);
 
 #if defined(__cplusplus)

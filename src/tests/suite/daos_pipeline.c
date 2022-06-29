@@ -240,9 +240,12 @@ build_incor_ops_datatypes(void)
 static void
 cleanup_pipe(daos_pipeline_t *p)
 {
+	int rc;
+
 	if (!p)
 		return;
-	daos_pipeline_free(p);
+	rc = daos_pipeline_free(p);
+	assert_rc_equal(rc, 0);
 }
 
 static void

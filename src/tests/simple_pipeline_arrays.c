@@ -464,8 +464,10 @@ main(int argc, char **argv)
 	run_pipeline(&pipeline2);
 
 	/** Freeing used memory */
-	free_pipeline(&pipeline1);
-	free_pipeline(&pipeline2);
+	rc = free_pipeline(&pipeline1);
+	ASSERT(rc == 0, "Pipeline free failed with %d", rc);
+	rc = free_pipeline(&pipeline2);
+	ASSERT(rc == 0, "Pipeline free failed with %d", rc);
 
 	/** destroying container */
 	rc = daos_cont_destroy(poh, "simple_pipeline_cont1", 1, NULL);
