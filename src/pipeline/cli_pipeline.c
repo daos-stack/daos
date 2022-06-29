@@ -47,7 +47,10 @@ struct shard_pipeline_run_args {
 struct pipeline_run_cb_args {
 	uint32_t             shard;
 	crt_rpc_t           *rpc;
-	unsigned int        *map_ver; /** I AM SETTING THIS BUT NOT USING IT */
+	unsigned int        *map_ver; /**
+				       * I AM SETTING THIS BUT NOT USING IT.
+				       * TODO: Do a pool map refersh to update this.
+				       */
 	daos_pipeline_run_t *api_args;
 	uint32_t             nr_iods;
 	uint32_t             nr_kds;
