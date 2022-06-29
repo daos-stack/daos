@@ -102,20 +102,13 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
 	int ret;
-	char *provider;
 	char *override;
 
 	rc = daos_init();
-
-	/* Event Queue creation is expensive with verbs provider */
 	if ((rc == 0) && (use_glob_eq == 0)) {
-		provider = getenv("CRT_PHY_ADDR_STR");
 		override = getenv("PYDAOS_GLOB_EQ");
-		if ((provider != NULL) && (strstr(provider, "verbs") != NULL))
+		if ((override == NULL) || strcmp(override, "0")) {
 			use_glob_eq = 1;
-		if (override != NULL)
-			use_glob_eq = strcmp(override, "0") ? 1 : 0;
-		if (use_glob_eq) {
 			ret = daos_eq_create(&glob_eq);
 			if (ret) {
 				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
