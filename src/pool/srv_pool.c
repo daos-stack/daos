@@ -2186,7 +2186,7 @@ out_tx:
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-			D_GOTO(out_svc, rc);
+			D_GOTO(out_mutex, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
 		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
@@ -2194,7 +2194,6 @@ out_tx:
 
 out_mutex:
 	ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
-out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pro_op.po_hint);
 	pool_svc_put(svc);
 out:
