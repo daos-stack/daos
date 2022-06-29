@@ -383,9 +383,28 @@ def display_task(task):
 
     Args:
         task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
     """
     log = getLogger()
     return check_task(task, log)
+
+
+def log_task(hosts, command, timeout=None):
+    """Display the output of the command executed on each host in parallel.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    return display_task(run_task(hosts, command, timeout, True))
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):

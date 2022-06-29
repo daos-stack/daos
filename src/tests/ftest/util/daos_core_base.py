@@ -11,7 +11,7 @@ from pathlib import Path
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
-from general_utils import get_log_file, get_clush_command, run_command
+from general_utils import get_log_file, get_clush_command, run_command, log_task
 from command_utils_base import EnvironmentVariables
 from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
@@ -124,8 +124,12 @@ class DaosCoreBase(TestWithServers):
                 get_log_file("daosCA/certs"), self.hostlist_clients)
             dmg.copy_configuration(self.hostlist_clients)
 
-        cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
+        # Temporarily place cmocka results in a test_dir subdirectory
         cmocka_dir = os.path.join(self.test_dir, "cmocka")
+        log_task(self.hostlist_clients, " ".join(["mkdir", "-p", cmocka_dir]))
+
+        # Set up the daos test command and environment settings
+        cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
         env = EnvironmentVariables({
             "D_LOG_FILE": get_log_file(self.client_log),
             "D_LOG_MASK": "DEBUG",
