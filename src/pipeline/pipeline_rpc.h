@@ -27,6 +27,7 @@ enum pipeline_rpc_opc {
 	PIPELINE_PROTO_CLI_COUNT,
 	PIPELINE_PROTO_CLI_LAST = PIPELINE_PROTO_CLI_COUNT - 1,
 };
+
 #undef X
 
 extern struct crt_proto_format pipeline_proto_fmt;
