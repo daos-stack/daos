@@ -97,7 +97,7 @@ crt_epi_destroy(struct crt_ep_inflight *epi)
 	/* crt_list_del_init(&epi->epi_link); */
 	D_MUTEX_DESTROY(&epi->epi_mutex);
 
-	D_FREE_PTR(epi);
+	D_FREE(epi);
 }
 
 static int
@@ -241,7 +241,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
-		D_FREE_PTR(ctx);
+		D_FREE(ctx);
 		D_GOTO(out, rc);
 	}
 
@@ -330,7 +330,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 			swim_period_set(swim_period_get() * 2);
 			csm->csm_ctx->sc_default_ping_timeout *= 2;
 		}
-
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
@@ -647,6 +646,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
 	int provider = ctx->cc_hg_ctx.chc_provider;
+
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
@@ -1083,9 +1083,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	RPC_ADDREF(rpc_priv);
 
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
-	    (epi->epi_req_num - epi->epi_reply_num) >=
-	     crt_gdata.cg_credit_ep_ctx) {
-
+	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
 		if (rpc_priv->crp_opc_info->coi_queue_front) {
 			d_list_add(&rpc_priv->crp_epi_link,
 					&epi->epi_req_waitq);
@@ -1233,10 +1231,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
-
+	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link))) {
 		rc = crt_req_send_internal(tmp_rpc);
 		if (rc == 0)
 			continue;
@@ -1335,12 +1330,23 @@ out:
 }
 
 int
+crt_get_nr_secondary_providers(void)
+{
+	return crt_gdata.cg_num_secondary_provs;
+}
+
+int
 crt_self_uri_get_secondary(int secondary_idx, char **uri)
 {
 	char *addr;
 
 	if (secondary_idx != 0) {
 		D_ERROR("Only index=0 supported for now\n");
+		return -DER_NONEXIST;
+	}
+
+	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
+	    (secondary_idx >= crt_gdata.cg_num_secondary_provs)) {
 		return -DER_NONEXIST;
 	}
 

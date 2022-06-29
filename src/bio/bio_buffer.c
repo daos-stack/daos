@@ -711,6 +711,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 
 	if (direct_scm_access(biod, biov)) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+
 		bio_iov_set_raw_buf(biov,
 				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
 		return 0;
@@ -1380,7 +1381,6 @@ bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 	return bio_rw(ioctxt, addr, iov, false);
 }
 
-
 int
 bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 {
@@ -1464,7 +1464,7 @@ free_copy_desc(struct bio_copy_desc *copy_desc)
 		bio_iod_free(copy_desc->bcd_iod_src);
 	if (copy_desc->bcd_iod_dst)
 		bio_iod_free(copy_desc->bcd_iod_dst);
-	D_FREE_PTR(copy_desc);
+	D_FREE(copy_desc);
 }
 
 static struct bio_copy_desc *
