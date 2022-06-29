@@ -46,8 +46,12 @@ pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
 static bool
 pipeline_part_chk_data_type(const char *data_type, size_t data_type_s)
 {
-	if (!data_type_s) /** some parts do not need to declare type */
-		return true;
+	if (!data_type_s)
+		return true; /** some parts do not need to declare type */
+
+	if (data_type_s < strlen("DAOS_FILTER_TYPE") ||
+	    strncmp(data_type, "DAOS_FILTER_TYPE", strlen("DAOS_FILTER_TYPE")))
+		return false; /** not a type */
 
 	if (!strncmp(data_type, "DAOS_FILTER_TYPE_BINARY", data_type_s) ||
 	    !strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s) ||
@@ -64,7 +68,7 @@ pipeline_part_chk_data_type(const char *data_type, size_t data_type_s)
 	    !strncmp(data_type, "DAOS_FILTER_TYPE_REAL8", data_type_s))
 		return true;
 
-	return false;
+	return false; /** type not recognized */
 }
 
 static int
