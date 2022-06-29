@@ -1,13 +1,8 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
   test_clients:
-    - client-G
+    - client-B
 # Hard limit the test at six hours, however individual tests have lower timeouts.
 timeout: 21600
 server_config:
@@ -17,7 +12,7 @@ server_config:
     targets: 4
     nr_xs_helpers: 0
 pool:
-  size: 12GiB
+  size: 5iB
   control_method: dmg
 container:
   type: POSIX
