@@ -127,8 +127,10 @@ class DaosServerManager(SubprocessManager):
         self.detect_start_via_dmg = False
 
         # Parameters to set storage prepare and format timeout
-        self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        default_prepare_timeout = int(os.environ.get("DAOS_STORAGE_PREPARE_TIMEOUT", 40))
+        default_format_timeout = int(os.environ.get("DAOS_STORAGE_FORMAT_TIMEOUT", 40))
+        self.storage_prepare_timeout = BasicParameter(None, default_prepare_timeout)
+        self.storage_format_timeout = BasicParameter(None, default_format_timeout)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
