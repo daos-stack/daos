@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 type testAttrDb struct {
@@ -30,10 +30,13 @@ func (db *testAttrDb) SetSystemAttrs(attrs map[string]string) error {
 	return nil
 }
 
-func (db *testAttrDb) GetSystemAttrs(keys []string) (map[string]string, error) {
+func (db *testAttrDb) GetSystemAttrs(keys []string, filterFn func(string) bool) (map[string]string, error) {
 	out := make(map[string]string)
 	if len(keys) == 0 {
 		for k, v := range db.attrs {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 		}
 		return out, nil
@@ -41,6 +44,9 @@ func (db *testAttrDb) GetSystemAttrs(keys []string) (map[string]string, error) {
 
 	for _, k := range keys {
 		if v, ok := db.attrs[k]; ok {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 			continue
 		}
@@ -78,7 +84,7 @@ func TestSystem_SetAttributes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := SetAttributes(newAttrDb(nil), tc.userAttrs)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -121,13 +127,13 @@ func TestSystem_GetAttributes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotAttrs, gotErr := GetAttributes(attrDb, tc.attrKeys)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			if diff := cmp.Diff(tc.expAttrs, gotAttrs); diff != "" {
-				t.Fatalf("unexpected attrerties (-want +got):\n%s", diff)
+				t.Fatalf("unexpected attributes (-want +got):\n%s", diff)
 			}
 		})
 	}

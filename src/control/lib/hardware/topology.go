@@ -8,8 +8,10 @@ package hardware
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
 
@@ -28,16 +30,146 @@ type (
 	// NodeMap maps a node ID to a node.
 	NodeMap map[uint]*NUMANode
 
-	// Topology is a hierarchy of hardware devices grouped under NUMA nodes.
-	Topology struct {
-		// NUMANodes is the set of NUMA nodes mapped by their ID.
-		NUMANodes NodeMap `json:"numa_nodes"`
+	// Device is the interface for a system device.
+	Device interface {
+		DeviceName() string
+		DeviceType() DeviceType
+		PCIDevice() *PCIDevice
+	}
+
+	// VirtualDevice represents a system device that is created virtually in software, and may
+	// have a real PCI hardware device associated with it.
+	VirtualDevice struct {
+		Name          string     `json:"name"`
+		Type          DeviceType `json:"type"`
+		BackingDevice *PCIDevice `json:"backing_device"`
+	}
+
+	// BlockDevice represents a block device that may be backed by a PCI device (SSD, HDD, etc)
+	// or may not (NVDIMM).
+	BlockDevice struct {
+		Type          string     `json:"type"`
+		Name          string     `json:"name"`
+		SectorSize    uint64     `json:"sector_size,omitempty"`
+		Size          uint64     `json:"size,omitempty"`
+		LinuxDeviceID string     `json:"linux_device_id,omitempty"`
+		Vendor        string     `json:"vendor,omitempty"`
+		Model         string     `json:"model,omitempty"`
+		Revision      string     `json:"revision,omitempty"`
+		SerialNumber  string     `json:"serial_number,omitempty"`
+		BackingDevice *PCIDevice `json:"backing_device,omitempty"`
 	}
 )
 
+func (d *BlockDevice) String() string {
+	var sizeStr string
+	if d.Size > 0 {
+		sizeStr = fmt.Sprintf("%s ", humanize.Bytes(d.Size))
+	}
+	return fmt.Sprintf("%s (%s%s)", d.Name, sizeStr, d.Type)
+}
+
+// AsSlice returns the node map as a sorted slice of NUMANodes.
+func (nm NodeMap) AsSlice() []*NUMANode {
+	nodes := make([]*NUMANode, 0, len(nm))
+
+	for _, node := range nm {
+		nodes = append(nodes, node)
+	}
+
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].ID < nodes[j].ID
+	})
+
+	return nodes
+}
+
+// AddPCIDevice adds a PCI device to the topology.
+func (nm NodeMap) AddPCIDevice(numaID uint, device *PCIDevice) error {
+	if nm == nil {
+		return errors.New("nil NodeMap")
+	}
+
+	numa, exists := nm[numaID]
+	if !exists {
+		return errors.Errorf("NUMA node %d does not exist", numaID)
+	}
+
+	return numa.AddDevice(device)
+}
+
+// AddBlockDevice adds a Block device to the topology.
+func (nm NodeMap) AddBlockDevice(numaID uint, device *BlockDevice) error {
+	if nm == nil {
+		return errors.New("nil NodeMap")
+	}
+
+	numa, exists := nm[numaID]
+	if !exists {
+		return errors.Errorf("NUMA node %d does not exist", numaID)
+	}
+
+	return numa.AddBlockDevice(device)
+}
+
+// DeviceName is the name of the virtual device.
+func (d *VirtualDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType is the type of the virtual device.
+func (d *VirtualDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice is the hardware device associated with the virtual device, if any.
+func (d *VirtualDevice) PCIDevice() *PCIDevice {
+	if d == nil {
+		return nil
+	}
+	return d.BackingDevice
+}
+
+// DeviceName is the name of the block device.
+func (d *BlockDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType will always return DeviceTypeBlock.
+func (d *BlockDevice) DeviceType() DeviceType {
+	return DeviceTypeBlock
+}
+
+// PCIDevice is PCI Device associated with the block device, if any.
+func (d *BlockDevice) PCIDevice() *PCIDevice {
+	if d == nil {
+		return nil
+	}
+	return d.BackingDevice
+}
+
+// Topology is a hierarchy of hardware devices grouped under NUMA nodes.
+type Topology struct {
+	// NUMANodes is the set of NUMA nodes mapped by their ID.
+	NUMANodes NodeMap `json:"numa_nodes"`
+
+	// VirtualDevices is a set of virtual devices created in software that may have a
+	// hardware backing device.
+	VirtualDevices []*VirtualDevice `json:"virtual_devices"`
+}
+
 // AllDevices returns a map of all system Devices sorted by their name.
-func (t *Topology) AllDevices() map[string]*PCIDevice {
-	devsByName := make(map[string]*PCIDevice)
+func (t *Topology) AllDevices() map[string]Device {
+	devsByName := make(map[string]Device)
 	if t == nil {
 		return devsByName
 	}
@@ -48,7 +180,17 @@ func (t *Topology) AllDevices() map[string]*PCIDevice {
 				devsByName[dev.Name] = dev
 			}
 		}
+		for _, b := range numaNode.BlockDevices {
+			if _, found := devsByName[b.Name]; !found {
+				devsByName[b.Name] = b
+			}
+		}
 	}
+
+	for _, v := range t.VirtualDevices {
+		devsByName[v.Name] = v
+	}
+
 	return devsByName
 }
 
@@ -99,6 +241,48 @@ func (t *Topology) AddDevice(numaID uint, device *PCIDevice) error {
 
 	numa.AddDevice(device)
 
+	return nil
+}
+
+// AddBlockDevice adds a device to the topology.
+func (t *Topology) AddBlockDevice(numaID uint, device *BlockDevice) error {
+	if t == nil {
+		return errors.New("nil Topology")
+	}
+
+	if device == nil {
+		return errors.New("nil BlockDevice")
+	}
+
+	if t.NUMANodes == nil {
+		t.NUMANodes = make(NodeMap)
+	}
+
+	numa, exists := t.NUMANodes[numaID]
+	if !exists {
+		numa = &NUMANode{
+			ID:    numaID,
+			Cores: []CPUCore{},
+		}
+		t.NUMANodes[numaID] = numa
+	}
+
+	numa.AddBlockDevice(device)
+
+	return nil
+}
+
+// AddVirtualDevice adds a virtual device not associated with a NUMA node to the topology.
+func (t *Topology) AddVirtualDevice(device *VirtualDevice) error {
+	if t == nil {
+		return errors.New("nil Topology")
+	}
+
+	if device == nil {
+		return errors.New("nil VirtualDevice")
+	}
+
+	t.VirtualDevices = append(t.VirtualDevices, device)
 	return nil
 }
 
@@ -182,6 +366,62 @@ func (t *Topology) Merge(newTopo *Topology) error {
 			}
 		}
 	}
+	return t.mergeVirtualDevices(newTopo)
+}
+
+func (t *Topology) mergeVirtualDevices(newTopo *Topology) error {
+	curDevices := t.AllDevices()
+
+	for _, newVirt := range newTopo.VirtualDevices {
+		if curDev, found := curDevices[newVirt.Name]; found {
+			curVirt, ok := curDev.(*VirtualDevice)
+			if !ok {
+				return errors.Errorf("virtual device %q has same name as a hardware device", newVirt.Name)
+			}
+
+			if newVirt.Type != DeviceTypeUnknown {
+				curVirt.Type = newVirt.Type
+			}
+
+			if err := mergeBackingDev(curDevices, curVirt, newVirt); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Create a new virtual device
+		toAdd := &VirtualDevice{
+			Name: newVirt.Name,
+			Type: newVirt.Type,
+		}
+		if err := mergeBackingDev(curDevices, toAdd, newVirt); err != nil {
+			return err
+		}
+		t.AddVirtualDevice(toAdd)
+	}
+
+	return nil
+}
+
+func mergeBackingDev(allDevices map[string]Device, curVirt, newVirt *VirtualDevice) error {
+	if newVirt.BackingDevice == nil {
+		return nil
+	}
+
+	backingDev, found := allDevices[newVirt.BackingDevice.Name]
+	if !found {
+		return errors.Errorf("backing device %q for virtual device %q does not exist in merged topology",
+			newVirt.BackingDevice.Name, newVirt.Name)
+	}
+
+	pciDev, ok := backingDev.(*PCIDevice)
+	if !ok {
+		return errors.Errorf("backing device %q for virtual device %q is not a PCI device",
+			newVirt.BackingDevice.Name, newVirt.Name)
+	}
+
+	curVirt.BackingDevice = pciDev
+
 	return nil
 }
 
@@ -194,10 +434,11 @@ type (
 
 	// NUMANode represents an individual NUMA node in the system and the devices associated with it.
 	NUMANode struct {
-		ID         uint       `json:"id"`
-		Cores      []CPUCore  `json:"cores"`
-		PCIBuses   []*PCIBus  `json:"pci_buses"`
-		PCIDevices PCIDevices `json:"pci_devices"`
+		ID           uint           `json:"id"`
+		Cores        []CPUCore      `json:"cores"`
+		PCIBuses     []*PCIBus      `json:"pci_buses"`
+		PCIDevices   PCIDevices     `json:"pci_devices"`
+		BlockDevices []*BlockDevice `json:"block_devices"`
 	}
 )
 
@@ -226,7 +467,7 @@ func (n *NUMANode) AddDevice(dev *PCIDevice) error {
 	n.PCIDevices.Add(dev)
 
 	for _, bus := range n.PCIBuses {
-		if bus.Contains(dev.PCIAddr) {
+		if bus.Contains(&dev.PCIAddr) {
 			return bus.AddDevice(dev)
 		}
 	}
@@ -246,6 +487,20 @@ func (n *NUMANode) AddCore(core CPUCore) error {
 	return nil
 }
 
+// AddBlockDevice adds a block device to the node.
+func (n *NUMANode) AddBlockDevice(device *BlockDevice) error {
+	if n == nil {
+		return errors.New("nil NUMANode")
+	}
+
+	if device == nil {
+		return errors.New("nil BlockDevice")
+	}
+
+	n.BlockDevices = append(n.BlockDevices, device)
+	return nil
+}
+
 // DeviceType indicates the type of a hardware device.
 type DeviceType uint
 
@@ -256,6 +511,8 @@ const (
 	DeviceTypeNetInterface
 	// DeviceTypeOFIDomain indicates an OpenFabrics domain device.
 	DeviceTypeOFIDomain
+	// DeviceTypeBlock indicates a block device.
+	DeviceTypeBlock
 )
 
 func (t DeviceType) String() string {
@@ -264,6 +521,8 @@ func (t DeviceType) String() string {
 		return "network interface"
 	case DeviceTypeOFIDomain:
 		return "OFI domain"
+	case DeviceTypeBlock:
+		return "block device"
 	}
 
 	return "unknown device type"

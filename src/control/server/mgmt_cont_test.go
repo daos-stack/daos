@@ -15,8 +15,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -44,7 +44,7 @@ func newTestListContReq() *mgmtpb.ListContReq {
 
 func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	db := raft.MockDatabase(t, log)
 	ms := system.MockMembership(t, log, db, mockTCPResolver)
@@ -57,12 +57,12 @@ func TestListCont_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, FaultHarnessNotStarted, err)
+	test.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestListCont_DrpcFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(t, log)
 	expectedErr := errors.New("mock error")
@@ -74,12 +74,12 @@ func TestListCont_DrpcFailed(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, expectedErr, err)
+	test.CmpErr(t, expectedErr, err)
 }
 
 func TestPoolListCont_BadDrpcResp(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(t, log)
 	// dRPC call returns junk in the message body
@@ -93,12 +93,12 @@ func TestPoolListCont_BadDrpcResp(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("unmarshal"), err)
+	test.CmpErr(t, errors.New("unmarshal"), err)
 }
 
 func TestListCont_ZeroContSuccess(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(t, log)
 
@@ -111,14 +111,14 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, test.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }
 
 func TestListCont_ManyContSuccess(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(t, log)
 
@@ -138,7 +138,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, test.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }
@@ -221,7 +221,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.createMS == nil {
 				tc.createMS = newTestMgmtSvc
@@ -235,8 +235,8 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 
 			resp, err := svc.ContSetOwner(context.TODO(), tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got): \n%s\n", diff)
 			}
 		})

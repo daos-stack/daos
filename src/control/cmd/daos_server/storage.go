@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -49,17 +50,10 @@ func (es *errs) add(err error) error {
 
 type nvmePrepFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
-func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error {
+func (cmd *storagePrepareCmd) prepNvme(prep nvmePrepFn, iommuEnabled bool) error {
 	if doPrep, _, err := cmd.Validate(); err != nil || !doPrep {
 		return err
 	}
-
-	op := "Prepare"
-	if cmd.Reset {
-		op = "Reset"
-	}
-
-	cmd.Info(op + " locally-attached NVMe storage...")
 
 	if cmd.TargetUser == "" {
 		runningUser, err := user.Current()
@@ -69,19 +63,48 @@ func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error 
 		cmd.TargetUser = runningUser.Username
 	}
 
-	// Prepare NVMe access through SPDK
-	if _, err := prep(storage.BdevPrepareRequest{
+	if cmd.TargetUser != "root" {
+		if cmd.DisableVFIO {
+			return errors.New("VFIO can not be disabled if running as non-root user")
+		}
+		if !iommuEnabled {
+			return errors.New("no IOMMU detected, to discover NVMe devices enable " +
+				"IOMMU per the DAOS Admin Guide")
+		}
+	}
+
+	op := "Prepare"
+	if cmd.Reset {
+		op = "Reset"
+	}
+
+	cmd.Info(op + " locally-attached NVMe storage...")
+
+	req := storage.BdevPrepareRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIAllowList:  cmd.PCIAllowList,
 		PCIBlockList:  cmd.PCIBlockList,
 		Reset_:        cmd.Reset,
-		EnableVMD:     true, // vmd will be prepared if available
-	}); err != nil {
-		return scanErrors.add(err)
+		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	return nil
+	switch {
+	case cmd.DisableVFIO:
+		cmd.Info("VMD not enabled because VFIO disabled in command options")
+	case !iommuEnabled:
+		cmd.Info("VMD not enabled because IOMMU disabled on platform")
+	default:
+		// If none of the cases above match, set enable VMD flag in request.
+		req.EnableVMD = true
+	}
+
+	cmd.Debugf("request parameters: %+v", req)
+
+	// Prepare NVMe access through SPDK
+	_, err := prep(req)
+
+	return err
 }
 
 type scmPrepFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
@@ -195,8 +218,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make(errs, 0, 2)
 
-	if err := cmd.prepNvme(&scanErrors, cmd.scs.NvmePrepare); err != nil {
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
+	if err != nil {
 		return err
+	}
+
+	if err := cmd.prepNvme(cmd.scs.NvmePrepare, iommuEnabled); err != nil {
+		scanErrors.add(err)
 	}
 
 	if err := cmd.prepScm(&scanErrors, cmd.scs.ScmPrepare); err != nil {

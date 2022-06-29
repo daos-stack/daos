@@ -354,8 +354,6 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 {
-	D_MUTEX_DESTROY(&dfc->dfs_read_mutex);
-
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -542,25 +540,41 @@ err:
 
 #define ATTR_COUNT 6
 
-char const *const
-cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
-			       "dfuse-dentry-time",
-			       "dfuse-dentry-dir-time",
-			       "dfuse-ndentry-time",
-			       "dfuse-data-cache",
-			       "dfuse-direct-io-disable"};
+char const *const cont_attr_names[ATTR_COUNT] = {
+    "dfuse-attr-time",    "dfuse-dentry-time", "dfuse-dentry-dir-time",
+    "dfuse-ndentry-time", "dfuse-data-cache",  "dfuse-direct-io-disable"};
 
-#define ATTR_TIME_INDEX		0
-#define ATTR_DENTRY_INDEX	1
-#define ATTR_DENTRY_DIR_INDEX	2
-#define ATTR_NDENTRY_INDEX	3
-#define ATTR_DATA_CACHE_INDEX	4
-#define ATTR_DIRECT_IO_DISABLE_INDEX	5
+#define ATTR_TIME_INDEX              0
+#define ATTR_DENTRY_INDEX            1
+#define ATTR_DENTRY_DIR_INDEX        2
+#define ATTR_NDENTRY_INDEX           3
+#define ATTR_DATA_CACHE_INDEX        4
+#define ATTR_DIRECT_IO_DISABLE_INDEX 5
 
 /* Attribute values are of the form "120M", so the buffer does not need to be
  * large.
  */
-#define ATTR_VALUE_LEN 128
+#define ATTR_VALUE_LEN               128
+
+static bool
+dfuse_char_enabled(char *addr, size_t len)
+{
+	if (strncasecmp(addr, "on", len) == 0)
+		return true;
+	if (strncasecmp(addr, "true", len) == 0)
+		return true;
+	return false;
+}
+
+static bool
+dfuse_char_disabled(char *addr, size_t len)
+{
+	if (strncasecmp(addr, "off", len) == 0)
+		return true;
+	if (strncasecmp(addr, "false", len) == 0)
+		return true;
+	return false;
+}
 
 /* Setup caching attributes for a container.
  *
@@ -574,16 +588,16 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-	size_t		sizes[ATTR_COUNT];
-	char		*buff;
-	char		*buff_addrs[ATTR_COUNT];
-	int		rc;
-	int		i;
-	unsigned int	value;
-	bool		have_dentry = false;
-	bool		have_dentry_dir = false;
-	bool		have_dio = false;
-	bool		have_cache_off = false;
+	size_t       sizes[ATTR_COUNT];
+	char        *buff;
+	char        *buff_addrs[ATTR_COUNT];
+	int          rc;
+	int          i;
+	unsigned int value;
+	bool         have_dentry     = false;
+	bool         have_dentry_dir = false;
+	bool         have_dio        = false;
+	bool         have_cache_off  = false;
 
 	D_ALLOC(buff, ATTR_VALUE_LEN * ATTR_COUNT);
 
@@ -591,19 +605,19 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		return ENOMEM;
 
 	for (i = 0; i < ATTR_COUNT; i++) {
-		sizes[i] = ATTR_VALUE_LEN - 1;
+		sizes[i]      = ATTR_VALUE_LEN - 1;
 		buff_addrs[i] = buff + i * ATTR_VALUE_LEN;
 	}
 
 	rc = daos_cont_get_attr(dfc->dfs_coh, ATTR_COUNT, cont_attr_names,
-				(void * const*)buff_addrs, sizes, NULL);
+				(void *const *)buff_addrs, sizes, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		/* none of the cache related attrs are present */
 		D_GOTO(out, rc = ENODATA);
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache "
-				  "related attrs" DF_RC, DP_RC(rc));
+		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache related attrs" DF_RC,
+				  DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -624,53 +638,50 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			*(buff_addrs[i] + sizes[i]) = '\0';
 
 		if (i == ATTR_DATA_CACHE_INDEX) {
-			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
+			if (dfuse_char_enabled(buff_addrs[i], sizes[i])) {
 				dfc->dfc_data_caching = true;
-			} else if (strncmp(buff_addrs[i], "off",
-				   sizes[i]) == 0) {
-				have_cache_off = true;
+				DFUSE_TRA_INFO(dfc, "setting '%s' is enabled", cont_attr_names[i]);
+			} else if (dfuse_char_disabled(buff_addrs[i], sizes[i])) {
+				have_cache_off        = true;
 				dfc->dfc_data_caching = false;
+				DFUSE_TRA_INFO(dfc, "setting '%s' is disabled", cont_attr_names[i]);
 			} else {
-				DFUSE_TRA_WARNING(dfc,
-						  "Failed to parse '%s' for '%s'",
-						  buff_addrs[i],
-						  cont_attr_names[i]);
+				DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
+						  buff_addrs[i], cont_attr_names[i]);
 				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
 		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
-			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
-				have_dio = true;
+			if (dfuse_char_enabled(buff_addrs[i], sizes[i])) {
+				have_dio                   = true;
 				dfc->dfc_direct_io_disable = true;
-			} else if (strncmp(buff_addrs[i], "off",
-				   sizes[i]) == 0) {
+				DFUSE_TRA_INFO(dfc, "setting '%s' is enabled", cont_attr_names[i]);
+			} else if (dfuse_char_disabled(buff_addrs[i], sizes[i])) {
 				dfc->dfc_direct_io_disable = false;
+				DFUSE_TRA_INFO(dfc, "setting '%s' is disabled", cont_attr_names[i]);
 			} else {
-				DFUSE_TRA_WARNING(dfc,
-						  "Failed to parse '%s' for '%s'",
-						  buff_addrs[i],
-						  cont_attr_names[i]);
-				dfc->dfc_data_caching = false;
+				DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
+						  buff_addrs[i], cont_attr_names[i]);
+				dfc->dfc_direct_io_disable = false;
 			}
 			continue;
 		}
 
 		rc = dfuse_parse_time(buff_addrs[i], sizes[i], &value);
 		if (rc != 0) {
-			DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
-					  buff_addrs[i], cont_attr_names[i]);
+			DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'", buff_addrs[i],
+					  cont_attr_names[i]);
 			continue;
 		}
-		DFUSE_TRA_INFO(dfc, "setting '%s' is %u",
-			       cont_attr_names[i], value);
+		DFUSE_TRA_INFO(dfc, "setting '%s' is %u seconds", cont_attr_names[i], value);
 		if (i == ATTR_TIME_INDEX) {
 			dfc->dfc_attr_timeout = value;
 		} else if (i == ATTR_DENTRY_INDEX) {
-			have_dentry = true;
+			have_dentry             = true;
 			dfc->dfc_dentry_timeout = value;
 		} else if (i == ATTR_DENTRY_DIR_INDEX) {
-			have_dentry_dir = true;
+			have_dentry_dir             = true;
 			dfc->dfc_dentry_dir_timeout = value;
 		} else if (i == ATTR_NDENTRY_INDEX) {
 			dfc->dfc_ndentry_timeout = value;
@@ -713,12 +724,12 @@ out:
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 {
-	dfc->dfc_attr_timeout = 1;
-	dfc->dfc_dentry_timeout = 1;
+	dfc->dfc_attr_timeout       = 1;
+	dfc->dfc_dentry_timeout     = 1;
 	dfc->dfc_dentry_dir_timeout = 5;
-	dfc->dfc_ndentry_timeout = 1;
-	dfc->dfc_data_caching = true;
-	dfc->dfc_direct_io_disable = false;
+	dfc->dfc_ndentry_timeout    = 1;
+	dfc->dfc_data_caching       = true;
+	dfc->dfc_direct_io_disable  = false;
 }
 
 /* Open a cont by label.
@@ -910,7 +921,6 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
-	D_MUTEX_INIT(&dfc->dfs_read_mutex, NULL);
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);

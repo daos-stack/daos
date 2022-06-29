@@ -671,42 +671,49 @@ vos_self_nvme_fini(void)
 }
 
 /* Storage path, NVMe config & numa node used by standalone VOS */
-#define VOS_NVME_CONF		"/etc/daos_nvme.conf"
+#define VOS_NVME_CONF		"daos_nvme.conf"
 #define VOS_NVME_NUMA_NODE	DAOS_NVME_NUMANODE_NONE
 #define VOS_NVME_MEM_SIZE	1024
 #define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init()
+vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 {
-	int rc;
-	int fd;
+	char	*nvme_conf;
+	int	 rc, fd;
+
+	D_ASSERT(vos_path != NULL);
+	D_ASPRINTF(nvme_conf, "%s/%s", vos_path, VOS_NVME_CONF);
+	if (nvme_conf == NULL)
+		return -DER_NOMEM;
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST)
-		return rc;
+		goto out;
 
 	/* Only use hugepages if NVME SSD configuration existed. */
-	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
+	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 	} else {
-		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_NUMA_NODE,
+		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 		close(fd);
 	}
 
 	if (rc)
-		return rc;
+		goto out;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, -1 /* Self poll */);
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
+out:
+	D_FREE(nvme_conf);
 	return rc;
 }
 
@@ -742,7 +749,7 @@ vos_self_fini(void)
 }
 
 int
-vos_self_init(const char *db_path)
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char	*evt_mode;
 	int	 rc = 0;
@@ -773,11 +780,14 @@ vos_self_init(const char *db_path)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_db_init(db_path, "self_db", true);
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_self_nvme_init();
+	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
 		D_GOTO(failed, rc);
 

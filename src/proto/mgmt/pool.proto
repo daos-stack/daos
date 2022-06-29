@@ -75,8 +75,8 @@ message PoolEvictResp {
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.
 message PoolExcludeReq {
 	string sys = 1; // DAOS system identifier
-	string id = 2; // uuid or label of pool to add target up to
-	uint32 rank = 3; // target to move to the up state
+	string id = 2; // uuid or label of pool to exclude some targets
+	uint32 rank = 3; // target to move to the down state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
@@ -89,8 +89,8 @@ message PoolExcludeResp {
 // PoolDrainReq supplies pool identifier, rank, and target_idxs.
 message PoolDrainReq {
 	string sys = 1; // DAOS system identifier
-	string id = 2; // uuid or label of pool to add target up to
-	uint32 rank = 3; // rank to move to the up state
+	string id = 2; // uuid or label of pool to drain some targets
+	uint32 rank = 3; // rank to move to the down state
 	repeated uint32 targetidx = 4; // rank targets
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
@@ -173,6 +173,11 @@ message PoolQueryReq {
 	bool include_disabled_ranks = 5; // True if the list of disabled ranks shall be returned
 }
 
+enum StorageMediaType {
+	SCM = 0;
+	NVME = 1;
+}
+
 // StorageUsageStats represents usage statistics for a storage subsystem.
 message StorageUsageStats {
 	uint64 total = 1;
@@ -180,7 +185,7 @@ message StorageUsageStats {
 	uint64 min = 3;
 	uint64 max = 4;
 	uint64 mean = 5;
-	uint32 media_type = 6;
+	StorageMediaType media_type = 6;
 }
 
 // PoolRebuildStatus represents a pool's rebuild status.
@@ -261,4 +266,52 @@ message PoolUpgradeReq {
 // PoolUpgradeResp returns resultant state of upgrade operation.
 message PoolUpgradeResp {
 	int32 status = 1; // DAOS error code
+}
+
+// PoolQueryTargetReq represents a pool query target(s) request.
+message PoolQueryTargetReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2;	// Pool label or UUID
+	uint32 rank = 3; // Engine rank with targets to query
+	repeated uint32 targets = 4; // indices of targets to be queried
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+}
+
+// StorageTargetUsage represent's a target's capacity and usage
+message StorageTargetUsage {
+	uint64 total = 1; // total space in bytes
+	uint64 free = 2; // free space in bytes
+	StorageMediaType  media_type = 3; // see daos_media_type_t (e.g., SCM, NVME)
+}
+
+// PoolQueryTargetInfo represents pool target query info for a single target.
+// The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
+message PoolQueryTargetInfo {
+	enum TargetType { // See enum daos_target_type_t
+		UNKNOWN = 0;
+		HDD = 1; // Rotating disk
+		SSD = 2; // Flash-based
+		PM = 3; // Persistent memory
+		VM = 4; // Volatile memory
+	}
+	TargetType type = 1; // Target type jsee enum daos_target_type_t
+
+	enum TargetState { // See enum daos_target_state_t
+		STATE_UNKNOWN = 0;
+		DOWN_OUT = 1; // Not available
+		DOWN = 2; // Not available, may need rebuild
+		UP = 3; // Up
+		UP_IN = 4; // Up and running
+		NEW = 5; // Intermediate state for pool map change
+		DRAIN = 6; // Being drained
+	}
+	TargetState state = 2; // target state see enum daos_target_state_t
+	// TODO: target performance data
+	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
+}
+
+// PoolQueryTargetResp represents a pool target query response
+message PoolQueryTargetResp {
+	int32 status = 1; // DAOS error code
+	repeated PoolQueryTargetInfo infos = 2; // Per-target information
 }

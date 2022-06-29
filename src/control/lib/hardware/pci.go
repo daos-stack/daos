@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -27,6 +28,8 @@ const (
 	// PCIAddrBusBitSize defines the number of bits used to represent bus in address.
 	PCIAddrBusBitSize = 8
 )
+
+var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
 
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
@@ -77,11 +80,11 @@ func parsePCIAddress(addr string) (dom uint16, bus, dev, fun uint8, vmdAddr *PCI
 // PCIAddress represents the address of a standard PCI device
 // or a VMD backing device.
 type PCIAddress struct {
-	VMDAddr  *PCIAddress
-	Domain   uint16 `json:"domain"`
-	Bus      uint8  `json:"bus"`
-	Device   uint8  `json:"device"`
-	Function uint8  `json:"function"`
+	VMDAddr  *PCIAddress `json:"vmd_address,omitempty"`
+	Domain   uint16      `json:"domain"`
+	Bus      uint8       `json:"bus"`
+	Device   uint8       `json:"device"`
+	Function uint8       `json:"function"`
 }
 
 func (pa *PCIAddress) FieldStrings() map[string]string {
@@ -165,8 +168,7 @@ func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
 		return nil, errors.New("PCIAddress is nil")
 	}
 	if !pa.IsVMDBackingAddress() {
-		return nil, errors.New("not a vmd backing device address")
-
+		return nil, ErrNotVMDBackingAddress
 	}
 
 	return pa.VMDAddr, nil
@@ -211,7 +213,7 @@ func (pas *PCIAddressSet) Equals(other *PCIAddressSet) bool {
 
 // Contains returns true if provided address is already in set.
 func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
-	if pas == nil {
+	if pas == nil || a == nil {
 		return false
 	}
 
@@ -220,6 +222,10 @@ func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
 }
 
 func (pas *PCIAddressSet) add(a *PCIAddress) {
+	if a == nil {
+		return
+	}
+
 	if pas.addrMap == nil {
 		pas.addrMap = make(map[string]*PCIAddress)
 	}
@@ -430,12 +436,13 @@ func NewPCIAddressSetFromString(addrs string) (*PCIAddressSet, error) {
 type (
 	// PCIDevice represents an individual hardware device.
 	PCIDevice struct {
-		Name      string     `json:"name"`
-		Type      DeviceType `json:"type"`
-		NUMANode  *NUMANode  `json:"-"`
-		Bus       *PCIBus    `json:"-"`
-		PCIAddr   PCIAddress `json:"pci_address"`
-		LinkSpeed float64    `json:"link_speed"`
+		Name        string       `json:"name"`
+		Type        DeviceType   `json:"type"`
+		NUMANode    *NUMANode    `json:"-"`
+		Bus         *PCIBus      `json:"-"`
+		PCIAddr     PCIAddress   `json:"pci_address"`
+		LinkSpeed   float64      `json:"link_speed,omitempty"`
+		BlockDevice *BlockDevice `json:"-"`
 	}
 
 	// PCIBus represents the root of a PCI bus hierarchy.
@@ -463,7 +470,7 @@ func (b *PCIBus) AddDevice(dev *PCIDevice) error {
 	if b == nil || dev == nil {
 		return errors.New("bus or device is nil")
 	}
-	if !b.Contains(dev.PCIAddr) {
+	if !b.Contains(&dev.PCIAddr) {
 		return fmt.Errorf("device %s is not on bus %s", &dev.PCIAddr, b)
 	}
 	if b.PCIDevices == nil {
@@ -477,8 +484,8 @@ func (b *PCIBus) AddDevice(dev *PCIDevice) error {
 }
 
 // Contains returns true if the given PCI address is contained within the bus.
-func (b *PCIBus) Contains(addr PCIAddress) bool {
-	if b == nil {
+func (b *PCIBus) Contains(addr *PCIAddress) bool {
+	if b == nil || addr == nil {
 		return false
 	}
 
@@ -510,7 +517,32 @@ func (d *PCIDevice) String() string {
 	if d.LinkSpeed > 0 {
 		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
 	}
-	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
+	var sizeStr string
+	if d.BlockDevice != nil {
+		sizeStr = fmt.Sprintf("%s ", humanize.Bytes(d.BlockDevice.Size))
+	}
+	return fmt.Sprintf("%s %s (%s%s)%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr)
+}
+
+// DeviceName returns the system name of the PCI device.
+func (d *PCIDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType returns the type of PCI device.
+func (d *PCIDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice returns a pointer to itself.
+func (d *PCIDevice) PCIDevice() *PCIDevice {
+	return d
 }
 
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
@@ -544,4 +576,17 @@ func (d PCIDevices) Keys() []*PCIAddress {
 		}
 	}
 	return set.Addresses()
+}
+
+// Get returns the devices for the given PCI address.
+func (d PCIDevices) Get(addr *PCIAddress) []*PCIDevice {
+	if d == nil || addr == nil {
+		return nil
+	}
+
+	if devs, found := d[*addr]; found {
+		return devs
+	}
+
+	return nil
 }

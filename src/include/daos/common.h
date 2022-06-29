@@ -615,6 +615,7 @@ daos_quiet_error(int err)
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
+#define daos_rank_list_merge		d_rank_list_merge
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_shuffle		d_rank_list_shuffle
