@@ -295,15 +295,14 @@ DEFINE_ARITHFUNC_DIV(d, double)
 	{                                                                                          \
 		_##ctype left  = (_##ctype)0;                                                      \
 		_##ctype right = (_##ctype)0;                                                      \
-		int      rc    = 0;                                                                \
+		int      rc;                                                                       \
 		rc = filter_func_getdata_##type(args, &left);                                      \
 		if (unlikely(rc != 0))                                                             \
-			D_GOTO(exit, rc);                                                          \
+			return rc;                                                                 \
 		rc = filter_func_getdata_##type(args, &right);                                     \
 		if (unlikely(rc != 0))                                                             \
-			D_GOTO(exit, rc);                                                          \
+			return rc;                                                                 \
 		rc = arithfunc_##op##_##type(left, right, &args->value_##type##_out);              \
-exit:                                                                                              \
 		return rc;                                                                         \
 	}
 
@@ -325,15 +324,14 @@ DEFINE_FILTER_FUNC_ARITH(div, d, double)
 	{                                                                                          \
 		_##ctype left  = 0;                                                                \
 		_##ctype right = 0;                                                                \
-		int      rc    = 0;                                                                \
+		int      rc;                                                                       \
 		rc = filter_func_getdata_##type(args, &left);                                      \
 		if (unlikely(rc != 0))                                                             \
-			D_GOTO(exit, rc);                                                          \
+			return rc;                                                                 \
 		rc = filter_func_getdata_##type(args, &right);                                     \
 		if (unlikely(rc != 0))                                                             \
-			D_GOTO(exit, rc);                                                          \
+			return rc;                                                                 \
 		args->value_##type##_out = left & right;                                           \
-exit:                                                                                              \
 		return rc;                                                                         \
 	}
 
