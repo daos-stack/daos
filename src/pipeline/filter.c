@@ -68,6 +68,11 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 	sgl_agg->sg_nr_out = pipeline->num_aggr_filters;
 }
 
+/**
+ * calculates the subindex of a function in filter_func_ptrs[] given its index calculated with the
+ * function calc_type_idx(). There is only 4 types if we don't consider the size: unsigned int,
+ * signed int, double and string.
+ */
 static uint32_t
 calc_type_nosize_idx(uint32_t idx)
 {
@@ -80,6 +85,10 @@ calc_type_nosize_idx(uint32_t idx)
 	return 3;
 }
 
+/**
+ * calculates the index of a type: this is used to point to the right function in the get data func
+ * ptrs defined above.
+ */
 static uint32_t
 calc_type_idx(char *type, size_t type_len)
 {
@@ -111,6 +120,11 @@ calc_type_idx(char *type, size_t type_len)
 		return 12;
 }
 
+/**
+ * calculates the index of function class: this is used to point to the right function in the filter
+ * func ptrs defined above. The space between function classes is there for the different types.
+ * For example, there is 4 EQ functions (unsigned int, signed int, doubles, and strings).
+ */
 static uint32_t
 calc_filterfunc_idx(daos_filter_part_t **parts, uint32_t idx)
 {
@@ -120,6 +134,7 @@ calc_filterfunc_idx(daos_filter_part_t **parts, uint32_t idx)
 	part_type   = (char *)parts[idx]->part_type.iov_buf;
 	part_type_s = parts[idx]->part_type.iov_len;
 
+	/** TODO: This could probably be done better with a FOREACH macro. */
 	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s))
 		return 0;
