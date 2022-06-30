@@ -8,7 +8,7 @@ def build_dpar(env, mpi_env):
     serial_lib = daos_build.library(env, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     env.Install('$PREFIX/lib64/', serial_lib)
 
-    if mpi_env is None:
+    if not mpi_env:
         return
 
     denv = mpi_env.Clone()
