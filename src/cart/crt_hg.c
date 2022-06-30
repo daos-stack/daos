@@ -404,6 +404,7 @@ out:
 }
 
 /* some simple helper functions */
+typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
 static inline int
 crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb, crt_proc_cb_t out_proc_cb,
 	   crt_hg_rpc_cb_t rpc_cb)
