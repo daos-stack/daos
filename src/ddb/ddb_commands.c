@@ -619,3 +619,130 @@ ddb_run_smd_sync(struct ddb_ctx *ctx)
 	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
+
+struct dump_vea_cb_args {
+	struct ddb_ctx *dva_ctx;
+	uint32_t	dva_count;
+};
+
+static int
+dump_vea_cb(void *cb_arg, struct vea_free_extent *vfe)
+{
+	struct dump_vea_cb_args *args = cb_arg;
+
+	ddb_printf(args->dva_ctx, "[Region %d] offset: %lu, block count: %d, age: %d\n",
+		   args->dva_count,
+		   vfe->vfe_blk_off,
+		   vfe->vfe_blk_cnt,
+		   vfe->vfe_age);
+
+	args->dva_count++;
+	return 0;
+}
+
+int
+ddb_run_dump_vea(struct ddb_ctx *ctx)
+{
+	struct dump_vea_cb_args args = {.dva_ctx = ctx, .dva_count = 0};
+	int			rc;
+
+	rc = dv_enumerate_vea(ctx->dc_poh, dump_vea_cb, &args);
+
+	ddb_printf(ctx, "Total Free Regions: %d\n", args.dva_count);
+
+	return rc;
+}
+
+static int
+parse_uint32_t(char *str)
+{
+	uint32_t result = atoi(str);
+	char	 verify_str[32];
+
+	snprintf(verify_str, ARRAY_SIZE(verify_str), "%d", result);
+
+	if (strcmp(str, verify_str) == 0)
+		return result;
+
+	return -DER_INVAL;
+
+}
+
+struct update_vea_verify_region_cb_args {
+	struct ddb_ctx		*ctx;
+	struct vea_free_extent	 potential_extent;
+};
+
+/**
+ *
+ * @param n - new extent to insert or update
+ * @param e - existing extent
+ * @return
+ */
+static bool
+vfe_overlap(struct vea_free_extent *n, struct vea_free_extent *e)
+{
+	uint64_t a_lo = n->vfe_blk_off;
+	uint64_t a_hi = n->vfe_blk_off + n->vfe_blk_cnt - 1;
+	uint64_t b_lo = e->vfe_blk_off;
+	uint64_t b_hi = e->vfe_blk_off + e->vfe_blk_cnt - 1;
+
+	return !(a_hi < b_lo || a_lo > b_hi);
+}
+
+static int
+update_vea_verify_region_cb(void *cb_arg, struct vea_free_extent *vfe)
+{
+	struct update_vea_verify_region_cb_args *args = cb_arg;
+
+	if (vfe_overlap(vfe, &args->potential_extent)) {
+		ddb_errorf(args->ctx, "New free region {%lu, %d} overlaps with {%lu, %d}\n",
+			   args->potential_extent.vfe_blk_off,
+			   args->potential_extent.vfe_blk_cnt,
+			   vfe->vfe_blk_off, vfe->vfe_blk_cnt);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+static int
+verify_free(struct ddb_ctx *ctx, uint64_t offset, uint32_t blk_cnt)
+{
+	struct update_vea_verify_region_cb_args args = {0};
+
+	args.potential_extent.vfe_blk_off = offset;
+	args.potential_extent.vfe_blk_cnt = blk_cnt;
+	args.ctx = ctx;
+	return dv_enumerate_vea(ctx->dc_poh, update_vea_verify_region_cb, &args);
+}
+
+int
+ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
+{
+	uint64_t				offset;
+	uint32_t				blk_cnt;
+	int					rc;
+
+	offset = parse_uint32_t(opt->offset);
+	if (offset <= 0) {
+		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
+		return -DER_INVAL;
+	}
+	blk_cnt = parse_uint32_t(opt->blk_cnt);
+	if (blk_cnt <= 0) {
+		ddb_errorf(ctx, "'%s' is not a valid block size\n", opt->blk_cnt);
+		return -DER_INVAL;
+	}
+
+	rc = verify_free(ctx, offset, blk_cnt);
+	if (!SUCCESS(rc))
+		return rc;
+
+	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
+	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
+	if (!SUCCESS(rc))
+		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}

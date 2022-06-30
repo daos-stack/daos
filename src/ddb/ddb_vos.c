@@ -14,7 +14,6 @@
 #include "ddb_parse.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
-
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
@@ -1633,6 +1632,63 @@ dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args)
 
 	smd_fini();
 	vos_db_fini();
+
+	return rc;
+}
+
+struct vea_cb_args {
+	dv_vea_extent_handler	 vca_cb;
+	void			*vca_cb_args;
+};
+
+static int
+vea_free_extent_cb(void *cb_arg, struct vea_free_extent *vfe)
+{
+	struct vea_cb_args	*args = cb_arg;
+
+	if (args->vca_cb)
+		return args->vca_cb(args->vca_cb_args, vfe);
+
+	return 0;
+}
+
+int
+dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg)
+{
+	struct vea_cb_args	 args = {.vca_cb = cb, .vca_cb_args = cb_arg};
+	struct vos_pool		*pool;
+	struct vea_space_info	*vsi;
+	int			 rc;
+
+	pool = vos_hdl2pool(poh);
+	vsi = pool->vp_vea_info;
+	if (vsi == NULL)
+		return -DER_NONEXIST;
+
+	rc = vea_enumerate_free(vsi, vea_free_extent_cb, &args);
+	if (!SUCCESS(rc))
+		D_ERROR("vea_enumerate_free failed: "DF_RC"\n", DP_RC(rc));
+	return rc;
+}
+
+int
+dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt)
+{
+	struct vos_pool		*pool;
+	struct vea_space_info	*vsi;
+	int			 rc;
+
+	if (offset == 0)
+		return -DER_INVAL;
+
+	pool = vos_hdl2pool(poh);
+	vsi = pool->vp_vea_info;
+	if (vsi == NULL)
+		return -DER_NONEXIST;
+
+	rc = vea_free(vsi, offset, blk_cnt);
+	if (!SUCCESS(rc))
+		D_ERROR("vea_free error: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
