@@ -54,3 +54,5 @@ job_manager: !mux
         test_macsio_daos_vol: 20
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
+daos_server:
+  pattern_timeout: 360

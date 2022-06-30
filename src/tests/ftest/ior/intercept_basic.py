@@ -33,3 +33,4 @@ class IorInterceptBasic(IorInterceptTestBase):
         :avocado: tags=ior_intercept_basic
         """
         self.run_il_perf_check()
+

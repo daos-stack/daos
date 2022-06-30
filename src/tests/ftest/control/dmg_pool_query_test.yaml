@@ -80,3 +80,5 @@ pool_uuids:
       # special_alphanumeric_chars
       - "abc-=*12----1@3c-4%DE-&5_,0+.k"
       - "FAIL"
+daos_server:
+    pattern_timeout: 360

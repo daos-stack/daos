@@ -82,3 +82,5 @@ ior:
       - "EC_8P2G1"
       - "EC_8P2G8"
       - "EC_8P2GX"
+daos_server:
+      pattern_timeout: 360

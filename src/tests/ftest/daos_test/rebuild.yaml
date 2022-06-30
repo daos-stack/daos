@@ -125,3 +125,5 @@ daos_tests:
     test_rebuild_12to15: 5
     test_rebuild_18: 5
     test_rebuild_28: 2
+daos_server:
+    pattern_timeout: 360
