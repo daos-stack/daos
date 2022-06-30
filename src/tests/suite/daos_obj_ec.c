@@ -1351,7 +1351,8 @@ ec_singv_overwrite(void **state)
 static void
 ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint32_t new_len)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
 	d_iov_t		 dkey;
@@ -1367,6 +1368,10 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 	uint16_t	 fail_shards[2];
 	uint64_t	 fail_val;
 	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
@@ -1498,6 +1503,8 @@ deg_test:
 
 	D_FREE(buf);
 	D_FREE(fetch_buf);
+
+	test_teardown((void **)&arg);
 }
 
 static void
