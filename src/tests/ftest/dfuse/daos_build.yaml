@@ -12,7 +12,7 @@ server_config:
     targets: 4
     nr_xs_helpers: 0
 pool:
-  size: 5iB
+  size: 5GiB
   control_method: dmg
 container:
   type: POSIX
