@@ -178,6 +178,8 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 		return nil, err
 	}
 
+	mod.log.Debugf("provider idx: %d", resp.ClientNetHint.ProviderIdx)
+
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
 	// knows what they're doing.

@@ -1266,7 +1266,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[7] =
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8] =
 {
   {
     "provider",
@@ -1352,6 +1352,18 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[7
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "provider_idx",
+    8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, provider_idx),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
   3,   /* field[3] = crt_ctx_share_addr */
@@ -1360,12 +1372,13 @@ static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
   1,   /* field[1] = interface */
   5,   /* field[5] = net_dev_class */
   0,   /* field[0] = provider */
+  7,   /* field[7] = provider_idx */
   6,   /* field[6] = srv_srx_set */
 };
 static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
 {
@@ -1375,7 +1388,7 @@ const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
   "Mgmt__ClientNetHint",
   "mgmt",
   sizeof(Mgmt__ClientNetHint),
-  7,
+  8,
   mgmt__client_net_hint__field_descriptors,
   mgmt__client_net_hint__field_indices_by_name,
   1,  mgmt__client_net_hint__number_ranges,
@@ -1481,7 +1494,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     offsetof(Mgmt__GetAttachInfoResp, ms_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

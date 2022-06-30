@@ -79,7 +79,8 @@ message ClientNetHint {
 	uint32 crt_timeout = 5;		// CaRT CRT_TIMEOUT
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
-	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+	int32 srv_srx_set = 7;		// Server SRX setting (-1, 0, 1; -1 == unset)
+	uint32 provider_idx = 8;	// Provider index - anything > 0 is a secondary provider
 }
 
 message GetAttachInfoResp {
