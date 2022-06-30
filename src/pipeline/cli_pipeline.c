@@ -207,7 +207,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		part             = api_args->pipeline->aggr_filters[i]->parts[0];
 		part_type        = (char *)part->part_type.iov_buf;
 
-		length_part_type = 20; /**
+		length_part_type = strlen("DAOS_FILTER_FUNC_XXX");
+					/**
 					* XXX: we can do this because all function names
 					* are the same length. Change this in the future
 					* if needed.
