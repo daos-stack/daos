@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl,
 		      position,	&read_size, NULL);
 	if (rc) {
-		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_read() failed: %d", rc);
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_read() failed: %d (%s)", rc, strerror(rc));
 		*errcode = rc;
 		return -1;
 	}
