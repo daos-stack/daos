@@ -1,3 +1,4 @@
+"""SCons Tools for useful features"""
 # Copyright 2018-2022 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,7 +19,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-"""SCons Tools for useful features"""
 
 
 # pylint: disable=unused-import
