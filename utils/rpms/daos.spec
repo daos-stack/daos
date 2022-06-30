@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       13%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -519,6 +519,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/jobtest
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
+%{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
 %files client-tests-openmpi
@@ -562,9 +563,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Jun 17 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-13
-- Remove libdts.so, replace with build time static
-
 * Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-12
 - Make ucx required for build on all platforms
 
