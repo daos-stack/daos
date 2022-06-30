@@ -178,11 +178,12 @@ drpc_notify_ready(void)
 	if (nr_sec_uris > 0) {
 		D_ALLOC_ARRAY(sec_uris, nr_sec_uris);
 		if (sec_uris == NULL)
-			goto out_uri;
+			D_GOTO(out_uri, rc = -DER_NOMEM);
 		for (i = 0; i < nr_sec_uris; i++) {
-			rc = crt_self_uri_get_secondary(0, &sec_uris[i]);
+			rc = crt_self_uri_get_secondary(i, &sec_uris[i]);
 			if (rc != 0) {
-				D_ERROR("failed to get secondary provider URI, rc=%d", rc);
+				D_ERROR("failed to get secondary provider URI, idx=%d, rc=%d",
+					i, rc);
 				nr_sec_uris = i;
 				goto out_sec_uri;
 			}
