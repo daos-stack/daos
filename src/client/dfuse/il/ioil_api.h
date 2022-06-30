@@ -22,7 +22,7 @@ enum dfuse_bypass_status {
 			      */
 	DFUSE_IO_DIS_RSRC,   /* Bypass is disabled due to lack of resources in interception library
 			      */
-	DFUSE_IO_DIS_IOERR,  /* Bypass is disabled becasue of I/O errors on the file handle */
+	DFUSE_IO_DIS_IOERR,  /* Bypass is disabled because of I/O errors on the file handle */
 };
 
 /** Return a value indicating the status of the file with respect to
