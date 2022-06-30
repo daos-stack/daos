@@ -66,7 +66,6 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
 static inline bool
 crt_na_type_is_ucx(int na_type)
 {
-
 	return (na_type >= CRT_NA_UCX_RC) &&
 	       (na_type < CRT_NA_COUNT);
 }
@@ -177,6 +176,8 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
+	case HG_BUSY:
+		return -DER_BUSY;
 	default:
 		return -DER_HG;
 	};
@@ -198,31 +199,14 @@ crt_der_2_hgret(int der)
 		return HG_NOMEM;
 	case -DER_CANCELED:
 		return HG_CANCELED;
+	case -DER_BUSY:
+		return HG_BUSY;
 	default:
 		return HG_OTHER_ERROR;
 	};
 }
 
-/* some simple helper functions */
 typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
-static inline int
-crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
-	   crt_proc_cb_t out_proc_cb, crt_hg_rpc_cb_t rpc_cb)
-{
-	hg_return_t hg_ret;
-	int         rc = 0;
-
-	D_ASSERT(hg_class != NULL);
-
-	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
-			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n",
-			rpcid, hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-	return rc;
-}
 
 static inline int
 crt_hg_bulk_free(crt_bulk_t bulk_hdl)
