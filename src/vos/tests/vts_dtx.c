@@ -127,7 +127,7 @@ vts_dtx_end(struct dtx_handle *dth)
 	vos_dtx_rsrvd_fini(dth);
 	vos_dtx_detach(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
-	D_FREE_PTR(dth);
+	D_FREE(dth);
 }
 
 static void
@@ -857,7 +857,7 @@ dtx_18(void **state)
 static int
 dtx_tst_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
 	return 0;
 }
 

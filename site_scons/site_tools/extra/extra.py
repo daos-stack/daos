@@ -39,7 +39,7 @@ MIN_FORMAT_VERSION = 12
 
 
 def _supports_custom_format(clang_exe):
-    """Checks if the version of clang-foramt is new enough to parse the settings used by
+    """Checks if the version of clang-format is new enough to parse the settings used by
     the config file"""
 
     try:
@@ -93,19 +93,6 @@ def _find_indent():
     return f'{indent} --style={style}'
 
 
-def _pp_gen(source, target, env, indent):
-    """generate commands for preprocessor builder"""
-    action = []
-    nenv = env.Clone()
-    cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
-    for src, tgt in zip(source, target):
-        if indent:
-            action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
-        else:
-            action.append(f'{cccom} -E -P {src} > {tgt}')
-    return action
-
-
 def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
@@ -122,7 +109,7 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        newtarget = os.path.join(dirname, f'{prefix}{base}_{ext}')
+        newtarget = os.path.join(dirname, f'{prefix}{base}_pp{ext}')
         target.append(newtarget)
     return target, source
 
@@ -150,18 +137,28 @@ def generate(env):
 
     indent = _find_indent()
 
-    # In order to pass the indent function to the generator and only execute _find_indent
-    # once, we create a lambda function to wrap our own that takes indent as argument.
-    pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
-                                                                      indent)  # noqa
+    # pylint: disable-next=unused-argument
+    def _pp_gen(source, target, env, for_signature):
+        """generate commands for preprocessor builder"""
+        action = []
+        cccom = env.subst("$CCCOM").replace(" -o ", " ")
+        for src, tgt in zip(source, target):
+            if indent:
+                action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
+            else:
+                action.append(f'{cccom} -E -P {src} > {tgt}')
+        return action
 
     # Only handle C for now
-    preprocess = Builder(generator=pp_generator, emitter=_preprocess_emitter)
+    preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
-    env.Append(BUILDERS={"Preprocess": preprocess})
-    env.Append(BUILDERS={"CheckHeader": check_header})
+    if not env["BUILDERS"].get("Preprocess", False):
+        env.Append(BUILDERS={"Preprocess": preprocess})
+
+    if not env["BUILDERS"].get("CheckHeader", False):
+        env.Append(BUILDERS={"CheckHeader": check_header})
 
 
 def exists(_env):

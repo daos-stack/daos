@@ -112,7 +112,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, 0);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -788,5 +788,5 @@ dtx_resync_ult(void *data)
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
 	ds_pool_put(pool);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }

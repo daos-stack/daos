@@ -49,8 +49,6 @@ def scons():
     Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     # For Common library and headers.
-    env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
-    base_env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     # Generic DAOS includes
@@ -110,9 +108,6 @@ def scons():
 
     # Build DAOS client libraries
     SConscript('client/SConscript')
-
-    # Build the common test code that requires client library
-    SConscript('common/SConscript.test')
 
     # Build cart utilities library
     SConscript('cart/utils/SConscript')
