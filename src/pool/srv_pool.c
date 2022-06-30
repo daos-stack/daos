@@ -2356,7 +2356,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (handler_version > 0) {
 		struct pool_connect_1_in *in1 = (struct pool_connect_1_in *)in;
 
-		if (in1->pci_pool_version <= DAOS_PROP_PO_GLOBAL_VERSION) {
+		if (in1->pci_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
 			if (global_ver > pool_max_supported_version[in1->pci_pool_version]) {
 				D_ERROR(DF_UUID": cannot connect, try to upgrade client firstly?\n",
 					DP_UUID(in->pci_op.pi_uuid));
