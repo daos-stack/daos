@@ -1184,7 +1184,7 @@ disable_file:
 			errno = EIO;
 		return -1;
 	}
-	DFUSE_TRA_WARNING(entry->fd_dfsoh, "Disabling interception on I/O error");
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on I/O error");
 	entry->fd_status = DFUSE_IO_DIS_IOERR;
 	vector_decref(&fd_table, entry);
 	/* Fall through and do the read */
