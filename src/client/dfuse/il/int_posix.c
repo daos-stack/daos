@@ -1988,15 +1988,6 @@ do_real_fclose:
 	return __real_fclose(stream);
 }
 
-void
-memdump(char *ptr, int len)
-{
-	int i;
-
-	for (i = 0; i < len; i++)
-		DFUSE_TRA_INFO(ptr, "data is %d", ptr[i]);
-}
-
 DFUSE_PUBLIC size_t
 dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
@@ -2014,8 +2005,6 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (fd == -1)
 		goto do_real_fread;
 
-	DFUSE_TRA_INFO(stream, "performing fread of %#zx %#zx", size, nmemb);
-
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_fread;
@@ -2023,7 +2012,8 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx", entry->fd_pos);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "performing fread of %#zx %#zx from %#zx", size, nmemb,
+			entry->fd_pos);
 
 	len     = nmemb * size;
 
@@ -2047,24 +2037,12 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	vector_decref(&fd_table, entry);
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "performed %#zx reads", nread);
-
-#if 0
-	memdump(ptr, nread * size);
-#endif
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "performed %#zx reads", nread);
 
 	return nread;
 
 do_real_fread:
-	nread = __real_fread(ptr, size, nmemb, stream);
-
-	DFUSE_TRA_INFO(stream, "performed %#zx reads", nread);
-
-#if 0
-	memdump(ptr, nread * size);
-#endif
-
-	return nread;
+	return __real_fread(ptr, size, nmemb, stream);
 }
 
 DFUSE_PUBLIC size_t
@@ -2098,7 +2076,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (counter < ioil_iog.iog_report_count)
 		__real_fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
 	oldpos        = entry->fd_pos;
 	bytes_written = ioil_do_writex(ptr, len, oldpos, entry, &errcode);
 	if (bytes_written > 0) {
