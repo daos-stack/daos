@@ -540,8 +540,8 @@ umem_tx_end(struct umem_instance *umm, int err)
 		if ((umm)->umm_ops->mo_defer_free)                                                 \
 			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
 		else                                                                               \
-			/** Go ahead and free immediately.  The purpose of this function           \
-			 *  is to allow reserve/publish pair to execute on commit                  \
+			/** Go ahead and free immediately.  The purpose of this function
+			 *  is to allow reserve/publish pair to execute on commit
 			 */                                                                        \
 			umem_free(umm, off);                                                       \
 	} while (0)
