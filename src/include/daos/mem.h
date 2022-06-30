@@ -523,7 +523,6 @@ umem_tx_end(struct umem_instance *umm, int err)
 #define umem_reserve(umm, act, size)                                                               \
 	({                                                                                         \
 		umem_off_t __umoff = UMOFF_NULL;                                                   \
-                                                                                                   \
 		if (umm->umm_ops->mo_reserve)                                                      \
 			__umoff = (umm)->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);       \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
@@ -540,8 +539,8 @@ umem_tx_end(struct umem_instance *umm, int err)
 		if ((umm)->umm_ops->mo_defer_free)                                                 \
 			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
 		else                                                                               \
-			/** Go ahead and free immediately.  The purpose of this function
-			 *  is to allow reserve/publish pair to execute on commit
+			/** Go ahead and free immediately.  The purpose of this function           \
+			 *  is to allow reserve/publish pair to execute on commit                  \
 			 */                                                                        \
 			umem_free(umm, off);                                                       \
 	} while (0)
