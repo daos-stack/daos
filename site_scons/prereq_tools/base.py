@@ -27,7 +27,6 @@
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
-from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
@@ -499,6 +498,7 @@ def check_flag_helper(context, compiler, ext, flag):
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
+        # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
         # options to the compiler even if it doesn't understand them but.  This would be tricky
@@ -581,9 +581,9 @@ def ensure_dir_exists(dirname, dry_run):
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
+
 # pylint: disable=too-many-public-methods
-
-
+# pylint: disable-next=function-redefined
 class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
@@ -592,7 +592,7 @@ class PreReqComponent():
     to allow compilation from from multiple systems in one source tree
     """
 
-# pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches
 
     def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
@@ -1480,7 +1480,7 @@ class _Component():
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if (not self.use_installed and self.component_prefix is not None
-                                   and not self.component_prefix == "/usr"):
+           and not self.component_prefix == "/usr"):
             path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
