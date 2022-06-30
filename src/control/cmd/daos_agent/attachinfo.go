@@ -20,8 +20,9 @@ import (
 type dumpAttachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
-	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
-	JSON   bool   `short:"j" long:"json" description:"Enable JSON output"`
+	Output      string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
+	JSON        bool   `short:"j" long:"json" description:"Enable JSON output"`
+	ProviderIdx uint   `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
@@ -55,6 +56,11 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return err
 	}
 
+	ranks, err := getServiceRanksForProviderIdx(resp, int(cmd.ProviderIdx))
+	if err != nil {
+		return err
+	}
+
 	/**
 	 * cart/crt_group.c:crt_group_config_save()
 	 *
@@ -78,24 +84,37 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	 */
 	ew := txtfmt.NewErrWriter(out)
 	fmt.Fprintf(ew, "name %s\n", cmd.cfg.SystemName)
-	fmt.Fprintf(ew, "size %d\n", len(resp.ServiceRanks))
+	fmt.Fprintf(ew, "size %d\n", len(ranks))
 	fmt.Fprintln(ew, "all")
-	fmt.Fprintf(ew, "primary provider: %s\n", resp.ClientNetHint.Provider)
-	for _, psr := range resp.ServiceRanks {
+	for _, psr := range ranks {
 		fmt.Fprintf(ew, "%d %s\n", psr.Rank, psr.Uri)
-	}
-	if len(resp.AlternateClientNetHints) > 0 {
-		fmt.Fprintln(ew, "secondary providers:")
-		for _, hint := range resp.AlternateClientNetHints {
-			fmt.Fprintf(ew, "%s\n", hint.Provider)
-		}
-	}
-	if len(resp.AlternateServiceRanks) > 0 {
-		fmt.Fprintln(ew, "secondary provider ranks:")
-		for _, psr := range resp.AlternateServiceRanks {
-			fmt.Fprintf(ew, "%s: %d %s\n", psr.Provider, psr.Rank, psr.Uri)
-		}
 	}
 
 	return ew.Err
+}
+
+func getServiceRanksForProviderIdx(inResp *control.GetAttachInfoResp, idx int) ([]*control.PrimaryServiceRank, error) {
+	if idx == 0 {
+		// Primary provider
+		return inResp.ServiceRanks, nil
+	}
+
+	secIdx := idx - 1
+	if secIdx < 0 || secIdx >= len(inResp.AlternateClientNetHints) {
+		return nil, errors.Errorf("provider index must be in range 0 <= idx <= %d", len(inResp.AlternateClientNetHints))
+	}
+
+	hint := inResp.AlternateClientNetHints[secIdx]
+	ranks := make([]*control.PrimaryServiceRank, 0)
+	for _, r := range inResp.AlternateServiceRanks {
+		if r.Provider == hint.Provider {
+			ranks = append(ranks, r)
+		}
+	}
+
+	if len(ranks) == 0 {
+		return nil, errors.Errorf("no ranks for provider %q (idx %d)", hint.Provider, idx)
+	}
+
+	return ranks, nil
 }
