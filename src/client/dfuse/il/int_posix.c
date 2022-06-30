@@ -2017,12 +2017,8 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	DFUSE_TRA_INFO(stream, "performing fread of %#zx %#zx", size, nmemb);
 
 	rc = vector_get(&fd_table, fd, &entry);
-	if (rc != 0) {
-		off_t offset = ftello(stream);
-
-		DFUSE_TRA_INFO(stream, "forwarding fread from %#zx", offset);
+	if (rc != 0)
 		goto do_real_fread;
-	}
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
@@ -2053,7 +2049,9 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	DFUSE_TRA_INFO(entry->fd_dfsoh, "performed %#zx reads", nread);
 
+#if 0
 	memdump(ptr, nread * size);
+#endif
 
 	return nread;
 
@@ -2062,7 +2060,9 @@ do_real_fread:
 
 	DFUSE_TRA_INFO(stream, "performed %#zx reads", nread);
 
+#if 0
 	memdump(ptr, nread * size);
+#endif
 
 	return nread;
 }
