@@ -74,7 +74,7 @@ struct tse_task_private {
 	 */
 	uint16_t			 dtp_stack_top;
 	uint16_t			 dtp_embed_top;
-	/* generation of the task, +1 every time when task re-init */
+	/* generation of the task, +1 every time when task re-init or add dependent task */
 	ATOMIC uint32_t			 dtp_generation;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
