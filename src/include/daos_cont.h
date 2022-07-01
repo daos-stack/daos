@@ -13,11 +13,11 @@
 #define __DAOS_CONT_H__
 
 /** Please ignore (code for back-compatibility) */
-#define daos_cont_open daos_cont_open2
+#define daos_cont_open    daos_cont_open2
 /** Please ignore (code for back-compatibility) */
 #define daos_cont_destroy daos_cont_destroy2
 /** Please ignore (code for back-compatibility) */
-#define daos_cont_create daos_cont_create2
+#define daos_cont_create  daos_cont_create2
 
 #if defined(__cplusplus)
 extern "C" {
@@ -26,39 +26,39 @@ extern "C" {
 #include <daos_security.h>
 
 /** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
-#define DAOS_COO_RO		(1U << 0)
+#define DAOS_COO_RO     (1U << 0)
 
 /** Opens the container for reading and writing. This flag conflicts with DAOS_COO_RO. */
-#define DAOS_COO_RW		(1U << 1)
+#define DAOS_COO_RW     (1U << 1)
 
 /** Disables the automatic epoch slip at epoch commit time. See daos_epoch_commit(). */
-#define DAOS_COO_NOSLIP		(1U << 2)
+#define DAOS_COO_NOSLIP (1U << 2)
 
 /** Skips the check to see if the pool meets the redundancy factor/level requirements of the
  * container.
  */
-#define DAOS_COO_FORCE		(1U << 3)
+#define DAOS_COO_FORCE  (1U << 3)
 
 /** Number of bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_NBITS	(4)
+#define DAOS_COO_NBITS  (4)
 
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
+#define DAOS_COO_MASK   ((1U << DAOS_COO_NBITS) - 1)
 
 /** Container information */
 typedef struct {
 	/** Container UUID */
-	uuid_t			ci_uuid;
+	uuid_t       ci_uuid;
 	/** Epoch of latest persistent snapshot */
-	daos_epoch_t		ci_lsnapshot;
+	daos_epoch_t ci_lsnapshot;
 	/** Redundancy factor */
-	uint32_t		ci_redun_fac;
+	uint32_t     ci_redun_fac;
 	/** Number of snapshots */
-	uint32_t		ci_nsnapshots;
+	uint32_t     ci_nsnapshots;
 	/** Redundancy level */
-	uint32_t		ci_redun_lvl;
+	uint32_t     ci_redun_lvl;
 	/** Container information pad (not used) */
-	uint32_t		ci_pad[3];
+	uint32_t     ci_pad[3];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -74,7 +74,8 @@ typedef struct {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *
+daos_rank_list_parse(const char *str, const char *sep);
 
 /**
  * Convert a local container handle to global representation data which can be
@@ -171,9 +172,8 @@ daos_cont_create(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_e
  *			-DER_UNREACH	network is unreachable
  */
 int
-daos_cont_create_with_label(daos_handle_t poh, const char *label,
-			    daos_prop_t *cont_prop, uuid_t *uuid,
-			    daos_event_t *ev);
+daos_cont_create_with_label(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
+			    uuid_t *uuid, daos_event_t *ev);
 
 /**
  * Open an existing container identified by \a cont, a label or UUID string.
@@ -278,8 +278,8 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
-		daos_prop_t *cont_prop, daos_event_t *ev);
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info, daos_prop_t *cont_prop,
+		daos_event_t *ev);
 
 /**
  * Query the container Access Control List and ownership properties.
@@ -357,8 +357,7 @@ daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev);
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
-			daos_event_t *ev);
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
 
 /**
  * Add new entries and/or update existing entries in a container's ACL.
@@ -404,8 +403,8 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
  *			-DER_NONEXIST	Principal is not in the ACL
  */
 int
-daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
-		     d_string_t name, daos_event_t *ev);
+daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type, d_string_t name,
+		     daos_event_t *ev);
 
 /**
  * Update a container's owner user and/or owner group.
@@ -426,8 +425,7 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
  *			-DER_NOMEM	Out of memory
  */
 int
-daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
-		    daos_event_t *ev);
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.
@@ -446,8 +444,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size,
-		    daos_event_t *ev);
+daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size, daos_event_t *ev);
 
 /**
  * Retrieve a list of user-defined container attribute values.
@@ -468,8 +465,8 @@ daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
-		   void *const buffers[], size_t sizes[], daos_event_t *ev);
+daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[], void *const buffers[],
+		   size_t sizes[], daos_event_t *ev);
 
 /**
  * Create or update a list of user-defined container attributes.
@@ -484,9 +481,8 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
-		   void const *const values[], size_t const sizes[],
-		   daos_event_t *ev);
+daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[], void const *const values[],
+		   size_t const sizes[], daos_event_t *ev);
 
 /**
  * Delete a list of user-defined container attributes.
@@ -507,8 +503,7 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
  *			-DER_NOMEM	Out of memory
  */
 int
-daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
-		   daos_event_t *ev);
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[], daos_event_t *ev);
 
 /**
  * Allocate a unique set of 64 bit unsigned integers to be used for object ID
@@ -533,8 +528,7 @@ daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
-		     daos_event_t *ev);
+daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid, daos_event_t *ev);
 
 /**
  * Trigger aggregation to specified epoch
@@ -595,15 +589,14 @@ daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
-		      daos_event_t *ev);
+daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name, daos_event_t *ev);
 
 /** snapshot create flag options */
 enum daos_snapshot_opts {
 	/** create snapshot */
-	DAOS_SNAP_OPT_CR	= (1 << 0),
+	DAOS_SNAP_OPT_CR = (1 << 0),
 	/** create OI table for a snapshot */
-	DAOS_SNAP_OPT_OIT	= (1 << 1),
+	DAOS_SNAP_OPT_OIT = (1 << 1),
 };
 
 /**
@@ -645,8 +638,8 @@ daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
-		    char **names, daos_anchor_t *anchor, daos_event_t *ev);
+daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs, char **names,
+		    daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
  * Destroy a snapshot. The epoch corresponding to the snapshot is not
@@ -662,8 +655,7 @@ daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
-		       daos_event_t *ev);
+daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

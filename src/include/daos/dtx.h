@@ -15,10 +15,10 @@
  * threshould with considering RPC limitation, PMDK transaction, and
  * CPU schedule efficiency, and so on.
  */
-#define DTX_THRESHOLD_COUNT		(1 << 9)
+#define DTX_THRESHOLD_COUNT      (1 << 9)
 
 /* The time (in second) threshold for batched DTX commit. */
-#define DTX_COMMIT_THRESHOLD_AGE	10
+#define DTX_COMMIT_THRESHOLD_AGE 10
 
 /*
  * VOS aggregation should try to avoid aggregating in the epoch range where
@@ -29,30 +29,30 @@
  * update/fetch with epoch lower than the aggregation upper bound should be
  * rejected and restarted.
  */
-#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
+#define DAOS_AGG_THRESHOLD       (DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 enum dtx_target_flags {
 	/* The target only contains read-only operations for the DTX. */
-	DTF_RDONLY			= (1 << 0),
+	DTF_RDONLY = (1 << 0),
 };
 
 enum dtx_grp_flags {
 	/* The group only contains read-only operations for the DTX. */
-	DGF_RDONLY			= (1 << 0),
+	DGF_RDONLY = (1 << 0),
 };
 
 enum dtx_mbs_flags {
 	/* The targets modified via the DTX belong to replicated object
 	 * within single redundancy group.
 	 */
-	DMF_SRDG_REP			= (1 << 0),
+	DMF_SRDG_REP = (1 << 0),
 	/* The MBS contains the leader information, used for distributed
 	 * transaction. For stand-alone modification, leader information
 	 * is not stored inside MBS as optimization.
 	 */
-	DMF_CONTAIN_LEADER		= (1 << 1),
+	DMF_CONTAIN_LEADER = (1 << 1),
 	/* The dtx_memberships::dm_tgts is sorted against target ID. */
-	DMF_SORTED_TGT_ID		= (1 << 2),
+	DMF_SORTED_TGT_ID = (1 << 2),
 	/* The dtx_memberships::dm_tgts is sorted against shard index.
 	 * For most of cases, shard index matches the shard ID. But during
 	 * shard migration, there may be some temporary shards in related
@@ -60,7 +60,7 @@ enum dtx_mbs_flags {
 	 * in the object layout, but the shard index is unique. So we use
 	 * shard index to sort the dtx_memberships::dm_tgts.
 	 */
-	DMF_SORTED_SAD_IDX		= (1 << 3),
+	DMF_SORTED_SAD_IDX = (1 << 3),
 };
 
 /**
@@ -68,12 +68,12 @@ enum dtx_mbs_flags {
  */
 struct dtx_daos_target {
 	/* Globally target ID, corresponding to pool_component::co_id. */
-	uint32_t			ddt_id;
+	uint32_t ddt_id;
 	union {
 		/* For distributed transaction, see dtx_target_flags. */
-		uint32_t		ddt_flags;
+		uint32_t ddt_flags;
 		/* For standalong modification. */
-		uint32_t		ddt_shard;
+		uint32_t ddt_shard;
 	};
 };
 
@@ -106,7 +106,7 @@ struct dtx_daos_target {
  */
 struct dtx_redundancy_group {
 	/* How many touched shards in this group. */
-	uint32_t			drg_tgt_cnt;
+	uint32_t drg_tgt_cnt;
 
 	/* The degree of redundancy. For EC based group, it is equal to the
 	 * count of parity nodes + 1. For replicated one, it is the same as
@@ -115,49 +115,49 @@ struct dtx_redundancy_group {
 	 * If all the shards 'drg_ids[0 - drg_redundancy - 1]' are lost,
 	 * then the group is regarded as unavailable.
 	 */
-	uint16_t			drg_redundancy;
+	uint16_t drg_redundancy;
 
 	/* See dtx_grp_flags. */
-	uint16_t			drg_flags;
+	uint16_t drg_flags;
 
 	/* The shards' IDs, corresponding to pool_component::co_id. For the
 	 * leader group that is the first in dtx_memberships, 'drg_index[0]'
 	 * is for the leader, the other 'drg_index[1 - drg_redundancy - 1]'
 	 * are the leader candidates for DTX recovery.
 	 */
-	uint32_t			drg_ids[0];
+	uint32_t drg_ids[0];
 };
 
 struct dtx_memberships {
 	/* How many touched shards in the DTX. */
-	uint32_t			dm_tgt_cnt;
+	uint32_t dm_tgt_cnt;
 
 	/* How many modification groups in the DTX. For standalone modification,
 	 * be as optimization, we will not store modification group information
 	 * inside 'dm_data'. Similarly for the distributed transaction that all
 	 * the touched targets are in the same redundancy group.
 	 */
-	uint32_t			dm_grp_cnt;
+	uint32_t dm_grp_cnt;
 
 	/* sizeof(dm_data). */
-	uint32_t			dm_data_size;
+	uint32_t dm_data_size;
 
 	/* see dtx_mbs_flags. */
-	uint16_t			dm_flags;
+	uint16_t dm_flags;
 
 	union {
 		/* DTX entry flags during DTX recovery. */
-		uint16_t		dm_dte_flags;
+		uint16_t dm_dte_flags;
 		/* For alignment. */
-		uint16_t		dm_padding;
+		uint16_t dm_padding;
 	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
 	 * dtx_daos_target array. The subsequent are modification groups.
 	 */
 	union {
-		char			dm_data[0];
-		struct dtx_daos_target	dm_tgts[0];
+		char                   dm_data[0];
+		struct dtx_daos_target dm_tgts[0];
 	};
 };
 
@@ -167,13 +167,15 @@ struct dtx_memberships {
  */
 struct dtx_id {
 	/** The uuid of the transaction */
-	uuid_t			dti_uuid;
+	uuid_t   dti_uuid;
 	/** The HLC timestamp (not epoch) of the transaction */
-	uint64_t		dti_hlc;
+	uint64_t dti_hlc;
 };
 
-void daos_dti_gen_unique(struct dtx_id *dti);
-void daos_dti_gen(struct dtx_id *dti, bool zero);
+void
+daos_dti_gen_unique(struct dtx_id *dti);
+void
+daos_dti_gen(struct dtx_id *dti, bool zero);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
@@ -196,19 +198,19 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }
 
-#define DF_DTI		DF_UUID"."DF_X64
-#define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
+#define DF_DTI      DF_UUID "." DF_X64
+#define DP_DTI(dti) DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {
-	DAOS_INTENT_DEFAULT		= 0, /* fetch/enumerate/query */
-	DAOS_INTENT_PURGE		= 1, /* purge/aggregation */
-	DAOS_INTENT_UPDATE		= 2, /* write/insert */
-	DAOS_INTENT_PUNCH		= 3, /* punch/delete */
-	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
-	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
-	DAOS_INTENT_KILL		= 6, /* delete object/key */
-	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
-	DAOS_INTENT_DISCARD		= 8, /* discard data */
+	DAOS_INTENT_DEFAULT             = 0, /* fetch/enumerate/query */
+	DAOS_INTENT_PURGE               = 1, /* purge/aggregation */
+	DAOS_INTENT_UPDATE              = 2, /* write/insert */
+	DAOS_INTENT_PUNCH               = 3, /* punch/delete */
+	DAOS_INTENT_MIGRATION           = 4, /* for migration related scan */
+	DAOS_INTENT_CHECK               = 5, /* check aborted or not */
+	DAOS_INTENT_KILL                = 6, /* delete object/key */
+	DAOS_INTENT_IGNORE_NONCOMMITTED = 7, /* ignore non-committed DTX. */
+	DAOS_INTENT_DISCARD             = 8, /* discard data */
 };
 
 /**
@@ -216,28 +218,28 @@ enum daos_ops_intent {
  */
 enum dtx_status {
 	/* DTX is pre-allocated, not prepared yet. */
-	DTX_ST_INITED		= 0,
+	DTX_ST_INITED = 0,
 	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
+	DTX_ST_PREPARED = 1,
 	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
+	DTX_ST_COMMITTED = 2,
 	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 3,
+	DTX_ST_CORRUPTED = 3,
 	/** The DTX is committable, but not committed, non-persistent status. */
-	DTX_ST_COMMITTABLE	= 4,
+	DTX_ST_COMMITTABLE = 4,
 	/** The DTX is aborted. */
-	DTX_ST_ABORTED		= 5,
+	DTX_ST_ABORTED = 5,
 };
 
 enum daos_dtx_alb {
 	/* unavailable case */
-	ALB_UNAVAILABLE		= 0,
+	ALB_UNAVAILABLE = 0,
 	/* available, no (or not care) pending modification */
-	ALB_AVAILABLE_CLEAN	= 1,
+	ALB_AVAILABLE_CLEAN = 1,
 	/* available but with dirty modification */
-	ALB_AVAILABLE_DIRTY	= 2,
+	ALB_AVAILABLE_DIRTY = 2,
 	/* available, aborted or garbage */
-	ALB_AVAILABLE_ABORTED	= 3,
+	ALB_AVAILABLE_ABORTED = 3,
 };
 
 static inline unsigned int
@@ -258,26 +260,26 @@ dtx_alb2state(int alb)
 }
 
 enum daos_tx_flags {
-	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */
+	DTF_RETRY_COMMIT = 1, /* TX commit will be retry. */
 };
 
 /** Epoch context of a DTX */
 struct dtx_epoch {
 	/** epoch */
-	daos_epoch_t		oe_value;
+	daos_epoch_t oe_value;
 	/** first epoch chosen */
-	daos_epoch_t		oe_first;
+	daos_epoch_t oe_first;
 	/** such as DTX_EPOCH_UNCERTAIN, etc. */
-	uint32_t		oe_flags;
+	uint32_t     oe_flags;
 	union {
-		uint32_t	oe_padding;
+		uint32_t oe_padding;
 		/** see 'obj_rpc_flags' when it is transferred on wire. */
-		uint32_t	oe_rpc_flags;
+		uint32_t oe_rpc_flags;
 	};
 };
 
 /* dtx_epoch.oe_flags */
-#define DTX_EPOCH_UNCERTAIN	(1U << 0)	/**< oe_value is uncertain */
+#define DTX_EPOCH_UNCERTAIN (1U << 0) /**< oe_value is uncertain */
 
 /** Does \a epoch contain a chosen TX epoch? */
 static inline bool

@@ -15,7 +15,7 @@
 #include <daos/object.h>
 
 #define DAOS_RAS_STR_FIELD_SIZE 128
-#define DAOS_RAS_ID_FIELD_SIZE 64
+#define DAOS_RAS_ID_FIELD_SIZE  64
 
 /**
  * For each RAS event, define the following:
@@ -35,27 +35,24 @@
  *   * Don't arbitrarily reorder entries
  *   * Do limit lines to 73 columns, wrapping as necessary
  */
-#define RAS_EVENT_LIST							\
-	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
-	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")	\
-	X(RAS_ENGINE_DIED,		"engine_died")			\
-	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
-	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
-	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
-	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
-	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
-	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
-	X(RAS_POOL_DF_INCOMPAT,						\
-	  "pool_durable_format_incompatible")				\
-	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")	\
-	X(RAS_CONT_DF_INCOMPAT,						\
-	  "container_durable_format_incompatible")			\
-	X(RAS_RDB_DF_INCOMPAT,						\
-	  "rdb_durable_format_incompatible")				\
-	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
-	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")		\
-	X(RAS_SYSTEM_STOP_FAILED,	"system_stop_failed")
+#define RAS_EVENT_LIST                                                                             \
+	X(RAS_UNKNOWN_EVENT, "unknown_ras_event")                                                  \
+	X(RAS_ENGINE_FORMAT_REQUIRED, "engine_format_required")                                    \
+	X(RAS_ENGINE_DIED, "engine_died")                                                          \
+	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
+	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
+	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
+	X(RAS_POOL_REBUILD_FAILED, "pool_rebuild_failed")                                          \
+	X(RAS_POOL_REPS_UPDATE, "pool_replicas_updated")                                           \
+	X(RAS_POOL_DF_INCOMPAT, "pool_durable_format_incompatible")                                \
+	X(RAS_POOL_DEFER_DESTROY, "pool_destroy_deferred")                                         \
+	X(RAS_CONT_DF_INCOMPAT, "container_durable_format_incompatible")                           \
+	X(RAS_RDB_DF_INCOMPAT, "rdb_durable_format_incompatible")                                  \
+	X(RAS_SWIM_RANK_ALIVE, "swim_rank_alive")                                                  \
+	X(RAS_SWIM_RANK_DEAD, "swim_rank_dead")                                                    \
+	X(RAS_SYSTEM_START_FAILED, "system_start_failed")                                          \
+	X(RAS_SYSTEM_STOP_FAILED, "system_stop_failed")
 
 /** Define RAS event enum */
 typedef enum {
@@ -66,8 +63,11 @@ typedef enum {
 
 /** Extract RAS event ID (= 64-char string) from enum */
 static inline char *
-ras_event2str(ras_event_t ras) {
-#define X(a, b) case a: return b;
+ras_event2str(ras_event_t ras)
+{
+#define X(a, b)                                                                                    \
+	case a:                                                                                    \
+		return b;
 	switch (ras) {
 		RAS_EVENT_LIST
 	};
@@ -77,7 +77,7 @@ ras_event2str(ras_event_t ras) {
 
 typedef enum {
 	/* ANY is a special case to match all types */
-	RAS_TYPE_ANY	= 0,
+	RAS_TYPE_ANY = 0,
 	RAS_TYPE_STATE_CHANGE,
 	RAS_TYPE_INFO,
 } ras_type_t;
@@ -134,10 +134,9 @@ ras_sev2str(ras_sev_t severity)
  * \retval		N/A
  */
 void __attribute__((weak))
-ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-		    char *hwid, d_rank_t *rank, uint64_t *inc, char *jobid,
-		    uuid_t *pool, uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
-		    char *data);
+ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
+		    d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool, uuid_t *cont,
+		    daos_obj_id_t *objid, char *ctlop, char *data);
 
 /**
  * A printf-style message-formatting wrapper for ds_notify_ras_event. If the
@@ -146,10 +145,9 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  * documentation.
  */
 void __attribute__((weak, __format__(__printf__, 13, 14)))
-ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
-		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
-		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
-		     const char *fmt, ...);
+ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid, d_rank_t *rank,
+		     uint64_t *inc, char *jobid, uuid_t *pool, uuid_t *cont, daos_obj_id_t *objid,
+		     char *ctlop, char *data, const char *fmt, ...);
 
 /**
  * Notify control plane of an update to a pool's service replicas and wait for

@@ -15,7 +15,7 @@
  * limits the addressing of user extents to the lower 63 bits of the offset
  * range.
  */
-#define DAOS_EC_PARITY_BIT	(1ULL << 63)
+#define DAOS_EC_PARITY_BIT (1ULL << 63)
 
 /**
  * XXX old class IDs
@@ -28,30 +28,30 @@ enum {
 	DAOS_OC_TINY_RW,
 	DAOS_OC_SMALL_RW,
 	DAOS_OC_LARGE_RW,
-	DAOS_OC_R2S_RW,		/* class for testing */
-	DAOS_OC_R2_RW,		/* class for testing */
-	DAOS_OC_R2_MAX_RW,	/* class for testing */
-	DAOS_OC_R3S_RW,		/* class for testing */
-	DAOS_OC_R3_RW,		/* class for testing */
-	DAOS_OC_R3_MAX_RW,	/* class for testing */
-	DAOS_OC_R4S_RW,		/* class for testing */
-	DAOS_OC_R4_RW,		/* class for testing */
-	DAOS_OC_R4_MAX_RW,	/* class for testing */
+	DAOS_OC_R2S_RW,    /* class for testing */
+	DAOS_OC_R2_RW,     /* class for testing */
+	DAOS_OC_R2_MAX_RW, /* class for testing */
+	DAOS_OC_R3S_RW,    /* class for testing */
+	DAOS_OC_R3_RW,     /* class for testing */
+	DAOS_OC_R3_MAX_RW, /* class for testing */
+	DAOS_OC_R4S_RW,    /* class for testing */
+	DAOS_OC_R4_RW,     /* class for testing */
+	DAOS_OC_R4_MAX_RW, /* class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_R1S_RW,	/* Echo class, 1 replica single stripe */
-	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
-	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
-	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
-	DAOS_OC_R1S_SPEC_RANK,	/* 1 replica with specified rank */
-	DAOS_OC_R2S_SPEC_RANK,	/* 2 replica start with specified rank */
-	DAOS_OC_R3S_SPEC_RANK,	/* 3 replica start with specified rank.
-				 * These 3 XX_SPEC are mostly for testing
-				 * purpose.
-				 */
+	DAOS_OC_ECHO_R1S_RW,   /* Echo class, 1 replica single stripe */
+	DAOS_OC_ECHO_R2S_RW,   /* Echo class, 2 replica single stripe */
+	DAOS_OC_ECHO_R3S_RW,   /* Echo class, 3 replica single stripe */
+	DAOS_OC_ECHO_R4S_RW,   /* Echo class, 4 replica single stripe */
+	DAOS_OC_R1S_SPEC_RANK, /* 1 replica with specified rank */
+	DAOS_OC_R2S_SPEC_RANK, /* 2 replica start with specified rank */
+	DAOS_OC_R3S_SPEC_RANK, /* 3 replica start with specified rank.
+				* These 3 XX_SPEC are mostly for testing
+				* purpose.
+				*/
 };
 
 /* Temporarily keep it to minimize change, remove it in the future */
-#define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
+#define DAOS_OC_ECHO_TINY_RW DAOS_OC_ECHO_R1S_RW
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -74,11 +74,11 @@ daos_obj_is_srank(daos_obj_id_t oid)
 
 enum {
 	/* smallest cell size */
-	DAOS_EC_CELL_MIN	= (4 << 10),
+	DAOS_EC_CELL_MIN = (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (64 << 10),
+	DAOS_EC_CELL_DEF = (64 << 10),
 	/* largest cell size */
-	DAOS_EC_CELL_MAX	= (1024 << 10),
+	DAOS_EC_CELL_MAX = (1024 << 10),
 };
 
 static inline bool
@@ -107,14 +107,14 @@ daos_rp_pda_valid(uint32_t rp_pda)
 }
 
 enum daos_io_mode {
-	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
-	DIM_SERVER_DISPATCH	= 1,
-	DIM_CLIENT_DISPATCH	= 2,
+	DIM_DTX_FULL_ENABLED = 0, /* by default */
+	DIM_SERVER_DISPATCH  = 1,
+	DIM_CLIENT_DISPATCH  = 2,
 };
 
-#define DAOS_OBJ_GRP_MAX	MAX_NUM_GROUPS
-#define DAOS_OBJ_REPL_MAX	MAX_NUM_GROUPS
-#define DAOS_OBJ_RESIL_MAX	MAX_NUM_GROUPS
+#define DAOS_OBJ_GRP_MAX   MAX_NUM_GROUPS
+#define DAOS_OBJ_REPL_MAX  MAX_NUM_GROUPS
+#define DAOS_OBJ_RESIL_MAX MAX_NUM_GROUPS
 
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
@@ -122,73 +122,73 @@ enum daos_io_mode {
  */
 typedef struct {
 	/** Public section, high level object ID */
-	daos_obj_id_t		id_pub;
+	daos_obj_id_t id_pub;
 	/** Private section, object shard identifier */
-	uint32_t		id_shard;
+	uint32_t      id_shard;
 	/** Padding */
-	uint32_t		id_pad_32;
+	uint32_t      id_pad_32;
 } daos_unit_oid_t;
 
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
-	daos_obj_id_t		omd_id;
-	uint32_t		omd_ver;
+	daos_obj_id_t omd_id;
+	uint32_t      omd_ver;
 	/* Fault domain level - PO_COMP_TP_RANK, or PO_COMP_TP_RANK. If it is zero then will
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
-	uint32_t		omd_fdom_lvl;
+	uint32_t      omd_fdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
 struct daos_obj_shard_md {
 	/** ID of the object shard */
-	daos_unit_oid_t		smd_id;
-	uint64_t		smd_attr;
-	uint32_t		smd_po_ver;
-	uint32_t		smd_padding;
+	daos_unit_oid_t smd_id;
+	uint64_t        smd_attr;
+	uint32_t        smd_po_ver;
+	uint32_t        smd_padding;
 };
 
 struct daos_shard_loc {
-	uint32_t	sd_rank;
-	uint32_t	sd_tgt_idx;
+	uint32_t sd_rank;
+	uint32_t sd_tgt_idx;
 };
 
 /**
  * object layout information.
  **/
 struct daos_obj_shard {
-	uint32_t		os_replica_nr;
-	struct daos_shard_loc	os_shard_loc[0];
+	uint32_t              os_replica_nr;
+	struct daos_shard_loc os_shard_loc[0];
 };
 
 struct daos_obj_layout {
-	uint32_t		 ol_ver;
-	uint32_t		 ol_class;
-	uint32_t		 ol_nr;
-	struct daos_obj_shard	*ol_shards[0];
+	uint32_t               ol_ver;
+	uint32_t               ol_class;
+	uint32_t               ol_nr;
+	struct daos_obj_shard *ol_shards[0];
 };
 
 /**
  * can be used as st_rank to indicate target can be ignored for IO, for example
  * update DAOS_OBJ_REPL_MAX obj with some target failed case.
  */
-#define DAOS_TGT_IGNORE		((d_rank_t)-1)
+#define DAOS_TGT_IGNORE ((d_rank_t)-1)
 
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
-	DTF_DELAY_FORWARD	= (1 << 0),
+	DTF_DELAY_FORWARD = (1 << 0),
 };
 
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
-	uint32_t		st_rank;	/* rank of the shard */
-	uint32_t		st_shard;	/* shard index */
-	uint32_t		st_shard_id;	/* shard id */
-	uint32_t		st_tgt_id;	/* target id */
-	uint16_t		st_tgt_idx;	/* target xstream index */
+	uint32_t st_rank;     /* rank of the shard */
+	uint32_t st_shard;    /* shard index */
+	uint32_t st_shard_id; /* shard id */
+	uint32_t st_tgt_id;   /* target id */
+	uint16_t st_tgt_idx;  /* target xstream index */
 	/* Target idx for EC obj, only used for client, consider OBJ_EC_MAX_M, 8-bits is enough. */
-	uint8_t			st_ec_tgt;
-	uint8_t			st_flags;	/* see daos_tgt_flags */
+	uint8_t  st_ec_tgt;
+	uint8_t  st_flags; /* see daos_tgt_flags */
 };
 
 static inline bool
@@ -216,44 +216,48 @@ daos_oid_cmp(daos_obj_id_t a, daos_obj_id_t b)
 static inline bool
 daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
 {
-	return daos_oid_cmp(oid1.id_pub, oid2.id_pub) == 0 &&
-	       oid1.id_shard == oid2.id_shard;
+	return daos_oid_cmp(oid1.id_pub, oid2.id_pub) == 0 && oid1.id_shard == oid2.id_shard;
 }
 
 struct pl_obj_layout;
 
-int obj_class_init(void);
-void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
-					       uint32_t *nr_grps);
-int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
-int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
-			      daos_oclass_id_t cid, uint32_t args);
-unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
-unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
-				struct daos_obj_md *md);
-int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-			enum daos_obj_redun *ord, uint32_t *nr);
-bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-				   daos_oclass_hints_t hints, uint32_t args);
-#define daos_oclass_grp_off_by_shard(oca, shard)				\
-	(rounddown(shard, daos_oclass_grp_size(oca)))
+int
+obj_class_init(void);
+void
+obj_class_fini(void);
+struct daos_oclass_attr *
+daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps);
+int
+daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
+int
+daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type, daos_oclass_id_t cid,
+			  uint32_t args);
+unsigned int
+daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
+unsigned int
+daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md);
+int
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
+		    uint32_t *nr);
+bool
+daos_oclass_is_valid(daos_oclass_id_t oc_id);
+daos_oclass_id_t
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+		    uint32_t args);
+#define daos_oclass_grp_off_by_shard(oca, shard) (rounddown(shard, daos_oclass_grp_size(oca)))
 
 /** bits for the specified rank */
-#define DAOS_OC_SR_SHIFT	24
-#define DAOS_OC_SR_BITS		8
-#define DAOS_OC_SR_MASK		\
-	(((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
+#define DAOS_OC_SR_SHIFT                         24
+#define DAOS_OC_SR_BITS                          8
+#define DAOS_OC_SR_MASK                          (((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
 
 /** bits for the specified target, Note: the target here means the target
  * index inside the rank, and it only reserve 4 bits, so only specify 16th
  * target maximum.
  */
-#define DAOS_OC_ST_SHIFT	20
-#define DAOS_OC_ST_BITS		4
-#define DAOS_OC_ST_MASK		\
-	(((1ULL << DAOS_OC_ST_BITS) - 1) << DAOS_OC_ST_SHIFT)
+#define DAOS_OC_ST_SHIFT                         20
+#define DAOS_OC_ST_BITS                          4
+#define DAOS_OC_ST_MASK                          (((1ULL << DAOS_OC_ST_BITS) - 1) << DAOS_OC_ST_SHIFT)
 
 static inline d_rank_t
 daos_oclass_sr_get_rank(daos_obj_id_t oid)
@@ -299,9 +303,8 @@ daos_oclass_is_ec(struct daos_oclass_attr *oca)
 }
 
 static inline void
-daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
-		 enum daos_obj_redun ord, uint32_t nr_grps,
-		 uint32_t args)
+daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type, enum daos_obj_redun ord,
+		 uint32_t nr_grps, uint32_t args)
 {
 	uint64_t hdr;
 
@@ -315,14 +318,13 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 	 * | OID_FMT_MD_BITS (object metadata)	 |
 	 * | 96-bit for API user ...		 |
 	 */
-	hdr  = ((uint64_t)type << OID_FMT_TYPE_SHIFT);
+	hdr = ((uint64_t)type << OID_FMT_TYPE_SHIFT);
 	hdr |= ((uint64_t)ord << OID_FMT_CLASS_SHIFT);
 	if (nr_grps > MAX_NUM_GROUPS)
 		nr_grps = MAX_NUM_GROUPS;
 	hdr |= ((uint64_t)nr_grps << OID_FMT_META_SHIFT);
 	oid->hi |= hdr;
 }
-
 
 /* check if an object ID is OIT (Object ID Table) */
 static inline bool
@@ -372,8 +374,8 @@ is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 static inline daos_obj_id_t
 daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
 {
-	enum daos_obj_redun	ord;
-	daos_obj_id_t		oid = {0};
+	enum daos_obj_redun ord;
+	daos_obj_id_t       oid = {0};
 
 	switch (cont_rf) {
 	case DAOS_PROP_CO_REDUN_RF0:
@@ -426,58 +428,95 @@ daos_unit_oid_compare(daos_unit_oid_t a, daos_unit_oid_t b)
 	return 0;
 }
 
-int daos_obj_layout_free(struct daos_obj_layout *layout);
-int daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
-			  uint32_t grp_size);
-int daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
-			struct daos_obj_layout **layout);
+int
+daos_obj_layout_free(struct daos_obj_layout *layout);
+int
+daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr, uint32_t grp_size);
+int
+daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid, struct daos_obj_layout **layout);
 
-int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
-void daos_iods_free(daos_iod_t *iods, int nr, bool free);
-daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
+int
+daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
+void
+daos_iods_free(daos_iod_t *iods, int nr, bool free);
+daos_size_t
+daos_iods_len(daos_iod_t *iods, int nr);
 
-int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
-				daos_obj_id_t *oid, enum daos_otype_t type,
-				daos_oclass_id_t cid, daos_oclass_hints_t hints,
-				uint32_t args);
+int
+daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor, daos_obj_id_t *oid,
+			    enum daos_otype_t type, daos_oclass_id_t cid, daos_oclass_hints_t hints,
+			    uint32_t args);
 
-int dc_obj_init(void);
-void dc_obj_fini(void);
+int
+dc_obj_init(void);
+void
+dc_obj_fini(void);
 
-int dc_obj_register_class(tse_task_t *task);
-int dc_obj_query_class(tse_task_t *task);
-int dc_obj_list_class(tse_task_t *task);
-int dc_obj_open(tse_task_t *task);
-int dc_obj_close(tse_task_t *task);
-int dc_obj_punch_task(tse_task_t *task);
-int dc_obj_punch_dkeys_task(tse_task_t *task);
-int dc_obj_punch_akeys_task(tse_task_t *task);
-int dc_obj_query(tse_task_t *task);
-int dc_obj_query_key(tse_task_t *task);
-int dc_obj_sync(tse_task_t *task);
-int dc_obj_fetch_task(tse_task_t *task);
-int dc_obj_update_task(tse_task_t *task);
-int dc_obj_list_dkey(tse_task_t *task);
-int dc_obj_list_akey(tse_task_t *task);
-int dc_obj_list_rec(tse_task_t *task);
-int dc_obj_list_obj(tse_task_t *task);
-int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
-int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
-int dc_obj_layout_refresh(daos_handle_t oh);
-int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
-daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
-int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
+int
+dc_obj_register_class(tse_task_t *task);
+int
+dc_obj_query_class(tse_task_t *task);
+int
+dc_obj_list_class(tse_task_t *task);
+int
+dc_obj_open(tse_task_t *task);
+int
+dc_obj_close(tse_task_t *task);
+int
+dc_obj_punch_task(tse_task_t *task);
+int
+dc_obj_punch_dkeys_task(tse_task_t *task);
+int
+dc_obj_punch_akeys_task(tse_task_t *task);
+int
+dc_obj_query(tse_task_t *task);
+int
+dc_obj_query_key(tse_task_t *task);
+int
+dc_obj_sync(tse_task_t *task);
+int
+dc_obj_fetch_task(tse_task_t *task);
+int
+dc_obj_update_task(tse_task_t *task);
+int
+dc_obj_list_dkey(tse_task_t *task);
+int
+dc_obj_list_akey(tse_task_t *task);
+int
+dc_obj_list_rec(tse_task_t *task);
+int
+dc_obj_list_obj(tse_task_t *task);
+int
+dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
+int
+dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
+int
+dc_obj_layout_refresh(daos_handle_t oh);
+int
+dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
+daos_handle_t
+dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int
+dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 
-int dc_tx_open(tse_task_t *task);
-int dc_tx_commit(tse_task_t *task);
-int dc_tx_abort(tse_task_t *task);
-int dc_tx_open_snap(tse_task_t *task);
-int dc_tx_close(tse_task_t *task);
-int dc_tx_restart(tse_task_t *task);
-int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
-		     uint32_t flags, daos_handle_t *th);
-int dc_tx_local_close(daos_handle_t th);
-int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
+int
+dc_tx_open(tse_task_t *task);
+int
+dc_tx_commit(tse_task_t *task);
+int
+dc_tx_abort(tse_task_t *task);
+int
+dc_tx_open_snap(tse_task_t *task);
+int
+dc_tx_close(tse_task_t *task);
+int
+dc_tx_restart(tse_task_t *task);
+int
+dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch, uint32_t flags, daos_handle_t *th);
+int
+dc_tx_local_close(daos_handle_t th);
+int
+dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
@@ -495,23 +534,23 @@ dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 
 enum daos_io_flags {
 	/* The RPC will be sent to leader replica. */
-	DIOF_TO_LEADER		= 0x1,
+	DIOF_TO_LEADER = 0x1,
 	/* The RPC will be sent to specified replica. */
-	DIOF_TO_SPEC_SHARD	= 0x2,
+	DIOF_TO_SPEC_SHARD = 0x2,
 	/* The operation (enumeration) has specified epoch. */
-	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	DIOF_WITH_SPEC_EPOCH = 0x4,
 	/* The operation is for EC recovering. */
-	DIOF_EC_RECOV		= 0x8,
+	DIOF_EC_RECOV = 0x8,
 	/* The key existence. */
-	DIOF_CHECK_EXISTENCE	= 0x10,
+	DIOF_CHECK_EXISTENCE = 0x10,
 	/* The RPC will be sent to specified redundancy group. */
-	DIOF_TO_SPEC_GROUP	= 0x20,
+	DIOF_TO_SPEC_GROUP = 0x20,
 	/* For data migration. */
-	DIOF_FOR_MIGRATION	= 0x40,
+	DIOF_FOR_MIGRATION = 0x40,
 	/* For EC aggregation. */
-	DIOF_FOR_EC_AGG		= 0x80,
+	DIOF_FOR_EC_AGG = 0x80,
 	/* The operation is for EC snapshot recovering */
-	DIOF_EC_RECOV_SNAP	= 0x100,
+	DIOF_EC_RECOV_SNAP = 0x100,
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
@@ -533,45 +572,45 @@ enum {
 	OBJ_ITER_OBJ_PUNCH_EPOCH,
 };
 
-#define RECX_INLINE	(1U << 0)
+#define RECX_INLINE (1U << 0)
 
 struct obj_enum_rec {
-	daos_recx_t		rec_recx;
-	daos_epoch_range_t	rec_epr;
-	uint64_t		rec_size;
-	uint32_t		rec_version;
-	uint32_t		rec_flags;
+	daos_recx_t        rec_recx;
+	daos_epoch_range_t rec_epr;
+	uint64_t           rec_size;
+	uint32_t           rec_version;
+	uint32_t           rec_flags;
 };
 
 enum daos_recx_type {
 	/** normal valid recx */
-	DRT_NORMAL	= 0,
+	DRT_NORMAL = 0,
 	/** hole recx */
-	DRT_HOLE	= 1,
+	DRT_HOLE = 1,
 	/**
 	 * shadow valid recx, only used for EC degraded fetch to indicate
 	 * recx on shadow, i.e need-to-be-recovered recx.
 	 */
-	DRT_SHADOW	= 2,
+	DRT_SHADOW = 2,
 };
 
 struct daos_recx_ep {
-	daos_recx_t	re_recx;
-	daos_epoch_t	re_ep;
-	uint32_t	re_rec_size;
-	uint8_t		re_type;
+	daos_recx_t  re_recx;
+	daos_epoch_t re_ep;
+	uint32_t     re_rec_size;
+	uint8_t      re_type;
 };
 
 struct daos_recx_ep_list {
 	/** #valid items in re_items array */
-	uint32_t		 re_nr;
+	uint32_t             re_nr;
 	/** #total items (capacity) in re_items array */
-	uint32_t		 re_total;
+	uint32_t             re_total;
 	/** recovery from snapshot flag */
-	bool			 re_snapshot;
+	bool                 re_snapshot;
 	/** epoch valid flag, re_items' re_ep can be ignored when it is false */
-	bool			 re_ep_valid;
-	struct daos_recx_ep	*re_items;
+	bool                 re_ep_valid;
+	struct daos_recx_ep *re_items;
 };
 
 static inline void
@@ -579,14 +618,14 @@ daos_recx_ep_free(struct daos_recx_ep_list *list)
 {
 	if (list->re_items)
 		D_FREE(list->re_items);
-	list->re_nr = 0;
+	list->re_nr    = 0;
 	list->re_total = 0;
 }
 
 static inline void
 daos_recx_ep_list_free(struct daos_recx_ep_list *list, unsigned int nr)
 {
-	unsigned int	i;
+	unsigned int i;
 
 	if (list == NULL)
 		return;
@@ -599,16 +638,15 @@ daos_recx_ep_list_free(struct daos_recx_ep_list *list, unsigned int nr)
 static inline int
 daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 {
-	struct daos_recx_ep	*new_items;
-	uint32_t		 nr;
+	struct daos_recx_ep *new_items;
+	uint32_t             nr;
 
 	if (list->re_total == list->re_nr) {
 		nr = (list->re_total == 0) ? 8 : (2 * list->re_total);
 		if (list->re_total == 0)
 			D_ALLOC_ARRAY(new_items, nr);
 		else
-			D_REALLOC_ARRAY(new_items, list->re_items,
-					list->re_total, nr);
+			D_REALLOC_ARRAY(new_items, list->re_items, list->re_total, nr);
 		if (new_items == NULL)
 			return -DER_NOMEM;
 		list->re_items = new_items;
@@ -623,9 +661,9 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 static inline struct daos_recx_ep_list *
 daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 {
-	struct daos_recx_ep_list	*dup_lists;
-	struct daos_recx_ep_list	*dup_list, *list;
-	unsigned int			 i;
+	struct daos_recx_ep_list *dup_lists;
+	struct daos_recx_ep_list *dup_list, *list;
+	unsigned int              i;
 
 	if (lists == NULL || nr == 0)
 		return NULL;
@@ -635,9 +673,9 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 		return NULL;
 
 	for (i = 0; i < nr; i++) {
-		list = &lists[i];
-		dup_list = &dup_lists[i];
-		*dup_list = *list;
+		list               = &lists[i];
+		dup_list           = &dup_lists[i];
+		*dup_list          = *list;
 		dup_list->re_items = NULL;
 		if (list->re_nr == 0)
 			continue;
@@ -646,8 +684,7 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 			daos_recx_ep_list_free(dup_lists, nr);
 			return NULL;
 		}
-		memcpy(dup_list->re_items, list->re_items,
-		       list->re_nr * sizeof(*list->re_items));
+		memcpy(dup_list->re_items, list->re_items, list->re_nr * sizeof(*list->re_items));
 	}
 
 	return dup_lists;
@@ -657,9 +694,9 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 static inline void
 daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
 {
-	struct daos_recx_ep_list	*list;
-	struct daos_recx_ep		*recx_ep, *next;
-	unsigned int			 i, j, k;
+	struct daos_recx_ep_list *list;
+	struct daos_recx_ep      *recx_ep, *next;
+	unsigned int              i, j, k;
 
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
@@ -667,7 +704,7 @@ daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
 			continue;
 		for (j = 0; j < list->re_nr - 1; j++) {
 			recx_ep = &list->re_items[j];
-			next = &list->re_items[j + 1];
+			next    = &list->re_items[j + 1];
 			if (recx_ep->re_ep != next->re_ep ||
 			    recx_ep->re_rec_size != next->re_rec_size ||
 			    recx_ep->re_type != next->re_type ||
@@ -688,15 +725,14 @@ daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
 }
 
 static inline void
-daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr,
-		       daos_recx_t *lo_ptr)
+daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr, daos_recx_t *lo_ptr)
 {
-	struct daos_recx_ep		*recx_ep;
-	daos_recx_t			*recx;
-	daos_recx_t			 hi = {0};
-	daos_recx_t			 lo = {0};
-	uint64_t			 end, end_hi, end_lo;
-	unsigned int			 i;
+	struct daos_recx_ep *recx_ep;
+	daos_recx_t         *recx;
+	daos_recx_t          hi = {0};
+	daos_recx_t          lo = {0};
+	uint64_t             end, end_hi, end_lo;
+	unsigned int         i;
 
 	if (list == NULL)
 		goto out;
@@ -705,14 +741,14 @@ daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr,
 	end_lo = -1;
 	for (i = 0; i < list->re_nr; i++) {
 		recx_ep = &list->re_items[i];
-		recx = &recx_ep->re_recx;
-		end = DAOS_RECX_PTR_END(recx);
+		recx    = &recx_ep->re_recx;
+		end     = DAOS_RECX_PTR_END(recx);
 		if (end > end_hi) {
-			hi = *recx;
+			hi     = *recx;
 			end_hi = end;
 		}
 		if (end < end_lo) {
-			lo = *recx;
+			lo     = *recx;
 			end_lo = end;
 		}
 		D_ASSERT(end_hi >= end_lo);
@@ -726,9 +762,9 @@ out:
 static inline void
 daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 {
-	struct daos_recx_ep_list	*list;
-	struct daos_recx_ep		*recx_ep;
-	unsigned int			 i, j;
+	struct daos_recx_ep_list *list;
+	struct daos_recx_ep      *recx_ep;
+	unsigned int              i, j;
 
 	if (lists == NULL || nr == 0) {
 		D_ERROR("empty daos_recx_ep_list.\n");
@@ -738,12 +774,12 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 		list = &lists[i];
 		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
 			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]  ",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
 		D_ERROR("\n");
 	}
@@ -768,31 +804,30 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
  * data, then ui_sgls[i].sg_iovs[j] will be empty.
  */
 struct dc_obj_enum_unpack_io {
-	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
-	daos_key_t		 ui_dkey;	/**< type <= DKEY */
-	uint64_t		 ui_dkey_hash;
-	daos_iod_t		*ui_iods;
-	d_iov_t			 ui_csum_iov;
+	daos_unit_oid_t ui_oid;  /**< type <= OBJ */
+	daos_key_t      ui_dkey; /**< type <= DKEY */
+	uint64_t        ui_dkey_hash;
+	daos_iod_t     *ui_iods;
+	d_iov_t         ui_csum_iov;
 	/* punched epochs per akey */
-	daos_epoch_t		*ui_akey_punch_ephs;
-	daos_epoch_t		*ui_rec_punch_ephs;
-	daos_epoch_t		**ui_recx_ephs;
-	int			 ui_iods_cap;
-	int			 ui_iods_top;
-	int			*ui_recxs_caps;
+	daos_epoch_t   *ui_akey_punch_ephs;
+	daos_epoch_t   *ui_rec_punch_ephs;
+	daos_epoch_t  **ui_recx_ephs;
+	int             ui_iods_cap;
+	int             ui_iods_top;
+	int            *ui_recxs_caps;
 	/* punched epoch for object */
-	daos_epoch_t		ui_obj_punch_eph;
+	daos_epoch_t    ui_obj_punch_eph;
 	/* punched epochs for dkey */
-	daos_epoch_t		ui_dkey_punch_eph;
-	d_sg_list_t		*ui_sgls;	/**< optional */
-	uint32_t		ui_version;
-	uint32_t		ui_type;
+	daos_epoch_t    ui_dkey_punch_eph;
+	d_sg_list_t    *ui_sgls; /**< optional */
+	uint32_t        ui_version;
+	uint32_t        ui_type;
 };
 
 typedef int (*dc_obj_enum_unpack_cb_t)(struct dc_obj_enum_unpack_io *io, void *arg);
 
 int
-dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
-		   d_sg_list_t *sgl, d_iov_t *csum, dc_obj_enum_unpack_cb_t cb,
-		   void *cb_arg);
+dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num, d_sg_list_t *sgl,
+		   d_iov_t *csum, dc_obj_enum_unpack_cb_t cb, void *cb_arg);
 #endif /* __DD_OBJ_H__ */

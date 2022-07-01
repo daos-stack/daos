@@ -116,12 +116,16 @@ struct rdb_storage;
 struct rdb_cbs;
 
 /** Database storage methods */
-int rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
-	       struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep);
-int rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	     struct rdb_storage **storagep);
-void rdb_close(struct rdb_storage *storage);
-int rdb_destroy(const char *path, const uuid_t uuid);
+int
+rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
+	   struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep);
+int
+rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+	 struct rdb_storage **storagep);
+void
+rdb_close(struct rdb_storage *storage);
+int
+rdb_destroy(const char *path, const uuid_t uuid);
 
 /** Database (opaque) */
 struct rdb;
@@ -155,16 +159,26 @@ struct rdb_cbs {
 };
 
 /** Database methods */
-int rdb_start(struct rdb_storage *storage, struct rdb **dbp);
-void rdb_stop(struct rdb *db, struct rdb_storage **storagep);
-void rdb_stop_and_close(struct rdb *db);
-void rdb_resign(struct rdb *db, uint64_t term);
-int rdb_campaign(struct rdb *db);
-bool rdb_is_leader(struct rdb *db, uint64_t *term);
-int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
-int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
-int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
-int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
+int
+rdb_start(struct rdb_storage *storage, struct rdb **dbp);
+void
+rdb_stop(struct rdb *db, struct rdb_storage **storagep);
+void
+rdb_stop_and_close(struct rdb *db);
+void
+rdb_resign(struct rdb *db, uint64_t term);
+int
+rdb_campaign(struct rdb *db);
+bool
+rdb_is_leader(struct rdb *db, uint64_t *term);
+int
+rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
+int
+rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int
+rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
+int
+		rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 
 /**
  * Path (opaque)
@@ -179,37 +193,39 @@ typedef d_iov_t rdb_path_t;
  *
  * A special key representing the root KVS in a path.
  */
-extern d_iov_t rdb_path_root_key;
+extern d_iov_t  rdb_path_root_key;
 
 /** Path methods */
-int rdb_path_init(rdb_path_t *path);
-void rdb_path_fini(rdb_path_t *path);
-int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
-int rdb_path_push(rdb_path_t *path, const d_iov_t *key);
+int
+rdb_path_init(rdb_path_t *path);
+void
+rdb_path_fini(rdb_path_t *path);
+int
+rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
+int
+rdb_path_push(rdb_path_t *path, const d_iov_t *key);
 
 /**
  * Define a d_iov_t object, named \a prefix + \a name, that represents a
  * constant string key. See rdb_layout.[ch] for an example of the usage of this
  * helper macro.
  */
-#define RDB_STRING_KEY(prefix, name)					\
-static char	prefix ## name ## _buf[] = #name;			\
-d_iov_t		prefix ## name = {					\
-	.iov_buf	= prefix ## name ## _buf,			\
-	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
-	.iov_len	= sizeof(prefix ## name ## _buf)		\
-}
+#define RDB_STRING_KEY(prefix, name)                                                               \
+	static char prefix##name##_buf[] = #name;                                                  \
+	d_iov_t     prefix##name         = {.iov_buf     = prefix##name##_buf,                     \
+					    .iov_buf_len = sizeof(prefix##name##_buf),             \
+					    .iov_len     = sizeof(prefix##name##_buf)}
 
 /** KVS classes */
 enum rdb_kvs_class {
-	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
-	RDB_KVS_INTEGER		/**< numerically-ordered uint64_t keys */
+	RDB_KVS_GENERIC, /**< hash-ordered byte-stream keys */
+	RDB_KVS_INTEGER  /**< numerically-ordered uint64_t keys */
 };
 
 /** KVS attributes */
 struct rdb_kvs_attr {
-	enum rdb_kvs_class	dsa_class;
-	unsigned int		dsa_order;	/**< dbtree order (unused) */
+	enum rdb_kvs_class dsa_class;
+	unsigned int       dsa_order; /**< dbtree order (unused) */
 };
 
 /**
@@ -219,43 +235,50 @@ struct rdb_kvs_attr {
  * allocate rdb_tx objects, possibly on their stacks.
  */
 struct rdb_tx {
-	struct rdb     *dt_db;
-	uint64_t	dt_term;	/* raft term this tx begins in */
-	void	       *dt_entry;	/* raft entry buffer */
-	size_t		dt_entry_cap;	/* buffer capacity */
-	size_t		dt_entry_len;	/* data length */
-	int		dt_num_ops;	/* number of individual operations */
-	unsigned int	dt_flags;
+	struct rdb  *dt_db;
+	uint64_t     dt_term;      /* raft term this tx begins in */
+	void        *dt_entry;     /* raft entry buffer */
+	size_t       dt_entry_cap; /* buffer capacity */
+	size_t       dt_entry_len; /* data length */
+	int          dt_num_ops;   /* number of individual operations */
+	unsigned int dt_flags;
 };
 
 /** Nil term */
 #define RDB_NIL_TERM UINT64_MAX
 
 /** TX methods */
-int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
-int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
-int rdb_tx_commit(struct rdb_tx *tx);
-void rdb_tx_end(struct rdb_tx *tx);
+int
+rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
+int
+rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
+int
+rdb_tx_commit(struct rdb_tx *tx);
+void
+rdb_tx_end(struct rdb_tx *tx);
 
 /** TX update methods */
-int rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr);
-int rdb_tx_destroy_root(struct rdb_tx *tx);
-int rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		      const d_iov_t *key, const struct rdb_kvs_attr *attr);
-int rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		       const d_iov_t *key);
-int rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const d_iov_t *key, const d_iov_t *value);
-int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const d_iov_t *key);
+int
+rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr);
+int
+rdb_tx_destroy_root(struct rdb_tx *tx);
+int
+rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent, const d_iov_t *key,
+		  const struct rdb_kvs_attr *attr);
+int
+rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent, const d_iov_t *key);
+int
+rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key, const d_iov_t *value);
+int
+rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key);
 
 /** Probe operation codes */
 enum rdb_probe_opc {
-	RDB_PROBE_FIRST,	/**< first key */
-	RDB_PROBE_LAST,		/**< unsupported */
-	RDB_PROBE_EQ,		/**< unsupported */
-	RDB_PROBE_GE,		/**< unsupported */
-	RDB_PROBE_LE		/**< unsupported */
+	RDB_PROBE_FIRST, /**< first key */
+	RDB_PROBE_LAST,  /**< unsupported */
+	RDB_PROBE_EQ,    /**< unsupported */
+	RDB_PROBE_GE,    /**< unsupported */
+	RDB_PROBE_LE     /**< unsupported */
 };
 
 /**
@@ -270,18 +293,20 @@ enum rdb_probe_opc {
  * rdb_tx_revalidate after the yield and return the return value of
  * rdb_tx_revalidate.
  */
-typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
-				d_iov_t *val, void *arg);
+typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg);
 
 /** TX query methods */
-int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const d_iov_t *key, d_iov_t *value);
-int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
-		 enum rdb_probe_opc opc, const d_iov_t *key_in,
-		 d_iov_t *key_out, d_iov_t *value);
-int rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key);
-int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
-		   rdb_iterate_cb_t cb, void *arg);
-int rdb_tx_revalidate(struct rdb_tx *tx);
+int
+rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key, d_iov_t *value);
+int
+rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
+	     const d_iov_t *key_in, d_iov_t *key_out, d_iov_t *value);
+int
+rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key);
+int
+rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iterate_cb_t cb,
+	       void *arg);
+int
+rdb_tx_revalidate(struct rdb_tx *tx);
 
 #endif /* DAOS_SRV_RDB_H */

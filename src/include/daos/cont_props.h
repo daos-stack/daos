@@ -10,51 +10,47 @@
 #include <daos_prop.h>
 
 /** DAOS container property entry names used to set properties using the daos tool */
-#define DAOS_PROP_ENTRY_LABEL		"label"
-#define DAOS_PROP_ENTRY_CKSUM		"cksum"
-#define DAOS_PROP_ENTRY_CKSUM_SIZE	"cksum_size"
-#define DAOS_PROP_ENTRY_SRV_CKSUM	"srv_cksum"
-#define DAOS_PROP_ENTRY_DEDUP		"dedup"
-#define DAOS_PROP_ENTRY_DEDUP_THRESHOLD	"dedup_threshold"
-#define DAOS_PROP_ENTRY_COMPRESS	"compression"
-#define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
-#define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
-#define DAOS_PROP_ENTRY_STATUS		"status"
-#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
-#define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
-#define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
-#define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
-#define DAOS_PROP_ENTRY_SNAPSHOT_MAX	"max_snapshot"
-#define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
-#define DAOS_PROP_ENTRY_OWNER		"owner"
-#define DAOS_PROP_ENTRY_GROUP		"group"
-#define DAOS_PROP_ENTRY_EC_PDA		"ec_pda"
-#define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
-#define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
+#define DAOS_PROP_ENTRY_LABEL           "label"
+#define DAOS_PROP_ENTRY_CKSUM           "cksum"
+#define DAOS_PROP_ENTRY_CKSUM_SIZE      "cksum_size"
+#define DAOS_PROP_ENTRY_SRV_CKSUM       "srv_cksum"
+#define DAOS_PROP_ENTRY_DEDUP           "dedup"
+#define DAOS_PROP_ENTRY_DEDUP_THRESHOLD "dedup_threshold"
+#define DAOS_PROP_ENTRY_COMPRESS        "compression"
+#define DAOS_PROP_ENTRY_ENCRYPT         "encryption"
+#define DAOS_PROP_ENTRY_REDUN_FAC       "rf"
+#define DAOS_PROP_ENTRY_STATUS          "status"
+#define DAOS_PROP_ENTRY_EC_CELL_SZ      "ec_cell_sz"
+#define DAOS_PROP_ENTRY_LAYOUT_TYPE     "layout_type"
+#define DAOS_PROP_ENTRY_LAYOUT_VER      "layout_version"
+#define DAOS_PROP_ENTRY_REDUN_LVL       "rf_lvl"
+#define DAOS_PROP_ENTRY_SNAPSHOT_MAX    "max_snapshot"
+#define DAOS_PROP_ENTRY_ALLOCED_OID     "alloc_oid"
+#define DAOS_PROP_ENTRY_OWNER           "owner"
+#define DAOS_PROP_ENTRY_GROUP           "group"
+#define DAOS_PROP_ENTRY_EC_PDA          "ec_pda"
+#define DAOS_PROP_ENTRY_RP_PDA          "rp_pda"
+#define DAOS_PROP_ENTRY_GLOBAL_VERSION  "global_version"
 
 struct cont_props {
-	uint32_t	 dcp_chunksize;
-	uint32_t	 dcp_dedup_size;
-	uint64_t	 dcp_alloced_oid;
+	uint32_t dcp_chunksize;
+	uint32_t dcp_dedup_size;
+	uint64_t dcp_alloced_oid;
 	/**
 	 * Use more bits for compression type since compression level is
 	 * encoded in there.
 	 */
-	uint32_t	 dcp_compress_type;
-	uint16_t	 dcp_csum_type;
-	uint16_t	 dcp_encrypt_type;
-	uint32_t	 dcp_redun_lvl;
-	uint32_t	 dcp_redun_fac;
-	uint32_t	 dcp_ec_cell_sz;
-	uint32_t	 dcp_ec_pda;
-	uint32_t	 dcp_rp_pda;
-	uint32_t	 dcp_global_version;
-	uint32_t	 dcp_csum_enabled:1,
-			 dcp_srv_verify:1,
-			 dcp_dedup_enabled:1,
-			 dcp_dedup_verify:1,
-			 dcp_compress_enabled:1,
-			 dcp_encrypt_enabled:1;
+	uint32_t dcp_compress_type;
+	uint16_t dcp_csum_type;
+	uint16_t dcp_encrypt_type;
+	uint32_t dcp_redun_lvl;
+	uint32_t dcp_redun_fac;
+	uint32_t dcp_ec_cell_sz;
+	uint32_t dcp_ec_pda;
+	uint32_t dcp_rp_pda;
+	uint32_t dcp_global_version;
+	uint32_t dcp_csum_enabled : 1, dcp_srv_verify : 1, dcp_dedup_enabled : 1,
+	    dcp_dedup_verify : 1, dcp_compress_enabled : 1, dcp_encrypt_enabled : 1;
 };
 
 void
@@ -108,7 +104,6 @@ daos_cont_encrypt_prop_is_enabled(uint16_t val);
 
 uint16_t
 daos_cont_prop2encrypt(daos_prop_t *props);
-
 
 /**
  * Redundancy properties

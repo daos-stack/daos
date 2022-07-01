@@ -93,8 +93,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  *			Other negative value if error.
  */
 int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+	      struct dtx_memberships **mbs, struct dtx_cos_key *dck);
 
 /**
  * Commit the specified DTXs.
@@ -250,8 +250,8 @@ vos_self_fini(void);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
+		unsigned int flags, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -286,8 +286,7 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh);
 
 /** Enable any version specific features on the pool
  *
@@ -414,8 +413,8 @@ int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
 enum {
-	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
-	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
+	VOS_AGG_FL_FORCE_SCAN  = (1UL << 0), /* Scan all obj/dkey/akeys */
+	VOS_AGG_FL_FORCE_MERGE = (1UL << 1), /* Merge all coalesce-able EV records */
 };
 
 /**
@@ -433,8 +432,8 @@ enum {
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, int (*yield_func)(void *arg),
+	      void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -496,9 +495,8 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-	      daos_iod_t *iods, d_sg_list_t *sgls);
+vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint64_t flags,
+	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
  * Fetch values for the given keys and their indices.
@@ -524,9 +522,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
+vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint64_t flags,
+		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods, d_sg_list_t *sgls,
+		 struct dtx_handle *dth);
 
 /**
  * Update records for the specified object.
@@ -560,11 +558,9 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
-	       unsigned int iod_nr, daos_iod_t *iods,
+vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t pm_ver,
+	       uint64_t flags, daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
-
 
 /**
  * Update records for the specified object.
@@ -599,11 +595,9 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		  uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
-		  unsigned int iod_nr, daos_iod_t *iods,
-		  struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls,
-		  struct dtx_handle *dth);
+vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t pm_ver,
+		  uint64_t flags, daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		  struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls, struct dtx_handle *dth);
 
 /**
  * Remove all array values within the specified range.  If the specified
@@ -620,9 +614,8 @@ vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
-		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
-		     const daos_key_t *akey, const daos_recx_t *recx);
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid, const daos_epoch_range_t *epr,
+		     const daos_key_t *dkey, const daos_key_t *akey, const daos_recx_t *recx);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -645,9 +638,9 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth);
+vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t pm_ver,
+	      uint64_t flags, daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys,
+	      struct dtx_handle *dth);
 
 /**
  * Delete an object, this object is unaccessible at any epoch after deletion.
@@ -675,8 +668,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
-		daos_key_t *akey);
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey);
 
 /**
  * I/O APIs
@@ -712,11 +704,9 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
  * \return		Zero on success, negative value if error
  */
 int
-vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods, uint32_t vos_flags,
-		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
-		struct dtx_handle *dth);
+vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, daos_key_t *dkey,
+		unsigned int nr, daos_iod_t *iods, uint32_t vos_flags,
+		struct daos_recx_ep_list *shadows, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the fetch operation and release the responding resources.
@@ -759,10 +749,10 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth);
+vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, uint64_t flags,
+		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		 struct dcs_iod_csums *iods_csums, uint32_t dedup_th, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -780,8 +770,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
-	       daos_size_t *size, struct dtx_handle *dth);
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err, daos_size_t *size,
+	       struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.
@@ -890,8 +880,8 @@ vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
  * \return		Zero on success, negative value if error
  */
 int
-vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih, struct dtx_handle *dth);
+vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param, daos_handle_t *ih,
+		 struct dtx_handle *dth);
 
 /**
  * Release a iterator
@@ -964,8 +954,7 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor);
  *			negative value if error
  */
 int
-vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
-	       daos_anchor_t *anchor);
+vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry, daos_anchor_t *anchor);
 
 /**
  * Copy out the data fetched by vos_iter_fetch()
@@ -979,8 +968,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
  *			negative value if error
  */
 int
-vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
-	      d_iov_t *iov_out);
+vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry, d_iov_t *iov_out);
 
 /**
  * Delete the current data entry of the iterator
@@ -1040,8 +1028,8 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+	    void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -1095,10 +1083,9 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  *			-DER_NONEXIST	No suitable key/recx found
  */
 int
-vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
-		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, daos_epoch_t *max_write, unsigned int cell_size,
-		  uint64_t stripe_size, struct dtx_handle *dth);
+vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags, daos_epoch_t epoch,
+		  daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_write,
+		  unsigned int cell_size, uint64_t stripe_size, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -1111,8 +1098,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
  *  \return 0 on success, error otherwise.
  */
 int
-vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-		      uint64_t otype, struct daos_tree_overhead *ovhd);
+vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass, uint64_t otype,
+		      struct daos_tree_overhead *ovhd);
 
 /** Return the size of the pool metadata in persistent memory on-disk format */
 int
@@ -1145,11 +1132,9 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
-vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
-	    void *yield_arg);
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg), void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
-
 
 enum vos_cont_opc {
 	VOS_CO_CTL_DUMMY,
@@ -1173,20 +1158,23 @@ vos_profile_stop(void);
  * Helper functions for dedup verify.
  */
 int
-vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
-		      unsigned int bulk_perm);
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt, unsigned int bulk_perm);
 int
 vos_dedup_verify(daos_handle_t ioh);
 
-struct sys_db *vos_db_get(void);
+struct sys_db *
+vos_db_get(void);
 /**
  * Create the system DB in VOS
  * System DB is KV store that can support insert/delete/traverse
  * See \a sys_db for more details.
  */
-int vos_db_init(const char *db_path);
-int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
-		   bool destroy_db_on_fini);
-void vos_db_fini(void);
+int
+vos_db_init(const char *db_path);
+int
+vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
+	       bool destroy_db_on_fini);
+void
+vos_db_fini(void);
 
 #endif /* __VOS_API_H */

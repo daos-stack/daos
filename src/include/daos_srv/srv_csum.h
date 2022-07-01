@@ -44,7 +44,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist
  */
 int
 ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_t flags,
-		 daos_iom_t **p_maps);
+	      daos_iom_t **p_maps);
 
 void
 ds_iom_free(daos_iom_t **p_maps, uint64_t map_nr);

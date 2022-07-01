@@ -22,35 +22,35 @@
 
 /* Common free extent structure for both SCM & in-memory index */
 struct vea_free_extent {
-	uint64_t	vfe_blk_off;	/* Block offset of the extent */
-	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_age;	/* Monotonic timestamp */
+	uint64_t vfe_blk_off; /* Block offset of the extent */
+	uint32_t vfe_blk_cnt; /* Total blocks of the extent */
+	uint32_t vfe_age;     /* Monotonic timestamp */
 };
 
 /* Maximum extents a non-contiguous allocation can have */
-#define VEA_EXT_VECTOR_MAX	9
+#define VEA_EXT_VECTOR_MAX 9
 
 /* Allocated extent vector */
 struct vea_ext_vector {
-	uint64_t	vev_blk_off[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_blk_cnt[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_size;	/* Size of the extent vector */
+	uint64_t vev_blk_off[VEA_EXT_VECTOR_MAX];
+	uint32_t vev_blk_cnt[VEA_EXT_VECTOR_MAX];
+	uint32_t vev_size; /* Size of the extent vector */
 };
 
 /* Reserved extent(s) */
 struct vea_resrvd_ext {
 	/* Link to a list for a series of vea_reserve() calls */
-	d_list_t		 vre_link;
+	d_list_t               vre_link;
 	/* Start block offset of the reserved extent */
-	uint64_t		 vre_blk_off;
+	uint64_t               vre_blk_off;
 	/* Hint offset before the reserve */
-	uint64_t		 vre_hint_off;
+	uint64_t               vre_hint_off;
 	/* Hint sequence to detect interleaved reserve -> publish */
-	uint64_t		 vre_hint_seq;
+	uint64_t               vre_hint_seq;
 	/* Total reserved blocks */
-	uint32_t		 vre_blk_cnt;
+	uint32_t               vre_blk_cnt;
 	/* Extent vector for non-contiguous reserve */
-	struct vea_ext_vector	*vre_vector;
+	struct vea_ext_vector *vre_vector;
 };
 
 /*
@@ -59,9 +59,9 @@ struct vea_resrvd_ext {
  */
 struct vea_hint_df {
 	/* Hint block offset */
-	uint64_t	vhd_off;
+	uint64_t vhd_off;
 	/* Hint sequence to detect interleaved reserve -> publish */
-	uint64_t	vhd_seq;
+	uint64_t vhd_seq;
 };
 
 /* Per I/O stream In-memory hint context */
@@ -84,40 +84,40 @@ struct vea_unmap_context {
 
 /* Free space tracking information on SCM */
 struct vea_space_df {
-	uint32_t	vsd_magic;
-	uint32_t	vsd_compat;
+	uint32_t        vsd_magic;
+	uint32_t        vsd_compat;
 	/* Block size, 4k bytes by default */
-	uint32_t	vsd_blk_sz;
+	uint32_t        vsd_blk_sz;
 	/* Reserved blocks for the block device header */
-	uint32_t	vsd_hdr_blks;
+	uint32_t        vsd_hdr_blks;
 	/* Block device capacity */
-	uint64_t	vsd_tot_blks;
+	uint64_t        vsd_tot_blks;
 	/* Free extent tree, sorted by offset */
-	struct btr_root	vsd_free_tree;
+	struct btr_root vsd_free_tree;
 	/* Allocated extent vector tree, for non-contiguous allocation */
-	struct btr_root	vsd_vec_tree;
+	struct btr_root vsd_vec_tree;
 };
 
 /* VEA attributes */
 struct vea_attr {
-	uint32_t	va_compat;	/* VEA compatibility*/
-	uint32_t	va_blk_sz;	/* Block size in bytes */
-	uint32_t	va_hdr_blks;	/* Blocks for header */
-	uint32_t	va_large_thresh;/* Large extent threshold in blocks */
-	uint64_t	va_tot_blks;	/* Total capacity in blocks */
-	uint64_t	va_free_blks;	/* Free blocks available for alloc */
+	uint32_t va_compat;       /* VEA compatibility*/
+	uint32_t va_blk_sz;       /* Block size in bytes */
+	uint32_t va_hdr_blks;     /* Blocks for header */
+	uint32_t va_large_thresh; /* Large extent threshold in blocks */
+	uint64_t va_tot_blks;     /* Total capacity in blocks */
+	uint64_t va_free_blks;    /* Free blocks available for alloc */
 };
 
 /* VEA statistics */
 struct vea_stat {
-	uint64_t	vs_free_persistent;	/* Persistent free blocks */
-	uint64_t	vs_free_transient;	/* Transient free blocks */
-	uint64_t	vs_resrv_hint;	/* Number of hint reserve */
-	uint64_t	vs_resrv_large;	/* Number of large reserve */
-	uint64_t	vs_resrv_small;	/* Number of small reserve */
-	uint64_t	vs_frags_large;	/* Large free frags */
-	uint64_t	vs_frags_small;	/* Small free frags */
-	uint64_t	vs_frags_aging;	/* Aging frags */
+	uint64_t vs_free_persistent; /* Persistent free blocks */
+	uint64_t vs_free_transient;  /* Transient free blocks */
+	uint64_t vs_resrv_hint;      /* Number of hint reserve */
+	uint64_t vs_resrv_large;     /* Number of large reserve */
+	uint64_t vs_resrv_small;     /* Number of small reserve */
+	uint64_t vs_frags_large;     /* Large free frags */
+	uint64_t vs_frags_small;     /* Small free frags */
+	uint64_t vs_frags_aging;     /* Aging frags */
 };
 
 struct vea_space_info;
@@ -143,10 +143,10 @@ typedef int (*vea_format_callback_t)(void *cb_data, struct umem_instance *umem);
  *			already initialized device without setting @force to
  *			true; Appropriated negative value for other errors
  */
-int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
-	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
-	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force);
+int
+vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd, struct vea_space_df *md,
+	   uint32_t blk_sz, uint32_t hdr_blks, uint64_t capacity, vea_format_callback_t cb,
+	   void *cb_data, bool force);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound
@@ -163,9 +163,9 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
  *				index returned by @vsi; Appropriated negative
  *				value on error
  */
-int vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
-	     struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
-	     void *metrics, struct vea_space_info **vsip);
+int
+vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd, struct vea_space_df *md,
+	 struct vea_unmap_context *unmap_ctxt, void *metrics, struct vea_space_info **vsip);
 
 /**
  * Free the memory footprint created by vea_load().
@@ -174,7 +174,8 @@ int vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
  *
  * \return		N/A
  */
-void vea_unload(struct vea_space_info *vsi);
+void
+vea_unload(struct vea_space_info *vsi);
 
 /**
  * Load persistent hint from SCM and initialize in-memory hint. It's usually
@@ -186,7 +187,8 @@ void vea_unload(struct vea_space_info *vsi);
  * \return		Zero on success, in-memory hint data returned by @thd;
  *			Appropriated negative value on error
  */
-int vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc);
+int
+vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc);
 
 /**
  * Free the in-memory hint data created by vea_hint_load(). It's usually
@@ -196,7 +198,8 @@ int vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc);
  *
  * \return		N/A
  */
-void vea_hint_unload(struct vea_hint_context *thc);
+void
+vea_hint_unload(struct vea_hint_context *thc);
 
 /**
  * Reserve an extent on block device, if the block device is too fragmented
@@ -211,8 +214,9 @@ void vea_hint_unload(struct vea_hint_context *thc);
  *				added in the @resrvd_list; Appropriated
  *				negative value on error
  */
-int vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
-		struct vea_hint_context *hint, d_list_t *resrvd_list);
+int
+vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt, struct vea_hint_context *hint,
+	    d_list_t *resrvd_list);
 
 /**
  * Cancel the reserved extent(s)
@@ -224,8 +228,8 @@ int vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
  * \return			Zero on success; Appropriated negative value
  *				on error
  */
-int vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint,
-	       d_list_t *resrvd_list);
+int
+vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint, d_list_t *resrvd_list);
 
 /**
  * Make the reservation persistent. It should be part of transaction
@@ -238,8 +242,8 @@ int vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint,
  * \return			Zero on success; Appropriated negative value
  *				on error
  */
-int vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
-		   d_list_t *resrvd_list);
+int
+vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint, d_list_t *resrvd_list);
 
 /**
  * Free allocated extent.
@@ -251,7 +255,8 @@ int vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
  * \return			Zero on success; Appropriated negative value
  *				on error
  */
-int vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt);
+int
+vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt);
 
 /**
  * Set an arbitrary age to a free extent with specified start offset.
@@ -265,7 +270,8 @@ int vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt);
  *				extent isn't found; Appropriated negative value
  *				on other error
  */
-int vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age);
+int
+vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age);
 
 /**
  * Convert an extent into an allocated extent vector.
@@ -279,8 +285,9 @@ int vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age);
  *				returned by @ext_vector; Appropriated negative
  *				value on error
  */
-int vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
-		       uint32_t blk_cnt, struct vea_ext_vector *ext_vector);
+int
+vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt,
+		   struct vea_ext_vector *ext_vector);
 
 /**
  * Query space attributes and allocation statistics.
@@ -292,8 +299,8 @@ int vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
  * \return			Zero on success; Appropriated negative value
  *				on error
  */
-int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
-	      struct vea_stat *stat);
+int
+vea_query(struct vea_space_info *vsi, struct vea_attr *attr, struct vea_stat *stat);
 
 /**
  * Flushing the free frags in aging buffer
@@ -304,14 +311,16 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
  * \return			0:	Nothing to be flushed;
  *				1:	Some Frags need be flushed;
  */
-int vea_flush(struct vea_space_info *vsi, bool force);
+int
+vea_flush(struct vea_space_info *vsi, bool force);
 
 /**
  * Free metrcis
  *
  * \param data      [IN]	Metrics to be freed
  */
-void vea_metrics_free(void *data);
+void
+vea_metrics_free(void *data);
 
 /**
  * Allocate VEA metrics
@@ -321,11 +330,13 @@ void vea_metrics_free(void *data);
  *
  * \return			VEA metrics on success, NULL on error
  */
-void *vea_metrics_alloc(const char *path, int tgt_id);
+void *
+vea_metrics_alloc(const char *path, int tgt_id);
 
 /**
  * Get VEA metrics count
  */
-int vea_metrics_count(void);
+int
+vea_metrics_count(void);
 
 #endif /* __VEA_API_H__ */

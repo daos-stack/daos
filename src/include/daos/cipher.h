@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,23 +32,24 @@ daos_str2encryptcontprop(const char *value);
 enum DAOS_CIPHER_TYPE {
 	CIPHER_TYPE_UNKNOWN = 0,
 
-	CIPHER_TYPE_AES_XTS128	= 1,
-	CIPHER_TYPE_AES_XTS256	= 2,
-	CIPHER_TYPE_AES_CBC128	= 3,
-	CIPHER_TYPE_AES_CBC192	= 4,
-	CIPHER_TYPE_AES_CBC256	= 5,
-	CIPHER_TYPE_AES_GCM128	= 6,
-	CIPHER_TYPE_AES_GCM256	= 7,
+	CIPHER_TYPE_AES_XTS128 = 1,
+	CIPHER_TYPE_AES_XTS256 = 2,
+	CIPHER_TYPE_AES_CBC128 = 3,
+	CIPHER_TYPE_AES_CBC192 = 4,
+	CIPHER_TYPE_AES_CBC256 = 5,
+	CIPHER_TYPE_AES_GCM128 = 6,
+	CIPHER_TYPE_AES_GCM256 = 7,
 
-	CIPHER_TYPE_END	= 8,
+	CIPHER_TYPE_END = 8,
 };
 
 /** Lookup the appropriate CIPHER_TYPE given daos container property */
-enum DAOS_CIPHER_TYPE daos_contprop2ciphertype(int contprop_encrypt_val);
+enum DAOS_CIPHER_TYPE
+daos_contprop2ciphertype(int contprop_encrypt_val);
 
 struct cipher_ft {
-	char		*cf_name;
-	enum DAOS_CIPHER_TYPE	cf_type;
+	char                 *cf_name;
+	enum DAOS_CIPHER_TYPE cf_type;
 };
 
 struct cipher_ft *

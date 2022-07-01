@@ -30,7 +30,7 @@ struct btr_record {
 	 * - a structure includes both the variable-length key and value.
 	 * - a complex data structure under this record, e.g. a sub-tree.
 	 */
-	umem_off_t		rec_off;
+	umem_off_t rec_off;
 	/**
 	 * Fix-size key can be stored in if it is small enough (DAOS_HKEY_MAX),
 	 * or hashed key for variable-length/large key. In the later case,
@@ -43,9 +43,9 @@ struct btr_record {
 	 * relevant leaf node for direct key comparison
 	 */
 	union {
-		char			rec_hkey[0]; /* hashed key */
-		uint64_t		rec_ukey[0]; /* uint key */
-		umem_off_t		rec_node[0]; /* direct key */
+		char       rec_hkey[0]; /* hashed key */
+		uint64_t   rec_ukey[0]; /* uint key */
+		umem_off_t rec_node[0]; /* direct key */
 	};
 };
 
@@ -56,23 +56,20 @@ struct btr_record {
  */
 struct btr_node {
 	/** leaf, root etc */
-	uint16_t			tn_flags;
+	uint16_t          tn_flags;
 	/** number of keys stored in this node */
-	uint16_t			tn_keyn;
+	uint16_t          tn_keyn;
 	/** padding bytes */
-	uint32_t			tn_pad_32;
+	uint32_t          tn_pad_32;
 	/** generation, reserved for COW */
-	uint64_t			tn_gen;
+	uint64_t          tn_gen;
 	/** the first child, it is unused on leaf node */
-	umem_off_t			tn_child;
+	umem_off_t        tn_child;
 	/** records in this node */
-	struct btr_record		tn_recs[0];
+	struct btr_record tn_recs[0];
 };
 
-enum {
-	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 63
-};
+enum { BTR_ORDER_MIN = 3, BTR_ORDER_MAX = 63 };
 
 /**
  * Tree root descriptor, it consists of tree attributes and reference to the
@@ -84,66 +81,66 @@ struct btr_root {
 	/** For dynamic tree ordering, the root node temporarily has less
 	 * entries than the order
 	 */
-	uint8_t				tr_node_size;
+	uint8_t    tr_node_size;
 	/** configured btree order */
-	uint8_t				tr_order;
+	uint8_t    tr_order;
 	/** depth of the tree */
-	uint16_t			tr_depth;
+	uint16_t   tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
 	 * functions etc.
 	 */
-	uint32_t			tr_class;
+	uint32_t   tr_class;
 	/** the actual features of the tree, e.g. hash type, integer key */
-	uint64_t			tr_feats;
+	uint64_t   tr_feats;
 	/** generation, reserved for COW */
-	uint64_t			tr_gen;
+	uint64_t   tr_gen;
 	/** pointer to root node (struct btr_node), UMOFF_NULL for empty tree */
-	umem_off_t			tr_node;
+	umem_off_t tr_node;
 };
 
 /** btree attributes returned by query function. */
 struct btr_attr {
 	/** Estimate of entries in tree.  Exact for tree depth <= 1 */
-	int				ba_count;
+	int              ba_count;
 	/** tree order */
-	unsigned int			ba_order;
+	unsigned int     ba_order;
 	/** tree depth */
-	unsigned int			ba_depth;
-	unsigned int			ba_class;
-	uint64_t			ba_feats;
+	unsigned int     ba_depth;
+	unsigned int     ba_class;
+	uint64_t         ba_feats;
 	/** memory class, pmem pool etc */
-	struct umem_attr		ba_uma;
+	struct umem_attr ba_uma;
 };
 
 /** btree statistics returned by query function. */
 struct btr_stat {
 	/** total number of tree nodes */
-	uint64_t			bs_node_nr;
+	uint64_t bs_node_nr;
 	/** total number of records in the tree */
-	uint64_t			bs_rec_nr;
+	uint64_t bs_rec_nr;
 	/** total number of bytes of all keys */
-	uint64_t			bs_key_sum;
+	uint64_t bs_key_sum;
 	/** max key size */
-	uint64_t			bs_key_max;
+	uint64_t bs_key_max;
 	/** total number of bytes of all values */
-	uint64_t			bs_val_sum;
+	uint64_t bs_val_sum;
 	/** max value size */
-	uint64_t			bs_val_max;
+	uint64_t bs_val_max;
 };
 
 struct btr_rec_stat {
 	/** record key size */
-	uint64_t			rs_ksize;
+	uint64_t rs_ksize;
 	/** record value size */
-	uint64_t			rs_vsize;
+	uint64_t rs_vsize;
 };
 
 struct btr_instance;
 
 typedef enum {
 	/** probe a specific key */
-	BTR_PROBE_SPEC		= (1 << 8),
+	BTR_PROBE_SPEC = (1 << 8),
 	/**
 	 * unconditionally trust the probe result from the previous call,
 	 * bypass probe process for dbtree_upsert (or delete) in the future.
@@ -159,35 +156,35 @@ typedef enum {
 	 * the correctness of dbtree if inserting a new key to a mismatched
 	 * probe path.
 	 */
-	BTR_PROBE_BYPASS	= 0,
+	BTR_PROBE_BYPASS = 0,
 	/** the first record in the tree */
-	BTR_PROBE_FIRST		= 1,
+	BTR_PROBE_FIRST = 1,
 	/** the last record in the tree */
-	BTR_PROBE_LAST		= 2,
+	BTR_PROBE_LAST = 2,
 	/** probe the record whose key equals to the provide key */
-	BTR_PROBE_EQ		= BTR_PROBE_SPEC,
+	BTR_PROBE_EQ = BTR_PROBE_SPEC,
 	/** probe the record whose key is great to the provided key */
-	BTR_PROBE_GT		= BTR_PROBE_SPEC | 1,
+	BTR_PROBE_GT = BTR_PROBE_SPEC | 1,
 	/** probe the record whose key is less to the provided key */
-	BTR_PROBE_LT		= BTR_PROBE_SPEC | 2,
+	BTR_PROBE_LT = BTR_PROBE_SPEC | 2,
 	/** probe the record whose key is great/equal to the provided key */
-	BTR_PROBE_GE		= BTR_PROBE_SPEC | 3,
+	BTR_PROBE_GE = BTR_PROBE_SPEC | 3,
 	/** probe the record whose key is less/equal to the provided key */
-	BTR_PROBE_LE		= BTR_PROBE_SPEC | 4,
+	BTR_PROBE_LE = BTR_PROBE_SPEC | 4,
 } dbtree_probe_opc_t;
 
 /** the return value of to_hkey_cmp/to_key_cmp callback */
 enum btr_key_cmp_rc {
-	BTR_CMP_EQ	= (0),		/* equal */
-	BTR_CMP_LT	= (1 << 0),	/* less than */
-	BTR_CMP_GT	= (1 << 1),	/* greater than */
+	BTR_CMP_EQ = (0),      /* equal */
+	BTR_CMP_LT = (1 << 0), /* less than */
+	BTR_CMP_GT = (1 << 1), /* greater than */
 	/**
 	 * User can return it combined with BTR_CMP_LT/GT. If it is set,
 	 * dbtree can fetch/update value even the provided key is less/greater
 	 * than the compared key.
 	 */
-	BTR_CMP_UNKNOWN	= (1 << 2),	/* unset */
-	BTR_CMP_ERR	= (1 << 3),	/* error */
+	BTR_CMP_UNKNOWN = (1 << 2), /* unset */
+	BTR_CMP_ERR     = (1 << 3), /* error */
 };
 
 /**
@@ -202,16 +199,15 @@ typedef struct {
 	 * \param key	[IN]	key buffer
 	 * \param hkey	[OUT]	hashed key
 	 */
-	void		(*to_hkey_gen)(struct btr_instance *tins,
-				       d_iov_t *key, void *hkey);
+	void (*to_hkey_gen)(struct btr_instance *tins, d_iov_t *key, void *hkey);
 	/** Static callback to get size of the hashed key. */
-	int		(*to_hkey_size)(void);
+	int (*to_hkey_size)(void);
 
 	/** Static callback to metadata size of the record
 	 *
 	 * \param alloc_overhead[IN]	Expected per-allocation overhead
 	 */
-	int		(*to_rec_msize)(int alloc_ovheread);
+	int (*to_rec_msize)(int alloc_ovheread);
 	/**
 	 * Optional:
 	 * Comparison of hashed key.
@@ -231,8 +227,7 @@ typedef struct {
 	 *		return any other value will cause assertion, segfault or
 	 *		other undefined result.
 	 */
-	int		(*to_hkey_cmp)(struct btr_instance *tins,
-				       struct btr_record *rec, void *hkey);
+	int (*to_hkey_cmp)(struct btr_instance *tins, struct btr_record *rec, void *hkey);
 	/**
 	 * Optional:
 	 * Comparison of real key. It can be ignored if there is no hash
@@ -253,8 +248,7 @@ typedef struct {
 	 *		return any other value will cause assertion, segfault or
 	 *		other undefined result.
 	 */
-	int		(*to_key_cmp)(struct btr_instance *tins,
-				      struct btr_record *rec, d_iov_t *key);
+	int (*to_key_cmp)(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key);
 
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
@@ -266,9 +260,7 @@ typedef struct {
 	 * @param key		[IN]	The current key of iteration.
 	 * @param anchor	[OUT]	Anchor for the iteration
 	 */
-	void		(*to_key_encode)(struct btr_instance *tins,
-					 d_iov_t *key,
-					 daos_anchor_t *anchor);
+	void (*to_key_encode)(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor);
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
 	 *
@@ -278,9 +270,7 @@ typedef struct {
 	 *				be decoded to key.
 	 * @param anchor	[IN]	Anchor of where iteration process is.
 	 */
-	void		(*to_key_decode)(struct btr_instance *tins,
-					 d_iov_t *key,
-					 daos_anchor_t *anchor);
+	void (*to_key_decode)(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor);
 
 	/**
 	 * Allocate record body for \a key and \a val.
@@ -295,9 +285,8 @@ typedef struct {
 	 *			See \a btr_record for the details.
 	 * \param val_out [OUT]	Returned value address.
 	 */
-	int		(*to_rec_alloc)(struct btr_instance *tins,
-					d_iov_t *key, d_iov_t *val,
-					struct btr_record *rec, d_iov_t *val_out);
+	int (*to_rec_alloc)(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
+			    struct btr_record *rec, d_iov_t *val_out);
 	/**
 	 * Free the record body stored in \a rec::rec_off
 	 *
@@ -310,8 +299,7 @@ typedef struct {
 	 *			allocator/GC address for externally allocated
 	 *			resources.
 	 */
-	int		(*to_rec_free)(struct btr_instance *tins,
-				       struct btr_record *rec, void *args);
+	int (*to_rec_free)(struct btr_instance *tins, struct btr_record *rec, void *args);
 	/**
 	 * Fetch value or both key & value of a record.
 	 *
@@ -323,9 +311,8 @@ typedef struct {
 	 * \param val	[OUT]	Sink buffer for the returned value or the
 	 *			value address.
 	 */
-	int		(*to_rec_fetch)(struct btr_instance *tins,
-					struct btr_record *rec,
-					d_iov_t *key, d_iov_t *val);
+	int (*to_rec_fetch)(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
+			    d_iov_t *val);
 	/**
 	 * Update value of a record, the new value should be stored in the
 	 * current rec::rec_off.
@@ -342,9 +329,8 @@ typedef struct {
 	 *			and rec_alloc() to create a new record.
 	 *		-ve	error code
 	 */
-	int		(*to_rec_update)(struct btr_instance *tins,
-					 struct btr_record *rec,
-					 d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
+	int (*to_rec_update)(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
+			     d_iov_t *val, d_iov_t *val_out);
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
@@ -353,9 +339,8 @@ typedef struct {
 	 * \param rec	[IN]	Record to get size from.
 	 * \param rstat	[OUT]	Returned key & value size.
 	 */
-	int		(*to_rec_stat)(struct btr_instance *tins,
-				       struct btr_record *rec,
-				       struct btr_rec_stat *rstat);
+	int (*to_rec_stat)(struct btr_instance *tins, struct btr_record *rec,
+			   struct btr_rec_stat *rstat);
 	/**
 	 * Convert record into readable string and store it in \a buf.
 	 *
@@ -369,9 +354,8 @@ typedef struct {
 	 * \param buf	[OUT]	Buffer to store the returned string.
 	 * \param buf_len [IN]	Buffer length.
 	 */
-	char	       *(*to_rec_string)(struct btr_instance *tins,
-					 struct btr_record *rec, bool leaf,
-					 char *buf, int buf_len);
+	char *(*to_rec_string)(struct btr_instance *tins, struct btr_record *rec, bool leaf,
+			       char *buf, int buf_len);
 	/**
 	 * Optional:
 	 * Check whether the given record is available to outside or not.
@@ -393,9 +377,8 @@ typedef struct {
 	 *					some time later.
 	 *		Other negative values on error.
 	 */
-	int		(*to_check_availability)(struct btr_instance *tins,
-						 struct btr_record *rec,
-						 uint32_t intent);
+	int (*to_check_availability)(struct btr_instance *tins, struct btr_record *rec,
+				     uint32_t intent);
 	/**
 	 * Allocate a tree node
 	 *
@@ -404,7 +387,7 @@ typedef struct {
 	 * \param size	[IN]	Node size
 	 * \a return		Allocated node address (offset within the pool)
 	 */
-	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
+	umem_off_t (*to_node_alloc)(struct btr_instance *tins, int size);
 
 } btr_ops_t;
 
@@ -413,31 +396,31 @@ typedef struct {
  */
 struct btr_instance {
 	/** instance of memory class for the tree */
-	struct umem_instance		 ti_umm;
+	struct umem_instance ti_umm;
 	/** Private data for opener */
-	void				*ti_priv;
+	void                *ti_priv;
 	/**
 	 * The container open handle.
 	 */
-	daos_handle_t			 ti_coh;
+	daos_handle_t        ti_coh;
 	/** root umem offset */
-	umem_off_t			 ti_root_off;
+	umem_off_t           ti_root_off;
 	/** root pointer */
-	struct btr_root			*ti_root;
+	struct btr_root     *ti_root;
 	/** Customized operations for the tree */
-	btr_ops_t			*ti_ops;
+	btr_ops_t           *ti_ops;
 };
 
 /**
  * Inline data structure for embedding the key bundle and key into an anchor
  * for serialization.
  */
-#define	EMBEDDED_KEY_MAX	100
+#define EMBEDDED_KEY_MAX 100
 struct btr_embedded_key {
 	/** Inlined iov key references */
-	uint32_t	ek_size;
+	uint32_t      ek_size;
 	/** Inlined buffer the key references*/
-	unsigned char	ek_key[EMBEDDED_KEY_MAX];
+	unsigned char ek_key[EMBEDDED_KEY_MAX];
 };
 
 D_CASSERT(sizeof(struct btr_embedded_key) == DAOS_ANCHOR_BUF_MAX);
@@ -445,8 +428,7 @@ D_CASSERT(sizeof(struct btr_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 static inline void
 embedded_key_encode(d_iov_t *key, daos_anchor_t *anchor)
 {
-	struct btr_embedded_key *embedded =
-		(struct btr_embedded_key *)anchor->da_buf;
+	struct btr_embedded_key *embedded = (struct btr_embedded_key *)anchor->da_buf;
 
 	D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
 
@@ -458,12 +440,11 @@ embedded_key_encode(d_iov_t *key, daos_anchor_t *anchor)
 static inline void
 embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
 {
-	struct btr_embedded_key *embedded =
-		(struct btr_embedded_key *)anchor->da_buf;
+	struct btr_embedded_key *embedded = (struct btr_embedded_key *)anchor->da_buf;
 
 	/* Fix the pointer first */
-	key->iov_buf = &embedded->ek_key[0];
-	key->iov_len = embedded->ek_size;
+	key->iov_buf     = &embedded->ek_key[0];
+	key->iov_len     = embedded->ek_size;
 	key->iov_buf_len = embedded->ek_size;
 }
 
@@ -475,23 +456,23 @@ embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
  */
 enum btr_feats {
 	/** Key is an unsigned integer.  Implies no hash or key callbacks */
-	BTR_FEAT_UINT_KEY		= (1 << 0),
+	BTR_FEAT_UINT_KEY = (1 << 0),
 	/** Key is not hashed or stored by library.  User must provide
 	 * to_key_cmp callback
 	 */
-	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	BTR_FEAT_DIRECT_KEY = (1 << 1),
 	/** Root is dynamically sized up to tree order.  This bit is set for a
 	 *  tree class
 	 */
-	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
+	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
-	BTR_FEAT_SKIP_LEAF_REBAL	= (1 << 3),
+	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
 
 	/** Put new entries above this line */
 	/** Convenience entry for calculating mask for all feats */
 	BTR_FEAT_HELPER,
 	/** Mask for all feats */
-	BTR_FEAT_MASK			= ((BTR_FEAT_HELPER - 1) << 1) - 1,
+	BTR_FEAT_MASK = ((BTR_FEAT_HELPER - 1) << 1) - 1,
 };
 
 D_CASSERT(((BTR_FEAT_HELPER - 1) & BTR_FEAT_MASK) == (BTR_FEAT_HELPER - 1));
@@ -518,42 +499,55 @@ dbtree_is_empty_inplace(const struct btr_root *root)
 	return root->tr_depth == 0;
 }
 
-int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
-			   btr_ops_t *ops);
-int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
-		   unsigned int tree_order, struct umem_attr *uma,
-		   umem_off_t *root_offp, daos_handle_t *toh);
-int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
-			   unsigned int tree_order, struct umem_attr *uma,
-			   struct btr_root *root, daos_handle_t *toh);
-int  dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
-			      unsigned int tree_order, struct umem_attr *uma,
-			      struct btr_root *root, daos_handle_t coh,
-			      void *priv, daos_handle_t *toh);
-int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
-		 daos_handle_t *toh);
-int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
-			 daos_handle_t *toh);
-int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *priv, daos_handle_t *toh);
-int  dbtree_close(daos_handle_t toh);
-int  dbtree_destroy(daos_handle_t toh, void *args);
-int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
-int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
-int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
-int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
-int  dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out);
-int  dbtree_fetch_prev(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
-int  dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
-int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
-int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
-		   d_iov_t *key, void *args);
-int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
-		  struct btr_stat *stat);
-int  dbtree_is_empty(daos_handle_t toh);
-int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
+int
+dbtree_class_register(unsigned int tree_class, uint64_t tree_feats, btr_ops_t *ops);
+int
+dbtree_create(unsigned int tree_class, uint64_t tree_feats, unsigned int tree_order,
+	      struct umem_attr *uma, umem_off_t *root_offp, daos_handle_t *toh);
+int
+dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats, unsigned int tree_order,
+		      struct umem_attr *uma, struct btr_root *root, daos_handle_t *toh);
+int
+dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats, unsigned int tree_order,
+			 struct umem_attr *uma, struct btr_root *root, daos_handle_t coh,
+			 void *priv, daos_handle_t *toh);
+int
+dbtree_open(umem_off_t root_off, struct umem_attr *uma, daos_handle_t *toh);
+int
+dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma, daos_handle_t *toh);
+int
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       daos_handle_t *toh);
+int
+dbtree_close(daos_handle_t toh);
+int
+dbtree_destroy(daos_handle_t toh, void *args);
+int
+dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
+int
+dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
+int
+dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
+int
+dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
+	     d_iov_t *key_out, d_iov_t *val_out);
+int
+dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out);
+int
+dbtree_fetch_prev(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
+int
+dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
+int
+dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
+	      d_iov_t *val, d_iov_t *val_out);
+int
+dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key, void *args);
+int
+dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat);
+int
+dbtree_is_empty(daos_handle_t toh);
+int
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
 
 static inline uint64_t
 dbtree_feats_get(struct btr_root *root)
@@ -561,7 +555,8 @@ dbtree_feats_get(struct btr_root *root)
 	return root->tr_feats;
 }
 
-struct umem_instance *btr_hdl2umm(daos_handle_t toh);
+struct umem_instance *
+btr_hdl2umm(daos_handle_t toh);
 
 /**
  * hashed key for the key-btree, it is stored in btr_record::rec_hkey
@@ -571,7 +566,6 @@ struct umem_instance *btr_hdl2umm(daos_handle_t toh);
  *  to encode the type (hash or inline) and the length of the inline key.
  */
 #define KH_INLINE_MAX 15
-
 
 struct ktr_hkey {
 	/** murmur64 hash */
@@ -583,32 +577,35 @@ struct ktr_hkey {
 		 */
 		struct {
 			/** Length of key shifted left by 2 bits. */
-			uint32_t	kh_len;
+			uint32_t kh_len;
 			/** string32 hash of key */
-			uint32_t	kh_str32;
+			uint32_t kh_str32;
 			/** Murmur hash of key */
-			uint64_t	kh_murmur64;
+			uint64_t kh_murmur64;
 		};
 		struct {
 			/** length shifted left by 2 bits. Low bit means inline
 			 *  key.  An extra bit is reserved for future use.
 			 */
-			char		kh_inline_len;
+			char kh_inline_len;
 			/** Inline key */
-			char		kh_inline[KH_INLINE_MAX];
+			char kh_inline[KH_INLINE_MAX];
 		};
 		/** For comparison convenience */
-		uint64_t		kh_hash[2];
+		uint64_t kh_hash[2];
 	};
 };
 
 /** hash seed for murmur hash */
-#define BTR_MUR_SEED	0xC0FFEE
+#define BTR_MUR_SEED 0xC0FFEE
 
 D_CASSERT(sizeof(struct ktr_hkey) == 16);
-void hkey_common_gen(d_iov_t *key_iov, void *hkey);
-int hkey_common_cmp(struct ktr_hkey *k1, struct ktr_hkey *k2);
-void hkey_int_gen(d_iov_t *key,  void *hkey);
+void
+hkey_common_gen(d_iov_t *key_iov, void *hkey);
+int
+hkey_common_cmp(struct ktr_hkey *k1, struct ktr_hkey *k2);
+void
+hkey_int_gen(d_iov_t *key, void *hkey);
 
 /******* iterator API ******************************************************/
 
@@ -618,21 +615,28 @@ enum {
 	 * It can reduce memory consumption, but state of iterator can be
 	 * overwritten by other tree operation.
 	 */
-	BTR_ITER_EMBEDDED	= (1 << 0),
+	BTR_ITER_EMBEDDED = (1 << 0),
 };
 
-int dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
-int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
-			daos_handle_t *ih);
-int dbtree_iter_finish(daos_handle_t ih);
-int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
-int dbtree_iter_next(daos_handle_t ih);
-int dbtree_iter_prev(daos_handle_t ih);
-int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
-		      d_iov_t *val, daos_anchor_t *anchor);
-int dbtree_iter_delete(daos_handle_t ih, void *args);
-int dbtree_iter_empty(daos_handle_t ih);
+int
+dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
+int
+dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih);
+int
+dbtree_iter_finish(daos_handle_t ih);
+int
+dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent, d_iov_t *key,
+		  daos_anchor_t *anchor);
+int
+dbtree_iter_next(daos_handle_t ih);
+int
+dbtree_iter_prev(daos_handle_t ih);
+int
+dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key, d_iov_t *val, daos_anchor_t *anchor);
+int
+dbtree_iter_delete(daos_handle_t ih, void *args);
+int
+dbtree_iter_empty(daos_handle_t ih);
 
 /**
  * Prototype of dbtree_iterate() callbacks. When a callback returns an rc,
@@ -641,18 +645,18 @@ int dbtree_iter_empty(daos_handle_t ih);
  *   - if rc == 1, dbtree_iterate() stops and returns 0;
  *   - otherwise, dbtree_iterate() stops and returns rc.
  */
-typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
-				   d_iov_t *val, void *arg);
-int dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
-		   dbtree_iterate_cb_t cb, void *arg);
+typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg);
+int
+dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward, dbtree_iterate_cb_t cb,
+	       void *arg);
 
 enum {
-	DBTREE_VOS_BEGIN	= 10,
-	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,
-	DBTREE_DSM_BEGIN	= 20,
-	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
-	DBTREE_SMD_BEGIN	= 30,
-	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
+	DBTREE_VOS_BEGIN = 10,
+	DBTREE_VOS_END   = DBTREE_VOS_BEGIN + 9,
+	DBTREE_DSM_BEGIN = 20,
+	DBTREE_DSM_END   = DBTREE_DSM_BEGIN + 9,
+	DBTREE_SMD_BEGIN = 30,
+	DBTREE_SMD_END   = DBTREE_SMD_BEGIN + 9,
 };
 
 /** Get overhead constants for a given tree class
@@ -665,7 +669,8 @@ enum {
  *
  * \return 0 on success, error otherwise
  */
-int dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t feats,
-			int tree_order, struct daos_tree_overhead *ovhd);
+int
+dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t feats, int tree_order,
+		    struct daos_tree_overhead *ovhd);
 
 #endif /* __DAOS_BTREE_H__ */

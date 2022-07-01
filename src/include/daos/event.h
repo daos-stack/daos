@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,14 +24,14 @@ enum daos_ev_flags {
 	 * in the EQ anymore, upper level stack is supposed to be notified by
 	 * callback.
 	 */
-	DAOS_EVF_NO_POLL	= (1 << 0),
+	DAOS_EVF_NO_POLL = (1 << 0),
 	/**
 	 * Only useful for parent event:
 	 * without this flag, a parent event will be automatically launched
 	 * if any child event is launched. With this flag, a parent event
 	 * always needs to be explicitly launched.
 	 */
-	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
+	DAOS_EVF_NEED_LAUNCH = (1 << 1),
 };
 
 struct tse_task_t;
@@ -66,8 +66,9 @@ daos_task2ctx(tse_task_t *task);
  *
  * \return		zero on success, negative value if error
  */
-int daos_event_init_adv(struct daos_event *ev, enum daos_ev_flags flags,
-			daos_handle_t eqh, struct daos_event *parent);
+int
+daos_event_init_adv(struct daos_event *ev, enum daos_ev_flags flags, daos_handle_t eqh,
+		    struct daos_event *parent);
 
 /**
  * Mark the event completed, i.e. move this event
@@ -116,7 +117,6 @@ daos_event_destroy(struct daos_event *ev, bool force);
 int
 daos_event_destroy_children(struct daos_event *ev, bool force);
 
-
 /**
  * Wait for completion of the private event
  * This function is deprecated, use dc_task_new() and dc_task_schedule()
@@ -141,8 +141,7 @@ daos_event_is_priv(daos_event_t *ev);
  * scheduler of event/EQ.
  */
 int
-dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
-	       tse_task_t **taskp);
+dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev, tse_task_t **taskp);
 
 /**
  * Schedule the task created by dc_task_create, this function will execute
@@ -168,41 +167,30 @@ dc_task_get_opc(tse_task_t *task);
  *
  * NB: There are still a bunch of functions w/o wrappers.
  */
-#define dc_task_addref(task)					\
-	tse_task_addref(task)
+#define dc_task_addref(task)            tse_task_addref(task)
 
-#define dc_task_decref(task)					\
-	tse_task_decref(task)
+#define dc_task_decref(task)            tse_task_decref(task)
 
-#define dc_task_set_priv(task, priv)				\
-	tse_task_set_priv_internal(task, priv)
+#define dc_task_set_priv(task, priv)    tse_task_set_priv_internal(task, priv)
 
-#define dc_task_get_priv(task)					\
-	tse_task_get_priv_internal(task)
+#define dc_task_get_priv(task)          tse_task_get_priv_internal(task)
 
-#define dc_task_list_add(task, head)				\
-	tse_task_list_add(task, head)
+#define dc_task_list_add(task, head)    tse_task_list_add(task, head)
 
-#define dc_task_list_del(task)					\
-	tse_task_list_del(task)
+#define dc_task_list_del(task)          tse_task_list_del(task)
 
-#define dc_task_list_first(head)				\
-	tse_task_list_first(head)
+#define dc_task_list_first(head)        tse_task_list_first(head)
 
-#define dc_task_list_depend(head, task)				\
-	tse_task_list_depend(head, task)
+#define dc_task_list_depend(head, task) tse_task_list_depend(head, task)
 
-#define dc_task_depend_list(task, head)				\
-	tse_task_depend_list(task, head)
+#define dc_task_depend_list(task, head) tse_task_depend_list(task, head)
 
-#define dc_task_reg_comp_cb(task, comp_cb, arg, arg_size)	\
+#define dc_task_reg_comp_cb(task, comp_cb, arg, arg_size)                                          \
 	tse_task_register_comp_cb(task, comp_cb, arg, arg_size)
 
-#define dc_task_depend(task, dep_nr, dep_tasks)			\
-	tse_task_register_deps(task, dep_nr, dep_tasks)
+#define dc_task_depend(task, dep_nr, dep_tasks) tse_task_register_deps(task, dep_nr, dep_tasks)
 
-#define dc_task_resched(task)					\
-	tse_task_reinit(task)
+#define dc_task_resched(task)                   tse_task_reinit(task)
 
 void
 dc_task_list_sched(d_list_t *head, bool instant);

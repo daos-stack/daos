@@ -27,11 +27,11 @@ extern "C" {
 #endif
 
 /** Env to specify fault injection config file */
-#define D_FAULT_CONFIG_ENV	"D_FI_CONFIG"
+#define D_FAULT_CONFIG_ENV "D_FI_CONFIG"
 
 /** global on/off switch for fault injection */
-extern unsigned int	d_fault_inject;
-extern unsigned int	d_fault_config_file;
+extern unsigned int           d_fault_inject;
+extern unsigned int           d_fault_config_file;
 
 /* Location used for inecting memory allocation failures into D_ALLOC
  * uses fault_id 0
@@ -52,35 +52,35 @@ struct d_fault_attr_t {
 	 * config id, used to select configuration from the fault_inject config
 	 * file
 	 */
-	uint32_t		fa_id;
+	uint32_t           fa_id;
 	/**
 	 * inject faults every n-th occurrence. If interval is set to 5 and
 	 * probability is set to 20, fault injection only occurs on every 5-th
 	 * hit of fault_id with a 20% probability.
 	 */
-	uint32_t		fa_interval;
+	uint32_t           fa_interval;
 	/**
 	 * max number of faults to inject. 0 means unlimited. After max_faults
 	 * is reached, no faults will be injected for fault_id.
 	 */
-	uint64_t		fa_max_faults;
+	uint64_t           fa_max_faults;
 	/** counter of injected faults */
-	uint64_t		fa_num_faults;
+	uint64_t           fa_num_faults;
 	/** number of times this injection point has been evaluated */
-	uint64_t		fa_num_hits;
+	uint64_t           fa_num_hits;
 	/** argument string. Interpretation of content is up to the user */
-	char			*fa_argument;
+	char              *fa_argument;
 	/** spin lock to protect this struct */
-	pthread_spinlock_t	fa_lock;
+	pthread_spinlock_t fa_lock;
 	/**
 	 * the error code to inject. Can be retrieved by d_fault_attr_err_code()
 	 */
-	int32_t			fa_err_code;
+	int32_t            fa_err_code;
 	/**
 	 * state for nrand48. this allows each injection point has its own
 	 * independent random number sequence.
 	 */
-	unsigned short		fa_rand_state[3];
+	unsigned short     fa_rand_state[3];
 	/**
 	 * the frequency faults should be injected, calculated by:
 	 *
@@ -89,8 +89,8 @@ struct d_fault_attr_t {
 	 * e.g. fa_probability_x = 123, fa_probability_y = 1000
 	 * means faults will be injected randomly with frequency 12.3%
 	 */
-	uint32_t			fa_probability_x;
-	uint32_t			fa_probability_y;
+	uint32_t           fa_probability_x;
+	uint32_t           fa_probability_y;
 };
 
 /**
@@ -99,45 +99,50 @@ struct d_fault_attr_t {
  *
  * \return                   DER_SUCCESS on success, negative value on error
  */
-int d_fault_inject_init(void);
+int
+d_fault_inject_init(void);
 
 /**
  * Finalize the fault injection framework
  *
  * \return                   DER_SUCCESS on success, negative value on error
  */
-int d_fault_inject_fini(void);
+int
+d_fault_inject_fini(void);
 
 /**
  * Start injecting faults.
  *
  * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
-int d_fault_inject_enable(void);
+int
+d_fault_inject_enable(void);
 
 /**
  * Stop injecting faults.
  *
  * \return                   DER_SUCCESS on success, -DER_NOSYS if not supported
  */
-int d_fault_inject_disable(void);
+int
+d_fault_inject_disable(void);
 
-bool d_fault_inject_is_enabled(void);
+bool
+d_fault_inject_is_enabled(void);
 
-bool d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
+bool
+d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
 
 /**
  * use this macro to determine if a fault should be injected at a specific call
  * site
  */
-#define D_SHOULD_FAIL(fault_attr)			\
-	({								\
-		bool __rb;						\
-		__rb = d_fault_inject && d_should_fail(fault_attr);	\
-		if (__rb)						\
-			D_WARN("fault_id %d, injecting fault.\n",	\
-				fault_attr->fa_id);			\
-		__rb;							\
+#define D_SHOULD_FAIL(fault_attr)                                                                  \
+	({                                                                                         \
+		bool __rb;                                                                         \
+		__rb = d_fault_inject && d_should_fail(fault_attr);                                \
+		if (__rb)                                                                          \
+			D_WARN("fault_id %d, injecting fault.\n", fault_attr->fa_id);              \
+		__rb;                                                                              \
 	})
 
 /**

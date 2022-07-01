@@ -55,14 +55,14 @@ extern "C" {
  */
 struct d_binheap_node {
 	/** Index into the binary tree */
-	uint32_t	chn_idx;
+	uint32_t chn_idx;
 };
 
-#define DBH_SHIFT	(9)
-#define DBH_SIZE	(1U << DBH_SHIFT)	/* #ptrs per level */
-#define DBH_MASK	(DBH_SIZE - 1)
-#define DBH_NOB		(DBH_SIZE * sizeof(struct d_binheap_node *))
-#define DBH_POISON	(0xdeadbeef)
+#define DBH_SHIFT  (9)
+#define DBH_SIZE   (1U << DBH_SHIFT) /* #ptrs per level */
+#define DBH_MASK   (DBH_SIZE - 1)
+#define DBH_NOB    (DBH_SIZE * sizeof(struct d_binheap_node *))
+#define DBH_POISON (0xdeadbeef)
 
 /**
  * Binary heap feature bits.
@@ -76,12 +76,12 @@ enum d_bh_feats {
 	 * The bin heap has no lock, it means the bin heap is protected
 	 * by external lock, or only accessed by a single thread.
 	 */
-	DBH_FT_NOLOCK		= (1 << 0),
+	DBH_FT_NOLOCK = (1 << 0),
 
 	/**
 	 * It is a read-mostly bin heap, so it is protected by RW lock.
 	 */
-	DBH_FT_RWLOCK		= (1 << 1),
+	DBH_FT_RWLOCK = (1 << 1),
 };
 
 struct d_binheap;
@@ -137,26 +137,26 @@ struct d_binheap_ops {
 struct d_binheap {
 	/** different type of locks based on cbt_feats */
 	union {
-		pthread_mutex_t		    d_bh_mutex;
-		pthread_rwlock_t	    d_bh_rwlock;
+		pthread_mutex_t  d_bh_mutex;
+		pthread_rwlock_t d_bh_rwlock;
 	};
 	/** feature bits */
-	uint32_t			    d_bh_feats;
+	uint32_t                  d_bh_feats;
 
 	/** Triple indirect */
-	struct d_binheap_node		****d_bh_nodes3;
+	struct d_binheap_node ****d_bh_nodes3;
 	/** double indirect */
-	struct d_binheap_node		 ***d_bh_nodes2;
+	struct d_binheap_node  ***d_bh_nodes2;
 	/** single indirect */
-	struct d_binheap_node		  **d_bh_nodes1;
+	struct d_binheap_node   **d_bh_nodes1;
 	/** operations table */
-	struct d_binheap_ops		   *d_bh_ops;
+	struct d_binheap_ops     *d_bh_ops;
 	/** private data */
-	void				   *d_bh_priv;
+	void                     *d_bh_priv;
 	/** # elements referenced */
-	uint32_t			    d_bh_nodes_cnt;
+	uint32_t                  d_bh_nodes_cnt;
 	/** high water mark */
-	uint32_t			    d_bh_hwm;
+	uint32_t                  d_bh_hwm;
 };
 
 /**
@@ -170,8 +170,9 @@ struct d_binheap {
  *
  * \return		zero on success, negative value if error
  */
-int d_binheap_create(uint32_t feats, uint32_t count, void *priv,
-		    struct d_binheap_ops *ops, struct d_binheap **h);
+int
+d_binheap_create(uint32_t feats, uint32_t count, void *priv, struct d_binheap_ops *ops,
+		 struct d_binheap **h);
 
 /**
  * Creates and initializes a binary heap instance inplace.
@@ -184,8 +185,9 @@ int d_binheap_create(uint32_t feats, uint32_t count, void *priv,
  *
  * \return		zero on success, negative value if error
  */
-int d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
-			    struct d_binheap_ops *ops, struct d_binheap *h);
+int
+d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv, struct d_binheap_ops *ops,
+			 struct d_binheap *h);
 
 /**
  * Releases all resources associated with a binary heap instance.
@@ -195,7 +197,8 @@ int d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
  *
  * \param[in] h		The binary heap object
  */
-void d_binheap_destroy(struct d_binheap *h);
+void
+d_binheap_destroy(struct d_binheap *h);
 
 /**
  * Releases all resources associated with a binary heap instance inplace.
@@ -205,7 +208,8 @@ void d_binheap_destroy(struct d_binheap *h);
  *
  * \param[in] h		The binary heap object
  */
-void d_binheap_destroy_inplace(struct d_binheap *h);
+void
+d_binheap_destroy_inplace(struct d_binheap *h);
 
 /**
  * Obtains a pointer to a heap node, given its index into the binary tree.
@@ -216,7 +220,8 @@ void d_binheap_destroy_inplace(struct d_binheap *h);
  * \return		valid-pointer of the requested heap node,
  *			NULL if index is out of bounds
  */
-struct d_binheap_node *d_binheap_find(struct d_binheap *h, uint32_t idx);
+struct d_binheap_node *
+d_binheap_find(struct d_binheap *h, uint32_t idx);
 
 /**
  * Sort-inserts a node into the binary heap.
@@ -227,7 +232,8 @@ struct d_binheap_node *d_binheap_find(struct d_binheap *h, uint32_t idx);
  * \return		0 if the node inserted successfully
  *			negative value if error
  */
-int d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e);
+int
+d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e);
 
 /**
  * Removes a node from the binary heap.
@@ -235,7 +241,8 @@ int d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e);
  * \param[in] h		The heap
  * \param[in] e		The node
  */
-void d_binheap_remove(struct d_binheap *h, struct d_binheap_node *e);
+void
+d_binheap_remove(struct d_binheap *h, struct d_binheap_node *e);
 
 /**
  * Removes the root node from the binary heap.
@@ -245,7 +252,8 @@ void d_binheap_remove(struct d_binheap *h, struct d_binheap_node *e);
  * \return		valid pointer of the removed root node,
  *			or NULL when empty.
  */
-struct d_binheap_node *d_binheap_remove_root(struct d_binheap *h);
+struct d_binheap_node *
+d_binheap_remove_root(struct d_binheap *h);
 
 /**
  * Queries the size (number of nodes) of the binary heap.

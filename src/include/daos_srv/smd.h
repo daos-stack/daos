@@ -18,25 +18,25 @@
 #include <daos_srv/daos_engine.h>
 
 enum smd_dev_state {
-	SMD_DEV_NORMAL	= 0,
+	SMD_DEV_NORMAL = 0,
 	SMD_DEV_FAULTY,
 };
 
 struct smd_dev_info {
-	d_list_t		 sdi_link;
-	uuid_t			 sdi_id;
-	enum smd_dev_state	 sdi_state;
-	uint32_t		 sdi_tgt_cnt;
-	int			*sdi_tgts;
+	d_list_t           sdi_link;
+	uuid_t             sdi_id;
+	enum smd_dev_state sdi_state;
+	uint32_t           sdi_tgt_cnt;
+	int               *sdi_tgts;
 };
 
 struct smd_pool_info {
-	d_list_t	 spi_link;
-	uuid_t		 spi_id;
-	uint64_t	 spi_blob_sz;
-	uint32_t	 spi_tgt_cnt;
-	int		*spi_tgts;
-	uint64_t	*spi_blobs;
+	d_list_t  spi_link;
+	uuid_t    spi_id;
+	uint64_t  spi_blob_sz;
+	uint32_t  spi_tgt_cnt;
+	int      *spi_tgts;
+	uint64_t *spi_blobs;
 };
 
 /**
@@ -46,12 +46,14 @@ struct smd_pool_info {
  *
  * \return		Zero on success, negative value on error
  */
-int smd_init(struct sys_db *db);
+int
+smd_init(struct sys_db *db);
 
 /**
  * Finalize SMD store
  */
-void smd_fini(void);
+void
+smd_fini(void);
 
 /**
  * Assign a NVMe device to a target (VOS xstream)
@@ -61,7 +63,8 @@ void smd_fini(void);
  *
  * \return		Zero on success, negative value on error
  */
-int smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id);
+int
+smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id);
 
 /**
  * Unassign a NVMe device from a target (VOS xstream)
@@ -71,7 +74,8 @@ int smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id);
  *
  * \return		Zero on success, negative value on error
  */
-int smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id);
+int
+smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id);
 
 /**
  * Set a NVMe device state
@@ -81,7 +85,8 @@ int smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id);
  *
  * \return		Zero on success, negative value on error
  */
-int smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state);
+int
+smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state);
 
 /**
  * Get NVMe device info, caller is responsible to free @dev_info
@@ -91,7 +96,8 @@ int smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info);
+int
+smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info);
 
 /**
  * Get NVMe device info by target ID, caller is responsible to free @dev_info
@@ -101,7 +107,8 @@ int smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_get_by_tgt(uint32_t tgt_id, struct smd_dev_info **dev_info);
+int
+smd_dev_get_by_tgt(uint32_t tgt_id, struct smd_dev_info **dev_info);
 
 /**
  * List all NVMe devices, caller is responsible to free list items
@@ -111,9 +118,11 @@ int smd_dev_get_by_tgt(uint32_t tgt_id, struct smd_dev_info **dev_info);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_list(d_list_t *dev_list, int *dev_cnt);
+int
+smd_dev_list(d_list_t *dev_list, int *dev_cnt);
 
-static inline void smd_dev_free_info(struct smd_dev_info *dev_info)
+static inline void
+smd_dev_free_info(struct smd_dev_info *dev_info)
 {
 	if (dev_info->sdi_tgts != NULL)
 		D_FREE(dev_info->sdi_tgts);
@@ -130,7 +139,8 @@ static inline void smd_dev_free_info(struct smd_dev_info *dev_info)
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
+int
+smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
 
 /**
  * Assign a blob to a VOS pool target
@@ -142,8 +152,8 @@ int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		     uint64_t blob_sz);
+int
+smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, uint64_t blob_sz);
 
 /**
  * Unassign a VOS pool target
@@ -153,7 +163,8 @@ int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id);
+int
+smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id);
 
 /**
  * Get pool info, caller is responsible to free @pool_info
@@ -163,7 +174,8 @@ int smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
+int
+smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
 
 /**
  * Get blob ID mapped to pool:target
@@ -174,7 +186,8 @@ int smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id, uint64_t *blob_id);
+int
+smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id, uint64_t *blob_id);
 
 /**
  * Get pool info, caller is responsible to free list items
@@ -184,7 +197,8 @@ int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id, uint64_t *blob_id);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
+int
+smd_pool_list(d_list_t *pool_list, int *pool_cnt);
 
 /**
  * Convert device state to human-readable string
@@ -193,7 +207,8 @@ int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
  *
  * \return			Static string representing enum value
  */
-char *smd_dev_stat2str(enum smd_dev_state state);
+char *
+smd_dev_stat2str(enum smd_dev_state state);
 
 static inline void
 smd_pool_free_info(struct smd_pool_info *pool_info)

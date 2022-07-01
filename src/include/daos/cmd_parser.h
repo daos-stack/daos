@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
  * \param [IN]	prompt		prompt string
  * \param [IN]	cmd_func	command functions
  */
-int cmd_parser(struct option *opts, const char *prompt,
-	       int (*cmd_func)(char opc, char *args));
+int
+cmd_parser(struct option *opts, const char *prompt, int (*cmd_func)(char opc, char *args));
 
 #endif /* __CMD_PARSER_H__ */

@@ -32,7 +32,7 @@ extern "C" {
  */
 
 /** Local handle for an incast variable namespace */
-typedef void		*crt_iv_namespace_t;
+typedef void    *crt_iv_namespace_t;
 
 /**
  * The version is an optional feature of incast variable. Each iv can have its
@@ -46,7 +46,7 @@ typedef void		*crt_iv_namespace_t;
  * for updates, for this usage user can always use one same version for example
  * zero.
  */
-typedef uint32_t	crt_iv_ver_t;
+typedef uint32_t crt_iv_ver_t;
 
 /**
  * The shortcut hints to optimize the request propagation.
@@ -64,13 +64,13 @@ typedef uint32_t	crt_iv_ver_t;
  */
 typedef enum {
 	/** no shortcut */
-	CRT_IV_SHORTCUT_NONE	= 0,
+	CRT_IV_SHORTCUT_NONE = 0,
 	/** directly send request to root node */
-	CRT_IV_SHORTCUT_TO_ROOT	= 1
+	CRT_IV_SHORTCUT_TO_ROOT = 1
 } crt_iv_shortcut_t;
 
 /** key is the unique ID for IV within namespace */
-typedef d_iov_t	crt_iv_key_t;
+typedef d_iov_t crt_iv_key_t;
 
 /**
  * Operation flags passed to callbacks
@@ -105,9 +105,8 @@ typedef enum {
  *				need to forward to next hop,
  *				other negative value if error
  */
-typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
-				    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				    uint32_t flags, d_sg_list_t *iv_value,
+typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				    crt_iv_ver_t *iv_ver, uint32_t flags, d_sg_list_t *iv_value,
 				    void *arg);
 
 /**
@@ -127,9 +126,8 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  *				need to forward to next hop,
  *				other negative value if error
  */
-typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
-				     crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				     uint32_t flags, d_sg_list_t *iv_value,
+typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				     crt_iv_ver_t iv_ver, uint32_t flags, d_sg_list_t *iv_value,
 				     void *arg);
 
 /**
@@ -150,10 +148,8 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * ivo_on_fetch(). It's not related to the notion of prefeching data. Same for
  * pre_update() and pre_refresh().
  */
-typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
-				     crt_iv_key_t *iv_key,
-				     crt_generic_cb_t cb,
-				     void *cb_arg);
+typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				      crt_generic_cb_t cb, void *cb_arg);
 
 /**
  * If provided, this callback is executed on intermediate nodes during
@@ -169,10 +165,8 @@ typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
  *				the crt_iv_update() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
-typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
-				     crt_iv_key_t *iv_key,
-				     crt_generic_cb_t cb,
-				     void *cb_arg);
+typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				       crt_generic_cb_t cb, void *cb_arg);
 
 /**
  * If provided, this callback is executed on intermediate nodes during
@@ -188,10 +182,8 @@ typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
  *				the crt_iv_sync() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
-typedef void (*crt_iv_pre_refresh_cb_t)(crt_iv_namespace_t ivns,
-				     crt_iv_key_t *iv_key,
-				     crt_generic_cb_t cb,
-				     void *cb_arg);
+typedef void (*crt_iv_pre_refresh_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+					crt_generic_cb_t cb, void *cb_arg);
 
 /**
  * Incast variable on_refresh callback which will be called when the
@@ -211,9 +203,8 @@ typedef void (*crt_iv_pre_refresh_cb_t)(crt_iv_namespace_t ivns,
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
-				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				      d_sg_list_t *iv_value, bool invalidate,
+typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
 				      int rc, void *arg);
 
 /**
@@ -229,15 +220,13 @@ typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
-				   crt_iv_key_t *iv_key, d_rank_t *root);
-
+typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root);
 
 /**
  * Permission flag passed to crt_iv_on_get_cb_t
  */
 typedef enum {
-	CRT_IV_PERM_READ = 0x1,
+	CRT_IV_PERM_READ  = 0x1,
 	CRT_IV_PERM_WRITE = 0x2,
 } crt_iv_perm_t;
 
@@ -272,11 +261,9 @@ typedef enum {
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
-				  crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				  crt_iv_perm_t permission,
-				  d_sg_list_t *iv_value,
-				  void **arg);
+typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				  crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
+				  d_sg_list_t *iv_value, void **arg);
 
 /**
  * Put value function to return buffers retrieved for the specified iv_key
@@ -289,9 +276,7 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				  d_sg_list_t *iv_value,
-				  void *arg);
+typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *arg);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either
@@ -308,8 +293,8 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
  *
  * \return			true if keys match, false otherwise
  */
-typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns,
-				crt_iv_key_t *key1, crt_iv_key_t *key2);
+typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *key1,
+				       crt_iv_key_t *key2);
 
 /**
  * If provided, this callback will be called before the
@@ -324,22 +309,21 @@ typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns,
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_pre_sync_cb_t)(crt_iv_namespace_t ivns,
-				    crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				    d_sg_list_t *iv_value, void *arg);
+typedef int (*crt_iv_pre_sync_cb_t)(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+				    crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, void *arg);
 
 struct crt_iv_ops {
-	crt_iv_pre_fetch_cb_t	ivo_pre_fetch;
-	crt_iv_on_fetch_cb_t	ivo_on_fetch;
-	crt_iv_pre_update_cb_t	ivo_pre_update;
-	crt_iv_on_update_cb_t	ivo_on_update;
-	crt_iv_pre_refresh_cb_t	ivo_pre_refresh;
-	crt_iv_on_refresh_cb_t	ivo_on_refresh;
-	crt_iv_on_hash_cb_t	ivo_on_hash;
-	crt_iv_on_get_cb_t	ivo_on_get;
-	crt_iv_on_put_cb_t	ivo_on_put;
-	crt_iv_keys_match_cb_t	ivo_keys_match;
-	crt_iv_pre_sync_cb_t	ivo_pre_sync;
+	crt_iv_pre_fetch_cb_t   ivo_pre_fetch;
+	crt_iv_on_fetch_cb_t    ivo_on_fetch;
+	crt_iv_pre_update_cb_t  ivo_pre_update;
+	crt_iv_on_update_cb_t   ivo_on_update;
+	crt_iv_pre_refresh_cb_t ivo_pre_refresh;
+	crt_iv_on_refresh_cb_t  ivo_on_refresh;
+	crt_iv_on_hash_cb_t     ivo_on_hash;
+	crt_iv_on_get_cb_t      ivo_on_get;
+	crt_iv_on_put_cb_t      ivo_on_put;
+	crt_iv_keys_match_cb_t  ivo_keys_match;
+	crt_iv_pre_sync_cb_t    ivo_pre_sync;
 };
 
 /**
@@ -358,16 +342,16 @@ struct crt_iv_ops {
  * IV classes.
  */
 /* some IV feature bit flags for IV class */
-#define CRT_IV_CLASS_UPDATE_IN_ORDER	(0x0001U)
-#define CRT_IV_CLASS_DISCARD_CACHE	(0x0002U)
+#define CRT_IV_CLASS_UPDATE_IN_ORDER (0x0001U)
+#define CRT_IV_CLASS_DISCARD_CACHE   (0x0002U)
 
 struct crt_iv_class {
 	/** ID of the IV class */
-	uint32_t		 ivc_id;
+	uint32_t           ivc_id;
 	/** feature bits of the IV class */
-	uint32_t		 ivc_feats;
+	uint32_t           ivc_feats;
 	/** IV callback table for the IV class */
-	struct crt_iv_ops	*ivc_ops;
+	struct crt_iv_ops *ivc_ops;
 };
 
 /**
@@ -393,8 +377,8 @@ struct crt_iv_class {
  */
 int
 crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
-		struct crt_iv_class *iv_classes, uint32_t num_classes,
-		uint32_t iv_ns_id, crt_iv_namespace_t *ivns);
+			struct crt_iv_class *iv_classes, uint32_t num_classes, uint32_t iv_ns_id,
+			crt_iv_namespace_t *ivns);
 
 /**
  * Create an incast variable namespace with associated user priv
@@ -420,10 +404,9 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_namespace_create_priv(crt_context_t crt_ctx, crt_group_t *grp,
-		int tree_topo, struct crt_iv_class *iv_classes,
-		uint32_t num_classes, uint32_t iv_ns_id, void *user_priv,
-		crt_iv_namespace_t *ivns);
+crt_iv_namespace_create_priv(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
+			     struct crt_iv_class *iv_classes, uint32_t num_classes,
+			     uint32_t iv_ns_id, void *user_priv, crt_iv_namespace_t *ivns);
 
 /**
  * Retrieve IV namespace id from the handle.
@@ -466,8 +449,7 @@ crt_iv_namespace_priv_get(crt_iv_namespace_t *ivns, void **priv);
  * \param[in] cb_arg		pointer to argument provide by the user to
  *				crt_iv_namespace_destroy.
  */
-typedef void (*crt_iv_namespace_destroy_cb_t)(crt_iv_namespace_t ivns,
-					      void *cb_arg);
+typedef void (*crt_iv_namespace_destroy_cb_t)(crt_iv_namespace_t ivns, void *cb_arg);
 
 /**
  * Destroy an IV namespace, after that all related resources of the namespace
@@ -481,9 +463,7 @@ typedef void (*crt_iv_namespace_destroy_cb_t)(crt_iv_namespace_t ivns,
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
-			 crt_iv_namespace_destroy_cb_t cb,
-			 void *cb_arg);
+crt_iv_namespace_destroy(crt_iv_namespace_t ivns, crt_iv_namespace_destroy_cb_t cb, void *cb_arg);
 
 /**
  * IV fetch/update/invalidate completion callback
@@ -500,10 +480,8 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
-				crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				d_sg_list_t *iv_value,
-				int rc, void *cb_arg);
+typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id, crt_iv_key_t *iv_key,
+				crt_iv_ver_t *iv_ver, d_sg_list_t *iv_value, int rc, void *cb_arg);
 
 /**
  * Fetch the value of incast variable.
@@ -533,10 +511,8 @@ typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
-	    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	    crt_iv_shortcut_t shortcut,
-	    crt_iv_comp_cb_t fetch_comp_cb, void *cb_arg);
+crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id, crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+	     crt_iv_shortcut_t shortcut, crt_iv_comp_cb_t fetch_comp_cb, void *cb_arg);
 
 /**
  * The mode of synchronizing the update request or notification (from root to
@@ -555,28 +531,27 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
  *		       CRT_IV_CLASS_UPDATE_IN_ORDER is set in the iv class.
  */
 typedef enum {
-	CRT_IV_SYNC_NONE	= 0,
-	CRT_IV_SYNC_EAGER	= 1,
-	CRT_IV_SYNC_LAZY	= 2,
+	CRT_IV_SYNC_NONE  = 0,
+	CRT_IV_SYNC_EAGER = 1,
+	CRT_IV_SYNC_LAZY  = 2,
 } crt_iv_sync_mode_t;
-
 
 /**
  * The type of the synchronization event requested.
  */
 typedef enum {
 	/** No synchronization */
-	CRT_IV_SYNC_EVENT_NONE		= 0,
+	CRT_IV_SYNC_EVENT_NONE = 0,
 	/**
 	 * Update synchronization. IV value is propagated to all the
 	 * nodes during the synchronization phase.
 	 */
-	CRT_IV_SYNC_EVENT_UPDATE	= 1,
+	CRT_IV_SYNC_EVENT_UPDATE = 1,
 	/**
 	 * Notification only. IV value is not propagated during the
 	 * synchronization phase.
 	 */
-	CRT_IV_SYNC_EVENT_NOTIFY	= 2,
+	CRT_IV_SYNC_EVENT_NOTIFY = 2,
 } crt_iv_sync_event_t;
 
 typedef enum {
@@ -599,26 +574,29 @@ typedef enum {
 
 typedef int (*crt_iv_sync_done_cb_t)(void *cb_arg, int rc);
 typedef struct {
-	crt_iv_sync_mode_t	ivs_mode;
-	crt_iv_sync_event_t	ivs_event;
+	crt_iv_sync_mode_t  ivs_mode;
+	crt_iv_sync_event_t ivs_event;
 	/* OR-ed combination of 0 or more crt_iv_sync_flag_t flags */
-	uint32_t		ivs_flags;
+	uint32_t            ivs_flags;
 } crt_iv_sync_t;
 
 /* some common crt_iv_sync_t definitions */
-#define CRT_IV_SYNC_MODE_NONE	{0, 0, 0}
+#define CRT_IV_SYNC_MODE_NONE                                                                      \
+	{                                                                                          \
+		0, 0, 0                                                                            \
+	}
 
-#define CRT_IV_SYNC_UPDATE_EAGER(flags) \
-	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_EAGER, flags})
+#define CRT_IV_SYNC_UPDATE_EAGER(flags)                                                            \
+	((crt_iv_sync_t){CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_EAGER, flags})
 
-#define CRT_IV_SYNC_UPDATE_LAZY(flags) \
-	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_LAZY, flags})
+#define CRT_IV_SYNC_UPDATE_LAZY(flags)                                                             \
+	((crt_iv_sync_t){CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_LAZY, flags})
 
-#define CRT_IV_SYNC_NOTIFY_EAGER(flags) \
-	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_EAGER, flags})
+#define CRT_IV_SYNC_NOTIFY_EAGER(flags)                                                            \
+	((crt_iv_sync_t){CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_EAGER, flags})
 
-#define CRT_IV_SYNC_NOTIFY_LAZY(flags) \
-	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_LAZY, flags})
+#define CRT_IV_SYNC_NOTIFY_LAZY(flags)                                                             \
+	((crt_iv_sync_t){CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_LAZY, flags})
 
 /**
  * Update the value of incast variable.
@@ -641,11 +619,9 @@ typedef struct {
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
-	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	      d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
-	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
-	      void *cb_arg);
+crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id, crt_iv_key_t *iv_key,
+	      crt_iv_ver_t *iv_ver, d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb, void *cb_arg);
 
 /**
  * Invalidate an incast variable.
@@ -669,11 +645,9 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
-		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-		crt_iv_shortcut_t shortcut, crt_iv_sync_t sync_type,
-		crt_iv_comp_cb_t invali_comp_cb,
-		  void *cb_arg);
+crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id, crt_iv_key_t *iv_key,
+		  crt_iv_ver_t *iv_ver, crt_iv_shortcut_t shortcut, crt_iv_sync_t sync_type,
+		  crt_iv_comp_cb_t invali_comp_cb, void *cb_arg);
 
 /**
  * Query the topo info for the number of immediate children of the caller in IV
@@ -687,9 +661,8 @@ crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
-		     crt_iv_key_t *iv_key, uint32_t *nchildren);
-
+crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id, crt_iv_key_t *iv_key,
+		     uint32_t *nchildren);
 
 /** @}
  */

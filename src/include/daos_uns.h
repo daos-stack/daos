@@ -47,20 +47,20 @@ enum {
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
 	/** IN/OUT: Container layout (POSIX, HDF5, Python, etc.) */
-	daos_cont_layout_t	da_type;
+	daos_cont_layout_t da_type;
 	/** IN: (Optional) For a POSIX container, set a default object class for all objects. */
-	daos_oclass_id_t	da_oclass_id;
+	daos_oclass_id_t   da_oclass_id;
 	/** IN: (Optional) For a POSIX container, set a default chunk size for all files. */
-	daos_size_t		da_chunk_size;
+	daos_size_t        da_chunk_size;
 	/** IN: (Optional Container props to be added with duns_path_create */
-	daos_prop_t		*da_props;
+	daos_prop_t       *da_props;
 	/** IN: access flags
 	 *
 	 * DUNS_NO_PREFIX
 	 * DUNS_NO_REVERSE_LOOKUP
 	 * DUNS_NO_CHECK_PATH:
 	 */
-	uint32_t		da_flags;
+	uint32_t           da_flags;
 	/** OUT: Pool UUID or label string.
 	 *
 	 * On duns_resolve_path(), a UUID string is returned for the pool that was stored on that
@@ -68,7 +68,7 @@ struct duns_attr_t {
 	 * a UUID or a label. This can be used in daos_pool_connect() regardless of whether it's a
 	 * UUID or label.
 	 */
-	char			da_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char               da_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/** OUT: Container UUID or label string.
 	 *
 	 * On duns_resolve_path(), a UUID string is returned for the container that was stored on
@@ -77,13 +77,13 @@ struct duns_attr_t {
 	 * a UUID or label. on duns_create_path(), the uuid of the container created is also
 	 * populated in this field.
 	 */
-	char			da_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char               da_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/** OUT: DAOS System Name. (The UNS does not maintain this yet, and this is not set)
 	 *
 	 * On duns_resolve_path(), the daos system name is returned that can be used on
 	 * daos_pool_connect().
 	 */
-	char			*da_sys;
+	char              *da_sys;
 	/** OUT: Relative component of path from where the UNS entry is located (returned on
 	 * duns_resolve_path()).
 	 *
@@ -92,42 +92,42 @@ struct duns_attr_t {
 	 * in the path and not return this relative path to that entry, set DUNS_NO_REVERSE_LOOKUP
 	 * on \a da_flags.
 	 */
-	char			*da_rel_path;
+	char              *da_rel_path;
 	/** OUT: This is set to true if path is on Lustre filesystem */
-	bool			da_on_lustre;
+	bool               da_on_lustre;
 	/** IN: (Deprecated - use flags) String does not include daos:// prefix
 	 *
 	 * Path that is passed does not have daos: prefix but is direct: (/pool/cont/xyz) and does
 	 * not need to parse a path for the UNS attrs.  This is usually set to false.
 	 */
-	bool			da_no_prefix;
+	bool               da_no_prefix;
 	/** IN/OUT: (Deprecated) Pool UUID of the container to be created in duns_create_path().
 	 *
 	 * The pool UUID is now obtained from the pool handle in duns_create_path(). The pool UUID
 	 * is returned as a string in \a da_pool with duns_resolve_path().
 	 */
-	uuid_t			da_puuid;
+	uuid_t             da_puuid;
 	/** IN/OUT: (Deprecated) Optional UUID of the cont to be created in duns_create_path().
 	 *
 	 * The UUID will be used to create the container in duns_create_path() if set, otherwise a
 	 * random one will be generated. The cont UUID or label is returned as a string in \a
 	 * da_cont with duns_resolve_path().
 	 */
-	uuid_t			da_cuuid;
+	uuid_t             da_cuuid;
 };
 
 /** extended attribute name that will store the UNS info */
-#define DUNS_XATTR_NAME		"user.daos"
+#define DUNS_XATTR_NAME       "user.daos"
 /** Length of the extended attribute */
-#define DUNS_MAX_XATTR_LEN	170
+#define DUNS_MAX_XATTR_LEN    170
 /** Format of daos attributes in the extended attribute */
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+#define DUNS_XATTR_FMT        "DAOS.%s://%36s/%36s"
 /**
  * Lustre specific foreign LOV/LMV format (container type will be encoded in
  * lfm_flag field and extra slashes will be added when needed by foreign_symlink
  * Lustre code)
  */
-#define DUNS_LUSTRE_XATTR_FMT		"%36s/%36s"
+#define DUNS_LUSTRE_XATTR_FMT "%36s/%36s"
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a

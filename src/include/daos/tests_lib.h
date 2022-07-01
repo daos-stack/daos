@@ -14,66 +14,74 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_success(r)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != 0)						\
-			fail_msg("Not successful!! Error code: "	\
-				 DF_RC, DP_RC(__rc));			\
+#define assert_success(r)                                                                          \
+	do {                                                                                       \
+		int __rc = (r);                                                                    \
+		if (__rc != 0)                                                                     \
+			fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc));              \
 	} while (0)
 
-#define assert_rc_equal(rc, expected_rc)				\
-	do {								\
-		if ((rc) == (expected_rc))				\
-			break;						\
-		print_message("Failure assert_rc_equal %s:%d "		\
-			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
-			      d_errstr(rc), rc,				\
-			      d_errstr(expected_rc), expected_rc);	\
-		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
-		assert_int_equal(rc, expected_rc);			\
+#define assert_rc_equal(rc, expected_rc)                                                           \
+	do {                                                                                       \
+		if ((rc) == (expected_rc))                                                         \
+			break;                                                                     \
+		print_message("Failure assert_rc_equal %s:%d "                                     \
+			      "%s(%d) != %s(%d)\n",                                                \
+			      __FILE__, __LINE__, d_errstr(rc), rc, d_errstr(expected_rc),         \
+			      expected_rc);                                                        \
+		assert_string_equal(d_errstr(rc), d_errstr(expected_rc));                          \
+		assert_int_equal(rc, expected_rc);                                                 \
 	} while (0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 
 /** Fill in readable random bytes into the buffer */
-void dts_buf_render(char *buf, unsigned int buf_len);
+void
+dts_buf_render(char *buf, unsigned int buf_len);
 
 /** Fill in random uppercase chars into the buffer */
-void dts_buf_render_uppercase(char *buf, unsigned int buf_len);
+void
+dts_buf_render_uppercase(char *buf, unsigned int buf_len);
 
 /** generate a unique key */
-void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
+void
+dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(unsigned seed);
+daos_obj_id_t
+dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard);
+daos_unit_oid_t
+dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard);
 
 /** Set rank into the oid */
-#define dts_oid_set_rank(oid, rank)	daos_oclass_sr_set_rank(oid, rank)
+#define dts_oid_set_rank(oid, rank) daos_oclass_sr_set_rank(oid, rank)
 /** Set target offset into oid */
-#define dts_oid_set_tgt(oid, tgt)	daos_oclass_st_set_tgt(oid, tgt)
+#define dts_oid_set_tgt(oid, tgt)   daos_oclass_st_set_tgt(oid, tgt)
 
 /**
  * Create a random (optionally) ordered integer array with \a nr elements, value
  * of this array starts from \a base.
  */
-uint64_t *dts_rand_iarr_alloc_set(int nr, int base, bool shuffle);
-uint64_t *dts_rand_iarr_alloc(int nr);
-void dts_rand_iarr_set(uint64_t *array, int nr, int base, bool shuffle);
+uint64_t *
+dts_rand_iarr_alloc_set(int nr, int base, bool shuffle);
+uint64_t *
+dts_rand_iarr_alloc(int nr);
+void
+dts_rand_iarr_set(uint64_t *array, int nr, int base, bool shuffle);
 
 static inline double
 dts_time_now(void)
 {
-	struct timeval	tv;
+	struct timeval tv;
 
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec + tv.tv_usec / 1000000.0);
 }
 
-void dts_reset_key(void);
+void
+dts_reset_key(void);
 
 static inline bool
 tsc_create_pool(struct credit_context *tsc)
@@ -90,16 +98,16 @@ tsc_create_cont(struct credit_context *tsc)
 
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
-#define DSS_HOSTNAME_MAX_LEN	255
+#define DSS_HOSTNAME_MAX_LEN        255
 
 typedef struct {
-	uuid_t		device_id;
-	char		state[10];
-	int		rank;
-	char		host[DSS_HOSTNAME_MAX_LEN];
-	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
-	int		n_tgtidx;
-}  device_list;
+	uuid_t device_id;
+	char   state[10];
+	int    rank;
+	char   host[DSS_HOSTNAME_MAX_LEN];
+	int    tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
+	int    n_tgtidx;
+} device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
  *  to the value of the strings passed. This will allocate memory for the iov
@@ -127,16 +135,14 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  * @param ...		Rest of strings, up to count
  */
 void
-dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
-				 uint32_t count, char *d, ...);
+dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat, uint32_t count, char *d, ...);
 
 #define DTS_CFG_MAX 256
-__attribute__ ((__format__(__printf__, 2, 3)))
-static inline void
+__attribute__((__format__(__printf__, 2, 3))) static inline void
 dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
 {
-	va_list	ap;
-	int	count;
+	va_list ap;
+	int     count;
 
 	va_start(ap, format);
 	count = vsnprintf(buf, DTS_CFG_MAX, format, ap);
@@ -149,8 +155,8 @@ dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
 static inline void
 dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
 {
-	va_list	ap;
-	int	count = strnlen(buf, DTS_CFG_MAX);
+	va_list ap;
+	int     count = strnlen(buf, DTS_CFG_MAX);
 
 	va_start(ap, format);
 	vsnprintf(buf + count, DTS_CFG_MAX - count, format, ap);
@@ -181,8 +187,9 @@ dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
  *				-DER_TRUNC	\a pools cannot hold \a npools
  *						items
  */
-int dmg_pool_list(const char *dmg_config_file, const char *group,
-		  daos_size_t *npools, daos_mgmt_pool_info_t *pools);
+int
+dmg_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npools,
+	      daos_mgmt_pool_info_t *pools);
 
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
@@ -217,12 +224,10 @@ int dmg_pool_list(const char *dmg_config_file, const char *group,
  *			shall be the list of pool service ranks.
  * \param uuid	[OUT]	UUID of the pool created
  */
-int dmg_pool_create(const char *dmg_config_file,
-		    uid_t uid, gid_t gid, const char *grp,
-		    const d_rank_list_t *tgts,
-		    daos_size_t scm_size, daos_size_t nvme_size,
-		    daos_prop_t *prop,
-		    d_rank_list_t *svc, uuid_t uuid);
+int
+dmg_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *grp,
+		const d_rank_list_t *tgts, daos_size_t scm_size, daos_size_t nvme_size,
+		daos_prop_t *prop, d_rank_list_t *svc, uuid_t uuid);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this
@@ -235,8 +240,8 @@ int dmg_pool_create(const char *dmg_config_file,
  * \param grp	[IN]	Process set name of the DAOS servers managing the pool
  * \param force	[IN]	Force destruction even if there are active connections
  */
-int dmg_pool_destroy(const char *dmg_config_file,
-		     const uuid_t uuid, const char *grp, int force);
+int
+dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force);
 
 /**
  * Set property of the pool with \a pool_uuid.
@@ -247,8 +252,7 @@ int dmg_pool_destroy(const char *dmg_config_file,
  * \param prop_value		[IN] the value of the property.
  */
 int
-dmg_pool_set_prop(const char *dmg_config_file,
-		  const char *prop_name, const char *prop_value,
+dmg_pool_set_prop(const char *dmg_config_file, const char *prop_name, const char *prop_value,
 		  const uuid_t pool_uuid);
 
 /**
@@ -257,13 +261,13 @@ dmg_pool_set_prop(const char *dmg_config_file,
  * \param dmg_config_file
  *				[IN]	DMG config file
  * \param ndisks	[OUT]
-  *				[OUT] Number of drives  in the DAOS system.
+ *				[OUT] Number of drives  in the DAOS system.
  * \param devices	[OUT]	Array of NVMe device information structures.
  *				NULL is permitted in which case only the
  *				number of disks will be returned in \a ndisks.
  */
-int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
-			    device_list *devices);
+int
+dmg_storage_device_list(const char *dmg_config_file, int *ndisks, device_list *devices);
 
 /**
  * Set NVMe device to faulty. Which will trigger the rebuild and all the
@@ -276,8 +280,8 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  * \param uuid	[IN]	UUID of the device.
  * \param force	[IN]	Do not require confirmation
  */
-int dmg_storage_set_nvme_fault(const char *dmg_config_file,
-			       char *host, const uuid_t uuid, int force);
+int
+dmg_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid, int force);
 /**
  * Get NVMe Device health stats.
  *
@@ -289,8 +293,9 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  *			[in] Health stats for which to get counter value.
  *			[out] Stats counter value.
  */
-int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
-				    char *stats, const uuid_t uuid);
+int
+dmg_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
+				const uuid_t uuid);
 
 /**
  * Verify the assumed blobstore device state with the actual enum definition
@@ -304,8 +309,10 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  *			1 on failure, meaning the enum definition differs from
  *					expected state
  */
-int verify_blobstore_state(int state, const char *state_str);
+int
+verify_blobstore_state(int state, const char *state_str);
 
-const char *daos_target_state_enum_to_str(int state);
+const char *
+daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

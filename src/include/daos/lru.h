@@ -48,36 +48,34 @@ struct daos_llink;
 
 struct daos_llink_ops {
 	/** Mandatory: lru reference free callback */
-	void	 (*lop_free_ref)(struct daos_llink *llink);
+	void (*lop_free_ref)(struct daos_llink *llink);
 	/** Mandatory: If ref not found, allocate and return ref */
-	int	 (*lop_alloc_ref)(void *key, unsigned int ksize,
-				  void *args, struct daos_llink **link);
+	int (*lop_alloc_ref)(void *key, unsigned int ksize, void *args, struct daos_llink **link);
 	/** Mandatory: Compare keys callback for LRU */
-	bool	 (*lop_cmp_keys)(const void *key, unsigned int ksize,
-				 struct daos_llink *link);
+	bool (*lop_cmp_keys)(const void *key, unsigned int ksize, struct daos_llink *link);
 	/** Mandatory: Get key's hash callback for LRU */
 	uint32_t (*lop_rec_hash)(struct daos_llink *link);
 	/** Optional print_key function for debugging */
-	void	 (*lop_print_key)(void *key, unsigned int ksize);
+	void (*lop_print_key)(void *key, unsigned int ksize);
 };
 
 struct daos_llink {
-	d_list_t		 ll_link;	/**< LRU hash link */
-	d_list_t		 ll_qlink;	/**< Temp link for traverse */
-	uint32_t		 ll_ref;	/**< refcount for this ref */
-	uint32_t		 ll_evicted:1;	/**< has been evicted */
-	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
+	d_list_t               ll_link;        /**< LRU hash link */
+	d_list_t               ll_qlink;       /**< Temp link for traverse */
+	uint32_t               ll_ref;         /**< refcount for this ref */
+	uint32_t               ll_evicted : 1; /**< has been evicted */
+	struct daos_llink_ops *ll_ops;         /**< ops to maintain refs */
 };
 
 /**
  * LRU cache implementation using d_hash_table and d_list_t
  */
 struct daos_lru_cache {
-	uint32_t		 dlc_csize;	/**< Provided cache size */
-	uint32_t		 dlc_count;	/**< count of refs in cache */
-	d_list_t		 dlc_lru;	/**< list head of LRU */
-	struct d_hash_table	 dlc_htable;	/**< Hash table for all refs */
-	struct daos_llink_ops	*dlc_ops;	/**< ops to maintain refs */
+	uint32_t               dlc_csize;  /**< Provided cache size */
+	uint32_t               dlc_count;  /**< count of refs in cache */
+	d_list_t               dlc_lru;    /**< list head of LRU */
+	struct d_hash_table    dlc_htable; /**< Hash table for all refs */
+	struct daos_llink_ops *dlc_ops;    /**< ops to maintain refs */
 };
 
 /**
@@ -92,8 +90,7 @@ struct daos_lru_cache {
  * \return		0 on success and negative on failure.
  */
 int
-daos_lru_cache_create(int bits, uint32_t feats,
-		      struct daos_llink_ops *ops,
+daos_lru_cache_create(int bits, uint32_t feats, struct daos_llink_ops *ops,
 		      struct daos_lru_cache **lcache);
 
 /**
@@ -116,8 +113,7 @@ typedef bool (*daos_lru_cond_cb_t)(struct daos_llink *llink, void *arg);
  * \param[in] arg		arguments for the @cond
  */
 void
-daos_lru_cache_evict(struct daos_lru_cache *lcache,
-		     daos_lru_cond_cb_t cond, void *arg);
+daos_lru_cache_evict(struct daos_lru_cache *lcache, daos_lru_cond_cb_t cond, void *arg);
 
 /**
  * Find a ref in the cache \a lcache and take its reference.
@@ -135,8 +131,8 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
  * \param[out] llink		DAOS LRU link
  */
 int
-daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
-		  void *create_args, struct daos_llink **llink);
+daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize, void *create_args,
+		  struct daos_llink **llink);
 
 /**
  * Release a reference from the cache

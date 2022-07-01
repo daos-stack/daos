@@ -13,35 +13,36 @@
 
 #include <daos/multihash.h>
 
-#define	CSUM_NO_CHUNK -1
+#define CSUM_NO_CHUNK -1
 
 /*
  * Tag used in debug logs to easily find important checksum info, making it
  * easier to trace checksums through the log files
  */
-#define CSTAG "[CSUM]"
+#define CSTAG         "[CSUM]"
 
-#define DF_C_IOD CSTAG"IOD {akey: "DF_KEY", type: %s, nr: %d, size: %lu} CSUM"
-#define DP_C_IOD(i) DP_KEY(&(i)->iod_name), \
-	(i)->iod_type == DAOS_IOD_SINGLE ? "SINGLE" : \
-	(i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY" : "UNKNOWN", \
-	(i)->iod_nr, (i)->iod_size
+#define DF_C_IOD      CSTAG "IOD {akey: " DF_KEY ", type: %s, nr: %d, size: %lu} CSUM"
+#define DP_C_IOD(i)                                                                                \
+	DP_KEY(&(i)->iod_name),                                                                    \
+	    (i)->iod_type == DAOS_IOD_SINGLE  ? "SINGLE"                                           \
+	    : (i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY"                                            \
+					      : "UNKNOWN",                                         \
+	    (i)->iod_nr, (i)->iod_size
 
-#define DF_C_UOID_DKEY CSTAG"OBJ ("DF_UOID", "DF_KEY")"
+#define DF_C_UOID_DKEY            CSTAG "OBJ (" DF_UOID ", " DF_KEY ")"
 #define DP_C_UOID_DKEY(oid, dkey) DP_UOID(oid), DP_KEY(dkey)
 
-#define DF_C_OID_DKEY CSTAG"OBJ ("DF_OID", "DF_KEY")"
-#define DP_C_OID_DKEY(oid, dkey) DP_OID(oid), DP_KEY(dkey)
+#define DF_C_OID_DKEY             CSTAG "OBJ (" DF_OID ", " DF_KEY ")"
+#define DP_C_OID_DKEY(oid, dkey)  DP_OID(oid), DP_KEY(dkey)
 
-#define DF_LAYOUT "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"
-#define DP_LAYOUT(l) (l).cs_bytes, (l).cs_nr, DP_BOOL((l).cs_even_dist), \
-			DP_BOOL((l).cs_cell_align)
-#define	DF_CI_BUF "%"PRIu64
-#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
-#define DF_RANGE "{lo: %lu, hi: %lu, nr: %lu}"
-#define DP_RANGE(r) (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
+#define DF_LAYOUT                 "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"
+#define DP_LAYOUT(l)              (l).cs_bytes, (l).cs_nr, DP_BOOL((l).cs_even_dist), DP_BOOL((l).cs_cell_align)
+#define DF_CI_BUF                 "%" PRIu64
+#define DP_CI_BUF(buf, len)       ci_buf2uint64(buf, len)
+#define DF_CI                     "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define DP_CI(ci)                 (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
+#define DF_RANGE                  "{lo: %lu, hi: %lu, nr: %lu}"
+#define DP_RANGE(r)               (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
@@ -50,65 +51,65 @@
 
 struct dcs_csum_info {
 	/** buffer to store the checksums */
-	uint8_t		*cs_csum;
+	uint8_t *cs_csum;
 	/** number of checksums stored in buffer */
-	uint32_t	 cs_nr;
+	uint32_t cs_nr;
 	/** type of checksum */
-	uint16_t	 cs_type;
+	uint16_t cs_type;
 	/** length of each checksum in bytes */
-	uint16_t	 cs_len;
+	uint16_t cs_len;
 	/** length of entire buffer (cs_csum). buf_len can be larger than
-	*  nr * len, but never smaller
-	*/
-	uint32_t	 cs_buf_len;
+	 *  nr * len, but never smaller
+	 */
+	uint32_t cs_buf_len;
 	/** bytes of data each checksum verifies (if value type is array) */
-	uint32_t	 cs_chunksize;
+	uint32_t cs_chunksize;
 };
 
 struct dcs_iod_csums {
 	/** akey checksum */
-	struct dcs_csum_info	 ic_akey;
+	struct dcs_csum_info  ic_akey;
 	/** csum for the data. will be 1 for each recx for arrays */
-	struct dcs_csum_info	*ic_data;
+	struct dcs_csum_info *ic_data;
 	/** number of dcs_csum_info in ic_data. should be 1 for SV */
-	uint32_t		 ic_nr;
+	uint32_t              ic_nr;
 };
 
 /** Single value layout info for checksum */
 struct dcs_layout {
 	/** #bytes on evenly distributed targets */
-	uint64_t	cs_bytes;
+	uint64_t cs_bytes;
 	/** targets number */
-	uint32_t	cs_nr;
+	uint32_t cs_nr;
 	/** even distribution flag */
-	uint32_t	cs_even_dist:1,
-	/**
-	 * Align flag, used only for single value fetch that parity buffer's
-	 * location possibly not immediately following data buffer (to align
-	 * with cell size to avoid data movement in data recovery). For update
-	 * the data immediately followed by parity (this flag is zero).
-	 */
-			cs_cell_align:1;
+	uint32_t cs_even_dist : 1,
+	    /**
+	     * Align flag, used only for single value fetch that parity buffer's
+	     * location possibly not immediately following data buffer (to align
+	     * with cell size to avoid data movement in data recovery). For update
+	     * the data immediately followed by parity (this flag is zero).
+	     */
+	    cs_cell_align     : 1;
 };
 
 struct daos_csummer {
 	/** Size of csum_buf. */
-	uint32_t	 dcs_csum_buf_size;
+	uint32_t        dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
-	uint32_t	 dcs_chunk_size;
+	uint32_t        dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
-	struct hash_ft	*dcs_algo;
+	struct hash_ft *dcs_algo;
 	/** Pointer to function table specific contexts */
-	void		*dcs_ctx;
+	void           *dcs_ctx;
 	/** Points to the buffer where the calculated csum is to be written */
-	uint8_t		*dcs_csum_buf;
+	uint8_t        *dcs_csum_buf;
 	/** Whether or not to verify on the server on an update */
-	bool		 dcs_srv_verify;
+	bool            dcs_srv_verify;
 	/** Disable aspects of the checksum process */
-	bool		 dcs_skip_key_calc;
-	bool		 dcs_skip_key_verify;
-	bool		 dcs_skip_data_verify;
-	pthread_mutex_t	 dcs_lock;
+	bool            dcs_skip_key_calc;
+	bool            dcs_skip_key_verify;
+	bool            dcs_skip_data_verify;
+	pthread_mutex_t dcs_lock;
 };
 
 /**
@@ -132,8 +133,8 @@ struct daos_csummer {
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
-		  size_t chunk_bytes, bool srv_verify);
+daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft, size_t chunk_bytes,
+		  bool srv_verify);
 
 /**
  * Initialize the daos_csummer with a known DAOS_HASH_TYPE
@@ -150,8 +151,8 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
-			    size_t chunk_bytes, bool srv_verify);
+daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type, size_t chunk_bytes,
+			    bool srv_verify);
 
 /**
  * Initialize the daos_csummer using container properties
@@ -172,8 +173,7 @@ daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
  * @return
  */
 int
-daos_csummer_csum_init_with_packed(struct daos_csummer **csummer,
-				   const d_iov_t *csums_iov);
+daos_csummer_csum_init_with_packed(struct daos_csummer **csummer, const d_iov_t *csums_iov);
 
 /**
  * Initialize a daos_csummer as a copy of an existing daos_csummer
@@ -219,8 +219,7 @@ daos_csummer_get_name(struct daos_csummer *obj);
 
 /** Set the csum buffer where the calculated checksumm will be written to */
 void
-daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
-			uint32_t buf_len);
+daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf, uint32_t buf_len);
 
 /** Reset the csummer */
 int
@@ -238,18 +237,15 @@ int
 daos_csummer_finish(struct daos_csummer *obj);
 
 bool
-daos_csummer_compare_csum_info(struct daos_csummer *obj,
-			       struct dcs_csum_info *a,
+daos_csummer_compare_csum_info(struct daos_csummer *obj, struct dcs_csum_info *a,
 			       struct dcs_csum_info *b);
 
 bool
-daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
-			  uint8_t *b, uint32_t csum_len);
+daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a, uint8_t *b, uint32_t csum_len);
 
 int
-daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
-		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
-		       size_t idx);
+daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl, struct dcs_csum_info *csums,
+		      size_t rec_len, size_t nr, size_t idx);
 
 /**
  * Using the data from the sgl, calculates the checksums
@@ -285,9 +281,8 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
  * @return			0 for success, or an error code
  */
 int
-daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
-		       daos_iod_t *iods, daos_iom_t *maps, uint32_t nr,
-		       bool akey_only, struct dcs_layout *singv_los,
+daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls, daos_iod_t *iods,
+		       daos_iom_t *maps, uint32_t nr, bool akey_only, struct dcs_layout *singv_los,
 		       int singv_idx, struct dcs_iod_csums **p_iods_csums);
 
 /**
@@ -302,8 +297,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
  * @return			0 for success, or an error code.
  */
 int
-daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
-		      struct dcs_csum_info **p_csum);
+daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key, struct dcs_csum_info **p_csum);
 
 /**
  * Using the data from the sgl, calculates the checksums for each extent and
@@ -329,9 +323,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  * @return		0 for success, -DER_CSUM if corruption is detected
  */
 int
-daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
-			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_layout *singv_lo, int singv_idx,
+daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod, d_sg_list_t *sgl,
+			struct dcs_iod_csums *iod_csum, struct dcs_layout *singv_lo, int singv_idx,
 			daos_iom_t *map);
 
 /**
@@ -344,8 +337,7 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
  * @return		0 for success, -DER_CSUM if corruption is detected
  */
 int
-daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
-			struct dcs_csum_info *csum);
+daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key, struct dcs_csum_info *csum);
 
 /**
  * Calculate the needed memory for all the structures that will
@@ -366,9 +358,8 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
  * @return			0 for success, or an error code
  */
 uint64_t
-daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
-			     uint32_t nr, bool akey_only,
-			     struct dcs_layout *singv_los);
+daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods, uint32_t nr,
+			     bool akey_only, struct dcs_layout *singv_los);
 
 /**
  * Allocate the checksum structures needed for the iods. This will also
@@ -390,9 +381,8 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				negative if error
  */
 int
-daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
-			      uint32_t nr, bool akey_only,
-			      struct dcs_layout *singv_los,
+daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods, uint32_t nr,
+			      bool akey_only, struct dcs_layout *singv_los,
 			      struct dcs_iod_csums **p_cds);
 
 /**
@@ -408,30 +398,26 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
  * @return
  */
 int
-daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer,
-					  daos_iod_t *iods, int iod_cnt,
-					  d_iov_t *csum_iov,
+daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer, daos_iod_t *iods,
+					  int iod_cnt, d_iov_t *csum_iov,
 					  struct dcs_iod_csums **iods_csums);
 
 /** Destroy the iods csums */
 void
-daos_csummer_free_ic(struct daos_csummer *obj,
-		     struct dcs_iod_csums **p_cds);
+daos_csummer_free_ic(struct daos_csummer *obj, struct dcs_iod_csums **p_cds);
 
 /** Destroy the csum infos allocated by daos_csummer_calc_key */
 void
-daos_csummer_free_ci(struct daos_csummer *obj,
-		     struct dcs_csum_info **p_cis);
+daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis);
 
 /**
  * -----------------------------------------------------------------------------
  * struct dcs_iod_csums Functions
  * -----------------------------------------------------------------------------
  */
- /** return a specific csum buffer from a specific iod csum info */
+/** return a specific csum buffer from a specific iod csum info */
 uint8_t *
-ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
-	    uint32_t csum_idx);
+ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx, uint32_t csum_idx);
 
 /**
  * -----------------------------------------------------------------------------
@@ -444,9 +430,8 @@ ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
  * checksum represents
  */
 void
-ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
-	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
-	uint16_t type);
+ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size, uint16_t csum_size,
+       uint32_t csum_count, uint32_t chunksize, uint16_t type);
 
 /**
  * Setup the daos_csum_info with an existing daos_csum_info. This is not a copy,
@@ -489,21 +474,20 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 uint64_t
 ci2csum(struct dcs_csum_info ci);
 
-
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a
  * buffer
  */
-#define	ci_size(obj) (sizeof(obj) + (obj).cs_nr * (obj).cs_len)
+#define ci_size(obj)      (sizeof(obj) + (obj).cs_nr * (obj).cs_len)
 
 /** return the actual length for the csums stored in obj. Note that the buffer
  * (cs_buf_len) might be larger than the actual csums len
  */
-#define	ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
+#define ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
 
 /** Serialze a \dcs_csum_info structure to an I/O vector. First the structure
-* fields are added to the memory buf, then the actual csum.
-*/
+ * fields are added to the memory buf, then the actual csum.
+ */
 int
 ci_serialize(struct dcs_csum_info *obj, d_iov_t *iov);
 void
@@ -513,12 +497,12 @@ ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov);
  * A dcs_ci_list and associated functions manages the memory for storing a list of csum_infos.
  */
 struct dcs_ci_list {
-	uint8_t			*dcl_csum_infos;
-	uint32_t		 dcl_csum_infos_nr;
-	uint32_t		 dcl_buf_used;
-	uint32_t		 dcl_buf_size;
+	uint8_t *dcl_csum_infos;
+	uint32_t dcl_csum_infos_nr;
+	uint32_t dcl_buf_used;
+	uint32_t dcl_buf_size;
 	/* hack for supporting biov_csums_used usage in csum_add2iods */
-	uint32_t		 dcl_csum_offset;
+	uint32_t dcl_csum_offset;
 };
 
 /**
@@ -528,10 +512,14 @@ struct dcs_ci_list {
  * need to worry about that. dcs_csum_info_list_fini must be called when done so that the memory
  * allocated is freed.
  */
-int dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr);
-void dcs_csum_info_list_fini(struct dcs_ci_list *list);
-int dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info);
-struct dcs_csum_info *dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx);
+int
+dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr);
+void
+dcs_csum_info_list_fini(struct dcs_ci_list *list);
+int
+dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info);
+struct dcs_csum_info *
+dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx);
 
 /**
  * change the iov so that buf points to the next csum_info, assuming the
@@ -548,16 +536,13 @@ ci_move_next_iov(struct dcs_csum_info *obj, d_iov_t *iov);
 
 /** Gets the number checksums needed given a record extent.  */
 uint32_t
-daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
-		      uint32_t chunk_size);
-
+daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size, uint32_t chunk_size);
 
 /** Helper function for dividing a range (lo-hi) into number of chunks, using
  * absolute alignment
  */
 uint32_t
-csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
-		 uint64_t rec_size);
+csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx, uint64_t rec_size);
 
 static inline bool
 csum_iod_is_supported(daos_iod_t *iod)
@@ -566,8 +551,7 @@ csum_iod_is_supported(daos_iod_t *iod)
 	 * Needs to have something to actually checksum
 	 * iod_size must be greater than 1 and have records if it's an array
 	 */
-	return iod->iod_size > 0 &&
-	       !(iod->iod_type == DAOS_IOD_ARRAY && iod->iod_nr == 0);
+	return iod->iod_size > 0 && !(iod->iod_type == DAOS_IOD_ARRAY && iod->iod_nr == 0);
 }
 
 /**
@@ -589,9 +573,9 @@ csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size);
 /** Represents a chunk, extent, or some calculated alignment for a range
  */
 struct daos_csum_range {
-	daos_off_t	dcr_lo; /** idx to first record in chunk */
-	daos_off_t	dcr_hi; /** idx to last record in chunk */
-	daos_size_t	dcr_nr; /** num of records in chunk  */
+	daos_off_t  dcr_lo; /** idx to first record in chunk */
+	daos_off_t  dcr_hi; /** idx to last record in chunk */
+	daos_size_t dcr_nr; /** num of records in chunk  */
 };
 
 static inline void
@@ -615,8 +599,8 @@ dcr_set_idx_nr(struct daos_csum_range *range, daos_off_t lo, size_t nr)
  * recx
  */
 struct daos_csum_range
-csum_recx_chunkidx2range(daos_recx_t *recx, uint32_t rec_size,
-			 uint32_t chunksize, uint64_t chunk_idx);
+csum_recx_chunkidx2range(daos_recx_t *recx, uint32_t rec_size, uint32_t chunksize,
+			 uint64_t chunk_idx);
 
 /**
  * get chunk boundaries for chunk with record offset \record_idx that doesn't
@@ -631,8 +615,8 @@ csum_recidx2range(size_t chunksize, daos_off_t record_idx, size_t lo_boundary,
  * boundaries must not exceed lo/hi
  */
 struct daos_csum_range
-csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx,
-		    uint64_t lo, uint64_t hi);
+csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx, uint64_t lo,
+		    uint64_t hi);
 
 struct daos_csum_range
 csum_chunkrange(uint64_t chunksize, uint64_t idx);
@@ -642,9 +626,8 @@ csum_chunkrange(uint64_t chunksize, uint64_t idx);
  * lo/hi
  */
 struct daos_csum_range
-csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
-		      daos_off_t hi_boundary, daos_off_t record_size,
-		      size_t chunksize);
+csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary, daos_off_t hi_boundary,
+		      daos_off_t record_size, size_t chunksize);
 
 /**
  * return start index and number of recxs within the map.recxs that have

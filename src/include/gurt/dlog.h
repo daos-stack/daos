@@ -31,95 +31,93 @@
 typedef uint64_t d_dbug_t;
 
 /* clog open flavor */
-#define DLOG_FLV_LOGPID	(1 << 0)	/**< include pid in log tag */
-#define DLOG_FLV_FQDN	(1 << 1)	/**< log fully quallified domain name */
-#define DLOG_FLV_FAC	(1 << 2)	/**< log facility name */
-#define DLOG_FLV_YEAR	(1 << 3)	/**< log year */
-#define DLOG_FLV_TAG	(1 << 4)	/**< log tag */
-#define DLOG_FLV_STDOUT	(1 << 5)	/**< always log to stdout */
-#define DLOG_FLV_STDERR	(1 << 6)	/**< always log to stderr */
+#define DLOG_FLV_LOGPID (1 << 0) /**< include pid in log tag */
+#define DLOG_FLV_FQDN   (1 << 1) /**< log fully quallified domain name */
+#define DLOG_FLV_FAC    (1 << 2) /**< log facility name */
+#define DLOG_FLV_YEAR   (1 << 3) /**< log year */
+#define DLOG_FLV_TAG    (1 << 4) /**< log tag */
+#define DLOG_FLV_STDOUT (1 << 5) /**< always log to stdout */
+#define DLOG_FLV_STDERR (1 << 6) /**< always log to stderr */
 
 /* per-message log flag values */
-#define DLOG_STDERR     0x20000000	/**< always log to stderr */
-#define DLOG_STDOUT     0x10000000	/**< always log to stdout */
+#define DLOG_STDERR     0x20000000 /**< always log to stderr */
+#define DLOG_STDOUT     0x10000000 /**< always log to stdout */
 
-#define DLOG_PRIMASK    0x0fffff00	/**< priority mask */
-#define D_FOREACH_PRIO_MASK(ACTION, arg)				    \
-	ACTION(DLOG_EMIT,  emit,  emit,  0x08000000, arg) /**< emit */	    \
-	ACTION(DLOG_EMERG, fatal, fatal, 0x07000000, arg) /**< emergency */ \
-	ACTION(DLOG_ALERT, alert, alert, 0x06000000, arg) /**< alert */	    \
-	ACTION(DLOG_CRIT,  crit,  crit,  0x05000000, arg) /**< critical */  \
-	ACTION(DLOG_ERR,   err,   err,   0x04000000, arg) /**< error */	    \
-	ACTION(DLOG_WARN,  warn,  warn,  0x03000000, arg) /**< warning */   \
-	ACTION(DLOG_NOTE,  note,  note,  0x02000000, arg) /**< notice */    \
-	ACTION(DLOG_INFO,  info,  info,  0x01000000, arg) /**< info */	    \
-	ACTION(DLOG_DBG,   debug, debug, 0x00ffff00, arg) /**< debug mask */
+#define DLOG_PRIMASK    0x0fffff00 /**< priority mask */
+#define D_FOREACH_PRIO_MASK(ACTION, arg)                                                           \
+	ACTION(DLOG_EMIT, emit, emit, 0x08000000, arg)    /**< emit */                             \
+	ACTION(DLOG_EMERG, fatal, fatal, 0x07000000, arg) /**< emergency */                        \
+	ACTION(DLOG_ALERT, alert, alert, 0x06000000, arg) /**< alert */                            \
+	ACTION(DLOG_CRIT, crit, crit, 0x05000000, arg)    /**< critical */                         \
+	ACTION(DLOG_ERR, err, err, 0x04000000, arg)       /**< error */                            \
+	ACTION(DLOG_WARN, warn, warn, 0x03000000, arg)    /**< warning */                          \
+	ACTION(DLOG_NOTE, note, note, 0x02000000, arg)    /**< notice */                           \
+	ACTION(DLOG_INFO, info, info, 0x01000000, arg)    /**< info */                             \
+	ACTION(DLOG_DBG, debug, debug, 0x00ffff00, arg)   /**< debug mask */
 
 #define D_NOOP(...)
 
-#define D_PRIO_ENUM(name, id, longid, mask, arg)	name = mask,
-enum {
-	D_FOREACH_PRIO_MASK(D_PRIO_ENUM, D_NOOP)
-};
+#define D_PRIO_ENUM(name, id, longid, mask, arg) name = mask,
+enum { D_FOREACH_PRIO_MASK(D_PRIO_ENUM, D_NOOP) };
 
 enum d_log_flag_bits {
 	/**
 	 * To be used in d_log_dbg_grp_alloc(). This bit sets grpname as the
 	 * global default debug mask.
 	 */
-	D_LOG_SET_AS_DEFAULT	= 1U,
+	D_LOG_SET_AS_DEFAULT = 1U,
 };
 
-#define DLOG_PRISHIFT     24		/**< to get non-debug level */
-#define DLOG_DPRISHIFT    8		/**< to get debug level */
-#define DLOG_PRINDMASK    0x0f000000	/**< mask for non-debug level bits */
-#define DLOG_FACMASK      0x000000ff	/**< facility mask */
-#define DLOG_UNINIT       0x80000000	/**< Reserve one bit mask cache */
+#define DLOG_PRISHIFT   24         /**< to get non-debug level */
+#define DLOG_DPRISHIFT  8          /**< to get debug level */
+#define DLOG_PRINDMASK  0x0f000000 /**< mask for non-debug level bits */
+#define DLOG_FACMASK    0x000000ff /**< facility mask */
+#define DLOG_UNINIT     0x80000000 /**< Reserve one bit mask cache */
 
-#define DLOG_PRI(flag) ((flag & DLOG_PRINDMASK) >> DLOG_PRISHIFT)
+#define DLOG_PRI(flag)  ((flag & DLOG_PRINDMASK) >> DLOG_PRISHIFT)
 
 /** The environment variable for the default debug bit-mask */
-#define DD_MASK_ENV	"DD_MASK"
-#define DD_MASK_DEFAULT	"all"
-#define DD_SEP		","
+#define DD_MASK_ENV     "DD_MASK"
+#define DD_MASK_DEFAULT "all"
+#define DD_SEP          ","
 
 /**
  * The environment variable for setting debug level being output to stderr.
  * Options: "info", "note", "warn", "err", "crit", "emerg".
  * Default: "crit", which is used by D__FATAL, D__ASSERT and D__ASSERTF
  */
-#define DD_STDERR_ENV	"DD_STDERR"
+#define DD_STDERR_ENV   "DD_STDERR"
 
 /** The environment variable for enabled debug facilities (subsystems) */
-#define DD_FAC_ENV	"DD_SUBSYS"
-#define DD_FAC_ALL	"all"
+#define DD_FAC_ENV      "DD_SUBSYS"
+#define DD_FAC_ALL      "all"
 
 /** facility name and mask info */
 struct dlog_fac {
-	char	*fac_aname;	/**< abbreviated name of this facility */
-	char	*fac_lname;	/**< optional long name of this facility */
-	int	 fac_mask;	/**< log level for this facility */
-	bool	 is_enabled;	/**< true if facility will be logged */
+	char *fac_aname;  /**< abbreviated name of this facility */
+	char *fac_lname;  /**< optional long name of this facility */
+	int   fac_mask;   /**< log level for this facility */
+	bool  is_enabled; /**< true if facility will be logged */
 };
 
 /** dlog global state */
 struct d_log_xstate {
-	char			*tag; /**< tag string */
+	char            *tag; /**< tag string */
 	/* note that tag is NULL if clog is not open/inited */
-	struct dlog_fac		*dlog_facs; /**< array of facility */
-	char			*nodename; /**< pointer to our utsname */
-	int			 fac_cnt; /**< # of facilities */
+	struct dlog_fac *dlog_facs; /**< array of facility */
+	char            *nodename;  /**< pointer to our utsname */
+	int              fac_cnt;   /**< # of facilities */
 };
 
 struct d_debug_data {
 	/** debug bitmask, e.g. DB_IO */
-	d_dbug_t		dd_mask;
+	d_dbug_t dd_mask;
 	/** priority level that should be output to stderr */
-	d_dbug_t		dd_prio_err;
+	d_dbug_t dd_prio_err;
 	/** alloc'd debug bit count */
-	int			dbg_bit_cnt;
+	int      dbg_bit_cnt;
 	/** alloc'd debug group count */
-	int			dbg_grp_cnt;
+	int      dbg_grp_cnt;
 };
 
 /**
@@ -131,9 +129,9 @@ struct d_debug_data {
  *   env variable DD_STDERR, the default level is D__CRIT.
  */
 struct d_debug_priority {
-	char			*dd_name;
-	d_dbug_t		 dd_prio;
-	size_t			 dd_name_size;
+	char    *dd_name;
+	d_dbug_t dd_prio;
+	size_t   dd_name_size;
 };
 
 /*
@@ -141,11 +139,11 @@ struct d_debug_priority {
  * of the system, e.g. DB_MEM, DB_IO, DB_TRACE...
  */
 struct d_debug_bit {
-	d_dbug_t		*db_bit;
-	char			*db_name;
-	char			*db_lname;
-	size_t			 db_name_size;
-	size_t			 db_lname_size;
+	d_dbug_t *db_bit;
+	char     *db_name;
+	char     *db_lname;
+	size_t    db_name_size;
+	size_t    db_lname_size;
 };
 
 /*
@@ -153,9 +151,9 @@ struct d_debug_bit {
  * group, e.g. "daos_dbg" = DB_IO | DB_OPT1 | DB_OPT2
  */
 struct d_debug_grp {
-	char			*dg_name;
-	size_t			 dg_name_size;
-	d_dbug_t		 dg_mask;
+	char    *dg_name;
+	size_t   dg_name_size;
+	d_dbug_t dg_mask;
 };
 
 #if defined(__cplusplus)
@@ -172,7 +170,8 @@ extern struct d_debug_data d_dbglog_data;
  *
  * \return		0 on success, -1 on error
  */
-int d_log_dbg_bit_dealloc(char *name);
+int
+d_log_dbg_bit_dealloc(char *name);
 
 /**
  * Allocate optional debug bit, register name and return available bit
@@ -184,7 +183,8 @@ int d_log_dbg_bit_dealloc(char *name);
  * \return		0 on success, -1 on error
  *
  */
-int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
+int
+d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
 
 /**
  * Reset optional debug group
@@ -193,7 +193,8 @@ int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
  *
  * \return		0 on success, -1 on error
  */
-int d_log_dbg_grp_dealloc(char *grpname);
+int
+d_log_dbg_grp_dealloc(char *grpname);
 
 /**
  * Create an identifier/group name for muliple debug bits
@@ -206,7 +207,8 @@ int d_log_dbg_grp_dealloc(char *grpname);
  *
  * \return		0 on success, -1 on error
  */
-int d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags);
+int
+d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags);
 
 /**
  * log a message using stdarg list without checking filtering
@@ -215,7 +217,8 @@ int d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags);
  *
  * \return			flags to pass to d_vlog, 0 indicates no log
  */
-static inline int d_log_check(int flags)
+static inline int
+d_log_check(int flags)
 {
 	int fac = flags & DLOG_FACMASK;
 	int lvl = flags & DLOG_PRIMASK;
@@ -249,15 +252,15 @@ static inline int d_log_check(int flags)
 	if (lvl >= DLOG_INFO) {
 		if (lvl < msk)
 			return 0; /* Skip it */
-	} else { /* debug clog message */
+	} else {                  /* debug clog message */
 		/*
 		 * note: if (msk >= DLOG_INFO), then all the mask's debug bits
 		 * are zero (meaning debugging messages are masked out).  thus,
 		 * for messages with the debug level we only have to do a bit
 		 * test.
 		 */
-		if ((lvl & msk) == 0)	/* do we want this type of debug msg? */
-			return 0; /* Skip it */
+		if ((lvl & msk) == 0) /* do we want this type of debug msg? */
+			return 0;     /* Skip it */
 	}
 
 	return lvl | fac;
@@ -273,7 +276,8 @@ static inline int d_log_check(int flags)
  * \param[in] fmt		printf-style format string
  * \param[in] ap		stdarg list
  */
-void d_vlog(int flags, const char *fmt, va_list ap);
+void
+d_vlog(int flags, const char *fmt, va_list ap);
 
 /**
  * log a message if type specified by flags is enabled
@@ -286,9 +290,10 @@ void d_vlog(int flags, const char *fmt, va_list ap);
  * \param[in] fmt		printf-style format string
  * \param[in] ap		stdarg list
  */
-static inline void d_log(int flags, const char *fmt, ...)
-	__attribute__ ((__format__(__printf__, 2, 3)));
-static inline void d_log(int flags, const char *fmt, ...)
+static inline void
+d_log(int flags, const char *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
+static inline void
+d_log(int flags, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -308,7 +313,8 @@ static inline void d_log(int flags, const char *fmt, ...)
  * \return			new facility number on success, -1 on
  *				error - malloc problem.
  */
-int d_log_allocfacility(const char *aname, const char *lname);
+int
+d_log_allocfacility(const char *aname, const char *lname);
 
 /**
  * Ensure default cart log is initialized.  This routine calls
@@ -323,7 +329,8 @@ int d_log_allocfacility(const char *aname, const char *lname);
  *
  * \return			0 on success, negative value on error
  */
-int d_log_init(void);
+int
+d_log_init(void);
 
 /**
  * Callback to get XS id and ULT id
@@ -343,19 +350,22 @@ typedef void (*d_log_id_cb_t)(uint32_t *xs_id, uint64_t *ult_id);
  *
  * \return			0 on success, -1 on failure
  */
-int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		   d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb);
+int
+d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor, d_dbug_t def_mask,
+	       d_dbug_t err_mask, d_log_id_cb_t id_cb);
 
 /**
  * Remove a reference on the default cart log.  Calls d_log_close
  * if the reference count is 0.
  */
-void d_log_fini(void);
+void
+d_log_fini(void);
 
 /**
  * close off an log and release any allocated resources.
  */
-void d_log_close(void);
+void
+d_log_close(void);
 
 /**
  * Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
@@ -363,7 +373,8 @@ void d_log_close(void);
  * previously unknown facilities.
  *
  */
-void d_log_sync_mask(void);
+void
+d_log_sync_mask(void);
 
 /**
  * open a dlog.
@@ -381,8 +392,9 @@ void d_log_sync_mask(void);
  *
  * \return			0 on success, -1 on error.
  */
-int d_log_open(char *tag, int maxfac_hint, int default_mask,
-	       int stderr_mask, char *logfile, int flags, d_log_id_cb_t id_cb);
+int
+d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask, char *logfile, int flags,
+	   d_log_id_cb_t id_cb);
 
 /**
  * set the logmask for a given facility.
@@ -392,7 +404,8 @@ int d_log_open(char *tag, int maxfac_hint, int default_mask,
  *
  * \return			0 on success, -1 on error.
  */
-int d_log_setlogmask(int facility, int mask);
+int
+d_log_setlogmask(int facility, int mask);
 
 /**
  * set log masks for a set of facilities to a given level.
@@ -406,7 +419,8 @@ int d_log_setlogmask(int facility, int mask);
  *
  * \return			0 on success, -1 on error.
  */
-int d_log_setmasks(char *mstr, int mlen);
+int
+d_log_setmasks(char *mstr, int mlen);
 
 /**
  * get current mask level as a string (not null terminated).
@@ -421,7 +435,8 @@ int d_log_setmasks(char *mstr, int mlen);
  * \return			bytes returned (may be trunced and non-null
  *				terminated if == len)
  */
-int d_log_getmasks(char *buf, int discard, int len, int unterm);
+int
+d_log_getmasks(char *buf, int discard, int len, int unterm);
 
 /**
  * Add an array of integers to initialize to DLOG_UNINIT on changes
@@ -437,12 +452,14 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm);
  * on memory allocation errors.  The assumption is that failure to
  * reset log masks in such rare occasions isn't a showstopper.
  */
-void d_log_add_cache(int *cache, int nr);
+void
+d_log_add_cache(int *cache, int nr);
 
 /**
  * Fsync log files.
  */
-void d_log_sync(void);
+void
+d_log_sync(void);
 
 #if defined(__cplusplus)
 }

@@ -19,7 +19,7 @@ extern "C" {
 /** Flags for daos_tx_open */
 enum {
 	/** The transaction is read only. */
-	DAOS_TF_RDONLY		= (1 << 0),
+	DAOS_TF_RDONLY = (1 << 0),
 	/**
 	 * Do not copy caller data buffers during modifications associated with
 	 * the transaction. The buffers must remain unchanged until the
@@ -28,7 +28,7 @@ enum {
 	 * Key buffers are always copied, regardless of this flag. They can be
 	 * released or repurposed after corresponding operations complete.
 	 */
-	DAOS_TF_ZERO_COPY	= (1 << 1),
+	DAOS_TF_ZERO_COPY = (1 << 1),
 };
 
 /**
@@ -42,7 +42,8 @@ enum {
  * \return		allocated rank list that user is responsible to free
  *			with d_rank_list_free().
  */
-d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *
+daos_rank_list_parse(const char *str, const char *sep);
 
 /*
  * Transaction API
@@ -62,8 +63,7 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  * \return		0 if Success, negative if failed.
  */
 int
-daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
-	     daos_event_t *ev);
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags, daos_event_t *ev);
 
 /**
  * Commit the transaction. If the operation succeeds, the transaction handle
@@ -102,8 +102,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  * \return		0 if Success, negative if failed.
  */
 int
-daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
-		  daos_event_t *ev);
+daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th, daos_event_t *ev);
 
 /**
  * Abort all modifications on the transaction. The transaction handle cannot be
@@ -174,7 +173,7 @@ daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 static inline int
 daos_anchor_init(daos_anchor_t *anchor, __attribute__((unused)) unsigned int opts)
 {
-	daos_anchor_t	_anchor = DAOS_ANCHOR_INIT;
+	daos_anchor_t _anchor = DAOS_ANCHOR_INIT;
 
 	*anchor = _anchor;
 	return 0;

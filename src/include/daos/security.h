@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <daos_types.h>
-
 
 /**
  * Request the security credentials for the current user from the DAOS agent.
@@ -31,6 +30,7 @@
  *		-DER_NOREPLY	No response from agent
  *		-DER_MISC	Invalid response from agent
  */
-int dc_sec_request_creds(d_iov_t *creds);
+int
+dc_sec_request_creds(d_iov_t *creds);
 
 #endif /* __DAOS_SECURITY_INT_H__ */

@@ -12,20 +12,19 @@
 #ifndef __DAOS_VERSION_H__
 #define __DAOS_VERSION_H__
 
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
 /* libdaos version as integer components major.minor.fix */
-#define DAOS_API_VERSION_MAJOR @TMPL_MAJOR@
-#define DAOS_API_VERSION_MINOR @TMPL_MINOR@
-#define DAOS_API_VERSION_FIX @TMPL_FIX@
+#define DAOS_API_VERSION_MAJOR @TMPL_MAJOR @
+#define DAOS_API_VERSION_MINOR @TMPL_MINOR @
+#define DAOS_API_VERSION_FIX   @TMPL_FIX @
 
 /* DAOS package version components major.minor.fix */
-#define DAOS_VERSION_MAJOR @TMPL_PKG_MAJOR@
-#define DAOS_VERSION_MINOR @TMPL_PKG_MINOR@
-#define DAOS_VERSION_FIX @TMPL_PKG_FIX@
+#define DAOS_VERSION_MAJOR     @TMPL_PKG_MAJOR @
+#define DAOS_VERSION_MINOR     @TMPL_PKG_MINOR @
+#define DAOS_VERSION_FIX       @TMPL_PKG_FIX @
 
 #if defined(__cplusplus)
 }

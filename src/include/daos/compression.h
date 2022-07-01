@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,11 +9,11 @@
 
 #include <daos_prop.h>
 
-#define DC_STATUS_OK			0
-#define DC_STATUS_ERR			-DER_MISC
-#define DC_STATUS_INVALID_LEVEL		-DER_INVAL
-#define DC_STATUS_OVERFLOW		-DER_TRUNC
-#define DC_STATUS_NOMEM			-DER_NOSPACE
+#define DC_STATUS_OK            0
+#define DC_STATUS_ERR           -DER_MISC
+#define DC_STATUS_INVALID_LEVEL -DER_INVAL
+#define DC_STATUS_OVERFLOW      -DER_TRUNC
+#define DC_STATUS_NOMEM         -DER_NOSPACE
 
 /**
  * -----------------------------------------------------------
@@ -38,62 +38,46 @@ daos_str2compresscontprop(const char *value);
 enum DAOS_COMPRESS_TYPE {
 	COMPRESS_TYPE_UNKNOWN = 0,
 
-	COMPRESS_TYPE_LZ4	= 1,
-	COMPRESS_TYPE_DEFLATE	= 2,
-	COMPRESS_TYPE_DEFLATE1	= 3,
-	COMPRESS_TYPE_DEFLATE2	= 4,
-	COMPRESS_TYPE_DEFLATE3	= 5,
-	COMPRESS_TYPE_DEFLATE4	= 6,
+	COMPRESS_TYPE_LZ4      = 1,
+	COMPRESS_TYPE_DEFLATE  = 2,
+	COMPRESS_TYPE_DEFLATE1 = 3,
+	COMPRESS_TYPE_DEFLATE2 = 4,
+	COMPRESS_TYPE_DEFLATE3 = 5,
+	COMPRESS_TYPE_DEFLATE4 = 6,
 
-	COMPRESS_TYPE_END	= 7,
+	COMPRESS_TYPE_END = 7,
 };
 
 /** Lookup the appropriate COMPRESS_TYPE given daos container property */
-enum DAOS_COMPRESS_TYPE daos_contprop2compresstype(int contprop_compress_val);
+enum DAOS_COMPRESS_TYPE
+daos_contprop2compresstype(int contprop_compress_val);
 
 struct compress_ft;
 struct daos_compressor {
 	/** Pointer to the function table to be used for compression */
 	struct compress_ft *dc_algo;
 	/** Pointer to function table specific contexts */
-	void *dc_ctx;
+	void               *dc_ctx;
 };
 
 typedef void (*dc_callback_fn)(void *cb_data, int produced, int status);
 
 struct compress_ft {
-	int		(*cf_init)(
-				void **daos_dc_ctx,
-				uint16_t level,
-				uint32_t max_buf_size);
-	int		(*cf_compress)(
-				void *daos_dc_ctx,
-				uint8_t *src, size_t src_len,
-				uint8_t *dst, size_t dst_len,
-				size_t *produced);
-	int		(*cf_decompress)(
-				void *daos_mhash_ctx,
-				uint8_t *src, size_t src_len,
-				uint8_t *dst, size_t dst_len,
-				size_t *produced);
-	int		(*cf_compress_async)(
-				void *daos_dc_ctx,
-				uint8_t *src, size_t src_len,
-				uint8_t *dst, size_t dst_len,
-				dc_callback_fn cb_fn,
-				void *cb_data);
-	int		(*cf_decompress_async)(
-				void *daos_dc_ctx,
-				uint8_t *src, size_t src_len,
-				uint8_t *dst, size_t dst_len,
-				dc_callback_fn cb_fn,
-				void *cb_data);
-	int		(*cf_poll_response)(void *daos_dc_ctx);
-	void		(*cf_destroy)(void *daos_dc_ctx);
-	int		(*cf_available)();
-	uint16_t	cf_level;
-	char		*cf_name;
-	enum DAOS_COMPRESS_TYPE	cf_type;
+	int (*cf_init)(void **daos_dc_ctx, uint16_t level, uint32_t max_buf_size);
+	int (*cf_compress)(void *daos_dc_ctx, uint8_t *src, size_t src_len, uint8_t *dst,
+			   size_t dst_len, size_t *produced);
+	int (*cf_decompress)(void *daos_mhash_ctx, uint8_t *src, size_t src_len, uint8_t *dst,
+			     size_t dst_len, size_t *produced);
+	int (*cf_compress_async)(void *daos_dc_ctx, uint8_t *src, size_t src_len, uint8_t *dst,
+				 size_t dst_len, dc_callback_fn cb_fn, void *cb_data);
+	int (*cf_decompress_async)(void *daos_dc_ctx, uint8_t *src, size_t src_len, uint8_t *dst,
+				   size_t dst_len, dc_callback_fn cb_fn, void *cb_data);
+	int (*cf_poll_response)(void *daos_dc_ctx);
+	void (*cf_destroy)(void *daos_dc_ctx);
+	int (*cf_available)();
+	uint16_t                cf_level;
+	char                   *cf_name;
+	enum DAOS_COMPRESS_TYPE cf_type;
 };
 
 struct compress_ft *
@@ -109,10 +93,7 @@ daos_compress_type2algo(enum DAOS_COMPRESS_TYPE type, bool qat_preferred);
  *		in qat, if the size is set to 0, 64KB is used by default.
  */
 int
-daos_compressor_init(
-		struct daos_compressor **obj,
-		struct compress_ft *ft,
-		uint32_t max_buf_size);
+daos_compressor_init(struct daos_compressor **obj, struct compress_ft *ft, uint32_t max_buf_size);
 
 /**
  * Initialize compressor with the specified compress type.
@@ -125,11 +106,8 @@ daos_compressor_init(
  *		in qat, if the size is set to 0, 64KB is used by default.
  */
 int
-daos_compressor_init_with_type(
-		struct daos_compressor **obj,
-		enum DAOS_COMPRESS_TYPE type,
-		bool qat_preferred,
-		uint32_t max_buf_size);
+daos_compressor_init_with_type(struct daos_compressor **obj, enum DAOS_COMPRESS_TYPE type,
+			       bool qat_preferred, uint32_t max_buf_size);
 
 /**
  * Compression function.
@@ -143,11 +121,8 @@ daos_compressor_init_with_type(
  * \param[out]	produced	length of compress result.
  */
 int
-daos_compressor_compress(
-		struct daos_compressor *obj,
-		uint8_t *src_buf, size_t src_len,
-		uint8_t *dst_buf, size_t dst_len,
-		size_t *produced);
+daos_compressor_compress(struct daos_compressor *obj, uint8_t *src_buf, size_t src_len,
+			 uint8_t *dst_buf, size_t dst_len, size_t *produced);
 
 /**
  * Compression asynchronous function.
@@ -162,11 +137,9 @@ daos_compressor_compress(
  * \param[out]	cb_data		transparent data sent back to callback func.
  */
 int
-daos_compressor_compress_async(
-		struct daos_compressor *obj,
-		uint8_t *src_buf, size_t src_len,
-		uint8_t *dst_buf, size_t dst_len,
-		dc_callback_fn cb_fn, void *cb_data);
+daos_compressor_compress_async(struct daos_compressor *obj, uint8_t *src_buf, size_t src_len,
+			       uint8_t *dst_buf, size_t dst_len, dc_callback_fn cb_fn,
+			       void *cb_data);
 
 /**
  * DeCompression function.
@@ -180,11 +153,8 @@ daos_compressor_compress_async(
  * \param[out]	produced	length of decompress result.
  */
 int
-daos_compressor_decompress(
-		struct daos_compressor *obj,
-		uint8_t *src_buf, size_t src_len,
-		uint8_t *dst_buf, size_t dst_len,
-		size_t *produced);
+daos_compressor_decompress(struct daos_compressor *obj, uint8_t *src_buf, size_t src_len,
+			   uint8_t *dst_buf, size_t dst_len, size_t *produced);
 
 /**
  * DeCompression asynchronous function.
@@ -199,11 +169,9 @@ daos_compressor_decompress(
  * \param[out]	cb_data		transparent data sent back to callback func.
  */
 int
-daos_compressor_decompress_async(
-		struct daos_compressor *obj,
-		uint8_t *src_buf, size_t src_len,
-		uint8_t *dst_buf, size_t dst_len,
-		dc_callback_fn cb_fn, void *cb_data);
+daos_compressor_decompress_async(struct daos_compressor *obj, uint8_t *src_buf, size_t src_len,
+				 uint8_t *dst_buf, size_t dst_len, dc_callback_fn cb_fn,
+				 void *cb_data);
 
 /**
  * Poll response on asynchronous mode.
@@ -219,7 +187,7 @@ daos_compressor_poll_response(struct daos_compressor *obj);
  * \param[in]	obj		compressor.
  */
 void
-daos_compressor_destroy(struct daos_compressor **obj);
+			   daos_compressor_destroy(struct daos_compressor **obj);
 
 /** ISA-L compression function table implemented in compression_isal.c */
 extern struct compress_ft *isal_compress_algo_table[];
