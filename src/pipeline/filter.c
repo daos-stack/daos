@@ -11,9 +11,57 @@
 #include "pipeline_internal.h"
 #include <daos/common.h>
 
-#define NTYPES 13
+#define NTYPES              13
+#define NTYPES_NOSIZE        4
+#define N_FILTER_FUNC_PTRS  53
+#define N_GETD_FUNC_PTRS    39
 
-static filter_func_t *filter_func_ptrs[53] = {
+#define SUBIDX_UINTEGER1  0
+#define SUBIDX_UINTEGER2  1
+#define SUBIDX_UINTEGER4  2
+#define SUBIDX_UINTEGER8  3
+#define SUBIDX_INTEGER1   4
+#define SUBIDX_INTEGER2   5
+#define SUBIDX_INTEGER4   6
+#define SUBIDX_INTEGER8   7
+#define SUBIDX_REAL4      8
+#define SUBIDX_REAL8      9
+#define SUBIDX_BINARY    10
+#define SUBIDX_STRING    11
+#define SUBIDX_CSTRING   12
+
+#define SUBIDX_UINTEGER   0
+#define SUBIDX_INTEGER    1
+#define SUBIDX_DOUBLE     2
+#define SUBIDX_STR        3
+
+#define SUBIDX_FUNC_EQ        0
+#define SUBIDX_FUNC_NE        NTYPES_NOSIZE
+#define SUBIDX_FUNC_LT        (NTYPES_NOSIZE * 2)
+#define SUBIDX_FUNC_LE        (NTYPES_NOSIZE * 3)
+#define SUBIDX_FUNC_GE        (NTYPES_NOSIZE * 4)
+#define SUBIDX_FUNC_GT        (NTYPES_NOSIZE * 5)
+
+#define SUBIDX_FUNC_ADD       (NTYPES_NOSIZE * 6) /** these do not work with strings */
+#define SUBIDX_FUNC_SUB       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1))
+#define SUBIDX_FUNC_MUL       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 2)
+#define SUBIDX_FUNC_DIV       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 3)
+#define SUBIDX_FUNC_SUM       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 4)
+#define SUBIDX_FUNC_MAX       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 5)
+#define SUBIDX_FUNC_MIN       (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 6)
+
+#define SUBIDX_FUNC_BITAND    (SUBIDX_FUNC_ADD + (NTYPES_NOSIZE - 1) * 7) /** only works w/ int */
+
+#define SUBIDX_FUNC_LIKE      (SUBIDX_FUNC_BITAND + (NTYPES_NOSIZE - 2))  /** only works w/ str */
+#define SUBIDX_FUNC_ISNULL    (SUBIDX_FUNC_LIKE + 1)/** type is N/A */
+#define SUBIDX_FUNC_ISNOTNULL (SUBIDX_FUNC_LIKE + 2)
+#define SUBIDX_FUNC_NOT       (SUBIDX_FUNC_LIKE + 3)
+#define SUBIDX_FUNC_AND       (SUBIDX_FUNC_LIKE + 4)
+#define SUBIDX_FUNC_OR        (SUBIDX_FUNC_LIKE + 5)
+
+#define SUBIDX_FUNCS_WITH_ONE_TYPE_ONLY SUBIDX_FUNC_LIKE
+
+static filter_func_t *filter_func_ptrs[N_FILTER_FUNC_PTRS] = {
     filter_func_eq_u,   filter_func_eq_i,      filter_func_eq_d,     filter_func_eq_st,
     filter_func_ne_u,   filter_func_ne_i,      filter_func_ne_d,     filter_func_ne_st,
     filter_func_lt_u,   filter_func_lt_i,      filter_func_lt_d,     filter_func_lt_st,
@@ -29,7 +77,7 @@ static filter_func_t *filter_func_ptrs[53] = {
     filter_func_isnull, filter_func_isnotnull, filter_func_not,      filter_func_and,
     filter_func_or};
 
-static filter_func_t *getd_func_ptrs[39] = {
+static filter_func_t *getd_func_ptrs[N_GETD_FUNC_PTRS] = {
     getdata_func_dkey_u1,   getdata_func_dkey_u2,  getdata_func_dkey_u4,  getdata_func_dkey_u8,
     getdata_func_dkey_i1,   getdata_func_dkey_i2,  getdata_func_dkey_i4,  getdata_func_dkey_i8,
     getdata_func_dkey_r4,   getdata_func_dkey_r8,  getdata_func_dkey_raw, getdata_func_dkey_st,
@@ -76,13 +124,14 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 static uint32_t
 calc_type_nosize_idx(uint32_t idx)
 {
-	if (idx < 4)
-		return 0;
-	else if (idx < 8)
-		return 1;
-	else if (idx < 10)
-		return 2;
-	return 3;
+	/** TODO: This could probably be done better with a FOREACH macro. */
+	if (idx <= SUBIDX_UINTEGER8)
+		return SUBIDX_UINTEGER;
+	else if (idx <= SUBIDX_INTEGER8)
+		return SUBIDX_INTEGER;
+	else if (idx <= SUBIDX_REAL8)
+		return SUBIDX_DOUBLE;
+	return SUBIDX_STR;
 }
 
 /**
@@ -92,32 +141,33 @@ calc_type_nosize_idx(uint32_t idx)
 static uint32_t
 calc_type_idx(char *type, size_t type_len)
 {
+	/** TODO: This could probably be done better with a FOREACH macro. */
 	if (!strncmp(type, "DAOS_FILTER_TYPE_UINTEGER1", type_len))
-		return 0;
+		return SUBIDX_UINTEGER1;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_UINTEGER2", type_len))
-		return 1;
+		return SUBIDX_UINTEGER2;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_UINTEGER4", type_len))
-		return 2;
+		return SUBIDX_UINTEGER4;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_UINTEGER8", type_len))
-		return 3;
+		return SUBIDX_UINTEGER8;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER1", type_len))
-		return 4;
+		return SUBIDX_INTEGER1;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER2", type_len))
-		return 5;
+		return SUBIDX_INTEGER2;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER4", type_len))
-		return 6;
+		return SUBIDX_INTEGER4;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER8", type_len))
-		return 7;
+		return SUBIDX_INTEGER8;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL4", type_len))
-		return 8;
+		return SUBIDX_REAL4;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL8", type_len))
-		return 9;
+		return SUBIDX_REAL8;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_BINARY", type_len))
-		return 10;
+		return SUBIDX_BINARY;
 	else if (!strncmp(type, "DAOS_FILTER_TYPE_STRING", type_len))
-		return 11;
+		return SUBIDX_STRING;
 	else /* DAOS_FILTER_TYPE_CSTRING */
-		return 12;
+		return SUBIDX_CSTRING;
 }
 
 /**
@@ -137,46 +187,46 @@ calc_filterfunc_idx(daos_filter_part_t **parts, uint32_t idx)
 	/** TODO: This could probably be done better with a FOREACH macro. */
 	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s))
-		return 0;
+		return SUBIDX_FUNC_EQ;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s))
-		return 4;
+		return SUBIDX_FUNC_NE;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s))
-		return 8;
+		return SUBIDX_FUNC_LT;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s))
-		return 12;
+		return SUBIDX_FUNC_LE;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s))
-		return 16;
+		return SUBIDX_FUNC_GE;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s))
-		return 20;
+		return SUBIDX_FUNC_GT;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s))
-		return 24;
+		return SUBIDX_FUNC_ADD;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s))
-		return 27;
+		return SUBIDX_FUNC_SUB;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s))
-		return 30;
+		return SUBIDX_FUNC_MUL;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-		return 33;
+		return SUBIDX_FUNC_DIV;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-		return 36;
+		return SUBIDX_FUNC_SUM;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
-		return 39;
+		return SUBIDX_FUNC_MAX;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
-		return 42;
+		return SUBIDX_FUNC_MIN;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s))
-		return 45;
+		return SUBIDX_FUNC_BITAND;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
-		return 47;
+		return SUBIDX_FUNC_LIKE;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s))
-		return 48;
+		return SUBIDX_FUNC_ISNULL;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s))
-		return 49;
+		return SUBIDX_FUNC_ISNOTNULL;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s))
-		return 50;
+		return SUBIDX_FUNC_NOT;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s))
-		return 51;
+		return SUBIDX_FUNC_AND;
 	else /* if (!strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)) */
-		return 52;
+		return SUBIDX_FUNC_OR;
 }
 
 static uint32_t
@@ -287,7 +337,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter, uin
 	func_idx = calc_filterfunc_idx(filter->parts, idx);
 	type_idx = calc_type_nosize_idx(calc_type_idx(*type, *type_len));
 
-	if (func_idx < 47)
+	if (func_idx < SUBIDX_FUNCS_WITH_ONE_TYPE_ONLY)
 		func_idx += type_idx;
 
 	comp_part->filter_func     = filter_func_ptrs[func_idx];
