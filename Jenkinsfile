@@ -830,7 +830,7 @@ pipeline {
                                 inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
             }
         } // stage('Test Storage Prep')
-        stage('Test Hardware') {
+        stage('Test Hardware Small') {
             when {
                 beforeAgent true
                 expression { ! skipStage() }
@@ -856,26 +856,14 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Small')
-                stage('Functional Hardware Medium') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                   }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium')
+            } // parallel
+        } // stage('Test Hardware Small')
+        stage('Test Hardware Large') {
+            when {
+                beforeAgent true
+                expression { ! skipStage() }
+            }
+            parallel {
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -897,7 +885,35 @@ pipeline {
                     }
                 } // stage('Functional_Hardware_Large')
             } // parallel
-        } // stage('Test Hardware')
+        } // stage('Test Hardware Large')
+        stage('Test Hardware Medium') {
+            when {
+                beforeAgent true
+                expression { ! skipStage() }
+            }
+            parallel {
+                stage('Functional Hardware Medium') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.CI_NVME_5_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       test_function: 'runTestFunctionalV2'
+                   }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium')
+            } // parallel
+        } // stage('Test Hardware Medium')
         stage ('Test Report') {
             parallel {
                 stage('Bullseye Report') {
