@@ -208,6 +208,16 @@ func (r *ContSetOwnerReq) GetId() string {
 	return r.PoolUUID
 }
 
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *ListContReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *ListContReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
 func Debug(msg proto.Message) string {
 	var bld strings.Builder
 	switch m := msg.(type) {

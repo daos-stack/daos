@@ -1594,6 +1594,8 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	resp.n_containers = containers_len;
 
+	D_INFO("Found %lu containers in DAOS pool %s\n", containers_len, req->id);
+
 	for (i = 0; i < containers_len; i++) {
 		D_ALLOC_PTR(resp.containers[i]);
 		if (resp.containers[i] == NULL)

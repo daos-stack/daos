@@ -2872,6 +2872,7 @@ realloc_resp:
 		D_ERROR(DF_UUID": failed to get container list for pool: %d\n",
 			DP_UUID(uuid), rc);
 	} else {
+		*ncontainers = out->plco_ncont;
 		*containers = resp_cont;
 	}
 

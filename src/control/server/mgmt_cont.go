@@ -23,7 +23,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 	}
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodListContainers, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
