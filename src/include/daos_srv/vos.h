@@ -1198,20 +1198,20 @@ void vos_db_fini(void);
  */
 
 struct cont_scrub {
-	struct daos_csummer	*scs_cont_csummer;
-	void			*scs_cont_src;
-	daos_handle_t		 scs_cont_hdl;
-	uuid_t			 scs_cont_uuid;
+	struct daos_csummer *scs_cont_csummer;
+	void                *scs_cont_src;
+	daos_handle_t        scs_cont_hdl;
+	uuid_t               scs_cont_uuid;
 };
 
 /*
  * Because the scrubber operates at the pool level, it will need a way to
  * get some info for each container within the pool as it's scrubbed.
  */
-typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
-			       struct cont_scrub *cont);
-typedef void(*sc_put_cont_fn_t)(void *cont);
-typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
+typedef int (*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
+				struct cont_scrub *cont);
+typedef void (*sc_put_cont_fn_t)(void *cont);
+typedef bool (*sc_cont_is_stopping_fn_t)(void *cont);
 
 typedef bool (*sc_is_idle_fn_t)();
 typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
@@ -1219,8 +1219,8 @@ typedef int (*sc_yield_fn_t)(void *);
 typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);
 
 enum scrub_status {
-	SCRUB_STATUS_UNKNOWN = 0,
-	SCRUB_STATUS_RUNNING = 1,
+	SCRUB_STATUS_UNKNOWN     = 0,
+	SCRUB_STATUS_RUNNING     = 1,
 	SCRUB_STATUS_NOT_RUNNING = 2,
 };
 
@@ -1247,54 +1247,54 @@ struct scrub_ctx {
 	 */
 	struct scrub_ctx_metrics sc_metrics;
 
-	struct dss_module_info	*sc_dmi;
+	struct dss_module_info  *sc_dmi;
 
 	/**
 	 * Pool
 	 **/
-	uuid_t			 sc_pool_uuid;
-	daos_handle_t		 sc_vos_pool_hdl;
-	struct ds_pool		*sc_pool; /* Used to get properties */
-	uint32_t		 sc_pool_scrub_count;
-	struct timespec		 sc_pool_start_scrub;
-	int			 sc_pool_last_csum_calcs;
-	int			 sc_pool_csum_calcs;
-	uint64_t		 sc_bytes_scrubbed;
-	uint32_t		 sc_pool_tgt_corrupted_detected;
-	ds_pool_tgt_drain	 sc_drain_pool_tgt_fn;
+	uuid_t                   sc_pool_uuid;
+	daos_handle_t            sc_vos_pool_hdl;
+	struct ds_pool          *sc_pool; /* Used to get properties */
+	uint32_t                 sc_pool_scrub_count;
+	struct timespec          sc_pool_start_scrub;
+	int                      sc_pool_last_csum_calcs;
+	int                      sc_pool_csum_calcs;
+	uint64_t                 sc_bytes_scrubbed;
+	uint32_t                 sc_pool_tgt_corrupted_detected;
+	ds_pool_tgt_drain        sc_drain_pool_tgt_fn;
 
 	/**
 	 * Container
 	 **/
 	/* callback function that will provide the csummer for the container */
-	sc_get_cont_fn_t	 sc_cont_lookup_fn;
-	sc_put_cont_fn_t	 sc_cont_put_fn;
+	sc_get_cont_fn_t         sc_cont_lookup_fn;
+	sc_put_cont_fn_t         sc_cont_put_fn;
 	sc_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
-	struct cont_scrub	 sc_cont;
-	uuid_t			 sc_cont_uuid;
+	struct cont_scrub        sc_cont;
+	uuid_t                   sc_cont_uuid;
 
 	/**
 	 * Object
 	 */
-	daos_unit_oid_t		 sc_cur_oid;
-	daos_key_t		 sc_dkey;
-	struct dcs_csum_info	*sc_csum_to_verify;
-	daos_epoch_t		 sc_epoch;
-	uint16_t		 sc_minor_epoch;
-	daos_iod_t		 sc_iod;
-	struct bio_iov		*sc_cur_biov;
+	daos_unit_oid_t          sc_cur_oid;
+	daos_key_t               sc_dkey;
+	struct dcs_csum_info    *sc_csum_to_verify;
+	daos_epoch_t             sc_epoch;
+	uint16_t                 sc_minor_epoch;
+	daos_iod_t               sc_iod;
+	struct bio_iov          *sc_cur_biov;
 
 	/* Current vos object iterator */
-	daos_handle_t		 sc_vos_iter_handle;
+	daos_handle_t            sc_vos_iter_handle;
 
 	/* Schedule controlling function pointers and arg */
-	sc_is_idle_fn_t		 sc_is_idle_fn;
-	sc_sleep_fn_t		 sc_sleep_fn;
-	sc_yield_fn_t		 sc_yield_fn;
-	void			*sc_sched_arg;
+	sc_is_idle_fn_t          sc_is_idle_fn;
+	sc_sleep_fn_t            sc_sleep_fn;
+	sc_yield_fn_t            sc_yield_fn;
+	void                    *sc_sched_arg;
 
-	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	enum scrub_status        sc_status;
+	bool                     sc_did_yield;
 };
 
 /*
@@ -1304,7 +1304,8 @@ struct scrub_ctx {
  * checksums are enabled on the pool, each object in the container will be
  * scrubbed.
  */
-int vos_scrub_pool(struct scrub_ctx *ctx);
+int
+vos_scrub_pool(struct scrub_ctx *ctx);
 
 /*
  * A generic utility function that, given a start time, duration, number of
@@ -1316,7 +1317,6 @@ int vos_scrub_pool(struct scrub_ctx *ctx);
  */
 uint64_t
 get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
-		       uint64_t duration_seconds, uint64_t periods_nr,
-		       uint64_t per_idx);
+		       uint64_t duration_seconds, uint64_t periods_nr, uint64_t per_idx);
 
 #endif /* __VOS_API_H */

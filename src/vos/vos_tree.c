@@ -444,7 +444,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
-	rbund->rb_off = rec->rec_off;
+	rbund->rb_off       = rec->rec_off;
 	return 0;
 }
 

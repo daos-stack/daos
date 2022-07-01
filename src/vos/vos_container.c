@@ -776,10 +776,10 @@ cont_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 }
 
 struct vos_iter_ops vos_cont_iter_ops = {
-	.iop_prepare = cont_iter_prep,
-	.iop_finish  = cont_iter_fini,
-	.iop_probe   = cont_iter_probe,
-	.iop_next    = cont_iter_next,
-	.iop_fetch   = cont_iter_fetch,
-	.iop_process  = cont_iter_process,
+    .iop_prepare = cont_iter_prep,
+    .iop_finish  = cont_iter_fini,
+    .iop_probe   = cont_iter_probe,
+    .iop_next    = cont_iter_next,
+    .iop_fetch   = cont_iter_fetch,
+    .iop_process = cont_iter_process,
 };

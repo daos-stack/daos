@@ -747,8 +747,8 @@ calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 
 /** Using the data from the iov, calculate the checksum */
 int
-daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
-			  uint8_t *csum_buf, uint16_t csum_buf_len)
+daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov, uint8_t *csum_buf,
+			  uint16_t csum_buf_len)
 {
 	int rc;
 
@@ -829,8 +829,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 
 		/** akey */
 		if (!obj->dcs_skip_key_calc) {
-			rc = daos_csummer_calc_for_iov(obj, &iod->iod_name,
-						       csums->ic_akey.cs_csum,
+			rc = daos_csummer_calc_for_iov(obj, &iod->iod_name, csums->ic_akey.cs_csum,
 						       csum_len);
 			if (rc != 0) {
 				D_ERROR("calc_for_iov error: "DF_RC"\n",

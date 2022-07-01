@@ -29,7 +29,7 @@ struct vos_io_context {
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
-	struct dcs_iod_csums	*ic_iod_csums;
+	struct dcs_iod_csums     *ic_iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
@@ -645,7 +645,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
-	ioc->ic_iod_csums = iod_csums;
+	ioc->ic_iod_csums                      = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
@@ -953,8 +953,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		nr = hi - lo + 1;
 
 		if (BIO_ADDR_IS_CORRUPTED(&ent->en_addr)) {
-			D_DEBUG(DB_CSUM, "Found corrupted entity: "DF_ENT"\n",
-				DP_ENT(ent));
+			D_DEBUG(DB_CSUM, "Found corrupted entity: " DF_ENT "\n", DP_ENT(ent));
 			rc = -DER_CSUM;
 			goto failed;
 		}
@@ -1558,7 +1557,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
-	struct dcs_csum_info	*value_csum;
+	struct dcs_csum_info    *value_csum;
 	umem_off_t		 umoff;
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
@@ -1583,11 +1582,11 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	else
 		rbund.rb_csum	= &csum;
 
-	rbund.rb_biov		= biov;
-	rbund.rb_rsize		= rsize;
-	rbund.rb_gsize		= gsize;
-	rbund.rb_off		= umoff;
-	rbund.rb_ver		= pm_ver;
+	rbund.rb_biov  = biov;
+	rbund.rb_rsize = rsize;
+	rbund.rb_gsize = gsize;
+	rbund.rb_off   = umoff;
+	rbund.rb_ver   = pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
@@ -1718,7 +1717,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info    *iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	uint32_t		 update_cond = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
@@ -2065,7 +2064,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
-	struct dcs_csum_info	*value_csum = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info    *value_csum = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 
 	/*
 	 * TODO:
@@ -2173,7 +2172,7 @@ done:
 static int
 akey_update_begin(struct vos_io_context *ioc)
 {
-	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info    *iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int i, rc;

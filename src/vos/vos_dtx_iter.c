@@ -289,10 +289,10 @@ dtx_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 }
 
 struct vos_iter_ops vos_dtx_iter_ops = {
-	.iop_prepare =	dtx_iter_prep,
-	.iop_finish  =  dtx_iter_fini,
-	.iop_probe   =	dtx_iter_probe,
-	.iop_next    =  dtx_iter_next,
-	.iop_fetch   =  dtx_iter_fetch,
-	.iop_process  =	dtx_iter_process,
+    .iop_prepare = dtx_iter_prep,
+    .iop_finish  = dtx_iter_fini,
+    .iop_probe   = dtx_iter_probe,
+    .iop_next    = dtx_iter_next,
+    .iop_fetch   = dtx_iter_fetch,
+    .iop_process = dtx_iter_process,
 };

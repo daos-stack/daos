@@ -765,7 +765,8 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent);
  *
  * \param ih		[IN]	Iterator open handle.
  */
-int evt_iter_corrupt(daos_handle_t ih);
+int
+    evt_iter_corrupt(daos_handle_t ih);
 
 /**
  * Fetch the extent and its data address from the current iterator position.

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC	DD_FAC(csum)
+#define D_LOGFAC DD_FAC(csum)
 
 #include <daos_srv/vos.h>
 #include <daos_srv/srv_csum.h>
@@ -13,7 +13,7 @@
 #include <daos_prop.h>
 #include "srv_internal.h"
 
-#define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
+#define C_TRACE(...)            D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 /*
  * telemetry metrics for the scrubber
@@ -21,20 +21,20 @@
  * lib/telemetry/promexp/collector.go:extractLabels(). If the format here
  * changes, extractLabels() must be updated as well.
  */
-#define DF_POOL_DIR "%s/tgt_%d/scrubber"
-#define DP_POOL_DIR(ctx) (ctx)->sc_pool->sp_path, (ctx)->sc_dmi->dmi_tgt_id
+#define DF_POOL_DIR             "%s/tgt_%d/scrubber"
+#define DP_POOL_DIR(ctx)        (ctx)->sc_pool->sp_path, (ctx)->sc_dmi->dmi_tgt_id
 
-#define M_CSUM_COUNTER "csums/current"
-#define M_CSUM_COUNTER_TOTAL "csums/total"
-#define M_CSUM_COUNTER_PREV "csums/prev"
-#define M_BYTES_SCRUBBED "bytes_scrubbed/current"
-#define M_BYTES_SCRUBBED_TOTAL "bytes_scrubbed/total"
-#define M_BYTES_SCRUBBED_PREV "bytes_scrubbed/prev"
-#define M_CSUM_CORRUPTION "corruption/current"
+#define M_CSUM_COUNTER          "csums/current"
+#define M_CSUM_COUNTER_TOTAL    "csums/total"
+#define M_CSUM_COUNTER_PREV     "csums/prev"
+#define M_BYTES_SCRUBBED        "bytes_scrubbed/current"
+#define M_BYTES_SCRUBBED_TOTAL  "bytes_scrubbed/total"
+#define M_BYTES_SCRUBBED_PREV   "bytes_scrubbed/prev"
+#define M_CSUM_CORRUPTION       "corruption/current"
 #define M_CSUM_CORRUPTION_TOTAL "corruption/total"
-#define M_STARTED "scrubber_started"
-#define M_ENDED "scrubber_finished"
-#define M_LAST_DURATION "last_duration"
+#define M_STARTED               "scrubber_started"
+#define M_ENDED                 "scrubber_finished"
+#define M_LAST_DURATION         "last_duration"
 
 /*
  * DAOS_CSUM_SCRUB_DISABLED can be set in the server config to disable the
@@ -65,20 +65,19 @@ sleep_fn(void *arg, uint32_t msec)
 }
 
 static int
-cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
-	       struct cont_scrub *cont)
+cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg, struct cont_scrub *cont)
 {
-	struct ds_cont_child	*cont_child = NULL;
-	int			 rc;
+	struct ds_cont_child *cont_child = NULL;
+	int                   rc;
 
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &cont_child);
 	if (rc != 0) {
-		D_ERROR("failed to get cont: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to get cont: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
 	cont->scs_cont_csummer = cont_child->sc_csummer;
-	cont->scs_cont_hdl = cont_child->sc_hdl;
+	cont->scs_cont_hdl     = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
 	cont->scs_cont_src = cont_child;
 
@@ -113,76 +112,65 @@ cont_is_stopping_cb(void *cont)
 static void
 sc_add_pool_metrics(struct scrub_ctx *ctx)
 {
-	d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count,
-			D_TM_COUNTER, "Number of full VOS tree scrubs",
-			NULL, DF_POOL_DIR"/scrubs_completed", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_start,
-			D_TM_TIMESTAMP,
-			"When the current scrubbing started", NULL,
-			DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "",
-			DF_POOL_DIR"/"M_ENDED, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count, D_TM_COUNTER,
+			"Number of full VOS tree scrubs", NULL, DF_POOL_DIR "/scrubs_completed",
+			DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_start, D_TM_TIMESTAMP,
+			"When the current scrubbing started", NULL, DF_POOL_DIR "/" M_STARTED,
+			DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "", DF_POOL_DIR "/" M_ENDED,
+			DP_POOL_DIR(ctx));
 	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
 			"How long waiting between checksum calculations", "ms",
-			DF_POOL_DIR"/sleep", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
-			D_TM_DURATION,
-			"How long the previous scrub took", "ms",
-			DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs,
-			D_TM_COUNTER, "Number of checksums calculated for "
-				      "current scan",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_last,
-			D_TM_COUNTER, "Number of checksums calculated in last "
-				      "scan", NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER_PREV,
+			DF_POOL_DIR "/sleep", DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_last_duration, D_TM_DURATION,
+			"How long the previous scrub took", "ms", DF_POOL_DIR "/" M_LAST_DURATION,
 			DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total,
-			D_TM_COUNTER, "Total number of checksums calculated",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs, D_TM_COUNTER,
+			"Number of checksums calculated for "
+			"current scan",
+			NULL, DF_POOL_DIR "/" M_CSUM_COUNTER, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_last, D_TM_COUNTER,
+			"Number of checksums calculated in last "
+			"scan",
+			NULL, DF_POOL_DIR "/" M_CSUM_COUNTER_PREV, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total, D_TM_COUNTER,
+			"Total number of checksums calculated", NULL,
+			DF_POOL_DIR "/" M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
 
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed,
-			D_TM_COUNTER, "Number of bytes scrubbed",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_last,
-			D_TM_COUNTER, "Number of bytes scrubbed in last scan",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED_PREV, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_total,
-			D_TM_COUNTER, "Total number of bytes scrubbed",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED_TOTAL, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_corruption,
-			D_TM_COUNTER, "Number of silent data corruption "
-				      "detected during current scan",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_corruption_total,
-			D_TM_COUNTER, "Total number of silent data corruption "
-				      "detected",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_CORRUPTION_TOTAL,
+	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed, D_TM_COUNTER,
+			"Number of bytes scrubbed", "bytes", DF_POOL_DIR "/" M_BYTES_SCRUBBED,
 			DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_last, D_TM_COUNTER,
+			"Number of bytes scrubbed in last scan", "bytes",
+			DF_POOL_DIR "/" M_BYTES_SCRUBBED_PREV, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_total, D_TM_COUNTER,
+			"Total number of bytes scrubbed", "bytes",
+			DF_POOL_DIR "/" M_BYTES_SCRUBBED_TOTAL, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_corruption, D_TM_COUNTER,
+			"Number of silent data corruption "
+			"detected during current scan",
+			NULL, DF_POOL_DIR "/" M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_corruption_total, D_TM_COUNTER,
+			"Total number of silent data corruption "
+			"detected",
+			NULL, DF_POOL_DIR "/" M_CSUM_CORRUPTION_TOTAL, DP_POOL_DIR(ctx));
 }
 
 static int
 drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 {
-	d_rank_list_t			 out_ranks = {0};
-	struct pool_target_addr_list	 target_list = {0};
-	struct pool_target_addr		 addr = {0};
-	int rc;
+	d_rank_list_t                out_ranks   = {0};
+	struct pool_target_addr_list target_list = {0};
+	struct pool_target_addr      addr        = {0};
+	int                          rc;
 
 	D_ERROR("Draining target. rank: %d, target: %d", rank, target);
 
 	rc = ds_pool_get_ranks(pool_uuid, PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_NEW,
 			       &out_ranks);
 	if (rc != DER_SUCCESS) {
-		D_ERROR("Couldn't get ranks: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Couldn't get ranks: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 	if (out_ranks.rl_nr == 0 || out_ranks.rl_ranks == NULL) {
@@ -191,13 +179,13 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 	}
 
 	target_list.pta_number = 1;
-	addr.pta_rank = rank;
-	addr.pta_target = target;
-	target_list.pta_addrs = &addr;
+	addr.pta_rank          = rank;
+	addr.pta_target        = target;
+	target_list.pta_addrs  = &addr;
 
 	rc = ds_pool_target_update_state(pool_uuid, &out_ranks, &target_list, PO_COMP_ST_DRAIN);
 	if (rc != DER_SUCCESS)
-		D_ERROR("pool target update status failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pool target update status failed: " DF_RC "\n", DP_RC(rc));
 	map_ranks_fini(&out_ranks);
 
 	return rc;
@@ -205,37 +193,34 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 
 struct drain_args {
 	struct ds_pool *ptd_pool;
-	d_rank_t ptd_rank;
-	uint32_t ptd_target_id;
+	d_rank_t        ptd_rank;
+	uint32_t        ptd_target_id;
 };
 
 void
 drain_pool_tgt_ult(void *arg)
 {
-	struct drain_args	*drain_args = arg;
-	int			 rc;
+	struct drain_args *drain_args = arg;
+	int                rc;
 
 	rc = drain_pool_target(drain_args->ptd_pool->sp_uuid, drain_args->ptd_rank,
 			       drain_args->ptd_target_id);
 
 	if (rc != 0)
-		D_ERROR("Pool target drain failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Pool target drain failed: " DF_RC "\n", DP_RC(rc));
 }
 
 static int
 drain_pool_tgt_cb(struct ds_pool *pool)
 {
-	int			 rc;
-	ABT_thread		 thread = ABT_THREAD_NULL;
-	struct dss_module_info	*dmi = dss_get_module_info();
-	struct drain_args	 drain_args = {
-		.ptd_pool = pool,
-		.ptd_target_id = dmi->dmi_tgt_id
-	};
+	int                     rc;
+	ABT_thread              thread     = ABT_THREAD_NULL;
+	struct dss_module_info *dmi        = dss_get_module_info();
+	struct drain_args       drain_args = {.ptd_pool = pool, .ptd_target_id = dmi->dmi_tgt_id};
 
 	rc = crt_group_rank(NULL, &drain_args.ptd_rank);
 	if (rc != 0) {
-		D_ERROR("Unable to get rank: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Unable to get rank: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -243,7 +228,7 @@ drain_pool_tgt_cb(struct ds_pool *pool)
 	rc = dss_ult_create(drain_pool_tgt_ult, &drain_args, DSS_XS_SYS, 0, 0, &thread);
 
 	if (rc != 0) {
-		D_ERROR("Error starting ULT: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Error starting ULT: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -263,11 +248,11 @@ is_idle()
 static void
 scrubbing_ult(void *arg)
 {
-	struct scrub_ctx	 ctx = {0};
-	struct ds_pool_child	*child = arg;
-	uuid_t			 pool_uuid;
-	daos_handle_t		 poh;
-	int			 rc;
+	struct scrub_ctx      ctx   = {0};
+	struct ds_pool_child *child = arg;
+	uuid_t                pool_uuid;
+	daos_handle_t         poh;
+	int                   rc;
 
 	poh = child->spc_hdl;
 	uuid_copy(pool_uuid, child->spc_uuid);
@@ -276,17 +261,17 @@ scrubbing_ult(void *arg)
 		return;
 
 	uuid_copy(ctx.sc_pool_uuid, pool_uuid);
-	ctx.sc_vos_pool_hdl = poh;
-	ctx.sc_sleep_fn = sleep_fn;
-	ctx.sc_yield_fn = yield_fn;
-	ctx.sc_sched_arg = child->spc_scrubbing_req;
-	ctx.sc_pool = child->spc_pool;
-	ctx.sc_cont_lookup_fn = cont_lookup_cb;
-	ctx.sc_cont_put_fn = cont_put_cb;
+	ctx.sc_vos_pool_hdl        = poh;
+	ctx.sc_sleep_fn            = sleep_fn;
+	ctx.sc_yield_fn            = yield_fn;
+	ctx.sc_sched_arg           = child->spc_scrubbing_req;
+	ctx.sc_pool                = child->spc_pool;
+	ctx.sc_cont_lookup_fn      = cont_lookup_cb;
+	ctx.sc_cont_put_fn         = cont_put_cb;
 	ctx.sc_cont_is_stopping_fn = cont_is_stopping_cb;
-	ctx.sc_dmi =  dss_get_module_info();
-	ctx.sc_drain_pool_tgt_fn = drain_pool_tgt_cb;
-	ctx.sc_is_idle_fn = is_idle;
+	ctx.sc_dmi                 = dss_get_module_info();
+	ctx.sc_drain_pool_tgt_fn   = drain_pool_tgt_cb;
+	ctx.sc_is_idle_fn          = is_idle;
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
@@ -299,7 +284,7 @@ scrubbing_ult(void *arg)
 			break;
 		}
 		if (rc != 0) {
-			D_ERROR("Issue with VOS Scrub (tgt_id: %d): "DF_RC"\n",
+			D_ERROR("Issue with VOS Scrub (tgt_id: %d): " DF_RC "\n",
 				ctx.sc_dmi->dmi_tgt_id, DP_RC(rc));
 			sleep_time = 60000; /* wait longer if there's an error */
 		}
@@ -311,8 +296,8 @@ scrubbing_ult(void *arg)
 int
 ds_start_scrubbing_ult(struct ds_pool_child *child)
 {
-	struct dss_module_info	*dmi = dss_get_module_info();
-	struct sched_req_attr	 attr;
+	struct dss_module_info *dmi = dss_get_module_info();
+	struct sched_req_attr   attr;
 
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_scrubbing_req == NULL);
@@ -333,11 +318,10 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	 * and so on. Let's use DSS_DEEP_STACK_SZ to avoid ULT overflow.
 	 */
 	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, &child->spc_uuid);
-	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child,
-						    DSS_DEEP_STACK_SZ);
+	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_scrubbing_req == NULL) {
-		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		D_ERROR(DF_UUID "[%d]: Failed to create Scrubbing ULT.n", DP_UUID(child->spc_uuid),
+			dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
 

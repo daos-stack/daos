@@ -1091,8 +1091,7 @@ daos_event_fini(struct daos_event *ev)
 
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
-			D_ERROR("Failed to finalize child event "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to finalize child event " DF_RC "\n", DP_RC(rc));
 			goto out_unlocked;
 		}
 

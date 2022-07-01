@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	18
+#define NUM_SERIALIZE_PROPS     18
 
 #include <stdio.h>
 #include <dirent.h>

@@ -150,8 +150,8 @@ main(int argc, char **argv)
 	struct option           long_options[] = {{"test-dir", required_argument, NULL, 'M'},
 						  {NULL, 0, NULL, 0} };
 
-	const struct CMUnitTest tests[]        = {
-		   cmocka_unit_test(do_openat),
+	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(do_openat),
 	};
 
 	while ((opt = getopt_long(argc, argv, "M:", long_options, &index)) != -1) {

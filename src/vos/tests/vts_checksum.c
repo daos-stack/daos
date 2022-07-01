@@ -25,8 +25,7 @@ struct extent_key {
  * Initialize the extent key from the io_test_args
  */
 void
-extent_key_from_test_args(struct extent_key *k,
-			  struct io_test_args *args)
+extent_key_from_test_args(struct extent_key *k, struct io_test_args *args)
 {
 	/* Set up dkey and akey */
 	dts_key_gen(&k->dkey_buf[0], args->dkey_size, args->dkey);
@@ -431,22 +430,18 @@ update_fetch_csum_for_array_10(void **state)
 }
 
 static int
-corrupt_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-	   vos_iter_type_t type, vos_iter_param_t *param,
+corrupt_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
 	   void *cb_arg, unsigned int *acts)
 {
 	if (type == VOS_ITER_SINGLE || type == VOS_ITER_RECX)
-		assert_success(
-			vos_iter_process(ih, VOS_ITER_PROC_OP_MARK_CORRUPT,
-					 NULL));
+		assert_success(vos_iter_process(ih, VOS_ITER_PROC_OP_MARK_CORRUPT, NULL));
 
 	return 0;
 }
 
 static int
-verify_corrupted_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		    vos_iter_type_t type, vos_iter_param_t *param,
-		    void *cb_arg, unsigned int *acts)
+verify_corrupted_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	if (type == VOS_ITER_SINGLE || type == VOS_ITER_RECX)
 		assert_true(BIO_ADDR_IS_CORRUPTED(&entry->ie_biov.bi_addr));
@@ -459,32 +454,32 @@ setup_iod_data(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_type_t type)
 {
 	iod->iod_type = type;
 	if (iod->iod_type == DAOS_IOD_ARRAY) {
-		iod->iod_nr = 1;
+		iod->iod_nr   = 1;
 		iod->iod_size = 2;
 		D_ALLOC_PTR(iod->iod_recxs);
 		iod->iod_recxs[0].rx_idx = 0;
-		iod->iod_recxs[0].rx_nr = daos_sgl_buf_size(sgl) / 2;
+		iod->iod_recxs[0].rx_nr  = daos_sgl_buf_size(sgl) / 2;
 
 	} else {
 		iod->iod_size = daos_sgl_buf_size(sgl);
-		iod->iod_nr = 1;
+		iod->iod_nr   = 1;
 	}
 }
 
 static void
 test_marking_corrupted_with_iod_type(void **state, daos_iod_type_t iod_type)
 {
-	struct extent_key	k = {0};
-	daos_iod_t		iod = {0};
-	d_sg_list_t		sgl = {0};
-	d_sg_list_t		sgl_fetch = {0};
-	int			rc = 0;
-	daos_epoch_t		epoch = 1;
-	uint32_t		i;
-	const uint32_t		akey_len = 32;
-	char			akey[akey_len];
-	vos_iter_param_t	param = {0};
-	struct vos_iter_anchors	anchor = {0};
+	struct extent_key       k         = {0};
+	daos_iod_t              iod       = {0};
+	d_sg_list_t             sgl       = {0};
+	d_sg_list_t             sgl_fetch = {0};
+	int                     rc        = 0;
+	daos_epoch_t            epoch     = 1;
+	uint32_t                i;
+	const uint32_t          akey_len = 32;
+	char                    akey[akey_len];
+	vos_iter_param_t        param  = {0};
+	struct vos_iter_anchors anchor = {0};
 
 	/** setup */
 	memset(akey, 0, akey_len);
@@ -497,29 +492,25 @@ test_marking_corrupted_with_iod_type(void **state, daos_iod_type_t iod_type)
 
 	for (i = 0; i < 100; i++) {
 		snprintf(akey, 32, "akey-%d", i);
-		assert_success(
-			vos_obj_update(k.container_hdl, k.object_id,
-				       epoch, 0, 0, &k.dkey, 1, &iod,
-				       NULL, &sgl));
+		assert_success(vos_obj_update(k.container_hdl, k.object_id, epoch, 0, 0, &k.dkey, 1,
+					      &iod, NULL, &sgl));
 	}
 
 	/* Iterate and mark corrupted each recx/sv */
 
-	param.ip_hdl = k.container_hdl;
+	param.ip_hdl        = k.container_hdl;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_RECX_ALL;
+	param.ip_flags      = VOS_IT_RECX_ALL;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 corrupt_cb, NULL, NULL, NULL);
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor, corrupt_cb, NULL, NULL, NULL);
 	assert_success(rc);
-
 
 	/* Verify that each SV/RECX entry is marked as corrupted, but
 	 * vos_iterate shouldn't fail
 	 */
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 verify_corrupted_cb, NULL, NULL, NULL);
+	rc =
+	    vos_iterate(&param, VOS_ITER_OBJ, true, &anchor, verify_corrupted_cb, NULL, NULL, NULL);
 	assert_success(rc);
 
 	/*
@@ -528,8 +519,8 @@ test_marking_corrupted_with_iod_type(void **state, daos_iod_type_t iod_type)
 	 */
 	for (i = 0; i < 100; i++) {
 		snprintf(akey, 32, "akey-%d", i);
-		rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
-				   &k.dkey, 1, &iod, &sgl_fetch);
+		rc =
+		    vos_obj_fetch(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod, &sgl_fetch);
 		assert_rc_equal(-DER_CSUM, rc);
 	}
 
@@ -869,36 +860,42 @@ test_evt_entry_csum_update(void **state)
 			 actual.cs_csum);
 }
 
-int vts_csum_setup(void **state)
+int
+vts_csum_setup(void **state)
 {
 	return 0;
 }
 
-int vts_csum_teardown(void **state)
+int
+vts_csum_teardown(void **state)
 {
 	return 0;
 }
 
-#define	VOS(desc, test_fn) \
-	{ "VOS_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown}
+#define VOS(desc, test_fn)                                                                         \
+	{                                                                                          \
+		"VOS_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown                        \
+	}
 
 static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
-	VOS("01: Single chunk", update_fetch_csum_for_array_1),
-	VOS("02: Two extents", update_fetch_csum_for_array_2),
-	VOS("03: Two chunks", update_fetch_csum_for_array_3),
-	VOS("04: Two extents -> one extent", update_fetch_csum_for_array_4),
-	VOS("05: One extent -> two extents", update_fetch_csum_for_array_5),
-	VOS("06: One chunk -> partial", update_fetch_csum_for_array_6),
-	VOS("07: Partial -> partial", update_fetch_csum_for_array_7),
-	VOS("08: Partial -> more partial", update_fetch_csum_for_array_8),
-	VOS("09: Many sequential extents", update_fetch_csum_for_array_9),
-	VOS("10: Holes", update_fetch_csum_for_array_10),
-	VOS("11: Mark corrupted: Single Value", mark_sv_corrupted),
-	VOS("12: Mark corrupted: Array Value", mark_extent_corrupted),
+    VOS("01: Single chunk", update_fetch_csum_for_array_1),
+    VOS("02: Two extents", update_fetch_csum_for_array_2),
+    VOS("03: Two chunks", update_fetch_csum_for_array_3),
+    VOS("04: Two extents -> one extent", update_fetch_csum_for_array_4),
+    VOS("05: One extent -> two extents", update_fetch_csum_for_array_5),
+    VOS("06: One chunk -> partial", update_fetch_csum_for_array_6),
+    VOS("07: Partial -> partial", update_fetch_csum_for_array_7),
+    VOS("08: Partial -> more partial", update_fetch_csum_for_array_8),
+    VOS("09: Many sequential extents", update_fetch_csum_for_array_9),
+    VOS("10: Holes", update_fetch_csum_for_array_10),
+    VOS("11: Mark corrupted: Single Value", mark_sv_corrupted),
+    VOS("12: Mark corrupted: Array Value", mark_extent_corrupted),
 };
 
-#define	EVT(desc, test_fn) \
-	{ "EVT_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown}
+#define EVT(desc, test_fn)                                                                         \
+	{                                                                                          \
+		"EVT_CSUM" desc, test_fn, vts_csum_setup, vts_csum_teardown                        \
+	}
 static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("01: Some EVT Checksum Helper Functions",
 		evt_csum_helper_functions_tests),

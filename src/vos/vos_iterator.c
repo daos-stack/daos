@@ -424,8 +424,8 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
 int
 vos_iter_process(daos_handle_t ih, vos_iter_proc_op_t op, void *args)
 {
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	int			 rc = 0;
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int                  rc   = 0;
 
 	if (iter->it_ops->iop_process == NULL)
 		return -DER_NOSYS;
