@@ -53,7 +53,7 @@ var (
 	FaultPoolHasContainers = serverFault(
 		code.ServerPoolHasContainers,
 		"cannot destroy a pool with existing containers",
-		"retry the operation with the recursive option set",
+		"retry the operation with the recursive flag set to remove containers along with the pool",
 	)
 )
 
