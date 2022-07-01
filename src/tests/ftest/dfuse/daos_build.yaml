@@ -7,6 +7,7 @@ hosts:
 timeout: 10800
 server_config:
   name: daos_server
+  crt_timeout: 60
 pool:
   size: 8GiB
   control_method: dmg
