@@ -49,7 +49,6 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (chunk->bdc_ptr == NULL) {
-		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
 		D_FREE(chunk);
 		return NULL;
 	}
@@ -73,6 +72,8 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 		D_ASSERT(buf->bdb_tot_cnt > 0);
 		buf->bdb_tot_cnt--;
 		cnt--;
+		if (buf->bdb_stats.bds_chks_tot)
+			d_tm_set_gauge(buf->bdb_stats.bds_chks_tot, buf->bdb_tot_cnt);
 	}
 }
 
@@ -93,6 +94,8 @@ dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 
 		d_list_add_tail(&chunk->bdc_link, &buf->bdb_idle_list);
 		buf->bdb_tot_cnt++;
+		if (buf->bdb_stats.bds_chks_tot)
+			d_tm_set_gauge(buf->bdb_stats.bds_chks_tot, buf->bdb_tot_cnt);
 	}
 
 	return rc;
@@ -103,19 +106,84 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 {
 	D_ASSERT(d_list_empty(&buf->bdb_used_list));
 	D_ASSERT(buf->bdb_active_iods == 0);
+	D_ASSERT(buf->bdb_queued_iods == 0);
 
 	bulk_cache_destroy(buf);
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
 	ABT_mutex_free(&buf->bdb_mutex);
-	ABT_cond_free(&buf->bdb_wait_iods);
+	ABT_cond_free(&buf->bdb_wait_iod);
+	ABT_cond_free(&buf->bdb_fifo);
 
 	D_FREE(buf);
 }
 
+static inline char *
+chk_type2str(int chk_type)
+{
+	switch (chk_type) {
+	case BIO_CHK_TYPE_IO:
+		return "io";
+	case BIO_CHK_TYPE_LOCAL:
+		return "local";
+	case BIO_CHK_TYPE_REBUILD:
+		return "rebuild";
+	default:
+		return "unknown";
+	}
+}
+
+static void
+dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
+{
+	struct bio_dma_stats	*stats = &bdb->bdb_stats;
+	char			 desc[40];
+	int			 i, rc;
+
+	rc = d_tm_add_metric(&stats->bds_chks_tot, D_TM_GAUGE, "Total chunks", "chunk",
+			     "dmabuff/total_chunks/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create total_chunks telemetry: "DF_RC"\n", DP_RC(rc));
+
+	for (i = BIO_CHK_TYPE_IO; i < BIO_CHK_TYPE_MAX; i++) {
+		snprintf(desc, sizeof(desc), "Used chunks (%s)", chk_type2str(i));
+		rc = d_tm_add_metric(&stats->bds_chks_used[i], D_TM_GAUGE, desc, "chunk",
+				     "dmabuff/used_chunks_%s/tgt_%d", chk_type2str(i), tgt_id);
+		if (rc)
+			D_WARN("Failed to create used_chunks_%s telemetry: "DF_RC"\n",
+			       chk_type2str(i), DP_RC(rc));
+	}
+
+	rc = d_tm_add_metric(&stats->bds_bulk_grps, D_TM_GAUGE, "Total bulk grps", "grp",
+			     "dmabuff/bulk_grps/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create total_bulk_grps telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_active_iods, D_TM_GAUGE, "Active requests", "req",
+			     "dmabuff/active_reqs/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create active_requests telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_queued_iods, D_TM_GAUGE, "Queued requests", "req",
+			     "dmabuff/queued_reqs/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create queued_requests telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_grab_errs, D_TM_COUNTER, "Grab buffer errors", "err",
+			     "dmabuff/grab_errs/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create grab_errs telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_grab_retries, D_TM_STATS_GAUGE, "Grab buffer retry count",
+			     "retry", "dmabuff/grab_retries/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
+
+}
+
 struct bio_dma_buffer *
-dma_buffer_create(unsigned int init_cnt)
+dma_buffer_create(unsigned int init_cnt, int tgt_id)
 {
 	struct bio_dma_buffer *buf;
 	int rc;
@@ -135,9 +203,17 @@ dma_buffer_create(unsigned int init_cnt)
 		return NULL;
 	}
 
-	rc = ABT_cond_create(&buf->bdb_wait_iods);
+	rc = ABT_cond_create(&buf->bdb_wait_iod);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&buf->bdb_mutex);
+		D_FREE(buf);
+		return NULL;
+	}
+
+	rc = ABT_cond_create(&buf->bdb_fifo);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&buf->bdb_mutex);
+		ABT_cond_free(&buf->bdb_wait_iod);
 		D_FREE(buf);
 		return NULL;
 	}
@@ -145,10 +221,13 @@ dma_buffer_create(unsigned int init_cnt)
 	rc = bulk_cache_create(buf);
 	if (rc != 0) {
 		ABT_mutex_free(&buf->bdb_mutex);
-		ABT_cond_free(&buf->bdb_wait_iods);
+		ABT_cond_free(&buf->bdb_wait_iod);
+		ABT_cond_free(&buf->bdb_fifo);
 		D_FREE(buf);
 		return NULL;
 	}
+
+	dma_metrics_init(buf, tgt_id);
 
 	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
@@ -278,6 +357,10 @@ iod_release_buffer(struct bio_desc *biod)
 			chunk->bdc_pg_idx = 0;
 			D_ASSERT(bdb->bdb_used_cnt[chunk->bdc_type] > 0);
 			bdb->bdb_used_cnt[chunk->bdc_type] -= 1;
+			if (bdb->bdb_stats.bds_chks_used[chunk->bdc_type])
+				d_tm_set_gauge(bdb->bdb_stats.bds_chks_used[chunk->bdc_type],
+					       bdb->bdb_used_cnt[chunk->bdc_type]);
+
 			if (chunk == bdb->bdb_cur_chk[chunk->bdc_type])
 				bdb->bdb_cur_chk[chunk->bdc_type] = NULL;
 			d_list_move_tail(&chunk->bdc_link, &bdb->bdb_idle_list);
@@ -810,16 +893,11 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 */
 	rc = chunk_get_idle(bdb, &chk);
 	if (rc) {
-		if (rc == -DER_AGAIN) {
-			D_ERROR("DMA buffer isn't sufficient to sustain "
-				"current IO workload\n");
+		if (rc == -DER_AGAIN)
 			biod->bd_retry = 1;
-		} else {
-			D_ERROR("Failed to get idle chunk. "DF_RC"\n",
-				DP_RC(rc));
-		}
+		else
+			D_ERROR("Failed to get idle chunk. "DF_RC"\n", DP_RC(rc));
 
-		dump_dma_info(bdb);
 		return rc;
 	}
 
@@ -827,6 +905,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	chk->bdc_type = biod->bd_chk_type;
 	bdb->bdb_cur_chk[chk->bdc_type] = chk;
 	bdb->bdb_used_cnt[chk->bdc_type] += 1;
+	if (bdb->bdb_stats.bds_chks_used[chk->bdc_type])
+		d_tm_set_gauge(bdb->bdb_stats.bds_chks_used[chk->bdc_type],
+			       bdb->bdb_used_cnt[chk->bdc_type]);
 	chk_pg_idx = chk->bdc_pg_idx;
 
 	D_ASSERT(chk_pg_idx == 0);
@@ -1053,9 +1134,11 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 {
 	D_ASSERT(bdb->bdb_active_iods > 0);
 	bdb->bdb_active_iods--;
+	if (bdb->bdb_stats.bds_active_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
 
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iods);
+	ABT_cond_broadcast(bdb->bdb_wait_iod);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1075,6 +1158,153 @@ iod_should_retry(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 	return bdb->bdb_active_iods != 0;
 }
 
+static inline void
+iod_fifo_wait(struct bio_desc *biod, struct bio_dma_buffer *bdb)
+{
+	if (!biod->bd_in_fifo) {
+		biod->bd_in_fifo = 1;
+		D_ASSERT(bdb->bdb_queued_iods == 0);
+		bdb->bdb_queued_iods = 1;
+		if (bdb->bdb_stats.bds_queued_iods)
+			d_tm_set_gauge(bdb->bdb_stats.bds_queued_iods, bdb->bdb_queued_iods);
+	}
+
+	ABT_mutex_lock(bdb->bdb_mutex);
+	ABT_cond_wait(bdb->bdb_wait_iod, bdb->bdb_mutex);
+	ABT_mutex_unlock(bdb->bdb_mutex);
+}
+
+static void
+iod_fifo_in(struct bio_desc *biod, struct bio_dma_buffer *bdb)
+{
+	/* No prior waiters */
+	if (!bdb || bdb->bdb_queued_iods == 0)
+		return;
+
+	biod->bd_in_fifo = 1;
+	bdb->bdb_queued_iods++;
+	if (bdb->bdb_stats.bds_queued_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_queued_iods, bdb->bdb_queued_iods);
+
+	ABT_mutex_lock(bdb->bdb_mutex);
+	ABT_cond_wait(bdb->bdb_fifo, bdb->bdb_mutex);
+	ABT_mutex_unlock(bdb->bdb_mutex);
+}
+
+static void
+iod_fifo_out(struct bio_desc *biod, struct bio_dma_buffer *bdb)
+{
+	if (!biod->bd_in_fifo)
+		return;
+
+	biod->bd_in_fifo = 0;
+	D_ASSERT(bdb != NULL);
+	D_ASSERT(bdb->bdb_queued_iods > 0);
+	bdb->bdb_queued_iods--;
+	if (bdb->bdb_stats.bds_queued_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_queued_iods, bdb->bdb_queued_iods);
+
+	/* Wakeup next one in FIFO */
+	if (bdb->bdb_queued_iods) {
+		ABT_mutex_lock(bdb->bdb_mutex);
+		ABT_cond_signal(bdb->bdb_fifo);
+		ABT_mutex_unlock(bdb->bdb_mutex);
+	}
+}
+
+#define	DMA_INFO_DUMP_INTVL	60	/* seconds */
+static void
+dump_dma_info(struct bio_dma_buffer *bdb)
+{
+	struct bio_bulk_cache	*bbc = &bdb->bdb_bulk_cache;
+	struct bio_bulk_group	*bbg;
+	uint64_t		 cur;
+	int			 i, bulk_grps = 0, bulk_chunks = 0;
+
+	cur = daos_gettime_coarse();
+	if ((bdb->bdb_dump_ts + DMA_INFO_DUMP_INTVL) > cur)
+		return;
+
+	bdb->bdb_dump_ts = cur;
+	D_EMIT("DMA buffer isn't sufficient to sustain current workload, "
+	       "enlarge the nr_hugepages in server YAML if possible.\n");
+
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, queued_iods:%u, used:%u,%u,%u\n",
+		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max, bdb->bdb_active_iods,
+		bdb->bdb_queued_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL], bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
+
+	/* cached bulk info */
+	for (i = 0; i < bbc->bbc_grp_cnt; i++) {
+		bbg = &bbc->bbc_grps[i];
+
+		if (bbg->bbg_chk_cnt == 0)
+			continue;
+
+		bulk_grps++;
+		bulk_chunks += bbg->bbg_chk_cnt;
+
+		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
+			i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
+	}
+	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
+}
+
+static int
+iod_map_iovs(struct bio_desc *biod, void *arg)
+{
+	struct bio_dma_buffer	*bdb;
+	int			 rc, retry_cnt = 0;
+
+	/* NVMe context isn't allocated */
+	if (biod->bd_ctxt->bic_xs_ctxt == NULL)
+		bdb = NULL;
+	else
+		bdb = iod_dma_buf(biod);
+
+	iod_fifo_in(biod, bdb);
+retry:
+	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
+	if (rc) {
+		/*
+		 * To avoid deadlock, held buffers need be released
+		 * before waiting for other active IODs.
+		 */
+		iod_release_buffer(biod);
+
+		if (!biod->bd_retry)
+			goto out;
+
+		D_ASSERT(bdb != NULL);
+		if (bdb->bdb_stats.bds_grab_errs)
+			d_tm_inc_counter(bdb->bdb_stats.bds_grab_errs, 1);
+		dump_dma_info(bdb);
+
+		biod->bd_retry = 0;
+		if (!iod_should_retry(biod, bdb)) {
+			D_ERROR("Per-xstream DMA buffer isn't large enough "
+				"to satisfy large IOD %p\n", biod);
+			goto out;
+		}
+
+		retry_cnt++;
+		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n", biod, retry_cnt);
+
+		iod_fifo_wait(biod, bdb);
+
+		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n", biod, retry_cnt);
+
+		goto retry;
+	}
+
+	biod->bd_buffer_prep = 1;
+	if (retry_cnt && bdb->bdb_stats.bds_grab_retries)
+		d_tm_set_gauge(bdb->bdb_stats.bds_grab_retries, retry_cnt);
+out:
+	iod_fifo_out(biod, bdb);
+	return rc;
+}
+
 int
 bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 	     unsigned int bulk_perm)
@@ -1082,7 +1312,7 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 	struct bio_bulk_args	 bulk_arg;
 	struct bio_dma_buffer	*bdb;
 	void			*arg = NULL;
-	int			 rc, retry_cnt = 0;
+	int			 rc;
 
 	if (biod->bd_buffer_prep)
 		return -DER_INVAL;
@@ -1097,39 +1327,10 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		bulk_arg.ba_sgl_idx = 0;
 		arg = &bulk_arg;
 	}
-retry:
-	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
-	if (rc) {
-		/*
-		 * To avoid deadlock, held buffers need be released
-		 * before waiting for other active IODs.
-		 */
-		iod_release_buffer(biod);
 
-		if (!biod->bd_retry)
-			return rc;
-
-		biod->bd_retry = 0;
-		bdb = iod_dma_buf(biod);
-		if (!iod_should_retry(biod, bdb)) {
-			D_ERROR("Per-xstream DMA buffer isn't large enough "
-				"to satisfy large IOD %p\n", biod);
-			return rc;
-		}
-
-		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n",
-			biod, retry_cnt++);
-
-		ABT_mutex_lock(bdb->bdb_mutex);
-		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
-		ABT_mutex_unlock(bdb->bdb_mutex);
-
-		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",
-			biod, retry_cnt);
-
-		goto retry;
-	}
-	biod->bd_buffer_prep = 1;
+	rc = iod_map_iovs(biod, arg);
+	if (rc)
+		return rc;
 
 	/* All direct SCM access, no DMA buffer prepared */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0)
@@ -1137,6 +1338,8 @@ retry:
 
 	bdb = iod_dma_buf(biod);
 	bdb->bdb_active_iods++;
+	if (bdb->bdb_stats.bds_active_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
 
 	if (biod->bd_type < BIO_IOD_TYPE_GETBUF) {
 		rc = ABT_eventual_create(0, &biod->bd_dma_done);

@@ -1288,7 +1288,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
 			*pctxt = NULL;
@@ -1364,7 +1364,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	if (rc)
 		goto out;
 
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;
