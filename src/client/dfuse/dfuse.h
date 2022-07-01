@@ -137,12 +137,12 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t                   de_req; /**< The fuse request handle */
-	daos_event_t                 de_ev;
-	size_t                       de_len;          /**< The size returned by daos */
-	off_t                        de_req_position; /**< The file position requested by fuse */
-	d_iov_t                      de_iov;
-	d_sg_list_t                  de_sgl;
+	fuse_req_t            de_req; /**< The fuse request handle */
+	daos_event_t          de_ev;
+	size_t                de_len;          /**< The size returned by daos */
+	off_t                 de_req_position; /**< The file position requested by fuse */
+	d_iov_t               de_iov;
+	d_sg_list_t           de_sgl;
 	struct dfuse_obj_hdl *de_oh;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
