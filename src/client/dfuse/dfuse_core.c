@@ -403,6 +403,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	daos_pool_info_t        p_info = {};
 	d_list_t		*rlink;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
@@ -449,7 +450,9 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	*_dfp = dfp;
 	return rc;
 err_disconnect:
-	daos_pool_disconnect(dfp->dfp_poh, NULL);
+	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC,DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
