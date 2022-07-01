@@ -12,6 +12,8 @@
  */
 
 #ifdef ULT_MMAP_STACK
+#define D_LOGFAC DD_FAC(stack)
+
 #include <daos/common.h>
 #include <daos/stack_mmap.h>
 #include <errno.h>
@@ -257,7 +259,6 @@ free_stack(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
 	struct stack_pool *sp = desc->sp;
-	bool do_munmap = false;
 	int rc;
 
 	/* XXX
@@ -272,18 +273,6 @@ free_stack(void *arg)
 	/* too many free stacks in pool ? */
 	if (sp->sp_free_stacks > MAX_NUMBER_FREE_STACKS &&
 	    sp->sp_free_stacks / nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
-		do_munmap = true;
-		atomic_fetch_sub(&nb_mmap_stacks, 1);
-	} else {
-		d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
-		++sp->sp_free_stacks;
-		atomic_fetch_add(&nb_free_stacks, 1);
-	}
-	if (do_munmap) {
-		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
-			sched_getcpu());
 		rc = munmap(desc->stack, desc->stack_size);
 		if (rc != 0) {
 			D_ERROR("Failed to munmap() %p stack of size %zd : %s\n",
@@ -292,8 +281,17 @@ free_stack(void *arg)
 			d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
 			++sp->sp_free_stacks;
 			atomic_fetch_add(&nb_free_stacks, 1);
+		} else {
+			atomic_fetch_sub(&nb_mmap_stacks, 1);
+			D_DEBUG(DB_MEM,
+				"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+				desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
+				sched_getcpu());
 		}
 	} else {
+		d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
+		++sp->sp_free_stacks;
+		atomic_fetch_add(&nb_free_stacks, 1);
 		D_DEBUG(DB_MEM,
 			"mmap()'ed stack %p of size %zd on free list, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
 			desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
@@ -318,9 +316,14 @@ stack_pool_create(struct stack_pool **sp)
 void stack_pool_destroy(struct stack_pool *sp)
 {
 	mmap_stack_desc_t *desc;
+	int rc;
 
 	while ((desc = d_list_pop_entry(&sp->sp_stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
-		munmap(desc->stack, desc->stack_size);
+		D_DEBUG(DB_MEM, "munmap() of pool %p, desc %p, stack %p of size %zu, ",
+			sp, desc, desc->stack, desc->stack_size);
+		rc = munmap(desc->stack, desc->stack_size);
+		D_DEBUG(DB_MEM, "has been %ssuccessfully munmap()'ed%s%s\n",
+			(rc ? "un" : ""), (rc ? " : " : ""), (rc ? strerror(errno) : ""));
 		--sp->sp_free_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 		atomic_fetch_sub(&nb_free_stacks, 1);
