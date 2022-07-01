@@ -64,7 +64,7 @@ dnf --nodocs install \
     yasm
 
 # ipmctl is only available on x86_64
-if [[ $arch == x86_64* ]]; then
+if [ "$arch" = x86_64 ]; then
     dnf --nodocs install \
         ipmctl \
         libipmctl-devel

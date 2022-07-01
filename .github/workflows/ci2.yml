@@ -68,7 +68,7 @@ jobs:
           fail_on: nothing
 
   Build:
-    name: Build DAOS
+    name: Build DAOS (x86_64)
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -138,8 +138,8 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
   BuildARM:
-    name: Build DAOS on ARM
-    runs-on: self-hosted
+    name: Build DAOS (ARM64)
+    runs-on: [self-hosted, ARM64]
     strategy:
       fail-fast: false
       matrix:
@@ -164,15 +164,6 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py
         id: commit-hash
-      - name: Fetch docker images from cache.
-        uses: satackey/action-docker-layer-caching@v0.0.11
-        continue-on-error: true
-        with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: |
-            ${{ steps.commit-hash.outputs.restore }}
-            ${{ steps.commit-hash.outputs.restore_prev }}
-          skip-save: true
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
