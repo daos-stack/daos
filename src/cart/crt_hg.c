@@ -1205,7 +1205,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
 				rc = crt_hgret_2_der(hg_ret);
-				RPC_ERROR(rpc_priv, "HG_Get_output failed, rc: %d\n", hg_ret);
+				RPC_ERROR(rpc_priv, "HG_Get_output failed, rc: " DF_RC "\n",
+					  DP_RC(rc));
 			}
 		}
 
