@@ -475,7 +475,7 @@ dtx_14(void **state)
 
 	/* Double commit the DTX is harmless. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_rc_equal(rc, 1);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -570,7 +570,7 @@ dtx_15(void **state)
 
 	/* Aborted DTX cannot be committed. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_rc_equal(rc, 1);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
