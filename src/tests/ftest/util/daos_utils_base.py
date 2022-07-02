@@ -1,11 +1,10 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import FormattedParameter, CommandWithParameters,\
-    CommandWithPositionalParameters, PositionalParameter
+    CommandWithParameters, PositionalParameter
 from command_utils import CommandWithSubCommand
 
 
@@ -65,7 +64,7 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonPoolSubCommand(CommandWithPositionalParameters):
+        class CommonPoolSubCommand(CommandWithParameters):
             """Defines an object for the common daos pool sub-command.
 
             Use PositionalParameter for positional parameter subcommands. The
@@ -201,7 +200,7 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonContainerSubCommand(CommandWithPositionalParameters):
+        class CommonContainerSubCommand(CommandWithParameters):
             """Defines an object for the common daos container sub-command."""
 
             def __init__(self, sub_command):
@@ -350,7 +349,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("get-prop")
                 self.prop = FormattedParameter("--properties={}")
 
-        class ListSubCommand(CommandWithPositionalParameters):
+        class ListSubCommand(CommandWithParameters):
             """Defines an object for the daos container list command."""
 
             def __init__(self):

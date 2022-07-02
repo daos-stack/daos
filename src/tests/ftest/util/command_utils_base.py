@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -126,7 +125,7 @@ class FormattedParameter(BasicParameter):
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None, yaml_key=None):
-        """Create a FormattedParameter  object.
+        """Create a FormattedParameter object.
 
         Normal use includes assigning this object to an attribute name that
         matches the test yaml file key used to assign its value.  If the
@@ -188,7 +187,7 @@ class LogParameter(FormattedParameter):
     """A class for a test log file parameter which is read from a yaml file."""
 
     def __init__(self, directory, str_format, default=None):
-        """Create a LogParameter  object.
+        """Create a LogParameter object.
 
         Args:
             directory (str): fixed location for the log file name specified by
@@ -260,6 +259,9 @@ class ObjectWithParameters():
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
 
+        The list has the ordered positional parameters first, then
+        non-positional parameters.
+
         Args:
             attr_type(object, optional): A single object type or tuple of
                 object types used to filter class attributes by their type.
@@ -269,9 +271,16 @@ class ObjectWithParameters():
             list: a list of class attribute names used to define parameters
 
         """
-        return [
-            name for name in sorted(self.__dict__.keys())
-            if attr_type is None or isinstance(getattr(self, name), attr_type)]
+        positional = {}
+        non_positional = []
+        for name in sorted(list(self.__dict__)):
+            attr = getattr(self, name)
+            if attr_type is None or isinstance(attr, attr_type):
+                if hasattr(attr, "position"):
+                    positional[attr] = name
+                else:
+                    non_positional.append(name)
+        return [positional[key] for key in sorted(positional)] + non_positional
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -661,14 +670,15 @@ class EnvironmentVariables(dict):
             export_str = "".join([export_str, separator])
         return export_str
 
-class PositionalParameter(BasicParameter):
+
+class PositionalParameter(FormattedParameter):
     """Parameter that defines position.
 
     Used to support positional parameters for dmg and daos.
     """
 
-    def __init__(self, position, default=None):
-        """Create a PositionalParameter  object.
+    def __init__(self, position, default=None, str_format=None, yaml_key=None):
+        """Create a PositionalParameter object.
 
         Args:
             position (int): argument position/order
@@ -676,7 +686,10 @@ class PositionalParameter(BasicParameter):
                 None.
 
         """
-        super().__init__(default, default)
+        if str_format is None:
+            str_format = "{}"
+
+        super().__init__(str_format, default, yaml_key)
         self._position = position
 
     @property
@@ -698,40 +711,8 @@ class PositionalParameter(BasicParameter):
     def __hash__(self):
         """Returns self.position as the hash of the class.
 
-        This is used in CommandWithPositionalParameters.get_attribute_names()
-        where we use this object as the key for a dictionary.
+        This is used in ObjectWithParameters.get_attribute_names() where we use this
+        object as the key for a dictionary.
 
         """
         return self.position
-
-class CommandWithPositionalParameters(CommandWithParameters):
-    """Command that uses positional parameters.
-
-    Used to support positional parameters for dmg and daos.
-    """
-
-    def get_attribute_names(self, attr_type=None):
-        """Get a sorted list of the names of the attr_type attributes.
-
-        The list has the ordered positional parameters first, then
-        non-positional parameters.
-
-        Args:
-            attr_type(object, optional): A single object type or tuple of
-                object types used to filter class attributes by their type.
-                Defaults to None.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-
-        """
-        positional = {}
-        non_positional = []
-        for name in sorted(list(self.__dict__)):
-            attr = getattr(self, name)
-            if isinstance(attr, attr_type):
-                if hasattr(attr, "position"):
-                    positional[attr] = name
-                else:
-                    non_positional.append(name)
-        return [positional[key] for key in sorted(positional)] + non_positional
