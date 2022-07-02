@@ -744,6 +744,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	daos_cont_info_t	c_info = {};
 	int			dfs_flags = O_RDWR;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
@@ -799,7 +800,9 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	return 0;
 
 err_close:
-	daos_cont_close(dfc->dfs_coh, NULL);
+	ret = daos_cont_close(dfc->dfs_coh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfc, "daos_cont_close() failed: " DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfc);
 	return rc;
