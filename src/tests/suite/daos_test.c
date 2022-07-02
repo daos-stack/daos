@@ -454,7 +454,7 @@ main(int argc, char **argv)
 	}
 
 	if (strlen(tests) == 0) {
-		strncpy(tests , all_tests, sizeof(TESTS));
+		strncpy(tests, all_tests, sizeof(TESTS));
 	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
