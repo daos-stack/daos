@@ -1728,7 +1728,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1794,8 +1795,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared)
+		if (dae->dae_prepared) {
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
+
 			return DTX_ST_PREPARED;
+		}
 
 		return DTX_ST_INITED;
 	}
