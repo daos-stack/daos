@@ -452,7 +452,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 err_disconnect:
 	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
 	if (ret)
-		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC,DP_RC(ret));
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
