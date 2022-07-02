@@ -520,6 +520,13 @@ ev_progress_cb(void *arg)
 	if (evx->evx_nchild_running > 0)
 		return 0;
 
+	/*
+	 * If it's a thread private event but it's not owned by this thread, don't change the status
+	 * as there could be race with the thread owner.
+	 */
+	if (evx->is_th_private && !daos_event_is_priv(daos_evx2ev(evx)))
+		return 0;
+
 	/** Change status of event to INIT only if event is not in EQ and get out. */
 	if (daos_handle_is_inval(evx->evx_eqh)) {
 		D_MUTEX_LOCK(&evx->evx_lock);
@@ -1203,7 +1210,8 @@ daos_event_abort(struct daos_event *ev)
 int
 daos_event_priv_reset(void)
 {
-	int rc;
+	struct daos_event_private	*evx;
+	int				rc;
 
 	if (ev_thpriv_is_init) {
 		rc = daos_event_fini(&ev_thpriv);
@@ -1218,6 +1226,9 @@ daos_event_priv_reset(void)
 		D_ERROR("Failed to initialize thread private event "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+
+	evx = daos_ev2evx(&ev_thpriv);
+	evx->is_th_private = 1;
 	return 0;
 }
 
@@ -1233,6 +1244,7 @@ daos_event_priv_get(daos_event_t **ev)
 		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 		if (rc)
 			return rc;
+		evx->is_th_private = 1;
 		ev_thpriv_is_init = true;
 	}
 
