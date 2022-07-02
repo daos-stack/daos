@@ -1051,14 +1051,11 @@ class PreReqComponent():
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4']
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
-        if not is_arm:
-            server_reqs.extend(['spdk'])
-            common_reqs.extend(['isal', 'isal_crypto'])
         reqs = []
         if not self._build_targets:
             raise ValueError("Call init_build_targets before load_defaults")
