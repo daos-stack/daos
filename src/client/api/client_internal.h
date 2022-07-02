@@ -56,6 +56,8 @@ struct daos_event_private {
 	unsigned int		is_barrier:1;
 	/** flag to indicate whether to convert DER to errno */
 	unsigned int		is_errno:1;
+	/** flag to indicate whether even is thread private */
+	unsigned int		is_th_private:1;
 
 	unsigned int		evx_flags;
 	daos_ev_status_t	evx_status;
