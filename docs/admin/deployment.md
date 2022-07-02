@@ -156,7 +156,7 @@ the hosts if '--num-engines' is not specified on the commandline.
   validation will be disabled.
 
 - '--net-class' specifies preference for network interface class, options are
-  'ethernet', 'infiband' or 'best-available'.
+  'ethernet', 'infiniband' or 'best-available'.
   'best-available' will attempt to choose the most performant (as judged by
   libfabric) sets of interfaces and supported provider that match the number and
   NUMA affinity of PMem devices.

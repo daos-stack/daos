@@ -6,10 +6,10 @@ This section describes some of the common tasks handled by admins at a high leve
 
 1. Check PMEM and NVMe are discovered by the system. Format and reset them.
 2. Check network configuration. Check that `ib` interfaces are active.
-3. Install `daos-server` and `daos-client` RPM.
+3. Install `daos-server` and `daos-client` RPMs.
 4. Generate certificate files.
-5. Place one of the example configs from `utils/config/examples` to
-`/etc/daos` and adjust it based on the environment. e.g., `access_points`,
+5. Copy one of the example configs from `utils/config/examples` to
+`/etc/daos` and adjust it based on the environment. E.g., `access_points`,
 `bdev_class`.
 6. Start `daos_server`.
 7. Use `dmg config generate` to generate the config file that contains PMEM and
@@ -27,22 +27,22 @@ NVMe.
 
 ## Multiple host setup with PMEM and NVMe
 
-1. Check PMEM and NVMe configurations are homogeneous. i.e., same number of
+1. Check PMEM and NVMe configurations are homogeneous. I.e., same number of
 disks, size, address, etc.
 2. Check network configuration. Check that both the server and the client hosts
-can communicate with the Infiniband interface.
-3. Install the same version of `daos-server` and `daos-client` RPM to all the
+can communicate with the network interface.
+3. Install the same version of `daos-server` and `daos-client` RPMs to all the
 hosts.
 4. Generate certificate files and distribute them to all the hosts.
-5. Place one of the example configs from `utils/config/examples` to
+5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` of one of the server hosts and adjust it based on the environment.
-e.g., `access_points`, `bdev_class`.
+E.g., `access_points`, `bdev_class`.
 6. Start `daos_server`.
 7. Use dmg config generate to generate the config file that contains PMEM and
 NVMe.
 8. Distribute the config file to `/etc/daos` of all hosts.
 9. Start server on all the hosts.
-10. Check that it's waiting for SCM format. Call dmg storage format against all
+10. Check that it's waiting for SCM format. Call `dmg storage format` against all
 server hosts.
 11. Check that the servers are running on all the hosts with `dmg system query
 --verbose`.
@@ -57,23 +57,11 @@ server hosts.
 ## Pool size management
 
 1. Start DAOS server with PMEM + NVMe and format.
-2. Call `dmg storage scan --verbose` to get the available size allocated to this
-server. Find the NVMe size.
-3. Create a pool with the size half of the NVMe with `--size`. For example, if
-the total NVMe size allocated is 1.6TB, call
+2. Create a pool with the size percentage. For example,
 ```
-dmg pool create --size=800GB
+dmg pool create --size=50%
 ```
-4. Create slightly larger pool. It should fail with `DER_NOSPACE(-1007)`
-```
-# dmg pool create --size=900GB
-Creating DAOS pool with automatic storage allocation: 900 GB NVMe + 6.00% SCM
-ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
-```
-5. Create smaller pool that fits into the remaining allocated space.
-```
-dmg pool create --size=700GB
-```
+The percentage is applied to the usable space.
 
 ## Run dmg remotely
 
@@ -86,15 +74,15 @@ hostlist:
 name: <group_name>
 port: 10001
 transport_config:
-  allow_insecure: true
+  allow_insecure: false
   ca_cert: /etc/daos/certs/daosCA.crt
   cert: /etc/daos/certs/admin.crt
   key: /etc/daos/certs/admin.key
 ```
 `server_host` is the hostname where the server is running. `group_name` is
-usually `daos_server`. Also adjust port and `transport_config` accordingly.
+usually `daos_server`. Also, adjust port and `transport_config` accordingly.
 
-3. dmg should be able to talk to the server.
+3. `dmg` should be able to talk to the server.
 
 ## Server config technique
 
