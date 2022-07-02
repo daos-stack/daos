@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,66 @@ extern "C" {
 
 /** struct holding attributes for the dfs_sys calls */
 typedef struct dfs_sys dfs_sys_t;
+
+/**
+ * Wrapper around dfs_connect for the dfs_sys API.
+ *
+ * \param[in]	pool	Pool label.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to use the default system.
+ * \param[in]	cont	Container label.
+ * \param[in]	mflags	Mount flags (O_RDONLY or O_RDWR, O_CREAT). O_CREAT attempts to create the
+ *			DFS container if it doesn't exists.
+ * \param[in]	sflags	Sys flags (DFS_SYS_NO_CACHE or DFS_SYS_NO_LOCK)
+ * \param[in]	attr	Optional set of properties and attributes to set on the container (if being
+ *			created). Pass NULL to use default.
+ * \param[out]	dfs_sys	Pointer to the file system object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_connect(const char *pool, const char *sys, const char *cont, int mflags, int sflags,
+		dfs_attr_t *attr, dfs_sys_t **dfs_sys);
+
+/**
+ * Umount the DFS sys namespace, and release the ref count on the container and pool handles. This
+ * should be called on a dfs_sys mount created with dfs_sys_connect() and not dfs_sys_mount().
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted file system from dfs_sys_connect().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_disconnect(dfs_sys_t *dfs_sys);
+
+/**
+ * Convert a local dfs_sys mount including the pool and container handles to global representation
+ * data which can be shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs_sys	valid dfs_sys mount to be shared.
+ * \param[out]	glob	pointer to iov of the buffer to store mount information.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_local2global_all(dfs_sys_t *dfs_sys, d_iov_t *glob);
+
+/**
+ * Create a dfs_sys mount from global representation data. This has to be
+ * closed with dfs_sys_disconnect().
+ *
+ * \param[in]	mflags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS Sys handle.
+ * \param[in]	sflags	Sys flags (DFS_SYS_NO_CACHE or DFS_SYS_NO_LOCK).
+ *			This is not inherited from the DFS Sys handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle to be extracted.
+ * \param[out]	dfs_sys	Returned dfs_sys mount.
+ */
+int
+dfs_sys_global2local_all(int mflags, int sflags, d_iov_t glob, dfs_sys_t **dfs_sys);
 
 /**
  * Mount a file system with dfs_mount and optionally initialize a cache.
@@ -129,6 +189,23 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags);
  */
 int
 dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode);
+
+/**
+ * Change owner/group. Symlinks are dereferenced. Since uid and gid are not enforced at the DFS
+ * level, we do not also enforce the process privileges to be able to change the uid and gid. Any
+ * process with write access to the DFS container can make changes to the uid and gid using this
+ * function.
+ *
+ * \param[in]	dfs_sys Pointer to the mounted file system.
+ * \param[in]	path	Link path of object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	(O_NOFOLLOW)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags);
 
 /**
  * set stat attributes for a file and fetch new values.

@@ -1,12 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
 from daos_utils import DaosCommand
+
 
 class RebuildTestParams(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
@@ -65,7 +66,7 @@ class RebuildTestBase(TestWithServers):
             "pi_ndisabled": 0,
         }
         self.rebuild_checks = {
-            "rs_done": 1,
+            "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0,
             "rs_errno": 0,
@@ -74,6 +75,7 @@ class RebuildTestBase(TestWithServers):
     def update_pool_verify(self):
         """Update the pool verification expected values."""
         self.info_checks["pi_ndisabled"] = ">0"
+        self.rebuild_checks["rs_state"] = 2
         self.rebuild_checks["rs_obj_nr"] = ">0"
         self.rebuild_checks["rs_rec_nr"] = ">0"
 
@@ -185,10 +187,10 @@ class RebuildTestBase(TestWithServers):
 
         # clear container status for the RF issue
         self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+            pool=self.pool.uuid,
+            cont=self.container.uuid,
+            prop="status",
+            value="healthy")
 
         # Refresh local pool and container
         self.pool.check_pool_info()

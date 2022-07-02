@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -37,6 +38,9 @@ const (
 	BdevOutConfName = "daos_nvme.conf"
 
 	maxScmDeviceLen = 1
+
+	accelOptMoveName = "move"
+	accelOptCRCName  = "crc"
 )
 
 // Class indicates a specific type of storage.
@@ -117,9 +121,9 @@ func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	return tc
 }
 
-// WithScmClass defines the type of SCM storage to be configured.
-func (tc *TierConfig) WithScmClass(scmClass string) *TierConfig {
-	tc.Class = Class(scmClass)
+// WithStorageClass defines the type of storage (scm or bdev) to be configured.
+func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
+	tc.Class = Class(cls)
 	return tc
 }
 
@@ -142,15 +146,16 @@ func (tc *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
 	return tc
 }
 
-// WithBdevClass defines the type of block device storage to be used.
-func (tc *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
-	tc.Class = Class(bdevClass)
-	return tc
-}
-
 // WithBdevDeviceList sets the list of block devices to be used.
 func (tc *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
-	tc.Bdev.DeviceList = devices
+	if set, err := NewBdevDeviceList(devices...); err == nil {
+		tc.Bdev.DeviceList = set
+	} else {
+		tc.Bdev.DeviceList = &BdevDeviceList{stringBdevSet: common.StringSet{}}
+		for _, d := range devices {
+			tc.Bdev.DeviceList.stringBdevSet.Add(d)
+		}
+	}
 	return tc
 }
 
@@ -174,9 +179,29 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) CfgHasBdevs() bool {
+func (tcs TierConfigs) HaveBdevs() bool {
 	for _, bc := range tcs.BdevConfigs() {
-		if len(bc.Bdev.DeviceList) > 0 {
+		if bc.Bdev.DeviceList.Len() > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (tcs TierConfigs) HaveRealNVMe() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		if bc.Bdev.DeviceList.Len() > 0 && bc.Class != ClassNvme {
 			return true
 		}
 	}
@@ -193,7 +218,7 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
-func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -203,7 +228,7 @@ func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
 	return
 }
 
-func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) BdevConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
@@ -265,6 +290,171 @@ func (sc *ScmConfig) Validate(class Class) error {
 	return nil
 }
 
+// BdevDeviceList represents a set of block device addresses.
+type BdevDeviceList struct {
+	// As this is the most common use case, we'll make the embedded type's methods
+	// available directly on the type.
+	hardware.PCIAddressSet
+
+	// As a fallback for non-PCI bdevs, maintain a map of strings.
+	stringBdevSet common.StringSet
+}
+
+// maybePCI does a quick check to see if a string could possibly be a PCI address.
+func maybePCI(addr string) bool {
+	comps := strings.Split(addr, ":")
+	if len(comps) != 3 {
+		return false
+	}
+	return (len(comps[0]) == 6 || len(comps[0]) == 4) && len(comps[1]) == 2 && len(comps[2]) >= 2
+}
+
+// fromStrings creates a BdevDeviceList from a list of strings.
+func (bdl *BdevDeviceList) fromStrings(addrs []string) error {
+	if bdl == nil {
+		return errors.New("nil BdevDeviceList")
+	}
+
+	if bdl.stringBdevSet == nil {
+		bdl.stringBdevSet = common.StringSet{}
+	}
+
+	for _, strAddr := range addrs {
+		if !maybePCI(strAddr) {
+			if err := bdl.stringBdevSet.AddUnique(strAddr); err != nil {
+				return errors.Wrap(err, "bdev_list")
+			}
+			continue
+		}
+
+		addr, err := hardware.NewPCIAddress(strAddr)
+		if err != nil {
+			return errors.Wrap(err, "bdev_list")
+		}
+
+		if bdl.Contains(addr) {
+			return errors.Errorf("bdev_list: duplicate PCI address %s", addr)
+		}
+
+		if err := bdl.Add(addr); err != nil {
+			return errors.Wrap(err, "bdev_list")
+		}
+	}
+
+	if len(bdl.stringBdevSet) > 0 && bdl.PCIAddressSet.Len() > 0 {
+		return errors.New("bdev_list: cannot mix PCI and non-PCI block device addresses")
+	}
+
+	return nil
+}
+
+func (bdl *BdevDeviceList) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp []string
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	return bdl.fromStrings(tmp)
+}
+
+func (bdl *BdevDeviceList) MarshalYAML() (interface{}, error) {
+	return bdl.Devices(), nil
+}
+
+func (bdl *BdevDeviceList) UnmarshalJSON(data []byte) error {
+	var tmp []string
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	return bdl.fromStrings(tmp)
+}
+
+func (bdl *BdevDeviceList) MarshalJSON() ([]byte, error) {
+	return json.Marshal(bdl.Devices())
+}
+
+// PCIAddressSetPtr returns a pointer to the underlying hardware.PCIAddressSet.
+func (bdl *BdevDeviceList) PCIAddressSetPtr() *hardware.PCIAddressSet {
+	if bdl == nil {
+		return nil
+	}
+
+	return &bdl.PCIAddressSet
+}
+
+// Len returns the number of block devices in the list.
+func (bdl *BdevDeviceList) Len() int {
+	if bdl == nil {
+		return 0
+	}
+
+	if bdl.PCIAddressSet.Len() > 0 {
+		return bdl.PCIAddressSet.Len()
+	}
+
+	return len(bdl.stringBdevSet)
+}
+
+// Equals returns true if the two lists are equivalent.
+func (bdl *BdevDeviceList) Equals(other *BdevDeviceList) bool {
+	if bdl == nil || other == nil {
+		return false
+	}
+
+	if bdl.Len() != other.Len() {
+		return false
+	}
+
+	if bdl.PCIAddressSet.Len() > 0 {
+		return bdl.PCIAddressSet.Equals(&other.PCIAddressSet)
+	}
+
+	for addr := range bdl.stringBdevSet {
+		if _, ok := other.stringBdevSet[addr]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Devices returns a slice of strings representing the block device addresses.
+func (bdl *BdevDeviceList) Devices() []string {
+	if bdl == nil {
+		return []string{}
+	}
+
+	if bdl.PCIAddressSet.Len() == 0 {
+		return bdl.stringBdevSet.ToSlice()
+	}
+
+	var addresses []string
+	for _, addr := range bdl.Addresses() {
+		addresses = append(addresses, addr.String())
+	}
+	return addresses
+}
+
+func (bdl *BdevDeviceList) String() string {
+	return strings.Join(bdl.Devices(), ",")
+}
+
+// NewBdevDeviceList creates a new BdevDeviceList from a list of strings.
+func NewBdevDeviceList(devices ...string) (*BdevDeviceList, error) {
+	bdl := &BdevDeviceList{stringBdevSet: common.StringSet{}}
+	return bdl, bdl.fromStrings(devices)
+}
+
+// MustNewBdevDeviceList creates a new BdevDeviceList from a string representation of a set of block device addresses. Panics on error.
+func MustNewBdevDeviceList(devices ...string) *BdevDeviceList {
+	bdl, err := NewBdevDeviceList(devices...)
+	if err != nil {
+		panic(err)
+	}
+	return bdl
+}
+
 // BdevBusRange represents a bus-ID range to be used to filter hot plug events.
 type BdevBusRange struct {
 	hardware.PCIBus
@@ -321,10 +511,10 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  []string      `yaml:"bdev_list,omitempty"`
-	DeviceCount int           `yaml:"bdev_number,omitempty"`
-	FileSize    int           `yaml:"bdev_size,omitempty"`
-	BusidRange  *BdevBusRange `yaml:"bdev_busid_range,omitempty"`
+	DeviceList  *BdevDeviceList `yaml:"bdev_list,omitempty"`
+	DeviceCount int             `yaml:"bdev_number,omitempty"`
+	FileSize    int             `yaml:"bdev_size,omitempty"`
+	BusidRange  *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -337,7 +527,7 @@ func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 }
 
 func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
-	if len(bc.DeviceList) == 0 {
+	if bc.DeviceList == nil || bc.DeviceList.Len() == 0 {
 		return errors.Errorf("bdev_class %s requires non-empty bdev_list",
 			class)
 	}
@@ -347,9 +537,6 @@ func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
 
 // Validate sanity checks engine bdev config parameters and update VOS env.
 func (bc *BdevConfig) Validate(class Class) error {
-	if common.StringSliceHasDuplicates(bc.DeviceList) {
-		return errors.New("bdev_list contains duplicate pci addresses")
-	}
 	if bc.FileSize < 0 {
 		return errors.New("negative bdev_size")
 	}
@@ -367,8 +554,9 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		if _, err := hardware.NewPCIAddressSet(bc.DeviceList...); err != nil {
-			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
+		// NB: We are specifically checking that the embedded PCIAddressSet is non-empty.
+		if bc.DeviceList == nil || bc.DeviceList.PCIAddressSet.Len() == 0 {
+			return errors.New("bdev_class nvme requires valid PCI addresses in bdev_list")
 		}
 	default:
 		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
@@ -407,12 +595,120 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
+// AccelOptionBits is a type alias representing optional capabilities as a bit-set.
+type AccelOptionBits uint16
+
+// toStrings returns a slice of option names that have been set.
+func (obs AccelOptionBits) toStrings() []string {
+	opts := common.NewStringSet()
+	for str, flag := range accelOptStr2Flag {
+		if obs&flag == flag {
+			opts.Add(str)
+		}
+	}
+
+	return opts.ToSlice()
+}
+
+// fromStrings generates bit-set referenced by the function receiver from the option names provided.
+func (obs *AccelOptionBits) fromStrings(opts ...string) error {
+	if obs == nil {
+		return errors.New("fromStrings() called on nil AccelOptionBits")
+	}
+
+	for _, opt := range opts {
+		flag, exists := accelOptStr2Flag[opt]
+		if !exists {
+			return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
+		}
+		*obs |= flag
+	}
+
+	return nil
+}
+
+func (obs AccelOptionBits) MarshalYAML() (interface{}, error) {
+	return obs.toStrings(), nil
+}
+
+func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var opts []string
+	if err := unmarshal(&opts); err != nil {
+		return err
+	}
+
+	return obs.fromStrings(opts...)
+}
+
+// IsEmpty returns true if no options have been set.
+func (obs *AccelOptionBits) IsEmpty() bool {
+	return obs == nil || *obs == 0
+}
+
+// AccelProps struct describes acceleration engine setting and optional capabilities expressed
+// as a bit mask. AccelProps is used both in YAML server config and JSON NVMe config files.
+type AccelProps struct {
+	Engine  string          `yaml:"engine,omitempty" json:"accel_engine"`
+	Options AccelOptionBits `yaml:"options,omitempty" json:"accel_opts"`
+}
+
+type optFlagMap map[string]AccelOptionBits
+
+func (aosf optFlagMap) keys() []string {
+	keys := common.NewStringSet()
+	for k := range aosf {
+		keys.Add(k)
+	}
+
+	return keys.ToSlice()
+}
+
+var accelOptStr2Flag = optFlagMap{
+	accelOptCRCName:  AccelOptCRCFlag,
+	accelOptMoveName: AccelOptMoveFlag,
+}
+
+func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	if ap == nil {
+		return errors.New("attempt to unmarshal nil AccelProps")
+	}
+
+	type AccelPropsDefault AccelProps
+	tmp := AccelPropsDefault{
+		Engine: AccelEngineNone,
+	}
+
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+	out := AccelProps(tmp)
+
+	switch out.Engine {
+	case AccelEngineNone:
+		out.Options = 0
+	case AccelEngineSPDK, AccelEngineDML:
+		if out.Options == 0 {
+			// If no options have been specified, all capabilities should be enabled.
+			if err := out.Options.fromStrings(accelOptStr2Flag.keys()...); err != nil {
+				return err
+			}
+		}
+	default:
+		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
+	}
+
+	*ap = out
+
+	return nil
+}
+
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
+	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
 }
 
 func (c *Config) Validate() error {
@@ -422,7 +718,7 @@ func (c *Config) Validate() error {
 
 	var pruned TierConfigs
 	for _, tier := range c.Tiers {
-		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+		if tier.IsBdev() && tier.Bdev.DeviceList.Len() == 0 {
 			continue // prune empty bdev tier
 		}
 		pruned = append(pruned, tier)
@@ -443,6 +739,10 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
+		return FaultBdevConfigTypeMismatch
+	}
 
 	fbc := bdevCfgs[0]
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_DIST;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -54,46 +54,6 @@ iov2rec_bundle(d_iov_t *val_iov)
  * @defgroup vos_key_btree vos key-btree
  * @{
  */
-
-/** Inline key is max of 15 bytes.  The extra byte in the struct is used
- *  to encode the type (hash or inline) and the length of the inline key.
- */
-#define KH_INLINE_MAX 15
-
-/**
- * hashed key for the key-btree, it is stored in btr_record::rec_hkey
- */
-struct ktr_hkey {
-	/** murmur64 hash */
-	union {
-		/** NB: This assumes little endian.  We already have little
-		 *  endian assumptions with integer keys so this isn't the
-		 *  first violation.  The hkey_gen code will trigger an
-		 *  assertion if this is violated.
-		 */
-		struct {
-			/** Length of key shifted left by 2 bits. */
-			uint32_t	kh_len;
-			/** string32 hash of key */
-			uint32_t	kh_str32;
-			/** Murmur hash of key */
-			uint64_t	kh_murmur64;
-		};
-		struct {
-			/** length shifted left by 2 bits. Low bit means inline
-			 *  key.  An extra bit is reserved for future use.
-			 */
-			char		kh_inline_len;
-			/** Inline key */
-			char		kh_inline[KH_INLINE_MAX];
-		};
-		/** For comparison convenience */
-		uint64_t		kh_hash[2];
-	};
-};
-
-D_CASSERT(sizeof(struct ktr_hkey) == 16);
-
 /**
  * Store a key and its checksum as a durable struct.
  */
@@ -188,27 +148,12 @@ ktr_rec_msize(int alloc_overhead)
 static void
 ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
+	struct ktr_hkey	*kkey = (struct ktr_hkey *)hkey;
 
-	if (key_iov->iov_len <= KH_INLINE_MAX) {
-		kkey->kh_hash[0] = 0;
-		kkey->kh_hash[1] = 0;
+	hkey_common_gen(key_iov, hkey);
 
-		/** Set the lowest bit for inline key */
-		kkey->kh_inline_len = (key_iov->iov_len << 2) | 1;
-		memcpy(&kkey->kh_inline[0], key_iov->iov_buf, key_iov->iov_len);
-		D_ASSERT(kkey->kh_len & 1);
-		return;
-	}
-
-	kkey->kh_murmur64 = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
-					    VOS_BTR_MUR_SEED);
-	kkey->kh_str32 = d_hash_string_u32(key_iov->iov_buf, key_iov->iov_len);
-	/** Lowest bit is clear for hashed key */
-	kkey->kh_len = key_iov->iov_len << 2;
-
-	vos_kh_set(kkey->kh_murmur64);
-	D_ASSERT(!(kkey->kh_inline_len & 1));
+	if (key_iov->iov_len > KH_INLINE_MAX)
+		vos_kh_set(kkey->kh_murmur64);
 }
 
 /** compare the hashed key */
@@ -218,24 +163,7 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct ktr_hkey *k1 = (struct ktr_hkey *)&rec->rec_hkey[0];
 	struct ktr_hkey *k2 = (struct ktr_hkey *)hkey;
 
-	/** Since the low bit is set for inline keys, there will never be
-	 *  a conflict between an inline key and a hashed key so we can
-	 *  simply compare as if they are hashed.  Order doesn't matter
-	 *  as long as it's consistent.
-	 */
-	if (k1->kh_hash[0] < k2->kh_hash[0])
-		return BTR_CMP_LT;
-
-	if (k1->kh_hash[0] > k2->kh_hash[0])
-		return BTR_CMP_GT;
-
-	if (k1->kh_hash[1] < k2->kh_hash[1])
-		return BTR_CMP_LT;
-
-	if (k1->kh_hash[1] > k2->kh_hash[1])
-		return BTR_CMP_GT;
-
-	return BTR_CMP_EQ;
+	return hkey_common_cmp(k1, k2);
 }
 
 static int
@@ -758,7 +686,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc,
-					  intent, DTX_RT_SVT);
+					  intent, DTX_RT_SVT, true);
 }
 
 static umem_off_t
@@ -790,16 +718,14 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
@@ -827,14 +753,13 @@ evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 
 static int
 evt_dop_log_status(struct umem_instance *umm, daos_epoch_t epoch,
-		   struct evt_desc *desc, int intent, void *args)
+		   struct evt_desc *desc, int intent, bool retry, void *args)
 {
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
-	return vos_dtx_check_availability(coh, desc->dc_dtx,
-					  epoch, intent, DTX_RT_EVT);
+	return vos_dtx_check_availability(coh, desc->dc_dtx, epoch, intent, DTX_RT_EVT, retry);
 }
 
 int
@@ -958,7 +883,6 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
 
-
 		ta = obj_tree_find_attr(tclass);
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
@@ -973,7 +897,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	}
 	/* NB: Only happens on create so krec will be in the transaction log
-	 * already.
+	 * already.  Mark that tree supports the aggregation optimizations.
+	 * At akey level, this bit map is used for the optimization.  At higher
+	 * levels, only the tree_feats version is used.
 	 */
 	krec->kr_bmap |= expected_flag;
 out:
@@ -1087,7 +1013,17 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
  out:
 	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
 		 flags, tclass, rc);
-	return rc;
+
+	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
+		return rc;
+
+	/** If it's evtree, evt_insert will detect if aggregation is needed.  For single value,
+	 *  return 1 to indicate aggregation is on update to an existing tree.
+	 */
+	if (flags & SUBTR_EVT)
+		return 0;
+
+	return created ? 0 : 1;
 }
 
 /** Close the opened trees */
@@ -1186,6 +1122,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			D_GOTO(done, rc);
 		*known_key |= 0x1;
 	}
+
+	rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

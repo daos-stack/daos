@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 
 #include <stdarg.h>
 #include <math.h>
+#include <string.h>
 #include <gurt/common.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
@@ -216,6 +217,60 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
 			__FILE__, __LINE__, dst_set, filter_num);
 	}
+}
+
+int
+d_rank_list_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
+{
+	d_rank_t	*rs;
+	int		*indexes;
+	int		num = 0;
+	int		src_num;
+	int		i;
+	int		j;
+	int		rc = 0;
+
+	D_ASSERT(src_ranks != NULL);
+	if (ranks_merge == NULL || ranks_merge->rl_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(indexes, ranks_merge->rl_nr);
+	if (indexes == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < ranks_merge->rl_nr; i++) {
+		if (!d_rank_list_find(src_ranks, ranks_merge->rl_ranks[i], NULL)) {
+			indexes[num] = i;
+			num++;
+		}
+	}
+
+	if (num == 0)
+		D_GOTO(free, rc = 0);
+
+	src_num = src_ranks->rl_nr;
+	D_ALLOC_ARRAY(rs, (num + src_num));
+	if (rs == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	for (i = 0; i < src_num; i++)
+		rs[i] = src_ranks->rl_ranks[i];
+
+	for (i = src_num, j = 0; i < src_num + num; i++, j++) {
+		int idx = indexes[j];
+
+		rs[i] = ranks_merge->rl_ranks[idx];
+	}
+
+	if (src_ranks->rl_ranks)
+		D_FREE(src_ranks->rl_ranks);
+
+	src_ranks->rl_nr = num + src_num;
+	src_ranks->rl_ranks = rs;
+
+free:
+	D_FREE(indexes);
+	return rc;
 }
 
 d_rank_list_t *
@@ -530,6 +585,30 @@ out:
 	return rc;
 }
 
+/**
+ * Create a ranged string representation of a rank list.
+ *
+ * \param[in]  rank_list	the rank list to represent
+ *
+ * \return			a ranged string (caller must free)
+ */
+char *
+d_rank_list_to_str(d_rank_list_t *rank_list)
+{
+	char			*str;
+	bool			 truncated = false;
+	d_rank_range_list_t	*range_list;
+
+	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	if (range_list == NULL)
+		return NULL;
+	str = d_rank_range_list_str(range_list, &truncated);
+
+	d_rank_range_list_free(range_list);
+
+	return str;
+}
+
 d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {
@@ -561,6 +640,160 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
 	return 0;
+}
+
+d_rank_range_list_t *
+d_rank_range_list_alloc(uint32_t size)
+{
+	d_rank_range_list_t    *range_list;
+
+	D_ALLOC_PTR(range_list);
+	if (range_list == NULL)
+		return NULL;
+
+	if (size == 0) {
+		range_list->rrl_nr = 0;
+		range_list->rrl_ranges = NULL;
+		return range_list;
+	}
+
+	D_ALLOC_ARRAY(range_list->rrl_ranges, size);
+	if (range_list->rrl_ranges == NULL) {
+		D_FREE(range_list);
+		return NULL;
+	}
+	range_list->rrl_nr = size;
+
+	return range_list;
+}
+
+d_rank_range_list_t *
+d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
+{
+	d_rank_range_t		*new_ranges;
+
+	if (range_list == NULL)
+		return d_rank_range_list_alloc(size);
+	if (size == 0) {
+		d_rank_range_list_free(range_list);
+		return NULL;
+	}
+	D_REALLOC_ARRAY(new_ranges, range_list->rrl_ranges, range_list->rrl_nr, size);
+	if (new_ranges != NULL) {
+		range_list->rrl_ranges = new_ranges;
+		range_list->rrl_nr = size;
+	} else {
+		range_list = NULL;
+	}
+
+	return range_list;
+}
+
+/* TODO (DAOS-10253) Add unit tests for this function */
+d_rank_range_list_t *
+d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
+{
+	d_rank_range_list_t	       *range_list;
+	uint32_t			alloc_size;
+	uint32_t			nranges;
+	unsigned int			i;		/* rank index */
+	unsigned int			j;		/* rank range index */
+
+	d_rank_list_sort(rank_list);
+	if ((rank_list == NULL) || (rank_list->rl_ranks == NULL) || (rank_list->rl_nr == 0))
+		return d_rank_range_list_alloc(0);
+
+	alloc_size = nranges = 1;
+	range_list = d_rank_range_list_alloc(alloc_size);
+	if (range_list == NULL)
+		return NULL;
+
+	range_list->rrl_ranges[0].lo = rank_list->rl_ranks[0];
+	range_list->rrl_ranges[0].hi = rank_list->rl_ranks[0];
+	for (i = 1, j = 0; i < rank_list->rl_nr; i++) {
+		if (rank_list->rl_ranks[i] == (rank_list->rl_ranks[i-1] + 1)) {
+			/* rank range j continues */
+			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
+		} else {
+			/* New rank range found at position i in rank_list. */
+			j++;
+			nranges++;	/* j + 1 */
+			if (nranges > alloc_size) {
+				alloc_size *= 2;
+				range_list = d_rank_range_list_realloc(range_list, alloc_size);
+				if (range_list == NULL) {
+					d_rank_range_list_free(range_list);
+					return NULL;
+				}
+			}
+			range_list->rrl_ranges[j].lo = rank_list->rl_ranks[i];
+			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
+			range_list->rrl_nr = nranges;
+		}
+	}
+
+	return range_list;
+}
+
+/* TODO (DAOS-10253) Add unit tests for this function */
+char *
+d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+{
+	const size_t	MAXBYTES = 512;
+	char	       *line;
+	char	       *linepos;
+	int		ret = 0;
+	size_t		remaining = MAXBYTES - 2u;
+	int		i;
+	int		err = 0;
+
+	*truncated = false;
+	D_ALLOC(line, MAXBYTES);
+	if (line == NULL)
+		return NULL;
+
+	*line = '[';
+	linepos = line + 1;
+	for (i = 0; i < list->rrl_nr; i++) {
+		uint32_t	lo = list->rrl_ranges[i].lo;
+		uint32_t	hi = list->rrl_ranges[i].hi;
+		bool		lastrange = (i == (list->rrl_nr - 1));
+
+		if (lo == hi)
+			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+		else
+			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+
+		if (ret < 0) {
+			err = errno;
+			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
+			break;
+		}
+
+		if (ret >= remaining) {
+			err = EOVERFLOW;
+			D_WARN("rank set has been partially serialized\n");
+			break;
+		}
+
+		remaining -= ret;
+		linepos += ret;
+	}
+	memcpy(linepos, "]", 2u);
+
+	if (err != 0)
+		*truncated = true;
+
+	return line;
+}
+
+void
+d_rank_range_list_free(d_rank_range_list_t *range_list)
+{
+	if (range_list == NULL)
+		return;
+	D_FREE(range_list->rrl_ranges);
+	D_FREE(range_list);
 }
 
 static inline bool

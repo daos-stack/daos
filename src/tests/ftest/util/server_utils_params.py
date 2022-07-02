@@ -1,11 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import ast
 
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
@@ -79,7 +78,9 @@ class DaosServerYamlParameters(YamlParameters):
         #       base location to place the sockets in.
         #
         #   - nr_hugepages: <int>, e.g. 4096
-        #       Number of hugepages to allocate for use by NVMe SSDs
+        #       Number of hugepages to allocate for use with SPDK and NVMe SSDs.
+        #       This value is only used for optional override and will be
+        #       automatically calculated if unset.
         #
         #   - control_log_mask: <str>, e.g. DEBUG
         #       Force specific debug mask for daos_server (control plane).
@@ -106,16 +107,16 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
         self.provider = BasicParameter(None, default_provider)
+        self.crt_timeout = BasicParameter(None, 10)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
+        # Auto-calculate if unset or set to zero
         self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
-        default_enable_vmd_val = os.environ.get("DAOS_ENABLE_VMD", "False")
-        default_enable_vmd = ast.literal_eval(default_enable_vmd_val)
-        self.enable_vmd = BasicParameter(None, default_enable_vmd)
+        self.disable_vmd = BasicParameter(None)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -155,10 +156,6 @@ class DaosServerYamlParameters(YamlParameters):
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
-
-        if self.using_nvme and self.nr_hugepages.value == 0:
-            self.log.debug("Setting hugepages when bdev class is 'nvme'")
-            self.nr_hugepages.update(4096, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -331,9 +328,12 @@ class DaosServerYamlParameters(YamlParameters):
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"],
             "ofi+tcp": [
-                "CRT_SWIM_RPC_TIMEOUT=10"],
+                "SWIM_PING_TIMEOUT=10"],
             "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
+            "ofi+cxi": [
+                "FI_OFI_RXM_USE_SRX=1",
+                "CRT_MRC_ENABLE=1"],
         }
 
         def __init__(self, index=None, provider=None):
@@ -387,6 +387,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
+                "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
@@ -397,9 +398,6 @@ class DaosServerYamlParameters(YamlParameters):
 
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
-
-            # global CRT_TIMEOUT shared with client
-            self.crt_timeout = BasicParameter(None, 30)
 
             # Storage definition parameters:
             #

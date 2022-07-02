@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -318,6 +318,13 @@ dc_get_attach_info(const char *name, bool all_ranks,
 
 #define SYS_INFO_BUF_SIZE 16
 
+static int g_num_serv_ranks = 1;
+
+int dc_mgmt_net_get_num_srv_ranks(void)
+{
+	return g_num_serv_ranks;
+}
+
 /*
  * Get the CaRT network configuration for this client node
  * via the get_attach_info() dRPC.
@@ -335,10 +342,13 @@ int dc_mgmt_net_cfg(const char *name)
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, false /* all_ranks */, &info, &resp);
+	rc = get_attach_info(name, true/* all_ranks */, &info, &resp);
 	if (rc != 0)
 		return rc;
 
+	/* Save number of server ranks */
+	g_num_serv_ranks = resp->n_rank_uris;
+	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)
@@ -421,7 +431,6 @@ cleanup:
 
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
 	uint8_t			 *reqb;
@@ -456,8 +465,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	}
 	mgmt__pool_monitor_req__pack(&req, reqb);
 
-	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      request_type, &dreq);
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, request_type, &dreq);
 	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
@@ -510,7 +518,6 @@ dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
 int
 dc_mgmt_notify_exit(void)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Drpc__Call		 *dreq;
 	Drpc__Response		 *dresp;
@@ -827,6 +834,8 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	srv_ep.ep_grp = sys->sy_group;
 	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	for (i = 0 ; i < ms_ranks->rl_nr; i++) {
+		uint32_t	timeout;
+
 		srv_ep.ep_rank = ms_ranks->rl_ranks[idx];
 		rpc = NULL;
 		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
@@ -836,6 +845,12 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 			idx = (idx + 1) % ms_ranks->rl_nr;
 			continue;
 		}
+
+		/* Shorten the timeout (but not lower than 10 seconds) to speed up pool find */
+		rc = crt_req_get_timeout(rpc, &timeout);
+		D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+		rc = crt_req_set_timeout(rpc, max(10, timeout / 4));
+		D_ASSERTF(rc == 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
 
 		rpc_in = NULL;
 		rpc_in = crt_req_get(rpc);

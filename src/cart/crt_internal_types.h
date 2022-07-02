@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,7 +66,7 @@ struct crt_gdata {
 	int			cg_init_prov;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_OFI_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_COUNT];
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -283,7 +283,7 @@ struct crt_opc_map {
 };
 
 
-int crt_na_ofi_config_init(int provider);
+int crt_na_ofi_config_init(int provider, crt_init_options_t *opt);
 void crt_na_ofi_config_fini(int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

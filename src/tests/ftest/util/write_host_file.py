@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,6 @@ from logging import getLogger
 import os
 import random
 
-from collections import Counter
 
 def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
@@ -29,7 +28,7 @@ def write_host_file(hostlist, path='/tmp', slots=1):
     """
 
     log = getLogger()
-    unique = random.randint(1, 100000) #nosec
+    unique = random.randint(1, 100000)  # nosec
 
     if not os.path.exists(path):
         os.makedirs(path)

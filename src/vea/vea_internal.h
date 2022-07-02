@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,8 @@
 #include <daos_srv/vea.h>
 
 #define VEA_MAGIC	(0xea201804)
+#define VEA_BLK_SZ	(4 * 1024)	/* 4K */
+#define VEA_TREE_ODR	20
 
 /* Per I/O stream hint context */
 struct vea_hint_context {
@@ -30,51 +32,35 @@ struct vea_entry {
 	 * Always keep it as first item, since vfe_blk_off is the direct key
 	 * of DBTREE_CLASS_IV
 	 */
-	struct vea_free_extent	ve_ext;
-	/* Link to one of vfc_lrus or vsi_agg_lru */
-	d_list_t		ve_link;
+	struct vea_free_extent   ve_ext;
+	/* Link to one of vsc_lru or vsi_agg_lru */
+	d_list_t		 ve_link;
+	/* Back reference to sized tree entry */
+	struct vea_sized_class	*ve_sized_class;
 	/* Link to vfc_heap */
-	struct d_binheap_node	ve_node;
-	uint32_t		ve_in_heap:1;
+	struct d_binheap_node	 ve_node;
 };
 
 #define VEA_LARGE_EXT_MB	64	/* Large extent threshold in MB */
 #define VEA_HINT_OFF_INVAL	0	/* Invalid hint offset */
-#define VEA_MIGRATE_INTVL	10	/* Seconds */
 
-struct free_ext_cursor {
-	struct vea_entry	*fec_cur;
-	int			 fec_idx;
-	int			 fec_entry_cnt;
-	struct vea_entry	*fec_entries[0];
+/* Value entry of sized free extent tree (vfc_size_btr) */
+struct vea_sized_class {
+	/* Small extents LRU list */
+	d_list_t		vsc_lru;
 };
 
 /*
- * Large free extents (>=VEA_LARGE_EXT_MB) are tracked in max a heap, small
- * free extents (< VEA_LARGE_EXT_MB) are tracked in size categorized LRUs
- * respectively.
+ * Large free extents (>VEA_LARGE_EXT_MB) are tracked in max a heap, small
+ * free extents (<= VEA_LARGE_EXT_MB) are tracked in a size tree.
  */
 struct vea_free_class {
 	/* Max heap for tracking the largest free extent */
-	struct d_binheap	 vfc_heap;
+	struct d_binheap	vfc_heap;
+	/* Small free extent tree */
+	daos_handle_t		vfc_size_btr;
 	/* Size threshold for large extent */
-	uint32_t		 vfc_large_thresh;
-	/* How many size classed LRUs for small free extents */
-	uint32_t		 vfc_lru_cnt;
-	/* Extent size classed LRU lists  */
-	d_list_t		*vfc_lrus;
-	/*
-	 * Upper size (in blocks) bounds for all size classes. The lower size
-	 * bound of the size class is the upper bound of previous class (0 for
-	 * first class), so the size of each extent in a size class satisfies:
-	 * vfc_sizes[i + 1] < blk_cnt <= vfc_sizes[i].
-	 */
-	uint32_t		*vfc_sizes;
-	/*
-	 * Cursor used to scan the size classed LRUs when trying to reserve
-	 * from small extents.
-	 */
-	struct free_ext_cursor	*vfc_cursor;
+	uint32_t		vfc_large_thresh;
 };
 
 enum {
@@ -141,15 +127,10 @@ struct vea_space_info {
 	uint64_t			 vsi_stat[STAT_MAX];
 	/* Metrics */
 	struct vea_metrics		*vsi_metrics;
-	/* Last aggregation time */
-	uint32_t			 vsi_agg_time;
-	bool				 vsi_agg_scheduled;
+	/* Last aging buffer flush timestamp */
+	uint32_t			 vsi_flush_time;
+	bool				 vsi_flush_scheduled;
 };
-
-static inline bool ext_is_idle(struct vea_free_extent *vfe)
-{
-	return vfe->vfe_age == VEA_EXT_AGE_MAX;
-}
 
 static inline uint32_t
 get_current_age(void)
@@ -186,22 +167,23 @@ void inc_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr);
 int compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec);
 int reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 		 struct vea_resrvd_ext *resrvd);
-int reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
-		  struct vea_resrvd_ext *resrvd);
-int reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
-		  struct vea_resrvd_ext *resrvd);
+int reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
+		   struct vea_resrvd_ext *resrvd);
 int reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 		   struct vea_resrvd_ext *resrvd);
 int persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 
 /* vea_free.c */
+#define MAX_FLUSH_FRAGS	256
 void free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry);
 int free_class_add(struct vea_space_info *vsi, struct vea_entry *entry);
 int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		  unsigned int flags);
 int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 int aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
-void migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb);
+int trigger_aging_flush(struct vea_space_info *vsi, bool force,
+			uint32_t nr_flush, uint32_t *nr_flushed);
+int schedule_aging_flush(struct vea_space_info *vsi);
 
 /* vea_hint.c */
 void hint_get(struct vea_hint_context *hint, uint64_t *off);

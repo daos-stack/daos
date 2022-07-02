@@ -1,11 +1,11 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 
 
 class DmgPoolEvictTest(TestWithServers):
@@ -79,7 +79,7 @@ class DmgPoolEvictTest(TestWithServers):
         # upper case since we use upper case in object.
         uuids_cmd = []
         for uuid_label in data["response"]:
-            uuids_cmd.append(uuid_label["UUID"].upper())
+            uuids_cmd.append(uuid_label["uuid"].upper())
         uuids_obj = []
         for cont in self.container[1:]:
             uuids_obj.append(cont.uuid)

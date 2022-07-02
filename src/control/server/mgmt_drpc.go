@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,8 @@
 package server
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -15,6 +17,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -29,7 +32,7 @@ func newMgmtModule() *mgmtModule {
 }
 
 // HandleCall is the handler for calls to the mgmtModule
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	return nil, drpc.UnknownMethodFailure()
 }
 
@@ -66,7 +69,7 @@ func newSrvModule(log logging.Logger, sysdb poolResolver, engines []Engine, even
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
@@ -105,7 +108,7 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 
 	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
-		resp.Status = int32(drpc.DaosNonexistant)
+		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
 	}
@@ -129,7 +132,7 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 
 	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
 	if err != nil {
-		resp.Status = int32(drpc.DaosNonexistant)
+		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
 		return proto.Marshal(resp)
 	}

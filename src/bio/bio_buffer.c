@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,7 +40,8 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (bio_spdk_inited) {
-		chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+		chunk->bdc_ptr = spdk_dma_malloc_socket(bytes, BIO_DMA_PAGE_SZ, NULL,
+							bio_numa_node);
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
 		if (rc)
@@ -710,6 +711,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 
 	if (direct_scm_access(biod, biov)) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+
 		bio_iov_set_raw_buf(biov,
 				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
 		return 0;
@@ -951,7 +953,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	struct spdk_io_channel	*channel;
 	struct spdk_blob	*blob;
 	struct bio_xs_context	*xs_ctxt;
-	uint64_t		 pg_idx, pg_cnt;
+	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
 
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
@@ -978,29 +980,36 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	D_ASSERT(pg_cnt > pg_idx);
 	pg_cnt -= pg_idx;
 
-	/* NVMe poll needs be scheduled */
-	if (bio_need_nvme_poll(xs_ctxt))
-		bio_yield();
+	while (pg_cnt > 0) {
+		/* NVMe poll needs be scheduled */
+		if (bio_need_nvme_poll(xs_ctxt))
+			bio_yield();
 
-	biod->bd_inflights++;
-	xs_ctxt->bxc_blob_rw++;
+		biod->bd_inflights++;
+		xs_ctxt->bxc_blob_rw++;
 
-	D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", "
-		"pg_cnt:"DF_U64"\n",
-		biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read",
-		blob, payload, pg_idx, pg_cnt);
+		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
-	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
-	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
-		spdk_blob_io_write(blob, channel, payload,
-				   page2io_unit(biod->bd_ctxt, pg_idx),
-				   page2io_unit(biod->bd_ctxt, pg_cnt),
-				   rw_completion, biod);
-	else
-		spdk_blob_io_read(blob, channel, payload,
-				  page2io_unit(biod->bd_ctxt, pg_idx),
-				  page2io_unit(biod->bd_ctxt, pg_cnt),
-				  rw_completion, biod);
+		D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", pg_cnt:"DF_U64"/"DF_U64"\n",
+			biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read",
+			blob, payload, pg_idx, pg_cnt, rw_cnt);
+
+		D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
+		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
+			spdk_blob_io_write(blob, channel, payload,
+					   page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					   page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
+					   rw_completion, biod);
+		else
+			spdk_blob_io_read(blob, channel, payload,
+					  page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					  page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
+					  rw_completion, biod);
+
+		pg_cnt -= rw_cnt;
+		pg_idx += rw_cnt;
+		payload += (rw_cnt * BIO_DMA_PAGE_SZ);
+	}
 }
 
 static void
@@ -1034,7 +1043,7 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll completion\n");
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
 	} else {
@@ -1221,7 +1230,7 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
 
-	if (biov->bi_addr.ba_type != DAOS_MEDIA_SCM)
+	if (!direct_scm_access(biod, biov))
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
@@ -1372,7 +1381,6 @@ bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 	return bio_rw(ioctxt, addr, iov, false);
 }
 
-
 int
 bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 {
@@ -1456,7 +1464,7 @@ free_copy_desc(struct bio_copy_desc *copy_desc)
 		bio_iod_free(copy_desc->bcd_iod_src);
 	if (copy_desc->bcd_iod_dst)
 		bio_iod_free(copy_desc->bcd_iod_dst);
-	D_FREE_PTR(copy_desc);
+	D_FREE(copy_desc);
 }
 
 static struct bio_copy_desc *

@@ -28,9 +28,25 @@ public class DaosObjectIT {
   }
 
   @Test
+  public void testEncodeEmptyObjectId() throws Exception {
+    DaosObjectId id = new DaosObjectId();
+    id.encode(0, DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_SX, DaosObjClassHint.DAOS_OCH_RDD_DEF,
+        0);
+    Assert.assertTrue(id.getLow() == 0);
+  }
+
+  @Test
+  public void testEncodeObjectId() throws Exception {
+    DaosObjectId id = new DaosObjectId(345, 1024);
+    id.encode(0, DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+        DaosObjClassHint.DAOS_OCH_RDD_DEF, 0);
+    Assert.assertTrue(id.getLow() != 0);
+  }
+
+  @Test
   public void testObjectOpen() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -43,7 +59,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectUpdateWithDifferentRecordSize() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -103,7 +119,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectUpdateWithExistingEntry() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -152,18 +168,21 @@ public class DaosObjectIT {
     }
   }
 
-  @Test
-  public void testObjectFetchSimple() throws IOException {
-    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
-    DaosObject object = client.getObject(id);
+  private void updateObjectSimple(long oidHigh, long oidLow, long contPtr,
+      DaosObjectType otype, DaosObjectClass oclass, DaosObjClassHint hint, byte[] bytes) throws IOException {
+    DaosObjectId oid = new DaosObjectId(oidHigh, oidLow);
+    if (otype == null) {
+      oid.encode(contPtr);
+    } else {
+      oid.encode(contPtr, otype, oclass, hint, 0);
+    }
+    DaosObject object = client.getObject(oid);
     try {
       object.open();
       object.punch();
       Assert.assertTrue(object.isOpen());
-      int dataSize = 30;
-      byte[] bytes = generateDataArray(dataSize);
-      IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 10);
+      int dataSize = bytes.length;
+      IODataDescSync desc = object.createDataDescForUpdate("1", IODataDescSync.IodType.ARRAY, 10);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
@@ -175,8 +194,25 @@ public class DaosObjectIT {
       } finally {
         desc.release();
       }
+    } finally {
+      object.close();
+    }
+  }
+
+  private void fetchObjectSimple(long oidHigh, long oidLow, long contPtr,
+       DaosObjectType otype, DaosObjectClass oclass, DaosObjClassHint hint, byte[] bytes) throws IOException {
+    DaosObjectId oid = new DaosObjectId(oidHigh, oidLow);
+    if (otype == null) {
+      oid.encode(contPtr);
+    } else {
+      oid.encode(contPtr, otype, oclass, hint, 0);
+    }
+    DaosObject object = client.getObject(oid);
+    int dataSize = bytes.length;
+    try {
+      object.open();
       // fetch akey1
-      IODataDescSync desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.ARRAY, 10);
+      IODataDescSync desc2 = object.createDataDescForFetch("1", IODataDescSync.IodType.ARRAY, 10);
       IODataDescSync.Entry entry = desc2.addEntryForFetch("akey1", 0, 80);
       try {
         object.fetch(desc2);
@@ -189,7 +225,7 @@ public class DaosObjectIT {
         desc2.release();
       }
       // fetch from offset
-      desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.ARRAY, 10);
+      desc2 = object.createDataDescForFetch("1", IODataDescSync.IodType.ARRAY, 10);
       entry = desc2.addEntryForFetch("akey2", 10, 80);
       try {
         object.fetch(desc2);
@@ -202,6 +238,21 @@ public class DaosObjectIT {
       } finally {
         desc2.release();
       }
+      // fetch both entries
+      desc2 = object.createDataDescForFetch("1", IODataDescSync.IodType.ARRAY, 10);
+      IODataDescSync.Entry entry1 = desc2.addEntryForFetch("akey1", 0, 80);
+      IODataDescSync.Entry entry2 = desc2.addEntryForFetch("akey2", 10, 80);
+      try {
+        object.fetch(desc2);
+        Assert.assertEquals(dataSize, entry1.getActualSize());
+        Assert.assertEquals(dataSize - 10, entry2.getActualSize());
+        byte[] actualBytes = new byte[dataSize];
+        ByteBuf buf = entry1.getFetchedData();
+        buf.readBytes(actualBytes);
+        Assert.assertTrue(Arrays.equals(bytes, actualBytes));
+      } finally {
+        desc2.release();
+      }
     } finally {
       if (object.isOpen()) {
         object.punch();
@@ -211,9 +262,43 @@ public class DaosObjectIT {
   }
 
   @Test
+  public void testObjectFetchSimple() throws IOException {
+    int dataSize = 30;
+    byte[] bytes = generateDataArray(dataSize);
+    long high = random.nextInt();
+    long low = lowSeq.incrementAndGet();
+    updateObjectSimple(high, low, client.getContPtr(), null, null, null, bytes);
+    fetchObjectSimple(high, low, client.getContPtr(), null, null, null, bytes);
+  }
+
+  @Test
+  public void testObjectFetchSimpleWithNoObjectClass() throws IOException {
+    int dataSize = 30;
+    byte[] bytes = generateDataArray(dataSize);
+    long high = random.nextInt();
+    long low = lowSeq.incrementAndGet();
+    updateObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+    fetchObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+  }
+
+  @Test
+  public void testObjectFetchSimpleWithObjectHintMax() throws IOException {
+    int dataSize = 30;
+    byte[] bytes = generateDataArray(dataSize);
+    long high = random.nextInt();
+    long low = lowSeq.incrementAndGet();
+    updateObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_SX,
+        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+    fetchObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_SX,
+        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+  }
+
+  @Test
   public void testUpdateAndFetchSingleType() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -273,7 +358,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectFetchWithIncorrectRecordSize() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -362,7 +447,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectFetchSingleWithIncorrectRecordSize() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -444,7 +529,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectUpdateAndFetchAsync() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     List<DaosEventQueue.Attachment> completeList = new LinkedList<>();
     try {
@@ -528,7 +613,7 @@ public class DaosObjectIT {
   @Test
   public void testObjectUpdateAndFetch() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -598,7 +683,7 @@ public class DaosObjectIT {
   @Test
   public void testListDkeysSimple() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -644,7 +729,7 @@ public class DaosObjectIT {
   @Test
   public void testPunchAndListDkeys() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -711,7 +796,7 @@ public class DaosObjectIT {
 
   private void listKeysMultipleTimes(String dkey) throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -785,7 +870,7 @@ public class DaosObjectIT {
 
   private void testListKeysTooBig(String dkey) throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -899,7 +984,7 @@ public class DaosObjectIT {
   @Test
   public void testPunchAndListAkeys() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -950,7 +1035,7 @@ public class DaosObjectIT {
   @Test
   public void testListAkeysSimple() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -1022,7 +1107,7 @@ public class DaosObjectIT {
   @Test
   public void testGetRecordSize() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -1052,7 +1137,7 @@ public class DaosObjectIT {
   @Test
   public void testReuseDataDesc() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     IODataDescSync desc = object.createReusableDesc(IODataDescSync.IodType.ARRAY, 1, true);
     IODataDescSync fetchDesc = object.createReusableDesc(IODataDescSync.IodType.ARRAY, 1, false);
@@ -1120,7 +1205,7 @@ public class DaosObjectIT {
   @Test
   public void testReuseWriteDescArgument() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -1191,7 +1276,7 @@ public class DaosObjectIT {
   @Test
   public void testReuseWriteSimpleDesc() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     try {
       object.open();
@@ -1257,7 +1342,7 @@ public class DaosObjectIT {
   @Test
   public void testDataDesc() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 1000;
 //    String dkey = "dkey1";
@@ -1340,7 +1425,7 @@ public class DaosObjectIT {
   @Test
   public void testDataDescSpeed() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 8000;
     int reduces = 20;
@@ -1408,7 +1493,7 @@ public class DaosObjectIT {
   @Test
   public void testAsyncUpdateAndFetch() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 16000;
     int reduces = 125;
@@ -1509,7 +1594,7 @@ public class DaosObjectIT {
   @Test
   public void testIODescUpdateAsyncNotReuse() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 100;
     byte[] data = generateDataArray(bufLen);
@@ -1566,7 +1651,7 @@ public class DaosObjectIT {
   @Test
   public void testIODescUpdateAsyncReuse() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 100;
     long offset = 2L;

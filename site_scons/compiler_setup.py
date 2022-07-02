@@ -21,6 +21,7 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+
 def base_setup(env, prereqs=None):
     """Setup the scons environment for the compiler
 
@@ -34,8 +35,8 @@ def base_setup(env, prereqs=None):
     compiler = env['CC']
 
     build_type = env['BUILD_TYPE']
-    print('Setting up compile environment for {}'.format(compiler))
-    print("Build type is '{}'".format(build_type))
+    print(f'Setting up compile environment for {compiler}')
+    print(f"Build type is '{build_type}'")
 
     prev_compiler = env.get('BSETUP', False)
     if prev_compiler:
@@ -63,12 +64,12 @@ def base_setup(env, prereqs=None):
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
 
         env.AppendUnique(CCFLAGS=['-O2'])
-        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE':'2'})
+        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
 
     if build_type != 'release':
-        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
+        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
+    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
@@ -77,7 +78,7 @@ def base_setup(env, prereqs=None):
     config = Configure(cenv)
     if config.CheckHeader('stdatomic.h'):
         config.Finish()
-        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC':'1'})
+        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC': '1'})
     elif prereqs:
         config.Finish()
         prereqs.require(env, 'openpa', headers_only=True)
@@ -95,19 +96,3 @@ def base_setup(env, prereqs=None):
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
     env['BSETUP'] = compiler
-
-_TO_STRIP=['_FORTIFY_SOURCE']
-
-def remove_fortify(env):
-    """Remove the _FORTIFY_SOURCE option"""
-
-    matched = False
-    old = env.get('CPPDEFINES')
-    new = []
-    for d in old:
-        if d[0] in _TO_STRIP:
-            matched = True
-            continue
-        new.append(d)
-    if matched:
-        env.Replace(CPPDEFINES=new)

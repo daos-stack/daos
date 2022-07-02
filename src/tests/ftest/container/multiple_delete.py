@@ -1,10 +1,11 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
+from general_utils import DaosTestError
 
 
 class MultipleContainerDelete(IorTestBase):
@@ -61,8 +62,11 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying SSD space is recovered")
-        self.log.info("%d == %d", final_ssd_fs, initial_ssd_fs)
-        self.assertTrue(final_ssd_fs == initial_ssd_fs)
+        try:
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
+        except DaosTestError as error:
+            self.fail("SSD space is not recovered after 50 "
+                      "create-write-destroy iterations {}".format(error))
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,9 +18,9 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status
+		     t->ta_comp.co_status, t->ta_comp.co_ver
 
 /**
  * pool component types
@@ -280,6 +280,9 @@ int pool_map_find_by_rank_status(struct pool_map *map,
 				 unsigned int *tgt_cnt, unsigned int status,
 				 d_rank_t rank);
 
+int pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled,
+		       d_rank_list_t **ranks);
+
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)
 {
@@ -363,7 +366,7 @@ pool_target_down(struct pool_target *tgt)
 	return (status == PO_COMP_ST_DOWN);
 }
 
-int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf);
+int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf);
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 

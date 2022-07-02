@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -232,11 +232,36 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 	return 0;
 }
 
+bool
+need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow_version)
+{
+	if (!pool_target_avail(tgt, allow_status))
+		return true;
+
+	if (tgt->ta_comp.co_status == PO_COMP_ST_UPIN || allow_version == (uint32_t)(-1))
+		return false;
+
+	if (tgt->ta_comp.co_status == PO_COMP_ST_DRAIN) {
+		/* If Drain happenes later, let's ignore it for current rebuild/reintegration */
+		if (tgt->ta_comp.co_fseq > allow_version)
+			return false;
+		else
+			return true;
+	}
+
+	/* For other cases, let's ignore all future pool map changes for current rebuild. */
+	if (tgt->ta_comp.co_in_ver > allow_version)
+		return true;
+
+	return false;
+}
+
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		uint32_t allow_status, struct failed_shard *f_shard,
-		struct pl_obj_shard *l_shard, bool *is_extending)
+		uint32_t allow_status, uint32_t allow_version,
+		struct failed_shard *f_shard, struct pl_obj_shard *l_shard,
+		bool *is_extending)
 {
 	struct failed_shard *f_tmp;
 
@@ -249,7 +274,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		*is_extending = true;
 
 	/* The selected spare target is down as well */
-	if (!pool_target_avail(spare_tgt, allow_status)) {
+	if (need_remap_target(spare_tgt, allow_status, allow_version)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);
@@ -415,7 +440,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	d_list_for_each_entry_safe(f_shard, tmp, extended_list, fs_list) {
 		if (grp_map_is_set(grp_map, grp_map_idx, f_shard->fs_tgt_id)) {
 			d_list_del_init(&f_shard->fs_list);
-			D_FREE_PTR(f_shard);
+			D_FREE(f_shard);
 			continue;
 		}
 

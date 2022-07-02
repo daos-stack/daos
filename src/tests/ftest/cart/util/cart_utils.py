@@ -1,23 +1,25 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 import os
 import shlex
-import subprocess #nosec
+import subprocess  # nosec
 import logging
-import cart_logparse
-import cart_logtest
 import socket
 import re
 import glob
+import cart_logparse
+import cart_logtest
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
+from job_manager_utils import Orterun
+
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -31,9 +33,8 @@ class CartTest(TestWithoutServers):
         self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
-        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.abspath(__file__))))))))
+        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
 
     def setUp(self):
@@ -145,7 +146,7 @@ class CartTest(TestWithoutServers):
             self.log.info("Expected %d completion files, ", count)
             self.log.info("but only found %d.\n", len(file_list))
 
-        # Clean up completion file(s) for next test for next runrun
+        # Clean up completion file(s) for next test for next run
         for _file in file_list:
             os.unlink(_file)
 
@@ -221,8 +222,8 @@ class CartTest(TestWithoutServers):
         log_path = log_path.replace(";", "_")
 
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + \
-                                env_CCSA + "_" + \
+                                test_name + "_" +
+                                env_CCSA + "_" +
                                 env_PHY_ADDR_STR + "_cart.log").replace(";", "_")
 
         # Default env vars for orterun to None
@@ -249,10 +250,8 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + \
-                       env_CCSA + "_" + \
-                       env_PHY_ADDR_STR + "_" + \
-                       "output.orterun_log"
+        log_filename = test_name + "_" + env_CCSA + "_" + env_PHY_ADDR_STR + "_" + \
+            "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
@@ -352,7 +351,7 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
-        # Return 0 on memory leaks while suppresion file is completed
+        # Return 0 on memory leaks while suppression file is completed
         # (CART-975 and CART-977)
         memcheck_error_code = 0
 
@@ -383,6 +382,7 @@ class CartTest(TestWithoutServers):
 
         tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
+        tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
@@ -393,16 +393,12 @@ class CartTest(TestWithoutServers):
             hostfile = write_host_file(tst_host,
                                        daos_test_shared_dir,
                                        tst_ppn)
-
-        mca_flags = "--mca btl self,tcp "
+        mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
-            mca_flags += "--mca pml ob1 "
+            mca_flags.append("pml ob1")
 
-        tst_cmd = "{} {} -N {} --hostfile {} ".format(
-            self.orterun, mca_flags, tst_ppn, hostfile)
-
-        tst_cmd += env
+        tst_cmd = env
 
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
         if tst_cont is not None:
@@ -429,7 +425,12 @@ class CartTest(TestWithoutServers):
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
 
-        return tst_cmd
+        job = Orterun(tst_cmd)
+        job.mca.update(mca_flags)
+        job.hostfile.update(hostfile)
+        job.pprnode.update(tst_ppn)
+        job.processes.update(tst_processes)
+        return str(job)
 
     def convert_xml(self, xml_file):
         """Modify the xml file"""
@@ -461,7 +462,7 @@ class CartTest(TestWithoutServers):
 
         xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(daos_test_shared_dir)))
+                                     os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
             self.convert_xml(daos_test_shared_dir + "/" + filename)
@@ -563,6 +564,6 @@ class CartTest(TestWithoutServers):
                     self.log.info("Adding %s=%s to environment.", key, value)
                     os.environ[key] = value
 
-            # For compatibility with cart tests, which set env vars in oretrun
+            # For compatibility with cart tests, which set env vars in orterun
             # command via -x options
             self.env = os.environ

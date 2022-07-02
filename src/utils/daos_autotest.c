@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -214,7 +214,7 @@ pconnect(void)
 	int rc;
 
 	/** Connect to pool */
-	rc = daos_pool_connect(autotest_ap->p_uuid, autotest_ap->sysname,
+	rc = daos_pool_connect(autotest_ap->pool_str, autotest_ap->sysname,
 			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
@@ -1209,6 +1209,8 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
+
+	uuid_unparse(ap->p_uuid, ap->pool_str);
 
 	autotest_ap = ap;
 

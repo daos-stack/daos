@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,24 +20,24 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cliOptions struct {
-	AllowProxy bool                    `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      string                  `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net" description:"Enable basic or enhanced network debug"`
-	JSON       bool                    `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool                    `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath string                  `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	Insecure   bool                    `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string                  `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string                  `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	Start      startCmd                `command:"start" description:"Start daos_agent daemon (default behavior)"`
-	Version    versionCmd              `command:"version" description:"Print daos_agent version"`
-	DumpInfo   dumpAttachInfoCmd       `command:"dump-attachinfo" description:"Dump system attachinfo"`
-	DumpTopo   cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	NetScan    netScanCmd              `command:"net-scan" description:"Perform local network fabric scan"`
+	AllowProxy bool                   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug      bool                   `short:"d" long:"debug" description:"Enable debug output"`
+	JSON       bool                   `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs   bool                   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath string                 `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure   bool                   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir string                 `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string                 `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start      startCmd               `command:"start" description:"Start daos_agent daemon (default behavior)"`
+	Version    versionCmd             `command:"version" description:"Print daos_agent version"`
+	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
 }
 
 type (
@@ -66,20 +66,6 @@ type (
 
 func (cmd *configCmd) setConfig(cfg *Config) {
 	cmd.cfg = cfg
-}
-
-type (
-	logSetter interface {
-		setLog(logging.Logger)
-	}
-
-	logCmd struct {
-		log logging.Logger
-	}
-)
-
-func (cmd *logCmd) setLog(log logging.Logger) {
-	cmd.log = log
 }
 
 type (
@@ -142,22 +128,16 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			cmd = &startCmd{}
 		}
 
-		if logCmd, ok := cmd.(logSetter); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {
 			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
-		switch opts.Debug {
-		case "net":
+		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("net debug output enabled")
-			netdetect.SetLogger(log)
-		case "basic":
-			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("basic debug output enabled")
 		}
 
 		if opts.JSONLogs {
@@ -165,7 +145,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		switch cmd.(type) {
-		case *versionCmd, *netScanCmd, *cmdutil.DumpTopologyCmd:
+		case *versionCmd, *netScanCmd, *hwprov.DumpTopologyCmd:
 			// these commands don't need the rest of the setup
 			return cmd.Execute(args)
 		}
@@ -187,6 +167,11 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			var err error
 			if cfg, err = LoadConfig(cfgPath); err != nil {
 				return errors.WithMessage(err, "failed to load agent configuration")
+			}
+
+			// Command line debug option overrides log level in config file
+			if !opts.Debug {
+				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
 			}
 			log.Debugf("agent config loaded from %s", cfgPath)
 		}

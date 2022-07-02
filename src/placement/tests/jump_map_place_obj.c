@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -184,10 +184,10 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 	/*
 	 * ---------------------------------------------------------
-	 * With 2 domains, 2 nodes each, 2 targets each = 8 targets
+	 * With 2 domains, 1 nodes each, 4 targets each = 8 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 2, 2, &po_map, &pl_map);
+	gen_maps(2, 1, 4, &po_map, &pl_map);
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 
@@ -1609,8 +1609,10 @@ placement_handles_multiple_states(void **state)
 	ver_after_fail = ctx.ver;
 
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
-	/* One reintegrating plus one failure recovery */
-	assert_int_equal(2, rebuilding);
+	/* One reintegrating plus one failure recovery, but due to co-location,
+	 * some other shards might change their location either after remap.
+	 **/
+	assert_true(rebuilding >= 2);
 
 	/* third shard is queued for drain */
 	jtc_set_status_on_shard_target(&ctx, DRAIN, 2);
@@ -1633,7 +1635,7 @@ placement_handles_multiple_states(void **state)
 	 */
 	jtc_scan(&ctx);
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
-	assert_int_equal(3, rebuilding);
+	assert_true(rebuilding >= 3);
 
 	/*
 	 * Compute find_reint() using the correct version of rebuild which
@@ -1693,6 +1695,8 @@ placement_handles_multiple_states_with_addition(void **state)
 
 	/* a new domain is added */
 	jtc_pool_map_extend(&ctx, 1, 1, 4);
+
+	assert_int_equal(pool_map_target_nr(ctx.po_map), 16);
 
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);

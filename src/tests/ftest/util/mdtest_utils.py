@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-
 import uuid
+import re
 
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
@@ -21,7 +20,7 @@ class MdtestCommand(ExecutableCommand):
         super().__init__("/run/mdtest/*", "mdtest")
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
-        #  -a=STRING             API for I/O [POSIX|DUMMY]
+        #  -a=STRING             API for I/O [POSIX|DFS|DUMMY]
         #  -b=1                  branching factor of hierarchical dir structure
         #  -d=./out              the directory in which the tests will run
         #  -B=0                  no barriers between phases
@@ -156,3 +155,103 @@ class MdtestCommand(ExecutableCommand):
                 self.dfs_oclass.value
 
         return env
+
+
+class MdtestMetrics():
+    # pylint: disable=too-few-public-methods
+    """Represents metrics from mdtest output.
+
+    Metrics are split into groups "rates" and "times".
+    Each group contains metrics for each operation.
+    Each operation contains values for max, min, mean, stddev.
+    For example:
+        self.rates.file_creation.max
+        self.times.directory_stat.min
+
+    """
+
+    class MdtestMetricsOperation():
+        """Metrics for an individual operation. E.g. file_creation."""
+        def __init__(self):
+            """Initialize operations values."""
+            self.max = 0
+            self.min = 0
+            self.mean = 0
+            self.stddev = 0
+
+    class MdtestMetricsGroup():
+        """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
+        def __init__(self):
+            """Initialize each operation.
+            Names are aligned with output from mdtest. E.g. "File creation" -> "file_creation"
+            """
+            self.directory_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.file_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.file_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.file_read = MdtestMetrics.MdtestMetricsOperation()
+            self.file_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.file_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_removal = MdtestMetrics.MdtestMetricsOperation()
+
+    def __init__(self, output=None):
+        """Initialize MdtestMetrics.
+
+        Args:
+            output (str, optional): output from mdtest from which to parse metrics.
+                Default initializes metrics to 0.
+
+        """
+        self.rates = MdtestMetrics.MdtestMetricsGroup()
+        self.times = MdtestMetrics.MdtestMetricsGroup()
+        if output is not None:
+            self.parse_output(output)
+
+    def parse_output(self, output):
+        """Parse output from Mdtest into metrics.
+
+        Args:
+            output (str): output from mdtest from which to parse metrics.
+
+        """
+        self._parse_output_group(output, self.rates, "rate")
+        self._parse_output_group(output, self.times, "time")
+
+    @staticmethod
+    def _parse_output_group(output, group_obj, group_suffix):
+        """Parse an output group.
+
+        Args:
+            output (str): output from mdtest from which to parse metrics.
+            group_obj (MdtestMetrics.MdtestMetricsGroup): the group object.
+            group_suffix (str): "rate" or "time" header in the output.
+
+        """
+        # Extract just one group, in case both are in the output
+        match = re.search("SUMMARY {}(((?!(SUMMARY)|-- finished).)*)".format(group_suffix),
+                          output, re.MULTILINE | re.DOTALL)
+        if not match:
+            return
+
+        # Split into individual metric lines, skipping over headers
+        for metric_line in match.group(0).splitlines()[3:]:
+            if not metric_line:
+                continue
+            metric_vals = metric_line.split()
+            if not metric_vals:
+                continue
+            # Name is, for example, "File" + " " + "creation"
+            # Convert to "file_creation"
+            operation_name = metric_vals[0] + ' ' + metric_vals[1]
+            operation_name = operation_name.lower().replace(" ", "_")
+            try:
+                operation = getattr(group_obj, operation_name)
+                operation.max = metric_vals[2]
+                operation.min = metric_vals[3]
+                operation.mean = metric_vals[4]
+                operation.stddev = metric_vals[5]
+            except AttributeError:
+                pass

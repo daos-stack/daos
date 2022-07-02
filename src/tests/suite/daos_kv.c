@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,7 +71,8 @@ list_keys(daos_handle_t oh, int *num_keys)
 }
 
 static void
-simple_put_get(void **state)
+simple_put_get_flags(void **state, bool is_old_flag)
+
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -92,8 +93,12 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
-
+	oid = dts_oid_gen(arg->myrank);
+	if (is_old_flag)
+		daos_obj_generate_oid(arg->coh, &oid, DAOS_OT_KV_HASHED,
+				      OC_SX, 0, 0);
+	else
+		daos_obj_generate_oid(arg->coh, &oid, type, OC_SX, 0, 0);
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_rc_equal(rc, 0);
@@ -251,6 +256,18 @@ simple_put_get(void **state)
 } /* End simple_put_get */
 
 static void
+simple_put_get(void **state)
+{
+	simple_put_get_flags(state, false);
+}
+
+static void
+simple_put_get_old(void **state)
+{
+	simple_put_get_flags(state, true);
+}
+
+static void
 kv_cond_ops(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -321,6 +338,8 @@ kv_cond_ops(void **state)
 static const struct CMUnitTest kv_tests[] = {
 	{"KV: Object Put/GET (blocking)",
 	 simple_put_get, async_disable, NULL},
+	{"KV: Object Put/GET with daos_ofeat_t flag(blocking)",
+	 simple_put_get_old, async_disable, NULL},
 	{"KV: Object Put/GET (non-blocking)",
 	 simple_put_get, async_enable, NULL},
 	{"KV: Object Conditional Ops (blocking)",
@@ -341,6 +360,6 @@ run_daos_kv_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_KV_API", kv_tests,
 					 kv_setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

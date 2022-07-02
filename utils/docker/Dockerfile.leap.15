@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -6,44 +6,35 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.2
+ARG BASE_DISTRO=opensuse/leap:15.3
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# If a local distro repository is supplied, then we should use it
-# and disable using the distro repositories that can be mirrored.
-# The Docker image starts out with the DISTRO provided GPG keys
-# on the disk, but not installed.  These must be installed before
-# adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.
-ARG REPO_URL
-ARG REPO_DISTRO
-RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
-      rm -f /etc/zypp/repos.d/*.repo &&                                        \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
-      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
-             daos-stack-distro-group-repo &&                                   \
-      zypper clean --all;                                                      \
-    fi
-
-# If a local DAOS repository is supplied, then we should use it
-# This is mainly for quickbuilds
-ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
-      zypper --non-interactive modifyrepo --no-gpgcheck                        \
-             daos-stack-daos-group-repo &&                                     \
-      zypper addlock --repo daos-stack-daos-group-repo                         \
-             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
-             'fuse-debuginfo<3' 'ompi' &&                                      \
-      zypper clean --all;                                                      \
-    fi
-# Allow packages to change vendors
-RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN set -e;                                                      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        zypper --non-interactive install curl;                   \
+        mkdir -p /etc/dnf/repos.d &&                             \
+        cd /etc/dnf/repos.d/ &&                                  \
+        curl -k -f -o daos_ci-leap15-artifactory.repo.tmp        \
+             "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo &&  \
+        for file in *.repo; do                                   \
+            true > $file;                                        \
+        done;                                                    \
+        mv daos_ci-leap15-artifactory.repo{.tmp,};               \
+    fi;                                                          \
+    zypper --non-interactive install dnf dnf-plugins-core &&     \
+    cd /etc/zypp/repos.d/ &&                                     \
+    for file in *.repo; do                                       \
+        sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
+    done;                                                        \
+    zypper --non-interactive clean --all;                        \
+    dnf config-manager --save --setopt=assumeyes=True;           \
+    dnf config-manager --save --setopt=install_weak_deps=False
 
 ARG JENKINS_URL
 ARG REPOS
@@ -58,16 +49,18 @@ RUN for repo in $REPOS; do                                                      
                 branch="${branch%:*}";                                                                     \
             fi;                                                                                            \
         fi;                                                                                                \
-        zypper --non-interactive addrepo --no-gpgcheck                                                     \
-               ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/ \
-               $repo:$branch:$build_number;                                                                \
+        echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
+        cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
-
+RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
+    rm -f /tmp/install.sh
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
                /etc/profile.d/lmod.sh;                                     \
@@ -83,34 +76,41 @@ RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bas
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
+    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
-RUN if $QUICKBUILD; then                                                       \
-        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
-        echo "Installing: $QUICKBUILD_DEPS";                                   \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |              \
-              xargs -0 zypper --non-interactive install;                       \
-        zypper clean --all;                                                    \
+
+RUN if $QUICKBUILD; then                                          \
+        echo "Installing: $QUICKBUILD_DEPS";                      \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
+          xargs -0 dnf install;                                   \
+        dnf clean all;                                            \
     fi
 
-RUN zypper addlock fuse fuse-libs fuse-devel \
-           libraft0 raft-devel mercury mercury-devel
-
-# The COPY command has a --chown option but it's not well supported so copy as
-# root then run a chown command which is frustrating as the copy can take a few
-# seconds.
-WORKDIR /home/daos/pre
-COPY SConstruct .
-COPY site_scons site_scons
-COPY utils/build.config utils/
-RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
+
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+# wheel is needed first to avoid a warning when installing pyyaml.
+COPY requirements.txt .
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install wheel && \
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
+
+WORKDIR /home/daos/pre
+COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server utils/build.config utils/
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -123,20 +123,23 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-      zypper --non-interactive update && \
-      zypper clean --all; }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                  \
+        dnf upgrade                                                                       \
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
+        dnf clean all;                                                                    \
+    }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
-    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
+              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+    }
 USER root:root
 
+# select compiler to use
 # Load the COMPILER arg early, and optionally install the Intel compiler
 # Do this before the CACHEBUST to make best use of cache as this is a big
 # download, and make it optional on the value of COMPILER for the same
@@ -146,18 +149,21 @@ USER root:root
 # below in the general update section.  Only install the compilers at
 # ~900Mb rather than the entire stack at ~3Gb download.
 ARG COMPILER=gcc
-RUN [ "$COMPILER" != "icc" ] || \
-    { zypper --non-interactive addrepo https://yum.repos.intel.com/oneapi oneAPI && \
-      zypper --non-interactive --gpg-auto-import-keys update --repo oneAPI && \
-      zypper --non-interactive install --repo oneAPI --name intel-oneapi-compiler-dpcpp-cpp && \
-      zypper clean --all; }
+RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
+        if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
+            rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+            dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
+        fi;                                                                                              \
+        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
+        dnf clean all;                                                                                   \
+    fi
 
-# force an upgrade to get any newly built RPMs
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || \
-    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-    zypper --non-interactive update && \
-    zypper clean --all; }
+RUN [ -z "$CACHEBUST" ] || {                                                                         \
+        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf clean all;                                                                               \
+    }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -165,25 +171,23 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY VERSION LICENSE ftest.sh SConstruct .clang-format ./
-COPY site_scons site_scons
-COPY utils utils
-COPY src src
-USER root:root
-RUN chown -R daos_server.daos_server /home/daos/daos/
-USER daos_server:daos_server
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct .clang-format ./
+COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server utils utils
+COPY --chown=daos_server:daos_server src src
 
-# select compiler to use
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-    /bin/rm -rf build && go clean -cache && \
-    cp -r utils/config/examples /opt/daos; }
+RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
+        go clean -cache &&                                                 \
+        cp -r utils/config/examples /opt/daos;                             \
+    }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
@@ -194,12 +198,14 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    { mkdir /home/daos/.m2 && \
-    cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        mkdir /home/daos/.m2 &&                                                               \
+        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
+        mvn clean install -ntp -T 1C                                                          \
+            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
+    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

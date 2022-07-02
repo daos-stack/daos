@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
 
-timeout: 140
+timeout: 320
 
 server_config:
   servers:
@@ -11,5 +11,5 @@ server_config:
       targets: 8
 
 pool:
-  scm_size: 10G
+  scm_size: 1G
   control_method: dmg

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 
 	/* First check the UID, if this is different then copy the mode bits from user to group */
 	if (ctx->uid != parent->ie_stat.st_uid) {
-		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms");
 		if (mode & S_IRUSR)
 			mode |= S_IRGRP;
 		if (mode & S_IWUSR)
@@ -49,7 +49,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		bool have_group_match = false;
 		int i;
 
-		DFUSE_TRA_DEBUG(parent, "create with mismatched GID\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched GID");
 
 		gcount = fuse_req_getgroups(req, START_GROUP_SIZE, glist);
 		gsize = min(2, gcount);
@@ -79,7 +79,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		}
 
 		if (!have_group_match) {
-			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms\n");
+			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms");
 
 			if (mode & S_IRUSR)
 				mode |= S_IROTH;
@@ -102,13 +102,14 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_obj_hdl		*oh = NULL;
 	struct fuse_file_info		fi_out = {0};
 	struct dfuse_cont		*dfs = parent->ie_dfs;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
@@ -130,7 +131,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
 		(fi->flags & O_ACCMODE) == O_WRONLY) {
-		DFUSE_TRA_INFO(parent, "Upgrading fd to O_RDRW");
+		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
 	}
@@ -152,6 +153,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(oh, ie, "open handle");
 	ie->ie_dfs = dfs;
 
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
+
 	rc = _dfuse_mode_update(req, parent, &mode);
 	if (rc != 0)
 		D_GOTO(err, rc);
@@ -170,6 +174,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	oh->doh_dfs = dfs->dfs_ns;
 	oh->doh_ie = ie;
+	oh->doh_writeable = true;
 
 	if (dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
@@ -197,6 +202,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
+
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);

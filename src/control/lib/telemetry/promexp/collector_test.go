@@ -1,9 +1,12 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-// +build linux,amd64
+//go:build linux && (amd64 || arm64)
+// +build linux
+// +build amd64 arm64
+
 //
 
 package promexp
@@ -23,7 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -58,7 +61,7 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 				defer cleanup()
 			}
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
@@ -85,19 +88,19 @@ func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
 		t.Fatal("EngineSource was nil")
 	}
 
-	common.AssertTrue(t, es.IsEnabled(), "default state should be enabled")
+	test.AssertTrue(t, es.IsEnabled(), "default state should be enabled")
 
 	es.Enable()
-	common.AssertTrue(t, es.IsEnabled(), "Enable() while enabled")
+	test.AssertTrue(t, es.IsEnabled(), "Enable() while enabled")
 
 	es.Disable()
-	common.AssertFalse(t, es.IsEnabled(), "Disable() while enabled")
+	test.AssertFalse(t, es.IsEnabled(), "Disable() while enabled")
 
 	es.Disable()
-	common.AssertFalse(t, es.IsEnabled(), "Disable() while disabled")
+	test.AssertFalse(t, es.IsEnabled(), "Disable() while disabled")
 
 	es.Enable()
-	common.AssertTrue(t, es.IsEnabled(), "Enable() while disabled")
+	test.AssertTrue(t, es.IsEnabled(), "Enable() while disabled")
 }
 
 func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
@@ -183,7 +186,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			go tc.es.Collect(log, tc.resultChan)
 
@@ -202,9 +205,9 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 				}
 			}
 
-			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
+			test.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				test.AssertEqual(t, testRank, got.rank, "wrong rank")
 				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
 					t.Fatalf("metric type %d not expected", got.metric.Type())
@@ -212,7 +215,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
+				test.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}
@@ -272,11 +275,11 @@ func TestPromExp_NewCollector(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result, err := NewCollector(log, tc.opts, tc.sources...)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(EngineSource{}),
@@ -300,7 +303,7 @@ func TestPromExp_NewCollector(t *testing.T) {
 
 func TestPromExp_Collector_Prune(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
@@ -404,7 +407,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 
 func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
@@ -492,7 +495,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				}
 			}
 
-			common.AssertEqual(t, len(tc.expMetricNames), len(gotMetrics), "wrong number of metrics returned")
+			test.AssertEqual(t, len(tc.expMetricNames), len(gotMetrics), "wrong number of metrics returned")
 			for _, exp := range tc.expMetricNames {
 				found := false
 				for _, got := range gotMetrics {
@@ -589,14 +592,14 @@ func TestPromExp_extractLabels(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			labels, name := extractLabels(tc.input)
 
-			common.AssertEqual(t, tc.expName, name, "")
-			common.AssertEqual(t, len(tc.expLabels), len(labels), "wrong number of labels")
+			test.AssertEqual(t, tc.expName, name, "")
+			test.AssertEqual(t, len(tc.expLabels), len(labels), "wrong number of labels")
 			for key, val := range labels {
 				expVal, exists := tc.expLabels[key]
 				if !exists {
 					t.Fatalf("key %q was not expected", key)
 				}
-				common.AssertEqual(t, expVal, val, "incorrect value")
+				test.AssertEqual(t, expVal, val, "incorrect value")
 			}
 		})
 	}
@@ -650,7 +653,7 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			collector, err := NewCollector(log, nil, tc.startSrc...)
 			if err != nil {
@@ -659,7 +662,7 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 			collector.AddSource(tc.es, tc.fn)
 
 			// Ordering changes are possible, so we can't directly compare the structs
-			common.AssertEqual(t, len(tc.expSrc), len(collector.sources), "")
+			test.AssertEqual(t, len(tc.expSrc), len(collector.sources), "")
 			for _, exp := range tc.expSrc {
 				found := false
 				for _, actual := range collector.sources {
@@ -678,7 +681,7 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 			if tc.es != nil {
 				_, found = collector.cleanupSource[tc.es.Index]
 			}
-			common.AssertEqual(t, tc.expAddedFn, found, "")
+			test.AssertEqual(t, tc.expAddedFn, found, "")
 		})
 	}
 }
@@ -753,7 +756,7 @@ func TestPromExp_Collector_RemoveSource(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			collector, err := NewCollector(log, nil, tc.startSrc...)
 			if err != nil {
@@ -769,12 +772,12 @@ func TestPromExp_Collector_RemoveSource(t *testing.T) {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
 
-			common.AssertEqual(t, tc.expCleanupCalled, goodCleanupCalled, "")
+			test.AssertEqual(t, tc.expCleanupCalled, goodCleanupCalled, "")
 
-			common.AssertEqual(t, len(tc.expCleanupKeys), len(collector.cleanupSource), "")
+			test.AssertEqual(t, len(tc.expCleanupKeys), len(collector.cleanupSource), "")
 			for _, key := range tc.expCleanupKeys {
 				fn, found := collector.cleanupSource[key]
-				common.AssertTrue(t, found, fmt.Sprintf("expected to find %d in cleanup map", key))
+				test.AssertTrue(t, found, fmt.Sprintf("expected to find %d in cleanup map", key))
 				if fn == nil {
 					t.Fatal("cleanup function was nil")
 				}

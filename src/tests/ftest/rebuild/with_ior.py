@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +54,7 @@ class RbldWithIOR(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
@@ -72,12 +72,14 @@ class RbldWithIOR(IorTestBase):
         self.pool.wait_for_rebuild(False)
 
         # verify the pool information after rebuild
+        self.log.info("Verifying pool info after rebuild")
         checks["pi_ndisabled"] = targets
         self.assertTrue(
             self.pool.check_pool_info(**checks),
             "#Invalid pool information detected after rebuild")
+        self.log.info("Verifying rebuild info after rebuild")
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=2),
             "#Invalid pool rebuild error number detected after rebuild")
 
         # perform IOR read after rebuild

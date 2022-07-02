@@ -1,0 +1,112 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+  test_clients:
+    - client-C
+    - client-D
+    - client-E
+    - client-F
+    - client-G
+timeout: 240 # Additional 180s timeout for each rank stopped
+timeouts:
+  test_performance_ior_easy_dfs_ec_4p2gx_stop_write: 420
+  test_performance_ior_easy_dfs_ec_4p2gx_stop_read: 420
+  test_performance_ior_easy_dfs_ec_16p2gx_stop_write: 420
+  test_performance_ior_easy_dfs_ec_16p2gx_stop_read: 420
+server_config:
+    name: daos_server
+    control_log_mask: INFO
+    engines_per_host: 2
+    servers:
+        0:
+          pinned_numa_node: 0
+          nr_xs_helpers: 1
+          fabric_iface: ib0
+          fabric_iface_port: 31317
+          log_file: daos_server0.log
+          log_mask: ERR
+          bdev_class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          pinned_numa_node: 1
+          nr_xs_helpers: 1
+          fabric_iface: ib1
+          fabric_iface_port: 31417
+          log_file: daos_server1.log
+          log_mask: ERR
+          bdev_class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+pool:
+  mode: 146
+  name: daos_server
+  size: 95%
+  control_method: dmg
+  properties: ec_cell_sz:128KiB
+container:
+  type: POSIX
+  control_method: daos
+ior: &ior_base
+  client_processes:
+    ppn: 32
+  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
+  read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
+  block_size: '150G'
+  sw_deadline: 30
+  sw_wearout: 1
+  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+ior_dfs_sx:
+  <<: *ior_base
+  api: DFS
+  dfs_oclass: SX
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+ior_dfs_ec_4p2gx:
+  <<: *ior_base
+  api: DFS
+  dfs_oclass: EC_4P2GX
+  dfs_chunk: 4MiB
+  transfer_size: 4MiB
+ior_dfs_ec_16p2gx:
+  <<: *ior_base
+  api: DFS
+  dfs_oclass: EC_16P2GX
+  dfs_chunk: 16MiB
+  transfer_size: 16MiB
+ior_dfuse_sx:
+  <<: *ior_base
+  api: POSIX
+  dfs_oclass: SX # dfs params are translated to container params
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+ior_dfuse_ec_16p2gx:
+  <<: *ior_base
+  api: POSIX
+  dfs_oclass: EC_16P2GX # dfs params are translated to container params
+  dfs_chunk: 16MiB
+  transfer_size: 16MiB
+ior_hdf5_sx:
+  <<: *ior_base
+  api: HDF5
+  dfs_oclass: SX # dfs params are translated to container params
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+ior_mpiio_sx:
+  <<: *ior_base
+  api: MPIIO
+  dfs_oclass: SX # dfs params are translated to container params
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
+  disable_caching: True
+performance:
+  env:
+    - D_LOG_MASK=ERR

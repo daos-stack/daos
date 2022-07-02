@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,25 +9,16 @@ package server
 import (
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
-)
-
-const (
-	defaultExcludeInterfaces = "lo"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 // NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-	excludes := req.GetExcludeinterfaces()
-	if excludes == "" {
-		excludes = defaultExcludeInterfaces
-	}
 
 	provider := c.srvCfg.Fabric.Provider
 	switch {
@@ -37,28 +28,58 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		provider = req.GetProvider()
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
+	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer netdetect.CleanUp(netCtx)
 
-	results, err := netdetect.ScanFabric(netCtx, provider, excludes)
+	if err := c.fabric.CacheTopology(topo); err != nil {
+		return nil, err
+	}
+
+	result, err := c.fabric.Scan(ctx)
 	if err != nil {
-		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
+		return nil, err
 	}
 
-	resp := new(ctlpb.NetworkScanResp)
-	resp.Interfaces = make([]*ctlpb.FabricInterface, len(results))
-	if err := convert.Types(results, &resp.Interfaces); err != nil {
-		return nil, errors.Wrap(err, "converting fabric interfaces to protobuf format")
-	}
+	resp := c.fabricInterfaceSetToNetworkScanResp(result, provider)
 
-	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
-	resp.Corespernuma = int32(netdetect.CoresPerNuma(netCtx))
+	resp.Numacount = int32(topo.NumNUMANodes())
+	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
 
 	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
 		resp.GetNumacount(), resp.GetCorespernuma())
 
 	return resp, nil
+}
+
+func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet, provider string) *ctlpb.NetworkScanResp {
+	resp := new(ctlpb.NetworkScanResp)
+	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumNetDevices())
+	for _, name := range fis.Names() {
+		fi, err := fis.GetInterface(name)
+		if err != nil {
+			c.log.Errorf("unexpected error getting IF %q: %s", name, err.Error())
+			continue
+		}
+
+		if fi.DeviceClass == hardware.Loopback {
+			continue
+		}
+
+		for _, hwFI := range fi.NetInterfaces.ToSlice() {
+			for _, prov := range fi.Providers.ToSlice() {
+				if provider == "" || provider == prov {
+					resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
+						Provider:    prov,
+						Device:      hwFI,
+						Numanode:    uint32(fi.NUMANode),
+						Netdevclass: uint32(fi.DeviceClass),
+					})
+				}
+			}
+		}
+	}
+
+	return resp
 }

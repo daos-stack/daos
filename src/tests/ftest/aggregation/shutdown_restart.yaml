@@ -9,14 +9,7 @@ timeout: 600
 server_config:
   name: daos_server
   servers:
-    log_mask: DEBUG
-    env_vars:
-      - ABT_ENV_MAX_NUM_XSTREAMS=100
-      - ABT_MAX_NUM_XSTREAMS=100
-      - DAOS_MD_CAP=1024
-      - FI_SOCKETS_MAX_CONN_RETRY=1
-      - FI_SOCKETS_CONN_TIMEOUT=2000
-      - DD_MASK=all
+    log_mask: ERR
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:

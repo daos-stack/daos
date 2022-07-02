@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1257,7 +1257,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		}
 		if (strcmp(argv[1], "set") == 0) {
 			for (i = 0; i < argc - 2; i++) {
-				shard[i] = atoi(argv[i + 2]) + 1;
+				shard[i] = atoi(argv[i + 2]);
 				print_message("will fail fetch from shard %d\n",
 					      shard[i]);
 			}
@@ -1647,10 +1647,10 @@ run_daos_epoch_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_Epoch_IO",
 			epoch_io_tests, epoch_io_setup,
 			epoch_io_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

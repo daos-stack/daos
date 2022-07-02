@@ -1,13 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from apricot import TestWithServers
 from random import randint
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import DaosTestError
 
 
@@ -114,7 +114,7 @@ class PoolServicesFaultInjection(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=pool_with_faults,test_pool_services
+        :avocado: tags=pool_with_faults,test_pool_services,faults
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()

@@ -12,27 +12,27 @@ hosts:
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 3600
-job_manager_class_name: Orterun
-job_manager_mpi_type: openmpi
-job_manager_timeout: 3600
+job_manager:
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 3600
 pool:
-    size: 1TB
-    control_method: dmg
+  size: 1TB
+  control_method: dmg
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 server_config:
-    name: daos_server
-    servers:
-      scm_class: dcpm
-      scm_list: [ "/dev/pmem0" ]
-      scm_mount: /mnt/daos0
+  name: daos_server
+  servers:
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+    scm_mount: /mnt/daos0
 daos_perf:
   test_command: 'U;p F;p V O;p'
   test_type: daos
   processes: 64
-  test_type: daos
-  akey_use_array: False
+  akey_use_array: false
   dkeys: 256
   akeys: 128
   object_class: EC2P1

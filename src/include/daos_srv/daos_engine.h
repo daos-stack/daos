@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,10 +39,7 @@ extern const char	*dss_nvme_conf;
 /** Socket Directory */
 extern const char	*dss_socket_dir;
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		 dss_nvme_shm_id;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
+/** NVMe mem_size for SPDK memory allocation (in MB) */
 extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
@@ -137,10 +134,12 @@ void dss_unregister_key(struct dss_module_key *key);
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
+int  dss_xstream_set_affinity(struct dss_xstream *dxs);
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
 void dss_set_start_epoch(void);
+bool dss_has_enough_helper(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -152,8 +151,10 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_cont_list;
+	uint32_t		dmi_dtx_batched_started:1,
+				dmi_srv_shutting_down:1;
+	d_list_t		dmi_dtx_batched_cont_open_list;
+	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
@@ -182,6 +183,18 @@ dss_current_xstream(void)
 }
 
 /**
+ * Is the engine shutting down? If this function returns false, then before the
+ * current xstream enters the scheduler (e.g., by yielding), the engine won't
+ * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
+ * won't return).
+ */
+static inline bool
+dss_srv_shutting_down(void)
+{
+	return dss_get_module_info()->dmi_srv_shutting_down;
+}
+
+/**
  * Module facility feature bits
  * DSS_FAC_LOAD_CLI - the module requires loading client stack.
  */
@@ -206,12 +219,15 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
-	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
+	/* Anonymous request which doesn't associate to a DAOS pool */
+	SCHED_REQ_ANONYM = SCHED_REQ_MAX,
+	SCHED_REQ_TYPE_MAX,
 };
 
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+	SCHED_REQ_FL_PERIODIC	= (1 << 1),
 };
 
 struct sched_req_attr {
@@ -390,10 +406,6 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
-
-	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path, int avg);
-	int	(*dms_profile_stop)(void);
 };
 
 int srv_profile_stop();
@@ -446,12 +458,14 @@ struct dss_module {
 	int				(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
 	int				(*sm_cleanup)(void);
-	/* Whole list of RPC definition for request sent by nodes */
-	struct crt_proto_format		*sm_proto_fmt;
-	/* The count of RPCs which are dedicated for client nodes only */
-	uint32_t			sm_cli_count;
-	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers;
+	/* Number of RPC protocols this module supports - max 2 */
+	int				sm_proto_count;
+	/* Array of whole list of RPC definition for request sent by nodes */
+	struct crt_proto_format		*sm_proto_fmt[2];
+	/* Array of the count of RPCs which are dedicated for client nodes only */
+	uint32_t			sm_cli_count[2];
+	/* Array of RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler		*sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
@@ -718,105 +732,6 @@ int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
 		 int arg_size, bool sync);
 tse_sched_t *dsc_scheduler(void);
 
-typedef int (*iter_copy_data_cb_t)(daos_handle_t ih,
-				   vos_iter_entry_t *it_entry,
-				   d_iov_t *iov_out);
-struct dss_enum_arg {
-	daos_epoch_range_t     *eprs;
-	struct daos_csummer    *csummer;
-	int			eprs_cap;
-	int			eprs_len;
-	int			last_type;	/* hack for tweaking kds_len */
-	iter_copy_data_cb_t	copy_data_cb;
-	/* Buffer fields */
-	union {
-		struct {	/* !fill_recxs */
-			daos_key_desc_t	       *kds;
-			int			kds_cap;
-			int			kds_len;
-			d_sg_list_t	       *sgl;
-			d_iov_t			csum_iov;
-			uint32_t		ec_cell_sz;
-			int			sgl_idx;
-		};
-		struct {	/* fill_recxs && type == S||R */
-			daos_recx_t	       *recxs;
-			int			recxs_cap;
-			int			recxs_len;
-		};
-	};
-	daos_size_t		inline_thres;	/* type == S||R || chk_key2big*/
-	int			rnum;		/* records num (type == S||R) */
-	daos_size_t		rsize;		/* record size (type == S||R) */
-	daos_unit_oid_t		oid;		/* for unpack */
-	uint32_t		fill_recxs:1,	/* type == S||R */
-				chk_key2big:1,
-				need_punch:1,	/* need to pack punch epoch */
-				obj_punched:1,	/* object punch is packed   */
-				size_query:1;	/* Only query size */
-};
-
-struct dtx_handle;
-typedef int (*enum_iterate_cb_t)(vos_iter_param_t *param, vos_iter_type_t type,
-			    bool recursive, struct vos_iter_anchors *anchors,
-			    vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
-			    void *arg, struct dtx_handle *dth);
-
-int dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-		  struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
-		  enum_iterate_cb_t iter_cb, struct dtx_handle *dth);
-typedef int (*obj_enum_process_cb_t)(daos_key_desc_t *kds, void *ptr,
-				     unsigned int size, void *arg);
-int
-obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
-		 unsigned int type, obj_enum_process_cb_t cb,
-		 void *cb_arg);
-/** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
-#define DSS_ENUM_UNPACK_MAX_IODS 16
-
-/**
- * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
- * VOS update.
- *
- * ui_oid and ui_dkey are only filled by dss_enum_unpack for certain
- * enumeration types, as commented after each field. Callers may fill ui_oid,
- * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
- * ID to the callback.
- *
- * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
- * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
- * hold at most ui_recxs_caps[i] recxs, which have their inline data described
- * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
- * data, then ui_sgls[i].sg_iovs[j] will be empty.
- */
-struct dss_enum_unpack_io {
-	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
-	daos_key_t		 ui_dkey;	/**< type <= DKEY */
-	daos_iod_t		*ui_iods;
-	d_iov_t			 ui_csum_iov;
-	/* punched epochs per akey */
-	daos_epoch_t		*ui_akey_punch_ephs;
-	daos_epoch_t		*ui_rec_punch_ephs;
-	daos_epoch_t		**ui_recx_ephs;
-	int			 ui_iods_cap;
-	int			 ui_iods_top;
-	int			*ui_recxs_caps;
-	/* punched epoch for object */
-	daos_epoch_t		ui_obj_punch_eph;
-	/* punched epochs for dkey */
-	daos_epoch_t		ui_dkey_punch_eph;
-	d_sg_list_t		*ui_sgls;	/**< optional */
-	uint32_t		ui_version;
-	uint32_t		ui_type;
-};
-
-typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
-
-int
-dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
-		d_sg_list_t *sgl, d_iov_t *csum, dss_enum_unpack_cb_t cb,
-		void *cb_arg);
-
 d_rank_t dss_self_rank(void);
 
 unsigned int dss_ctx_nr_get(void);
@@ -877,8 +792,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id);
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
 struct sys_db;
 typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,

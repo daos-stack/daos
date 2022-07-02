@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -339,7 +339,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 	} while (0)
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
-	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+	((sgl)->sg_iovs[iov_idx].iov_buf_len - (iov_off))
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
@@ -615,6 +615,7 @@ daos_quiet_error(int err)
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
+#define daos_rank_list_merge		d_rank_list_merge
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_shuffle		d_rank_list_shuffle
@@ -813,6 +814,7 @@ enum {
 #define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
+#define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -878,8 +880,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 }
 
 /* NVMe shared constants */
-#define DAOS_NVME_SHMID_NONE	-1
-#define DAOS_NVME_MEM_PRIMARY	0
+#define DAOS_NVME_NUMANODE_NONE		-1
+#define DAOS_NVME_MEM_PRIMARY		0
 
 /** Size of (un)expected Mercury buffers */
 #define DAOS_RPC_SIZE  (20480) /* 20KiB */

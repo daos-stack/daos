@@ -1,12 +1,13 @@
 #!/usr/bin/python
 """
-(C) Copyright 2020-2021 Intel Corporation.
+(C) Copyright 2020-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from dfuse_test_base import DfuseTestBase
-from command_utils_base import EnvironmentVariables, CommandFailure
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 
 
@@ -17,7 +18,7 @@ class VolTestBase(DfuseTestBase):
     :avocado: recursive
     """
 
-    def run_test(self, plugin_path, test_repo):
+    def run_test(self, job_manager, plugin_path, test_repo):
         """Run the HDF5 VOL testsuites.
 
         Raises:
@@ -40,25 +41,22 @@ class VolTestBase(DfuseTestBase):
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # Assign the test to run
-        self.job_manager.job = ExecutableCommand(
+        job_manager.job = ExecutableCommand(
             namespace=None, command=testname, path=test_repo,
             check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_SVCL"] = "{}".format(",".join([str(item) for item in
-                                                 self.pool.svc_ranks]))
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-        self.job_manager.assign_hosts(self.hostlist_clients)
-        self.job_manager.assign_processes(client_processes)
-        self.job_manager.assign_environment(env, True)
-        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
+        job_manager.assign_hosts(self.hostlist_clients)
+        job_manager.assign_processes(client_processes)
+        job_manager.assign_environment(env, True)
+        job_manager.working_dir.value = self.dfuse.mount_dir.value
 
         # run VOL Command
         try:
-            self.job_manager.run()
+            job_manager.run()
         except CommandFailure as _error:
-            self.fail("{} FAILED> \nException occurred: {}".format(
-                self.job_manager.job, str(_error)))
+            self.fail("{} FAILED> \nException occurred: {}".format(job_manager.job, str(_error)))

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -293,6 +293,17 @@ int
 crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec);
 
 /**
+ * Get the timeout value of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
+
+/**
  * Add reference of the RPC request.
  *
  * The typical usage is that user needs to do some asynchronous operations in
@@ -521,6 +532,17 @@ crt_sec2hlc(uint64_t sec)
  */
 uint64_t
 crt_hlc2unixnsec(uint64_t hlc);
+
+/**
+ * Return timespec from HLC
+ *
+ * \param[in]	hlc	HLC timestamp
+ * \param[out]	ts	timespec struct
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+crt_hlc2timespec(uint64_t hlc, struct timespec *ts);
 
 /**
  * Return the HLC timestamp of unixnsec in hlc.
@@ -1921,6 +1943,28 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
+/**
+ * query tgt_ep if it has registered base_opc with version using a user provided cart context.
+ *
+ * \param[in] tgt_ep           the service rank to query
+ * \param[in] base_opc         the base opcode for the protocol
+ * \param[in] ver              array of protocol version
+ * \param[in] count            number of elements in ver
+ * \param[in] cb               completion callback. crt_proto_query() internally
+ *                             sends an RPC to \a tgt_ep. \a cb will be called
+ *                             upon completion of that RPC. The highest protocol
+ *                             version supported by the target is available to
+ *                             \a cb as cb_info->pq_ver. (See \ref
+ *                             crt_proto_query_cb_t and \ref
+ *                             crt_proto_query_cb_info)
+ * \param[in,out] arg          argument for \a cb.
+ * \param[in] ctx              User provided cart context
+ *
+ * \return                     DER_SUCCESS on success, negative value on failure.
+ */
+int
+crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
 /**
  * Set self rank.
  *

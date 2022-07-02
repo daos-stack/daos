@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,9 +19,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -56,10 +56,10 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	if cmdErr != nil {
 		errStr = new(string)
 		*errStr = cmdErr.Error()
-		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
-			status = int(drpc.DaosMiscError)
+			status = int(daos.MiscError)
 		}
 	}
 
@@ -101,25 +101,16 @@ type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
 }
 
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
-}
-
 type cliOptions struct {
-	Debug      bool                    `long:"debug" description:"enable debug output"`
-	Verbose    bool                    `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool                    `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd            `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd                 `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd                   `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd               `command:"object" alias:"obj" description:"DAOS object operations"`
-	Version    versionCmd              `command:"version" description:"print daos version"`
-	DumpTopo   cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	ManPage    cmdutil.ManCmd          `command:"manpage" hidden:"true"`
+	Debug      bool           `long:"debug" description:"enable debug output"`
+	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON       bool           `long:"json" short:"j" description:"enable JSON output"`
+	Container  containerCmd   `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
+	Version    versionCmd     `command:"version" description:"print daos version"`
+	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}
@@ -175,8 +166,8 @@ or query/manage an object inside a container.`
 			}
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if daosCmd, ok := cmd.(daosCaller); ok {

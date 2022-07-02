@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -52,8 +52,10 @@ import re
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested."""
 
+
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
+
 
 LOG_LEVELS = {
     'EMIT': 1,
@@ -68,8 +70,9 @@ LOG_LEVELS = {
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
-for (name,value) in LOG_LEVELS.items():
+for (name, value) in LOG_LEVELS.items():
     LOG_NAMES[value] = name
+
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -88,6 +91,7 @@ class LogRaw():
         LogLine
         """
         return self.line
+
 
 # pylint: disable=too-many-instance-attributes
 class LogLine():
@@ -147,16 +151,14 @@ class LogLine():
             # Catch truncated log lines.
             self.trace = False
 
-        if self.trace:
-            if self.level == 7 or self.level == 3:
-                if self.fac == 'rpc' or self.fac == 'hg':
-                    del self._fields[2:5]
+        if self.trace and self.level in (7, 3) and self.fac in ('rpc', 'hg'):
+            del self._fields[2:5]
 
         if self.trace:
             fn_str = self._fields[1]
             start_idx = fn_str.find('(')
             self.function = fn_str[:start_idx]
-            desc = fn_str[start_idx+1:-1]
+            desc = fn_str[start_idx + 1:-1]
             if desc == '(nil)':
                 self.descriptor = ''
             else:
@@ -403,9 +405,10 @@ class LogLine():
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
 
+
 # pylint: disable=too-many-branches
 class StateIter():
-    """Helper class for LogIter to add a statefull iterator.
+    """Helper class for LogIter to add a state-full iterator.
 
     Implement a new iterator() for LogIter() that tracks descriptors
     and adds two new attributes, pdesc and pparent which are the local
@@ -481,8 +484,8 @@ class StateIter():
 
 # pylint: disable=too-many-branches
 
-# pylint: disable=too-few-public-methods
 
+# pylint: disable=too-few-public-methods
 class LogIter():
     """Class for parsing CaRT log files
 

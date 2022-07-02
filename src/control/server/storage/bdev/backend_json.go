@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,19 +16,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+// JSON tags should match decoding logic in src/bio/bio_config.c.
+
 const (
 	hotplugPeriod = 5 * time.Second
-)
-
-// SPDK bdev subsystem configuration method name definitions.
-const (
-	SpdkBdevSetOptions           = "bdev_set_options"
-	SpdkBdevNvmeSetOptions       = "bdev_nvme_set_options"
-	SpdkBdevNvmeAttachController = "bdev_nvme_attach_controller"
-	SpdkBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
-	SpdkVmdEnable                = "enable_vmd"
-	SpdkBdevAioCreate            = "bdev_aio_create"
-	SpdkHotplugBusidRange        = "hotplug_busid_range"
 )
 
 // SpdkSubsystemConfigParams is an interface that defines an object that
@@ -37,13 +28,13 @@ type SpdkSubsystemConfigParams interface {
 	isSpdkSubsystemConfigParams()
 }
 
-// SpdkDaosConfigParams is an interface that defines an object that
+// DaosConfigParams is an interface that defines an object that
 // contains details for a DAOS configuration method.
-type SpdkDaosConfigParams interface {
-	isSpdkDaosConfigParams()
+type DaosConfigParams interface {
+	isDaosConfigParams()
 }
 
-// SetOptionsParams specifies details for a SpdkBdevSetOptions method.
+// SetOptionsParams specifies details for a storage.ConfBdevSetOptions method.
 type SetOptionsParams struct {
 	BdevIoPoolSize  uint64 `json:"bdev_io_pool_size"`
 	BdevIoCacheSize uint64 `json:"bdev_io_cache_size"`
@@ -51,7 +42,7 @@ type SetOptionsParams struct {
 
 func (sop SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
-// NvmeSetOptionsParams specifies details for a SpdkBdevNvmeSetOptions method.
+// NvmeSetOptionsParams specifies details for a storage.ConfBdevNvmeSetOptions method.
 type NvmeSetOptionsParams struct {
 	RetryCount               uint32 `json:"retry_count"`
 	TimeoutUsec              uint64 `json:"timeout_us"`
@@ -62,7 +53,7 @@ type NvmeSetOptionsParams struct {
 
 func (nsop NvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
 
-// NvmeAttachControllerParams specifies details for a SpdkBdevNvmeAttachController
+// NvmeAttachControllerParams specifies details for a storage.ConfBdevNvmeAttachController
 // method.
 type NvmeAttachControllerParams struct {
 	TransportType    string `json:"trtype"`
@@ -72,7 +63,7 @@ type NvmeAttachControllerParams struct {
 
 func (napp NvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
 
-// NvmeSetHotplugParams specifies details for a SpdkBdevNvmeSetHotplug method.
+// NvmeSetHotplugParams specifies details for a storage.ConfBdevNvmeSetHotplug method.
 type NvmeSetHotplugParams struct {
 	Enable     bool   `json:"enable"`
 	PeriodUsec uint64 `json:"period_us"`
@@ -80,12 +71,12 @@ type NvmeSetHotplugParams struct {
 
 func (nshp NvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
 
-// VmdEnableParams specifies details for a SpdkVmdEnable method.
+// VmdEnableParams specifies details for a storage.ConfVmdEnable method.
 type VmdEnableParams struct{}
 
 func (vep VmdEnableParams) isSpdkSubsystemConfigParams() {}
 
-// AioCreateParams specifies details for a SpdkAioCreate method.
+// AioCreateParams specifies details for a storage.ConfAioCreate method.
 type AioCreateParams struct {
 	BlockSize  uint64 `json:"block_size"`
 	DeviceName string `json:"name"`
@@ -94,13 +85,18 @@ type AioCreateParams struct {
 
 func (acp AioCreateParams) isSpdkSubsystemConfigParams() {}
 
-// HotplugBusidRangeParams specifies details for a SpdkHotplugBusidRange method.
+// HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
 	Begin uint8 `json:"begin"`
 	End   uint8 `json:"end"`
 }
 
-func (hbrp HotplugBusidRangeParams) isSpdkDaosConfigParams() {}
+func (hbrp HotplugBusidRangeParams) isDaosConfigParams() {}
+
+// AccelPropsParams specifies details for a storage.ConfSetAccelProps method.
+type AccelPropsParams storage.AccelProps
+
+func (app AccelPropsParams) isDaosConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -114,35 +110,36 @@ type SpdkSubsystem struct {
 	Configs []*SpdkSubsystemConfig `json:"config"`
 }
 
-// SpdkDaosConfig entries apply to the SpdkDaos entry.
-type SpdkDaosConfig struct {
-	Params SpdkDaosConfigParams `json:"params"`
-	Method string               `json:"method"`
+// DaosConfig entries apply to the DAOS entry.
+type DaosConfig struct {
+	Params DaosConfigParams `json:"params"`
+	Method string           `json:"method"`
 }
 
-// SpdkDaos entries make up the DaosData field of a SpdkConfig.
-type SpdkDaos struct {
-	Configs []*SpdkDaosConfig `json:"config"`
+// DaosData entries contain a number of DaosConfig entries and make up
+// the DaosData field of a SpdkConfig.
+type DaosData struct {
+	Configs []*DaosConfig `json:"config"`
 }
 
 // SpdkConfig is used to indicate which devices are to be used by SPDK and the
 // desired behavior of SPDK subsystems.
 type SpdkConfig struct {
-	DaosData   *SpdkDaos        `json:"daos_data"`
+	DaosData   *DaosData        `json:"daos_data"`
 	Subsystems []*SpdkSubsystem `json:"subsystems"`
 }
 
 func defaultSpdkConfig() *SpdkConfig {
 	bdevSubsystemConfigs := []*SpdkSubsystemConfig{
 		{
-			Method: SpdkBdevSetOptions,
+			Method: storage.ConfBdevSetOptions,
 			Params: SetOptionsParams{
 				BdevIoPoolSize:  humanize.KiByte * 64,
 				BdevIoCacheSize: 256,
 			},
 		},
 		{
-			Method: SpdkBdevNvmeSetOptions,
+			Method: storage.ConfBdevNvmeSetOptions,
 			Params: NvmeSetOptionsParams{
 				RetryCount:               4,
 				NvmeAdminqPollPeriodUsec: 100 * 1000,
@@ -150,7 +147,7 @@ func defaultSpdkConfig() *SpdkConfig {
 			},
 		},
 		{
-			Method: SpdkBdevNvmeSetHotplug,
+			Method: storage.ConfBdevNvmeSetHotplug,
 			Params: NvmeSetHotplugParams{},
 		},
 	}
@@ -162,8 +159,8 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 	}
 
-	daosData := &SpdkDaos{
-		Configs: make([]*SpdkDaosConfig, 0),
+	daosData := &DaosData{
+		Configs: make([]*DaosConfig, 0),
 	}
 
 	return &SpdkConfig{
@@ -176,7 +173,7 @@ type configMethodGetter func(string, string) *SpdkSubsystemConfig
 
 func getNvmeAttachMethod(name, pci string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
-		Method: SpdkBdevNvmeAttachController,
+		Method: storage.ConfBdevNvmeAttachController,
 		Params: NvmeAttachControllerParams{
 			TransportType:    "PCIe",
 			DeviceName:       fmt.Sprintf("Nvme_%s", name),
@@ -187,7 +184,7 @@ func getNvmeAttachMethod(name, pci string) *SpdkSubsystemConfig {
 
 func getAioFileCreateMethod(name, path string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
-		Method: SpdkBdevAioCreate,
+		Method: storage.ConfBdevAioCreate,
 		Params: AioCreateParams{
 			DeviceName: fmt.Sprintf("AIO_%s", name),
 			Filename:   path,
@@ -198,7 +195,7 @@ func getAioFileCreateMethod(name, path string) *SpdkSubsystemConfig {
 
 func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	return &SpdkSubsystemConfig{
-		Method: SpdkBdevAioCreate,
+		Method: storage.ConfBdevAioCreate,
 		Params: AioCreateParams{
 			DeviceName: fmt.Sprintf("AIO_%s", name),
 			Filename:   path,
@@ -219,7 +216,7 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 			f = getAioKdevCreateMethod
 		}
 
-		for index, dev := range tier.DeviceList {
+		for index, dev := range tier.DeviceList.Devices() {
 			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
 			sscs = append(sscs, f(name, dev))
 		}
@@ -234,7 +231,7 @@ func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 		Name: "vmd",
 		Configs: []*SpdkSubsystemConfig{
 			{
-				Method: SpdkVmdEnable,
+				Method: storage.ConfVmdEnable,
 				Params: VmdEnableParams{},
 			},
 		},
@@ -260,6 +257,31 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
+// Add hotplug bus-ID range to DAOS config data for use by non-SPDK consumers in
+// engine e.g. BIO or VOS.
+func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	data.Configs = append(data.Configs, &DaosConfig{
+		Method: storage.ConfSetHotplugBusidRange,
+		Params: HotplugBusidRangeParams{
+			Begin: req.HotplugBusidBegin,
+			End:   req.HotplugBusidEnd,
+		},
+	})
+}
+
+// Add acceleration engine properties to DAOS config data if non-native implementation
+// has been selected in config file.
+func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	props := req.AccelProps
+	// Add config if acceleration engine and options have been selected.
+	if props.Engine != storage.AccelEngineNone && !props.Options.IsEmpty() {
+		data.Configs = append(data.Configs, &DaosConfig{
+			Method: storage.ConfSetAccelProps,
+			Params: AccelPropsParams(props),
+		})
+	}
+}
+
 func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
@@ -278,32 +300,24 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 			if ss.Name != "bdev" {
 				continue
 			}
-
 			for _, bsc := range ss.Configs {
-				if bsc.Method == SpdkBdevNvmeSetHotplug {
+				if bsc.Method == storage.ConfBdevNvmeSetHotplug {
 					bsc.Params = NvmeSetHotplugParams{
 						Enable:     true,
 						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
 					}
 					found = true
-
 					break
 				}
 			}
-
 			if found {
 				break
 			}
 		}
-
-		sc.DaosData.Configs = append(sc.DaosData.Configs, &SpdkDaosConfig{
-			Method: SpdkHotplugBusidRange,
-			Params: HotplugBusidRangeParams{
-				Begin: req.HotplugBusidBegin,
-				End:   req.HotplugBusidEnd,
-			},
-		})
+		hotplugPropSet(req, sc.DaosData)
 	}
+
+	accelPropSet(req, sc.DaosData)
 
 	return sc.WithBdevConfigs(log, req), nil
 }

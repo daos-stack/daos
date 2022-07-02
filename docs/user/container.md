@@ -166,7 +166,7 @@ Access Control List   A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
 Additionally, a container's properties may be retrieved using the
 libdaos API `daos_cont_query()` function. Refer to the file
 src/include/daos\_cont.h Doxygen comments and the online documentation
-available [here](https://daos-stack.github.io/html/).
+available [here](https://docs.daos.io/v2.2/doxygen/html/).
 
 ### Changing Properties
 
@@ -278,6 +278,41 @@ fully supported yet:
 | encryption              | Yes             | Inline encryption off, or algorithm to use (XTS[128,256], CBC[128,192,256] or GCM[128,256])|
 
 Please refer to the next sections for more details on each property.
+
+### Container Type
+
+A DAOS container type denotes a specific storage middleware, which implements
+its own data layout on top of the main DAOS API that is provided through `libdaos`.
+Container types are specified through the immutable `layout_type` container property.
+Within each container type, the `layout_version` property provides a mechanism for
+versioning - usage of this version number is determined by the respective middleware.
+
+Some container layouts are defined as part of the main DAOS project.
+The best-known example is the `POSIX` container type that is used to implement the
+[DAOS File System (DFS)](filesystem.md) layout with files and directories.
+Other container layouts are created by various user communities that are
+implementing their own domain-specific storage middleware on top of DAOS.
+
+The known DAOS container types are maintained as an enumerated list in the
+[`daos_prop.h`](https://github.com/daos-stack/daos/blob/master/src/include/daos_prop.h#L284)
+header file. The following container types are currently defined,
+and can be used with the `daos cont create --type` command option:
+
+| **Container Type** | **Description** |
+| ------------------ | --------------- |
+| UNKNOWN            | No container type was specified at container create time, or the specified container type is unknown. |
+| POSIX              | [DAOS Filesystem (DFS)](filesystem.md), also used with dfuse and by the [MPI-IO DAOS backend](mpi-io.md). |
+| HDF5               | [HDF5 DAOS VOL connector](hdf5.md), maintained by [The HDF Group](https://www.hdfgroup.org/?s=DAOS). |
+| PYTHON             | [PyDAOS](python.md) container format. |
+| SPARK              | A specific layout for [Apache Spark](spark.md) shuffle. |
+| DATABASE           | SQL Database, used by an experimental DAOS interface to MariaDB. |
+| ROOT               | ROOT/RNTuple format, maintained by [CERN](https://root.cern.ch/). |
+| SEISMIC            | DAOS Seismic Graph, aka SEG-Y, maintained by the [segy-daos](https://github.com/daos-stack/segy-daos) project. |
+| METEO              | Meteorology, aka Fields Database (FDB), maintained by [ECMWF](https://www.ecmwf.int/search/site/FDB). |
+
+To register a new DAOS container type (represented as an integer number and a
+corresponding `DAOS_PROP_CO_LAYOUT_*` mnemonic name for that integer in the
+`daos_prop.h` header), please get in touch with the DAOS engineering team.
 
 ### Redundancy Factor
 
@@ -539,7 +574,7 @@ Attributes for container mycont:
 ## Access Control Lists
 
 Client user and group access for containers is controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.2/overview/security/#access-control-lists).
 
 Access-controlled container accesses include:
 
@@ -563,7 +598,7 @@ Access-controlled container accesses include:
 
 
 This is reflected in the set of supported
-[container permissions](https://daos-stack.github.io/overview/security/#permissions).
+[container permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
 
 ### Pool vs. Container Permissions
 
@@ -595,7 +630,7 @@ $ daos cont create $DAOS_POOL --label $DAOS_CONT --acl-file=<path>
 ```
 
 The ACL file format is detailed in the
-[security overview](https://daos-stack.github.io/overview/security/#acl-file).
+[security overview](https://docs.daos.io/v2.2/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -648,7 +683,7 @@ $ daos cont delete-acl $DAOS_POOL $DAOS_CONT --principal=<principal>
 ```
 
 The `principal` argument refers to the
-[principal](https://daos-stack.github.io/overview/security/#principal), or
+[principal](https://docs.daos.io/v2.2/overview/security/#principal), or
 identity, of the entry to be removed.
 
 For the delete operation, the `principal` argument must be formatted as follows:
@@ -684,7 +719,7 @@ The owner-user will always have the following implicit capabilities:
 
 Because the owner's special permissions are implicit, they do not need to be
 specified in the `OWNER@` entry. After
-[determining](https://daos-stack.github.io/overview/security/#enforcement)
+[determining](https://docs.daos.io/v2.2/overview/security/#enforcement)
 the user's privileges from the container ACL, DAOS checks whether the user
 requesting access is the owner-user. If so, DAOS grants the owner's
 implicit permissions to that user, in addition to any permissions granted by
@@ -704,7 +739,7 @@ $ daos cont create $DAOS_POOL --label $DAOS_CONT --user=<owner-user> --group=<ow
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).
 
 #### Changing Ownership
 
@@ -721,4 +756,4 @@ $ daos cont set-owner $DAOS_POOL $DAOS_CONT --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).

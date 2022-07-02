@@ -7,6 +7,8 @@ provider: ofi+verbs
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 
+telemetry_port: 9191
+
 ## Transport Credentials Specifying certificates to secure communications
 ##
 #transport_config:
@@ -23,42 +25,42 @@ control_log_file: /tmp/daos_server.log
 #  key: /etc/daos/certs/server.key
 
 engines:
--
-  targets: 16               # number of I/O service threads per-engine
-  pinned_numa_node: 0
-  nr_xs_helpers: 4          # count of I/O offload threads per engine
-  fabric_iface: ib0
-  fabric_iface_port: 31416
-  log_mask: ERR
-  log_file: /tmp/daos_engine.0.log
+  -
+    targets: 16               # number of I/O service threads per-engine
+    pinned_numa_node: 0
+    nr_xs_helpers: 4          # count of I/O offload threads per engine
+    fabric_iface: ib0
+    fabric_iface_port: 31416
+    log_mask: ERR
+    log_file: /tmp/daos_engine.0.log
 
-  # Storage definitions (one per tier)
-  storage:
+    # Storage definitions (one per tier)
+    storage:
+      -
+        # When class is set to dcpm, scm_list is the list of device paths for
+        # PMem namespaces (currently only one per engine supported).
+        class: dcpm
+        scm_list: [/dev/pmem0]
+        scm_mount: /mnt/daos0
+      -
+        # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
+        # engine with -n <path>).
+        class: nvme
+        bdev_list: ["0000:81:00.0"]
   -
-    # When class is set to dcpm, scm_list is the list of device paths for
-    # PMem namespaces (currently only one per engine supported).
-    class: dcpm
-    scm_list: [/dev/pmem0]
-    scm_mount: /mnt/daos0
-  -
-    # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-    # engine with -n <path>).
-    class: nvme
-    bdev_list: ["0000:81:00.0"]
--
-  targets: 16               # number of I/O service threads per-engine
-  pinned_numa_node: 1
-  nr_xs_helpers: 4          # count of I/O offload threads per engine
-  fabric_iface: ib1
-  fabric_iface_port: 32416
-  log_mask: ERR
-  log_file: /tmp/daos_engine.1.log
+    targets: 16               # number of I/O service threads per-engine
+    pinned_numa_node: 1
+    nr_xs_helpers: 4          # count of I/O offload threads per engine
+    fabric_iface: ib1
+    fabric_iface_port: 32416
+    log_mask: ERR
+    log_file: /tmp/daos_engine.1.log
 
-  storage:
-  -
-    class: dcpm
-    scm_list: [/dev/pmem1]
-    scm_mount: /mnt/daos1
-  -
-    class: nvme
-    bdev_list: ["0000:82:00.0"]
+    storage:
+      -
+        class: dcpm
+        scm_list: [/dev/pmem1]
+        scm_mount: /mnt/daos1
+      -
+        class: nvme
+        bdev_list: ["0000:82:00.0"]

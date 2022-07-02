@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,12 +11,9 @@ from ClusterShell.NodeSet import NodeSet
 
 from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
+from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 from general_utils import pcmd, get_random_string
-from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
-from test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
@@ -59,21 +56,41 @@ class IorTestBase(DfuseTestBase):
         # Get the pool params and create a pool
         self.add_pool(connect=False)
 
-    def create_cont(self):
+    def create_cont(self, chunk_size=None, properties=None):
         """Create a TestContainer object to be used to create container.
 
-        """
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
+        Args:
+            chunk_size (str, optional): container chunk size. Defaults to None.
+            properties (str, optional): additional properties to append. Defaults to None.
+        Returns:
+            TestContainer: the created container.
 
-        # update container oclass
+        """
+        params = {}
+
+        # Set container oclass to match ior oclass
         if self.ior_cmd.dfs_oclass:
-            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+            params["oclass"] = self.ior_cmd.dfs_oclass.value
+
+        # update container chunk size
+        if chunk_size is not None:
+            params["chunk_size"] = chunk_size
+
+        # create container from params
+        self.container = self.get_container(self.pool, create=False, **params)
+
+        # append container properties
+        if properties is not None:
+            current_properties = self.container.properties.value
+            if current_properties:
+                new_properties = current_properties + "," + properties
+            else:
+                new_properties = properties
+            self.container.properties.update(new_properties)
 
         # create container
         self.container.create()
+        return self.container
 
     def display_pool_space(self, pool=None):
         """Display the current pool space.
@@ -92,7 +109,7 @@ class IorTestBase(DfuseTestBase):
         if pool.dmg:
             pool.set_query_data()
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
+    def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
                           test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
@@ -105,7 +122,9 @@ class IorTestBase(DfuseTestBase):
 
         Args:
             intercept (str, optional): path to the interception library. Shall
-                    be used only for POSIX through DFUSE. Defaults to None.
+                be used only for POSIX through DFUSE. Defaults to None.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
@@ -119,8 +138,9 @@ class IorTestBase(DfuseTestBase):
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Default is False.
             mount_dir (str, optional): Create specific mount point
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None
@@ -156,7 +176,8 @@ class IorTestBase(DfuseTestBase):
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
-                               intercept, plugin_path=plugin_path,
+                               intercept=intercept,
+                               display_space=display_space, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
@@ -184,31 +205,14 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_ior_job_manager_command(self, custom_ior_cmd=None):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
-        Args:
-            custom_ior_cmd (IorCommand): Custom IorCommand instance to create
-            job_manager with.
-
         Returns:
-            str: the path for the mpi job manager command
+            JobManager: the mpi job manager object
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
-        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS", "HDF5"]:
-            mpio_util = MpioUtils()
-            if mpio_util.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
-        else:
-            self.fail("Unsupported IOR API")
-
-        if custom_ior_cmd:
-            self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
-        else:
-            self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
-
-        return self.job_manager
+        return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
@@ -238,8 +242,9 @@ class IorTestBase(DfuseTestBase):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Defaults is False.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
@@ -251,13 +256,14 @@ class IorTestBase(DfuseTestBase):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            env['D_LOG_MASK'] = 'INFO'
-            if env.get('D_IL_REPORT', None) is None:
+            if 'D_LOG_MASK' not in env:
+                env['D_LOG_MASK'] = 'INFO'
+            if 'D_IL_REPORT' not in env:
                 env['D_IL_REPORT'] = '1'
 
-            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-            #env['DD_MASK'] = 'all'
-            #env['DD_SUBSYS'] = 'all'
+            # env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            # env['DD_MASK'] = 'all'
+            # env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -283,7 +289,9 @@ class IorTestBase(DfuseTestBase):
             if self.subprocess:
                 return out
 
-            if fail_on_warning:
+            if callable(fail_on_warning):
+                report_warning = fail_on_warning
+            elif fail_on_warning:
                 report_warning = self.fail
             else:
                 report_warning = self.log.warning
@@ -302,6 +310,8 @@ class IorTestBase(DfuseTestBase):
         finally:
             if not self.subprocess and display_space:
                 self.display_pool_space(pool)
+
+        return None
 
     def stop_ior(self):
         """Stop IOR process.
@@ -421,7 +431,7 @@ class IorTestBase(DfuseTestBase):
         ior_command.test_file.update(testfile)
 
         # Get the custom job manager that's associated with this thread.
-        manager = self.get_ior_job_manager_command(custom_ior_cmd=ior_command)
+        manager = get_job_manager(self, "Mpirun", ior_command, self.subprocess, "mpich")
 
         procs = (self.processes // len(self.hostlist_clients)) * len(clients)
         env = ior_command.get_default_env(str(manager), self.client_log)
@@ -457,7 +467,7 @@ class IorTestBase(DfuseTestBase):
                                        and block sizes. eg: [1M, 32M]
                                        1M is transfer size and 32M is
                                        block size in the above example.
-            flags(list): list of ior flags
+            flags(list): list of ior flags. Only the first index is used
             mount_dir(str): dfuse mount directory
         """
         results = []
@@ -465,17 +475,18 @@ class IorTestBase(DfuseTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
+                hdf5_plugin_path = None
+                intercept = None
+                flags_w = flags[0]
                 if api == "HDF5-VOL":
-                    self.ior_cmd.api.update("HDF5")
-                    hdf5_plugin_path = self.params.get(
-                        "plugin_path", '/run/hdf5_vol/*')
-                    flags_w_k = " ".join([flags[0]] + ["-k"])
-                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
-                else:
-                    # run tests for different variants
-                    self.ior_cmd.flags.update(flags[0], "ior.flags")
-                    hdf5_plugin_path = None
-                    self.ior_cmd.api.update(api)
+                    api = "HDF5"
+                    hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+                    flags_w += " -k"
+                elif api == "POSIX+IL":
+                    api = "POSIX"
+                    intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                self.ior_cmd.flags.update(flags_w, "ior.flags")
+                self.ior_cmd.api.update(api)
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
@@ -483,13 +494,12 @@ class IorTestBase(DfuseTestBase):
                     # run ior
                     try:
                         self.run_ior_with_pool(
-                            plugin_path=hdf5_plugin_path, timeout=self.ior_timeout,
-                            mount_dir=mount_dir)
+                            intercept=intercept, plugin_path=hdf5_plugin_path,
+                            timeout=self.ior_timeout, mount_dir=mount_dir)
                         results.append(["PASS", str(self.ior_cmd)])
                     except CommandFailure:
                         results.append(["FAIL", str(self.ior_cmd)])
         return results
-
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.

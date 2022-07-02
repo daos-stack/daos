@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,6 +68,8 @@ message BioHealthResp {
 	uint64 pll_lock_loss_cnt = 43;
 	uint64 nand_bytes_written = 44;
 	uint64 host_bytes_written = 45;
+	// Engine configs properties
+	uint64 cluster_size = 46; // blobstore cluster size in bytes
 }
 
 message SmdDevReq {
@@ -80,7 +82,7 @@ message SmdDevResp {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
 		string tr_addr = 4; // Transport address of blobstore
-		uint32 dev_state = 5; // NVMe device state
+		string dev_state = 5; // NVMe device state
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -107,7 +109,7 @@ message DevStateResp {
 	reserved 3;
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	uint32 dev_state = 4; // NVMe device state
+	string dev_state = 4; // NVMe device state
 }
 
 message DevReplaceReq {
@@ -120,7 +122,7 @@ message DevReplaceResp {
 	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	uint32 dev_state = 4; // NVMe device state
+	string dev_state = 4; // NVMe device state
 }
 
 message DevIdentifyReq {
@@ -132,7 +134,7 @@ message DevIdentifyResp {
 	reserved "led_state";
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of VMD uuid
-	uint32 dev_state = 4; // NVMe device state
+	string dev_state = 4; // NVMe device state
 }
 
 message SmdQueryReq {
@@ -159,7 +161,7 @@ message SmdQueryResp {
 		repeated int32 tgt_ids = 2; // VOS target IDs
 		string tr_addr = 4; // Transport address of blobstore
 		BioHealthResp health = 5; // optional BIO health
-		uint32 dev_state = 6; // NVMe device state
+		string dev_state = 6; // NVMe device state
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool

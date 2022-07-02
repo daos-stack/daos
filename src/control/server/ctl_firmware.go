@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,7 +48,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 }
 
 func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.storage.Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
+	queryResp, err := svc.storage.QueryScmFirmware(storage.ScmFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceUIDs:  pbReq.DeviceIDs,
@@ -137,7 +137,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 }
 
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.storage.Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
+	updateResp, err := svc.storage.UpdateScmFirmware(storage.ScmFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

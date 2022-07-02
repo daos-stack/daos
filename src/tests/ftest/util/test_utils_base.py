@@ -1,11 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 from time import sleep
+from threading import Lock
 
 from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
@@ -152,18 +153,18 @@ class TestDaosApiBase(ObjectWithParameters):
             # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in list(comparisons.items()):
+                comparisons = [
+                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
+                    ["<", (lambda x, y: x < y, "is too large")],
+                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
+                    [">", (lambda x, y: x > y, "is too small")],
+                ]
+                for comparison in comparisons:
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value
+                    key = comparison[0]
+                    val = comparison[1]
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]
@@ -183,3 +184,50 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+
+class LabelGenerator():
+    # pylint: disable=too-few-public-methods
+    """Generates label used for pools and containers."""
+
+    def __init__(self, base_label=None, value=1):
+        """Constructor.
+
+        Args:
+            base_label (str, optional): Default label prefix. Don't include space.
+                Default is None.
+            value (int, optional): Number that's attached after the base_label.
+                Default is 1.
+
+        """
+        self.base_label = base_label
+        self.value = value
+        self._lock = Lock()
+
+    def _next_value(self):
+        """Get the next value. Thread-safe.
+
+        Returns:
+            int: the next value.
+
+        """
+        with self._lock:
+            value = self.value
+            self.value += 1
+            return value
+
+    def get_label(self, base_label=None):
+        """Create a label by adding number after the given base_label.
+
+        Args:
+            base_label (str, optional): Label prefix. Don't include space.
+                Default is self.base_label.
+
+        Returns:
+            str: Created label.
+
+        """
+        base_label = base_label or self.base_label
+        if base_label is None:
+            return None
+        return "_".join([base_label, str(self._next_value())])

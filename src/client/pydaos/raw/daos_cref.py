@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,22 +44,13 @@ class EpochRange(ctypes.Structure):
                 ("epr_hi", ctypes.c_uint64)]
 
 
-class TargetInfo(ctypes.Structure):
-    """ Represents info about a given target
-    Represents struct: daos_target_info_t"""
-    _fields_ = [("ta_type", ctypes.c_uint),
-                ("ta_state", ctypes.c_uint),
-                ("ta_perf", ctypes.c_int),
-                ("ta_space", ctypes.c_int)]
-
-
 class RebuildStatus(ctypes.Structure):
     """ Structure to represent rebuild status info
     Represents struct: daos_rebuild_status"""
     _fields_ = [("rs_version", ctypes.c_uint32),
                 ("rs_seconds", ctypes.c_uint32),
                 ("rs_errno", ctypes.c_uint32),
-                ("rs_done", ctypes.c_uint32),
+                ("rs_state", ctypes.c_uint32),
                 ("rs_padding32", ctypes.c_uint32),
                 ("rs_fail_rank", ctypes.c_uint32),
                 ("rs_toberb_obj_nr", ctypes.c_uint64),
@@ -80,6 +70,15 @@ class Daos_Space(ctypes.Structure):
     Represents struct: daos_space"""
     _fields_ = [("s_total", ctypes.c_uint64 * 2),
                 ("s_free", ctypes.c_uint64 * 2)]
+
+
+class TargetInfo(ctypes.Structure):
+    """ Represents info about a given target
+    Represents struct: daos_target_info_t"""
+    _fields_ = [("ta_type", ctypes.c_uint),
+                ("ta_state", ctypes.c_uint),
+                ("ta_perf", ctypes.c_int),
+                ("ta_space", Daos_Space)]
 
 
 class PoolSpace(ctypes.Structure):
@@ -110,7 +109,8 @@ class PoolInfo(ctypes.Structure):
 class DaosPropertyEntry(ctypes.Structure):
     """Represents struct: daos_prop_entry """
     _fields_ = [("dpe_type", ctypes.c_uint32),
-                ("dpe_reserv", ctypes.c_uint32),
+                ("dpe_flags", ctypes.c_uint16),
+                ("dpe_reserv", ctypes.c_uint16),
                 ("dpe_val", ctypes.c_uint64)]
 
 
@@ -129,7 +129,8 @@ class DaosProperty(ctypes.Structure):
         self.dpp_reserv = 0
         for num in range(0, num_structs):
             self.dpp_entries[num].dpe_type = ctypes.c_uint32(0)
-            self.dpp_entries[num].dpe_reserv = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_flags = ctypes.c_uint16(0)
+            self.dpp_entries[num].dpe_reserv = ctypes.c_uint16(0)
             self.dpp_entries[num].dpe_val = ctypes.c_uint64(0)
 
 
@@ -146,7 +147,7 @@ class ContInfo(ctypes.Structure):
 class DaosEvent(ctypes.Structure):
     """Represents struct: daos_event_t"""
     _fields_ = [("ev_error", ctypes.c_int),
-                ("ev_private", ctypes.c_ulonglong * 19),
+                ("ev_private", ctypes.c_ulonglong * 20),
                 ("ev_debug", ctypes.c_ulonglong)]
 
 

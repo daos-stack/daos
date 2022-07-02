@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -329,6 +329,9 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, num_attach_retries, true, true);
 
+	if (D_ON_VALGRIND)
+		crtu_set_shutdown_delay(5);
+
 	rc = d_log_init();
 	assert(rc == 0);
 
@@ -539,7 +542,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
-				 NUM_SERVER_CTX, 10, 100.0);
+				 NUM_SERVER_CTX, 50, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);

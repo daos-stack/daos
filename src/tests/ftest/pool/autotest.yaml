@@ -1,0 +1,27 @@
+hosts:
+  servers: !mux
+    1_server:
+      test_servers:
+        - server-A
+    3_servers:
+      test_servers:
+        - server-A
+        - server-B
+        - server-C
+  test_clients:
+    - client-A
+timeout: 600
+setup:
+  start_servers_once: False
+server_config:
+  name: daos_server
+  servers:
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a"]
+pool:
+  mode: 146
+  size: 90%
+  tier_ratio: 6
+  control_method: dmg

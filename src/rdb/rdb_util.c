@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -371,7 +371,8 @@ rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, dao
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rc = vos_obj_query_key(cont, uoid, DAOS_GET_AKEY|DAOS_GET_MAX, epoch, &rdb_dkey, akey,
-			       NULL /* recx */, 0 /* cell sz */, 0 /* stripe sz */, NULL /* dth */);
+			       NULL /* recx */, NULL /* max_write */, 0 /* cell sz */,
+			       0 /* stripe sz */, NULL /* dth */);
 	if (rc != 0) {
 		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
 			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,
@@ -493,7 +494,7 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		}
 
 		/* Move to next a-key. */
-		rc = vos_iter_next(iter);
+		rc = vos_iter_next(iter, NULL /* anchor */);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
 				/* No more a-keys. */
@@ -587,4 +588,3 @@ rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp)
 
 	return 0;
 }
-

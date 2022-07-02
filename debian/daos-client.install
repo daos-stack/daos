@@ -1,6 +1,5 @@
 usr/bin/cart_ctl
 usr/bin/self_test
-usr/bin/dmg
 usr/bin/daos_agent
 usr/bin/dfuse
 usr/bin/daos
@@ -9,17 +8,13 @@ usr/lib64/daos/API_VERSION
 usr/lib64/libduns.so
 usr/lib64/libdfuse.so
 usr/lib64/libioil.so
-usr/lib64/libdaos_common.so
 usr/lib64/libdaos.so.*
-usr/lib64/libdfs_internal.so
 usr/lib64/libdaos_cmd_hdlrs.so
 usr/lib64/python3.8/site-packages/pydaos/*.py
 usr/lib64/python3.8/site-packages/pydaos/pydaos_shim.so
 usr/lib64/python3.8/site-packages/pydaos/raw/*.py
 usr/share/daos/ioil-ld-opts
 etc/daos/daos_agent.yml
-etc/daos/daos_control.yml
 usr/lib/systemd/system/daos_agent.service
 usr/share/man/man8/daos.8*
-usr/share/man/man8/dmg.8*
 usr/bin/cart_ctl

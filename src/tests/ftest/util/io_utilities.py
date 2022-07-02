@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -113,19 +113,19 @@ class DirTree():
                 "{0} object is not initialized".format(
                     self.__class__.__name__))
 
-        needle_path = random.choice(self._needles_paths) #nosec
+        needle_path = random.choice(self._needles_paths)  # nosec
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
 
-    def set_logger(self, fn):
+    def set_logger(self, function):
         """
         Set the function that will be used to print log messages.
         If this value is not set, it will work silently.
 
         Parameters:
-            fn (function): Function to be used for logging.
+            function (function): Function to be used for logging.
         """
-        self._logger = fn
+        self._logger = function
 
     def _log(self, msg):
         """If logger function is set, print log messages"""
@@ -161,7 +161,7 @@ class DirTree():
             return
 
         for count in range(self._needles_count):
-            new_path = os.path.dirname(random.choice(self._needles_paths)) #nosec
+            new_path = os.path.dirname(random.choice(self._needles_paths))  # nosec
             suffix = "_{:05d}.needle".format(count)
             fd, _ = tempfile.mkstemp(
                 dir=new_path, prefix=self._needles_prefix, suffix=suffix)
@@ -237,7 +237,6 @@ def write_until_full(container):
     """
     total_written = 0
     size = 2048
-    _oid = None
 
     try:
         while True:
@@ -246,7 +245,7 @@ def write_until_full(container):
             akey = get_random_bytes(5)
             data = get_random_bytes(size)
 
-            _oid = container.write_an_obj(data, size, dkey, akey)
+            container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the committed epochs
@@ -277,7 +276,6 @@ def write_quantity(container, size_in_bytes):
     """
     total_written = 0
     size = 2048
-    _oid = None
 
     try:
         while total_written < size_in_bytes:
@@ -287,7 +285,7 @@ def write_quantity(container, size_in_bytes):
             akey = get_random_bytes(5)
             data = get_random_bytes(size)
 
-            _oid = container.write_an_obj(data, size, dkey, akey)
+            container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the committed epochs

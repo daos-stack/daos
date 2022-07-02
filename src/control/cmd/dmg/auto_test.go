@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -162,14 +162,16 @@ engines:
   fabric_iface_port: 32416
   pinned_numa_node: 1
 disable_vfio: false
-enable_vmd: false
+disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
+disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 helper_log_file: ""
 firmware_helper_log_file: ""
 fault_path: ""
+core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs
@@ -195,12 +197,12 @@ hyperthreads: false
 				WithPinnedNumaNode(0).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem0").
 						WithScmMountPoint("/mnt/daos0"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2, 3)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
@@ -216,12 +218,12 @@ hyperthreads: false
 				WithPinnedNumaNode(1).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem1").
 						WithScmMountPoint("/mnt/daos1"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 				WithStorageVosEnv("NVME").

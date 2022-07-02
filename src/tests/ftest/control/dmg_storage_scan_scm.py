@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from general_utils import pcmd, run_pcmd
-from apricot import TestWithServers
 from control_test_base import ControlTestBase
 
 
@@ -18,7 +17,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     (TR-1.0.34) admin can use daos_shell to collect information and create yaml
     file by himself. This means that daos_shell allows to list:
     SCM module and NVMe SSDs with NUMA affinity
-    network adaptor with NUMA affinity
+    network adapter with NUMA affinity
 
     This test focuses on the correctness of SCM info obtained by dmg storage
     scan (so that the admin can create a yaml file correctly). First, it

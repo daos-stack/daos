@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1360,6 +1360,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	}
 	D_ASSERT(addr - (void *)dst_tree <= size);
 	D_DEBUG(DB_TRACE, "Merged all components\n");
+
+	/* Update the total target number for the root */
+	dst_tree->do_target_nr = cntr.cc_targets;
+
 	/* At this point, I only have valid children pointers for the last
 	 * layer domains, and need to build target pointers for all layers.
 	 */
@@ -2214,7 +2218,7 @@ struct pmap_fail_ver {
 struct pmap_fail_node {
 	struct pmap_fail_ver	 pf_ver_inline[PMAP_FAIL_INLINE_NR];
 	struct pmap_fail_ver	*pf_vers;
-	uint32_t		 pf_co_rank;
+	uint32_t		 pf_co_id;
 	uint32_t		 pf_ver_total;	/* capacity of pf_vers array */
 	uint32_t		 pf_ver_nr;	/* #valid items */
 	uint32_t		 pf_down:1,	/* with DOWN tgt */
@@ -2239,11 +2243,10 @@ struct pmap_fail_stat {
 static void
 pmap_fail_node_init(struct pmap_fail_node *fnode)
 {
+	memset(fnode, 0, sizeof(*fnode));
 	fnode->pf_vers = fnode->pf_ver_inline;
 	fnode->pf_ver_total = PMAP_FAIL_INLINE_NR;
 	fnode->pf_ver_nr = 0;
-	memset(fnode->pf_vers, 0,
-	       sizeof(struct pmap_fail_ver) * fnode->pf_ver_total);
 }
 
 static void
@@ -2291,6 +2294,7 @@ pmap_fail_node_get(struct pmap_fail_stat *fstat)
 
 	D_ASSERT(fstat->pf_node_nr < fstat->pf_node_total);
 	fnode = &fstat->pf_nodes[fstat->pf_node_nr++];
+	pmap_fail_node_init(fnode);
 	return fnode;
 }
 
@@ -2495,7 +2499,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 	if (fnode == NULL || fnode->pf_ver_nr == 0)
 		return 0;
 
-	fnode->pf_co_rank = node_dom->do_comp.co_rank;
+	fnode->pf_co_id = node_dom->do_comp.co_id;
 	daos_array_sort(fnode->pf_vers, fnode->pf_ver_nr, false,
 			&pmap_fver_sort_ops);
 	pmap_fail_ver_merge(fnode);
@@ -2599,24 +2603,24 @@ fail:
  * Check if #concurrent_failures exceeds RF since pool map version \a last_ver.
  */
 int
-pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf)
+pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
 {
 	struct pool_domain	*node_doms;
 	struct pool_domain	*node_dom;
 	struct pmap_fail_stat	 fstat;
 	int			 node_nr, i;
+	int			 com_type;
 	int			 rc = 0;
 
 	pmap_fail_stat_init(&fstat, last_ver, rf);
-	node_nr = pool_map_find_domain(map, PO_COMP_TP_RANK, PO_COMP_ID_ALL,
-				       &node_doms);
+	com_type = rlvl == DAOS_PROP_CO_REDUN_NODE ? PO_COMP_TP_NODE : PO_COMP_TP_RANK;
+	node_nr = pool_map_find_domain(map, com_type, PO_COMP_ID_ALL, &node_doms);
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
 		return -DER_INVAL;
 
 	for (i = 0; i < node_nr; i++) {
 		node_dom = &node_doms[i];
-		D_ASSERT(node_dom->do_children == NULL);
 		rc = pmap_node_check(node_dom, &fstat);
 		if (rc)
 			goto out;
@@ -2659,6 +2663,56 @@ pool_map_find_by_rank_status(struct pool_map *map,
 		}
 	}
 	return 0;
+}
+
+/** Return a list of engine ranks from the pool map.
+ * get_enabled == true: ranks of engines whose targets are all up or draining (i.e., not disabled).
+ * get_enabled != true: ranks of engines having one or more targets disabled (i.e., down).
+ */
+int
+pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled, d_rank_list_t **ranks)
+{
+	int			 rc;
+	int			 i;
+	int			 j;
+	unsigned int		 nnodes_tot;
+	unsigned int		 nnodes_alloc;
+	unsigned int		 nnodes_enabled = 0;	/* nodes with all targets enabled */
+	unsigned int		 nnodes_disabled = 0;	/* nodes with some, all targets disabled */
+	const unsigned int	 ENABLED = (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN);
+	struct pool_domain	*domains = NULL;
+	d_rank_list_t		*ranklist = NULL;
+
+	nnodes_tot = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
+	for (i = 0; i < nnodes_tot; i++) {
+		if (pool_map_node_status_match(&domains[i], ENABLED))
+			nnodes_enabled++;
+		else
+			nnodes_disabled++;
+	}
+	D_DEBUG(DB_MGMT, DF_UUID": nnodes=%u, nnodes_enabled=%u, nnodes_disabled=%u\n",
+		DP_UUID(pool_uuid), nnodes_tot, nnodes_enabled, nnodes_disabled);
+
+	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
+	ranklist = d_rank_list_alloc(nnodes_alloc);
+	if (!ranklist)
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	for (i = 0, j = 0; i < nnodes_tot; i++) {
+		struct	pool_domain *d = &domains[i];
+
+		if ((get_enabled && pool_map_node_status_match(d, ENABLED)) ||
+		    (!get_enabled && !pool_map_node_status_match(d, ENABLED))) {
+			D_ASSERT(j < ranklist->rl_nr);
+			ranklist->rl_ranks[j++] = domains[i].do_comp.co_rank;
+		}
+	}
+	D_ASSERT(j == ranklist->rl_nr);
+
+	*ranks = ranklist;
+	return 0;
+err:
+	return rc;
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,10 +50,12 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
-	((int32_t)		(do_pad)		CRT_VAR)	\
+	((int32_t)		(do_misc)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
+
+#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
@@ -92,6 +94,21 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_THD_AGE_MIN	210
 #define DTX_AGG_THD_AGE_DEF	630
 
+/* There is race between DTX aggregation and DTX refresh. Consider the following scenario:
+ *
+ * The DTX leader triggers DTX commit for some DTX entry, then related DTX participants
+ * (including the leader itself) will commit the DTX entry on each own target in parallel.
+ * It is possible that the leader has already committed locally but DTX aggregation removed
+ * the committed DTX very shortly after the commit. On the other hand, on some non-leader
+ * before the local commit, someone triggers DTX refresh for such DTX on such non-leader.
+ * Unfortunately the DTX entry has already gone on the leader. Then the non-leader will
+ * get -DER_TX_UNCERTAIN, that will cause related application to fail unexpectedly.
+ *
+ * So even if the system has DRAM pressure, we still need to keep some very recent committed
+ * DTX entries to handle above race.
+ */
+#define DTX_AGG_AGE_PRESERVE	3
+
 /* The threshold for yield CPU when handle DTX RPC. */
 #define DTX_RPC_YIELD_THD	64
 
@@ -110,6 +127,26 @@ extern uint32_t dtx_agg_thd_age_up;
  */
 extern uint32_t dtx_agg_thd_age_lo;
 
+/* The default count of DTX batched commit ULTs. */
+#define DTX_BATCHED_ULT_DEF	32
+
+/*
+ * Ideally, dedicated DXT batched commit ULT for each opened container is the most simple model.
+ * But it may be burden for the engine if opened containers become more and more on the target.
+ * So it is necessary to restrict the count of DTX batched commit ULTs on the target. It can be
+ * adjusted via the environment "DAOS_DTX_BATCHED_ULT_MAX" when load the module.
+ *
+ * Zero:		disable DTX batched commit, all DTX will be committed synchronously.
+ * Others:		the max count of DXT batched commit ULTs.
+ */
+extern uint32_t dtx_batched_ult_max;
+
+/* The threshold for using helper ULT when handle DTX RPC. */
+#define DTX_RPC_HELPER_THD_MIN	18
+#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+
+extern uint32_t dtx_rpc_helper_thd;
+
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
@@ -121,6 +158,8 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	uint64_t		 dt_agg_gen;
+	uint32_t		 dt_batched_ult_cnt;
 };
 
 extern struct dss_module_key dtx_module_key;
@@ -131,14 +170,20 @@ dtx_tls_get(void)
 	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
 }
 
+static inline bool
+dtx_cont_opened(struct ds_cont_child *cont)
+{
+	return cont->sc_open > 0;
+}
+
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
-extern uint64_t dtx_agg_gen;
 
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
+void dtx_aggregation_main(void *arg);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
@@ -153,7 +198,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, daos_epoch_t epoch);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 
@@ -162,6 +207,9 @@ int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 			 d_list_t *abt_list, d_list_t *act_list, bool failout);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			  daos_epoch_t epoch, int *tgt_array, int *err);
+
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
+		   struct pool_target **p_tgt);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,45 +11,12 @@
 #include "client_internal.h"
 #include "task_internal.h"
 
-/** Disable backward compat code */
-#undef daos_pool_connect
-
-/** Kept for backward ABI compatibility, but not advertised via header file */
-int
-daos_pool_connect(const char *pool, const char *grp, unsigned int flags,
-		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
-{
-	daos_pool_connect_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) pool;
-	int			rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_connect, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->flags	= flags;
-	args->poh	= poh;
-	args->info	= info;
-	/** use deprecated field for backward compatibility */
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->pool	= NULL;
-
-	return dc_task_schedule(task, true);
-}
-
 /**
  * Real latest & greatest implementation of pool connect.
  * Used by anyone including the daos_pool.h header file.
  */
 int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
@@ -71,6 +38,12 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 
 	return dc_task_schedule(task, true);
 }
+
+#undef daos_pool_connect
+int
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_pool_connect2")));
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
@@ -103,7 +76,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
@@ -123,7 +96,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
-	args->tgts	= tgts;
+	args->ranks	= ranks;
 	args->info	= info;
 	args->prop	= pool_prop;
 

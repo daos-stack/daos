@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,8 +11,8 @@ import copy
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
-from command_utils import CommandFailure
-from test_utils_pool import TestPool, LabelGenerator
+from exception_utils import CommandFailure
+from test_utils_pool import add_pool
 from apricot import skipForTicket
 import queue
 
@@ -85,7 +85,6 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass (str) : Daos object class (RP_2G1,etc)
         """
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         pool_uuid = []
         target_list = []
@@ -103,11 +102,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             pool_uuid.append(self.pool.uuid)
             # Use only pool UUID while running the test.
@@ -196,7 +191,6 @@ class OSAOfflineParallelTest(OSAUtils):
             else:
                 self.assertTrue(pver_end >= 25,
                                 "Pool Version Error:  at the end")
-
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):

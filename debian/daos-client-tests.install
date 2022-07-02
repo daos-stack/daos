@@ -5,6 +5,7 @@ usr/bin/agent_tests
 usr/bin/common_test
 usr/bin/drpc_engine_test
 usr/bin/drpc_test
+usr/bin/dfuse_test
 usr/bin/job_tests
 usr/bin/eq_tests
 usr/bin/security_test
@@ -12,6 +13,15 @@ usr/bin/io_conf
 usr/bin/fault_status
 usr/lib64/libdaos_tests.so
 etc/daos/fault-inject-cart.yaml
+usr/bin/daos_perf
+usr/bin/daos_racer
+usr/bin/daos_test
+usr/bin/dfs_test
+usr/bin/jobtest
+usr/bin/crt_launch
+usr/bin/daos_gen_io_conf
+usr/bin/daos_run_io_conf
+usr/lib64/libdpar.so
 # For avocado tests
 usr/lib/daos/.build_vars.json
 usr/lib/daos/.build_vars.sh

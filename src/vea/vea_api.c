@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,13 +10,10 @@
 #include <daos/dtx.h>
 #include "vea_internal.h"
 
-#define VEA_BLK_SZ	(4 * 1024)	/* 4K */
-#define VEA_TREE_ODR	20
-
 static void
 erase_md(struct umem_instance *umem, struct vea_space_df *md)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	daos_handle_t free_btr, vec_btr;
 	int rc;
 
@@ -135,7 +132,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	/* Insert the initial free extent */
 	free_ext.vfe_blk_off = hdr_blks;
 	free_ext.vfe_blk_cnt = tot_blks;
-	free_ext.vfe_age = VEA_EXT_AGE_MAX;
+	free_ext.vfe_age = 0;	/* Not used */
 
 	d_iov_set(&key, &free_ext.vfe_blk_off,
 		     sizeof(free_ext.vfe_blk_off));
@@ -228,8 +225,8 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_INIT_LIST_HEAD(&vsi->vsi_agg_lru);
 	vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
-	vsi->vsi_agg_time = 0;
-	vsi->vsi_agg_scheduled = false;
+	vsi->vsi_flush_time = 0;
+	vsi->vsi_flush_scheduled = false;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 	vsi->vsi_metrics = metrics;
 
@@ -269,31 +266,36 @@ error:
 	return rc;
 }
 
+static inline void
+aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+{
+	if (vsi->vsi_unmap_ctxt.vnc_ext_flush) {
+		if (nr_flushed != NULL)
+			*nr_flushed = 0;
+	} else {
+		trigger_aging_flush(vsi, force, nr_flush, nr_flushed);
+	}
+}
+
 /*
- * Reserve an extent on block device.
+ * Reserve an extent on block device, reserve attempting order:
  *
- * Always try to preserve sequential locality by 'hint', 'free extent size'
- * and 'free extent age', if the block device is too fragmented to satisfy
- * a contiguous allocation, reserve an extent vector as the last resort.
- *
- * Reserve attempting order:
- *
- * 1. Reserve from the free extent with 'hinted' start offset. (vsi_free_tree)
- * 2. Reserve from the largest free extent if it isn't non-active (extent age
- *    isn't VEA_EXT_AGE_MAX), otherwise, divide it in half-and-half and resreve
- *    from the latter half. (vfc_heap)
- * 3. Search & reserve from a bunch of extent size classed LRUs in first fit
- *    policy, larger & older free extent has priority. (vfc_lrus)
- * 4. Repeat the search in 3rd step to reserve an extent vector. (vsi_vec_tree)
+ * 1. Reserve from the free extent with 'hinted' start offset. (lookup vsi_free_btr)
+ * 2. If the largest free extent is large enough for splitting, divide it in
+ *    half-and-half then reserve from the latter half. (lookup vfc_heap). Otherwise;
+ * 3. Try to reserve from some small free extent (<= VEA_LARGE_EXT_MB) in best-fit,
+ *    if it fails, reserve from the largest free extent. (lookup vfc_size_btr)
+ * 4. Repeat the search in 3rd step to reserve an extent vector. (vsi_vec_btr)
  * 5. Fail reserve with ENOMEM if all above attempts fail.
  */
 int
 vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	    struct vea_hint_context *hint, d_list_t *resrvd_list)
 {
-	struct vea_resrvd_ext *resrvd;
-	bool retry = true;
-	int rc = 0;
+	struct vea_resrvd_ext	*resrvd;
+	uint32_t		 nr_flushed;
+	bool			 force = false;
+	int			 rc = 0;
 
 	D_ASSERT(vsi != NULL);
 	D_ASSERT(resrvd_list != NULL);
@@ -308,10 +310,9 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	/* Get hint offset */
 	hint_get(hint, &resrvd->vre_hint_off);
 
+	/* Trigger aging extents flush */
+	aging_flush(vsi, force, MAX_FLUSH_FRAGS, &nr_flushed);
 retry:
-	/* Trigger free extents migration */
-	migrate_free_exts(vsi, false);
-
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
 	if (rc != 0)
@@ -319,15 +320,8 @@ retry:
 	else if (resrvd->vre_blk_cnt != 0)
 		goto done;
 
-	/* Reserve from the large extents */
-	rc = reserve_large(vsi, blk_cnt, resrvd);
-	if (rc != 0)
-		goto error;
-	else if (resrvd->vre_blk_cnt != 0)
-		goto done;
-
-	/* Reserve from the small extents */
-	rc = reserve_small(vsi, blk_cnt, resrvd);
+	/* Reserve from the largest extent or a small extent */
+	rc = reserve_single(vsi, blk_cnt, resrvd);
 	if (rc != 0)
 		goto error;
 	else if (resrvd->vre_blk_cnt != 0)
@@ -336,9 +330,11 @@ retry:
 	/* Reserve extent vector as the last resort */
 	rc = reserve_vector(vsi, blk_cnt, resrvd);
 
-	if (rc == -DER_NOSPACE && retry) {
-		vsi->vsi_agg_time = 0; /* force free extents migration */
-		retry = false;
+	if (rc == -DER_NOSPACE && !force) {
+		force = true;
+		trigger_aging_flush(vsi, force, MAX_FLUSH_FRAGS * 10, &nr_flushed);
+		if (nr_flushed == 0)
+			goto error;
 		goto retry;
 	} else if (rc != 0) {
 		goto error;
@@ -366,19 +362,18 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		    d_list_t *resrvd_list, bool publish)
 {
 	struct vea_resrvd_ext	*resrvd, *tmp;
-	struct vea_free_extent vfe = {0};
+	struct vea_free_extent	 vfe;
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
-	uint32_t		 cur_age;
 	unsigned int		 seq_cnt = 0;
 	int			 rc = 0;
 
 	if (d_list_empty(resrvd_list))
 		return 0;
 
-	cur_age = get_current_age();
 	vfe.vfe_blk_off = 0;
 	vfe.vfe_blk_cnt = 0;
+	vfe.vfe_age = 0;	/* Not used */
 
 	d_list_for_each_entry(resrvd, resrvd_list, vre_link) {
 		rc = verify_resrvd_ext(resrvd);
@@ -403,7 +398,6 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		}
 
 		if (vfe.vfe_blk_cnt != 0) {
-			vfe.vfe_age = cur_age;
 			rc = publish ? persistent_alloc(vsi, &vfe) :
 				       compound_free(vsi, &vfe, 0);
 			if (rc)
@@ -415,7 +409,6 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	if (vfe.vfe_blk_cnt != 0) {
-		vfe.vfe_age = cur_age;
 		rc = publish ? persistent_alloc(vsi, &vfe) :
 			       compound_free(vsi, &vfe, 0);
 		if (rc)
@@ -552,9 +545,13 @@ vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 done:
 	/* Commit/Abort transaction on success/error */
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
-	/* Migrate the expired aggregated free extents to compound index */
-	if (rc == 0)
-		migrate_free_exts(vsi, true);
+	/* Flush the expired aging free extents to compound index */
+	if (rc == 0) {
+		if (pmemobj_tx_stage() == TX_STAGE_NONE)
+			aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
+		else
+			schedule_aging_flush(vsi);
+	}
 error:
 	/*
 	 * -DER_NONEXIST or -DER_ENOENT could be ignored by some caller,
@@ -657,10 +654,6 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	if (attr == NULL && stat == NULL)
 		return -DER_INVAL;
 
-	/* Trigger free extents migration only for slow query */
-	if (stat != NULL)
-		migrate_free_exts(vsi, false);
-
 	if (attr != NULL) {
 		struct vea_space_df *vsd = vsi->vsi_md;
 
@@ -701,16 +694,12 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 }
 
 int
-vea_flush(struct vea_space_info *vsi, bool force)
+vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
 {
-	D_ASSERT(vsi != NULL);
+	if (pmemobj_tx_stage() != TX_STAGE_NONE) {
+		D_ERROR("This function isn't supposed to be called in transaction!\n");
+		return -DER_INVAL;
+	}
 
-	if (d_list_empty(&vsi->vsi_agg_lru))
-		return 0;
-
-	if (force)
-		vsi->vsi_agg_time = 0;
-	migrate_free_exts(vsi, false);
-
-	return 1;
+	return trigger_aging_flush(vsi, force, nr_flush, nr_flushed);
 }

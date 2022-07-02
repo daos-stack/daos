@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,8 @@
 #include <spdk/nvme.h>
 #include <spdk/nvmf_spec.h>
 #include "bio_internal.h"
+
+/* JSON tags should match encode/decode logic in src/control/server/storage/bdev/backend_json.go */
 
 struct
 json_config_ctx {
@@ -109,6 +111,7 @@ struct busid_range_info {
 	uint8_t	begin;
 	uint8_t	end;
 };
+
 /* PCI address bus-ID range to be used to filter hotplug events */
 struct busid_range_info hotplug_busid_range = {};
 
@@ -116,6 +119,20 @@ static struct spdk_json_object_decoder
 busid_range_decoders[] = {
 	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
 	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
+};
+
+struct accel_props_info {
+	char		*engine;
+	uint16_t	 opt_mask;
+};
+
+/* Acceleration properties to specify engine to use and optional capabilities to enable */
+struct accel_props_info accel_props = {};
+
+static struct spdk_json_object_decoder
+accel_props_decoders[] = {
+	{"accel_engine", offsetof(struct accel_props_info, engine), spdk_json_decode_string},
+	{"accel_opts", offsetof(struct accel_props_info, opt_mask), spdk_json_decode_uint16},
 };
 
 static int
@@ -352,7 +369,7 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 		return -DER_INVAL;
 	}
 
-	if (strcmp(cfg.method, "enable_vmd") == 0)
+	if (strcmp(cfg.method, NVME_CONF_ENABLE_VMD) == 0)
 		*vmd_enabled = true;
 
 	free(cfg.method);
@@ -381,7 +398,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 	if (traddr == NULL)
 		return -DER_NOMEM;
 
-	if ((strcmp(cfg.method, "bdev_nvme_attach_controller") != 0) || (cfg.params == NULL))
+	if ((strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0) || (cfg.params == NULL))
 		goto out;
 
 	key = spdk_json_object_first(cfg.params);
@@ -624,7 +641,6 @@ get_hotplug_busid_range(const char *nvme_conf)
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
 		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
-		rc = 0;
 		goto out; /* non-fatal */
 	}
 
@@ -637,7 +653,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 			goto out;
 		}
 
-		if (strcmp(cfg.method, "hotplug_busid_range") == 0)
+		if (strcmp(cfg.method, NVME_CONF_SET_HOTPLUG_RANGE) == 0)
 			break;
 
 		/* Move on to next subsystem config */
@@ -645,8 +661,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 	}
 
 	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "No 'hotplug_busid_range' entry\n");
-		rc = 0;
+		D_DEBUG(DB_MGMT, "No '%s' entry\n", NVME_CONF_SET_HOTPLUG_RANGE);
 		goto out; /* non-fatal */
 	}
 
@@ -654,13 +669,12 @@ get_hotplug_busid_range(const char *nvme_conf)
 				     SPDK_COUNTOF(busid_range_decoders),
 				     &hotplug_busid_range);
 	if (rc < 0) {
-		D_ERROR("Failed to decode 'hotplug_busid_range' entry (rc: %d)\n", rc);
+		D_ERROR("Failed to decode '%s' entry (rc: %d)\n", NVME_CONF_SET_HOTPLUG_RANGE, rc);
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	rc = 0;
-	D_INFO("Hotplug bus-ID range read from config: %X-%X\n",
+	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
 		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	free(ctx->json_data);
@@ -699,3 +713,96 @@ bio_set_hotplug_filter(const char *nvme_conf) {
 
 	return rc;
 }
+
+static int
+get_accel_props(const char *nvme_conf)
+{
+	struct json_config_ctx	*ctx;
+	struct spdk_json_val	*daos_data;
+	struct config_entry	 cfg = { 0 };
+	int			 rc = 0;
+
+	D_ASSERT(nvme_conf != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
+	if (rc < 0) {
+		D_ERROR("No config file\n");
+		goto out;
+	}
+
+	/* Capture daos object */
+	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
+			    SPDK_JSON_VAL_OBJECT_BEGIN);
+	if (rc < 0) {
+		D_ERROR("Failed to find 'daos_data' key: %s\n", strerror(-rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Capture config array in ctx */
+	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
+				     SPDK_COUNTOF(daos_data_decoders), ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse 'daos_data' entry: %s\n", strerror(-rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Get 'config' array first configuration entry */
+	ctx->config_it = spdk_json_array_first(ctx->config);
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
+		goto out; /* non-fatal */
+	}
+
+	while (ctx->config_it != NULL) {
+		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+					     SPDK_COUNTOF(config_entry_decoders), &cfg);
+		if (rc < 0) {
+			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(-rc));
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		if (strcmp(cfg.method, NVME_CONF_SET_ACCEL_PROPS) == 0)
+			break;
+
+		/* Move on to next subsystem config */
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "No '%s' entry\n", NVME_CONF_SET_ACCEL_PROPS);
+		goto out; /* non-fatal */
+	}
+
+	rc = spdk_json_decode_object(cfg.params, accel_props_decoders,
+				     SPDK_COUNTOF(accel_props_decoders),
+				     &accel_props);
+	if (rc < 0) {
+		D_ERROR("Failed to decode '%s' entry (rc: %d)\n", NVME_CONF_SET_ACCEL_PROPS, rc);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
+	       NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
+	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
+	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
+out:
+	free(ctx->json_data);
+	free(ctx->values);
+	D_FREE(ctx);
+	return rc;
+}
+
+int
+bio_read_accel_props(const char *nvme_conf) {
+	/* TODO: do something useful with acceleration engine properties */
+	return get_accel_props(nvme_conf);
+}
+

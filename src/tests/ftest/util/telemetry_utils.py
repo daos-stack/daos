@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,10 +14,11 @@ class TelemetryUtils():
     """Defines a object used to verify telemetry information."""
 
     ENGINE_CONTAINER_METRICS = [
-        "engine_pool_container_handles",
+        "engine_pool_ops_cont_open",
         "engine_pool_ops_cont_close",
+        "engine_pool_ops_cont_create",
         "engine_pool_ops_cont_destroy",
-        "engine_pool_ops_cont_open"]
+        "engine_pool_ops_cont_query"]
     ENGINE_POOL_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
         "engine_pool_entries_dtx_batched_total",
@@ -44,8 +45,13 @@ class TelemetryUtils():
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
-        "engine_pool_pool_handles",
+        "engine_pool_ops_pool_evict",
+        "engine_pool_ops_pool_connect",
+        "engine_pool_ops_pool_disconnect",
+        "engine_pool_ops_pool_query",
+        "engine_pool_ops_pool_query_space",
         "engine_pool_resent",
+        "engine_pool_uncommitted_retry",
         "engine_pool_restarted",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
@@ -596,8 +602,7 @@ class TelemetryUtils():
                         data[name][host] = {}
                     for metric in info[host][name]["metrics"]:
                         if "labels" in metric:
-                            if ("rank" in metric["labels"]
-                                    and "target" in metric["labels"]):
+                            if ("rank" in metric["labels"] and "target" in metric["labels"]):
                                 rank = metric["labels"]["rank"]
                                 target = metric["labels"]["target"]
                                 if rank not in data[name][host]:
@@ -675,19 +680,22 @@ class TelemetryUtils():
                                     host, rank, target, "-", metric["value"])
         return data
 
-    def check_container_metrics(self, open_count=None, active_count=None,
-                                close_count=None, destroy_count=None):
+    def check_container_metrics(self, open_count=None, create_count=None,
+                                close_count=None, destroy_count=None,
+                                query_count=None):
         """Verify the container telemetry metrics.
 
         Args:
-            open_count (dict, optional): Number of times cont_open has been
-                called per host key. Defaults to None.
-            active_count (dict, optional): Number of open container handles per
+            open_count (dict, optional): Number of cont_open operations per
                 host key. Defaults to None.
-            close_count (dict, optional): Number of times cont_close has been
-                called per host key. Defaults to None.
-            destroy_count (dict, optional): Number of times cont_destroy has
-                been called per host key. Defaults to None.
+            create_count (dict, optional): Number of cont_create per
+                host key. Defaults to None.
+            close_count (dict, optional): Number of cont_close operation per
+                host key. Defaults to None.
+            destroy_count (dict, optional): Number of cont_destroy operations
+                per host key. Defaults to None.
+            query_count (dict, optional): Number of cont_query operations
+                per host key. Defaults to None.
 
         Returns:
             list: list of errors detected
@@ -696,8 +704,9 @@ class TelemetryUtils():
         errors = []
         expected = {
             "engine_pool_ops_cont_open": open_count,
-            "engine_pool_container_handles": active_count,
             "engine_pool_ops_cont_close": close_count,
+            "engine_pool_ops_cont_query": query_count,
+            "engine_pool_ops_cont_create": create_count,
             "engine_pool_ops_cont_destroy": destroy_count,
         }
         data = self.get_container_metrics()
@@ -796,7 +805,7 @@ class TelemetryUtils():
                 for rank in sorted(metrics_data[name][host]):
                     value = metrics_data[name][host][rank]
                     invalid = "Metric value in range"
-                    #Verify metrics are within allowable threshold
+                    # Verify metrics are within allowable threshold
                     if min_value is not None and value < min_value:
                         status = False
                         invalid = "Metric value is smaller than {}: {}".format(min_value, value)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -480,11 +480,9 @@ example_daos_array()
 	oid.hi = 0;
 	oid.lo = 3;
 
-	/*
-	 * generate an array objid to encode feature flags and object class to
-	 * the OID. This is a convenience function over the
-	 * daos_obj_generate_oid() that adds the required feature flags for an
-	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
+	/**
+	 * Convenience function to generate a DAOS Array object ID by encoding
+	 * the private DAOS bits of the object address space.
 	 */
 	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 
@@ -611,7 +609,6 @@ example_daos_kv()
 
 	oid.hi = 0;
 	oid.lo = 4;
-	/** the KV API requires the flat feature flag be set in the oid */
 	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, OC_SX, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);

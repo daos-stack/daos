@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,6 +61,16 @@ func (p *PoolProperty) SetValueNumber(numVal uint64) {
 // SetUUID sets the request's ID to a UUID.
 func (r *PoolDestroyReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolUpgradeReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolUpgradeReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
@@ -144,6 +154,16 @@ func (r *PoolQueryReq) SetUUID(id uuid.UUID) {
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolQueryTargetReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolQueryTargetReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
 func (r *GetACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
@@ -171,6 +191,21 @@ func (r *DeleteACLReq) SetSvcRanks(rl []uint32) {
 // SetUUID sets the request's ID to a UUID.
 func (r *DeleteACLReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *ContSetOwnerReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *ContSetOwnerReq) SetUUID(id uuid.UUID) {
+	r.PoolUUID = id.String()
+}
+
+// GetId fetches the pool ID.
+func (r *ContSetOwnerReq) GetId() string {
+	return r.PoolUUID
 }
 
 func Debug(msg proto.Message) string {

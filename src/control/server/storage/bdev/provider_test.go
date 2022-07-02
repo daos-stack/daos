@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -69,14 +69,14 @@ func TestProvider_Scan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc)
 
 			tc.req.Forwarded = tc.forwarded
 
 			gotRes, gotErr := p.Scan(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -124,12 +124,12 @@ func TestProvider_Prepare(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc)
 
 			gotRes, gotErr := p.Prepare(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -158,7 +158,7 @@ func TestProvider_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
+					DeviceList: storage.MustNewBdevDeviceList(mockSingle.PciAddr),
 				},
 			},
 			mbc: &MockBackendConfig{
@@ -184,7 +184,7 @@ func TestProvider_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
+					DeviceList: storage.MustNewBdevDeviceList(mockSingle.PciAddr),
 				},
 			},
 			mbc: &MockBackendConfig{
@@ -207,21 +207,21 @@ func TestProvider_Format(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc)
 
 			gotRes, gotErr := p.Format(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, len(tc.expRes.DeviceResponses),
+			test.AssertEqual(t, len(tc.expRes.DeviceResponses),
 				len(gotRes.DeviceResponses), "number of device responses")
 			for addr, resp := range tc.expRes.DeviceResponses {
 
-				common.AssertEqual(t, resp, gotRes.DeviceResponses[addr],
+				test.AssertEqual(t, resp, gotRes.DeviceResponses[addr],
 					"device response")
 			}
 		})

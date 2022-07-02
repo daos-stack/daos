@@ -3,9 +3,9 @@ Upstream-Name: daos
 Source: https://github.com/daos-stack/daos
 
 Files: *
-Copyright: Copyright 2016-2021 Intel Corporation <daos@daos.groups.io>
+Copyright: Copyright 2016-2022 Intel Corporation <daos@daos.groups.io>
 License: BSD-2-Clause-Patent
- Copyright (C) 2016-2021 Intel Corporation
+ Copyright 2016-2022 Intel Corporation
  All rights reserved.
  .
  Redistribution and use in source and binary forms, with or without

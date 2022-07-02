@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019-2021 Intel Corporation.
+(C) Copyright 2019-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ class SlurmFailed(Exception):
 
 
 def cancel_jobs(job_id):
-    """Cancel slurms jobs.
+    """Cancel slurm jobs.
 
     Args:
         job_id (int): slurm job id
@@ -133,8 +133,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
     if uniq is None:
-        uniq = random.randint(1, 100000) #nosec
-
+        uniq = random.randint(1, 100000)  # nosec
     if not os.path.exists(path):
         os.makedirs(path)
     scriptfile = path + '/jobscript' + "_" + str(uniq) + ".sh"
@@ -151,9 +150,12 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
             for key, value in list(sbatch.items()):
-                if key == "error":
-                    value = value + str(uniq)
-                script_file.write("#SBATCH --{}={}\n".format(key, value))
+                if value is not None:
+                    if key == "error":
+                        value = value + str(uniq)
+                    script_file.write("#SBATCH --{}={}\n".format(key, value))
+                else:
+                    script_file.write("#SBATCH --{}\n".format(key))
         script_file.write("\n")
 
         # debug
@@ -163,6 +165,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
 
         for cmd in list(cmds):
             script_file.write(cmd + "\n")
+        script_file.close()
     return scriptfile
 
 
@@ -263,7 +266,7 @@ def watch_job(handle, maxwait, test_obj):
         test_obj.job_done(params)
 
 
-def srun_str(hosts, cmd, srun_params=None):
+def srun_str(hosts, cmd, srun_params=None, timeout=None):
     """Create string of cmd with srun and params.
 
     Args:
@@ -279,6 +282,8 @@ def srun_str(hosts, cmd, srun_params=None):
     params = ""
     if hosts is not None:
         params_list.append("--nodelist {}".format(hosts))
+    if timeout is not None:
+        params_list.append("--time {}".format(timeout))
     if srun_params is not None:
         for key, value in list(srun_params.items()):
             params_list.extend(["--{}={}".format(key, value)])
@@ -287,20 +292,22 @@ def srun_str(hosts, cmd, srun_params=None):
     return str(cmd)
 
 
-def srun(hosts, cmd, srun_params=None, timeout=30):
+def srun(hosts, cmd, srun_params=None, timeout=60):
     """Run srun cmd on slurm partition.
 
     Args:
         hosts (str): hosts to allocate
         cmd (str): cmdline to execute
         srun_params(dict): additional params for srun
+        timeout
 
     Returns:
         CmdResult: object containing the result (exit status, stdout, etc.) of
             the srun command
 
     """
-    cmd = srun_str(hosts, cmd, srun_params)
+    srun_time = max(int(timeout / 60), 1)
+    cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
     try:
         result = run_command(cmd, timeout)
     except DaosTestError as error:

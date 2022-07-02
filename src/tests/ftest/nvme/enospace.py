@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -11,12 +11,10 @@ from apricot import skipForTicket
 from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import error_count
-import queue
 
 
 class NvmeEnospace(ServerFillUp):
@@ -32,6 +30,7 @@ class NvmeEnospace(ServerFillUp):
         self.daos_cmd = None
 
     def setUp(self):
+        """Initial setup"""
         super().setUp()
 
         # initialize daos command
@@ -39,6 +38,7 @@ class NvmeEnospace(ServerFillUp):
         self.create_pool_max_size()
         self.der_nospace_count = 0
         self.other_errors_count = 0
+        self.test_result = []
 
     def verify_enspace_log(self, der_nospace_err_count):
         """
@@ -73,7 +73,7 @@ class NvmeEnospace(ServerFillUp):
         #List all the container
         kwargs = {"pool": self.pool.uuid}
         data = self.daos_cmd.container_list(**kwargs)
-        containers = [uuid_label["UUID"] for uuid_label in data["response"]]
+        containers = [uuid_label["uuid"] for uuid_label in data["response"]]
 
         #Destroy all the containers
         for _cont in containers:
@@ -81,16 +81,11 @@ class NvmeEnospace(ServerFillUp):
             kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
-    def ior_bg_thread(self, results):
+    def ior_bg_thread(self):
         """Start IOR Background thread, This will write small data set and
         keep reading it in loop until it fails or main program exit.
 
-        Args:
-            results (queue): queue for returning thread results
         """
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()
@@ -104,28 +99,30 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.test_file.update('/testfile_background')
 
         # Define the job manager for the IOR command
-        self.job_manager = Mpirun(ior_bg_cmd, mpitype="mpich")
-        self.create_cont()
-        self.job_manager.job.dfs_cont.update(self.container.uuid)
-        env = ior_bg_cmd.get_default_env(str(self.job_manager))
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(1)
-        self.job_manager.assign_environment(env, True)
+        job_manager = get_job_manager(self, "Mpirun", ior_bg_cmd, mpi_type="mpich")
+
+        # create container
+        container = self.get_container(self.pool)
+
+        job_manager.job.dfs_cont.update(container.uuid)
+        env = ior_bg_cmd.get_default_env(str(job_manager))
+        job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager.assign_processes(1)
+        job_manager.assign_environment(env, True)
         print('----Run IOR in Background-------')
         # run IOR Write Command
         try:
-            self.job_manager.run()
+            job_manager.run()
         except (CommandFailure, TestFail) as _error:
-            results.put("FAIL")
+            self.test_result.append("FAIL")
             return
 
         # run IOR Read Command in loop
         ior_bg_cmd.flags.update(self.ior_read_flags)
         while True:
             try:
-                self.job_manager.run()
+                job_manager.run()
             except (CommandFailure, TestFail) as _error:
-                results.put("FAIL")
                 break
 
     def run_enospace_foreground(self):
@@ -182,20 +179,17 @@ class NvmeEnospace(ServerFillUp):
 
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
-        out_queue = queue.Queue()
-        job = threading.Thread(target=self.ior_bg_thread,
-                               kwargs={"results": out_queue})
+        job = threading.Thread(target=self.ior_bg_thread)
         job.daemon = True
         job.start()
 
         #Run IOR in Foreground
         self.run_enospace_foreground()
-        # Verify the background job queue and make sure no FAIL for any IOR run
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
+        # Verify the background job result has no FAIL for any IOR run
+        for _result in self.test_result:
+            if "FAIL" in _result:
                 self.fail("One of the Background IOR job failed")
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -219,7 +213,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -254,7 +247,6 @@ class NvmeEnospace(ServerFillUp):
         #Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -282,7 +274,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -316,12 +307,12 @@ class NvmeEnospace(ServerFillUp):
             #Delete all the containers
             self.delete_all_containers()
             #Delete container will take some time to release the space
-            time.sleep(120)
+            time.sleep(60)
 
         #Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-7378")
+    @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -363,7 +354,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
@@ -422,9 +412,9 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
             print(pool_usage)
             #SCM pool size should be released (some still be used for system)
-            #Pool SCM free % should not be less than 50%
-            if pool_usage['scm'] > 55:
-                self.fail('SCM pool used percentage should be < 55, instead {}'.
+            #Pool SCM free % should not be less than 62%
+            if pool_usage['scm'] > 62:
+                self.fail('SCM pool used percentage should be < 62, instead {}'.
                           format(pool_usage['scm']))
 
         #Run last IO

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,8 +7,8 @@
 package engine
 
 import (
-	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,8 +19,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -28,7 +27,12 @@ var update = flag.Bool("update", false, "update .golden files")
 
 var defConfigCmpOpts = []cmp.Option{
 	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
-	cmpopts.IgnoreFields(Config{}, "GetNetDevCls", "ValidateProvider", "GetIfaceNumaNode"),
+	cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+		if x == nil && y == nil {
+			return true
+		}
+		return x.Equals(y)
+	}),
 }
 
 func TestConfig_MergeEnvVars(t *testing.T) {
@@ -122,7 +126,57 @@ func TestConfig_HasEnvVar(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
+func TestConfig_GetEnvVar(t *testing.T) {
+
+	for name, tc := range map[string]struct {
+		environment []string
+		key         string
+		expValue    string
+		expErr      error
+	}{
+		"present": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOO",
+			expValue:    "BAR",
+		},
+		"invalid prefix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FFOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"invalid suffix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"empty env": {
+			key:    "FOO",
+			expErr: errors.New("Undefined environment variable"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().WithEnvVars(tc.environment...)
+
+			value, err := cfg.GetEnvVar(tc.key)
+
+			if err != nil {
+				test.AssertTrue(t, tc.expErr != nil,
+					fmt.Sprintf("Unexpected error %q", err))
+				test.CmpErr(t, tc.expErr, err)
+				test.AssertEqual(t, value, "",
+					fmt.Sprintf("Unexpected value %q for key %q",
+						tc.key, value))
+				return
+			}
+
+			test.AssertTrue(t, tc.expErr == nil,
+				fmt.Sprintf("Expected error %q", tc.expErr))
+			test.AssertEqual(t, value, tc.expValue, "Invalid value returned")
+		})
+	}
+}
+
+func TestConfig_Constructed(t *testing.T) {
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -134,12 +188,12 @@ func TestConstructedConfig(t *testing.T) {
 		WithModules("foo,bar,baz").
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmRamdiskSize(42).
 				WithScmMountPoint("/mnt/daostest").
 				WithScmDeviceList("/dev/a", "/dev/b"),
 			storage.NewTierConfig().
-				WithBdevClass("kdev").
+				WithStorageClass("kdev").
 				WithBdevDeviceCount(2).
 				WithBdevFileSize(20).
 				WithBdevDeviceList("/dev/c", "/dev/d"),
@@ -185,7 +239,8 @@ func TestConfig_ScmValidation(t *testing.T) {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("ib0"). // ib0 recognized by mock validator
-			WithFabricInterfacePort(42)
+			WithFabricInterfacePort(42).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -204,7 +259,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram"),
+						WithStorageClass("ram"),
 				),
 			expErr: errors.New("scm_mount"),
 		},
@@ -212,7 +267,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
 				),
@@ -221,7 +276,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmMountPoint("test"),
 				),
 			expErr: errors.New("scm_size"),
@@ -230,7 +285,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(0).
 						WithScmMountPoint("test"),
 				),
@@ -240,7 +295,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
@@ -251,7 +306,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint("test"),
 				),
@@ -260,7 +315,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
 				),
@@ -270,7 +325,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmMountPoint("test"),
 				),
 			expErr: errors.New("scm_list"),
@@ -279,7 +334,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
@@ -288,10 +343,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 		})
 	}
 }
@@ -304,10 +356,11 @@ func TestConfig_BdevValidation(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("dcpm").
+					WithStorageClass("dcpm").
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
-			)
+			).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -320,33 +373,32 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvmed"),
+						WithStorageClass("nvmed"),
 				),
 			expErr: errors.New("no storage class"),
 		},
 		"nvme class; no devices": {
-			// output config path should be empty and the empty tier removed
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme"),
+						WithStorageClass("nvme"),
 				),
-			expEmptyCfgPath: true,
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
 				),
 		},
 		"nvme class; duplicate pci address": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
 				),
 			expErr: errors.New("bdev_list"),
 		},
@@ -354,16 +406,16 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
 				),
-			expErr: errors.New("unexpected pci address"),
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"kdev class; no devices": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev"),
+						WithStorageClass("kdev"),
 				),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
@@ -371,7 +423,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev").
+						WithStorageClass("kdev").
 						WithBdevDeviceList("/dev/sda"),
 				),
 			expCls: storage.ClassKdev,
@@ -380,7 +432,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1"),
 				),
 			expErr: errors.New("file requires non-zero bdev_size"),
@@ -389,7 +441,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1").
 						WithBdevFileSize(-1),
 				),
@@ -399,7 +451,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10),
 				),
 			expErr: errors.New("file requires non-empty bdev_list"),
@@ -408,18 +460,28 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10).
 						WithBdevDeviceList("bdev1", "bdev2"),
 				),
 			expCls: storage.ClassFile,
 		},
+		"mix of emulated and non-emulated device classes": {
+			cfg: baseValidConfig().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1)),
+					storage.NewTierConfig().
+						WithStorageClass("file").
+						WithBdevFileSize(10).
+						WithBdevDeviceList("bdev1", "bdev2"),
+				),
+			expErr: errors.New("mix of emulated and non-emulated NVMe"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 			if tc.expErr != nil {
 				return
 			}
@@ -429,42 +491,52 @@ func TestConfig_BdevValidation(t *testing.T) {
 				if tc.expCls == "" {
 					tc.expCls = storage.ClassNvme // default if unset
 				}
-				common.AssertEqual(t, tc.expCls,
+				test.AssertEqual(t, tc.expCls,
 					tc.cfg.Storage.Tiers.BdevConfigs()[0].Class,
 					"unexpected bdev class")
 
 				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint,
 					storage.BdevOutConfName)
 			}
-			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
+			test.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
 				"unexpected config path")
 		})
 	}
 }
 
 func TestConfig_Validation(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	bad := MockConfig()
-
-	if err := bad.Validate(context.TODO(), log); err == nil {
-		t.Fatal("expected empty config to fail validation")
+	validConfig := func() *Config {
+		return MockConfig().WithFabricProvider("foo").
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(42).
+			WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("/foo/bar"),
+			).
+			WithPinnedNumaNode(0)
 	}
 
-	// create a minimally-valid config
-	good := MockConfig().WithFabricProvider("foo").
-		WithFabricInterface("ib0"). // ib0 recognized by mock validator
-		WithFabricInterfacePort(42).
-		WithStorage(
-			storage.NewTierConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("/foo/bar"),
-		)
-
-	if err := good.Validate(context.TODO(), log); err != nil {
-		t.Fatalf("expected %#v to validate; got %s", good, err)
+	for name, tc := range map[string]struct {
+		cfg    *Config
+		expErr error
+	}{
+		"empty config should fail": {
+			cfg:    MockConfig(),
+			expErr: errors.New("provider not set"),
+		},
+		"config with pinned_numa_node and nonzero first_core should fail": {
+			cfg:    validConfig().WithPinnedNumaNode(1).WithServiceThreadCore(1),
+			expErr: errors.New("cannot specify both"),
+		},
+		"minimally-valid config should pass": {
+			cfg: validConfig(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
 	}
 }
 
@@ -505,7 +577,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -600,54 +672,5 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
-	}
-}
-
-func TestConfig_setAffinity(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg     *Config
-		expErr  error
-		expNuma uint
-	}{
-		"numa pinned; matching iface": {
-			cfg: MockConfig().
-				WithPinnedNumaNode(1).
-				WithFabricInterface("ib1"),
-			expNuma: 1,
-		},
-		// NOTE: this currently logs an error but could instead return one
-		//       but there might be legitimate use cases e.g. sharing interface
-		//"numa pinned; not matching iface": {
-		//	cfg: MockConfig().
-		//		WithPinnedNumaNode(1).
-		//		WithFabricInterface("ib0"),
-		//	expErr:  errors.New("misconfiguration"),
-		//	expNuma: 1,
-		//},
-		"numa not pinned": {
-			cfg: MockConfig().
-				WithFabricInterface("ib1"),
-			expNuma: 1,
-		},
-		"missing iface": {
-			cfg: MockConfig().
-				WithFabricInterface("foo"),
-			expErr: errors.New("unknown fabric interface"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			common.CmpErr(t, tc.expErr, tc.cfg.setAffinity(context.TODO(), log))
-			if tc.expErr != nil {
-				return
-			}
-
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
-				"unexpected storage numa node id")
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
-				"unexpected fabric numa node id")
-		})
 	}
 }

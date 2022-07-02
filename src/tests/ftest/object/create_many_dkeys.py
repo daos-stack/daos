@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -100,7 +100,6 @@ class CreateManyDkeys(TestWithServers):
 
         # write a lot of individual data items, verify them, then destroy
         self.write_a_bunch_of_values(no_of_dkeys)
-
 
         # do it again, which should verify the first container
         # was truly destroyed because a second round won't fit otherwise

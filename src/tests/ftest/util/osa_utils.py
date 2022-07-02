@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ import re
 from avocado import fail_on
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 from general_utils import create_string_buffer, run_command
@@ -278,7 +278,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
-                                              len(indata)+1)
+                                              len(indata) + 1)
                 if indata != (repr(val.value)[1:-1]):
                     self.d_log.error("ERROR:Data mismatch for "
                                      "dkey = {0}, "

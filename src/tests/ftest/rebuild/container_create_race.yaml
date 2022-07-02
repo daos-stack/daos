@@ -19,7 +19,7 @@ testparams:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 7G
+  scm_size: 8G
   svcn: 1
   control_method: dmg
   pool_query_timeout: 15
@@ -35,15 +35,15 @@ io:
   oclass: "OC_RP_3GX"
   cont_qty: 10
 ior:
-    client_processes:
-        np_8:
-            np: 8
-    ior_test_loop: 2
-    repetitions: 1
-    api: DFS
-    dfs_oclass: "RP_2G1"
-    flags: "-w -W -k -G 1"
-    transfersize_blocksize:
-      1M:
-        transfer_size: '1M'
-        block_size: '128M'
+  client_processes:
+    np_8:
+      np: 8
+  ior_test_loop: 2
+  repetitions: 1
+  api: DFS
+  dfs_oclass: "RP_2G1"
+  flags: "-w -W -k -G 1"
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '128M'

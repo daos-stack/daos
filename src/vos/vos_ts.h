@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -497,8 +497,19 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 	}
 
 calc_hash:
-	if (ts_set->ts_etype > VOS_TS_TYPE_CONT)
-		hash = vos_hash_get(rec, rec_size);
+	if (ts_set->ts_etype > VOS_TS_TYPE_CONT) {
+		if (ts_set->ts_etype != VOS_TS_TYPE_OBJ) {
+			hash = vos_hash_get(rec, rec_size);
+		} else {
+			daos_unit_oid_t *oid = (daos_unit_oid_t *)rec;
+
+			/*
+			 * Test shows using d_hash_murmur64() for oid
+			 * is easy to conflict.
+			 */
+			hash = oid->id_pub.lo ^ oid->id_pub.hi;
+		}
+	}
 
 	if (idx != NULL) {
 		entry = vos_ts_alloc(ts_set, idx, hash);

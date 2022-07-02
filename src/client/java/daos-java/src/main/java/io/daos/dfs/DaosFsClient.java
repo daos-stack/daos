@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -874,7 +874,7 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     return getBuilder().defaultFileMode;
   }
 
-  DaosObjectType getDefaultFileObjType() {
+  DaosObjectClass getDefaultFileObjType() {
     return getBuilder().defaultFileObjType;
   }
 
@@ -893,7 +893,7 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
-    private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
+    private DaosObjectClass defaultFileObjType = DaosObjectClass.OC_SX;
     private boolean readOnlyFs = false;
     private boolean shareFsClient = true;
 
@@ -915,7 +915,7 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
 
     /**
      * set default file mode. You can override this value when create new file by
-     * Scalling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
+     * Scalling {@link DaosFile#createNewFile(int, DaosObjectClass, int, boolean)}.
      *
      * @param defaultFileMode
      * should be octal value. Default is 0755
@@ -928,20 +928,20 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
 
     /**
      * set default file type. You can override this value when create new file by
-     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
+     * calling {@link DaosFile#createNewFile(int, DaosObjectClass, int, boolean)}.
      *
      * @param defaultFileObjType
-     * default is {@link DaosObjectType#OC_SX}
+     * default is {@link DaosObjectClass#OC_SX}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileType(DaosObjectType defaultFileObjType) {
+    public DaosFsClientBuilder defaultFileType(DaosObjectClass defaultFileObjType) {
       this.defaultFileObjType = defaultFileObjType;
       return this;
     }
 
     /**
      * set default file chunk size. You can override this value when create new file by
-     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
+     * calling {@link DaosFile#createNewFile(int, DaosObjectClass, int, boolean)}.
      *
      * @param defaultFileChunkSize
      * default is 0. DAOS will decide what default is. 1MB for now.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,9 +19,6 @@
 #include <gurt/list.h>
 #include <daos/mem.h>
 #include <daos/btree.h>
-
-/* Maximum age, indicating a non-active free extent */
-#define VEA_EXT_AGE_MAX		0
 
 /* Common free extent structure for both SCM & in-memory index */
 struct vea_free_extent {
@@ -75,14 +72,15 @@ struct vea_unmap_context {
 	/**
 	 * Unmap (TRIM) the extent being freed.
 	 *
-	 * \param off [IN]         Offset in bytes
-	 * \param len [IN]         Length in bytes
-	 * \param data [IN]        Block device opaque data
+	 * \param unmap_sgl [IN]    SGL to be unmapped (offset & len are in blocks)
+	 * \param blk_sz    [IN]    Block size
+	 * \param data      [IN]    Block device opaque data
 	 *
 	 * \return                 Zero on success, negative value on error
 	 */
-	int (*vnc_unmap)(uint64_t off, uint64_t cnt, void *data);
+	int (*vnc_unmap)(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data);
 	void *vnc_data;
+	bool vnc_ext_flush;
 };
 
 /* Free space tracking information on SCM */
@@ -301,13 +299,14 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 /**
  * Flushing the free frags in aging buffer
  *
- * \param vsi       [IN]	In-memory compound index
- * \param force     [IN]	Force flush all frags no matter if they are expired
+ * \param vsi        [IN]	In-memory compound index
+ * \param force      [IN]	Force flush no matter if there is qualified extent
+ * \param nr_flush   [IN]	Flush at most @nr_flush frags
+ * \param nr_flushed [OUT]	How many frags are actually flushed (optional)
  *
- * \return			0:	Nothing to be flushed;
- *				1:	Some Frags need be flushed;
+ * \return			Zero on success; Appropriated negative value on error
  */
-int vea_flush(struct vea_space_info *vsi, bool force);
+int vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
 
 /**
  * Free metrcis

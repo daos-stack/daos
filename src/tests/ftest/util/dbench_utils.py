@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +10,7 @@ from command_utils_base import FormattedParameter
 from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
 from job_manager_utils import Mpirun
+
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 class DbenchCommand(ExecutableCommand):
@@ -76,7 +77,7 @@ class Dbench(DbenchCommand):
         self.log.info('Starting dbench')
 
         # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
+        mpirun = Mpirun(self, mpi_type="mpich")
         mpirun.assign_hosts(self.hosts, self.tmp)
         mpirun.assign_processes(processes)
         mpirun.exit_status_exception = True

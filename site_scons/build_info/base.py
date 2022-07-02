@@ -1,5 +1,4 @@
-#!/usr/bin/python
-# Copyright (c) 2016 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +19,6 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
-
-from __future__ import print_function
 
 import os
 import sys

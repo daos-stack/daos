@@ -4,36 +4,29 @@ import daos_build
 LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
                'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c']
 
+
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'API_VERSION', 'prereqs')
+    Import('env', 'API_VERSION', 'prereqs', 'libdaos_tgts')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
     env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
     prereqs.require(denv, 'protobufc')
-    libdaos_tgts = denv.SharedObject(LIBDAOS_SRC)
-    Import('dc_pool_tgts', 'dc_co_tgts', 'dc_obj_tgts', 'dc_placement_tgts')
-    Import('dc_mgmt_tgts', 'dc_array_tgts', 'dc_kv_tgts', 'dc_security_tgts')
-    libdaos_tgts += dc_pool_tgts + dc_co_tgts + dc_placement_tgts + dc_obj_tgts
-    libdaos_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
-    Export('libdaos_tgts')
-    _compile_check = denv.Object(["compile_check.c", "compile_check_cpp.cpp"])
+    libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
     if prereqs.client_requested():
-        libdaos= daos_build.library(env, 'daos', libdaos_tgts,
+        libdaos = daos_build.library(env, 'daos', libdaos_tgts,
                                      SHLIBVERSION=API_VERSION,
                                      LIBS=['daos_common'])
         if hasattr(env, 'InstallVersionedLib'):
-            env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
-                                    SHLIBVERSION=API_VERSION)
+            env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
         else:
             env.Install('$PREFIX/lib64/', libdaos)
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

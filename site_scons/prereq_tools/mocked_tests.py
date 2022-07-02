@@ -1,5 +1,4 @@
-#!/usr/bin/python
-# Copyright (c) 2017 Intel Corporation
+# Copyright 2017-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +29,7 @@ from collections import namedtuple
 
 # pylint: disable=too-few-public-methods
 
+
 class TestFunction():
     """
     A simple store for tracking information about a specific test. Tied heavily
@@ -54,6 +54,7 @@ class TestFunction():
         """
         return '"%s"' % self.name
 
+
 UnitTests = namedtuple('UnitTests',
                        ['sources',
                         'test_functions',
@@ -62,8 +63,9 @@ UnitTests = namedtuple('UnitTests',
 
 
 def build_mock_unit_tests(env, src_list=None, **kwargs):
+    # pylint: disable=wrong-spelling-in-docstring
     """
-    Call im place of Program with the same parameters other than the executable
+    Call in place of Program with the same parameters other than the executable
     name and the source files.
 
     In concert with the _test_source_list this method searches the source
@@ -109,6 +111,7 @@ def _parse_unit_tests(line, test_functions):
                          names[1].strip(),
                          names[2].strip()))
 
+
 def _parse_global_setup(line, global_setups):
     """parse global setup"""
     name = re.match("GLOBAL_SETUP\\(([a-zA-Z0-9_ ]*)\\)", line)
@@ -123,6 +126,7 @@ def _parse_global_teardowns(line, global_teardowns):
 
     if name is not None:
         global_teardowns.append(name.group(1))
+
 
 def _get_source_and_tests(env, source_list):
     """get source and tests"""
@@ -186,7 +190,6 @@ def _create_source_files(unit_tests):
     global_teardowns = '\n'.join('int %s(void **state);' % gt
                                  for gt in unit_tests.global_teardowns)
 
-
     test_source = """
 // Auto generated file to run the cmocka tests
 
@@ -211,14 +214,14 @@ static struct CMUnitTest generated_unit_tests[] = %s;
 
 struct _cmocka_tests *
 generated_cmocka_tests() {
-	static struct _cmocka_tests cmocka_tests;
+        static struct _cmocka_tests cmocka_tests;
 
-	cmocka_tests.group_name = "Unit Tests";
-	cmocka_tests.tests = generated_unit_tests;
-	cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
-	                                     sizeof(generated_unit_tests[0]);
+        cmocka_tests.group_name = "Unit Tests";
+        cmocka_tests.tests = generated_unit_tests;
+        cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
+                                             sizeof(generated_unit_tests[0]);
 
-	return &cmocka_tests;
+        return &cmocka_tests;
 }
 
 int (*global_setup_functions[])(void **state) = {%s};
@@ -237,7 +240,7 @@ int (*global_teardown_functions[])(void **state) = {%s};
 
     try:
         with open('cmocka_tests.c', 'r') as original_test_source_file:
-            original_test_source = original_test_source_file.read(1024*1024)
+            original_test_source = original_test_source_file.read(1024 * 1024)
     except IOError:
         original_test_source = ""
 
@@ -249,8 +252,8 @@ int (*global_teardown_functions[])(void **state) = {%s};
                                              'c_source',
                                              '*')):
         c_dest_path = path.basename(c_source_file)
-        if ((path.isfile(c_dest_path) is False) or
-                (path.getmtime(c_source_file) > path.getmtime(c_dest_path))):
+        if ((path.isfile(c_dest_path) is False)
+           or (path.getmtime(c_source_file) > path.getmtime(c_dest_path))):
             shutil.copy(c_source_file, c_dest_path)
 
     for c_source_file in [path.basename(file_name)

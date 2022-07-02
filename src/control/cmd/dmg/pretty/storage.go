@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,7 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+		fmt.Fprintf(out, "HugePage Size: %d KB\n", hss.HostStorage.HugePageInfo.PageSizeKb)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
 			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
@@ -165,7 +166,8 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
 		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
-		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		row[nvmeTitle] = fmt.Sprintf("%d",
+			len(parseNvmeFormatResults(hss.HostStorage.NvmeDevices)))
 		table = append(table, row)
 	}
 
@@ -182,7 +184,7 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 
 	iw1 := txtfmt.NewIndentWriter(iw)
 	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.StatusString()); err != nil {
+		dev.TargetIDs, dev.Rank, dev.NvmeState.String()); err != nil {
 
 		return err
 	}
