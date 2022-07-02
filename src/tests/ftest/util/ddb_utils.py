@@ -199,12 +199,10 @@ class DdbCommand(DdbCommandBase):
 
         """
         commands = ["dump_dtx"]
-
         if committed:
             commands.append("-c")
         if active:
             commands.append("-a")
-
         commands.append(component_path)
 
         self.single_command.value = " ".join(commands)

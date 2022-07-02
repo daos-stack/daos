@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import FormattedParameter, CommandWithParameters,\
-    CommandWithParameters, PositionalParameter
+    PositionalParameter
 from command_utils import CommandWithSubCommand
 
 
