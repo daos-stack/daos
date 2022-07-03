@@ -192,11 +192,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
-# Should work, but enable on master only for now.
-#    - name: Run NLT
-#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-#               --name build-post build-image
-#               ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+
 # Should work, but enable on master only for now.
 #    - name: Run NLT
 #      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
