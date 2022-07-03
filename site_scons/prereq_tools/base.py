@@ -1047,7 +1047,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def load_defaults(self, is_arm):
+    def load_defaults(self):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
