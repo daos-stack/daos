@@ -2988,19 +2988,19 @@ out:
 static void
 ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 {
-	struct pool_query_1_in	*in = crt_req_get(rpc);
-	struct pool_query_1_out	*out = crt_reply_get(rpc);
-	daos_prop_t		*prop = NULL;
-	struct pool_buf		*map_buf;
-	uint32_t		map_version = 0;
-	struct pool_svc		*svc;
-	struct pool_metrics	*metrics;
-	struct rdb_tx		tx;
-	d_iov_t			key;
-	d_iov_t			value;
-	struct pool_hdl		hdl = {0};
-	int			rc;
-	struct daos_prop_entry	*entry;
+	struct pool_query_v5_in	 *in = crt_req_get(rpc);
+	struct pool_query_v5_out *out = crt_reply_get(rpc);
+	daos_prop_t		 *prop = NULL;
+	struct pool_buf		 *map_buf;
+	uint32_t		  map_version = 0;
+	struct pool_svc		 *svc;
+	struct pool_metrics	 *metrics;
+	struct rdb_tx		  tx;
+	d_iov_t			  key;
+	d_iov_t			  value;
+	struct pool_hdl		  hdl = {0};
+	int			  rc;
+	struct daos_prop_entry	 *entry;
 
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
@@ -3201,13 +3201,13 @@ out:
 }
 
 void
-ds_pool_query_handler_0(crt_rpc_t *rpc)
+ds_pool_query_handler_v4(crt_rpc_t *rpc)
 {
 	ds_pool_query_handler(rpc, false);
 }
 
 void
-ds_pool_query_handler_1(crt_rpc_t *rpc)
+ds_pool_query_handler_v5(crt_rpc_t *rpc)
 {
 	ds_pool_query_handler(rpc, true);
 }
@@ -3412,15 +3412,15 @@ ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ran
 		  daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		  uint32_t *upgrade_layout_ver)
 {
-	int			rc;
-	struct rsvc_client	client;
-	crt_endpoint_t		ep;
-	struct dss_module_info	*info = dss_get_module_info();
-	crt_rpc_t		*rpc;
-	struct pool_query_1_in	*in;
-	struct pool_query_1_out	*out;
-	struct pool_buf		*map_buf;
-	uint32_t		map_size = 0;
+	int			  rc;
+	struct rsvc_client	  client;
+	crt_endpoint_t		  ep;
+	struct dss_module_info	 *info = dss_get_module_info();
+	crt_rpc_t		 *rpc;
+	struct pool_query_v5_in	 *in;
+	struct pool_query_v5_out *out;
+	struct pool_buf		 *map_buf;
+	uint32_t		  map_size = 0;
 
 	if (ranks == NULL || pool_info == NULL)
 		D_GOTO(out, rc = -DER_INVAL);

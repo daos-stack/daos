@@ -73,8 +73,8 @@ CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
-CRT_RPC_DEFINE(pool_query_0, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_0)
-CRT_RPC_DEFINE(pool_query_1, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_1)
+CRT_RPC_DEFINE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
+CRT_RPC_DEFINE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
@@ -131,31 +131,31 @@ CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 	.prf_co_ops  = NULL,	\
 }
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt_0[] = {
-	POOL_PROTO_CLI_RPC_LIST(0),
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
+	POOL_PROTO_CLI_RPC_LIST(4),
 	POOL_PROTO_SRV_RPC_LIST,
 };
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt_1[] = {
-	POOL_PROTO_CLI_RPC_LIST(1),
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
+	POOL_PROTO_CLI_RPC_LIST(5),
 	POOL_PROTO_SRV_RPC_LIST,
 };
 
 #undef X
 
-struct crt_proto_format pool_proto_fmt_0 = {
+struct crt_proto_format pool_proto_fmt_v4 = {
 	.cpf_name  = "pool",
-	.cpf_ver   = DAOS_POOL_VERSION - 1,
-	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_0),
-	.cpf_prf   = pool_proto_rpc_fmt_0,
+	.cpf_ver   = 4,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v4),
+	.cpf_prf   = pool_proto_rpc_fmt_v4,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
-struct crt_proto_format pool_proto_fmt_1 = {
+struct crt_proto_format pool_proto_fmt_v5 = {
 	.cpf_name  = "pool",
-	.cpf_ver   = DAOS_POOL_VERSION,
-	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_1),
-	.cpf_prf   = pool_proto_rpc_fmt_1,
+	.cpf_ver   = 5,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v5),
+	.cpf_prf   = pool_proto_rpc_fmt_v5,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
