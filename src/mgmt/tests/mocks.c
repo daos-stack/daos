@@ -449,8 +449,7 @@ uuid_t  ds_mgmt_pool_evict_uuid;
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
-		   uint32_t destroy, uint32_t force_destroy, char *machine,
-		   const char *group, uint32_t *count)
+		   uint32_t destroy, uint32_t force_destroy, char *machine, uint32_t *count)
 {
 	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
 	return ds_mgmt_pool_evict_return;
@@ -513,8 +512,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		     const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 {
 	return 0;
 }

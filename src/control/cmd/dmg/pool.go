@@ -339,8 +339,8 @@ func (cmd *poolCmd) PoolID() *PoolID {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	Recursive bool `short:"r" long:"recursive" description:"Remove DAOS pool and any child containers"`
-	Force     bool `short:"f" long:"force" description:"Force removal of DAOS pool by ignoring open handles"`
+	Recursive bool `short:"r" long:"recursive" description:"Destroy DAOS pool including any containers. Without this set the pool will not be destroyed if it has any containers"`
+	Force     bool `short:"f" long:"force" description:"Evict all pool connections prior to destroying DAOS pool. Without this set the pool will not be destroyed if connections exist"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated

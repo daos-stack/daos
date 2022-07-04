@@ -548,9 +548,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
-				  (req->force == true) ? 1 : 0);
+	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
@@ -646,7 +644,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
-				machine, req->sys, &count);
+				machine, &count);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
