@@ -10,8 +10,9 @@
 #define __DAOS_S3_INTERNAL_H__
 
 #include "daos.h"
-#include "daos_s3.h"
 #include "daos_fs.h"
+#include "daos_s3.h"
+#include <daos/event.h>
 
 #define METADATA_BUCKET        "_METADATA"
 #define MULTIPART_MAX_PARTS    10000

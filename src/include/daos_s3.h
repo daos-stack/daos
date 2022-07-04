@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#include <daos/event.h>
+#include <daos_event.h>
 
 /** DAOS S3 Pool handle */
 typedef struct ds3        ds3_t;
