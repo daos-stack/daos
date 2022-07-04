@@ -19,11 +19,17 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
+
 class StopError(Exception):
     """Fake StopError"""
 
+
 class InternalError(Exception):
     """Fake InternalError"""
+
+
+class UserError(Exception):
+    """Fake UserError"""
 
 
 ARGUMENTS = {}
