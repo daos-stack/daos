@@ -29,6 +29,7 @@ from collections import namedtuple
 
 # pylint: disable=too-few-public-methods
 
+
 class TestFunction():
     """
     A simple store for tracking information about a specific test. Tied heavily
@@ -62,6 +63,7 @@ UnitTests = namedtuple('UnitTests',
 
 
 def build_mock_unit_tests(env, src_list=None, **kwargs):
+    # pylint: disable=wrong-spelling-in-docstring
     """
     Call in place of Program with the same parameters other than the executable
     name and the source files.
@@ -109,6 +111,7 @@ def _parse_unit_tests(line, test_functions):
                          names[1].strip(),
                          names[2].strip()))
 
+
 def _parse_global_setup(line, global_setups):
     """parse global setup"""
     name = re.match("GLOBAL_SETUP\\(([a-zA-Z0-9_ ]*)\\)", line)
@@ -123,6 +126,7 @@ def _parse_global_teardowns(line, global_teardowns):
 
     if name is not None:
         global_teardowns.append(name.group(1))
+
 
 def _get_source_and_tests(env, source_list):
     """get source and tests"""
@@ -236,7 +240,7 @@ int (*global_teardown_functions[])(void **state) = {%s};
 
     try:
         with open('cmocka_tests.c', 'r') as original_test_source_file:
-            original_test_source = original_test_source_file.read(1024*1024)
+            original_test_source = original_test_source_file.read(1024 * 1024)
     except IOError:
         original_test_source = ""
 
@@ -248,8 +252,8 @@ int (*global_teardown_functions[])(void **state) = {%s};
                                              'c_source',
                                              '*')):
         c_dest_path = path.basename(c_source_file)
-        if ((path.isfile(c_dest_path) is False) or
-                (path.getmtime(c_source_file) > path.getmtime(c_dest_path))):
+        if ((path.isfile(c_dest_path) is False)
+           or (path.getmtime(c_source_file) > path.getmtime(c_dest_path))):
             shutil.copy(c_source_file, c_dest_path)
 
     for c_source_file in [path.basename(file_name)

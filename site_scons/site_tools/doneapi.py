@@ -6,17 +6,13 @@ Hack to support oneapi version of Intel compilers
 import sys
 import os
 
-# TODO: Should these be in fake_scons
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 import SCons.Tool.gcc
 import SCons.Util
-# pylint: enable=import-error
-# pylint: enable=no-name-in-module
 import SCons.Warnings
 import SCons.Errors
 
 
+# pylint: disable=too-few-public-methods
 class DetectCompiler():
     """Find oneapi compiler"""
 
@@ -53,7 +49,6 @@ def generate(env):
     """Add Builders and construction variables for Intel Oneapi C++C++ compiler
     to an Environment.
     """
-    # pylint: disable=no-member
     SCons.Tool.gcc.generate(env)
 
     detector = DetectCompiler()
