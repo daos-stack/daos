@@ -13,13 +13,44 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type DeviceUID [1]byte
-
-type DeviceDiscovery struct{}
-
-type PMemRegion struct{}
-
-type DeviceFirmwareInfo struct{}
+// DeviceDiscovery struct stub defined without CGO type members.
+type DeviceDiscovery struct {
+	All_properties_populated uint8
+	Pad_cgo_0                [3]byte
+	Device_handle            [4]byte
+	Physical_id              uint16
+	Vendor_id                uint16
+	Device_id                uint16
+	Revision_id              uint16
+	Channel_pos              uint16
+	Channel_id               uint16
+	Memory_controller_id     uint16
+	Socket_id                uint16
+	Node_controller_id       uint16
+	Pad_cgo_1                [2]byte
+	Memory_type              uint32
+	Dimm_sku                 uint32
+	Manufacturer             [2]uint8
+	Serial_number            [4]uint8
+	Subsystem_vendor_id      uint16
+	Subsystem_device_id      uint16
+	Subsystem_revision_id    uint16
+	Manufacturing_info_valid uint8
+	Manufacturing_location   uint8
+	Manufacturing_date       uint16
+	Part_number              PartNumber
+	Fw_revision              Version
+	Fw_api_version           Version
+	Pad_cgo_2                [5]byte
+	Capacity                 uint64
+	Interface_format_codes   [9]uint16
+	Uid                      DeviceUID
+	Lock_state               uint32
+	Manageability            uint32
+	Controller_revision_id   uint16
+	Reserved                 [48]uint8
+	Pad_cgo_3                [6]byte
+}
 
 // Init verifies library version is compatible with this application code.
 func (n *NvmMgmt) Init(log logging.Logger) error {
