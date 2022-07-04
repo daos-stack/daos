@@ -303,19 +303,35 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	return nvmeScanResp, nil
 }
 
+func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
+	if cfg.HelperLogFile != "" {
+		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged helper logging")
+		}
+	}
+
+	if cfg.FWHelperLogFile != "" {
+		if err := setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
+		}
+	}
+
+	return nil
+}
+
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
 func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
 	ei.RLock()
-	engineCfg := ei.runner.GetConfig()
-	engineIdx := engineCfg.Index
-	if getBdevDevicesFromCfgs(engineCfg.Storage.Tiers.BdevConfigs()).Len() == 0 {
-		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
-		ei.RUnlock()
+	ec := ei.runner.GetConfig()
+	ei.RUnlock()
+
+	if getBdevDevicesFromCfgs(ec.Storage.Tiers.BdevConfigs()).Len() == 0 {
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ec.Index)
+
 		return nil
 	}
-	ei.RUnlock()
 
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
 	hpi, err := getHugePageInfo()
@@ -333,7 +349,7 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	if memSizeFreeMb < memSizeReqMb {
 		srv.log.Errorf("huge page info: %+v", *hpi)
 
-		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,
+		return FaultInsufficientFreeHugePageMem(int(ec.Index), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
@@ -345,51 +361,29 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	return nil
 }
 
-func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
-	if cfg.HelperLogFile != "" {
-		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
-			return errors.Wrap(err, "unable to configure privileged helper logging")
-		}
+func cleanEngineHugePagesFn(srv *server, engineIdx uint32) error {
+	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
+
+	prepReq := storage.BdevPrepareRequest{
+		CleanHugePagesOnly: true,
 	}
 
-	if cfg.FWHelperLogFile != "" {
-		if err := setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
-			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
-		}
+	resp, err := srv.ctlSvc.NvmePrepare(prepReq)
+	if err != nil {
+		err = errors.Wrap(err, msg)
+		srv.log.Errorf(err.Error())
+
+		return errors.Wrapf(err, "engine %d", engineIdx)
 	}
+
+	srv.log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
 
 	return nil
-}
-
-func cleanEngineHugePagesFn(log logging.Logger, username string, svc *ControlService) onInstanceExitFn {
-	return func(ctx context.Context, engineIdx uint32, _ system.Rank, _ error, exPid uint64) error {
-		msg := fmt.Sprintf("cleaning engine %d (pid %d) hugepages after exit", engineIdx, exPid)
-
-		prepReq := storage.BdevPrepareRequest{
-			CleanHugePagesOnly: true,
-			CleanHugePagesPID:  exPid,
-			TargetUser:         username,
-		}
-
-		resp, err := svc.NvmePrepare(prepReq)
-		if err != nil {
-			err = errors.Wrap(err, msg)
-			log.Errorf(err.Error())
-			return err
-		}
-
-		log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
-
-		return nil
-	}
 }
 
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
-
-	// Register callback to clear hugepages used by engine process after it has exited.
-	engine.OnInstanceExit(cleanEngineHugePagesFn(srv.log, srv.runningUser.Username, srv.ctlSvc))
 
 	// Register callback to publish engine format requested events.
 	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))
@@ -405,8 +399,19 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		return nil
 	})
 
+	engine.RLock()
+	engineIdx := engine.runner.GetConfig().Index
+	engine.RUnlock()
+
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
+		// Clear hugepages created by SPDK but not in use by a current process.
+		if err := cleanEngineHugePagesFn(srv, engineIdx); err != nil {
+			srv.log.Errorf(err.Error())
+
+			return err
+		}
+
 		// Retrieve up-to-date hugepage info to evaluate and assign available memory.
 		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
 			"updating engine memory parameters")

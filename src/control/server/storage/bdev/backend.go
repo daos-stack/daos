@@ -9,11 +9,9 @@ package bdev
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
+	"regexp"
 	"sort"
-	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -25,8 +23,8 @@ import (
 )
 
 const (
-	hugePageDir    = "/dev/hugepages"
-	hugePagePrefix = "spdk"
+	hugePageDir         = "/dev/hugepages"
+	spdkHugepagePattern = `spdk_pid([0-9]+)map`
 )
 
 type (
@@ -41,12 +39,12 @@ type (
 		script  *spdkSetupScript
 	}
 
-	removeFn     func(string) error
-	userLookupFn func(string) (*user.User, error)
-	vmdDetectFn  func() (*hardware.PCIAddressSet, error)
-	hpCleanFn    func(string, string, string) (uint, error)
-	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
-	restoreFn    func()
+	statFn      func(string) (os.FileInfo, error)
+	removeFn    func(string) error
+	vmdDetectFn func() (*hardware.PCIAddressSet, error)
+	hpCleanFn   func(string) (uint, error)
+	writeConfFn func(logging.Logger, *storage.BdevWriteConfigRequest) error
+	restoreFn   func()
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -113,9 +111,22 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
+func isPIDActive(pidStr string, statter statFn) (bool, error) {
+	filename := fmt.Sprintf("/proc/%s", pidStr)
+
+	if _, err := statter(filename); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
 // hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-// name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count *uint) filepath.WalkFunc {
+// name begins with prefix and encoded pid is inactive.
+func hugePageWalkFunc(hugePageDir string, statter statFn, remover removeFn, count *uint) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -127,19 +138,19 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count
 				return nil
 			}
 			return filepath.SkipDir // skip subdirectories
-		case !strings.HasPrefix(info.Name(), prefix):
-			return nil // skip files without prefix
 		}
 
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat == nil {
-			return errors.New("stat missing for file")
-		}
-		if strconv.Itoa(int(stat.Uid)) != tgtUID {
-			return nil // skip not owned by target user
+		re := regexp.MustCompile(spdkHugepagePattern)
+		matches := re.FindStringSubmatch(info.Name())
+		if len(matches) != 2 {
+			return nil // skip files not matching expected pattern
 		}
 
-		if err := remove(path); err != nil {
+		if isActive, err := isPIDActive(matches[1], statter); err != nil || isActive {
+			return err // skip files created by an existing process (isActive == true)
+		}
+
+		if err := remover(path); err != nil {
 			return err
 		}
 		*count++
@@ -150,32 +161,23 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count
 
 // cleanHugePages removes hugepage files with pathPrefix that are owned by the user with username
 // tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) (count uint, _ error) {
+func cleanHugePages(hugePageDir string) (count uint, _ error) {
 	return count, filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove, &count))
+		hugePageWalkFunc(hugePageDir, os.Stat, os.Remove, &count))
 }
 
 // prepare receives function pointers for external interfaces.
-func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
+func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
 
-	usr, err := userLookup(req.TargetUser)
-	if err != nil {
-		return resp, errors.Wrapf(err, "lookup on local host")
-	}
-
-	// Remove hugepages matching file name beginning with prefix and owned by the target user.
-	hpPrefix := hugePagePrefix
-	if req.CleanHugePagesPID != 0 {
-		// If a pid is supplied then include in the prefix.
-		hpPrefix = fmt.Sprintf("%s_pid%dmap", hpPrefix, req.CleanHugePagesPID)
-	}
-	nrRemoved, err := hpClean(hugePageDir, hpPrefix, usr.Uid)
-	if err != nil {
-		return resp, errors.Wrapf(err, "clean spdk hugepages")
-	}
-	resp.NrHugePagesRemoved = nrRemoved
 	if req.CleanHugePagesOnly {
+		// Remove hugepages created by an inactive SPDK process.
+		nrRemoved, err := hpClean(hugePageDir)
+		if err != nil {
+			return resp, errors.Wrapf(err, "clean spdk hugepages")
+		}
+		resp.NrHugePagesRemoved = nrRemoved
+
 		return resp, nil
 	}
 
@@ -243,7 +245,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
-	return sb.prepare(req, user.Lookup, DetectVMD, cleanHugePages)
+	return sb.prepare(req, DetectVMD, cleanHugePages)
 }
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
