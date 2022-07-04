@@ -2015,7 +2015,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "performing fread of %#zx %#zx from %#zx", size, nmemb,
 			entry->fd_pos);
 
-	len     = nmemb * size;
+	len = nmemb * size;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
@@ -2058,7 +2058,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	ssize_t          bytes_written;
 	size_t           nwrite = 0;
 
-	fd                      = fileno(stream);
+	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fwrite;
 
@@ -2069,7 +2069,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fwrite;
 
-	len     = nmemb * size;
+	len = nmemb * size;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
