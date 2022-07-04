@@ -440,7 +440,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	d_list_for_each_entry_safe(f_shard, tmp, extended_list, fs_list) {
 		if (grp_map_is_set(grp_map, grp_map_idx, f_shard->fs_tgt_id)) {
 			d_list_del_init(&f_shard->fs_list);
-			D_FREE_PTR(f_shard);
+			D_FREE(f_shard);
 			continue;
 		}
 

@@ -22,6 +22,8 @@ uint32_t dtx_agg_thd_cnt_up;
 uint32_t dtx_agg_thd_cnt_lo;
 uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
+uint32_t dtx_batched_ult_max;
+
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
@@ -150,7 +152,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		D_FREE(dbpa);
 	}
 
-	D_FREE_PTR(dbca);
+	D_FREE(dbca);
 	ds_cont_child_put(cont);
 }
 
@@ -470,11 +472,14 @@ static void
 dtx_batched_commit_one(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_batched_cont_args	*dbca = arg;
 	struct ds_cont_child		*cont = dbca->dbca_cont;
 
 	if (dbca->dbca_commit_req == NULL)
 		goto out;
+
+	tls->dt_batched_ult_cnt++;
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_commit_req) &&
@@ -518,6 +523,7 @@ dtx_batched_commit_one(void *arg)
 	}
 
 	dbca->dbca_commit_done = 1;
+	tls->dt_batched_ult_cnt--;
 
 out:
 	dtx_put_dbca(dbca);
@@ -527,6 +533,7 @@ void
 dtx_batched_commit(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_batched_cont_args	*dbca;
 	struct sched_req_attr		 attr;
 	uuid_t				 anonym_uuid;
@@ -572,6 +579,7 @@ dtx_batched_commit(void *arg)
 		}
 
 		if (dtx_cont_opened(cont) && dbca->dbca_commit_req == NULL &&
+		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
@@ -1120,7 +1128,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		D_ASSERT(0);
 	}
 
-	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared) {
+	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
 		/* We do not know whether some other participants have
 		 * some active entry for this DTX, consider distributed
 		 * transaction case, the other participants may execute
@@ -1970,7 +1978,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	rc = ABT_future_create(dlh->dlh_normal_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (1): "DF_RC"\n", DP_RC(rc));
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 		return dss_abterr2der(rc);
 	}
 
@@ -2023,7 +2031,7 @@ exec:
 	rc = ABT_future_create(dlh->dlh_delay_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (3): "DF_RC"\n", DP_RC(rc));
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 		return dss_abterr2der(rc);
 	}
 

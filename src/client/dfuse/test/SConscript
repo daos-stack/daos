@@ -4,11 +4,11 @@ import daos_build
 IOIL_TEST_SRC = ['test_ioil.c']
 IOIL_BUILD_STATIC = False
 
+
 def build_static_tests(env):
     """build the static interception library"""
 
-    #This code requires a full static chain or some major
-    #linker magic.  Disabled for now.
+    # This code requires a full static chain or some major linker magic.  Disabled for now.
     if IOIL_BUILD_STATIC:
         to_build = env.get('libioil')
         if to_build in ('none', 'shared'):
