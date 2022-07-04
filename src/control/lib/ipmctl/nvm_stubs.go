@@ -13,13 +13,17 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type DeviceUID [1]byte
+
+type DeviceDiscovery struct{}
+
+type PMemRegion struct{}
+
+type DeviceFirmwareInfo struct{}
+
 // Init verifies library version is compatible with this application code.
 func (n *NvmMgmt) Init(log logging.Logger) error {
 	return nil
-}
-
-func getDevices(log logging.Logger, devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
-	return 0
 }
 
 // GetModules queries number of PMem modules and retrieves device_discovery structs for each before
