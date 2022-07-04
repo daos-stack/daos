@@ -7,14 +7,6 @@
 // Package ipmctl provides Go bindings for libipmctl Native Management API
 package ipmctl
 
-// CGO_CFLAGS & CGO_LDFLAGS env vars can be used
-// to specify additional dirs.
-
-/*
-
-#include "nvm_management.h"
-*/
-import "C"
 import (
 	"github.com/daos-stack/daos/src/control/logging"
 )

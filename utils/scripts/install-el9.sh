@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/usr/bin/env bash
 
 # Install OS updates and packages as required for building DAOS on EL 9 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -8,7 +8,9 @@
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
 
-arch=$(uname -i)
+set -e
+
+#arch=$(uname -i)
 
 dnf --nodocs install \
     boost-python3-devel \
@@ -66,8 +68,8 @@ dnf --nodocs install \
 #    Lmod \
 #
 # ipmctl is only available on x86_64
-if [ "$arch" = x86_64 ]; then
+#if [ "$arch" = x86_64 ]; then
 #    dnf --nodocs install \
 #        ipmctl \
 #        libipmctl-devel
-fi
+#fi
