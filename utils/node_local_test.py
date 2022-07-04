@@ -1165,7 +1165,7 @@ class DFuse():
             self._env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
         if self.log_flush:
-            my_env['D_LOG_FLUSH'] = 'DEBUG'
+            self._env['D_LOG_FLUSH'] = 'DEBUG'
 
         if v_hint is None:
             v_hint = get_inc_id()

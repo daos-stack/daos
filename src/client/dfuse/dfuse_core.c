@@ -403,7 +403,7 @@ dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void 
 
 	*ptr = NULL;
 
-	rc   = dfs_release(obj);
+	rc = dfs_release(obj);
 	if (rc == 0) {
 		D_FREE(_ptr);
 		return;
