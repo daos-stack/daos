@@ -473,7 +473,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
 	case len(cfg.AccessPoints) == 1:
-		log.Infof("WARNING: Configuration includes only one access point. This is provides no redundancy " +
+		log.Infof("WARNING: Configuration includes only one access point. This provides no redundancy " +
 			"in the event of an access point failure.")
 	}
 
