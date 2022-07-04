@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -364,7 +363,9 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
+    if ARM_PLATFORM:
+        spdk_arch = 'native'
+    elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
         spdk_arch = 'nehalem'
@@ -397,11 +398,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
-                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
-                extra_include_path=['/usr/include/dpdk',
-                                    '$SPDK_PREFIX/include/dpdk',
-                                    # debian dpdk rpm puts rte_config.h here
-                                    '/usr/include/x86_64-linux-gnu/dpdk'],
+                headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',

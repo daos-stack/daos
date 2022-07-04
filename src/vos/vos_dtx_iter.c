@@ -49,7 +49,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (oiter->oit_cont != NULL)
 		vos_cont_decref(oiter->oit_cont);
 
-	D_FREE_PTR(oiter);
+	D_FREE(oiter);
 	return rc;
 }
 

@@ -165,6 +165,8 @@ struct dfs {
 	struct dfs_mnt_hdls	*pool_hdl;
 	/** hash entry for cont open handle - valid on dfs_connect() */
 	struct dfs_mnt_hdls	*cont_hdl;
+	/** the root dir stat buf */
+	struct stat		root_stbuf;
 };
 
 struct dfs_entry {
@@ -1904,6 +1906,15 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		D_GOTO(err_super, rc);
 	}
 
+	dfs->root_stbuf.st_nlink = 1;
+	dfs->root_stbuf.st_size = sizeof(root_dir);
+	dfs->root_stbuf.st_mode = dfs->root.mode;
+	dfs->root_stbuf.st_uid = root_dir.uid;
+	dfs->root_stbuf.st_gid = root_dir.gid;
+	dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
+	dfs->root_stbuf.st_mtim.tv_sec = root_dir.mtime;
+	dfs->root_stbuf.st_ctim.tv_sec = root_dir.ctime;
+
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
@@ -2919,6 +2930,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	char			*token;
 	char			*rem, *sptr = NULL; /* bogus compiler warning */
 	bool			exists;
+	bool			is_root = true;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};
 	size_t			len;
@@ -2968,6 +2980,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	for (token = strtok_r(rem, "/", &sptr);
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
+		is_root = false;
 lookup_rel_path_loop:
 
 		/*
@@ -3178,13 +3191,17 @@ lookup_rel_path_loop:
 		*mode = obj->mode;
 
 	if (stbuf) {
-		stbuf->st_nlink = 1;
-		stbuf->st_mode = obj->mode;
-		stbuf->st_uid = entry.uid;
-		stbuf->st_gid = entry.gid;
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_ctim.tv_sec = entry.ctime;
+		if (is_root) {
+			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
+		} else {
+			stbuf->st_nlink = 1;
+			stbuf->st_mode = obj->mode;
+			stbuf->st_uid = entry.uid;
+			stbuf->st_gid = entry.gid;
+			stbuf->st_atim.tv_sec = entry.atime;
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_ctim.tv_sec = entry.ctime;
+		}
 	}
 
 	obj->flags = flags;

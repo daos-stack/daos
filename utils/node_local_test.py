@@ -1379,7 +1379,8 @@ def run_daos_cmd(conf,
                  show_stdout=False,
                  valgrind=True,
                  log_check=True,
-                 use_json=False):
+                 use_json=False,
+                 cwd=None):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1414,20 +1415,17 @@ def run_daos_cmd(conf,
         del cmd_env['DD_SUBSYS']
         del cmd_env['D_LOG_MASK']
 
-    with tempfile.NamedTemporaryFile(prefix='dnt_cmd_{}_'.format(get_inc_id()),
+    with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
                                      suffix='.log',
                                      dir=conf.tmp_dir,
-                                     delete=False) as lf:
-        log_name = lf.name
+                                     delete=False) as log_file:
+        log_name = log_file.name
         cmd_env['D_LOG_FILE'] = log_name
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
-    rc = subprocess.run(exec_cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        env=cmd_env,
-                        check=False)
+    rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        env=cmd_env, check=False, cwd=cwd)
 
     if rc.stderr != b'':
         print('Stderr from command')
@@ -1460,13 +1458,15 @@ def run_daos_cmd(conf,
     dcr.rc = rc
     return dcr
 
+
 def create_cont(conf,
                 pool=None,
                 ctype=None,
                 label=None,
                 path=None,
                 valgrind=False,
-                log_check=True):
+                log_check=True,
+                cwd=None):
     """Create a container and return the uuid"""
 
     cmd = ['container', 'create']
@@ -1475,7 +1475,7 @@ def create_cont(conf,
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties', 'label:{}'.format(label)])
+        cmd.extend(['--properties', f'label:{label}'])
 
     if path:
         cmd.extend(['--path', path])
@@ -1487,7 +1487,8 @@ def create_cont(conf,
     def _create_cont():
         """Helper function for create_cont"""
 
-        rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
+        rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind,
+                          cwd=cwd)
         print(rc)
         return rc
 
@@ -1504,6 +1505,7 @@ def create_cont(conf,
 
     assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
+
 
 def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     """Destroy a container"""
@@ -1696,6 +1698,10 @@ class posix_tests():
         print(rc)
         assert rc.returncode == 0, rc
 
+        rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()], use_json=True)
+        print(rc)
+        assert rc.returncode == 0, rc
+
     def test_cache(self):
         """Test with caching enabled"""
 
@@ -1756,7 +1762,7 @@ class posix_tests():
         with open(filename, 'w') as fd:
             fd.write('hello')
 
-        os.truncate(filename, 1024*1024*4)
+        os.truncate(filename, 1024 * 1024 * 4)
         with open(filename, 'r') as fd:
             data = fd.read(5)
             print('_{}_'.format(data))
@@ -1779,12 +1785,20 @@ class posix_tests():
             assert rc.returncode == 0, rc
 
         child_path = join(self.dfuse.dir, 'new_cont')
-        new_cont = create_cont(self.conf, self.pool.uuid, path=child_path)
-        print(new_cont)
+        new_cont1 = create_cont(self.conf, self.pool.uuid, path=child_path)
+        print(new_cont1)
+
+        # Check that cont create works with relative paths where there is no directory part,
+        # this is important as duns inspects the path and tries to access the parent directory.
+        child_path_cwd = join(self.dfuse.dir, 'new_cont_2')
+        new_cont_cwd = create_cont(self.conf, self.pool.uuid, path='new_cont_2', cwd=self.dfuse.dir)
+        print(new_cont_cwd)
+
         _check_cmd(child_path)
+        _check_cmd(child_path_cwd)
         _check_cmd(self.dfuse.dir)
 
-        # Do not destroy the container at this point as dfuse will be holding a reference to it.
+        # Do not destroy the new containers at this point as dfuse will be holding references.
         # destroy_container(self.conf, self.pool.id(), new_cont)
 
     def test_two_mounts(self):
