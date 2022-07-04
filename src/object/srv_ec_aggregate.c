@@ -2103,7 +2103,8 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	rc = agg_shard_is_leader(agg_param->ap_pool_info.api_pool, agg_entry);
 	if (rc == 1) {
-		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting\n",
+		/* D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting\n", */
+		D_ERROR("oid:"DF_UOID":"DF_KEY" ec agg starting\n",
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey));
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
 		rc = 0;
@@ -2263,10 +2264,10 @@ check:
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+		D_ERROR("EC aggregation yield type %d. acts %u\n",
 			desc->id_type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			D_ERROR("EC aggregation quit\n");
 			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
@@ -2352,10 +2353,10 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_param->ap_credits += 20;
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+		D_ERROR("EC aggregation yield type %d. acts %u\n",
 			type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			D_ERROR("EC aggregation quit\n");
 			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
@@ -2509,7 +2510,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	D_ASSERT(rc == 0);
 out:
 	if (rc) {
-		D_DEBUG(DB_EPC, "aggregate param init failed: %d\n", rc);
+		D_ERROR("aggregate param init failed: %d, will ec_agg_param_fini\n", rc);
 		ec_agg_param_fini(cont, agg_param);
 	} else {
 		agg_param->ap_initialized = 1;
@@ -2598,8 +2599,16 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)
+		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
 			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
+			D_ERROR(DF_UUID" tgt_idx %d, UPDATE cont->sc_ec_query_agg_eph %p as "DF_X64"\n",
+				DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id,
+				cont->sc_ec_query_agg_eph, cont->sc_ec_agg_eph);
+		}
+		D_ERROR(DF_UUID" tgt_idx %d, cont->sc_ec_agg_eph updated to "DF_X64
+			", cont->sc_ec_query_agg_eph %p \n",
+			DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id,
+			cont->sc_ec_agg_eph, cont->sc_ec_query_agg_eph);
 	}
 
 	return rc;
