@@ -29,8 +29,6 @@
 
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
 
-#define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
-
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
 
@@ -62,11 +60,6 @@ struct dfuse_user_reply {
 	gid_t gid;
 };
 
-struct dfuse_user_reply {
-	uid_t uid;
-	gid_t gid;
-};
-
 /* Defines the IOCTL command to get the object ID for a open file */
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, struct dfuse_il_reply))
 
@@ -78,10 +71,6 @@ struct dfuse_user_reply {
 /* Defines the IOCTL command to get the dfs/object handle sizes for a open file */
 #define DFUSE_IOCTL_IL_DSIZE                                                                       \
 	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_DSIZE, struct dfuse_hsd_reply))
-
-/* Return the user running dfuse */
-#define DFUSE_IOCTL_DFUSE_USER                                                                     \
-	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_R_DFUSE_USER, struct dfuse_user_reply))
 
 /* Return the user running dfuse */
 #define DFUSE_IOCTL_DFUSE_USER                                                                     \
