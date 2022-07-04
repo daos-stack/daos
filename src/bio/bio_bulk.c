@@ -680,7 +680,7 @@ done:
 	biod->bd_bulk_hdls[biod->bd_bulk_cnt] = hdl;
 	biod->bd_bulk_cnt++;
 
-	return 0;
+	return rc;
 }
 
 void
