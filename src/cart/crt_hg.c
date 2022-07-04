@@ -140,7 +140,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 		*prov = crt_prov_str_to_na_type(provider_str);
 
 	if (addr)
-		strncpy(addr, addr_str + 2, CRT_ADDR_STR_MAX_LEN - 1);
+		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
 
 	return 0;
 }
@@ -553,7 +553,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return &prov_data->cpg_ctx_list;
+	return &(prov_data->cpg_ctx_list);
 }
 
 static int
@@ -833,9 +833,9 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Could not destroy HG context, hg_ret: %d %s\n", hg_ret,
-				HG_Error_to_string(hg_ret));
-			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+			D_ERROR("Could not destroy HG context, hg_ret: %d.\n",
+				hg_ret);
+			D_GOTO(out, rc = -DER_HG);
 		}
 		hg_ctx->chc_hgctx = NULL;
 	}
@@ -1620,7 +1620,8 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 			D_DEBUG(DB_NET, "bulk transferring canceled.\n");
 			rc = -DER_CANCELED;
 		} else {
-			D_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+			D_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
+				hg_cbinfo->ret);
 			hg_ret = hg_cbinfo->ret;
 			rc = -DER_HG;
 		}

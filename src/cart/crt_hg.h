@@ -177,8 +177,6 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
-	case HG_BUSY:
-		return -DER_BUSY;
 	default:
 		return -DER_HG;
 	};
