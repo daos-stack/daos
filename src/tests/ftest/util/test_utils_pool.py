@@ -879,10 +879,16 @@ class TestPool(TestDaosApiBase):
 
         """
         daos_space = self.get_pool_daos_space()
+        # Print the raw data.
+        print('scm raw', daos_space["s_free"][0], daos_space["s_total"][0])
+        print('nvme raw', daos_space["s_free"][1], daos_space["s_total"][1])
+        # Print the percentages without rounding.
+        print('scm', float(daos_space["s_free"][0]) / float(daos_space["s_total"][0]) * 100)
+        print('nvme', float(daos_space["s_free"][1]) / float(daos_space["s_total"][1]) * 100)
         pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
-                                     float(daos_space["s_total"][0]) * 100, 2),
+                                     float(daos_space["s_total"][0]) * 100, 4),
                         'nvme': round(float(daos_space["s_free"][1]) /
-                                      float(daos_space["s_total"][1]) * 100, 2)}
+                                      float(daos_space["s_total"][1]) * 100, 4)}
         return pool_percent
 
     def get_pool_rebuild_status(self):
