@@ -204,7 +204,6 @@ update_or_fetch(bool update)
 
 			rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey_iov,
 					     iod_nr, iods, sgls, NULL);
-			assert_rc_equal(rc, 0);
 		} else {
 			if ((cond_rand % 100) < cond_pct) {
 				switch (cond_rand % 2) {
@@ -219,7 +218,6 @@ update_or_fetch(bool update)
 
 			rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &dkey_iov,
 					    iod_nr, iods, sgls, NULL, NULL);
-			assert_rc_equal(rc, 0);
 		}
 	}
 
