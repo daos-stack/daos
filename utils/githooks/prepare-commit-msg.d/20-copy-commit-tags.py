@@ -2,7 +2,6 @@
 
 """Git hook to copy forward commit message metadata to new commits."""
 
-import os
 import sys
 import subprocess  # nosec
 from collections import OrderedDict
@@ -12,6 +11,7 @@ class NotTag(Exception):
     """Nothing"""
 
 # TODO: Call get_tag_kv function from main and check https: links.
+
 
 def main():
     """Run the check"""
