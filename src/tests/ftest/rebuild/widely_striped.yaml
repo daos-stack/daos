@@ -12,6 +12,7 @@ hosts:
 timeout: 500
 server_config:
   name: daos_server
+  crt_timeout: 60
   servers:
     targets: 8
     bdev_class: nvme
