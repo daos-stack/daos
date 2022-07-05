@@ -42,7 +42,7 @@
 |SCM|Storage-Class Memory|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
-|[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
+|[SWIM](https://doi.org/10.1109/DSN.2002.1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|
 |UUID|Universal Unique Identifier|
