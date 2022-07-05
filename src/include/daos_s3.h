@@ -247,4 +247,8 @@ ds3_obj_open(const char *name, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_
 int
 ds3_obj_close(ds3_obj_t *ds3o, daos_event_t *ev);
 
+#if defined(__cplusplus)
+}
+#endif
+
 #endif /* __DAOS_S3_H__ */
