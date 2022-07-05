@@ -244,6 +244,7 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
+#ifdef ULT_MMAP_STACK
 /* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
 static inline void
 dss_free_stack_cb(void *arg)
@@ -256,6 +257,9 @@ dss_free_stack_cb(void *arg)
 		desc->sp = dx->dx_sp;
 
 }
+#else
+#define dss_free_stack_cb NULL
+#endif
 
 static inline int
 sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
