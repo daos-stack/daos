@@ -119,13 +119,12 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
-        build_jobs = 24
+        build_jobs = 6 * 5
         if intercept:
             build_jobs = 1
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
-        # not yet work, so run this part in serial.  The VMs have 6 cores so run 24 jobs to keep
-        # them busy.
+        # not yet work, so run this part in serial.  The VMs have 6 cores each.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
