@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 from scrubber_test_base import TestWithScrubber
 
 
@@ -44,10 +45,20 @@ class TestWithScrubberFault(TestWithScrubber):
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
-        final_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
-        if status is False:
-            self.log.info("------Test Failed-----")
-            self.log.info("---No metrics value change----")
+        start_time = 0
+        finish_time = 0
+        poll_status = False
+        start_time = time.time()
+        while int(finish_time - start_time) < 60 and poll_status is False:
+            final_metrics = self.scrubber.get_scrub_corrupt_metrics()
+            status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
+            if status is False:
+                self.log.info("------Test Failed-----")
+                self.log.info("---No metrics value change----")
+            else:
+                poll_status = True
+            finish_time = time.time()
+        if poll_status is True:
+            self.log.info("------Test passed------")
+        else:
             self.fail("------Test Failed-----")
-        self.log.info("------Test passed------")
