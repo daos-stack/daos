@@ -82,7 +82,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 
 	rc = pmemobj_ctl_set(ctx->uc_uma.uma_pool, "stats.enabled", &enabled);
 	if (rc) {
-		perror("Enable SCM usage statistics failed. rc:%d\n", rc);
+		perror("Enable SCM usage statistics failed.");
 		goto free_ctx;
 	}
 
@@ -120,8 +120,8 @@ end:
 	return 0;
 destroy:
 	pmemobj_close(ctx->uc_uma.uma_pool);
-	if (remove(utx->uc_pool_name) != 0)
-		D_ERROR("Failed to remove %s: %s\n", utx->uc_pool_name, strerror(errno));
+	if (remove(ctx->uc_pool_name) != 0)
+		D_ERROR("Failed to remove %s: %s\n", ctx->uc_pool_name, strerror(errno));
 free_ctx:
 	D_FREE(ctx);
 	return rc;
