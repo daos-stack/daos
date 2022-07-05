@@ -175,6 +175,8 @@ free_io_params(struct io_params *io_list)
 static int
 free_io_params_cb(tse_task_t *task, void *data)
 {
+	if (task->dt_result)
+		D_ERROR("FAiled IO "DF_RC"\n", DP_RC(task->dt_result));
 	free_io_params(*((struct io_params **)data));
 	return task->dt_result;
 }
