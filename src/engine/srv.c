@@ -478,7 +478,7 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = daos_abt_thread_create(dx->dx_sp, dx->dx_sp, dx->dx_pools[DSS_POOL_NVME_POLL],
+		rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NVME_POLL],
 					    dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
@@ -751,7 +751,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = daos_abt_thread_create(dx->dx_sp, dx->dx_sp, dx->dx_pools[DSS_POOL_NET_POLL],
+	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NET_POLL],
 				    dss_srv_handler, dx, attr,
 				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {

@@ -82,19 +82,21 @@ typedef struct {
 	void *thread_arg;
 	/* per-size free-list of stacks */
 	d_list_t stack_list;
-	/* ULT execution XStream, where to free stack */
+	/* by default, pool where to free stack */
 	struct stack_pool *sp;
+	/* callback to determine where to free stack at ULT exit time */
+	void (*free_stack_cb)(void *);
 } mmap_stack_desc_t;
 
 void free_stack(void *arg);
 
 void mmap_stack_wrapper(void *arg);
 
-int mmap_stack_thread_create(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
+int mmap_stack_thread_create(struct stack_pool *sp_alloc, void (*free_stack_cb)(void *),
 			     ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
 			     ABT_thread_attr attr, ABT_thread *newthread);
 
-int mmap_stack_thread_create_on_xstream(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
+int mmap_stack_thread_create_on_xstream(struct stack_pool *sp_alloc, void (*free_stack_cb)(void *),
 					ABT_xstream xstream, void (*thread_func)(void *),
 					void *thread_arg, ABT_thread_attr attr,
 					ABT_thread *newthread);
@@ -106,6 +108,6 @@ void stack_pool_destroy(struct stack_pool *sp);
 #define daos_abt_thread_create mmap_stack_thread_create
 #define daos_abt_thread_create_on_xstream mmap_stack_thread_create_on_xstream
 #else /* !defined(ULT_MMAP_STACK) */
-#define daos_abt_thread_create(sp_alloc, sp_free, ...) ABT_thread_create(__VA_ARGS__)
-#define daos_abt_thread_create_on_xstream(sp_alloc, sp_free, ...) ABT_thread_create_on_xstream(__VA_ARGS__)
+#define daos_abt_thread_create(sp_alloc, free_stack_cb, ...) ABT_thread_create(__VA_ARGS__)
+#define daos_abt_thread_create_on_xstream(sp_alloc, free_stack_cb, ...) ABT_thread_create_on_xstream(__VA_ARGS__)
 #endif
