@@ -11,8 +11,7 @@ pool:
     control_method: dmg
 container:
     control_method: daos
-    properties:
-        - compression:lz4
+    properties: compression:lz4
 ior:
     client_processes:
         np: 1
