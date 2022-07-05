@@ -281,39 +281,39 @@ show_help(char *name)
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info	*fs_handle = NULL;
-	struct dfuse_info	*dfuse_info = NULL;
-	struct dfuse_pool	*dfp = NULL;
-	struct dfuse_cont	*dfs = NULL;
-	struct duns_attr_t	path_attr = {};
-	struct duns_attr_t	duns_attr = {};
-	uuid_t			cont_uuid = {};
-	uuid_t			pool_uuid = {};
-	char			*pool_name = NULL;
-	char			*cont_name = NULL;
-	char			c;
-	int			rc;
-	int			rc2;
-	char			*path = NULL;
-	bool			have_thread_count = false;
+	struct dfuse_projection_info *fs_handle  = NULL;
+	struct dfuse_info            *dfuse_info = NULL;
+	struct dfuse_pool            *dfp        = NULL;
+	struct dfuse_cont            *dfs        = NULL;
+	struct duns_attr_t            path_attr  = {};
+	struct duns_attr_t            duns_attr  = {};
+	uuid_t                        cont_uuid  = {};
+	uuid_t                        pool_uuid  = {};
+	char                         *pool_name  = NULL;
+	char                         *cont_name  = NULL;
+	char                          c;
+	int                           rc;
+	int                           rc2;
+	char                         *path              = NULL;
+	bool                          have_thread_count = false;
+	int                           pos_index         = 0;
 
-	struct option long_options[] = {
-		{"mountpoint",		required_argument, 0, 'm'},
-		{"path",		required_argument, 0, 'P'},
-		{"pool",		required_argument, 0, 'p'},
-		{"container",		required_argument, 0, 'c'},
-		{"sys-name",		required_argument, 0, 'G'},
-		{"singlethread",	no_argument,	   0, 'S'},
-		{"thread-count",	required_argument, 0, 't'},
-		{"foreground",		no_argument,	   0, 'f'},
-		{"enable-caching",	no_argument,	   0, 'E'},
-		{"enable-wb-cache",	no_argument,	   0, 'F'},
-		{"disable-caching",	no_argument,	   0, 'A'},
-		{"disable-wb-cache",	no_argument,	   0, 'B'},
-		{"version",		no_argument,	   0, 'v'},
-		{"help",		no_argument,	   0, 'h'},
-		{0, 0, 0, 0}
-	};
+	struct option                 long_options[] = {{"mountpoint", required_argument, 0, 'm'},
+							{"path", required_argument, 0, 'P'},
+							{"pool", required_argument, 0, 'p'},
+							{"container", required_argument, 0, 'c'},
+							{"sys-name", required_argument, 0, 'G'},
+							{"singlethread", no_argument, 0, 'S'},
+							{"thread-count", required_argument, 0, 't'},
+							{"foreground", no_argument, 0, 'f'},
+							{"enable-caching", no_argument, 0, 'E'},
+							{"enable-wb-cache", no_argument, 0, 'F'},
+							{"disable-caching", no_argument, 0, 'A'},
+							{"disable-wb-cache", no_argument, 0, 'B'},
+							{"options", required_argument, 0, 'o'},
+							{"version", no_argument, 0, 'v'},
+							{"help", no_argument, 0, 'h'},
+							{0, 0, 0, 0} };
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -328,8 +328,7 @@ main(int argc, char **argv)
 	dfuse_info->di_wb_cache = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "m:St:fhv",
-				long_options, NULL);
+		c = getopt_long(argc, argv, "m:St:o:fhv", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -345,14 +344,14 @@ main(int argc, char **argv)
 			dfuse_info->di_group = optarg;
 			break;
 		case 'E':
-			dfuse_info->di_caching = true;
+			dfuse_info->di_caching  = true;
 			dfuse_info->di_wb_cache = true;
 			break;
 		case 'F':
 			dfuse_info->di_wb_cache = true;
 			break;
 		case 'A':
-			dfuse_info->di_caching = false;
+			dfuse_info->di_caching  = false;
 			dfuse_info->di_wb_cache = false;
 			break;
 		case 'B':
@@ -368,12 +367,12 @@ main(int argc, char **argv)
 			/* Set it to be single threaded, but allow an extra one
 			 * for the event queue processing
 			 */
-			dfuse_info->di_threaded = false;
+			dfuse_info->di_threaded     = false;
 			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
-			have_thread_count = true;
+			have_thread_count           = true;
 			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
@@ -388,6 +387,24 @@ main(int argc, char **argv)
 			D_GOTO(out_debug, rc = -DER_SUCCESS);
 			break;
 		case '?':
+			show_help(argv[0]);
+			D_GOTO(out_debug, rc = -DER_INVAL);
+			break;
+		}
+	}
+
+	for (pos_index = optind; optind < argc; optind++) {
+		switch (optind - pos_index) {
+		case 0:
+			dfuse_info->di_mountpoint = argv[optind];
+			break;
+		case 1:
+			pool_name = argv[optind];
+			break;
+		case 2:
+			cont_name = argv[optind];
+			break;
+		default:
 			show_help(argv[0]);
 			D_GOTO(out_debug, rc = -DER_INVAL);
 			break;
