@@ -16,7 +16,7 @@
 #include <daos/mgmt.h>
 #include <daos/event.h>
 
-#include "crt_internal.h"
+#include "../crt_internal.h"
 #include "crt_utils.h"
 
 /* Global structures */
@@ -115,7 +115,6 @@ write_completion_file(void)
 	fclose(fptr);
 	D_FREE(completion_file);
 }
-
 
 void *
 crtu_progress_fn(void *data)
@@ -818,4 +817,3 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 out:
 	return rc;
 }
-
