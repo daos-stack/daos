@@ -16,6 +16,11 @@ class NotTag(Exception):
 def main():
     """Run the check"""
 
+    print(f'copy-tags args are {sys.argv}')
+    # Will be unset for a regular commit, 'commit' and amend.
+    if len(sys.argv) > 2 and sys.argv[2] not in ('message', 'template'):
+        return
+
     def get_tag_kv(line):
         """Convert a line of test to a key/value"""
 
@@ -36,10 +41,6 @@ def main():
         output += 'Quick-Functional: true\n'
         output += 'Test-tag: dfuse\n'
         return output
-
-    if os.path.exists('.git/MERGE_HEAD'):
-        print('Not modifying merge-head')
-        return
 
     tags = OrderedDict()
     rc = subprocess.run(['git', 'log', '-1'], stdout=subprocess.PIPE, check=True)
@@ -77,8 +78,13 @@ def main():
                 matched = True
 
                 idx = -1
-                if output[idx] == '':
-                    idx -= 1
+                try:
+                    if output and output[idx] == '':
+                        idx -= 1
+                except IndexError:
+                    print(idx)
+                    print(output)
+                    raise
 
                 for (key, value) in tags.items():
                     output.insert(idx, f'{key}: {value}')
