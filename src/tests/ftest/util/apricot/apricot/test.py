@@ -27,7 +27,7 @@ from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
-    DaosTestError, run_command, get_avocado_config_value, set_avocado_config_value \
+    DaosTestError, run_command, get_avocado_config_value, set_avocado_config_value, \
     dump_engines_stacks
 from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
