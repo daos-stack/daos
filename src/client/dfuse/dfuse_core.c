@@ -957,6 +957,49 @@ err:
 	return rc;
 }
 
+/* Set a timer to mark cache entry as valid */
+void
+dfuse_cache_set_time(struct dfuse_inode_entry *ie)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	/* Lock */
+	ie->ie_cache_last_update = now;
+	/* Unlock */
+}
+
+bool
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          age;
+	double          timeout;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	/* Lock */
+
+	left.tv_sec  = now.tv_sec - ie->ie_cache_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_cache_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	age     = left.tv_sec + ((double)left.tv_nsec / 1000000000);
+	timeout = max_age - age;
+	if (timeout > 0) {
+		DFUSE_TRA_INFO(ie, "Allowing cache use, time remaining: %lf", timeout);
+		use = true;
+	}
+
+	/* Unlock */
+
+	return use;
+}
+
 int
 dfuse_fs_init(struct dfuse_info *dfuse_info,
 	      struct dfuse_projection_info **_fsh)
@@ -1007,6 +1050,13 @@ err_pt:
 err:
 	D_FREE(fs_handle);
 	return rc;
+}
+
+void
+dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
+{
+	oh->doh_dfs = ie->ie_dfs->dfs_ns;
+	oh->doh_ie  = ie;
 }
 
 void
