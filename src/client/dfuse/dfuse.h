@@ -570,6 +570,8 @@ struct dfuse_inode_entry {
 	bool                     ie_unlinked;
 };
 
+extern char *duns_xattr_name;
+
 /* Generate the inode to use for this dfs object.  This is generating a single
  * 64 bit number from three 64 bit numbers so will not be perfect but does
  * avoid most conflicts.
@@ -595,9 +597,7 @@ void
 dfuse_cache_set_time(struct dfuse_inode_entry *ie);
 
 bool
-	     dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age);
-
-extern char *duns_xattr_name;
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
