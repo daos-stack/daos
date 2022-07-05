@@ -19,7 +19,7 @@ class DmgServerSetLogmasksTest(ControlTestBase):
         """
         JIRA ID: DAOS-10900
         Test Description: Test that server set-logmasks command completes successfully.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=basic,control,dmg
         :avocado: tags=test_dmg_server_set_logmasks
