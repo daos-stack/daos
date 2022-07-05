@@ -15,7 +15,6 @@
 #include "srv_layout.h"
 
 /** Root KVS */
-RDB_STRING_KEY(ds_pool_prop_, version);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
 RDB_STRING_KEY(ds_pool_prop_, label);
@@ -27,18 +26,17 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
-RDB_STRING_KEY(ds_pool_prop_, policy);
-RDB_STRING_KEY(ds_pool_prop_, global_version);
-RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
-RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
-
-/** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_prop_, redun_fac);
 RDB_STRING_KEY(ds_pool_prop_, ec_pda);
 RDB_STRING_KEY(ds_pool_prop_, rp_pda);
 RDB_STRING_KEY(ds_pool_attr_, user);
+RDB_STRING_KEY(ds_pool_prop_, policy);
+RDB_STRING_KEY(ds_pool_prop_, global_version);
+RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
+RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
+RDB_STRING_KEY(ds_pool_prop_, svc_redun_fac);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -72,7 +70,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val	= DAOS_EC_CELL_DEF,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_REDUN_FAC,
-		.dpe_val	= DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
+		.dpe_val	= DAOS_PROP_PO_REDUN_FAC_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_EC_PDA,
 		.dpe_val	= DAOS_PROP_PO_EC_PDA_DEFAULT,
@@ -89,6 +87,9 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_SVC_REDUN_FAC,
+		.dpe_val	= DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT,
 	}
 };
 

@@ -552,7 +552,6 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
 	}
 	wantReq.Tierratio = []float64{0, 0}
-	wantReq.Numsvcreps = DefaultPoolServiceReps
 
 	_, err = mgmtSvc.PoolCreate(ctx, req)
 	if err != nil {

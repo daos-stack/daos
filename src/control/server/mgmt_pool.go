@@ -30,13 +30,9 @@ const (
 	// DefaultPoolNvmeRatio defines the default NVMe:SCM ratio for
 	// requests that do not specify one.
 	DefaultPoolNvmeRatio = 0.94
-	// DefaultPoolServiceReps defines a default value for pool create
-	// requests that do not specify a value. If there are fewer than this
-	// number of ranks available, then the default falls back to 1.
-	DefaultPoolServiceReps = 3
 	// MaxPoolServiceReps defines the maximum number of pool service
 	// replicas that may be configured when creating a pool.
-	MaxPoolServiceReps = 13
+	MaxPoolServiceReps = 2*daos.PoolSvcRedunFacMax + 1
 )
 
 type poolServiceReq interface {
@@ -335,16 +331,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return uint32(allRanks)
 	}(len(req.GetRanks()))
 
-	// Set the number of service replicas to a reasonable default
-	// if the request didn't specify. Note that the number chosen
-	// should not be even in order to work best with the raft protocol's
-	// 2N+1 resiliency model.
-	if req.GetNumsvcreps() == 0 {
-		req.Numsvcreps = DefaultPoolServiceReps
-		if len(req.GetRanks()) < DefaultPoolServiceReps {
-			req.Numsvcreps = 1
-		}
-	} else if req.GetNumsvcreps() > maxSvcReps {
+	// If Numsvcreps is not specified, daos_engine will choose a value.
+	if req.GetNumsvcreps() > maxSvcReps {
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 

@@ -202,6 +202,36 @@ out:
 	return rc;
 }
 
+/* Move a replica that is not ourself from src to dst. */
+static int
+move_one_other_replica(d_rank_list_t *src, d_rank_list_t *dst)
+{
+	d_rank_t	self = dss_self_rank();
+	int		i;
+	int		rc;
+
+	D_ASSERTF(src->rl_nr > 1, "%u\n", src->rl_nr);
+
+	/* Choose the last rank that is not myself in src. */
+	i = src->rl_nr - 1;
+	if (src->rl_ranks[i] == self)
+		i--;
+	D_ASSERTF(i >= 0, "%d\n", i);
+	D_ASSERT(src->rl_ranks[i] != self);
+
+	/* Add it to dst first, as this may return an error. */
+	rc = d_rank_list_append(dst, src->rl_ranks[i]);
+	if (rc != 0)
+		return rc;
+
+	/* Remove it from src. */
+	if (i < src->rl_nr - 1)
+		src->rl_ranks[i] = src->rl_ranks[src->rl_nr - 1];
+	src->rl_nr--;
+
+	return 0;
+}
+
 /**
  * Plan a round of pool service (PS) reconfigurations based on the PS
  * redundancy factor (RF), the pool map, and the current PS membership. The caller
@@ -213,13 +243,12 @@ out:
  * We try to achieve the PS RF by putting available ranks to *to_add_out. If
  * there are not enough ranks, we try to achieve an odd number of replicas.
  *
- * [Temporary] If \a svc_rf is negative, a default value (see the
- * implementation) is used instead---a temporary policy before we come up with
- * a way to determine a more accurate value based on data redundancy factors.
- * Related, if there are an even number of replicas that are more than enough
- * for the PS redundancy factor, one of them will be in *to_remove_out, even if
- * the resulting odd number of replicas are still more than enough for the PS
- * redundancy factor.
+ * [Compatibility] If \a svc_rf is negative, we try to maintain
+ * DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT or the redundancy of the current
+ * replicas, whichever is higher---a compatibility policy for earlier pool
+ * layout versions that do not store PS RFs. If there are an even number of
+ * replicas that are more than enough for the RF we want to maintain, one of
+ * them will be in *to_remove_out.
  *
  * \param[in]	svc_rf		PS redundancy factor
  * \param[in]	map		pool map
@@ -231,7 +260,6 @@ int
 ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
 			 d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out)
 {
-	const int		 svc_rf_default = 2;
 	const pool_comp_state_t	 desired_states = PO_COMP_ST_UP | PO_COMP_ST_UPIN;
 	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
@@ -241,9 +269,6 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 	d_rank_list_t		*to_remove = NULL;
 	int			 i;
 	int			 rc;
-
-	if (svc_rf < 0)
-		svc_rf = svc_rf_default;
 
 	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &nodes);
 	D_ASSERTF(nnodes > 0, "pool_map_find_nodes: %d\n", nnodes);
@@ -278,10 +303,28 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 			goto out;
 	}
 
+	/* Compute the objective. */
+	if (svc_rf < 0) {
+		int svc_rf_compat = ds_pool_svc_rf_from_nreplicas(replicas->rl_nr);
+
+		/*
+		 * If the PS RF is unavailable, we choose the greater one
+		 * between the default PS RF and the one implied by the current
+		 * number of replicas.
+		 */
+		if (svc_rf_compat < DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT)
+			svc_rf_compat = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
+		objective = ds_pool_svc_rf_to_nreplicas(svc_rf_compat);
+	} else {
+		objective = ds_pool_svc_rf_to_nreplicas(svc_rf);
+	}
+
 	/* Compare the UP replicas with the objective. */
-	objective = ds_pool_svc_rf_to_nreplicas(svc_rf);
+	D_DEBUG(DB_MD, "replicas=%u to_keep=%u to_remove=%u objective=%d\n", replicas->rl_nr,
+		to_keep->rl_nr, to_remove->rl_nr, objective);
 	D_ASSERT(to_keep->rl_nr > 0);
 	D_ASSERTF(to_add->rl_nr == 0, "to_add->rl_nr: %u\n", to_add->rl_nr);
+	D_ASSERTF(objective > 0 && objective % 2 == 1, "objective: %d\n", objective);
 	if (to_keep->rl_nr < objective) {
 		/* More replicas needed. Add new ranks to to_add. */
 		for (i = 0; i < nnodes; i++) {
@@ -307,28 +350,17 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 			if (to_add->rl_nr > 0) {
 				to_add->rl_nr--;
 			} else {
-				d_rank_t victim = to_keep->rl_ranks[to_keep->rl_nr - 1];
-
-				rc = d_rank_list_append(to_remove, victim);
+				rc = move_one_other_replica(to_keep, to_remove);
 				if (rc != 0)
 					goto out;
-				to_keep->rl_nr--;
 			}
 		}
 	} else if (to_keep->rl_nr > objective) {
-		/*
-		 * Too many replicas. Since the objective may be based on
-		 * svc_rf_default (see [Temporary] in the function
-		 * documentation), do not reduce the number of replicas to the
-		 * objective. If the number of replicas is even, however,
-		 * remove a replica to make the number odd, because an even
-		 * number is inefficient.
-		 */
-		if (to_keep->rl_nr % 2 == 0) {
-			rc = d_rank_list_append(to_remove, to_keep->rl_ranks[to_keep->rl_nr - 1]);
+		/* Too many replicas. Reduce to the objective. */
+		while (to_keep->rl_nr > objective) {
+			rc = move_one_other_replica(to_keep, to_remove);
 			if (rc != 0)
 				goto out;
-			to_keep->rl_nr--;
 		}
 	}
 

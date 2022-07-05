@@ -27,7 +27,7 @@
 /*
  * Aggregation of pool/container/object/keys disk format change.
  */
-#define DS_POOL_GLOBAL_VERSION		1
+#define DS_POOL_GLOBAL_VERSION		2
 
 /*
  * Pool object
@@ -42,7 +42,7 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
-	uint32_t		sp_redun_fac;
+	uint64_t		sp_redun_fac;
 	/* Performance Domain Affinity Level of EC object. */
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
@@ -174,8 +174,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
+		       daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_rf_to_nreplicas(int svc_rf);
+int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);

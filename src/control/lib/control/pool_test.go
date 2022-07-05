@@ -1045,6 +1045,10 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("policy", "").Number,
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
+						{
+							Number: propWithVal("svc_rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{3},
+						},
 					},
 				}),
 			},
@@ -1062,6 +1066,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("svc_rf", "3"),
 				propWithVal("upgrade_status", "in progress"),
 			},
 		},

@@ -210,6 +210,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			bits |= DAOS_PO_QUERY_PROP_UPGRADE_STATUS;
 			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			bits |= DAOS_PO_QUERY_PROP_SVC_REDUN_FAC;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;

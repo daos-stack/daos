@@ -356,9 +356,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
-		/* container-only properties */
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_svc_rf_is_valid(val)) {
+				D_ERROR("invalid svc_rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
+		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {

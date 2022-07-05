@@ -63,11 +63,12 @@ extern d_iov_t ds_pool_prop_ec_cell_sz;		/* uint64_t */
 extern d_iov_t ds_pool_prop_redun_fac;		/* uint64_t */
 extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
 extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
-extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_attr_user;		/* pool user attribute KVS */
 extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
 extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
+extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
