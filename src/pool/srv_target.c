@@ -56,6 +56,22 @@ stop_gc_ult(struct ds_pool_child *child)
 	child->spc_gc_req = NULL;
 }
 
+static void
+stop_flush_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* Flush ULT is not started */
+	if (child->spc_flush_req == NULL)
+		return;
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Stopping Flush ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_flush_req, true);
+	sched_req_put(child->spc_flush_req);
+	child->spc_flush_req = NULL;
+}
+
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -91,6 +107,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 
 		/* only stop gc ULT when all ops ULTs are done */
 		stop_gc_ult(child);
+		stop_flush_ult(child);
 
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
@@ -191,6 +208,68 @@ start_gc_ult(struct ds_pool_child *child)
 	return 0;
 }
 
+static void
+flush_ult(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	uint32_t		 sleep_ms, nr_flushed, nr_flush = 6000;
+	int			 rc;
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Flush ULT started\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
+	D_ASSERT(child->spc_flush_req != NULL);
+
+	while (!dss_ult_exiting(child->spc_flush_req)) {
+		rc = vos_flush_pool(child->spc_hdl, false, nr_flush, &nr_flushed);
+		if (rc < 0) {
+			D_ERROR(DF_UUID"[%d]: Flush pool failed. "DF_RC"\n",
+				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, DP_RC(rc));
+			sleep_ms = 2000;
+		} else if (rc) {	/* This pool doesn't have NVMe partition */
+			sleep_ms = 60000;
+		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
+			sleep_ms = 5000;
+		} else {
+			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
+		}
+
+		if (dss_ult_exiting(child->spc_flush_req))
+			break;
+
+		if (sleep_ms)
+			sched_req_sleep(child->spc_flush_req, sleep_ms);
+		else
+			sched_req_yield(child->spc_flush_req);
+	}
+
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Flush ULT stopped\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+}
+
+static int
+start_flush_ult(struct ds_pool_child *child)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+
+	D_ASSERT(child != NULL);
+	D_ASSERT(child->spc_flush_req == NULL);
+
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
+
+	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, 0);
+	if (child->spc_flush_req == NULL) {
+		D_ERROR(DF_UUID"[%d]: Failed to create flush ULT.\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
 struct pool_child_lookup_arg {
 	struct ds_pool *pla_pool;
 	void	       *pla_uuid;
@@ -238,7 +317,7 @@ pool_child_add_one(void *varg)
 		goto out_metrics;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL,
+	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
@@ -265,9 +344,13 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_eventual;
 
-	rc = ds_start_scrubbing_ult(child);
+	rc = start_flush_ult(child);
 	if (rc != 0)
 		goto out_gc;
+
+	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0)
+		goto out_flush;
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
@@ -282,6 +365,8 @@ out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
 	ds_stop_scrubbing_ult(child);
+out_flush:
+	stop_flush_ult(child);
 out_gc:
 	stop_gc_ult(child);
 out_eventual:

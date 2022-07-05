@@ -124,6 +124,7 @@ struct ds_pool_child {
 	struct ds_pool		*spc_pool;
 	uuid_t			spc_uuid;	/* pool UUID */
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	d_list_t		spc_cont_list;
 

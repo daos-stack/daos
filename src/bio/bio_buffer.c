@@ -997,13 +997,13 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 		D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
 			spdk_blob_io_write(blob, channel, payload,
-					   page2io_unit(biod->bd_ctxt, pg_idx),
-					   page2io_unit(biod->bd_ctxt, rw_cnt),
+					   page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					   page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					   rw_completion, biod);
 		else
 			spdk_blob_io_read(blob, channel, payload,
-					  page2io_unit(biod->bd_ctxt, pg_idx),
-					  page2io_unit(biod->bd_ctxt, rw_cnt),
+					  page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
+					  page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					  rw_completion, biod);
 
 		pg_cnt -= rw_cnt;
