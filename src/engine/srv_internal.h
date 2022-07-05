@@ -244,6 +244,19 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
+/* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
+static inline void
+dss_free_stack_cb(void *arg)
+{
+	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
+	struct dss_xstream *dx = dss_current_xstream();
+
+	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
+	if (dx != NULL)
+		desc->sp = dx->dx_sp;
+
+}
+
 static inline int
 sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		    ABT_thread_attr t_attr, ABT_thread *thread,
@@ -255,7 +268,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 #ifdef ULT_MMAP_STACK
 	struct dss_xstream *cur_dx = dss_current_xstream();
 
-	/* stack should be allocated from launching XStream pool */
+	/* if possible,stack should be allocated from launching XStream pool */
 	if (cur_dx == NULL)
 		cur_dx = dx;
 #endif
@@ -268,7 +281,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(cur_dx->dx_sp, dx->dx_sp, abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 

@@ -55,8 +55,8 @@ enum AbtThreadCreateType {
 
 static int
 call_abt_method(void *arg, enum AbtThreadCreateType flag,
-			   void (*thread_func)(void *), void *thread_arg,
-			   ABT_thread_attr attr, ABT_thread *newthread)
+		void (*thread_func)(void *), void *thread_arg,
+		ABT_thread_attr attr, ABT_thread *newthread)
 {
 	int rc;
 
@@ -90,10 +90,10 @@ void mmap_stack_wrapper(void *arg)
 }
 
 static int
-mmap_stack_thread_create_common(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
-				    enum AbtThreadCreateType flag, void *arg,
-				    void (*thread_func)(void *), void *thread_arg,
-				    ABT_thread_attr attr, ABT_thread *newthread)
+mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_cb)(void *),
+				enum AbtThreadCreateType flag, void *arg,
+				void (*thread_func)(void *), void *thread_arg,
+				ABT_thread_attr attr, ABT_thread *newthread)
 {
 	ABT_thread_attr new_attr = ABT_THREAD_ATTR_NULL;
 	int rc;
@@ -191,7 +191,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, struct stack_pool *
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		/* store target XStream */
-		mmap_stack_desc->sp = sp_free;
+		mmap_stack_desc->sp = sp_alloc;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
 			"mmap()'ed stack %p of size %zd has been allocated, in pool=%p, on CPU=%d\n",
@@ -201,6 +201,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, struct stack_pool *
 	/* continue to fill/update descriptor */
 	mmap_stack_desc->thread_func = thread_func;
 	mmap_stack_desc->thread_arg = thread_arg;
+	mmap_stack_desc->free_stack_cb = free_stack_cb;
 
 	/* usable stack size */
 	usable_stack_size = stack_size - sizeof(mmap_stack_desc_t);
@@ -235,21 +236,21 @@ out_err:
  */
 
 int
-mmap_stack_thread_create(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
-			     ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
-			     ABT_thread_attr attr, ABT_thread *newthread)
+mmap_stack_thread_create(struct stack_pool *sp_alloc, void (*free_stack_cb)(void *),
+			 ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
+			 ABT_thread_attr attr, ABT_thread *newthread)
 {
-	return mmap_stack_thread_create_common(sp_alloc, sp_free, MAIN, (void *)pool, thread_func,
+	return mmap_stack_thread_create_common(sp_alloc, free_stack_cb, MAIN, (void *)pool, thread_func,
 					       thread_arg, attr, newthread);
 }
 
 int
-mmap_stack_thread_create_on_xstream(struct stack_pool *sp_alloc, struct stack_pool *sp_free,
-					ABT_xstream xstream, void (*thread_func)(void *),
-					void *thread_arg, ABT_thread_attr attr,
-					ABT_thread *newthread)
+mmap_stack_thread_create_on_xstream(struct stack_pool *sp_alloc, void (*free_stack_cb)(void *),
+				    ABT_xstream xstream, void (*thread_func)(void *),
+				    void *thread_arg, ABT_thread_attr attr,
+				    ABT_thread *newthread)
 {
-	return mmap_stack_thread_create_common(sp_alloc, sp_free, ON_XSTREAM, (void *)xstream,
+	return mmap_stack_thread_create_common(sp_alloc, free_stack_cb, ON_XSTREAM, (void *)xstream,
 					       thread_func, thread_arg, attr, newthread);
 }
 
@@ -258,8 +259,14 @@ void
 free_stack(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	struct stack_pool *sp = desc->sp;
+	struct stack_pool *sp;
 	int rc;
+
+	if (desc->free_stack_cb != NULL)
+		desc->free_stack_cb(arg);
+
+	/* callback may have re-evaluated pool where to free stack */
+	sp = desc->sp;
 
 	/* XXX
 	 * We may need to reevaluate stack size since a growth may

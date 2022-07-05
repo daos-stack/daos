@@ -206,7 +206,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = daos_abt_thread_create_on_xstream(sp, sp, abt_xstream,
+	rc = daos_abt_thread_create_on_xstream(sp, NULL, abt_xstream,
 					       vos_update_or_fetch_ult,
 					       &ult_arg, ABT_THREAD_ATTR_NULL,
 					       &thread);
