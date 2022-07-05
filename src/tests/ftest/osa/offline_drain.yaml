@@ -54,7 +54,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    oclass: RP_3G6
+    oclass: RP_3G1
     properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:2
 dkeys:
   single:
@@ -78,8 +78,8 @@ ior:
       write_flags: "-w -F -k -G 1"
       read_flags: "-F -r -R -k -G 1"
       api: DFS
-      dfs_oclass: RP_3G6
-      dfs_dir_oclass: RP_3G6
+      dfs_oclass: RP_3G1
+      dfs_dir_oclass: RP_3G1
     ior_test_sequence:
     #   - [scmsize, nvmesize, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
@@ -93,8 +93,8 @@ mdtest:
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
-  dfs_oclass: RP_3G6
-  dfs_dir_oclass: RP_3G6
+  dfs_oclass: RP_3G1
+  dfs_dir_oclass: RP_3G1
   manager: "MPICH"
   flags: "-u"
   wr_size:
@@ -119,4 +119,4 @@ test_ranks:
   rank_list: ["2","5"]
 pool_capacity:
   pool_fillup: 10
-  pool_test_oclass: RP_3G6
+  pool_test_oclass: RP_3G1
