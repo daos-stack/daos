@@ -122,7 +122,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	D_ALLOC_PTR(dcrc);
 	if (dcrc == NULL) {
-		D_FREE_PTR(dcr);
+		D_FREE(dcr);
 		return -DER_NOMEM;
 	}
 
@@ -169,7 +169,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 		dec++;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_prio_list,
@@ -177,7 +177,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 		dec++;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_expcmt_list,
@@ -185,10 +185,10 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 		dec++;
 	}
-	D_FREE_PTR(dcr);
+	D_FREE(dcr);
 
 	cont->sc_dtx_committable_count -= dec;
 
@@ -437,7 +437,7 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_prio_count--;
@@ -453,7 +453,7 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_reg_count--;
@@ -469,7 +469,7 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
 		dtx_entry_put(dcrc->dcrc_dte);
-		D_FREE_PTR(dcrc);
+		D_FREE(dcrc);
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_expcmt_count--;

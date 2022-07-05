@@ -1147,6 +1147,9 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
+int
+vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
