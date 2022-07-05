@@ -589,22 +589,22 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("pool", "query"), pool=pool,
                                      show_enabled=show_enabled, show_disabled=show_disabled)
 
-    def pool_destroy(self, pool, force=True):
+    def pool_destroy(self, pool, force=True, recursive=True):
         """Destroy a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID to destroy.
             force (bool, optional): Force removal of pool. Defaults to True.
+            recursive (bool, optional): Remove pool with containers. Defaults to True.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: if the dmg pool destroy command fails.
 
         """
-        return self._get_result(("pool", "destroy"), pool=pool, force=force)
+        return self._get_result(("pool", "destroy"), pool=pool, force=force, recursive=recursive)
 
     def pool_get_acl(self, pool):
         """Get the ACL for a given pool.

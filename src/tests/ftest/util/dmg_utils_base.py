@@ -288,6 +288,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("{}", None)
                 self.sys_name = FormattedParameter("--sys-name={}", None)
                 self.force = FormattedParameter("--force", False)
+                self.recursive = FormattedParameter("--recursive", False)
 
         class GetAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool get-acl command."""
