@@ -523,7 +523,8 @@ ev_progress_cb(void *arg)
 	/** Change status of event to INIT only if event is not in EQ and get out. */
 	if (daos_handle_is_inval(evx->evx_eqh)) {
 		D_MUTEX_LOCK(&evx->evx_lock);
-		evx->evx_status = DAOS_EVS_READY;
+		if (evx->evx_status == DAOS_EVS_COMPLETED || evx->evx_status == DAOS_EVS_ABORTED)
+			evx->evx_status = DAOS_EVS_READY;
 		D_MUTEX_UNLOCK(&evx->evx_lock);
 		return 1;
 	}
@@ -1091,8 +1092,7 @@ daos_event_fini(struct daos_event *ev)
 
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
-			D_ERROR("Failed to finalize child event "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to finalize child event "DF_RC"\n", DP_RC(rc));
 			goto out_unlocked;
 		}
 
@@ -1203,7 +1203,22 @@ daos_event_abort(struct daos_event *ev)
 int
 daos_event_priv_reset(void)
 {
-	return daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
+	int rc;
+
+	if (ev_thpriv_is_init) {
+		rc = daos_event_fini(&ev_thpriv);
+		if (rc) {
+			D_ERROR("Failed to finalize thread private event "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
+
+	rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
+	if (rc) {
+		D_ERROR("Failed to initialize thread private event "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	return 0;
 }
 
 int
@@ -1215,7 +1230,7 @@ daos_event_priv_get(daos_event_t **ev)
 	D_ASSERT(*ev == NULL);
 
 	if (!ev_thpriv_is_init) {
-		rc = daos_event_priv_reset();
+		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 		if (rc)
 			return rc;
 		ev_thpriv_is_init = true;
@@ -1270,8 +1285,11 @@ daos_event_priv_wait()
 	}
 
 	rc2 = daos_event_priv_reset();
-	if (rc == 0)
-		rc = rc2;
+	if (rc2) {
+		if (rc == 0)
+			rc = rc2;
+		return rc;
+	}
 	D_ASSERT(ev_thpriv.ev_error == 0);
 	return rc;
 }

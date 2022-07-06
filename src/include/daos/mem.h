@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -520,28 +520,30 @@ umem_tx_end(struct umem_instance *umm, int err)
 }
 
 #ifdef DAOS_PMEM_BUILD
-static inline umem_off_t
-umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
-{
-	if (umm->umm_ops->mo_reserve)
-		return umm->umm_ops->mo_reserve(umm, act, size,
-						UMEM_TYPE_ANY);
-	return UMOFF_NULL;
-}
+#define umem_reserve(umm, act, size)                                                               \
+	({                                                                                         \
+		umem_off_t __umoff = UMOFF_NULL;                                                   \
+		if (umm->umm_ops->mo_reserve)                                                      \
+			__umoff = (umm)->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);       \
+		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
+			  "Invalid assumption about allocnot using flag bits");                    \
+		D_DEBUG(DB_MEM, "reserve %s umoff " UMOFF_PF " size %zu\n", (umm)->umm_name,       \
+			UMOFF_P(__umoff), (size_t)(size));                                         \
+		__umoff;                                                                           \
+	})
 
-static inline void
-umem_defer_free(struct umem_instance *umm, umem_off_t off,
-		struct pobj_action *act)
-{
-	if (umm->umm_ops->mo_defer_free)
-		return umm->umm_ops->mo_defer_free(umm, off, act);
-
-	/** Go ahead and free immediately.  The purpose of this function
-	 *  is to allow reserve/publish pair to execute on commit
-	 */
-	umem_free(umm, off);
-}
-
+#define umem_defer_free(umm, off, act)                                                             \
+	do {                                                                                       \
+		D_DEBUG(DB_MEM, "Defer free %s umoff " UMOFF_PF "\n", (umm)->umm_name,             \
+			UMOFF_P(off));                                                             \
+		if ((umm)->umm_ops->mo_defer_free)                                                 \
+			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
+		else                                                                               \
+			/** Go ahead and free immediately.  The purpose of this function           \
+			 *  is to allow reserve/publish pair to execute on commit                  \
+			 */                                                                        \
+			umem_free(umm, off);                                                       \
+	} while (0)
 
 static inline void
 umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
