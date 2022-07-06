@@ -369,7 +369,7 @@ func (cmd *containerSerializeCmd) Execute(_ []string) error {
 		return errors.New("Source container is required")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func (cmd *containerDeserializeCmd) Execute(_ []string) error {
 		return errors.New("File to deserialize is required")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
