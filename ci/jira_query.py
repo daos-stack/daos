@@ -49,7 +49,7 @@ def main():
         if component.endswith(':'):
             component = component[:-1]
             if component not in VALID_COMPONENTS:
-                errors.append('Uknown component')
+                errors.append('Unknown component')
         else:
             errors.append('component not formatted correctly')
         if len(pr_title) > 80:
