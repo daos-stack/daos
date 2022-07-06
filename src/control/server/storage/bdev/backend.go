@@ -145,6 +145,7 @@ func hugePageWalkFunc(hugePageDir string, statter statFn, remover removeFn, coun
 		if len(matches) != 2 {
 			return nil // skip files not matching expected pattern
 		}
+		// PID string will be the first submatch at index 1 of the match results.
 
 		if isActive, err := isPIDActive(matches[1], statter); err != nil || isActive {
 			return err // skip files created by an existing process (isActive == true)
