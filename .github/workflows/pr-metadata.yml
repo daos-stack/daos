@@ -1,10 +1,13 @@
 on:
+  # This should probably be pull_request_target.
   pull_request:
 
 jobs:
   example_comment_pr:
     runs-on: ubuntu-latest
     name: Report Jira data to PR comment
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -20,7 +23,8 @@ jobs:
         with:
           comment_includes: 'Bug-tracker data'
           message: |
-            Bug-tracker data
-            Hello world ! :wave:
-            ${{ steps.jira-data.outputs.status }}
+            Bug-tracker data:
+            Jira ticket status is ${{ steps.jira-data.outputs.status }}
+            Labels: ${{ steps.jira-data.outputs.labels }}
+            Build should proceed at ${{ steps.jira-data.outputs.priority }} priority
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

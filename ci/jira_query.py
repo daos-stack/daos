@@ -51,8 +51,13 @@ def main():
         if str(version) in ('2.2 Community Release', '2.4 Community Release'):
             priority = True
 
+    set_output('labels', ','.join(ticket.fields.labels))
+
     if priority:
+        set_output('priority', 'elevated')
         print('Job should run at high priority')
+    else:
+        set_output('priority', 'standard')
 
 
 if __name__ == '__main__':
