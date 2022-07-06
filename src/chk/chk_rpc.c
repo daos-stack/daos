@@ -204,8 +204,8 @@ chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 
 int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
-		 uuid_t pools[], uint32_t flags, int32_t phase, d_rank_t leader,
+		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
+		 uuid_t pools[], uint32_t flags, int phase, d_rank_t leader,
 		 chk_co_rpc_cb_t start_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
@@ -276,7 +276,7 @@ out:
 }
 
 int
-chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		chk_co_rpc_cb_t stop_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
@@ -320,14 +320,14 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u stop DAOS check with gen "DF_X64", pool_nr %u: "DF_RC"\n",
+		 "Rank %u stop DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
 		 dss_self_rank(), gen, pool_nr, DP_RC(rc));
 
 	return rc;
 }
 
 int
-chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
 		 chk_co_rpc_cb_t query_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
@@ -379,7 +379,7 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u query DAOS check with gen "DF_X64", pool_nr %u: "DF_RC"\n",
+		 "Rank %u query DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
 		 dss_self_rank(), gen, pool_nr, DP_RC(rc));
 
 	return rc;
@@ -461,7 +461,7 @@ out:
 	return rc;
 }
 
-int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int32_t result,
+int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
 		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
 		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr, d_sg_list_t *details,

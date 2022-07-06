@@ -339,7 +339,7 @@ chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 }
 
 void
-chk_pools_dump(uint32_t pool_nr, uuid_t pools[])
+chk_pools_dump(int pool_nr, uuid_t pools[])
 {
 	char	 buf[256];
 	char	*ptr = buf;
@@ -371,6 +371,58 @@ chk_pools_dump(uint32_t pool_nr, uuid_t pools[])
 	D_INFO("%s\n", buf);
 }
 
+int
+chk_pool_filter(uuid_t uuid, void *arg)
+{
+	struct chk_pool_filter_args	*cpfa = arg;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
+	int				 i;
+	int				 rc;
+	bool				 found = false;
+
+	if (daos_handle_is_valid(cpfa->cpfa_pool_hdl)) {
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, uuid, sizeof(uuid_t));
+		rc = dbtree_lookup(cpfa->cpfa_pool_hdl, &kiov, &riov);
+		if (rc == 0)
+			found = true;
+	} else {
+		if (cpfa->cpfa_pool_nr <= 0) {
+			found = true;
+		} else {
+			for (i = 0; i < cpfa->cpfa_pool_nr; i++) {
+				if (uuid_compare(uuid, cpfa->cpfa_pools[i]) == 0) {
+					found = true;
+					break;
+				}
+			}
+		}
+	}
+
+	return found ? 1 : 0;
+}
+
+int
+chk_dup_label(char **tgt, const char *src, size_t len)
+{
+	int	rc = 0;
+
+	if (src == NULL) {
+		*tgt = NULL;
+	} else {
+		D_ASSERT(len > 0);
+
+		D_ALLOC(*tgt, len + 1);
+		if (*tgt == NULL)
+			rc = -DER_NOMEM;
+		else
+			memcpy(*tgt, src, len);
+	}
+
+	return rc;
+}
+
 void
 chk_stop_sched(struct chk_instance *ins)
 {
@@ -385,7 +437,7 @@ chk_stop_sched(struct chk_instance *ins)
 
 int
 chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		 struct chk_policy *policies, uint32_t pool_nr, uuid_t pools[],
+		 struct chk_policy *policies, int pool_nr, uuid_t pools[],
 		 uint32_t flags, int phase, d_rank_t leader,
 		 struct chk_property *prop, d_rank_list_t **rlist)
 {
