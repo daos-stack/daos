@@ -10,7 +10,7 @@ from pathlib import Path
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
-from general_utils import get_log_file, get_clush_command, run_command, log_task
+from general_utils import get_log_file, get_clush_command, run_command, log_task, check_file_exists
 from command_utils_base import EnvironmentVariables
 from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
@@ -171,7 +171,7 @@ class DaosCoreBase(TestWithServers):
             for host in self.hostlist_clients:
                 if check_file_exists(host, cmocka_result_file):
                     host_list.append(host)
-            if host_list != []:
+            if not host_list:
                 command = "{} cp {} {}".format(
                     get_clush_command(host_list, "-S -v --rcopy"),
                     cmocka_result_file, cmocka_dir)
