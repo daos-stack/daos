@@ -502,10 +502,14 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
-	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	uint32_t		 gen, new_gen;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+
+	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
+	 * re-init the task that may be completed immediately.
+	 */
+	tse_task_addref(task);
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
@@ -518,21 +522,16 @@ tse_task_complete_callback(tse_task_t *task)
 
 		D_FREE(dtc);
 
-		/** Task was re-initialized; break */
+		/** Task was re-initialized, or new dep-task added */
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
-			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
-			return false;
-		}
-
-		/** New dependent task added in completion call-back */
-		if (dtp->dtp_dep_cnt > dep_cnt) {
-			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
-				task);
+			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			tse_task_decref(task);
 			return false;
 		}
 	}
 
+	tse_task_decref(task);
 	return true;
 }
 
@@ -913,6 +912,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	dtp->dtp_dep_cnt++;
+	dtp_generation_inc(dtp);
 
 	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 

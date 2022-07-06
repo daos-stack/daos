@@ -442,9 +442,9 @@ is_blob_valid(struct bio_io_context *ctxt)
 }
 
 static inline uint64_t
-page2io_unit(struct bio_io_context *ctxt, uint64_t page)
+page2io_unit(struct bio_io_context *ctxt, uint64_t page, uint32_t pg_sz)
 {
-	return page * (BIO_DMA_PAGE_SZ / ctxt->bic_io_unit);
+	return page * (pg_sz / ctxt->bic_io_unit);
 }
 
 enum {
