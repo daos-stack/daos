@@ -32,7 +32,7 @@ def set_output(key, value):
 def main():
     """Run the script"""
 
-    priority = True
+    priority = False
     errors = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
@@ -64,7 +64,7 @@ def main():
     # Check format of ticket_number using regexp?
 
     try:
-        ticket = server.issue(ticket_number)
+        ticket = server.issue(ticket_number, fields='summary,issuetype,status,labels,fixVersions')
     except jira.exceptions.JIRAError:
         set_output('errors', f"Unable to load ticket data for '{ticket_number}'")
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
