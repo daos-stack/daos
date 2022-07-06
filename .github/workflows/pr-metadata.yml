@@ -25,6 +25,7 @@ jobs:
           comment_includes: 'Bug-tracker data'
           message: |
             Bug-tracker data:
+            ${{ steps.jira-data.outputs.summary }}
             Jira ticket status is ${{ steps.jira-data.outputs.status }}
             Labels: ${{ steps.jira-data.outputs.labels }}
             Build should proceed at ${{ steps.jira-data.outputs.priority }} priority

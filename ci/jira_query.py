@@ -75,7 +75,8 @@ def main():
     print(ticket.fields.labels)
     print(ticket.fields.fixVersions)
 
-    set_output('status', ticket.fields.status)
+    set_output('status', f'Ticket status\\n{ticket.fields.status}')
+    set_output('summary', ticket.fields.summary)
     for version in ticket.fields.fixVersions:
         if str(version) in ('2.2 Community Release', '2.4 Community Release'):
             priority = True
