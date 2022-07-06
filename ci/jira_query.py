@@ -26,7 +26,9 @@ VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test', 'doc', 'build'
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
-    print(f'::set-output name={key}::{value}')
+    clean_value = value.replace('\n', '%0A')
+    print(f'::set-output name={key}::{clean_value}')
+    print(value)
 
 
 def main():
@@ -66,7 +68,7 @@ def main():
     try:
         ticket = server.issue(ticket_number, fields='summary,issuetype,status,labels,fixVersions')
     except jira.exceptions.JIRAError:
-        set_output('errors', f"Unable to load ticket data for '{ticket_number}'")
+        set_output('message', f"Unable to load ticket data for '{ticket_number}'")
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
     print(ticket.fields.summary)
@@ -75,22 +77,28 @@ def main():
     print(ticket.fields.labels)
     print(ticket.fields.fixVersions)
 
-    set_output('summary', ticket.fields.summary)
-    set_output('status', f'Ticket status%25%0A{ticket.fields.status}')
-    set_output('summary', ticket.fields.summary)
+    output = []
+
+    output.append(f"Ticket title is '{ticket.fields.summary}'")
+    output.append(f"Status is '{ticket.fields.status}'")
+
     for version in ticket.fields.fixVersions:
         if str(version) in ('2.2 Community Release', '2.4 Community Release'):
             priority = True
 
-    set_output('labels', ','.join(ticket.fields.labels))
+    if ticket.fields.labels:
+        label_str = ','.join(ticket.fields.labels)
+        output.append(f"Labels: '{label_str}'")
 
     if priority:
-        set_output('priority', 'elevated')
-        print('Job should run at high priority')
-    else:
-        set_output('priority', 'standard')
+        output.append('Job should run at elevated priority')
+
     if errors:
-        set_output('errors', f'Errors are {",".join(errors)}')
+        output.append('errors', f'Errors are {",".join(errors)}')
+
+    set_output('message', '\n'.join(output))
+
+    if errors:
         sys.exit(1)
 
 
