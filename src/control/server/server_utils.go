@@ -59,10 +59,10 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	return bdevCfgs
 }
 
-func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolver("tcp", ap)
+		apAddr, err := resolve("tcp", ap)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -125,9 +125,9 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 	return ctlAddr, nil
 }
 
-func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
+func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
+	lis, err := listen("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
@@ -361,7 +361,7 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	return nil
 }
 
-func cleanEngineHugePagesFn(srv *server, engineIdx uint32) error {
+func cleanEngineHugePages(srv *server, engineIdx uint32) error {
 	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
 
 	req := storage.BdevPrepareRequest{
@@ -382,10 +382,10 @@ func cleanEngineHugePagesFn(srv *server, engineIdx uint32) error {
 
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
+	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))
+	engine.OnAwaitFormat(createPublishFormatRequiredFunc(srv.pubSub.Publish, srv.hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
@@ -404,7 +404,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
 		// Clear hugepages created by SPDK but not in use by a current process.
-		if err := cleanEngineHugePagesFn(srv, engineIdx); err != nil {
+		if err := cleanEngineHugePages(srv, engineIdx); err != nil {
 			srv.log.Errorf(err.Error())
 			return err
 		}
@@ -415,7 +415,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, join systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
@@ -450,7 +450,7 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 			sb.Rank = system.NewRankPtr(0)
 		}
 
-		return joinFn(ctx, req)
+		return join(ctx, req)
 	}
 }
 

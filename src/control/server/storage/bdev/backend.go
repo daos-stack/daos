@@ -111,10 +111,10 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-func isPIDActive(pidStr string, statter statFn) (bool, error) {
+func isPIDActive(pidStr string, stat statFn) (bool, error) {
 	filename := fmt.Sprintf("/proc/%s", pidStr)
 
-	if _, err := statter(filename); err != nil {
+	if _, err := stat(filename); err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
@@ -124,9 +124,11 @@ func isPIDActive(pidStr string, statter statFn) (bool, error) {
 	return true, nil
 }
 
-// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// createHugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
 // name begins with prefix and encoded pid is inactive.
-func hugePageWalkFunc(hugePageDir string, statter statFn, remover removeFn, count *uint) filepath.WalkFunc {
+func createHugePageWalkFunc(hugePageDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
+	re := regexp.MustCompile(spdkHugepagePattern)
+
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -140,18 +142,17 @@ func hugePageWalkFunc(hugePageDir string, statter statFn, remover removeFn, coun
 			return filepath.SkipDir // skip subdirectories
 		}
 
-		re := regexp.MustCompile(spdkHugepagePattern)
 		matches := re.FindStringSubmatch(info.Name())
 		if len(matches) != 2 {
 			return nil // skip files not matching expected pattern
 		}
 		// PID string will be the first submatch at index 1 of the match results.
 
-		if isActive, err := isPIDActive(matches[1], statter); err != nil || isActive {
+		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
 			return err // skip files created by an existing process (isActive == true)
 		}
 
-		if err := remover(path); err != nil {
+		if err := remove(path); err != nil {
 			return err
 		}
 		*count++
@@ -164,7 +165,7 @@ func hugePageWalkFunc(hugePageDir string, statter statFn, remover removeFn, coun
 // tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
 func cleanHugePages(hugePageDir string) (count uint, _ error) {
 	return count, filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, os.Stat, os.Remove, &count))
+		createHugePageWalkFunc(hugePageDir, os.Stat, os.Remove, &count))
 }
 
 // prepare receives function pointers for external interfaces.

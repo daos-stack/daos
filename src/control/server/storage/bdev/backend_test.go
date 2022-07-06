@@ -866,13 +866,13 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			removedFiles := make([]string, 0)
-			remover := func(path string) error {
+			remove := func(path string) error {
 				if tc.removeErr == nil {
 					removedFiles = append(removedFiles, path)
 				}
 				return tc.removeErr
 			}
-			statter := func(path string) (os.FileInfo, error) {
+			stat := func(path string) (os.FileInfo, error) {
 				if tc.statExistMap[path] {
 					return nil, nil
 				}
@@ -880,7 +880,7 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 			}
 
 			var count uint = 0
-			testFn := hugePageWalkFunc(testDir, statter, remover, &count)
+			testFn := createHugePageWalkFunc(testDir, stat, remove, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				test.CmpErr(t, ti.expErr, gotErr)
