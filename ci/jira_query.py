@@ -20,7 +20,7 @@ import jira
 # https://github.com/marketplace/actions/comment-pull-request
 
 
-VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test')
+VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test', 'doc', 'build', 'bio')
 
 
 def set_output(key, value):
@@ -32,7 +32,7 @@ def set_output(key, value):
 def main():
     """Run the script"""
 
-    priority = False
+    priority = True
     errors = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
@@ -66,6 +66,7 @@ def main():
     try:
         ticket = server.issue(ticket_number)
     except jira.exceptions.JIRAError:
+        set_output('errors', f"Unable to load ticket data for '{ticket_number}'")
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
     print(ticket.fields.summary)
