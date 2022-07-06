@@ -171,7 +171,7 @@ class DaosCoreBase(TestWithServers):
             for host in self.hostlist_clients:
                 if check_file_exists(host, cmocka_result_file):
                     host_list.append(host)
-            if not host_list:
+            if host_list:
                 command = "{} cp {} {}".format(
                     get_clush_command(host_list, "-S -v --rcopy"),
                     cmocka_result_file, cmocka_dir)
