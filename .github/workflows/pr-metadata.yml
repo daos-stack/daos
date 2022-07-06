@@ -22,5 +22,5 @@ jobs:
           message: |
             Bug-tracker data
             Hello world ! :wave:
-            ${{ steps.jira.data.outputs.status }}
+            ${{ steps.jira-data.outputs.status }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
