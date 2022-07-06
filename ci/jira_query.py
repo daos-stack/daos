@@ -96,6 +96,8 @@ def main():
     if errors:
         output.append('errors', f'Errors are {",".join(errors)}')
 
+    output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
+
     set_output('message', '\n'.join(output))
 
     if errors:
