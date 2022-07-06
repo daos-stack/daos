@@ -173,7 +173,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 		"modules but no regions": {
 			runOut: []string{
 				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-				outScmNoRegions,
+				outNoPMemRegions,
 			},
 			expState: storage.ScmStateNoRegions,
 		},
