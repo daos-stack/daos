@@ -322,16 +322,17 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
-func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
-	ei.RLock()
-	ec := ei.runner.GetConfig()
-	ei.RUnlock()
+func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+	engine.RLock()
+	ec := engine.runner.GetConfig()
+	ei := ec.Index
 
 	if getBdevDevicesFromCfgs(ec.Storage.Tiers.BdevConfigs()).Len() == 0 {
-		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ec.Index)
-
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
+		engine.RUnlock()
 		return nil
 	}
+	engine.RUnlock()
 
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
 	hpi, err := getHugePageInfo()
@@ -348,15 +349,14 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
 	if memSizeFreeMb < memSizeReqMb {
 		srv.log.Errorf("huge page info: %+v", *hpi)
-
-		return FaultInsufficientFreeHugePageMem(int(ec.Index), memSizeReqMb, memSizeFreeMb,
+		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	ei.setMemSize(memSizeReqMb)
-	ei.setHugePageSz(pageSizeMb)
+	engine.setMemSize(memSizeReqMb)
+	engine.setHugePageSz(pageSizeMb)
 
 	return nil
 }
@@ -364,15 +364,14 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 func cleanEngineHugePagesFn(srv *server, engineIdx uint32) error {
 	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
 
-	prepReq := storage.BdevPrepareRequest{
+	req := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,
 	}
 
-	resp, err := srv.ctlSvc.NvmePrepare(prepReq)
+	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		err = errors.Wrap(err, msg)
 		srv.log.Errorf(err.Error())
-
 		return errors.Wrapf(err, "engine %d", engineIdx)
 	}
 
@@ -395,7 +394,6 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		onceReady.Do(func() {
 			allStarted.Done()
 		})
-
 		return nil
 	})
 
@@ -408,7 +406,6 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		// Clear hugepages created by SPDK but not in use by a current process.
 		if err := cleanEngineHugePagesFn(srv, engineIdx); err != nil {
 			srv.log.Errorf(err.Error())
-
 			return err
 		}
 
