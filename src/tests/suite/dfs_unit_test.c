@@ -1365,7 +1365,7 @@ dfs_test_mtime(void **state)
 	d_iov_t			iov;
 	char			buf[64];
 	struct stat		stbuf;
-	struct timespec		prev_ts;
+	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
 	int			rc;
 
@@ -1381,6 +1381,10 @@ dfs_test_mtime(void **state)
 	assert_int_equal(stbuf.st_size, 0);
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/** store the first modification timestamp (at creation time) */
+	first_ts.tv_sec = prev_ts.tv_sec;
+	first_ts.tv_nsec = prev_ts.tv_nsec;
 
 	d_iov_set(&iov, buf, 64);
 	sgl.sg_nr = 1;
@@ -1408,9 +1412,27 @@ dfs_test_mtime(void **state)
 	assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 
+	printf("reset mtime ...\n");
+	/** reset the mtime on the file to the first timestamp */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = first_ts.tv_sec;
+	stbuf.st_mtim.tv_nsec = first_ts.tv_nsec;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+
+	/** verify mtime is now that it's the same as the one we just set */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
+	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+
+	printf("punch ...\n");
+	/** truncate the file */
 	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
 
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);

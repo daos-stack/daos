@@ -57,7 +57,7 @@
 #define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	10
+#define INODE_AKEYS	11
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
@@ -70,7 +70,8 @@
 #define UID_IDX		(OCLASS_IDX + sizeof(daos_oclass_id_t))
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
 #define SIZE_IDX	(GID_IDX + sizeof(gid_t))
-#define END_IDX		(SIZE_IDX + sizeof(daos_size_t))
+#define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
+#define END_IDX		(HLC_IDX + sizeof(uint64_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -180,6 +181,8 @@ struct dfs_entry {
 	time_t			atime;
 	/* Time of last modification */
 	time_t			mtime;
+	/* for regular file, the time of last modification of the object */
+	uint64_t		obj_hlc;
 	/* Time of last status change */
 	time_t			ctime;
 	/** chunk size of file or default for all files in a dir */
@@ -444,11 +447,12 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
-	/* if we are reading from a layout ver 2 or older, don't read the uid, gid, and val len */
+	/* if we are reading from a layout ver 2 or older, we only have up to oclass IDX */
 	if (ver <= 2) {
 		recx.rx_nr = UID_IDX;
-		i = i - 3;
+		i = i - 4;
 	}
 
 	sgl->sg_nr	= i;
@@ -625,8 +629,8 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 
 	nr_iods = 1;
 	/*
-	 * if we are writing to a layout ver 2 or older container, don't add the uid/gid, and put
-	 * symlink value in the same akey.
+	 * if we are writing to a layout ver 2 or older container, don't add the uid, gid, internal
+	 * mtime and put symlink value in the same akey.
 	 */
 	if (ver <= 2) {
 		/*
@@ -645,6 +649,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 		/** Add file size / symlink length. for now, file size cached in the entry is 0. */
 		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+		d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
 		/** add the symlink as a separate akey */
 		if (S_ISLNK(entry->mode)) {
@@ -718,7 +723,7 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct dfs_obj *obj, struct stat *stbuf)
+	   size_t len, struct dfs_obj *obj, struct stat *stbuf, uint64_t *obj_hlc)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -783,11 +788,40 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		}
 
 		size = array_stbuf.st_size;
+		/** object was updated since creation */
 		if (array_stbuf.st_max_epoch) {
-			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &stbuf->st_mtim);
+			struct timespec obj_mtime, entry_mtime;
+
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &obj_mtime);
 			if (rc) {
 				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
+			}
+
+			if (obj_hlc)
+				*obj_hlc = array_stbuf.st_max_epoch;
+
+			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			if (obj_mtime.tv_sec == entry_mtime.tv_sec &&
+			    obj_mtime.tv_nsec == entry_mtime.tv_nsec) {
+				/*
+				 * internal mtime entry set through a user set mtime and is up to
+				 * date with the object epoch time, which means that the user set
+				 * mtime in the inode entry is the correct value to return.
+				 */
+				stbuf->st_mtim.tv_sec = entry.mtime;
+			} else {
+				/*
+				 * the user has not updated the mtime explicitly or the object
+				 * itself was modified after an explicit mtime update.
+				 */
+				stbuf->st_mtim.tv_sec = obj_mtime.tv_sec;
+				stbuf->st_mtim.tv_nsec = obj_mtime.tv_nsec;
 			}
 		} else {
 			stbuf->st_mtim.tv_sec = entry.mtime;
@@ -4249,7 +4283,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf, NULL);
 }
 
 int
@@ -4268,7 +4302,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4617,6 +4651,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	int			i = 0;
 	size_t			len;
 	int			rc;
+	uint64_t		obj_hlc = 0;
 	struct stat		rstat = {};
 
 	if (dfs == NULL || !dfs->mounted)
@@ -4649,7 +4684,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	/* Fetch the remote entry first so we can check the oid, then keep
 	 * a track locally of what has been updated
 	 */
-	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat);
+	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
 	if (rc)
 		D_GOTO(out_obj, rc);
 
@@ -4681,6 +4716,12 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_idx = MTIME_IDX;
 		recx[i].rx_nr = sizeof(time_t);
 		i++;
+
+		d_iov_set(&sg_iovs[i], &obj_hlc, sizeof(time_t));
+		recx[i].rx_idx = HLC_IDX;
+		recx[i].rx_nr = sizeof(time_t);
+		i++;
+
 		flags &= ~DFS_SET_ATTR_MTIME;
 		rstat.st_mtim = stbuf->st_mtim;
 	}
