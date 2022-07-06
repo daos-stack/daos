@@ -69,7 +69,7 @@ pipeline {
 
     parameters {
         string(name: 'BuildPriority',
-               defaultValue: getPriority(),
+               defaultValue: 2,
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: "",
