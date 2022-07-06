@@ -12,6 +12,7 @@
 
 ## What is DAOS?
 
+
 The **D**istributed **A**synchronous **O**bject **S**torage (DAOS) is an
 open-source software-defined object store designed from the ground up for
 massively distributed Non Volatile Memory (NVM). DAOS takes advantage of next
