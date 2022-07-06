@@ -214,7 +214,7 @@ def get_interface_device_name(hosts, interface, verbose=True):
     Args:
         hosts (NodeSet): hosts on which to detect the device name
         interface (str): interface for which to obtain the device name
-        verbose (bool, optional): display command details. Defaults to True.
+        verbose (bool, optional): display command details. Defaults to True
 
     Returns:
         dict: a dictionary of device name keys and NodeSet values on which they were detected
