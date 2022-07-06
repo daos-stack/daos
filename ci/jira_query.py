@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Interface between CI and bug-tracking tools"""
 
+import os
+import sys
 import jira
 
 # Script to improve interaction with Jenkins, GitHub and Jira.  This is intended to work in several
@@ -18,6 +20,9 @@ import jira
 # https://github.com/marketplace/actions/comment-pull-request
 
 
+VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test')
+
+
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
@@ -28,15 +33,38 @@ def main():
     """Run the script"""
 
     priority = False
+    errors = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
 
     server = jira.JIRA(options)
 
-    my_issue = 'DAOS-7821'
+    # Find the ticket number, either from the environment if possible or the command line.
+    pr_title = os.getenv('PR_TITLE')
+    if pr_title:
+        # GitHub actions (or similar), perform some checks on the title of the PR.
+        parts = pr_title.split(' ')
+        ticket_number = parts[0]
+        component = parts[1]
+        if component.endswith(':'):
+            component = component[:-1]
+            if component not in VALID_COMPONENTS:
+                errors.append('Uknown component')
+        else:
+            errors.append('component not formatted correctly')
+        if len(pr_title) > 80:
+            errors.append('Title of PR is too long')
+    else:
+        if len(sys.argv) > 1:
+            ticket_number = sys.argv[1]
+        else:
+            print('Set PR_TITLE or pass on command line')
+            return
+
+    # Check format of ticket_number using regexp?
 
     try:
-        ticket = server.issue(my_issue)
+        ticket = server.issue(ticket_number)
     except jira.exceptions.JIRAError:
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
@@ -58,6 +86,9 @@ def main():
         print('Job should run at high priority')
     else:
         set_output('priority', 'standard')
+    if errors:
+        set_output('errors', f'Errors are {",".join(errors)}')
+        sys.exit(1)
 
 
 if __name__ == '__main__':

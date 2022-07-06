@@ -1,3 +1,5 @@
+name: Jira Report
+
 on:
   # This should probably be pull_request_target.
   pull_request:
@@ -11,14 +13,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Search env
-        run: env
       - name: install jira
         run: python3 -m pip install jira
       - name: Load jira metadata
         run: ./ci/jira_query.py
         id: jira-data
       - name: Comment on PR
+        if: always()
         uses: thollander/actions-comment-pull-request@v1
         with:
           comment_includes: 'Bug-tracker data'
@@ -27,4 +28,5 @@ jobs:
             Jira ticket status is ${{ steps.jira-data.outputs.status }}
             Labels: ${{ steps.jira-data.outputs.labels }}
             Build should proceed at ${{ steps.jira-data.outputs.priority }} priority
+            ${{ steps.jira-data.outputs.errors }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
