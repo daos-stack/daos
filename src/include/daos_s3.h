@@ -36,6 +36,27 @@ struct ds3_user_info {
 
 /** S3 Bucket information */
 struct ds3_bucket_info {
+	/** Bucket name */
+	char		name[DAOS_PROP_LABEL_MAX_LEN+1];
+};
+
+struct ds3_object_list_params {
+	char prefix[128];
+    char delim[128];
+    char marker[128];
+	bool list_versions;
+	bool allow_unordered;
+	/** If the reults are truncated */
+	bool is_truncated;
+	char next_marker[128]; // TODO adjust length
+	// TODO fill
+};
+
+/** S3 Object information */
+struct ds3_object_info {
+	/** Object key */
+	char		key[128]; // TODO adjust length
+	// TODO fill
 };
 
 /**
@@ -156,7 +177,7 @@ ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, dao
  *
  * \param[in,out]
  *		nbuck	[in] \a buf length in items.
- *			[out] Number of buckets in the pool.
+ *			[out] Number of buckets returned.
  * \param[out]	buf	Array of bucket info structures.
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -220,6 +241,25 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
  */
 int
 ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev);
+
+/**
+ * List objects stored in the DAOS container identified by \a ds3b.
+ *
+ * \param[in,out]
+ *		nobj	[in] \a buf length in items.
+ *			[out] Number of objects returned.
+ * \param[out]	buf	Array of object info structures.
+ * \param[in,out]	
+ * 		params	[in] Params for the list operation
+ *			[out] Results from the list operation
+ * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, struct ds3_object_list_params *params, ds3_bucket_t *ds3b, daos_event_t *ev);
 
 /**
  * Open a S3 object.
