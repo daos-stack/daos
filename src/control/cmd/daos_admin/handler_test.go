@@ -351,9 +351,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Method:  "ScmScan",
 				Payload: scmScanReqPayload,
 			},
-			expPayload: &storage.ScmScanResponse{
-				State: storage.ScmStateNoModules,
-			},
+			expPayload: &storage.ScmScanResponse{},
 		},
 		"ScmScan failure": {
 			req: &pbin.Request{

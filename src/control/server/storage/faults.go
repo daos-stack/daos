@@ -16,10 +16,34 @@ import (
 
 // FaultScmNotInterleaved represents an error where PMem regions exist in non-interleaved
 // mode, this is unsupported.
-var FaultScmNotInterleaved = storageFault(code.ScmNotInterleaved,
-	"PMem regions are in AppDirect non-interleaved mode",
-	"Rerun the command first with the --reset option and then without to recreate the "+
-		"PMem regions in the recommended mode")
+func FaultScmNotInterleaved(sockID int) *fault.Fault {
+	return storageFault(
+		code.ScmBadRegion,
+		fmt.Sprintf("PMem region on socket %d is in non-interleaved mode which is unsupported", sockID),
+		"Remove and recreate region in AppDirect interleaved mode")
+}
+
+func FaultScmNotHealthy(sockID int) *fault.Fault {
+	return storageFault(
+		code.ScmBadRegion,
+		fmt.Sprintf("PMem region on socket %d is unhealthy", sockID),
+		"Check persistent memory modules are not faulty and then remove and recreate region")
+}
+
+func FaultScmPartialCapacity(sockID int) *fault.Fault {
+	return storageFault(
+		code.ScmBadRegion,
+		fmt.Sprintf("PMem region on socket %d only has partial capacity free", sockID),
+		"Creating namespaces on regions with only partial capacity available is unsupported, remove"+
+			"namespaces and try again")
+}
+
+func FaultScmUnknownMemoryMode(sockID int) *fault.Fault {
+	return storageFault(
+		code.ScmBadRegion,
+		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type", sockID),
+		"Remove and recreate region in AppDirect interleaved mode")
+}
 
 // FaultScmNoModules represents an error where no PMem modules exist.
 var FaultScmNoModules = storageFault(code.ScmNoModules,

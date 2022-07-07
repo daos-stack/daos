@@ -6,7 +6,9 @@
 
 package ipmctl
 
-import "bytes"
+import (
+	"bytes"
+)
 
 // DeviceUID represents the Go equivalent of an NVM_UID string buffer
 type DeviceUID [22]byte
@@ -99,6 +101,15 @@ func (pmrt PMemRegionType) String() string {
 	}[pmrt]
 }
 
+func PMemRegionTypeFromString(in string) PMemRegionType {
+	return map[string]PMemRegionType{
+		"Unknown":                 RegionTypeUnknown,
+		"AppDirect":               RegionTypeAppDirect,
+		"AppDirectNotInterleaved": RegionTypeNotInterleaved,
+		"Volatile":                RegionTypeVolatile,
+	}[in]
+}
+
 // PMemRegionHealth represents PMem region health.
 type PMemRegionHealth uint32
 
@@ -115,12 +126,22 @@ const (
 
 func (pmrh PMemRegionHealth) String() string {
 	return map[PMemRegionHealth]string{
-		RegionHealthNormal:  "Normal",
+		RegionHealthNormal:  "Healthy",
 		RegionHealthError:   "Error",
 		RegionHealthUnknown: "Unknown",
 		RegionHealthPending: "Pending",
 		RegionHealthLocked:  "Locked",
 	}[pmrh]
+}
+
+func PMemRegionHealthFromString(in string) PMemRegionHealth {
+	return map[string]PMemRegionHealth{
+		"Healthy": RegionHealthNormal,
+		"Error":   RegionHealthError,
+		"Unknown": RegionHealthUnknown,
+		"Pending": RegionHealthPending,
+		"Locked":  RegionHealthLocked,
+	}[in]
 }
 
 // PMemRegion represents Go equivalent of C.struct_region from nvm_management.h (NVM API) as

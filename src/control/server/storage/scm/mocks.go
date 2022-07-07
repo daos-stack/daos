@@ -175,7 +175,7 @@ type MockBackendConfig struct {
 	GetModulesErr        error
 	GetNamespacesRes     storage.ScmNamespaces
 	GetNamespacesErr     error
-	GetStateRes          storage.ScmState
+	GetStateRes          *storage.ScmSocketState
 	GetStateErr          error
 	PrepRes              *storage.ScmPrepareResponse
 	PrepErr              error
@@ -190,15 +190,15 @@ type MockBackend struct {
 	cfg MockBackendConfig
 }
 
-func (mb *MockBackend) getModules() (storage.ScmModules, error) {
+func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
 	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
-func (mb *MockBackend) getNamespaces() (storage.ScmNamespaces, error) {
+func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
-func (mb *MockBackend) getRegionState() (storage.ScmState, error) {
+func (mb *MockBackend) getPMemState(int) (*storage.ScmSocketState, error) {
 	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
 }
 
@@ -206,7 +206,7 @@ func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse)
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+func (mb *MockBackend) prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
 
