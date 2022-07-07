@@ -283,7 +283,7 @@ demo_pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pm
 
 static int
 demo_pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
-		 daos_size_t len)
+		      daos_size_t len)
 {
 	struct punch_args punch_args;
 	int rc = 0;
