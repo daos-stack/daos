@@ -33,7 +33,7 @@ FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
 
 # Labels in GitHub which this script will set/clear based on the logic below.
-MANAGED_LABELS = ('wontfix', 'release-2.2')
+MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 
 
 def set_output(key, value):
@@ -133,6 +133,8 @@ def main():
 
             if str(version) in ('2.2 Community Release'):
                 gh_label.append('release-2.2')
+            if str(version) in ('2.4 Community Release'):
+                gh_label.append('release-2.4')
 
         if set_rv_priority and priority is None:
             priority = rv_priority
@@ -148,6 +150,7 @@ def main():
 
     if priority is not None:
         output.append(f'Job should run at elevated priority ({priority})')
+        gh_label.append('priority')
 
     if errors:
         output.append(f'Errors are {",".join(errors)}')
@@ -155,8 +158,6 @@ def main():
     output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
 
     set_output('message', '\n'.join(output))
-
-    gh_label.append('wontfix')
 
     if gh_label:
         set_output('label', '\n'.join(gh_label))
