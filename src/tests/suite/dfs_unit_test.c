@@ -1412,7 +1412,6 @@ dfs_test_mtime(void **state)
 	assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 
-	printf("reset mtime ...\n");
 	/** reset the mtime on the file to the first timestamp */
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = first_ts.tv_sec;
@@ -1427,7 +1426,6 @@ dfs_test_mtime(void **state)
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 
-	printf("punch ...\n");
 	/** truncate the file */
 	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
