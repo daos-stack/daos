@@ -10,7 +10,7 @@ ARG BASE_DISTRO=ubuntu:20.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust
 ARG CB0
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -84,8 +84,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
+RUN apt-get update && apt-get upgrade && apt-get clean all
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used

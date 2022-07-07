@@ -14,5 +14,4 @@ ARG CB0
 # Install Python Bandit scanner.
 RUN dnf -y upgrade && dnf -y install bandit && dnf clean all
 
-ARG CACHEBUST
 RUN dnf -y upgrade && dnf clean all

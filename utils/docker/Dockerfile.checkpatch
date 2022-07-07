@@ -32,8 +32,6 @@ RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
 
 WORKDIR /home/daos
 
-# Actual CACHEBUST.  Do this every time so the system is up to date.
-ARG CACHEBUST
 RUN dnf -y upgrade && dnf clean all
 
 USER daos:daos

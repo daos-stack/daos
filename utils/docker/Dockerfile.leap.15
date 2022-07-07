@@ -10,7 +10,7 @@ ARG BASE_DISTRO=opensuse/leap:15.3
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust
 ARG CB0
 
 # Use local repo server if present
@@ -141,8 +141,7 @@ USER root:root
 
 # select compiler to use
 # Load the COMPILER arg early, and optionally install the Intel compiler
-# Do this before the CACHEBUST to make best use of cache as this is a big
-# download, and make it optional on the value of COMPILER for the same
+# Make it optional on the value of COMPILER for the same
 # reason.  Tell zypper to only consider the oneAPI repo here using the
 # discouraged --repo flag, however this prevents an update of the entire
 # upstream package list which would be immediately discarded, then reloaded
@@ -158,12 +157,9 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
         dnf clean all;                                                                                   \
     fi
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                         \
-        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf clean all;                                                                               \
-    }
+# force an upgrade to get any newly built RPMs
+RUN dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+    dnf clean all
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used

@@ -10,7 +10,7 @@ ARG BASE_DISTRO=rockylinux/rockylinux:8
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust
 ARG CB0
 
 # Use local repo server if present
@@ -149,12 +149,9 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
     }
 USER root:root
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                           \
-        dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf clean all;                                                                 \
-    }
+# force an upgrade to get any newly built RPMs
+RUN dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        dnf clean all
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
