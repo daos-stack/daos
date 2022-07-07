@@ -202,7 +202,7 @@ demo_pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *n
 
 static int
 demo_pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
-		mode_t mode, int flags, daos_size_t chunk_size,
+		     mode_t mode, int flags, daos_size_t chunk_size,
 		const char *value, struct pmfs_obj **_obj)
 {
 	struct open_args open_args;
