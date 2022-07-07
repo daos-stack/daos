@@ -28,12 +28,12 @@ jobs:
             ${{ steps.jira-data.outputs.message }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set labels
-        if: ${{ steps.jira-data.outputs.label }}
+        if: always() && ${{ steps.jira-data.outputs.label }}
         uses: actions-ecosystem/action-add-labels@v1
         with:
           labels: ${{ steps.jira-data.outputs.label }}
       - name: Clear labels
-        if: ${{ steps.jira-data.outputs.label-clear }}
+        if: ${{ always() && steps.jira-data.outputs.label-clear != '' }}
         uses: actions-ecosystem/action-remove-labels@v1
         with:
           labels: ${{ steps.jira-data.outputs.label-clear }}

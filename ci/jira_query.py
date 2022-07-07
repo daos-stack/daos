@@ -22,7 +22,7 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'test')
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'test')
 
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
@@ -47,7 +47,7 @@ def main():
 
     priority = None
     errors = []
-    gh_label = None
+    gh_label = 'release-2.2'
 
     options = {'server': 'https://daosio.atlassian.net/'}
 
