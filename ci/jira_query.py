@@ -19,10 +19,11 @@ import jira
 # https://jira.readthedocs.io/api.html#module-jira.client
 # https://github.com/marketplace/actions/comment-pull-request
 
-# Expected components from the commit message.  We've never checked/enforced these before so there
-# have been a lot of values used in the past.
-VALID_COMPONENTS = ('api', 'bio', 'build', 'client', 'control', 'cq', 'dfs', 'dfuse', 'doc',
-                    'engine', 'gha', 'object', 'pool', 'rdb', 'test', 'tse', 'vea', 'vos')
+# Expected components from the commit message, and directory in src/, src/client or utils/ is also
+# valid.  We've never checked/enforced these before so there have been a lot of values used in the
+# past.
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'test')
+
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
@@ -40,11 +41,13 @@ def set_output(key, value):
     print(value)
 
 
+# pylint: disable=too-many-branches
 def main():
     """Run the script"""
 
     priority = None
     errors = []
+    gh_label = None
 
     options = {'server': 'https://daosio.atlassian.net/'}
 
@@ -59,9 +62,13 @@ def main():
         component = parts[1]
         if component.endswith(':'):
             component = component[:-1]
-            if component.lower() != component:
+            col = component.lower()
+            if col != component:
                 errors.append('Component should be lower-case')
-            if component.lower() not in VALID_COMPONENTS:
+            if col not in VALID_COMPONENTS and not os.path.isdir(os.path.join('src', col)) \
+               and not os.path.isdir(os.path.join('src', 'client', col)) \
+               and not os.path.isdir(os.path.join('utils', col)):
+
                 errors.append('Unknown component')
         else:
             errors.append('component not formatted correctly')
@@ -121,6 +128,9 @@ def main():
             if rv_priority is None and str(version) in ('2.4 Community Release'):
                 rv_priority = 3
 
+            if str(version) in ('2.2 Community Release'):
+                gh_label = 'release-2.2'
+
         if set_rv_priority and priority is None:
             priority = rv_priority
 
@@ -142,6 +152,11 @@ def main():
     output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
 
     set_output('message', '\n'.join(output))
+
+    if gh_label:
+        set_output('label', gh_label)
+
+    set_output('label-clear', 'wontfix')
 
     if errors:
         sys.exit(1)
