@@ -370,9 +370,7 @@ func cleanEngineHugePages(srv *server, engineIdx uint32) error {
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
-		err = errors.Wrap(err, msg)
-		srv.log.Errorf(err.Error())
-		return errors.Wrapf(err, "engine %d", engineIdx)
+		return errors.Wrap(err, msg)
 	}
 
 	srv.log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
