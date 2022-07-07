@@ -403,13 +403,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
-		// Clear hugepages created by SPDK but not in use by a current process.
+		// Attempt to remove unused hugepages, log error only.
 		if err := cleanEngineHugePages(srv, engineIdx); err != nil {
 			srv.log.Errorf(err.Error())
-			return err
 		}
 
-		// Retrieve up-to-date hugepage info to evaluate and assign available memory.
+		// Update engine memory related config parameters before starting.
 		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
 			"updating engine memory parameters")
 	})
