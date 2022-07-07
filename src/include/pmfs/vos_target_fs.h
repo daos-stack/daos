@@ -214,9 +214,9 @@ int pmfs_init_pool(void *arg, struct scan_context ctx);
 void pmfs_set_cmd_type(const char *type);
 
 /* Add a single pool to the pool linked list */
-//struct pmfs_pool pmfs_add_single_pool(char *tsc_pmem_file, uint64_t tsc_nvme_size,
-//				      uint64_t tsc_scm_size, bool tsc_skip_cont_create,
-//				      bool amend);
+/* struct pmfs_pool pmfs_add_single_pool(char *tsc_pmem_file, uint64_t tsc_nvme_size, */
+/* uint64_t tsc_scm_size, bool tsc_skip_cont_create, */
+/* bool amend); */
 /* The following APIs encapsulate with thread (argobots or regular thread) */
 /* Launching pmfs command using callbacks */
 /* They are the same with pmfs.h just add thread launching */
