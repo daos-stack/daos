@@ -1,14 +1,18 @@
 """Build mpi abstraction libraries"""
 import daos_build
+import compiler_setup
 
 
 def build_dpar(env, mpi_env):
     """Build MPI abstraction library"""
 
-    serial_lib = daos_build.library(env, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
-    env.Install('$PREFIX/lib64/', serial_lib)
+    senv = env.Clone()
+    compiler_setup.base_setup(senv)
 
-    if mpi_env is None:
+    serial_lib = daos_build.library(senv, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    senv.Install('$PREFIX/lib64/', serial_lib)
+
+    if not mpi_env:
         return
 
     denv = mpi_env.Clone()
@@ -27,10 +31,11 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
     daos_build.add_build_rpath(env)
     daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(base_env_mpi)
+    if base_env_mpi:
+        base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
+        daos_build.add_build_rpath(base_env_mpi)
 
     build_dpar(base_env, base_env_mpi)
 

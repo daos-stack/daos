@@ -15,6 +15,18 @@ import (
 )
 
 func TestHardware_PrintTopology(t *testing.T) {
+	test2Block := &PCIDevice{
+		Name:      "test2-block",
+		Type:      DeviceTypeBlock,
+		PCIAddr:   *MustNewPCIAddress("0000:00:1f.2"),
+		LinkSpeed: 1.75,
+		BlockDevice: &BlockDevice{
+			Name: "test2-block",
+			Size: 512 * 1000 * 1000 * 1000,
+		},
+	}
+	test2Block.BlockDevice.BackingDevice = test2Block
+
 	testNUMANode := MockNUMANode(0, 8).
 		WithPCIBuses(
 			[]*PCIBus{
@@ -38,7 +50,11 @@ func TestHardware_PrintTopology(t *testing.T) {
 					PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
 					LinkSpeed: 1.2,
 				},
+				test2Block,
 			},
+		).
+		WithBlockDevices(
+			[]*BlockDevice{test2Block.BlockDevice},
 		)
 
 	for name, tc := range map[string]struct {
@@ -59,6 +75,8 @@ NUMA Node 0
   CPU cores: 0-7
   PCI buses:
     0000:[00-0f]
+      0000:00:1f.2
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
       0000:01:01.1
         0000:01:01.1 test0 (network interface) @ 2.50 GB/s
         0000:01:01.1 test0-peer (OFI domain) @ 1.20 GB/s
@@ -86,6 +104,8 @@ NUMA Node 0
   CPU cores: 0-7
   PCI buses:
     0000:[00-0f]
+      0000:00:1f.2
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
       0000:01:01.1
         0000:01:01.1 test0 (network interface) @ 2.50 GB/s
         0000:01:01.1 test0-peer (OFI domain) @ 1.20 GB/s
@@ -95,7 +115,7 @@ Virtual Devices
     backed by: 0000:01:01.1 test0 (network interface) @ 2.50 GB/s
 `,
 		},
-		"multiple NUMA nodes": {
+		"multiple NUMA nodes and pmem": {
 			topo: &Topology{
 				NUMANodes: map[uint]*NUMANode{
 					2: MockNUMANode(2, 8, 8).
@@ -115,10 +135,16 @@ Virtual Devices
 									PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
 									LinkSpeed: 2.5,
 								},
+								test2Block,
+							},
+						).
+						WithBlockDevices(
+							[]*BlockDevice{
+								test2Block.BlockDevice,
 								{
-									Name:    "test2-block",
-									Type:    DeviceTypeBlock,
-									PCIAddr: *MustNewPCIAddress("0000:00:1f.2"),
+									Name: "pmem2",
+									Size: 4 * 1024 * 1024 * 1024 * 1024,
+									Type: "NVDIMM",
 								},
 							},
 						),
@@ -145,6 +171,16 @@ Virtual Devices
 									PCIAddr: *MustNewPCIAddress("0000:83:00.0"),
 								},
 							},
+						).
+						WithBlockDevices(
+							[]*BlockDevice{
+								test2Block.BlockDevice,
+								{
+									Name: "pmem0",
+									Size: 4 * 1024 * 1024 * 1024 * 1024,
+									Type: "NVDIMM",
+								},
+							},
 						),
 				},
 			},
@@ -157,14 +193,18 @@ NUMA Node 0
         0000:80:01.1 test0-net (network interface) @ 2.50 GB/s
       0000:83:00.0
         0000:83:00.0 test0-block (block device)
+  Non-PCI block devices:
+    pmem0 (4.4 TB NVDIMM)
 NUMA Node 2
   CPU cores: 8-15
   PCI buses:
     0000:[00-0f]
       0000:00:1f.2
-        0000:00:1f.2 test2-block (block device)
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
       0000:01:01.1
         0000:01:01.1 test2-net (network interface) @ 2.50 GB/s
+  Non-PCI block devices:
+    pmem2 (4.4 TB NVDIMM)
 `,
 		},
 	} {

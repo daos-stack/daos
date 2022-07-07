@@ -1,6 +1,7 @@
 # Build from scratch
 
-The following instructions describe how to build DAOS from source code. The following steps are required:
+The following instructions describe how to build DAOS from source code. This
+includes the following steps:
 
 1. Download Source Code
 2. Install Prerequisites
@@ -15,7 +16,7 @@ Download DAOS source code using the following command:
 
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To checkout the 2.2 development branch, simply run:
+To checkout the 2.4 development branch, simply run:
 
 ```
 $ git clone --recurse-submodules https://github.com/daos-stack/daos.git
@@ -28,27 +29,24 @@ below) and initializes all the submodules automatically.
 ## Install Prerequisites
 
 To build DAOS and its dependencies, several software packages must be installed
-on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
-packages usually available on all the Linux distributions. Moreover, a Go
-version of at least 1.10 is required.
+on the system. This includes libuuid, cmocka, Go, and several other packages
+usually available on all the Linux distributions.
 
-Some DAOS tests use MPI. The DAOS build process uses the environment modules
+Some DAOS tests also use MPI. The DAOS build process uses the environment modules
 package to detect the presence of MPI. If none is found, the build will skip
 building those tests.
+
+In addition some python packages are required, which can be installed via the
+Linux distribution or installed by [pip](https://pip.pypa.io/en/stable/) after
+the source code is available.
 
 Scripts to install all the required packages are provided for each supported
 distribution.
 
-### EL (including CentOS)
+### RHEL and Clones
 
-On CentOS7, please run the following command from the DAOS tree as root or via
-sudo.
-
-```bash
-$ ./utils/scripts/install-centos7.sh
-```
-
-For EL8, the following script must be used instead:
+For RHEL8-compatible distributions (e.g. Rocky Linux 8 or AlmaLinux 8), please
+run the following command from the DAOS tree as root or via sudo:
 
 ```bash
 $ ./utils/scripts/install-el8.sh
@@ -62,13 +60,31 @@ For openSUSE, the following command should be executed as root or via sudo:
 $ ./utils/scripts/install-leap15.sh
 ```
 
-### Unbuntu
+### Ubuntu
 
 As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu20.sh
+$ ./utils/scripts/install-ubuntu.sh
 ```
+
+### Python Packages
+
+Python packages required to build and test DAOS can be installed via a python
+[virtual environment](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
+or system wide.
+
+To install a virtual environment for building DAOS use the following commands, this will only need
+to be done once, for a new shell only the `source venv/bin/activate` command will be required.
+Alternatively the packages can be installed via pip as root which will install onto PATH, or as
+the user outside of a virtual environment, in which case `~/.local/bin` will need to be added to
+PATH.
+
+ ```bash
+ $ python3 -m venv venv
+ $ source venv/bin/activate
+ $ python3 -m pip install -f requirements.txt
+ ```
 
 ## Build DAOS
 
@@ -76,7 +92,7 @@ Once all prerequisites installed and the sources are downloaded,
 DAOS can be built via the following command:
 
 ```bash
-$ scons-3 --config=force --build-deps=yes install
+$ scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`
@@ -86,7 +102,7 @@ command line (e.g., PREFIX=/usr/local).
 
 !!! note
     Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
-    scons command line. Please see `scons-3 --help` for all the possible options.
+    scons command line. Please see `scons --help` for all the possible options.
     Those options are also saved for future compilations.
 
 ## Environment setup

@@ -31,7 +31,7 @@ def generate_daos_version_header(env):
           '@TMPL_PKG_FIX@': env['DAOS_VERSION_FIX'],
           '@Template for @': ""}
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
-    print("generated daos version header file: {}".format(out[0].abspath))
+    print(f'generated daos version header file: {out[0].abspath}')
 
 
 def check_install_header(env, header):
@@ -49,8 +49,6 @@ def scons():
     Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     # For Common library and headers.
-    env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
-    base_env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     # Generic DAOS includes
