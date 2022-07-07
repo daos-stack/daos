@@ -21,7 +21,6 @@
 #include <pmfs/pmfs.h>
 #include <pmfs/vos_target_fs.h>
 #include <pmfs/vos_tasks.h>
-#include <pmfs/pmfs_cmd.h>
 #include "perf_internal.h"
 #include <spdk/crc32.h>
 #include <daos_srv/vos_types.h>
@@ -387,6 +386,10 @@ main(int argc, char **argv)
 
 	/* Open this config with NVME and SCM size for user */
 	pmfs_pool = pmfs_init_target_env(8ULL << 30, 2ULL << 30);
+	if (!pmfs_pool) {
+		D_ERROR("PMFS environment init failed\r\n");
+		return -1;
+	}
 
 	pmfs_prepare_mounted_env_in_pool(pmfs_pool, &pmfs);
 

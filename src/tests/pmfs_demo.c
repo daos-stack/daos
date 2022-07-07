@@ -28,111 +28,6 @@ D_LIST_HEAD(g_test_pool_list);
 D_LIST_HEAD(g_test_fini_list);
 D_LIST_HEAD(g_present_list);
 
-enum {
-	MKFS,
-	MOUNT
-};
-
-struct mkfs_args {
-	daos_handle_t poh;
-	uuid_t uuid;
-};
-
-struct mount_args {
-	daos_handle_t poh;
-	daos_handle_t coh;
-	int flags;
-	struct pmfs **pmfs;
-};
-
-struct umount_args {
-	struct pmfs *pmfs;
-};
-
-struct mkdir_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *parent;
-	const char *name;
-	mode_t mode;
-};
-
-struct listdir_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *obj;
-	uint32_t nr;
-};
-
-struct remove_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *parent;
-	const char *name;
-	bool force;
-	daos_obj_id_t *oid;
-};
-
-struct open_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *parent;
-	const char *name;
-	mode_t mode;
-	int flags;
-	daos_size_t chunk_size;
-	const char *value;
-	struct pmfs_obj *obj;
-};
-
-struct readdir_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *obj;
-	uint32_t *nr;
-	struct dirent *dirs;
-};
-
-struct lookup_args {
-	struct pmfs *pmfs;
-	const char *path;
-	int flags;
-	struct pmfs_obj *obj;
-	mode_t *mode;
-	struct stat *stbuf;
-};
-
-struct release_args {
-	struct pmfs_obj *obj;
-};
-
-struct punch_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *obj;
-	daos_off_t offset;
-	daos_size_t len;
-};
-
-struct write_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *obj;
-	d_sg_list_t *user_sgl;
-	daos_size_t buf_size;
-	daos_off_t off;
-	daos_size_t *write_size;
-};
-
-struct read_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *obj;
-	d_sg_list_t *user_sgl;
-	daos_off_t off;
-	daos_size_t stride_size;
-	daos_size_t *read_size;
-};
-
-struct stat_args {
-	struct pmfs *pmfs;
-	struct pmfs_obj *parent;
-	const char *name;
-	struct stat *stbuf;
-};
-
 static void
 pmfs_buffer_render(char *buf, unsigned int buf_len)
 {
@@ -159,10 +54,9 @@ pmfs_time_now(void)
 	return (tv.tv_sec + tv.tv_usec / 1000000.0);
 }
 
-static  struct pmfs_pool
+static struct pmfs_pool
 pmfs_add_single_pool(char *tsc_pmem_file, uint64_t tsc_nvme_size,
-		     uint64_t tsc_scm_size, bool tsc_skip_cont_create,
-		     bool amend)
+		     uint64_t tsc_scm_size, bool tsc_skip_cont_create, bool amend)
 {
 	struct pmfs_pool *pmfs_pool;
 
@@ -175,7 +69,7 @@ pmfs_add_single_pool(char *tsc_pmem_file, uint64_t tsc_nvme_size,
 		snprintf(ts_pmem_file, sizeof(ts_pmem_file),
 			 "/mnt/daos/pmfs_cli%d.pmem", count);
 		tsc_pmem_file = ts_pmem_file;
-		D_PRINT("tsc pmem file = %s\r\n", tsc_pmem_file);
+		printf("tsc pmem file = %s\r\n", tsc_pmem_file);
 	}
 	uuid_generate(pmfs_pool->tsc_pool_uuid);
 	pmfs_pool->tsc_pmem_file = tsc_pmem_file;
@@ -193,7 +87,7 @@ pmfs_add_single_pool(char *tsc_pmem_file, uint64_t tsc_nvme_size,
 }
 
 static struct pmfs_context *
-pmfs_set_ctx(void)
+pmfs_set_ctx(uint64_t tsc_nvme_size,  uint64_t tsc_scm_size)
 {
 	struct pmfs_context *pmfs_ctx;
 
@@ -201,160 +95,21 @@ pmfs_set_ctx(void)
 	D_ASSERT(pmfs_ctx != NULL);
 
 	D_INIT_LIST_HEAD(&pmfs_ctx->pmfs_pool.pl);
-	/* add pool mapping to /mnt/daos/pmfs_cli0.pmem, 8G NVME,2G SCM, skip container create */
+	/* add pool mapping to /mnt/daos/pmfs_cli0.pmem,tsc_nvme_size,
+	 * tsc_scm_size, skip container create
+	 */
 	pmfs_ctx->pmfs_pool = pmfs_add_single_pool("/mnt/daos/pmfs_cli0.pmem",
-						   8ULL << 30, 2ULL << 30, true, false);
+						   tsc_nvme_size, tsc_scm_size, true,
+						   false);
 	/* That aims to associated with engine lib */
 	pmfs_ctx->pmfs_pool.pl = g_test_pool_list;
+
 	pmfs_ctx_combine_pool_list(pmfs_ctx);
 	return pmfs_ctx;
 }
 
-static void
-pmfs_mkfs_cb(void *arg)
-{
-	struct mkfs_args *mags = arg;
-
-	pmfs_mkfs(mags->poh, mags->uuid);
-}
-
-static void
-pmfs_mount_cb(void *arg)
-{
-	struct mount_args *mount_args = arg;
-
-	pmfs_mount(mount_args->poh, mount_args->coh, mount_args->flags,
-		   mount_args->pmfs);
-}
-
-static void
-pmfs_umount_cb(void *arg)
-{
-	struct umount_args *umount_args = arg;
-
-	pmfs_umount(umount_args->pmfs);
-}
-
-static void
-pmfs_mkdir_cb(void *arg)
-{
-	struct mkdir_args *mkdir_args = arg;
-
-	pmfs_mkdir(mkdir_args->pmfs, mkdir_args->parent, mkdir_args->name,
-		   mkdir_args->mode);
-}
-
-static void
-pmfs_listdir_cb(void *arg)
-{
-	struct listdir_args *listdir_args = arg;
-
-	pmfs_listdir(listdir_args->pmfs, listdir_args->obj, &listdir_args->nr);
-}
-
-static void
-pmfs_remove_cb(void *arg)
-{
-	struct remove_args *remove_args = arg;
-
-	pmfs_remove(remove_args->pmfs, remove_args->parent, remove_args->name,
-		    remove_args->force, remove_args->oid);
-}
-
-static void
-pmfs_open_cb(void *arg)
-{
-	struct open_args *open_args = arg;
-
-	pmfs_open(open_args->pmfs, open_args->parent, open_args->name,
-		  open_args->mode, open_args->flags, open_args->chunk_size,
-		  open_args->value, &open_args->obj);
-}
-
-static void
-pmfs_readdir_cb(void *arg)
-{
-	struct readdir_args *readdir_args = arg;
-
-	pmfs_readdir(readdir_args->pmfs, readdir_args->obj, readdir_args->nr,
-		     readdir_args->dirs);
-}
-
-static void
-pmfs_lookup_cb(void *arg)
-{
-	struct lookup_args *lookup_args = arg;
-
-	pmfs_lookup(lookup_args->pmfs, lookup_args->path, lookup_args->flags,
-		    &lookup_args->obj, lookup_args->mode, lookup_args->stbuf);
-}
-
-static void
-pmfs_release_cb(void *arg)
-{
-	struct release_args *release_args = arg;
-
-	pmfs_release(release_args->obj);
-}
-
-static void
-pmfs_punch_cb(void *arg)
-{
-	struct punch_args *punch_args = arg;
-
-	pmfs_punch(punch_args->pmfs, punch_args->obj, punch_args->offset,
-		   punch_args->len);
-}
-
 static int
-pmfs_write_cb(void *arg)
-{
-	struct write_args *write_args = arg;
-	d_sg_list_t     *sgl = write_args->user_sgl;
-	daos_size_t     off = write_args->off;
-	int     rc = 0;
-
-	rc = pmfs_write_sync(write_args->pmfs, write_args->obj, sgl, off);
-	if (rc != 0) {
-		D_PRINT("write error\r\n");
-		return rc;
-	}
-
-	return 0;
-}
-
-static int
-pmfs_read_cb(void *arg)
-{
-	struct read_args *read_args = arg;
-	int rc = 0;
-
-	d_sg_list_t *sgl = read_args->user_sgl;
-	daos_size_t off = read_args->off;
-	daos_size_t read_size  = *read_args->read_size;
-
-	rc = pmfs_read_sync(read_args->pmfs, read_args->obj, sgl, off,
-			    &read_size);
-	if (rc != 0) {
-		D_PRINT("read error\r\n");
-		return rc;
-	}
-
-	return 0;
-}
-
-static void
-pmfs_stat_cb(void *arg)
-{
-	struct stat_args *stat_args = arg;
-
-	pmfs_stat(stat_args->pmfs, stat_args->parent, stat_args->name,
-		  stat_args->stbuf);
-}
-
-
-static int
-pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
+demo_pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
 {
 	struct mount_args mount_args;
 	int rc = 0;
@@ -375,7 +130,7 @@ pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
 }
 
 static int
-pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
+demo_pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 		 mode_t mode)
 {
 	struct mkdir_args mkdir_args;
@@ -399,7 +154,7 @@ pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 }
 
 static int
-pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
+demo_pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
 {
 	struct listdir_args listdir_args;
 	int rc = 0;
@@ -422,7 +177,7 @@ pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
 }
 
 static int
-pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
+demo_pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 		  bool force, daos_obj_id_t *oid)
 {
 	struct remove_args remove_args;
@@ -446,7 +201,7 @@ pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 }
 
 static int
-pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
+demo_pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 		mode_t mode, int flags, daos_size_t chunk_size,
 		const char *value, struct pmfs_obj **_obj)
 {
@@ -477,7 +232,7 @@ pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 }
 
 static int
-pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
+demo_pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 		   struct dirent *dirs)
 {
 	struct readdir_args readdir_args;
@@ -491,6 +246,7 @@ pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
+	D_PRINT("---------------start readdir------------------------\r\n");
 	rc = pmfs_thread_create(pmfs_readdir_cb, (void *)&readdir_args, 1);
 	if (rc != 0)
 		return rc;
@@ -499,7 +255,7 @@ pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 }
 
 static int
-pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pmfs_obj **obj,
+demo_pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pmfs_obj **obj,
 		  mode_t *mode, struct stat *stbuf)
 {
 	struct lookup_args lookup_args;
@@ -526,7 +282,7 @@ pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pmfs_ob
 }
 
 static int
-pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
+demo_pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 		 daos_size_t len)
 {
 	struct punch_args punch_args;
@@ -549,7 +305,7 @@ pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 }
 
 static int
-pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
+demo_pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 		 daos_off_t off, daos_size_t *write_size)
 {
 	struct write_args write_args;
@@ -573,7 +329,7 @@ pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 }
 
 static int
-pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
+demo_pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 		daos_off_t off,	daos_size_t *read_size)
 {
 	struct read_args read_args;
@@ -597,7 +353,7 @@ pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 }
 
 static int
-pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
+demo_pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 		struct stat *stbuf)
 {
 	struct stat_args stat_args;
@@ -621,7 +377,7 @@ pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 }
 
 static int
-pmfs_release_start(struct pmfs_obj *obj)
+demo_pmfs_release_start(struct pmfs_obj *obj)
 {
 	struct release_args release_args;
 	int rc = 0;
@@ -641,7 +397,7 @@ pmfs_release_start(struct pmfs_obj *obj)
 
 
 static int
-pmfs_umount_start(struct pmfs *pmfs)
+demo_pmfs_umount_start(struct pmfs *pmfs)
 {
 	struct umount_args umount_args;
 	int rc = 0;
@@ -658,7 +414,7 @@ pmfs_umount_start(struct pmfs *pmfs)
 }
 
 static int
-pmfs_init_pool(void *arg, struct scan_context ctx)
+demo_pmfs_init_pool(void *arg, struct scan_context ctx)
 {
 	struct vos_fs_cmd_args *vfca = arg;
 	int rc;
@@ -679,7 +435,7 @@ pmfs_init_pool(void *arg, struct scan_context ctx)
 }
 
 static struct pmfs *
-pmfs_start_mount(struct pmfs_pool *pmfs_pool, struct pmfs *pmfs)
+demo_pmfs_start_mount(struct pmfs_pool *pmfs_pool, struct pmfs *pmfs)
 {
 	struct scan_context ctx = { };
 	daos_handle_t test_coh;
@@ -688,7 +444,7 @@ pmfs_start_mount(struct pmfs_pool *pmfs_pool, struct pmfs *pmfs)
 	g_vfca->pmfs_ctx->pmfs_pool = *pmfs_pool;
 	D_PRINT("---------------start scan pool---------------------------\r\n");
 	D_PRINT("---------------rebuild container list before mount-------\r\n");
-	rc = pmfs_init_pool(g_vfca, ctx);
+	rc = demo_pmfs_init_pool(g_vfca, ctx);
 	if (rc != 0) {
 		return NULL;
 	}
@@ -696,8 +452,8 @@ pmfs_start_mount(struct pmfs_pool *pmfs_pool, struct pmfs *pmfs)
 	D_PRINT("---------------rebuild container list done---------------\r\n");
 	/* start mount thread */
 	test_coh = g_vfca->pmfs_ctx->pmfs_pool.pmfs_container.tsc_coh;
-	rc = pmfs_mount_start(g_vfca->pmfs_ctx->pmfs_pool.tsc_poh, test_coh,
-			      &pmfs);
+	rc = demo_pmfs_mount_start(g_vfca->pmfs_ctx->pmfs_pool.tsc_poh, test_coh,
+				   &pmfs);
 	if (rc != 0) {
 		D_PRINT("pmfs mount start failed\r\n");
 		return NULL;
@@ -707,7 +463,7 @@ pmfs_start_mount(struct pmfs_pool *pmfs_pool, struct pmfs *pmfs)
 }
 
 static int
-pmfs_start_mkfs(struct pmfs_pool *pmfs_pool)
+demo_pmfs_start_mkfs(struct pmfs_pool *pmfs_pool)
 {
 	struct mkfs_args mags;
 	int rc;
@@ -1049,11 +805,11 @@ cli_parse_cmds(char cmd)
 demo:
 		if (check_cmd(argv1, "mkfs")) {
 			g_vfca->vfcmd = "PMFS_MKFS";
-			pmfs_start_mkfs(g_present_pool->p_pmfs_pool);
+			demo_pmfs_start_mkfs(g_present_pool->p_pmfs_pool);
 			g_present_pool->is_formatted = true;
 			break;
 		} else if (check_cmd(argv1, "umount")) {
-			pmfs_umount_start(g_present_pool->p_cmd_pmfs);
+			demo_pmfs_umount_start(g_present_pool->p_cmd_pmfs);
 
 			D_PRINT("pmfs umount done.\r\n");
 			g_present_pool->p_cmd_pmfs = NULL;
@@ -1064,16 +820,16 @@ demo:
 				continue;
 			}
 			g_present_pool->p_cmd_pmfs =
-				pmfs_start_mount(g_present_pool->p_pmfs_pool,
-						 g_present_pool->p_cmd_pmfs);
+				demo_pmfs_start_mount(g_present_pool->p_pmfs_pool,
+						      g_present_pool->p_cmd_pmfs);
 			g_present_pool->p_cmd_obj = NULL;
 			break;
 		} else if (check_cmd(argv1, "lookup ") ||  check_cmd(argv1, "lk ")) {
 			struct pmfs_obj *tmp1_obj = NULL;
 			mode_t mode;
 
-			rc = pmfs_lookup_start(g_present_pool->p_cmd_pmfs, argv2, O_RDONLY,
-					       &tmp1_obj, &mode, NULL);
+			rc = demo_pmfs_lookup_start(g_present_pool->p_cmd_pmfs, argv2, O_RDONLY,
+						    &tmp1_obj, &mode, NULL);
 			if (rc != 0) {
 				D_PRINT("lookup failed\r\n");
 				continue;
@@ -1087,8 +843,8 @@ demo:
 				D_PRINT("no mount point\r\n");
 				continue;
 			}
-			rc = pmfs_mkdir_start(g_present_pool->p_cmd_pmfs,
-					      g_present_pool->p_cmd_obj, argv2, O_RDWR);
+			rc = demo_pmfs_mkdir_start(g_present_pool->p_cmd_pmfs,
+						   g_present_pool->p_cmd_obj, argv2, O_RDWR);
 			if (rc < 0) {
 				D_PRINT("mkdir failed\r\n");
 				continue;
@@ -1124,8 +880,8 @@ demo:
 
 			uint32_t nr = 0;
 
-			rc = pmfs_listdir_start(g_present_pool->p_cmd_pmfs,
-						g_present_pool->p_cmd_obj, &nr);
+			rc = demo_pmfs_listdir_start(g_present_pool->p_cmd_pmfs,
+						     g_present_pool->p_cmd_obj, &nr);
 			if (rc < 0) {
 				D_PRINT("list dir failed\r\n");
 				continue;
@@ -1139,8 +895,8 @@ demo:
 			pmfs_path_root_reactor(argv2, 1);
 			daos_obj_id_t oid;
 
-			rc = pmfs_remove_start(g_present_pool->p_cmd_pmfs,
-					       g_present_pool->p_cmd_obj, argv2,
+			rc = demo_pmfs_remove_start(g_present_pool->p_cmd_pmfs,
+						    g_present_pool->p_cmd_obj, argv2,
 					       true, &oid);
 			if (rc != 0)
 				D_PRINT("pmfs remove start failed\r\n");
@@ -1153,14 +909,14 @@ demo:
 			mode_t mode;
 			struct pmfs_obj *tmp_obj = g_present_pool->p_cmd_obj;
 
-			rc = pmfs_lookup_start(g_present_pool->p_cmd_pmfs, g_name, O_RDONLY,
-					       &tmp_obj, &mode, NULL);
+			rc = demo_pmfs_lookup_start(g_present_pool->p_cmd_pmfs, g_name,
+						    O_RDONLY, &tmp_obj, &mode, NULL);
 			if (rc != 0  || !tmp_obj) {
 				D_PRINT("no such file or dir %s\r\n", argv2);
 				continue;
 			}
 
-			rc = pmfs_release_start(tmp_obj);
+			rc = demo_pmfs_release_start(tmp_obj);
 			if (rc != 0) {
 				D_PRINT("pmfs release tmp_obj start failed\r\n");
 			continue;
@@ -1171,8 +927,8 @@ demo:
 			continue;
 		} else if (check_cmd(argv1, "stat ") || check_cmd(argv1, "s ") ||
 				check_cmd(argv1, "stat")) {
-			rc = pmfs_stat_start(g_present_pool->p_cmd_pmfs, g_present_pool->p_cmd_obj,
-					     argv2, &stbuf);
+			rc = demo_pmfs_stat_start(g_present_pool->p_cmd_pmfs,
+						  g_present_pool->p_cmd_obj, argv2, &stbuf);
 			if (rc != 0) {
 				D_PRINT("pmfs stat start failed\r\n");
 				continue;
@@ -1182,9 +938,10 @@ demo:
 			continue;
 		} else if (check_cmd(argv1, "cd ")) {
 			g_present_pool->p_parent_cmd_obj = g_present_pool->p_cmd_obj;
-			rc = pmfs_open_start(g_present_pool->p_cmd_pmfs, g_present_pool->p_cmd_obj,
-					     argv2, S_IFDIR, O_RDWR,
-					     1024, NULL, &g_present_pool->p_cmd_obj);
+			rc = demo_pmfs_open_start(g_present_pool->p_cmd_pmfs,
+						  g_present_pool->p_cmd_obj,
+						  argv2, S_IFDIR, O_RDWR,
+						  1024, NULL, &g_present_pool->p_cmd_obj);
 			if (rc != 0) {
 				D_PRINT("pmfs open failed\r\n");
 				continue;
@@ -1195,9 +952,10 @@ demo:
 			continue;
 		} else if (check_cmd(argv1, "createfile ") || check_cmd(argv1, "c ")) {
 			g_present_pool->p_parent_cmd_obj = g_present_pool->p_cmd_obj;
-			rc = pmfs_open_start(g_present_pool->p_cmd_pmfs, g_present_pool->p_cmd_obj,
-					     argv2, S_IFREG, O_CREAT | O_RDWR,
-					     atoi(argv3), argv4, &g_present_pool->p_cmd_obj);
+			rc = demo_pmfs_open_start(g_present_pool->p_cmd_pmfs,
+						  g_present_pool->p_cmd_obj,
+						  argv2, S_IFREG, O_CREAT | O_RDWR,
+						  atoi(argv3), argv4, &g_present_pool->p_cmd_obj);
 			if (rc != 0) {
 				D_PRINT("pmfs open file failed\r\n");
 				continue;
@@ -1208,8 +966,9 @@ demo:
 		} else if (check_cmd(argv1, "r ") || check_cmd(argv1, "readsync ")) {
 			then = pmfs_time_now();
 
-			rc = pmfs_read_start(g_present_pool->p_cmd_pmfs, g_present_pool->p_cmd_obj,
-					     &g_user_sgl, atoll(argv2), &g_read_size);
+			rc = demo_pmfs_read_start(g_present_pool->p_cmd_pmfs,
+						  g_present_pool->p_cmd_obj,
+						  &g_user_sgl, atoll(argv2), &g_read_size);
 			if (rc != 0) {
 				D_PRINT("pmfs read file failed\r\n");
 				continue;
@@ -1225,8 +984,9 @@ demo:
 			then = pmfs_time_now();
 			g_write_size = atoll(argv3);
 
-			rc = pmfs_write_start(g_present_pool->p_cmd_pmfs, g_present_pool->p_cmd_obj,
-					      &g_user_sgl, atoll(argv2), &g_write_size);
+			rc = demo_pmfs_write_start(g_present_pool->p_cmd_pmfs,
+						   g_present_pool->p_cmd_obj,
+						   &g_user_sgl, atoll(argv2), &g_write_size);
 			if (rc != 0) {
 				D_PRINT("pmfs write file failed\r\n");
 				continue;
@@ -1250,9 +1010,9 @@ demo:
 				D_PRINT("punch size equals filesize-offset\r\n");
 				g_punch_size = g_write_size - atoll(argv2);
 			}
-			rc = pmfs_punch_start(g_present_pool->p_cmd_pmfs,
-					      g_present_pool->p_cmd_obj,
-					      atoll(argv2), g_punch_size);
+			rc = demo_pmfs_punch_start(g_present_pool->p_cmd_pmfs,
+						   g_present_pool->p_cmd_obj,
+						   atoll(argv2), g_punch_size);
 			if (rc != 0) {
 				D_PRINT("pmfs punch file failed\r\n");
 				continue;
@@ -1267,8 +1027,8 @@ demo:
 			mode_t mode;
 			struct pmfs_obj *tmp_obj = g_present_pool->p_cmd_obj;
 
-			rc = pmfs_lookup_start(g_present_pool->p_cmd_pmfs, argv2,
-					       O_RDONLY, &tmp_obj, &mode, NULL);
+			rc = demo_pmfs_lookup_start(g_present_pool->p_cmd_pmfs, argv2,
+						    O_RDONLY, &tmp_obj, &mode, NULL);
 			if (rc != 0  || !tmp_obj) {
 				D_PRINT("no such file or dir %s\r\n", argv2);
 				continue;
@@ -1276,14 +1036,14 @@ demo:
 
 			uint32_t nr, i;
 
-			rc = pmfs_listdir(g_present_pool->p_cmd_pmfs, tmp_obj, &nr);
+			rc = demo_pmfs_listdir_start(g_present_pool->p_cmd_pmfs, tmp_obj, &nr);
 			if (rc != 0) {
 				D_PRINT("pmfs listdir failed\r\n");
 				continue;
 			}
 			D_PRINT("start to readdir\r\n");
-			rc = pmfs_readdir_start(g_present_pool->p_cmd_pmfs, tmp_obj,
-						&nr, tmp_dir);
+			rc = demo_pmfs_readdir_start(g_present_pool->p_cmd_pmfs, tmp_obj,
+						     &nr, tmp_dir);
 			if (rc != 0) {
 				D_PRINT("pmfs readdir failed\r\n");
 				continue;
@@ -1323,8 +1083,8 @@ demo:
 			if (present == true) {
 				/* already exists, don't need to create. keep mounted state*/
 				g_present_pool->p_cmd_pmfs =
-					pmfs_start_mount(g_present_pool->p_pmfs_pool,
-							 g_present_pool->p_cmd_pmfs);
+					demo_pmfs_start_mount(g_present_pool->p_pmfs_pool,
+							      g_present_pool->p_cmd_pmfs);
 				g_present_pool->p_cmd_obj = NULL;
 
 			} else {
@@ -1367,7 +1127,7 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	g_vfca->pmfs_ctx = pmfs_set_ctx();
+	g_vfca->pmfs_ctx = pmfs_set_ctx(8ULL << 30, 2ULL << 30);
 	g_vfca->vfcmd = NULL;
 	D_ALLOC(g_vfca->duration, sizeof(g_vfca->duration));
 	D_ASSERT(g_vfca->duration != NULL);

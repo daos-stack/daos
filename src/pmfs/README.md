@@ -1,5 +1,7 @@
 # PMFS Overview
 
+PMFS is designed for single node VOS without replica, and it can be combined with other DB (i.e.: RocksDB).
+
 PMFS stands for Persistent Memory VOS File System. The PMFS API provides an encapsulated namespace
 with a POSIX-like API directly on top of the VOS API. The namespace is
 encapsulated under a single VOS container, where directories and files are

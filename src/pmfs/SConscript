@@ -1,7 +1,7 @@
 """Build versioned object store"""
 import daos_build
 
-FILES = ["pmfs.c", "pmfs_cmd.c", "vos_client.c", "vos_target_engine.c", "vos_target_fs.c",
+FILES = ["pmfs.c", "vos_client.c", "vos_target_engine.c", "vos_target_fs.c",
          "vos_tasks.c"]
 
 def build_pmfs(env):

@@ -13,7 +13,7 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'types.h', 'atomic.h', 'slab.h',
                 'telemetry_consumer.h', 'telemetry_common.h']
 HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
-HEADERS_PMFS = ['pmfs.h', 'pmfs_cmd.h', 'vos_tasks.h', 'vos_target_fs.h', 'vos_target_engine.h']
+HEADERS_PMFS = ['pmfs.h', 'vos_tasks.h', 'vos_target_fs.h', 'vos_target_engine.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.9.0"
