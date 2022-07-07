@@ -306,7 +306,7 @@ demo_pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset
 
 static int
 demo_pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		 daos_off_t off, daos_size_t *write_size)
+		      daos_off_t off, daos_size_t *write_size)
 {
 	struct write_args write_args;
 	int rc = 0;
