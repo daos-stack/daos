@@ -19,9 +19,10 @@ import jira
 # https://jira.readthedocs.io/api.html#module-jira.client
 # https://github.com/marketplace/actions/comment-pull-request
 
-
-VALID_COMPONENTS = ('api', 'bio', 'build', 'control', 'cq', 'dfs', 'dfuse', 'doc', 'gha', 'object',
-                    'test', 'tse', 'vea', 'vos')
+# Expected components from the commit message.  We've never checked/enforced these before so there
+# have been a lot of values used in the past.
+VALID_COMPONENTS = ('api', 'bio', 'build', 'client', 'control', 'cq', 'dfs', 'dfuse', 'doc',
+                    'engine', 'gha', 'object', 'pool', 'rdb', 'test', 'tse', 'vea', 'vos')
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
