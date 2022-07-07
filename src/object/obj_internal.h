@@ -156,8 +156,6 @@ struct obj_reasb_req {
 	uint32_t			 orr_tgt_nr;
 	/* number of targets that with IOM handled */
 	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -171,6 +169,8 @@ struct obj_reasb_req {
 	/* parity recx list (to compare parity ext/epoch when data recovery) */
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
+	/* number of iom extends */
+	uint32_t			 orr_iom_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */

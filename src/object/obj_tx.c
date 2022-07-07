@@ -910,6 +910,20 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
+	if (unlikely(rc == -DER_TX_ID_REUSED)) {
+		if (tx->tx_retry)
+			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
+			D_ASSERTF(0,
+				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
+				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
+
+		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
+		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_gen(&tx->tx_id, false);
+		tx->tx_status = TX_FAILED;
+		D_GOTO(out, rc = -DER_TX_RESTART);
+	}
+
 	if (rc != -DER_TX_RESTART && !obj_retry_error(rc)) {
 		tx->tx_retry = 0;
 		tx->tx_status = TX_ABORTED;
