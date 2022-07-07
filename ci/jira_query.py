@@ -32,6 +32,9 @@ FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 # which are Open or Reopened should be set to In Progress when being worked on.
 STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
 
+# Labels in GitHub which this script will set/clear based on the logic below.
+MANAGED_LABELS = ('wontfix', 'release-2.2')
+
 
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
@@ -47,7 +50,7 @@ def main():
 
     priority = None
     errors = []
-    gh_label = 'release-2.2'
+    gh_label = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
 
@@ -129,7 +132,7 @@ def main():
                 rv_priority = 3
 
             if str(version) in ('2.2 Community Release'):
-                gh_label = 'release-2.2'
+                gh_label.append('release-2.2')
 
         if set_rv_priority and priority is None:
             priority = rv_priority
@@ -153,10 +156,16 @@ def main():
 
     set_output('message', '\n'.join(output))
 
-    if gh_label:
-        set_output('label', gh_label)
+    gh_label.append('wontfix')
 
-    set_output('label-clear', 'wontfix')
+    if gh_label:
+        set_output('label', '\n'.join(gh_label))
+
+    to_remove = list(MANAGED_LABELS)
+    for label in gh_label:
+        to_remove.remove(label)
+    if to_remove:
+        set_output('label-clear', '\n'.join(to_remove))
 
     if errors:
         sys.exit(1)
