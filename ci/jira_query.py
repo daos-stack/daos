@@ -75,7 +75,7 @@ def main():
 
     # Check format of ticket_number.
     parts = ticket_number.split('-', maxsplit=1)
-    if parts not in ('DAOS', 'CORCI'):
+    if parts[0] not in ('DAOS', 'CORCI'):
         errors.append('Ticket number prefix incorrect')
     try:
         int(parts[1])
