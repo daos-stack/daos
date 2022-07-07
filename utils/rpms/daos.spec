@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.0.3
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -529,6 +529,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Jul 07 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-5
+- Version bump to 2.0.3 (rc4)
+
 * Thu Jun 30 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.0.3-4
 - Restrict mercury version to less than v2.2
 
