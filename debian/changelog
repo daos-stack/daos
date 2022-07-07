@@ -1,8 +1,14 @@
-daos (2.0.3-4) unstable; urgency=medium
+daos (2.0.3-5) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 2.0.3 (rc4)
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 16 Jun 2022 09:00:00 -0100
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 07 Jul 2022 09:00:00 -0100
+
+daos (2.0.3-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Restrict mercury version to less than 2.2
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Thu, 30 Jun 2022 11:00:00 -0500
 
 daos (2.0.3-3) unstable; urgency=medium
   [ Johann Lombardi ]
