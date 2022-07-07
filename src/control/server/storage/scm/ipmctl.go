@@ -331,18 +331,20 @@ type regionCapacityMap map[uint]uint64
 // FIXME DAOS-10173: When libipmctl nvm_get_region() is fixed so that it doesn't take
 //                   a minute to return, replace this with getRegionState() below to use
 //                   libipmctl directly through bindings.
-func parseShowRegionOutput(log logging.Logger, text string) (regionFreeBytes regionCapacityMap, err error) {
+func parseShowRegionOutput(log logging.Logger, text string) (_ regionCapacityMap, err error) {
 	defer func() {
 		err = errors.Wrap(err, "parse show regions cmd output")
 	}()
 
 	lines := strings.Split(strings.TrimSpace(text), "\n")
-	if len(lines) < 3 {
-		return nil, errors.Errorf("expecting at least 3 lines, got %d", len(lines))
+	if len(lines) < 4 {
+		return nil, errors.Errorf("expecting at least 4 lines, got %d", len(lines))
 	}
 
 	var appDirect bool
 	var socketID uint
+	regionFreeBytes := make(regionCapacityMap)
+
 	for _, line := range lines {
 		entry := strings.TrimSpace(line)
 
@@ -519,12 +521,18 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		}
 		resp.RebootRequired = true
 	case storage.ScmStateFreeCapacity:
+		// TODO: Only create namespaces if none already exist, partial state should not be
+		//       supported and request the user resets PMem before trying again.
+
 		// Regions exist but no namespaces, create block devices on PMem regions.
 		resp.Namespaces, err = cr.createNamespaces(req.NrNamespacesPerSocket)
 		if err != nil {
 			break
 		}
 		resp.State = storage.ScmStateNoFreeCapacity
+
+		// TODO: Verify that created namespaces' block device names match the socket ID
+		//       of the underlying PMem region.
 	case storage.ScmStateNoFreeCapacity:
 		// Regions and namespaces exist so sanity check number of namespaces matches the
 		// number requested before returning details.
