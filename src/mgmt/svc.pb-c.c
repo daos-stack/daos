@@ -827,7 +827,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[10] =
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[11] =
 {
   {
     "sys",
@@ -949,6 +949,18 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[10] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "secondary_nctxs",
+    11,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__JoinReq, n_secondary_nctxs),
+    offsetof(Mgmt__JoinReq, secondary_nctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   5,   /* field[5] = addr */
@@ -956,6 +968,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
   8,   /* field[8] = incarnation */
   4,   /* field[4] = nctxs */
   2,   /* field[2] = rank */
+  10,   /* field[10] = secondary_nctxs */
   9,   /* field[9] = secondary_uris */
   6,   /* field[6] = srvFaultDomain */
   0,   /* field[0] = sys */
@@ -965,7 +978,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 10 }
+  { 0, 11 }
 };
 const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
 {
@@ -975,7 +988,7 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   "Mgmt__JoinReq",
   "mgmt",
   sizeof(Mgmt__JoinReq),
-  10,
+  11,
   mgmt__join_req__field_descriptors,
   mgmt__join_req__field_indices_by_name,
   1,  mgmt__join_req__number_ranges,
@@ -1422,20 +1435,20 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__rank_uri__fiel
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "provider",
+    "provider_idx",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp__RankUri, provider),
+    offsetof(Mgmt__GetAttachInfoResp__RankUri, provider_idx),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__get_attach_info_resp__rank_uri__field_indices_by_name[] = {
-  2,   /* field[2] = provider */
+  2,   /* field[2] = provider_idx */
   0,   /* field[0] = rank */
   1,   /* field[1] = uri */
 };

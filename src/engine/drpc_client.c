@@ -182,7 +182,7 @@ drpc_notify_ready(void)
 		for (i = 0; i < nr_sec_uris; i++) {
 			rc = crt_self_uri_get_secondary(i, &sec_uris[i]);
 			if (rc != 0) {
-				D_ERROR("failed to get secondary provider URI, idx=%d, rc=%d",
+				D_ERROR("failed to get secondary provider URI, idx=%d, rc=%d\n",
 					i, rc);
 				nr_sec_uris = i;
 				goto out_sec_uri;
@@ -190,13 +190,22 @@ drpc_notify_ready(void)
 			D_DEBUG(DB_MGMT, "secondary provider URI: %s\n", sec_uris[i]);
 		}
 
-		D_DEBUG(DB_MGMT, "setting secondary provider URIs");
+		D_DEBUG(DB_MGMT, "setting secondary provider URIs\n");
 		req.secondaryuris = sec_uris;
 		req.n_secondaryuris = nr_sec_uris;
+
+		D_DEBUG(DB_MGMT, "setting secondary provider number cart ctxs\n");
+		req.n_secondarynctxs = nr_sec_uris;
+		D_ALLOC_ARRAY(req.secondarynctxs, nr_sec_uris);
+		if (req.secondarynctxs == NULL)
+			D_GOTO(out_sec_uri, rc = -DER_NOMEM);
+		for (i = 0; i < nr_sec_uris; i++)
+			req.secondarynctxs[i] = dss_sec_xs_nr;
 	}
 
 	req.incarnation = incarnation;
 	req.nctxs = DSS_CTX_NR_TOTAL;
+
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
@@ -205,7 +214,7 @@ drpc_notify_ready(void)
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL)
-		D_GOTO(out_sec_uri, rc = -DER_NOMEM);
+		D_GOTO(out_sec_nctxs, rc = -DER_NOMEM);
 	srv__notify_ready_req__pack(&req, reqb);
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
@@ -221,6 +230,8 @@ drpc_notify_ready(void)
 	drpc_response_free(dresp);
 out_reqb:
 	D_FREE(reqb);
+out_sec_nctxs:
+	D_FREE(req.secondarynctxs);
 out_sec_uri:
 	for (i = 0; i < nr_sec_uris; i++)
 		D_FREE(sec_uris[i]);

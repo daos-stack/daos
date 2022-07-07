@@ -71,15 +71,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 	}
 
-	getPrimaryProvider := func() string {
-		return svc.clientNetworkHint[0].Provider
-	}
-
-	getSecondaryProvider := func(idx int) string {
-		// Primary is at idx 0, secondary providers start afterward
-		return svc.clientNetworkHint[idx+1].Provider
-	}
-
 	for rank, uris := range rankURIs {
 		if len(svc.clientNetworkHint) < len(uris.Secondary)+1 {
 			return nil, errors.Errorf("not enough client network hints (%d) for rank %d URIs (%d)",
@@ -87,16 +78,15 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 
 		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-			Rank:     rank.Uint32(),
-			Uri:      uris.Primary,
-			Provider: getPrimaryProvider(),
+			Rank: rank.Uint32(),
+			Uri:  uris.Primary,
 		})
 
 		for i, uri := range uris.Secondary {
 			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank:     rank.Uint32(),
-				Uri:      uri,
-				Provider: getSecondaryProvider(i),
+				Rank:        rank.Uint32(),
+				Uri:         uri,
+				ProviderIdx: uint32(i + 1),
 			}
 
 			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
@@ -693,6 +683,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	members := svc.membership.Members(hitRanks)
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
+	}
+
+	for _, hint := range svc.clientNetworkHint {
+		resp.Providers = append(resp.Providers, hint.Provider)
 	}
 
 	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))
