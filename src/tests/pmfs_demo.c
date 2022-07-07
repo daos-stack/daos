@@ -233,7 +233,7 @@ demo_pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *nam
 
 static int
 demo_pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
-		   struct dirent *dirs)
+			struct dirent *dirs)
 {
 	struct readdir_args readdir_args;
 	int rc = 0;
