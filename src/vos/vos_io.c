@@ -2035,7 +2035,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 	ioc->ic_iov_at++;
 	bsgl->bs_nr_out++;
 
-	D_DEBUG(DB_TRACE, "media %d offset "DF_U64" size %zd\n",
+	D_DEBUG(DB_TRACE, "media %d offset "DF_X64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
 		bio_iov2len(biov));
 	return 0;
