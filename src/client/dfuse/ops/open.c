@@ -53,6 +53,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (ie->ie_dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
+
+		fi_out.keep_cache = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
