@@ -105,7 +105,7 @@ def scons():
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
                     daos_aggregate_ec.c daos_degrade_ec.c
-                    daos_extend_simple.c daos_obj_ec.c""")
+                    daos_extend_simple.c daos_obj_ec.c daos_pipeline.c""")
 
     newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,

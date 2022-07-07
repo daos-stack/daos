@@ -31,6 +31,20 @@ def build_tests(prereqs, env, client_libs):
 
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
+    simple_pipeline_common = denv.StaticObject(['pipeline_common.c'])
+
+    daos_build.program(denv, 'simple_pipeline',
+                       ['simple_pipeline.c', simple_pipeline_common],
+                       LIBS=libs_client)
+    daos_build.program(denv, 'simple_pipeline_arrays',
+                       ['simple_pipeline_arrays.c', simple_pipeline_common],
+                       LIBS=libs_client)
+    daos_build.program(denv, 'simple_pipeline_str_arrays',
+                       ['simple_pipeline_str_arrays.c', simple_pipeline_common],
+                       LIBS=libs_client)
+    libs_client += ['pthread', 'dts']
+    libs_server += ['pthread', 'dts']
+
     daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c'],
                                     LIBS=libs_client)

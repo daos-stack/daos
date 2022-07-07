@@ -374,6 +374,7 @@ int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
+int run_daos_pipeline_test(int rank, int size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);

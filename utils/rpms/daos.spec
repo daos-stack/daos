@@ -443,6 +443,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py

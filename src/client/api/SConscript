@@ -2,7 +2,7 @@
 import daos_build
 
 LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
-               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c']
+               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c', 'pipeline.c']
 
 
 def scons():

@@ -270,14 +270,17 @@ extern "C" {
 	       ID mismatch)						\
 	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
 	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
-		Retry with other target)				\
+	       Retry with other target)					\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
 	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
 	       One or more control plane components are incompatible)	\
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)
+	       No service available)					\
+	/** Division by zero. */					\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 40),	\
+	       Division by zero)					\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

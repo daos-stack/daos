@@ -466,6 +466,7 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 
 int dc_tx_open(tse_task_t *task);

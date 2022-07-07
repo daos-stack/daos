@@ -6702,3 +6702,18 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 
 	return (ord << OC_REDUN_SHIFT) | nr_grp;
 }
+
+int
+dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md)
+{
+	struct dc_object *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+	{
+		return -DER_NO_HDL;
+	}
+	*md = obj->cob_md;
+	obj_decref(obj);
+	return 0;
+}
