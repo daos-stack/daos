@@ -178,7 +178,7 @@ demo_pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
 
 static int
 demo_pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
-		  bool force, daos_obj_id_t *oid)
+		       bool force, daos_obj_id_t *oid)
 {
 	struct remove_args remove_args;
 	int rc = 0;
