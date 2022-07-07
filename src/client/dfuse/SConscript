@@ -228,9 +228,6 @@ def scons():
 
     Export('dfuse_env')
 
-    if prereqs.test_requested():
-        SConscript('test/SConscript')
-
 
 if __name__ == "SCons.Script":
     scons()
