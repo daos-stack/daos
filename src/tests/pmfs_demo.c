@@ -354,7 +354,7 @@ demo_pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_
 
 static int
 demo_pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
-		struct stat *stbuf)
+		     struct stat *stbuf)
 {
 	struct stat_args stat_args;
 	int rc = 0;
