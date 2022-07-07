@@ -461,6 +461,47 @@ out:
 	return rc;
 }
 
+int
+chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint32_t flags,
+		    uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint)
+{
+	crt_rpc_t		*req;
+	struct chk_pool_mbs_in	*cpmi;
+	struct chk_pool_mbs_out	*cpmo;
+	int			 rc;
+
+	rc = chk_sg_rpc_prepare(rank, CHK_POOL_MBS, &req);
+	if (rc != 0)
+		goto out;
+
+	cpmi = crt_req_get(req);
+	cpmi->cpmi_gen = gen;
+	uuid_copy(cpmi->cpmi_pool, uuid);
+	cpmi->cpmi_flags = flags;
+	cpmi->cpmi_label = label;
+	cpmi->cpmi_targets.ca_count = mbs_nr;
+	cpmi->cpmi_targets.ca_arrays = mbs_array;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	cpmo = crt_reply_get(req);
+	rc = cpmo->cpmo_status;
+	*hint = cpmo->cpmo_hint;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Sent pool ("DF_UUIDF") members and label %s to rank %u with gen "
+		 DF_X64": "DF_RC"\n",
+		 DP_UUID(uuid), label != NULL ? label : "(null)", rank, gen, DP_RC(rc));
+
+	return rc;
+}
+
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
 		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
@@ -769,6 +810,7 @@ static int
 crt_proc_struct_ds_pool_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct ds_pool_clue *clue)
 {
 	int	rc;
+	int	i;
 
 	rc = crt_proc_uuid_t(proc, proc_op, &clue->pc_uuid);
 	if (unlikely(rc != 0))
@@ -787,6 +829,14 @@ crt_proc_struct_ds_pool_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct ds_p
 		return rc;
 
 	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_label_len);
+	if (unlikely(rc != 0))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_tgt_nr);
+	if (unlikely(rc != 0))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_padding);
 	if (unlikely(rc != 0))
 		return rc;
 
@@ -820,6 +870,23 @@ crt_proc_struct_ds_pool_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct ds_p
 			goto out;
 	}
 
+	if (clue->pc_tgt_nr > 0) {
+		if (FREEING(proc_op))
+			goto out;
+
+		if (DECODING(proc_op)) {
+			D_ALLOC_ARRAY(clue->pc_tgt_status, clue->pc_tgt_nr);
+			if (clue->pc_tgt_status == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		for (i = 0; i < clue->pc_tgt_nr; i++) {
+			rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_tgt_status[i]);
+			if (unlikely(rc != 0))
+				goto out;
+		}
+	}
+
 out:
 	if (unlikely(rc != 0 && DECODING(proc_op)) || FREEING(proc_op))
 		ds_pool_clue_fini(clue);
@@ -827,10 +894,70 @@ out:
 	return rc;
 }
 
+static int
+crt_proc_struct_chk_pool_mbs(crt_proc_t proc, crt_proc_op_t proc_op, struct chk_pool_mbs *mbs)
+{
+	int	rc;
+	int	i;
+
+	rc = crt_proc_d_rank_t(proc, proc_op, &mbs->cpm_rank);
+	if (unlikely(rc != 0))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &mbs->cpm_tgt_nr);
+	if (unlikely(rc != 0))
+		return rc;
+
+	if (FREEING(proc_op))
+		goto out;
+
+	if (mbs->cpm_tgt_nr > 0) {
+		if (DECODING(proc_op)) {
+			D_ALLOC_ARRAY(mbs->cpm_tgt_status, mbs->cpm_tgt_nr);
+			if (mbs->cpm_tgt_status == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		for (i = 0; i < mbs->cpm_tgt_nr; i++) {
+			rc = crt_proc_uint32_t(proc, proc_op, &mbs->cpm_tgt_status[i]);
+			if (unlikely(rc != 0))
+				goto out;
+		}
+	}
+
+out:
+	if (unlikely(rc != 0 && DECODING(proc_op)) || FREEING(proc_op))
+		D_FREE(mbs->cpm_tgt_status);
+
+	return rc;
+}
+
+static int
+crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rsvc_hint *hint)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_flags);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_rank);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
 CRT_RPC_DEFINE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
 CRT_RPC_DEFINE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
 CRT_RPC_DEFINE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 CRT_RPC_DEFINE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 CRT_RPC_DEFINE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
+CRT_RPC_DEFINE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 CRT_RPC_DEFINE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 CRT_RPC_DEFINE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);

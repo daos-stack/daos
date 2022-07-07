@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,7 +64,10 @@
 		&ds_mgmt_hdlr_tgt_map_update_co_ops),			\
 	X(MGMT_TGT_MARK,						\
 		0, &CQF_mgmt_mark,					\
-		ds_mgmt_tgt_mark_hdlr, NULL)
+		ds_mgmt_tgt_mark_hdlr, NULL),				\
+	X(MGMT_TGT_SHARD_DESTROY,					\
+		0, &CQF_mgmt_tgt_shard_destroy,				\
+		ds_mgmt_hdlr_tgt_shard_destroy, NULL)
 
 
 
@@ -213,5 +216,17 @@ CRT_RPC_DECLARE(mgmt_mark, DAOS_ISEQ_MGMT_MARK, DAOS_OSEQ_MGMT_MARK)
 
 CRT_RPC_DECLARE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
 		DAOS_OSEQ_MGMT_GET_BS_STATE)
+
+#define DAOS_ISEQ_MGMT_TGT_SHARD_DESTROY /* input fields */		\
+	((uuid_t)		(tsdi_pool_uuid)	CRT_VAR)	\
+	((int32_t)		(tsdi_shard_idx)	CRT_VAR)	\
+	((uint32_t)		(tsdi_padding)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_SHARD_DESTROY /* output fields */		\
+	((int32_t)		(tsdo_rc)		CRT_VAR)	\
+	((uint32_t)		(tsdo_padding)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_shard_destroy, DAOS_ISEQ_MGMT_TGT_SHARD_DESTROY,
+		DAOS_OSEQ_MGMT_TGT_SHARD_DESTROY)
 
 #endif /* __MGMT_RPC_H__ */

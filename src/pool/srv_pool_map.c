@@ -188,7 +188,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p\n",
 				DP_TARGET(target), map);
 			if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
-				target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
+				target->ta_comp.co_flags |= PO_COMPF_DOWN2OUT;
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			target->ta_comp.co_out_ver = ++(*version);
 			if (print_changes)
@@ -266,7 +266,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 					target->ta_comp.co_fseq;
 			} else if (opc == POOL_EXCLUDE_OUT) {
 				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-				dom->do_comp.co_flags = PO_COMPF_DOWN2OUT;
+				dom->do_comp.co_flags |= PO_COMPF_DOWN2OUT;
 				dom->do_comp.co_out_ver =
 					target->ta_comp.co_out_ver;
 			} else

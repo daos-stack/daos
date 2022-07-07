@@ -231,24 +231,603 @@ out:
 	return rc;
 }
 
+static inline void
+chk_engine_post_repair(struct chk_instance *ins, int *result)
+{
+	if (!(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+		*result = 0;
+}
+
+static int
+chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	d_rank_list_t			 ranks = { 0 };
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	char				 msg[160] = { 0 };
+	uint32_t			 options[2];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	if (index < 0)
+		cla = CHK__CHECK_INCONSIST_CLASS__CIC_ENGINE_NONEXIST_IN_MAP;
+	else
+		cla = CHK__CHECK_INCONSIST_CLASS__CIC_ENGINE_DOWN_IN_MAP;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+	cpr->cpr_dirty = 1;
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * If the rank does not exists in the pool map, then destroy the orphan pool rank
+		 * to release space by default.
+		 *
+		 * XXX: Currently, we does not support to add the orphan pool rank into the pool
+		 *	map. If want to add them, it can be done via pool extend after DAOS check.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			if (index < 0) {
+				ranks.rl_ranks = &rank;
+				ranks.rl_nr = 1;
+				result = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, &ranks);
+			} else {
+				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
+			}
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 2;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = 0;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	snprintf(msg, 159, "Check engine detects orphan %s entry in pool map for "
+		 DF_UUIDF", rank %u, index %d",
+		 index < 0 ? "rank" : "shard", DP_UUID(cpr->cpr_uuid), rank, index);
+	cru.cru_msg = msg;
+	cru.cru_options = options;
+	cru.cru_details = NULL;
+	cru.cru_result = result;
+
+	rc = chk_engine_report(&cru, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects orphan %s entry in pool map for "
+		 DF_UUIDF", rank %u, index %d, action %u (%s), handle_rc %d, "
+		 "report_rc %d, decision %d\n",
+		 DP_ENGINE(ins), index < 0 ? "rank" : "shard", DP_UUID(cpr->cpr_uuid), rank,
+		 index, act, option_nr ? "need interact" : "no interact", result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+		D_ERROR(DF_ENGINE" got invalid decision %d for orphan %s entry in pool map "
+			"for pool "DF_UUIDF", rank %u, index %d. Ignore the inconsistency.\n",
+			DP_ENGINE(ins), decision, index < 0 ? "rank" : "shard",
+			DP_UUID(cpr->cpr_uuid), rank, index);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			if (index < 0) {
+				ranks.rl_ranks = &rank;
+				ranks.rl_nr = 1;
+				result = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, &ranks);
+			} else {
+				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
+			}
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	chk_engine_post_repair(ins, &result);
+
+	return result;
+}
+
+static int
+chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_component *comp,
+		       uint32_t *version, uint32_t status)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	char				 msg[160] = { 0 };
+	uint32_t			 options[2];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	D_ASSERTF(status == PO_COMP_ST_DOWNOUT || status == PO_COMP_ST_DOWN,
+		  "Unexpected pool map status %u\n", status);
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_ENGINE_HAS_NO_STORAGE;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+	cpr->cpr_dirty = 1;
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * If the target does not has storage on the engine, then mark it as 'DOWN' or
+		 * 'DOWNOUT' in the pool map by default.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+		/* For dryrun mode, we will not persistently store the change in subsequent step. */
+		comp->co_status = status;
+		comp->co_fseq = ++(*version);
+		cbk->cb_statistics.cs_repaired++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 2;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = 0;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	snprintf(msg, 159, "Check engine detects dangling %s entry in pool map for pool "
+		 DF_UUIDF", rank %u, index %u",
+		 comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
+		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index);
+	cru.cru_msg = msg;
+	cru.cru_options = options;
+	cru.cru_details = NULL;
+	cru.cru_result = result;
+
+	rc = chk_engine_report(&cru, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects dangling %s entry in pool map for pool "
+		 DF_UUIDF" rank %u, index %u, action %u (%s), handle_rc %d, report_rc %d, "
+		 "decision %d\n",
+		 DP_ENGINE(ins), comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
+		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act,
+		 option_nr ? "need interact" : "no interact", result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+		D_ERROR(DF_ENGINE" got invalid decision %d for dangling %s entry in pool map "
+			"for pool "DF_UUIDF", rank %u, index %u. Ignore the inconsistency.\n",
+			DP_ENGINE(ins), decision,
+			comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
+			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		/* For dryrun mode, we will not persistently store the change in subsequent step. */
+		comp->co_status = status;
+		comp->co_fseq = ++(*version);
+		cbk->cb_statistics.cs_repaired++;
+		break;
+	}
+
+	goto report;
+
+out:
+	chk_engine_post_repair(ins, &result);
+
+	return result;
+}
+
+static int
+chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *comp)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	char				 msg[256] = { 0 };
+	int				 rc;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
+	act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+	cbk->cb_statistics.cs_total++;
+	cbk->cb_statistics.cs_ignored++;
+	cpr->cpr_dirty = 1;
+
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = 0;
+	cru.cru_detail_nr = 0;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	snprintf(msg, 255, "Check engine detects unknown target entry in pool map for pool "
+		 DF_UUIDF", rank %u, index %u, status %u, skip.\n"
+		 "You can change its status via DAOS debug tool if it is not for downgrade case.",
+		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
+	cru.cru_msg = msg;
+	cru.cru_options = NULL;
+	cru.cru_details = NULL;
+	cru.cru_result = 0;
+
+	rc = chk_engine_report(&cru, NULL);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects unknown target entry in pool map for pool "DF_UUIDF", rank %u, "
+		 "target %u, action %u (no interact), handle_rc 0, report_rc %d, decision 0\n",
+		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act, rc);
+
+	return 0;
+}
+
+static int
+chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct chk_pool_mbs *mbs,
+			uint32_t *version)
+{
+	struct pool_domain	*dom;
+	struct pool_component	*comp;
+	int			 i;
+	int			 rc = 0;
+	bool			 unknown;
+
+	dom = pool_map_find_node_by_rank(map, mbs->cpm_rank);
+	if (dom == NULL) {
+		D_ASSERT(mbs->cpm_rank != dss_self_rank());
+
+		rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, -1);
+		goto out;
+	}
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		comp = &dom->do_targets[i].ta_comp;
+		unknown = false;
+
+		switch (comp->co_status) {
+		case PO_COMP_ST_DOWN:
+			/*
+			 * XXX: In the future, we may support to add the target (if exist) back.
+			 *
+			 * Fall through.
+			 */
+		case PO_COMP_ST_DOWNOUT:
+			if (comp->co_index < mbs->cpm_tgt_nr &&
+			    (mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY ||
+			     mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL))
+				rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, comp->co_index);
+			/*
+			 * Otherwise if the down/downout entry only exists in pool map,
+			 * then it is useless, do nothing.
+			 */
+			break;
+		case PO_COMP_ST_NEW:
+			if (comp->co_index >= mbs->cpm_tgt_nr ||
+			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NONEXIST ||
+			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY)
+				/* Dangling new entry in pool map, directly mark as 'DOWNOUT'. */
+				rc = chk_engine_pm_dangling(cpr, comp, version,
+							    PO_COMP_ST_DOWNOUT);
+			break;
+		default:
+			D_WARN(DF_ENGINE" hit knownn pool target status %u for "DF_UUIDF
+			       " with rank %u, index %u, ID %u\n",
+			       DP_ENGINE(cpr->cpr_ins), comp->co_status, DP_UUID(cpr->cpr_uuid),
+			       mbs->cpm_rank, comp->co_index, comp->co_id);
+			unknown = true;
+			/* Fall through. */
+		case PO_COMP_ST_UP:
+			/* Fall through. */
+		case PO_COMP_ST_UPIN:
+			/* Fall through. */
+		case PO_COMP_ST_DRAIN:
+			if (comp->co_index >= mbs->cpm_tgt_nr ||
+			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NONEXIST ||
+			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY)
+				/*
+				 * Some data may be on the lost target, mark as 'DOWN' that
+				 * will be handled via rebuild in subsequent process.
+				 */
+				rc = chk_engine_pm_dangling(cpr, comp, version, PO_COMP_ST_DOWN);
+			else if (mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL &&
+				 unknown)
+				/*
+				 * XXX: The unknown status maybe because of downgraded from new
+				 *	layout? It is better to keep it there with reporting it
+				 *	to admin who can adjust the status via DAOS debug tool.
+				 */
+				rc = chk_engine_pm_unknown_target(cpr, comp);
+			break;
+		}
+
+		if (rc != 0)
+			goto out;
+
+		/*
+		 * Set the target status as DS_POOL_TGT_NONEXIST in
+		 * DRAM to bypass the subsequent orphan entry check.
+		 */
+		if (comp->co_index < mbs->cpm_tgt_nr)
+			mbs->cpm_tgt_status[comp->co_index] = DS_POOL_TGT_NONEXIST;
+
+		comp->co_flags |= PO_COMPF_CHK_DONE;
+	}
+
+	dom->do_comp.co_flags |= PO_COMPF_CHK_DONE;
+
+	for (i = 0; i < mbs->cpm_tgt_nr; i++) {
+		if (mbs->cpm_tgt_status[i] == DS_POOL_TGT_EMPTY ||
+		    mbs->cpm_tgt_status[i] == DS_POOL_TGT_NORMAL) {
+			rc = chk_engine_pm_orphan(cpr, mbs->cpm_rank, i);
+			if (rc != 0)
+				goto out;
+		}
+	}
+
+out:
+	return rc;
+}
+
+static int
+chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map, uint32_t *version)
+{
+	struct pool_domain	*doms = NULL;
+	struct pool_component	*r_comp;
+	struct pool_component	*t_comp;
+	int			 rank_nr;
+	int			 rc = 0;
+	int			 i;
+	int			 j;
+	bool			 down = false;
+
+	rank_nr = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	if (rank_nr <= 0)
+		D_GOTO(out, rc = rank_nr);
+
+	for (i = 0; i < rank_nr; i++) {
+		r_comp = &doms[i].do_comp;
+		if (r_comp->co_flags & PO_COMPF_CHK_DONE ||
+		    r_comp->co_status == PO_COMP_ST_DOWN || r_comp->co_status == PO_COMP_ST_DOWNOUT)
+			continue;
+
+		for (j = 0; j < doms[i].do_target_nr; j++) {
+			t_comp = &doms[i].do_targets[j].ta_comp;
+
+			switch (t_comp->co_status) {
+			case PO_COMP_ST_DOWN:
+				down = true;
+				break;
+			case PO_COMP_ST_DOWNOUT:
+				/* Do nothing. */
+				break;
+			case PO_COMP_ST_NEW:
+				/* Dangling new entry in pool map, directly mark as 'DOWNOUT'. */
+				rc = chk_engine_pm_dangling(cpr, t_comp, version,
+							    PO_COMP_ST_DOWNOUT);
+				break;
+			default:
+				D_WARN(DF_ENGINE" hit knownn pool target status %u for "DF_UUIDF
+				       " with rank %u, index %u, ID %u\n", DP_ENGINE(cpr->cpr_ins),
+				       t_comp->co_status, DP_UUID(cpr->cpr_uuid),
+				       t_comp->co_rank, t_comp->co_index, t_comp->co_id);
+				/* Fall through. */
+			case PO_COMP_ST_UP:
+				/* Fall through. */
+			case PO_COMP_ST_UPIN:
+				/* Fall through. */
+			case PO_COMP_ST_DRAIN:
+				down = true;
+				/*
+				 * Some data may be on the lost target, mark as 'DOWN' that
+				 * will be handled via rebuild in subsequent process.
+				 */
+				rc = chk_engine_pm_dangling(cpr, t_comp, version, PO_COMP_ST_DOWN);
+				break;
+			}
+
+			if (rc != 0)
+				goto out;
+
+			t_comp->co_flags |= PO_COMPF_CHK_DONE;
+		}
+
+		rc = chk_engine_pm_dangling(cpr, r_comp, version,
+					    down ? PO_COMP_ST_DOWN : PO_COMP_ST_DOWNOUT);
+		if (rc != 0)
+			goto out;
+
+		r_comp->co_flags |= PO_COMPF_CHK_DONE;
+	}
+
+out:
+	return rc;
+}
+
 static void
 chk_engine_pool_ult(void *args)
 {
 	struct chk_pool_rec	*cpr = args;
+	struct chk_instance	*ins = cpr->cpr_ins;
 	struct chk_bookmark	*cbk = &cpr->cpr_bk;
+	struct pool_svc		*svc = NULL;
+	struct pool_map		*map = NULL;
+	uint32_t		 version;
+	int			 i;
 	int			 rc = 0;
+	int			 rc1 = 0;
 
-#if 0
-	/* TBD: Drive the check since phase CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS. */
+	rc = pool_svc_lookup_leader(cpr->cpr_uuid, &svc, NULL);
+	if (rc != 0)
+		/*
+		 * XXX: Before the phase of CHK__CHECK_SCAN_PHASE__CSP_OBJ_SCRUB, the PS
+		 *	leader drives the check on engine. Current one is not PS leader.
+		 */
+		D_GOTO(out, rc = 0);
 
-	while (!cpr->cpr_stop && cpr->cpr_ins->ci_sched_running) {
-		dss_sleep(300);
+	ABT_mutex_lock(cpr->cpr_mutex);
+
+again:
+	if (cpr->cpr_stop || !ins->ci_sched_running) {
+		ABT_mutex_unlock(cpr->cpr_mutex);
+		goto out;
 	}
-#endif
+
+	if (cpr->cpr_mbs == NULL) {
+		ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
+		goto again;
+	}
+
+	ABT_mutex_unlock(cpr->cpr_mutex);
+
+	rc = ds_pool_svc_load_map(svc, &map);
+	if (rc != 0)
+		goto out;
+
+	version = pool_map_get_version(map);
+
+	for (i = 0; i < cpr->cpr_shard_nr; i++) {
+		rc = chk_engine_pool_mbs_one(cpr, map, &cpr->cpr_mbs[i], &version);
+		if (rc != 0)
+			break;
+	}
+
+	/* Lookup for dangling entry in the pool map. */
+	if (rc == 0)
+		rc = chk_engine_find_dangling_pm(cpr, map, &version);
+
+	if (cpr->cpr_dirty) {
+		cpr->cpr_dirty = 0;
+
+		chk_bk_update_pool(cbk, cpr->cpr_uuid);
+
+		/*
+		 * Flush the pool map to persistent storage (if not under dryrun mode)
+		 * and distribute the pool map to other pool shards.
+		 */
+		rc1 = ds_pool_svc_flush_map(svc, map, version);
+	}
+
+out:
+	if (map != NULL)
+		pool_map_decref(map);
+	if (svc != NULL)
+		pool_svc_put_leader(svc);
 
 	cpr->cpr_done = 1;
 	cbk->cb_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
-	if (rc != 0)
+	if (rc != 0 || rc1 != 0)
 		cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
 	else
 		cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
@@ -278,7 +857,7 @@ chk_engine_sched(void *args)
 	D_INFO(DF_ENGINE" on rank %u start at the phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
 
-	if (cbk->cb_phase >= CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
+	if (cbk->cb_phase > CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
 		rc = chk_engine_setup_pools(ins, true);
 		if (rc != 0)
 			goto out;
@@ -491,8 +1070,8 @@ chk_engine_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *r
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_COMPLETED)
 		D_GOTO(out, rc = 1);
 
-	/* Drop dryrun flags needs to reset. */
-	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN && !(flags & CHK__CHECK_FLAG__CF_DRYRUN)) {
+	/* For dryrun mode, restart from the beginning since we did not record former repairing. */
+	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 		if (!reset)
 			D_GOTO(out, rc = -DER_NOT_RESUME);
 
@@ -814,8 +1393,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 	if (rc != 0)
 		goto out_pool;
 
-	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_PREPARE ||
-	    cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
+	if (cbk->cb_phase <= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
 		cpfa.cpfa_pool_hdl = ins->ci_pool_hdl;
 		rc = ds_pool_clues_init(chk_pool_filter, &cpfa, clues);
 		if (rc != 0)
@@ -1243,6 +1821,65 @@ out:
 		 DF_ENGINE" on rank %u takes action for seq "
 		 DF_X64" with gen "DF_X64", class %u, action %u, flags %x: "DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), seq, gen, cla, act, flags, DP_RC(rc));
+
+	return rc;
+}
+
+int
+chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, const char *label, uint32_t flags,
+		    uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint)
+{
+	struct chk_instance	*ins = chk_engine;
+	struct chk_pool_rec	*cpr = NULL;
+	struct pool_svc		*svc = NULL;
+	d_iov_t			 riov;
+	d_iov_t			 kiov;
+	int			 rc;
+
+	rc = pool_svc_lookup_leader(uuid, &svc, hint);
+	if (rc != 0)
+		goto out;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, uuid, sizeof(uuid_t));
+	rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	cpr = (struct chk_pool_rec *)riov.iov_buf;
+	ABT_mutex_lock(cpr->cpr_mutex);
+
+	/* XXX: resent RPC. */
+	if (unlikely(cpr->cpr_mbs != NULL))
+		goto unlock;
+
+	D_ALLOC_ARRAY(cpr->cpr_mbs, mbs_nr);
+	if (cpr->cpr_mbs == NULL)
+		D_GOTO(unlock, rc = -DER_NOMEM);
+
+	memcpy(cpr->cpr_mbs, mbs_array, sizeof(*mbs_array) * mbs_nr);
+	cpr->cpr_shard_nr = mbs_nr;
+
+	if (flags & CMF_REPAIR_LABEL) {
+		rc = chk_dup_label(&cpr->cpr_label, label, label != NULL ? strlen(label) : 0);
+		if (rc != 0)
+			goto unlock;
+
+		cpr->cpr_delay_label = 1;
+	}
+
+unlock:
+	if (rc != 0) {
+		D_FREE(cpr->cpr_mbs);
+		cpr->cpr_shard_nr = 0;
+		cpr->cpr_stop = 1;
+	}
+
+	ABT_cond_broadcast(cpr->cpr_cond);
+	ABT_mutex_unlock(cpr->cpr_mutex);
+out:
+	if (svc != NULL)
+		pool_svc_put_leader(svc);
 
 	return rc;
 }

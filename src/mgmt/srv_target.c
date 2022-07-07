@@ -1217,3 +1217,39 @@ ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	out_result->tm_rc += out_source->tm_rc;
 	return 0;
 }
+
+/**
+ * RPC handler for pool shard destroy
+ */
+void
+ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *req)
+{
+	struct mgmt_tgt_shard_destroy_in	*tsdi;
+	struct mgmt_tgt_shard_destroy_out	*tsdo;
+	char					*path = NULL;
+	int					 rc = 0;
+
+	tsdi = crt_req_get(req);
+	tsdo = crt_reply_get(req);
+
+	/* The being destroyed one must be down or downout one, need not to stop pool service. */
+
+	rc = ds_mgmt_tgt_file(tsdi->tsdi_pool_uuid, VOS_FILE, &tsdi->tsdi_shard_idx, &path);
+	if (rc == 0) {
+		rc = unlink(path);
+		if (rc < 0) {
+			if (errno == ENOENT)
+				rc = 0;
+			else
+				rc = daos_errno2der(errno);
+		}
+
+		D_FREE(path);
+	}
+
+	D_DEBUG(DB_MGMT, "Processed rpc %p to destroy pool "DF_UUIDF" shard %u: "DF_RC"\n",
+		req, DP_UUID(tsdi->tsdi_pool_uuid), tsdi->tsdi_shard_idx, DP_RC(rc));
+
+	tsdo->tsdo_rc = rc;
+	crt_reply_send(req);
+}

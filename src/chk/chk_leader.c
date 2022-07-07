@@ -1635,6 +1635,91 @@ chk_leader_handle_pools_svc(struct chk_sched_args *csa)
 	return rc;
 }
 
+static int
+chk_leader_pool_mbs_one(struct chk_instance *ins, struct chk_pool_rec *cpr)
+{
+	struct rsvc_client	 client = { 0 };
+	crt_endpoint_t		 ep = { 0 };
+	struct rsvc_hint	 hint = { 0 };
+	struct chk_bookmark	*cbk = &ins->ci_bk;
+	d_rank_list_t		*ps_ranks = NULL;
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	int			 rc = 0;
+	int			 rc1;
+	int			 i = 0;
+
+	D_ASSERT(cpr->cpr_mbs == NULL);
+
+	D_ALLOC_ARRAY(cpr->cpr_mbs, cpr->cpr_shard_nr);
+	if (cpr->cpr_mbs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		D_ASSERT(i < cpr->cpr_shard_nr);
+
+		cpr->cpr_mbs[i].cpm_rank = cps->cps_rank;
+		cpr->cpr_mbs[i].cpm_tgt_nr = clue->pc_tgt_nr;
+		cpr->cpr_mbs[i].cpm_tgt_status = clue->pc_tgt_status;
+		i++;
+	}
+
+	ps_ranks = chk_leader_cpr2ranklist(cpr, true);
+	if (ps_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = rsvc_client_init(&client, ps_ranks);
+	d_rank_list_free(ps_ranks);
+
+	if (rc != 0)
+		goto out;
+
+again:
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0)
+		goto out;
+
+	rc = chk_pool_mbs_remote(ep.ep_rank, cbk->cb_gen, cpr->cpr_uuid, cpr->cpr_label,
+				 cpr->cpr_delay_label ? CMF_REPAIR_LABEL : 0,
+				 cpr->cpr_shard_nr, cpr->cpr_mbs, &hint);
+
+	rc1 = rsvc_client_complete_rpc(&client, &ep, rc, rc, &hint);
+	if (rc1 == RSVC_CLIENT_RECHOOSE ||
+	    (rc1 == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc))) {
+		dss_sleep(RECHOOSE_SLEEP_MS);
+		goto again;
+	}
+
+out:
+	rsvc_client_fini(&client);
+
+	if (rc != 0)
+		cpr->cpr_skip = 1;
+
+	chk_leader_post_repair(ins, cpr->cpr_uuid, &rc, false, true);
+
+	return rc;
+}
+
+static int
+chk_leader_pool_mbs(struct chk_sched_args *csa)
+{
+	struct chk_pool_rec	*cpr;
+	struct chk_pool_rec	*tmp;
+	int			 rc = 0;
+
+	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+		if (!cpr->cpr_skip) {
+			rc = chk_leader_pool_mbs_one(csa->csa_ins, cpr);
+			if (rc != 0)
+				break;
+		}
+	}
+
+	return rc;
+}
+
 static void
 chk_leader_sched(void *args)
 {
@@ -1738,6 +1823,12 @@ handle:
 		 */
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
 		chk_bk_update_leader(cbk);
+	}
+
+	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
+		rc = chk_leader_pool_mbs(csa);
+		if (rc != 0)
+			D_GOTO(out, bcast = true);
 	}
 
 	while (ins->ci_sched_running) {
@@ -1856,8 +1947,8 @@ chk_leader_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *r
 		goto init;
 	}
 
-	/* Drop dryrun flags needs to reset. */
-	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN && !(*flags & CHK__CHECK_FLAG__CF_DRYRUN)) {
+	/* For dryrun mode, restart from the beginning since we did not record former repairing. */
+	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 		*flags |= CHK__CHECK_FLAG__CF_RESET;
 		goto init;
 	}
@@ -1916,6 +2007,7 @@ chk_leader_dup_clue(struct ds_pool_clue **tgt, struct ds_pool_clue *src)
 {
 	struct ds_pool_clue		*clue = NULL;
 	struct ds_pool_svc_clue		*svc = NULL;
+	uint32_t			*status = NULL;
 	char				*label = NULL;
 	int				 rc = 0;
 
@@ -1943,9 +2035,18 @@ chk_leader_dup_clue(struct ds_pool_clue **tgt, struct ds_pool_clue *src)
 	if (rc != 0)
 		goto out;
 
+	if (src->pc_tgt_status != NULL) {
+		D_ALLOC_ARRAY(status, src->pc_tgt_nr);
+		if (status == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy(status, src->pc_tgt_status, sizeof(*status) * src->pc_tgt_nr);
+	}
+
 	memcpy(clue, src, sizeof(*clue));
 	clue->pc_svc_clue = svc;
 	clue->pc_label = label;
+	clue->pc_tgt_status = status;
 
 out:
 	if (rc != 0) {
@@ -1954,6 +2055,8 @@ out:
 			D_FREE(svc);
 		}
 
+		D_FREE(status);
+		D_FREE(label);
 		D_FREE(clue);
 	} else {
 		*tgt = clue;

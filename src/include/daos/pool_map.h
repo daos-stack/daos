@@ -61,7 +61,11 @@ enum pool_component_flags {
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_DOWN2OUT	= (1 << 0),
+	/**
+	 * The component has been processed by DAOS check, only in DRAM.
+	 */
+	PO_COMPF_CHK_DONE	= (1 << 1),
 };
 
 #define co_in_ver	co_out_ver

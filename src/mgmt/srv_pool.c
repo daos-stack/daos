@@ -664,3 +664,51 @@ ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 out:
 	return rc;
 }
+
+/**
+ * Destroy the specified pool shard on the specified storage rank
+ */
+int
+ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
+{
+	crt_rpc_t				*req = NULL;
+	struct mgmt_tgt_shard_destroy_in	*tsdi;
+	struct mgmt_tgt_shard_destroy_out	*tsdo;
+	crt_endpoint_t				 tgt_ep;
+	crt_opcode_t				 opc;
+	int					 rc;
+
+	tgt_ep.ep_grp = NULL;
+	tgt_ep.ep_rank = rank;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_CHK, 0);
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
+	if (rc != 0)
+		goto out;
+
+	tsdi = crt_req_get(req);
+	D_ASSERT(tsdi != NULL);
+
+	uuid_copy(tsdi->tsdi_pool_uuid, pool_uuid);
+	tsdi->tsdi_shard_idx = shard_idx;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	tsdo = crt_reply_get(req);
+	rc = tsdo->tsdo_rc;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	if (rc != 0)
+		D_ERROR("Failed to destroy pool "DF_UUIDF" shard %u on rank %u: "DF_RC"\n",
+			DP_UUID(pool_uuid), shard_idx, rank, DP_RC(rc));
+
+	return rc;
+}

@@ -130,6 +130,23 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 }
 
 static void
+ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_pool_mbs_in	*cpmi = crt_req_get(rpc);
+	struct chk_pool_mbs_out	*cpmo = crt_reply_get(rpc);
+	int			 rc;
+
+	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_label,
+				 cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
+				 cpmi->cpmi_targets.ca_arrays, &cpmo->cpmo_hint);
+
+	cpmo->cpmo_status = rc;
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check pool mbs: "DF_RC"\n", DP_RC(rc));
+}
+
+static void
 ds_chk_report_hdlr(crt_rpc_t *rpc)
 {
 	struct chk_report_in	*cri = crt_req_get(rpc);

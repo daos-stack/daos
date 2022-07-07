@@ -413,6 +413,7 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
+		buf->pb_comps[nr].co_flags &= ~PO_COMPF_CHK_DONE;
 
 		D_DEBUG(DB_TRACE, "nr %d %s\n", nr,
 			pool_comp_type2str(comps[0].co_type));
@@ -2332,7 +2333,7 @@ pmap_comp_failed(struct pool_component *comp)
 {
 	return (comp->co_status == PO_COMP_ST_DOWN) ||
 	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags == PO_COMPF_DOWN2OUT);
+		comp->co_flags & PO_COMPF_DOWN2OUT);
 }
 
 static bool

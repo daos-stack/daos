@@ -64,11 +64,17 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 
 	if (cpb->cpb_data != NULL) {
 		D_ALLOC_PTR(cps);
-		if (cps == NULL) {
-			D_FREE(cpr);
+		if (cps == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
 	}
+
+	rc = ABT_mutex_create(&cpr->cpr_mutex);
+	if (rc != 0)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	rc = ABT_cond_create(&cpr->cpr_cond);
+	if (rc != 0)
+		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
 	cpr->cpr_shard_nr = 0;
@@ -95,6 +101,17 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	}
 
 out:
+	if (rc != 0) {
+		if (cpr != NULL) {
+			if (cpr->cpr_mutex != ABT_MUTEX_NULL)
+				ABT_mutex_free(&cpr->cpr_mutex);
+			if (cpr->cpr_cond != ABT_COND_NULL)
+				ABT_cond_free(&cpr->cpr_cond);
+			D_FREE(cps);
+			D_FREE(cpr);
+		}
+	}
+
 	return rc;
 }
 

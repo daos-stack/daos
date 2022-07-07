@@ -124,9 +124,11 @@ out:
 void
 ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 {
-	char	       *path;
-	struct stat	st;
-	int		rc;
+	char		*path = NULL;
+	char		*file = NULL;
+	struct stat	 st;
+	int		 rc;
+	int		 i;
 
 	memset(clue, 0, sizeof(*clue));
 	uuid_copy(clue->pc_uuid, uuid);
@@ -160,6 +162,41 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 		}
 		goto out_path;
 	}
+
+	D_ALLOC_ARRAY(clue->pc_tgt_status, dss_tgt_nr);
+	if (clue->pc_tgt_status == NULL) {
+		D_ERROR(DF_UUIDF": failed to allocate service clue for shards status\n",
+			DP_UUID(uuid));
+		D_GOTO(out_path, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &i, &file);
+		if (file == NULL) {
+			D_ERROR(DF_UUIDF": failed to allocate file name for shards status %d\n",
+				DP_UUID(uuid), i);
+			D_GOTO(out_path, rc = -DER_NOMEM);
+		}
+
+		rc = stat(file, &st);
+		D_FREE(file);
+		if (rc != 0) {
+			if (errno == ENOENT) {
+				clue->pc_tgt_status[i] = DS_POOL_TGT_NONEXIST;
+			}  else {
+				rc = daos_errno2der(errno);
+				D_ERROR(DF_UUIDF": failed to stat target %d: %d\n",
+					DP_UUID(uuid), i, rc);
+				D_GOTO(out_path, rc);
+			}
+		} else {
+			if (st.st_size > 0)
+				clue->pc_tgt_status[i] = DS_POOL_TGT_NORMAL;
+			else
+				clue->pc_tgt_status[i] = DS_POOL_TGT_EMPTY;
+		}
+	}
+	clue->pc_tgt_nr = dss_tgt_nr;
 
 	D_ALLOC(clue->pc_svc_clue, sizeof(*clue->pc_svc_clue));
 	if (clue->pc_svc_clue == NULL) {
@@ -198,6 +235,7 @@ ds_pool_clue_fini(struct ds_pool_clue *clue)
 		D_FREE(clue->pc_svc_clue);
 	}
 	D_FREE(clue->pc_label);
+	D_FREE(clue->pc_tgt_status);
 }
 
 /* Argument for glance_at_one */

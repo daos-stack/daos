@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,8 @@
 #define DAOS_RSVC_H
 
 #include <daos_types.h>
+
+#define RECHOOSE_SLEEP_MS 250
 
 /** Flags in rsvc_hint::sh_flags (opaque) */
 enum rsvc_hint_flag {
