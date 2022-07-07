@@ -20,7 +20,8 @@ import jira
 # https://github.com/marketplace/actions/comment-pull-request
 
 
-VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test', 'doc', 'build', 'bio')
+VALID_COMPONENTS = ('api', 'bio', 'build', 'control', 'cq', 'dfs', 'dfuse', 'doc', 'gha', 'object',
+                    'test', 'tse', 'vea', 'vos')
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
@@ -57,7 +58,9 @@ def main():
         component = parts[1]
         if component.endswith(':'):
             component = component[:-1]
-            if component not in VALID_COMPONENTS:
+            if component.lower() != component:
+                errors.append('Component should be lower-case')
+            if component.lower() not in VALID_COMPONENTS:
                 errors.append('Unknown component')
         else:
             errors.append('component not formatted correctly')
@@ -70,12 +73,21 @@ def main():
             print('Set PR_TITLE or pass on command line')
             return
 
-    # Check format of ticket_number using regexp?
+    # Check format of ticket_number.
+    parts = ticket_number.split('-', maxsplit=1)
+    if parts not in ('DAOS', 'CORCI'):
+        errors.append('Ticket number prefix incorrect')
+    try:
+        int(parts[1])
+    except ValueError:
+        errors.append('Ticket number suffix is not a number')
 
     try:
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
-        set_output('message', f"Unable to load ticket data for '{ticket_number}'")
+        output = [f"Unable to load ticket data for '{ticket_number}'"]
+        output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
+        set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
     print(ticket.fields.summary)
