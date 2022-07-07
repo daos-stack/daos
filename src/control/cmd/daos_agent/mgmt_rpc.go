@@ -169,6 +169,8 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 		return nil, err
 	}
 
+	mod.log.Debugf("full GetAttachInfoResp: %+v", rawResp)
+
 	reqProviders := mod.getInterfaceProviders(req.Interface, req.Domain)
 
 	resp, err := mod.selectAttachInfo(rawResp, reqProviders)
@@ -246,6 +248,8 @@ func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqPr
 			mod.log.Error("communications on this interface may fail")
 		}
 		providers = common.NewStringSet(mod.provider)
+
+		mod.log.Debugf("using configured provider: %s", mod.provider)
 	}
 
 	if len(providers) == 0 {
@@ -258,6 +262,7 @@ func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqPr
 
 	for _, hint := range srvResp.SecondaryClientNetHints {
 		if providers.Has(hint.Provider) {
+			mod.log.Debugf("getting secondary provider %s URIs", hint.Provider)
 			uris, err := mod.getProviderURIs(srvResp, hint.Provider)
 			if err == nil {
 				return &mgmtpb.GetAttachInfoResp{
@@ -267,6 +272,7 @@ func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqPr
 					ClientNetHint: hint,
 				}, nil
 			}
+			mod.log.Error(err.Error())
 		}
 	}
 

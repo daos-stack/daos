@@ -71,6 +71,15 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 	}
 
+	getPrimaryProvider := func() string {
+		return svc.clientNetworkHint[0].Provider
+	}
+
+	getSecondaryProvider := func(idx int) string {
+		// Primary is at idx 0, secondary providers start afterward
+		return svc.clientNetworkHint[idx+1].Provider
+	}
+
 	for rank, uris := range rankURIs {
 		if len(svc.clientNetworkHint) < len(uris.Secondary)+1 {
 			return nil, errors.Errorf("not enough client network hints (%d) for rank %d URIs (%d)",
@@ -80,14 +89,14 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 			Rank:     rank.Uint32(),
 			Uri:      uris.Primary,
-			Provider: svc.clientNetworkHint[0].Provider,
+			Provider: getPrimaryProvider(),
 		})
 
 		for i, uri := range uris.Secondary {
 			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank:     rank.Uint32(),
 				Uri:      uri,
-				Provider: svc.clientNetworkHint[i].Provider,
+				Provider: getSecondaryProvider(i),
 			}
 
 			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
