@@ -131,7 +131,7 @@ demo_pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
 
 static int
 demo_pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
-		 mode_t mode)
+		      mode_t mode)
 {
 	struct mkdir_args mkdir_args;
 	int rc = 0;
