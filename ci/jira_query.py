@@ -21,7 +21,7 @@ import jira
 
 # Expected components from the commit message.  We've never checked/enforced these before so there
 # have been a lot of values used in the past.
-VALID_COMPONENTS = ('api', 'bio', 'build', 'client', 'control', 'cq', 'dfs', 'dfuse', 'doc',
+VALID_COMPONENTS = ('api', 'bio', 'build', 'ci', 'client', 'control', 'cq', 'dfs', 'dfuse', 'doc',
                     'engine', 'gha', 'object', 'pool', 'rdb', 'test', 'tse', 'vea', 'vos')
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
@@ -31,19 +31,25 @@ FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 # which are Open or Reopened should be set to In Progress when being worked on.
 STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
 
+# pylint: disable=invalid-name
+priority_only = False
+
 
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
+    if priority_only:
+        return
+
     clean_value = value.replace('\n', '%0A')
     print(f'::set-output name={key}::{clean_value}')
-    print(value)
 
 
+# pylint: disable=too-many-branches
 def main():
     """Run the script"""
 
-    priority = None
+    priority = 1
     errors = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
@@ -71,7 +77,8 @@ def main():
         if len(sys.argv) > 1:
             ticket_number = sys.argv[1]
         else:
-            print('Set PR_TITLE or pass on command line')
+            if not priority_only:
+                print('Set PR_TITLE or pass on command line')
             return
 
     # Check format of ticket_number.
@@ -89,10 +96,12 @@ def main():
         output = [f"Unable to load ticket data for '{ticket_number}'"]
         output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
         set_output('message', '\n'.join(output))
-        print('Unable to load ticket data.  Ticket may be private, or may not exist')
+        if not priority_only:
+            print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
-    print(ticket.fields.summary)
-    print(ticket.fields.status)
+    if not priority_only:
+        print(ticket.fields.summary)
+        print(ticket.fields.status)
     if str(ticket.fields.status) not in STATUS_VALUES_ALLOWED:
         errors.append('Ticket status value not as expected')
 
@@ -143,9 +152,15 @@ def main():
 
     set_output('message', '\n'.join(output))
 
+    if priority_only and priority is not None:
+        print(priority)
+
     if errors:
         sys.exit(1)
 
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == '--priority-only':
+        priority_only = True
+
     main()
