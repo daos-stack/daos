@@ -330,7 +330,7 @@ demo_pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user
 
 static int
 demo_pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		daos_off_t off,	daos_size_t *read_size)
+		     daos_off_t off,	daos_size_t *read_size)
 {
 	struct read_args read_args;
 	int rc = 0;
