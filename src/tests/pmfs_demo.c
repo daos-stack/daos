@@ -256,7 +256,7 @@ demo_pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 
 static int
 demo_pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pmfs_obj **obj,
-		  mode_t *mode, struct stat *stbuf)
+		       mode_t *mode, struct stat *stbuf)
 {
 	struct lookup_args lookup_args;
 	int rc = 0;
