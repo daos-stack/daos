@@ -164,7 +164,8 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	 *   - Lower 8 bits are set to the numeric value of path[L_O].
 	 */
 	oid->id_pub.hi = 0;
-	oid->id_pub.lo = (i << 8) + 'o';
+	D_ASSERT(L_O < strlen(path));
+	oid->id_pub.lo = (i << 8) + path[L_O];
 	daos_obj_set_oid(&oid->id_pub, DAOS_OT_MULTI_UINT64, OR_RP_1, 1, 0);
 	oid->id_shard = 0;
 	oid->id_pad_32 = 0;
@@ -175,7 +176,8 @@ set_dkey(uint64_t i, char *path, daos_key_t *dkey)
 {
 	uint64_t key;
 
-	key = (i << 32) + 'd';
+	D_ASSERT(L_D < strlen(path));
+	key = (i << 32) + path[L_D];
 	D_ASSERT(dkey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)dkey->iov_buf = key;
 	dkey->iov_len = sizeof(key);
@@ -184,9 +186,10 @@ set_dkey(uint64_t i, char *path, daos_key_t *dkey)
 static void
 set_akey(uint64_t i, char *path, daos_key_t *akey)
 {
-	uint64_t key = (i << 32) + 'a';
+	uint64_t key = (i << 32) + path[L_A];
 
-	key = (i << 32) + 'a';
+	D_ASSERT(L_A < strlen(path));
+	key = (i << 32) + path[L_A];
 	D_ASSERT(akey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)akey->iov_buf = key;
 	akey->iov_len = sizeof(key);
@@ -1208,8 +1211,9 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 
 	/* If requested, prepare the data that will be read. */
 	if (!empty) {
-		char	pp[L_COUNT + 1] = {0};
+		char	pp[L_COUNT + 1] = "coda";
 
+		D_ASSERT(strlen(rp) <= L_COUNT);
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_X64") before %s(%s, "
 			      DF_X64"): ", pp, re - 1, r->o_name, rp, re);
@@ -1472,8 +1476,8 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
-		D_ASSERT(strnlen(wp, L_COUNT) <= sizeof(pp) - 1);
-		memcpy(pp, wp, strnlen(wp, L_COUNT));
+		D_ASSERT(strlen(wp) <= L_COUNT);
+		memcpy(pp, wp, strlen(wp));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
 		rc = update_f(arg, NULL /* txh */, pp, pe);
