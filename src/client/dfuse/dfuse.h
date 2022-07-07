@@ -101,6 +101,12 @@ struct dfuse_obj_hdl {
 	bool                             doh_writeable;
 };
 
+/*
+ * Set required initial state in dfuse_obj_hdl.
+ */
+void
+dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie);
+
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
@@ -430,28 +436,22 @@ struct fuse_lowlevel_ops dfuse_ops;
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");			\
-		if ((oh)->doh_ie->ie_dfs->dfc_data_caching) {		\
-			(_fi)->keep_cache = 1;				\
-		}							\
-		__rc = fuse_reply_open(req, _fi);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(oh,				\
-					"fuse_reply_open returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(oh, "Returning open");                                             \
+		__rc = fuse_reply_open(req, _fi);                                                  \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_CREATE(desc, req, entry, fi)                                                   \
 	do {                                                                                       \
-		int             __rc;                                                              \
-		struct timespec now;                                                               \
+		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
-		clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                                       \
-		(desc)->ie_attr_last_update = now;                                                 \
-		__rc                        = fuse_reply_create(req, &entry, fi);                  \
+		dfuse_cache_set_time(desc);                                                        \
+		__rc = fuse_reply_create(req, &entry, fi);                                         \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_create returned %d:%s", __rc,            \
 					strerror(-__rc));                                          \
@@ -459,13 +459,11 @@ struct fuse_lowlevel_ops dfuse_ops;
 
 #define DFUSE_REPLY_ENTRY(desc, req, entry)                                                        \
 	do {                                                                                       \
-		int             __rc;                                                              \
-		struct timespec now;                                                               \
+		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning entry inode %#lx mode %#o size %zi",              \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
-		clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                                       \
-		(desc)->ie_attr_last_update = now;                                                 \
-		__rc                        = fuse_reply_entry(req, &entry);                       \
+		dfuse_cache_set_time(desc);                                                        \
+		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_entry returned %d:%s", __rc,             \
 					strerror(-__rc));                                          \
@@ -508,14 +506,13 @@ struct dfuse_inode_entry {
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
 	 */
-	struct stat		ie_stat;
+	struct stat              ie_stat;
 
-	dfs_obj_t		*ie_obj;
+	dfs_obj_t               *ie_obj;
 
-	/** DAOS object ID of the dfs object.  Used for uniquely identifying
-	 * files
-	 */
-	daos_obj_id_t		ie_oid;
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying files */
+
+	daos_obj_id_t            ie_oid;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
@@ -523,7 +520,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char			ie_name[NAME_MAX + 1];
+	char                     ie_name[NAME_MAX + 1];
 
 	/** The parent inode of this entry.
 	 *
@@ -531,15 +528,19 @@ struct dfuse_inode_entry {
 	 * be incorrect at any point after that.  The inode does not hold
 	 * a reference on the parent so the inode may not be valid.
 	 */
-	fuse_ino_t		ie_parent;
+	fuse_ino_t               ie_parent;
 
-	struct dfuse_cont	*ie_dfs;
+	struct dfuse_cont       *ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
 	 * locking.
 	 */
-	d_list_t		ie_htl;
+	d_list_t                 ie_htl;
+
+	/* Time of last kernel cache update.
+	 */
+	struct timespec          ie_cache_last_update;
 
 	struct timespec          ie_attr_last_update;
 
@@ -550,7 +551,7 @@ struct dfuse_inode_entry {
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
-	ATOMIC uint		ie_ref;
+	ATOMIC uint              ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
@@ -559,14 +560,16 @@ struct dfuse_inode_entry {
 	ATOMIC uint32_t          ie_il_count;
 
 	/** file was truncated from 0 to a certain size */
-	bool			ie_truncated;
+	bool                     ie_truncated;
 
 	/** file is the root of a container */
-	bool			ie_root;
+	bool                     ie_root;
 
 	/** File has been unlinked from daos */
 	bool                     ie_unlinked;
 };
+
+extern char *duns_xattr_name;
 
 /* Generate the inode to use for this dfs object.  This is generating a single
  * 64 bit number from three 64 bit numbers so will not be perfect but does
@@ -588,7 +591,12 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
-extern char *duns_xattr_name;
+/* Mark the cache as up-to-date from now */
+void
+dfuse_cache_set_time(struct dfuse_inode_entry *ie);
+
+bool
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,

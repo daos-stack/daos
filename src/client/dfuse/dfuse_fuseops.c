@@ -164,11 +164,11 @@ err:
 void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*handle = NULL;
-	struct dfuse_inode_entry	*inode = NULL;
-	d_list_t			*rlink = NULL;
-	int rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *handle    = NULL;
+	struct dfuse_inode_entry     *inode     = NULL;
+	d_list_t                     *rlink     = NULL;
+	int                           rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
@@ -176,35 +176,18 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		inode = handle->doh_ie;
 	} else {
-		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
-					sizeof(ino));
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
-			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
-					ino);
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
 			D_GOTO(err, rc = ENOENT);
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
 	if (inode->ie_dfs->dfc_attr_timeout && (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
-		struct timespec now;
-		struct timespec left;
-		double          age;
-		double          timeout;
+		double timeout;
 
-		rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-		if (rc != 0)
-			D_GOTO(err, rc = EIO);
-
-		left.tv_sec  = now.tv_sec - inode->ie_attr_last_update.tv_sec;
-		left.tv_nsec = now.tv_nsec - inode->ie_attr_last_update.tv_nsec;
-		if (left.tv_nsec < 0) {
-			left.tv_sec--;
-			left.tv_nsec += 1000000000;
-		}
-		age     = left.tv_sec + ((double)left.tv_nsec / 1000000000);
-		timeout = inode->ie_dfs->dfc_attr_timeout - age;
-		if (timeout > 0) {
+		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
 			D_GOTO(done, 0);
 		}

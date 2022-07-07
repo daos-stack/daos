@@ -20,13 +20,12 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
+	dfuse_open_handle_init(oh, ie);
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
 	if (rc)
 		D_GOTO(err, rc);
-
-	oh->doh_dfs = ie->ie_dfs->dfs_ns;
-	oh->doh_ie  = ie;
 
 	fi_out.fh = (uint64_t)oh;
 
