@@ -21,6 +21,13 @@ import jira
 
 
 VALID_COMPONENTS = ('gha', 'object', 'dfs', 'tse', 'vea', 'test', 'doc', 'build', 'bio')
+# 10044 is "Approved to Merge"
+# 10045 is "Required for Version"
+FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
+
+# Expected values for Status.  Tickets which are closed should not be being worked on, and tickets
+# which are Open or Reopened should be set to In Progress when being worked on.
+STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
 
 
 def set_output(key, value):
@@ -34,7 +41,7 @@ def set_output(key, value):
 def main():
     """Run the script"""
 
-    priority = False
+    priority = None
     errors = []
 
     options = {'server': 'https://daosio.atlassian.net/'}
@@ -66,35 +73,58 @@ def main():
     # Check format of ticket_number using regexp?
 
     try:
-        ticket = server.issue(ticket_number, fields='summary,issuetype,status,labels,fixVersions')
+        ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
         set_output('message', f"Unable to load ticket data for '{ticket_number}'")
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
     print(ticket.fields.summary)
-    print(ticket.fields.issuetype)
     print(ticket.fields.status)
-    print(ticket.fields.labels)
-    print(ticket.fields.fixVersions)
+    if str(ticket.fields.status) not in STATUS_VALUES_ALLOWED:
+        errors.append('Ticket status value not as expected')
+
+    # Highest priority, tickets with "Approved to Merge" set.
+    if ticket.fields.customfield_10044:
+        priority = 1
+
+    # Elevated priority, PRs to master where ticket is "Required for Version" is set.
+    if ticket.fields.customfield_10045:
+
+        # Check the target branch here.  Can not be done from a ticket number alone, so only perform
+        # this check if we can.
+
+        set_rv_priority = True
+        target_branch = os.getenv('GITHUB_BASE_REF')
+        if target_branch:
+            if target_branch.startswith('release/'):
+                set_rv_priority = False
+
+        rv_priority = None
+
+        for version in ticket.fields.customfield_10045:
+            if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
+                                '2.2 Community Release'):
+                rv_priority = 2
+            if rv_priority is None and str(version) in ('2.4 Community Release'):
+                rv_priority = 3
+
+        if set_rv_priority and priority is None:
+            priority = rv_priority
 
     output = []
 
     output.append(f"Ticket title is '{ticket.fields.summary}'")
     output.append(f"Status is '{ticket.fields.status}'")
 
-    for version in ticket.fields.fixVersions:
-        if str(version) in ('2.2 Community Release', '2.4 Community Release'):
-            priority = True
-
     if ticket.fields.labels:
         label_str = ','.join(ticket.fields.labels)
         output.append(f"Labels: '{label_str}'")
 
-    if priority:
-        output.append('Job should run at elevated priority')
+    if priority is not None:
+        output.append(f'Job should run at elevated priority ({priority})')
 
     if errors:
-        output.append('errors', f'Errors are {",".join(errors)}')
+        output.append(f'Errors are {",".join(errors)}')
 
     output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
 
