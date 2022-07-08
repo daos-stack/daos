@@ -1401,7 +1401,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			 */
 			rc = daos_iod_recx_dup(iods, orw->orw_nr, &iods_dup);
 			if (rc != 0) {
-				D_ERROR(DF_UOID"iod_recx_dup failed: "DF_RC"\n",
+				D_ERROR(DF_UOID ": iod_recx_dup failed: " DF_RC "\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
@@ -2193,8 +2193,8 @@ end:
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 	if (rc1)
-		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc1));
+		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
+			DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
