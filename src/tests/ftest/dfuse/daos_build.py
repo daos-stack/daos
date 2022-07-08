@@ -64,8 +64,10 @@ class DaosBuild(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         # How long to cache things for, if caching is enabled.
-        cache_time = '30m'
-        build_time = 15
+        cache_time = '60m'
+        # Timeout.  This is per command so up to double this or more as there are two scons
+        # commands which can both take a long time.
+        build_time = 30
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
@@ -85,7 +87,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
-            build_time = 45
+            build_time = 180
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -112,25 +114,24 @@ class DaosBuild(DfuseTestBase):
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'WARN,IL=INFO'
-            remote_env['FI_LOG_LEVEL'] = 'warn'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
         preload_cmd = ';'.join(envs)
 
-        build_jobs = 18
+        build_jobs = 6 * 5
         if intercept:
             build_jobs = 1
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
-        # not yet work, so run this part in serial.
+        # not yet work, so run this part in serial.  The VMs have 6 cores each.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 18 --build-deps=only'.format(build_dir),
+                'scons -C {} --jobs 24 --build-deps=only'.format(build_dir),
                 'scons -C {} --jobs {}'.format(build_dir, build_jobs)]
         for cmd in cmds:
             try:
