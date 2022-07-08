@@ -1,6 +1,6 @@
 # DAOS Common Tasks
 
-This section describes some of the common tasks handled by admins at a high level. See [System Deployment](./deployment#system-deployment), [DAOS System Administration](./administration.md#daos-system-administration), and [Pool Operations](./pool_operations#pool-operations) for more detailed explanations about each step.
+This section describes some of the common tasks handled by admins at a high level. See [System Deployment](./deployment.md#system-deployment), [DAOS System Administration](./administration.md#daos-system-administration), and [Pool Operations](./pool_operations.md#pool-operations) for more detailed explanations about each step.
 
 ## Single host setup with PMEM and NVMe
 
