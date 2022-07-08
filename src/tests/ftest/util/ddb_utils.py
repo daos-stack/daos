@@ -70,7 +70,7 @@ class DdbCommand(DdbCommandBase):
         will be dumped.
 
         Args:
-			component_path (str): Component that comes after dump_value. e.g.,
+            component_path (str): Component that comes after dump_value. e.g.,
                 [0]/[1]/[1]/[0] to dump the data of the akey.
             out_file_path (str): Path where the file is saved. Pass in self.test_dir +
                 "my_out.txt" unless there's a specific reason. This will create a file in
@@ -212,8 +212,8 @@ class DdbCommand(DdbCommandBase):
     def clear_cmt_dtx(self, component_path="[0]"):
         """Call ddb -R "clear_cmt_dtx <component_path>"
 
-		Args:
-		    component_path (str): Component that comes after clear_cmt_dtx. It doesn't
+        Args:
+            component_path (str): Component that comes after clear_cmt_dtx. It doesn't
                 matter as long as it's valid. Defaults to [0].
 
         Returns:
