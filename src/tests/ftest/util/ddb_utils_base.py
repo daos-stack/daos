@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import  PositionalParameter
+from command_utils_base import PositionalParameter
 from command_utils import ExecutableCommand
 
 

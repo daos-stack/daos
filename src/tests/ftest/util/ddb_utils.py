@@ -24,14 +24,14 @@ class DdbCommand(DdbCommandBase):
     def __init__(self, path, mount_point, pool_uuid, vos_file):
         """Constructor that sets the common variables for subcommands.
 
-		Args:
+        Args:
             path (str): Path to the ddb command. Pass in self.bin for our wolf/CI env.
-			mount_point (str): DAOS mount point where pool directory is created. e.g.,
+            mount_point (str): DAOS mount point where pool directory is created. e.g.,
                 /mnt/daos, /mnt/daos0.
             pool_uuid (str): Pool UUID.
             vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
                 usually in the form of vos-0, vos-1, and so on.
-		"""
+        """
         super().__init__(path)
         self.mount_point = mount_point
         self.pool_uuid = pool_uuid
@@ -47,9 +47,9 @@ class DdbCommand(DdbCommandBase):
         ls is similar to the Linux ls command. It lists objects inside the container,
         dkeys inside the object, and so on.
 
-		Args:
-			component_path (str): Component that comes after ls. e.g., [0]/[1] for first
-				container, second object. Defaults to None, in which case "ls" will be
+        Args:
+            component_path (str): Component that comes after ls. e.g., [0]/[1] for first
+                container, second object. Defaults to None, in which case "ls" will be
                 called.
 
         Returns:
@@ -110,9 +110,9 @@ class DdbCommand(DdbCommandBase):
     def remove_component(self, component_path):
         """Call ddb -w -R "rm <component_path>"
 
-		Args:
-			component_path (str): Component that comes after rm. e.g., [0]/[1] for first
-				container, second object.
+        Args:
+            component_path (str): Component that comes after rm. e.g., [0]/[1] for first
+                container, second object.
 
         Returns:
             CmdResult: Result object that contains exit_status, stdout, etc.
@@ -126,8 +126,8 @@ class DdbCommand(DdbCommandBase):
     def dump_ilog(self, component_path):
         """Call ddb -R "dump_ilog <component_path>"
 
-		Args:
-			component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
+        Args:
+            component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
@@ -141,8 +141,8 @@ class DdbCommand(DdbCommandBase):
     def commit_ilog(self, component_path):
         """Call ddb -R "commit_ilog <component_path>"
 
-		Args:
-			component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
+        Args:
+            component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
@@ -156,8 +156,8 @@ class DdbCommand(DdbCommandBase):
     def rm_ilog(self, component_path):
         """Call ddb -R "rm_ilog <component_path>"
 
-		Args:
-			component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
+        Args:
+            component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
@@ -171,8 +171,8 @@ class DdbCommand(DdbCommandBase):
     def dump_superblock(self, component_path):
         """Call ddb -R "dump_superblock <component_path>"
 
-		Args:
-			component_path (str): Component that comes after dump_superblock.
+        Args:
+            component_path (str): Component that comes after dump_superblock.
                 e.g., [0]/[1]/[1] for first container, second object, second dkey.
 
         Returns:
@@ -188,8 +188,8 @@ class DdbCommand(DdbCommandBase):
 
         committed and active can't be set at the same time.
 
-		Args:
-			component_path (str): Component that comes after dump_dtx. It doesn't matter
+        Args:
+            component_path (str): Component that comes after dump_dtx. It doesn't matter
                 as long as it's valid. Defaults to [0].
             committed (str): -c flag. Defaults to False.
             active (str): -a flag. Defaults to False.
@@ -213,7 +213,7 @@ class DdbCommand(DdbCommandBase):
         """Call ddb -R "clear_cmt_dtx <component_path>"
 
 		Args:
-			component_path (str): Component that comes after clear_cmt_dtx. It doesn't
+		    component_path (str): Component that comes after clear_cmt_dtx. It doesn't
                 matter as long as it's valid. Defaults to [0].
 
         Returns:
