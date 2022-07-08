@@ -81,6 +81,9 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 	}
 }
 
+static crt_bulk_t cached_bulk = NULL;
+static void *cached_addr = NULL;
+
 int
 crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
@@ -99,11 +102,25 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	}
 
 	ctx = crt_ctx;
+
+	/* XXX HACK TO VERIFY THEORY */
+	if (sgl->sg_iovs && cached_addr == sgl->sg_iovs->iov_buf &&
+	    sgl->sg_iovs->iov_len == 1048576) {
+		*bulk_hdl = cached_bulk;
+		return rc;
+	}
+
+
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
 			DP_RC(rc));
 
+	if (rc == 0 && sgl->sg_iovs && cached_addr == NULL &&
+	    sgl->sg_iovs->iov_len == 1048576) {
+		cached_addr = sgl->sg_iovs->iov_buf;
+		cached_bulk = *bulk_hdl;
+	}
 out:
 	return rc;
 }
@@ -154,6 +171,9 @@ crt_bulk_free(crt_bulk_t bulk_hdl)
 		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	if (bulk_hdl == cached_bulk)
+		return 0;
 
 	rc = crt_hg_bulk_free(bulk_hdl);
 	if (rc != 0)
