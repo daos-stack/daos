@@ -379,10 +379,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
 				(attr)->st_mode, (attr)->st_size);                                 \
 		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {                                \
-			struct timespec now;                                                       \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
-			clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                               \
-			(ie)->ie_attr_last_update = now;                                           \
+			dfuse_cache_set_time(ie);                                                  \
 		}                                                                                  \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
@@ -542,8 +540,6 @@ struct dfuse_inode_entry {
 	 */
 	struct timespec          ie_cache_last_update;
 
-	struct timespec          ie_attr_last_update;
-
 	/** written region for truncated files (i.e. ie_truncated set) */
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
@@ -595,6 +591,11 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_set_time(struct dfuse_inode_entry *ie);
 
+/* Set the cache as invalid */
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie);
+
+/* Check the cache setting against a given timeout, and return time left */
 bool
 dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 

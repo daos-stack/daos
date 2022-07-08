@@ -967,6 +967,13 @@ dfuse_cache_set_time(struct dfuse_inode_entry *ie)
 	ie->ie_cache_last_update = now;
 }
 
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie)
+{
+	ie->ie_cache_last_update.tv_sec  = 0;
+	ie->ie_cache_last_update.tv_nsec = 0;
+}
+
 bool
 dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
 {
