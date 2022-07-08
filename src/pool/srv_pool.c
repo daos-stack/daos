@@ -6583,3 +6583,101 @@ out_lock:
 out:
 	return rc;
 }
+
+int
+ds_pool_svc_update_label(struct pool_svc *svc, const char *label)
+{
+	daos_prop_t		*prop = NULL;
+	struct rdb_tx		 tx = { 0 };
+	int			 rc = 0;
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
+	if (label != NULL) {
+		D_STRNDUP(prop->dpp_entries[0].dpe_str, label, strlen(label));
+		if (prop->dpp_entries[0].dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	} else {
+		prop->dpp_entries[0].dpe_flags = DAOS_PROP_ENTRY_NOT_SET;
+		prop->dpp_entries[0].dpe_str = NULL;
+	}
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0) {
+		D_ERROR("Failed to begin TX for updating pool "DF_UUIDF" label %s: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), label != NULL ? label : "(null)", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_write(&tx, &svc->ps_root, prop, false);
+	if (rc != 0) {
+		D_ERROR("Failed to updating pool "DF_UUIDF" label %s: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), label != NULL ? label : "(null)", DP_RC(rc));
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_ERROR("Failed to commit TX for updating pool "DF_UUIDF" label %s: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), label != NULL ? label : "(null)", DP_RC(rc));
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out:
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
+ds_pool_svc_evict_all(struct pool_svc *svc)
+{
+	struct pool_metrics	*metrics;
+	uuid_t			*hdl_uuids = NULL;
+	struct rdb_tx		 tx = { 0 };
+	size_t			 hdl_uuids_size = 0;
+	int			 n_hdl_uuids = 0;
+	int			 rc = 0;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0) {
+		D_ERROR("Failed to begin TX for evict pool "DF_UUIDF" connections: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size, &n_hdl_uuids, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to find hdls for evict pool "DF_UUIDF" connections: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_GOTO(out_lock, rc);
+	}
+
+	if (n_hdl_uuids > 0) {
+		rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
+					  dss_get_module_info()->dmi_ctx);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+
+		metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+		d_tm_inc_counter(metrics->evict_total, n_hdl_uuids);
+		rc = rdb_tx_commit(&tx);
+		if (rc != 0)
+			D_ERROR("Failed to commit TX for evict pool "DF_UUIDF" connections: "
+				DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+	}
+
+out_lock:
+	D_FREE(hdl_uuids);
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}

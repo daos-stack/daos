@@ -289,6 +289,8 @@ int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 int ds_pool_svc_load_map(struct pool_svc *svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct pool_svc *svc, struct pool_map *map, uint32_t version);
+int ds_pool_svc_update_label(struct pool_svc *svc, const char *label);
+int ds_pool_svc_evict_all(struct pool_svc *svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
