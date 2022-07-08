@@ -657,19 +657,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         elif self.tool == "FS_COPY":
             self._set_fs_copy_params(src, dst)
         elif self.tool == "CONT_CLONE":
-            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert src_path is None # nosec
-            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert dst_path is None # nosec
-            self._set_cont_clone_params(src_pool, src_cont,
-                                        dst_pool, dst_cont)
+            self._set_cont_clone_params(src, dst)
         elif self.tool == "CONT_SERIALIZE":
-            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert src_path is None # nosec
-            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert dst_path is None # nosec
-            assert dst_cont is None #nosec
-            self._set_cont_serialize_params(src_pool, src_cont, dst_pool)
+            self._set_cont_serialize_params(src, dst_pool)
         else:
             self.fail("Invalid tool: {}".format(self.tool))
 
@@ -809,7 +799,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if dst is not None:
             self.cont_clone_cmd.set_params(dst=dst)
 
-    def _set_cont_serialize_params(self, src_pool=None, src_cont=None, dst_pool=None):
+    def _set_cont_serialize_params(self, src=None, dst_pool=None):
         """Set the params for daos cont serialize and deserialize.
 
         Args:
@@ -831,17 +821,15 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.serial_file_path = join(tmp_path, "{}{}".format(src_cont.uuid, ".h5"))
 
         # Set the source params
-        if src_pool or src_cont:
+        if src is not None:
             self.cont_serialize_cmd.set_cont_serialize_params(
-                src=format_daos_path(src_pool, src_cont), output_path=tmp_path)
+                src=src, output_path=tmp_path)
         if dst_pool:
             pool = uuid_from_obj(dst_pool)
             self.cont_deserialize_cmd.set_cont_deserialize_params(file_path=self.serial_file_path,
                                                                   deser_pool=pool)
 
-    def _set_dserial_params(self,
-                            src_pool=None, src_cont=None,
-                            dst_pool=None):
+    def _set_dserial_params(self, src=None, dst_pool=None):
         """Set the params for daos-serialize and daos-deserialize.
 
         This uses a temporary POSIX path as the intermediate step

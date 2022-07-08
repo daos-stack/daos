@@ -68,6 +68,14 @@ struct dsr_h5_args {
 	struct dsr_h5_akey *akey_data;
 };
 
+struct dm_stats {
+	int total_oids;
+	int total_dkeys;
+	int total_akeys;
+	uint64_t bytes_read;
+	uint64_t bytes_written;
+};
+
 static int
 serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
@@ -343,6 +351,109 @@ prop_to_str(uint32_t type)
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
+}
+
+static int
+get_dset_dims(hid_t file, char *dset_name, hsize_t *dims)
+{
+	//hid_t			status = 0;
+	int			rc = 0;
+	hid_t			akey_dset = -1;
+	hid_t			akey_dspace = -1;
+	hid_t			akey_vtype = -1;
+	hsize_t			akey_dims[1];
+
+	akey_dset = H5Dopen(file, dset_name, H5P_DEFAULT);
+	if (akey_dset < 0) {
+		D_ERROR("Failed to open akey dataset\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	akey_dspace = H5Dget_space(akey_dset);
+	if (akey_dspace < 0) {
+		D_ERROR("Failed to get akey dataspace\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	akey_vtype = H5Dget_type(akey_dset);
+	if (akey_vtype < 0) {
+		D_ERROR("Failed to get akey vtype\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	rc = H5Sget_simple_extent_dims(akey_dspace, akey_dims, NULL);
+	if (rc < 0) {
+		D_ERROR("Failed to get akey dimensions\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	rc = 0;
+	*dims = akey_dims[0];
+out:
+	if (akey_dset >= 0)
+		H5Dclose(akey_dset);
+	if (akey_dspace >= 0)
+		H5Sclose(akey_dspace);
+	if (akey_vtype >= 0)
+		H5Tclose(akey_vtype);
+	return rc;
+}
+
+static int
+simple_batch_read(hid_t file, char *dset_name, void *data, hsize_t read_offset, hsize_t read_len)
+{
+	hid_t			status = 0;
+	int			rc = 0;
+	int			ndims = 0;
+	hid_t			dset = -1;
+	hid_t			dspace = -1;
+	hid_t			vtype = -1;
+	hid_t			mspace = -1;
+	hsize_t			dims[1];
+
+	dset = H5Dopen(file, dset_name, H5P_DEFAULT);
+	if (dset < 0) {
+		D_ERROR("Failed to open %s\n", dset_name);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	dspace = H5Dget_space(dset);
+	if (dspace < 0) {
+		D_ERROR("Failed to get %s dataspace\n", dset_name);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	vtype = H5Dget_type(dset);
+	if (vtype < 0) {
+		D_ERROR("Failed to get %s vtype\n", dset_name);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	ndims = H5Sget_simple_extent_dims(dspace, dims, NULL);
+	if (ndims < 0) {
+		D_ERROR("Failed to get %s dimensions\n", dset_name);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	status = H5Sselect_hyperslab(dspace, H5S_SELECT_SET, &read_offset, NULL, &read_len, NULL);
+	if (status < 0) {
+		D_ERROR("Failed to select Dataset Hyperslab\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+
+	mspace = H5Screate_simple(1, &read_len, &read_len);
+	if (mspace < 0) {
+		D_ERROR("Failed to create Memspace\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+
+	status = H5Dread(dset, vtype, mspace, dspace, H5P_DEFAULT, data);
+	if (status < 0) {
+		D_ERROR("Failed to read %s dataset\n", dset_name);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+out:
+	if (dset >= 0)
+		H5Dclose(dset);
+	if (dspace >= 0)
+		H5Sclose(dspace);
+	if (mspace >= 0)
+		H5Sclose(mspace);
+	if (vtype >= 0)
+		H5Tclose(vtype);
+	return rc;
 }
 
 static int
@@ -1390,7 +1501,7 @@ out:
 
 static int
 fetch_recx_single(hvl_t *single_val, daos_key_t *dkey, daos_handle_t *oh, daos_iod_t *iod,
-		  uint64_t *bytes_read)
+		  struct dm_stats *stats)
 {
 	/* if iod_type is single value just fetch iod size from source
 	 * and update in destination object
@@ -1421,7 +1532,7 @@ fetch_recx_single(hvl_t *single_val, daos_key_t *dkey, daos_handle_t *oh, daos_i
 		D_GOTO(out, rc);
 	}
 
-	(*bytes_read) += single_val->len;
+	(stats->bytes_read) += single_val->len;
 
 out:
 	if (rc)
@@ -1431,7 +1542,7 @@ out:
 
 static int
 serialize_recx_array(hid_t file, daos_key_t *dkey, daos_key_t *akey, char *rec_name,
-		     int *akey_index, daos_handle_t *oh, daos_iod_t *iod, uint64_t *bytes_read)
+		     int *akey_index, daos_handle_t *oh, daos_iod_t *iod, struct dm_stats *stats)
 {
 	int			rc = 0;
 	hid_t			status = 0;
@@ -1593,7 +1704,7 @@ serialize_recx_array(hid_t file, daos_key_t *dkey, daos_key_t *akey, char *rec_n
 				D_GOTO(out, rc);
 			}
 
-			(*bytes_read) += buf_len;
+			(stats->bytes_read) += buf_len;
 
 			/* write data to record dset */
 			mem_dims[0] = recxs[i].rx_nr;
@@ -1770,7 +1881,7 @@ realloc_buf(char **buf, daos_size_t *buf_len, daos_size_t min_len)
 
 static int
 serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *akey_index,
-		daos_handle_t *oh, int *total_akeys, uint64_t *bytes_read)
+		daos_handle_t *oh, struct dm_stats *stats)
 {
 	int			rc = 0;
 	int			i = 0;
@@ -1874,14 +1985,14 @@ retry_list_akey:
 					D_GOTO(out, rc);
 				}
 				rc = serialize_recx_array(args->file, &diov, &aiov, rec_name,
-							  akey_index, oh, &iod, bytes_read);
+							  akey_index, oh, &iod, stats);
 				if (rc != 0) {
 					D_ERROR("Failed to serialize recx array "DF_RC"\n",
 						DP_RC(rc));
 					D_GOTO(out, rc);
 				}
 			} else {
-				rc = fetch_recx_single(single_val, &diov, oh, &iod, bytes_read);
+				rc = fetch_recx_single(single_val, &diov, oh, &iod, stats);
 				if (rc != 0) {
 					D_ERROR("Failed to serialize recx single "DF_RC"\n",
 						DP_RC(rc));
@@ -1899,7 +2010,7 @@ retry_list_akey:
 			D_GOTO(out, rc);
 
 		/* increment total akeys successfully serialized */
-		*total_akeys += akey_number;
+		stats->total_akeys += akey_number;
 
 		/* free all rec values */
 		for (i = 0; i < akey_number; i++) {
@@ -1924,7 +2035,7 @@ out:
 
 static int
 fetch_kv_rec(hvl_t *kv_val, daos_key_t dkey, daos_handle_t *oh,
-	     char *dkey_val, uint64_t *bytes_read)
+	     char *dkey_val, struct dm_stats *stats)
 {
 	int		rc;
 	daos_size_t	size = 0;
@@ -1949,7 +2060,7 @@ fetch_kv_rec(hvl_t *kv_val, daos_key_t dkey, daos_handle_t *oh,
 		D_GOTO(out, rc);
 	}
 
-	(*bytes_read) += size;
+	(stats->bytes_read) += size;
 out:
 	if (rc)
 		D_FREE(kv_val->p);
@@ -1959,7 +2070,7 @@ out:
 static int
 serialize_dkeys(struct dsr_h5_args *args, daos_obj_id_t oid, daos_handle_t coh,
 		int *dkey_index, int *akey_index, daos_handle_t *oh, bool is_kv,
-		int *total_dkeys, int *total_akeys, uint64_t *bytes_read)
+		struct dm_stats *stats)
 {
 	int			rc = 0;
 	int			i = 0;
@@ -2036,7 +2147,7 @@ retry_list_dkey:
 
 				/* fetch KV record into dkey buffer */
 				rc = fetch_kv_rec(&dkey_data[i].rec_kv_val, diov, oh,
-						  (char *)dkey_val->p, bytes_read);
+						  (char *)dkey_val->p, stats);
 				if (rc != 0) {
 					D_ERROR("Failed to fetch KV record "DF_RC"\n", DP_RC(rc));
 					D_GOTO(out, rc);
@@ -2044,8 +2155,7 @@ retry_list_dkey:
 			} else {
 				dkey_data[i].akey_offset = *akey_index;
 
-				rc = serialize_akeys(args, diov, akey_index, oh,
-						     total_akeys, bytes_read);
+				rc = serialize_akeys(args, diov, akey_index, oh, stats);
 				if (rc != 0) {
 					D_ERROR("Failed to serialize akeys "DF_RC"\n", DP_RC(rc));
 					D_GOTO(out, rc);
@@ -2061,7 +2171,7 @@ retry_list_dkey:
 			D_GOTO(out, rc);
 
 		/* increment total dkeys successfully serialized */
-		(*total_dkeys) += dkey_number;
+		(stats->total_dkeys) += dkey_number;
 
 		/* free all KV rec values */
 		for (i = 0; i < dkey_number; i++)
@@ -2418,8 +2528,7 @@ out:
 /* TODO: daos_cont_serialize_obj so mpifileutils, etc. can share the API */
 int
 daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buffers, size_t *sizes,
-		    int *total_oids, int *total_dkeys, int *total_akeys, uint64_t *bytes_read,
-		    daos_handle_t coh, char *filename)
+		    struct dm_stats *stats, daos_handle_t coh, char *filename)
 {
 	int			rc = 0;
 	int			rc2 = 0;
@@ -2577,8 +2686,7 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 
 				/* serialize dkeys */
 				rc = serialize_dkeys(&args, oids[i], coh, &dkey_index,
-						     &akey_index, &oh, is_kv, total_dkeys,
-						     total_akeys, bytes_read);
+						     &akey_index, &oh, is_kv, stats);
 				if (rc != 0) {
 					D_ERROR("Failed to serialize dkeys: "DF_RC, DP_RC(rc));
 					D_GOTO(err_kv_obj, rc);
@@ -2598,8 +2706,7 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 
 				/* serialize dkeys */
 				rc = serialize_dkeys(&args, oids[i], coh, &dkey_index,
-						     &akey_index, &oh, is_kv, total_dkeys,
-						     total_akeys, bytes_read);
+						     &akey_index, &oh, is_kv, stats);
 
 				if (rc != 0) {
 					D_ERROR("Failed to serialize dkeys: "DF_RC, DP_RC(rc));
@@ -2612,7 +2719,7 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 					D_GOTO(out_oit, rc);
 				}
 			}
-			(*total_oids)++;
+			(stats->total_oids)++;
 		}
 
 		/* serialize this batch of oids. */
@@ -2656,7 +2763,7 @@ out:
 static int
 cont_deserialize_recx(hvl_t *akey_val, daos_handle_t *oh, daos_key_t diov, int num_attrs,
 		      hid_t *rx_dtype, hid_t *rx_dspace,
-		      hid_t *rx_dset, hid_t *rx_memspace, uint64_t *bytes_written)
+		      hid_t *rx_dset, hid_t *rx_memspace, struct dm_stats *stats)
 {
 	int		rc = 0;
 	hid_t		status = 0;
@@ -2744,7 +2851,7 @@ cont_deserialize_recx(hvl_t *akey_val, daos_handle_t *oh, daos_key_t diov, int n
 
 		start = rx_range[0];
 		count = (rx_range[1] - rx_range[0]) + 1;
-		status = H5Sselect_hyperslab(*rx_dspace, H5S_SELECT_AND, &start, NULL,
+		status = H5Sselect_hyperslab(*rx_dspace, H5S_SELECT_SET, &start, NULL,
 					     &count, NULL);
 		if (status < 0) {
 			D_ERROR("Failed to select hyperslab\n");
@@ -2767,6 +2874,7 @@ cont_deserialize_recx(hvl_t *akey_val, daos_handle_t *oh, daos_key_t diov, int n
 		memset(&iod, 0, sizeof(iod));
 		memset(&recxs, 0, sizeof(recxs));
 		d_iov_set(&iod.iod_name, akey_val->p, akey_val->len);
+
 		/* set iod values */
 		iod.iod_type  = DAOS_IOD_ARRAY;
 		iod.iod_size  = rx_dtype_size;
@@ -2789,24 +2897,22 @@ cont_deserialize_recx(hvl_t *akey_val, daos_handle_t *oh, daos_key_t diov, int n
 			D_ERROR("Failed to update object: "DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-		(*bytes_written) += buf_size;
+		(stats->bytes_written) += buf_size;
+		if (attr_type >= 0)
+			H5Tclose(attr_type);
+		if (aid >= 0)
+			H5Aclose(aid);
+		D_FREE(rx_range);
+		D_FREE(recx_data);
+		D_FREE(decode_buf);
 	}
 out:
-	/* TODO: leak: need to close for every loop iteration */
-	if (attr_type >= 0)
-		H5Tclose(attr_type);
-	if (aid >= 0)
-		H5Aclose(aid);
-	/* TODO: leak: need to free for every loop iteration */
-	D_FREE(rx_range);
-	D_FREE(recx_data);
-	D_FREE(decode_buf);
 	return rc;
 }
 
 static int
 cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_off, int k,
-		       daos_handle_t *oh, int *total_akeys, uint64_t *bytes_written)
+		       daos_handle_t *oh, struct dm_stats *stats)
 {
 	int		rc = 0;
 	daos_key_t	aiov;
@@ -2828,17 +2934,19 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 	hid_t		rx_dtype = -1;
 	hid_t		plist = -1;
 	hsize_t		rx_dims[1];
+	uint64_t	*rec_dset_id;
 
 	memset(&aiov, 0, sizeof(aiov));
-	akey_val = &args->akey_data[*ak_off + k].akey_val;
-	rec_single_val = &args->akey_data[*ak_off + k].rec_single_val;
+	rec_dset_id = &args->akey_data[k].rec_dset_id;
+	akey_val = &args->akey_data[k].akey_val;
+	rec_single_val = &args->akey_data[k].rec_single_val;
 	d_iov_set(&aiov, (void *)akey_val->p, akey_val->len);
 
 	/* if the len of the single value is set to zero,
 	 * then this akey points to an array record dataset
 	 */
 	if (rec_single_val->len == 0) {
-		index = *ak_off + k;
+		index = *rec_dset_id;
 		len = snprintf(NULL, 0, "%lu", index);
 		D_ALLOC(dset_name, len + 1);
 		if (dset_name == NULL)
@@ -2874,9 +2982,9 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 			D_ERROR("Failed to get num attrs\n");
 			D_GOTO(out, rc = -DER_MISC);
 		}
-		rc = cont_deserialize_recx(&args->akey_data[*ak_off + k].akey_val, oh, diov,
+		rc = cont_deserialize_recx(&args->akey_data[k].akey_val, oh, diov,
 					   num_attrs, &rx_dtype, &rx_dspace, &rx_dset,
-					   &rx_memspace, bytes_written);
+					   &rx_memspace, stats);
 		if (rc != 0) {
 			D_ERROR("Failed to deserialize recx "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -2914,10 +3022,10 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 			D_ERROR("Failed to update object: "DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-		(*bytes_written) += single_tsize;
+		(stats->bytes_written) += single_tsize;
 		D_FREE(single_data);
 	}
-	(*total_akeys)++;
+	(stats->total_akeys)++;
 out:
 	if (rx_dset >= 0)
 		H5Dclose(rx_dset);
@@ -2933,34 +3041,36 @@ out:
 }
 
 static int
-cont_deserialize_keys(struct dsr_h5_args *args, uint64_t *total_dkeys_this_oid, uint64_t *dk_off,
-		      daos_handle_t *oh, hsize_t dkey_dims[], hsize_t akey_dims[],
-		      int *total_dkeys, int *total_akeys, uint64_t *bytes_written)
-{
-	int		rc = 0;
-	int		j = 0;
-	daos_key_t	diov;
-	uint64_t	ak_off = 0;
-	uint64_t	ak_next = 0;
-	uint64_t	total_akeys_this_dkey = 0;
-	int		k = 0;
-	hvl_t		*dkey_val;
-	hvl_t		*rec_kv_val;
-	daos_size_t	kv_single_size = 0;
+deserialize_keys(daos_handle_t *oh, struct dsr_h5_args *args, int dkey_end, int dkey_batch,
+		 hsize_t total_akey_dims, struct dm_stats *stats) {
+	int			rc = 0;
+	int			j = 0;
+	int			k = 0;
+	daos_key_t		diov;
+	uint64_t		ak_off = 0;
+	uint64_t		ak_next = 0;
+	uint64_t		total_akeys_this_dkey = 0;
+	hvl_t			*dkey_val;
+	hvl_t			*rec_kv_val;
+	daos_size_t		kv_single_size = 0;
+	int			akey_batch = 0;
+	int			akeys_to_read = 0;
 
-	for (j = 0; j < *total_dkeys_this_oid; j++) {
+
+	for (j = 0; j < dkey_end; j++) {
+		/* calculate how many akeys for this dkey and save dkey vals */
 		memset(&diov, 0, sizeof(diov));
-		dkey_val = &args->dkey_data[*dk_off + j].dkey_val;
-		rec_kv_val = &args->dkey_data[*dk_off + j].rec_kv_val;
+		dkey_val = &args->dkey_data[j].dkey_val;
+		rec_kv_val = &args->dkey_data[j].rec_kv_val;
 		d_iov_set(&diov, (void *)dkey_val->p, dkey_val->len);
-		ak_off = args->dkey_data[*dk_off + j].akey_offset;
+		ak_off = args->dkey_data[j].akey_offset;
 		ak_next = 0;
 		total_akeys_this_dkey = 0;
-		if (*dk_off + j + 1 < (int)dkey_dims[0]) {
-			ak_next = args->dkey_data[(*dk_off + j) + 1].akey_offset;
+		if (j + 1 < dkey_batch) {
+			ak_next = args->dkey_data[j + 1].akey_offset;
 			total_akeys_this_dkey = ak_next - ak_off;
-		} else if (*dk_off + j == ((int)dkey_dims[0] - 1)) {
-			total_akeys_this_dkey = ((int)akey_dims[0]) - ak_off;
+		} else if (j == (dkey_batch - 1)) {
+			total_akeys_this_dkey = total_akey_dims - ak_off;
 		}
 
 		/* if rec_kv_val.len != 0 then skip akey iteration, we can write data back
@@ -2979,229 +3089,216 @@ cont_deserialize_keys(struct dsr_h5_args *args, uint64_t *total_dkeys_this_oid, 
 				D_ERROR("failed to write kv object "DF_RC"\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
-			(*bytes_written) += kv_single_size;
+			(stats->bytes_written) += kv_single_size;
 		} else {
-			for (k = 0; k < total_akeys_this_dkey; k++) {
-				rc = cont_deserialize_akeys(args, diov, &ak_off, k, oh,
-							    total_akeys, bytes_written);
-				if (rc != 0) {
-					D_ERROR("failed to deserialize akeys "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out, rc);
-				}
+			/* for each akey */
+			akeys_to_read = total_akeys_this_dkey;
+			akey_batch = DSR_AKEY_BATCH_SIZE;
+			while (akeys_to_read > 0) {
+				if (akeys_to_read < akey_batch)
+					akey_batch = akeys_to_read;
+					D_ALLOC_ARRAY(args->akey_data, akey_batch);
+					if (args->akey_data == NULL)
+						D_GOTO(out, rc =  -DER_NOMEM);
+					rc = simple_batch_read(args->file, "Akey Data",
+							       args->akey_data, stats->total_akeys,
+							       akey_batch);
+					if (rc != 0) {
+						D_ERROR("failed to read akey batch "DF_RC"\n",
+							DP_RC(rc));
+						D_GOTO(out, rc);
+					}
+					for (k = 0; k < akey_batch; k++) {
+						/* deserialize keys */
+						rc = cont_deserialize_akeys(args, diov, &ak_off,
+									    k, oh, stats);
+						if (rc != 0) {
+							D_ERROR("cont_deserialize_akeys "
+								"failed "DF_RC"\n", DP_RC(rc));
+							D_GOTO(out, rc);
+						}
+					}
+				akeys_to_read -= akey_batch;
+				D_FREE(args->akey_data);
 			}
 		}
-		(*total_dkeys)++;
+		(stats->total_dkeys)++;
 	}
 out:
 	return rc;
 }
 
 static int
-deserialize_oids(struct dsr_h5_args *args, int *total_oids, int *total_dkeys, int *total_akeys,
-		 uint64_t *bytes_written, daos_handle_t coh, char *filename)
+deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t coh,
+		 char *filename)
 {
 	int			rc = 0;
 	int			i = 0;
-	hid_t			status = 0;
-	int			oid_ndims = 0;
-	int			dkey_ndims = 0;
-	int			akey_ndims = 0;
-	hsize_t			oid_dims[1];
-	hid_t			oid_dset = -1;
-	hid_t			oid_dspace = -1;
-	hid_t			oid_dtype = -1;
-	hsize_t			dkey_dims[1];
-	hid_t			dkey_dset = -1;
-	hid_t			dkey_dspace = -1;
-	hid_t			dkey_vtype = -1;
-	hsize_t			akey_dims[1];
-	hid_t			akey_dset = -1;
-	hid_t			akey_dspace = -1;
-	hid_t			akey_vtype = -1;
 	struct dsr_h5_oid	*oid_data = NULL;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
-	bool			is_kv = false;
+	bool			is_kv = daos_is_kv(oid);
 	uint64_t                total_dkeys_this_oid = 0;
 	uint64_t		dk_off = 0;
 	uint64_t		dk_next = 0;
+	hsize_t			total_oid_dims = 0;
+	hsize_t			total_dkey_dims = 0;
+	hsize_t			total_akey_dims = 0;
+	int			oids_to_read = 0;
+	int			dkeys_to_read = 0;
+	int			oid_batch = 0;
+	int			dkey_batch = 0;
+	int			oid_end = 0;
+	int			dkey_end = 0;
 
-	/* read oid data */
-	/* TODO: read oids in batches instead of storing all in memory */
-	oid_dset = H5Dopen(args->file, "Oid Data", H5P_DEFAULT);
-	if (oid_dset < 0) {
-		D_ERROR("Failed to open Oid Dataset\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	oid_dspace = H5Dget_space(oid_dset);
-	if (oid_dspace < 0) {
-		D_ERROR("Failed to get oid dataspace\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	oid_dtype = H5Dget_type(oid_dset);
-	if (oid_dtype < 0) {
-		D_ERROR("Failed to get oid datatype\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
+	/* for each batch read oid, dkey, and akeys */
 
-	oid_ndims = H5Sget_simple_extent_dims(oid_dspace, oid_dims, NULL);
-	if (oid_ndims < 0) {
-		D_ERROR("Failed to get oid dimensions\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	if (oid_dims[0] > 0) {
-		D_ALLOC_ARRAY(oid_data, oid_dims[0]);
-		if (oid_data == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		status = H5Dread(oid_dset, oid_dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, oid_data);
-		if (status < 0) {
-			D_ERROR("Failed to get oid data\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
+	/* get total number of oids */
+	rc = get_dset_dims(args->file, "Oid Data", &total_oid_dims);
+	if (rc != 0) {
+		D_ERROR("failed to get dataset dimensions "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
-	/* read dkey data */
-	/* TODO: read dkeys in batches instead of storing all in memory */
-	dkey_dset = H5Dopen(args->file, "Dkey Data", H5P_DEFAULT);
-	if (dkey_dset < 0) {
-		D_ERROR("Failed to open dkey data\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	dkey_dspace = H5Dget_space(dkey_dset);
-	if (dkey_dspace < 0) {
-		D_ERROR("Failed to get dkey dataspace\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	dkey_vtype = H5Dget_type(dkey_dset);
-	if (dkey_vtype < 0) {
-		D_ERROR("Failed to get dkey vtype\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	dkey_ndims = H5Sget_simple_extent_dims(dkey_dspace, dkey_dims, NULL);
-	if (dkey_ndims < 0) {
-		D_ERROR("Failed to get dkey dimensions\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	if (dkey_dims[0] > 0) {
-		D_ALLOC_ARRAY(args->dkey_data, dkey_dims[0]);
-		if (args->dkey_data == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		status = H5Dread(dkey_dset, dkey_vtype, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-				 args->dkey_data);
-		if (status < 0) {
-			D_ERROR("Failed to read dkey dataset\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
+	/* get total number of dkeys */
+	rc = get_dset_dims(args->file, "Dkey Data", &total_dkey_dims);
+	if (rc != 0) {
+		D_ERROR("failed to get dataset dimensions "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
-	/* read akey data */
-	/* TODO: read akeys in batches instead of storing all in memory */
-	akey_dset = H5Dopen(args->file, "Akey Data", H5P_DEFAULT);
-	if (akey_dset < 0) {
-		D_ERROR("Failed to open akey dataset\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	akey_dspace = H5Dget_space(akey_dset);
-	if (akey_dspace < 0) {
-		D_ERROR("Failed to get akey dataspace\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	akey_vtype = H5Dget_type(akey_dset);
-	if (akey_vtype < 0) {
-		D_ERROR("Failed to get akey vtype\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	akey_ndims = H5Sget_simple_extent_dims(akey_dspace, akey_dims, NULL);
-	if (akey_ndims < 0) {
-		D_ERROR("Failed to get akey dimensions\n");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	if (akey_dims[0] > 0) {
-		D_ALLOC_ARRAY(args->akey_data, akey_dims[0]);
-		if (args->akey_data == NULL)
-			D_GOTO(out, rc =  -DER_NOMEM);
-		status = H5Dread(akey_dset, akey_vtype, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-				 args->akey_data);
-		if (status < 0) {
-			D_ERROR("Failed to read akey dataset\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
+	/* get total number of akeys */
+	rc = get_dset_dims(args->file, "Akey Data", &total_akey_dims);
+	if (rc != 0) {
+		D_ERROR("failed to get dataset dimensions "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
-	/* iterate over read key data from file and write it to a new DAOS container */
-	for (i = 0; i < (int)oid_dims[0]; i++) {
-		oid.lo = oid_data[i].oid_low;
-		oid.hi = oid_data[i].oid_hi;
-		is_kv = daos_is_kv(oid);
-		if (is_kv) {
-			rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
-			if (rc != 0) {
-				D_ERROR("failed to open kv object "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
-			}
+	/* loop over all batches of oids */
+	oids_to_read = total_oid_dims;
+
+	/* need to read extra oid in order to calculate number of dkeys per oid.
+	 * This is done by subtracting next dkey offset from the current dkey offset */
+	oid_batch = DSR_OID_BATCH_SIZE + 1;
+	while (oids_to_read > 0) {
+		if (oids_to_read <= oid_batch) {
+			oid_batch = oids_to_read;
+			oid_end = oid_batch;
 		} else {
-			rc = daos_obj_open(coh, oid, 0, &oh, NULL);
-			if (rc != 0) {
-				D_ERROR("failed to open object "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
-			}
+			/* do not read/deserialize extra oid read when
+			 * deserialing multiple batches it is only for
+			 * computing number of dkeys per oid */
+			oid_end = oid_batch - 1;
 		}
 
-		dk_off = oid_data[i].dkey_offset;
-		dk_next = 0;
-		total_dkeys_this_oid = 0;
-		if (i + 1 < (int)oid_dims[0]) {
-			dk_next = oid_data[i + 1].dkey_offset;
-			total_dkeys_this_oid = dk_next - dk_off;
-		} else if (i == ((int)oid_dims[0] - 1)) {
-			total_dkeys_this_oid = (int)dkey_dims[0] - (dk_off);
-		}
-
-		rc = cont_deserialize_keys(args, &total_dkeys_this_oid, &dk_off, &oh,
-					   dkey_dims, akey_dims, total_dkeys, total_akeys,
-					   bytes_written);
+		/* allocate memory for this batch of OIDs */
+		D_ALLOC_ARRAY(oid_data, oid_batch);
+		if (oid_data == NULL)
+			D_GOTO(out, rc =  -DER_NOMEM);
+		rc = simple_batch_read(args->file, "Oid Data", oid_data, stats->total_oids,
+				       oid_batch);
 		if (rc != 0) {
-			D_ERROR("failed to deserialize keys "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed to read oid batch "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
-		if (is_kv) {
-			rc = daos_kv_close(oh, NULL);
-			if (rc != 0) {
-				D_ERROR("failed to close kv object: "DF_RC, DP_RC(rc));
-				D_GOTO(out, rc);
+		for (i = 0; i < oid_end; i++) {
+			oid.lo = oid_data[i].oid_low;
+			oid.hi = oid_data[i].oid_hi;
+			is_kv = daos_is_kv(oid);
+
+			/* open object */
+			if (is_kv) {
+				rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+				if (rc != 0) {
+					D_ERROR("failed to open kv object "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out, rc);
+				}
+			} else {
+				rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+				if (rc != 0) {
+					D_ERROR("failed to open object "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out, rc);
+				}
 			}
-		} else {
-			rc = daos_obj_close(oh, NULL);
-			if (rc != 0) {
-				D_ERROR("failed to close object: "DF_RC, DP_RC(rc));
-				D_GOTO(out, rc);
+
+			dk_off = oid_data[i].dkey_offset;
+			dk_next = 0;
+			total_dkeys_this_oid = 0;
+			if (i + 1 < oid_batch) {
+				dk_next = oid_data[i + 1].dkey_offset;
+				total_dkeys_this_oid = dk_next - dk_off;
+			} else if (i == (oid_batch - 1)) {
+				/* calculate number of dkeys that belong to the last OID */
+				total_dkeys_this_oid = total_dkey_dims - (dk_off);
 			}
+
+			/* loop over all batches of dkeys */
+			/* Have to read MIN two dkeys if total number of dkeys
+			 * is more than one in order to figure out how many
+			 * akeys belong to that dkey
+			 */
+			dkeys_to_read = total_dkeys_this_oid;
+			dkey_batch = DSR_DKEY_BATCH_SIZE + 1;
+			while (dkeys_to_read > 0) {
+				if (dkeys_to_read <= dkey_batch) {
+					dkey_batch = dkeys_to_read;
+					dkey_end = dkey_batch;
+					/* have to read ahead to get number of  akeys for this
+					 * dkey, but don't read beyond total
+					 */
+					if (total_dkey_dims - stats->total_dkeys > dkey_batch) {
+						dkey_batch = dkey_batch + 1;
+						dkey_end = dkey_batch - 1;
+					}
+				} else {
+					/* don't read/deserialize extra dkey read if this batch
+					 * does not contain the last key
+					 */
+					dkey_end = dkey_batch - 1;
+				}
+
+				/* fetch/read dkey data */
+				D_ALLOC_ARRAY(args->dkey_data, dkey_batch);
+				if (args->dkey_data == NULL)
+					D_GOTO(out, rc =  -DER_NOMEM);
+				rc = simple_batch_read(args->file, "Dkey Data", args->dkey_data,
+						       stats->total_dkeys, dkey_batch);
+				if (rc != 0) {
+					D_ERROR("failed to read dkey batch "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out, rc);
+				}
+
+				/* loop over dkeys in this batch and serialize akeys */
+				rc = deserialize_keys(&oh, args, dkey_end, dkey_batch,
+						      total_akey_dims, stats);
+				if (rc != 0) {
+					D_ERROR("failed to deserialize keys: "DF_RC, DP_RC(rc));
+					D_GOTO(out, rc);
+				}
+				dkeys_to_read -= dkey_end;
+				D_FREE(args->dkey_data);
+			}
+
+			if (is_kv) {
+				rc = daos_kv_close(oh, NULL);
+				if (rc != 0) {
+					D_ERROR("failed to close kv object: "DF_RC, DP_RC(rc));
+					D_GOTO(out, rc);
+				}
+			} else {
+				rc = daos_obj_close(oh, NULL);
+				if (rc != 0) {
+					D_ERROR("failed to close object: "DF_RC, DP_RC(rc));
+					D_GOTO(out, rc);
+				}
+			}
+			(stats->total_oids)++;
 		}
-		(*total_oids)++;
+		oids_to_read -= oid_end;
+		D_FREE(oid_data);
 	}
 out:
-	if (oid_dset >= 0)
-		H5Dclose(oid_dset);
-	if (oid_dspace >= 0)
-		H5Sclose(oid_dspace);
-	if (oid_dtype >= 0)
-		H5Tclose(oid_dtype);
-	if (dkey_dset >= 0)
-		H5Dclose(dkey_dset);
-	if (dkey_dspace >= 0)
-		H5Sclose(dkey_dspace);
-	if (dkey_vtype >= 0)
-		H5Tclose(dkey_vtype);
-	if (akey_dset >= 0)
-		H5Dclose(akey_dset);
-	if (akey_dspace >= 0)
-		H5Sclose(akey_dspace);
-	if (akey_vtype >= 0)
-		H5Tclose(akey_vtype);
-	D_FREE(oid_data);
-	D_FREE(args->dkey_data);
-	D_FREE(args->akey_data);
 	return rc;
 }
 
@@ -3238,8 +3335,7 @@ out:
 }
 
 int
-daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint64_t *bytes_written,
-		      daos_handle_t coh, char *filename)
+daos_cont_deserialize(struct dm_stats *stats, daos_handle_t coh, char *filename)
 {
 	int			rc = 0;
 	struct dsr_h5_args	args = {0};
@@ -3265,8 +3361,7 @@ daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint6
 	}
 
 	/* Deserialize objects */
-	rc = deserialize_oids(&args, total_oids, total_dkeys, total_akeys, bytes_written, coh,
-			      filename);
+	rc = deserialize_oids(&args, stats, coh, filename);
 	if (rc) {
 		D_ERROR("Failed to deserialize OIDs: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

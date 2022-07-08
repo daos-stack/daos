@@ -38,8 +38,8 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 	char		**names = NULL;
 	void		**buffers = NULL;
 	size_t		*sizes = NULL;
-	int (*daos_cont_serialize)(daos_prop_t *, int, char **, char **, size_t *, int *,
-				   int *, int *, uint64_t *, daos_handle_t, char *);
+	int (*daos_cont_serialize)(daos_prop_t *, int, char **, char **, size_t *, struct dm_stats*,
+				   daos_handle_t, char *);
 
 	/* Get all user attributes if any exist */
 	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
@@ -59,9 +59,8 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
-	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes,
-				    &stats->total_oids, &stats->total_dkeys, &stats->total_akeys,
-				    &stats->bytes_read, ca->src_coh, filename);
+	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes, stats,
+				    ca->src_coh, filename);
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "Failed to serialize container");
 out:
@@ -182,7 +181,7 @@ deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *
 {
 	int		rc = 0;
 	void		*handle = NULL;
-	int (*daos_cont_deserialize)(int *, int *, int *, uint64_t *, daos_handle_t, char *);
+	int (*daos_cont_deserialize)(struct dm_stats*, daos_handle_t, char *);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
@@ -196,8 +195,7 @@ deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
-	rc = (*daos_cont_deserialize)(&stats->total_oids, &stats->total_dkeys, &stats->total_akeys,
-				      &stats->bytes_written, ca->dst_coh, filename);
+	rc = (*daos_cont_deserialize)(stats, ca->dst_coh, filename);
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "Failed to deserialize container");
 out:
