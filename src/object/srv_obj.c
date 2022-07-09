@@ -4399,9 +4399,6 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 			break;
 		}
-
-		if (dcu->dcu_ec_split_req != NULL)
-			*flags |= ORF_HAS_EC_SPLIT;
 	}
 
 	return rc;
