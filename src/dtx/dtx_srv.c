@@ -140,6 +140,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	uint32_t		 committed = 0;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -165,13 +166,18 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 			break;
 
+		if (unlikely(din->di_epoch == 1))
+			D_GOTO(out, rc = -DER_IO);
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
-			if (rc == 0 && rc1 < 0)
+			if (rc1 > 0)
+				committed += rc1;
+			else if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -292,6 +298,8 @@ out:
 		(int)din->di_dtx_array.ca_count, din->di_epoch, DP_RC(rc));
 
 	dout->do_status = rc;
+	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
+	dout->do_misc = committed;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
@@ -326,7 +334,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j);
+		rc = dtx_commit(cont, pdte, dcks, j, 0);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
