@@ -131,7 +131,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 
 	dout = crt_reply_get(req);
 	if (dra->dra_opc == DTX_COMMIT) {
-		dra->dra_committed += dout->do_misc;
+		(*dra->dra_committed) += dout->do_misc;
 		D_GOTO(out, rc = dout->do_status);
 	}
 
