@@ -6246,7 +6246,7 @@ daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
 
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n.",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
 	if (cid == OC_UNKNOWN) {
