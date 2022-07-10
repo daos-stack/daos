@@ -37,9 +37,9 @@ struct dtx_resync_args {
 	struct ds_cont_child	*cont;
 	struct dtx_resync_head	 tables;
 	daos_epoch_t		 epoch;
-	uint32_t		 version;
-	uint32_t		 resync_all:1,
-				 for_discard:1;
+	uint32_t		 resync_version;
+	uint32_t		 discard_version;
+	uint32_t		 resync_all:1;
 };
 
 static inline void
@@ -373,6 +373,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	struct dtx_resync_head		*drh = &dra->tables;
 	struct dtx_resync_entry		*dre;
 	struct dtx_resync_entry		*next;
+	struct dtx_memberships		*mbs;
 	struct ds_pool			*pool = cont->sc_pool->spc_pool;
 	int				*tgt_array = NULL;
 	int				 tgt_cnt;
@@ -382,23 +383,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 	if (drh->drh_count == 0)
 		goto out;
-
-	if (dra->for_discard) {
-		while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
-					       dre_link)) != NULL) {
-			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
-			dtx_dre_release(drh, dre);
-			if (err == -DER_NONEXIST)
-				err = 0;
-			if (err != 0)
-				goto out;
-
-			if (unlikely(count++ >= DTX_YIELD_CYCLE))
-				ABT_thread_yield();
-		}
-
-		goto out;
-	}
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	tgt_cnt = pool_map_target_nr(pool->sp_map);
@@ -410,22 +394,34 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		D_GOTO(out, err = -DER_NOMEM);
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		if (!dtx_cont_opened(cont))
-			goto out;
+		if (dre->dre_dte.dte_ver < dra->discard_version) {
+			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
+			dtx_dre_release(drh, dre);
+			if (err == -DER_NONEXIST)
+				err = 0;
+			if (err != 0)
+				goto out;
+			continue;
+		}
 
-		if (dre->dre_dte.dte_mbs->dm_dte_flags & DTE_LEADER)
+		mbs = dre->dre_dte.dte_mbs;
+		D_ASSERT(mbs->dm_tgt_cnt > 0);
+
+		if (mbs->dm_dte_flags & DTE_LEADER)
 			goto commit;
 
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
 				D_WARN("Not sure about the leader for the DTX "
-				       DF_DTI" (ver = %u): rc = %d, skip it.\n",
-				       DP_DTI(&dre->dre_xid), dra->version, rc);
+				       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
+				       DP_DTI(&dre->dre_xid), dra->resync_version,
+				       dra->discard_version, dre->dre_dte.dte_ver, rc);
 			else
 				D_DEBUG(DB_TRACE, "Not the leader for the DTX "
-					DF_DTI" (ver = %u) skip it.\n",
-					DP_DTI(&dre->dre_xid), dra->version);
+					DF_DTI" (ver = %u/%u/%u) skip it.\n",
+					DP_DTI(&dre->dre_xid), dra->resync_version,
+					dra->discard_version, dre->dre_dte.dte_ver);
 			dtx_dre_release(drh, dre);
 			continue;
 		}
@@ -472,7 +468,7 @@ out:
 				       dre_link)) != NULL)
 		dtx_dre_release(drh, dre);
 
-	if (err >= 0 && dtx_cont_opened(cont) && !dra->for_discard)
+	if (err >= 0 && dra->resync_version != dra->discard_version)
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
 
@@ -511,14 +507,12 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (dra->resync_all) {
 		/* For open container. */
 		if (ent->ie_dtx_flags & DTE_LEADER) {
-			/* Leader: handle the DTX that happened before current
-			 * DTX resync.
-			 */
+			/* Leader: handle the DTX that happened before current DTX resync. */
 			if (ent->ie_epoch < dra->epoch)
 				return 0;
 		} else {
 			/* Non-leader: handle the DTX with old version. */
-			if (ent->ie_dtx_ver >= dra->version)
+			if (ent->ie_dtx_ver >= dra->resync_version)
 				return 0;
 		}
 	} else {
@@ -528,26 +522,23 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 			return 0;
 
 		/* Non-leader: handle the DTX with old version. */
-		if (ent->ie_dtx_ver >= dra->version)
+		if (ent->ie_dtx_ver >= dra->resync_version)
 			return 0;
 	}
 
-	if (dra->for_discard) {
-		/* For discard case, skip new added entry. */
-		if (ent->ie_dtx_ver >= dra->version)
-			return 0;
-
+	/* The entry to be discarded. */
+	if (ent->ie_dtx_ver < dra->discard_version) {
 		D_ALLOC_PTR(dre);
 		if (dre == NULL)
 			return -DER_NOMEM;
 
-		dre->dre_epoch = ent->ie_epoch;
 		dte = &dre->dre_dte;
-		dte->dte_xid = ent->ie_dtx_xid;
-		dte->dte_refs = 1;
-
 		goto out;
 	}
+
+	/* For discard case, skip new added entry. */
+	if (dra->resync_version == dra->discard_version)
+		return 0;
 
 	/* For non-discard case, skip unprepared entry. */
 	if (ent->ie_dtx_tgt_cnt == 0)
@@ -560,7 +551,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (dre == NULL)
 		return -DER_NOMEM;
 
-	dre->dre_epoch = ent->ie_epoch;
 	dre->dre_oid = ent->ie_dtx_oid;
 	dre->dre_dkey_hash = ent->ie_dkey_hash;
 
@@ -574,12 +564,13 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	mbs->dm_dte_flags = ent->ie_dtx_flags;
 	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
 
-	dte->dte_xid = ent->ie_dtx_xid;
-	dte->dte_ver = ent->ie_dtx_ver;
-	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
 
 out:
+	dre->dre_epoch = ent->ie_epoch;
+	dte->dte_ver = ent->ie_dtx_ver;
+	dte->dte_xid = ent->ie_dtx_xid;
+	dte->dte_refs = 1;
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
 	dra->tables.drh_count++;
 
@@ -613,10 +604,13 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	rc = pool_map_find_target_by_rank_idx(pool->sp_map, myrank,
 					      dss_get_module_info()->dmi_tgt_id, &target);
 	D_ASSERT(rc == 1);
-	ABT_rwlock_unlock(pool->sp_lock);
 
 	if (target->ta_comp.co_status == PO_COMP_ST_UP)
-		dra.for_discard = 1;
+		dra.discard_version = target->ta_comp.co_in_ver;
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	D_INFO("DTX resync for "DF_UUID"/"DF_UUID" with discard version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
 
 	ABT_mutex_lock(cont->sc_mutex);
 
@@ -628,12 +622,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		D_DEBUG(DB_TRACE, "Waiting for resync of "DF_UUID"\n",
 			DP_UUID(co_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
-
-		if (!dra.for_discard) {
-			/* Someone just did the DTX resync*/
-			ABT_mutex_unlock(cont->sc_mutex);
-			goto out;
-		}
 	}
 
 	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
@@ -659,7 +647,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	dra.cont = cont;
-	dra.version = ver;
+	dra.resync_version = ver;
 	dra.epoch = crt_hlc_get();
 	if (resync_all)
 		dra.resync_all = 1;
@@ -668,8 +656,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
-	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
-		DP_UUID(po_uuid), DP_UUID(co_uuid));
+	D_INFO("Start DTX resync scan for "DF_UUID"/"DF_UUID" with version %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
@@ -683,8 +671,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	if (rc >= 0)
 		rc = rc1;
 
-	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" stop: rc = %d\n",
-		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
+	D_INFO("Stop DTX resync scan for "DF_UUID"/"DF_UUID" with version %u: rc = %d\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
 	ABT_mutex_lock(cont->sc_mutex);
 	cont->sc_dtx_resyncing = 0;
