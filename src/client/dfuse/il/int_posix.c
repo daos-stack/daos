@@ -801,7 +801,7 @@ get_file:
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
 		entry->fd_fstat = true;
 
-	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
+	DFUSE_LOG_DEBUG("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
