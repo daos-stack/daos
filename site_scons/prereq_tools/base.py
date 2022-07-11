@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,13 +27,16 @@
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
-from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
 import time
 import errno
 import shutil
+import subprocess  # nosec
+import tarfile
+import copy
+import configparser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -49,16 +51,8 @@ from SCons.Script import WhereIs
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
 from SCons.Errors import UserError
-# pylint: enable=no-name-in-module
-# pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess  # nosec
-import tarfile
-import copy
-import configparser
 
 OPTIONAL_COMPS = ['psm2']
 
@@ -504,6 +498,7 @@ def check_flag_helper(context, compiler, ext, flag):
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
+        # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
         # options to the compiler even if it doesn't understand them but.  This would be tricky
@@ -586,9 +581,9 @@ def ensure_dir_exists(dirname, dry_run):
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
+
 # pylint: disable=too-many-public-methods
-
-
+# pylint: disable-next=function-redefined
 class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
@@ -597,7 +592,7 @@ class PreReqComponent():
     to allow compilation from from multiple systems in one source tree
     """
 
-# pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches
 
     def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
@@ -679,7 +674,7 @@ class PreReqComponent():
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
 
-        # Build pre-reqs in sub-dir based on selected build type
+        # Build prerequisites in sub-dir based on selected build type
         build_dir_name = os.path.join(build_dir_name,
                                       self.__env.subst("$TTYPE_REAL"))
 
@@ -789,7 +784,7 @@ class PreReqComponent():
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
     def _setup_intelc(self):
-        """Setup environment to use intel compilers"""
+        """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
@@ -878,7 +873,19 @@ class PreReqComponent():
                         ['$CVS', '--add', '!**/src/vea/tests/'],
                         ['$CVS', '--add', '!**/src/vos/tests/'],
                         ['$CVS', '--add', '!**/src/engine/tests/'],
-                        ['$CVS', '--add', '!**/src/tests/']]
+                        ['$CVS', '--add', '!**/src/tests/'],
+                        ['$CVS', '--add', '!**/src/bio/smd/tests/'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test.h'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_client.c'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_service.c'],
+                        ['$CVS', '--add', '!**/src/client/api/tests/'],
+                        ['$CVS', '--add', '!**/src/client/dfuse/test/'],
+                        ['$CVS', '--add', '!**/src/gurt/examples/'],
+                        ['$CVS', '--add', '!**/src/utils/crt_launch/'],
+                        ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
+                        ['$CVS', '--add', '!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_dmg_helpers.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_lib.c']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
@@ -918,9 +925,9 @@ class PreReqComponent():
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
-                  choices=['yes', 'no', 'build-only'],
+                  choices=['yes', 'no', 'only', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -961,21 +968,26 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
         build_deps = GetOption('build_deps')
-        if build_deps == 'yes':
+        if build_deps in ('yes', 'only'):
             self.download_deps = True
             self.build_deps = True
         elif build_deps == 'build-only':
             self.build_deps = True
 
+    def realpath(self, path):
+        """Resolve the real path"""
+        return os.path.realpath(os.path.join(self.__top_dir, path))
+
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
-                value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
+                value = []
+                for path in tmp.split(os.pathsep):
+                    value.append(self.realpath(path))
             else:
-                value = realpath(tmp)
+                value = self.realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -1069,6 +1081,11 @@ class PreReqComponent():
             reqs.extend(server_reqs)
         if self.client_requested():
             reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'all', reqs))
+        if GetOption('build_deps') == 'only':
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
 
     def server_requested(self):
@@ -1474,7 +1491,8 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
-        if not self.use_installed and not self.component_prefix == "/usr":
+        if (not self.use_installed and self.component_prefix is not None
+           and not self.component_prefix == "/usr"):
             path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")

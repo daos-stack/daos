@@ -224,11 +224,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma]
+        distro: [alma.8, alma.9]
         include:
-          - distro: alma
+          - distro: alma.8
             base: el.8
             with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -291,6 +294,7 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
+        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy

@@ -12,22 +12,22 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'policy.c']
 
 
-def build_daos_common(env, client, prereqs):
+def build_daos_common(denv, client, prereqs):
     """ Building non-pmem version for client's common lib"""
-    denv = env.Clone()
+    benv = denv.Clone()
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
         libname = 'daos_common'
     else:
         common_libs.extend(['pmemobj'])
-        denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-        denv.Append(OBJPREFIX="v_")
+        benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+        benv.Append(OBJPREFIX="v_")
         libname = 'daos_common_pmem'
-        prereqs.require(denv, 'pmdk')
+        prereqs.require(benv, 'pmdk')
 
-    common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
-    denv.Install('$PREFIX/lib64/', common)
+    common = daos_build.library(benv, libname, COMMON_FILES, LIBS=common_libs)
+    benv.Install('$PREFIX/lib64/', common)
     return common
 
 
@@ -44,12 +44,15 @@ def scons():
     # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
+    prereqs.require(env, 'argobots')
 
     # Arm can build ISA-L
     prereqs.require(env, 'isal')
     prereqs.require(env, 'isal_crypto')
 
     denv = env.Clone(LIBS=[])
+    # generated protoc header should really move to this directory.
+    denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
@@ -68,12 +71,21 @@ def scons():
     if not prereqs.test_requested():
         return
 
+    tlibenv = env.Clone(LIBS=[])
+    prereqs.require(tlibenv, 'isal', 'isal_crypto', 'protobufc')
+    tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
+
+    tests_lib = daos_build.library(tlibenv, 'daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
+
+    tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
     prereqs.require(tenv, 'pmdk')
 
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     utest_utils = tenv.SharedObject('tests/utest_common.c')
     Export('utest_utils')
+
+    SConscript('tests/SConscript', exports='tenv')
 
 
 if __name__ == "SCons.Script":

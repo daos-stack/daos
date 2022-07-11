@@ -216,7 +216,7 @@ dc_tx_free(struct d_hlink *hlink)
 	D_FREE(tx->tx_req_cache);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
-	D_FREE_PTR(tx);
+	D_FREE(tx);
 }
 
 static struct d_hlink_ops tx_h_ops = {
@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
 	if (rc != 0) {
 		D_FREE(tx->tx_req_cache);
-		D_FREE_PTR(tx);
+		D_FREE(tx);
 		return rc;
 	}
 
@@ -908,6 +908,20 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		}
 
 		goto out;
+	}
+
+	if (unlikely(rc == -DER_TX_ID_REUSED)) {
+		if (tx->tx_retry)
+			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
+			D_ASSERTF(0,
+				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
+				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
+
+		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
+		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_gen(&tx->tx_id, false);
+		tx->tx_status = TX_FAILED;
+		D_GOTO(out, rc = -DER_TX_RESTART);
 	}
 
 	if (rc != -DER_TX_RESTART && !obj_retry_error(rc)) {
@@ -1737,7 +1751,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_head.dcs_type = DCST_HEAD;
 	tx->tx_head.dcs_nr = 1;
 	tx->tx_head.dcs_buf = dcsh;
-
 
 	/* XXX: Currently, we only pack single DTX per CPD RPC, then elect
 	 *	the first targets in the dispatch list as the leader.
