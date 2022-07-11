@@ -386,7 +386,7 @@ struct obj_auxi_args {
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
-	/* 64-bits alignment, bitmap for retry next replicas. */
+	uint32_t			 retry_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;

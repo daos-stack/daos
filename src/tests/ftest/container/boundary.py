@@ -11,6 +11,7 @@ from general_utils import DaosTestError
 from avocado.core.exceptions import TestFail
 from thread_manager import ThreadManager
 
+
 class BoundaryTest(TestWithServers):
     """
     Epic: Create system level tests that cover boundary tests and
@@ -37,7 +38,8 @@ class BoundaryTest(TestWithServers):
             msg = "#(3.{}.{}) container create failed. err={}".format(pool_num, cont_num, err)
             self.fail(msg)
 
-        self.log.info("===(3.%d.%d)create_container_and_test, container %s created..",
+        self.log.info(
+            "===(3.%d.%d)create_container_and_test, container %s created..",
             pool_num, cont_num, container)
         if with_io:
             io_run_time = self.params.get("run_time", '/run/container/execute_io/*')
@@ -51,20 +53,22 @@ class BoundaryTest(TestWithServers):
             except (DaosTestError, TestFail) as err:
                 msg = "#(3.{}.{}) container IO failed, err: {}".format(pool_num, cont_num, err)
                 self.fail(msg)
-        time.sleep(2)  #to syncup containers before close
+        time.sleep(2)  # to sync-up containers before close
 
         try:
-            self.log.info("===(4.%d.%d)create_container_and_test, container closing.",
+            self.log.info(
+                "===(4.%d.%d)create_container_and_test, container closing.",
                 pool_num, cont_num)
             container.close()
-            self.log.info("===(4.%d.%d)create_container_and_test, container closed.",
+            self.log.info(
+                "===(4.%d.%d)create_container_and_test, container closed.",
                 pool_num, cont_num)
         except (DaosTestError, TestFail) as err:
             msg = "#(4.{}.{}) container close fail, err: {}".format(pool_num, cont_num, err)
             self.fail(msg)
 
     def create_containers(self, pool=None, pool_num=10, num_containers=100, with_io=False):
-        """To create number of containers parallelly on pool.
+        """To create number of containers in parallel on pool.
         Args:
             pool(str): pool handle.
             pool_num (int): pool number to create containers.
@@ -90,7 +94,7 @@ class BoundaryTest(TestWithServers):
             self.fail(msg)
 
     def create_pools(self, num_pools=10, num_containers=100, with_io=False):
-        """To create number of pools and containers parallelly.
+        """To create number of pools and containers in parallel.
         Args:
             num_pools (int): number of pools to create.
             num_containers (int): number of containers to create.
@@ -125,7 +129,7 @@ class BoundaryTest(TestWithServers):
             0. Bring up DAOS server.
             1. Create pools and create containers_test by ThreadManager.
             2. Create containers and test under each pool by sub ThreadManager.
-            3. Launch io and syncup each container.
+            3. Launch io and sync-up each container.
             4. Close container.
         :avocado: tags=all,full_regression
         :avocado: tags=container, pool

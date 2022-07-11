@@ -309,6 +309,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	}
 }
 
+#define MAX_BULK_IOVS	1024
+
 static int
 bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		  off_t remote_off, crt_bulk_op_t bulk_op, bool bulk_bind,
@@ -321,7 +323,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	unsigned int		local_off;
 	unsigned int		iov_idx = 0;
 	size_t			remote_size;
-	int			rc;
+	int			rc, bulk_iovs = 0;
 
 	if (remote_bulk == NULL) {
 		D_ERROR("Remote bulk is NULL\n");
@@ -391,6 +393,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 			};
+			bulk_iovs += 1;
 		} else {
 			start = iov_idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
@@ -406,11 +409,15 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 
+				/* Don't create bulk handle with too many IOVs */
+				if ((iov_idx - start) >= MAX_BULK_IOVS)
+					break;
 			};
 			D_ASSERT(iov_idx > start);
 
 			local_off = 0;
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
+			bulk_iovs += sgl_sent.sg_nr;
 
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
@@ -460,6 +467,12 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			break;
 		}
 		remote_off += length;
+
+		/* Give cart progress a chance to complete some inflight bulk transfers */
+		if (bulk_iovs >= MAX_BULK_IOVS) {
+			bulk_iovs = 0;
+			ABT_thread_yield();
+		}
 	}
 
 	return rc;
@@ -1388,7 +1401,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			 */
 			rc = daos_iod_recx_dup(iods, orw->orw_nr, &iods_dup);
 			if (rc != 0) {
-				D_ERROR(DF_UOID"iod_recx_dup failed: "DF_RC"\n",
+				D_ERROR(DF_UOID ": iod_recx_dup failed: " DF_RC "\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
@@ -2180,8 +2193,8 @@ end:
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 	if (rc1)
-		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc1));
+		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
+			DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
