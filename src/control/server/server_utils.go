@@ -224,16 +224,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
 
+	enableVMD := true
+	if srv.cfg.DisableVMD != nil && *srv.cfg.DisableVMD {
+		enableVMD = false
+	}
+
 	switch {
-	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
+	case enableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
-	case !srv.cfg.DisableVMD && !iommuEnabled:
+	case enableVMD && !iommuEnabled:
 		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
-	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+	case enableVMD && bdevCfgs.HaveEmulatedNVMe():
 		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
 		// If no case above matches, set enable VMD flag in request otherwise leave false.
-		prepReq.EnableVMD = !srv.cfg.DisableVMD
+		prepReq.EnableVMD = enableVMD
 	}
 
 	if bdevCfgs.HaveBdevs() {
