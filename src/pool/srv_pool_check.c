@@ -67,12 +67,16 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 			D_GOTO(out_root, rc = -DER_IO);
 		}
 
-		D_ALLOC(clue_out->pc_label, value.iov_len + 1);
-		if (clue_out->pc_label == NULL)
-			D_GOTO(out_root, rc = -DER_NOMEM);
+		if (memcmp(DAOS_PROP_NO_PO_LABEL, value.iov_buf, value.iov_len) == 0) {
+			clue_out->pc_label_len = 0;
+		} else {
+			D_ALLOC(clue_out->pc_label, value.iov_len + 1);
+			if (clue_out->pc_label == NULL)
+				D_GOTO(out_root, rc = -DER_NOMEM);
 
-		clue_out->pc_label_len = value.iov_len;
-		memcpy(clue_out->pc_label, value.iov_buf, value.iov_len);
+			clue_out->pc_label_len = value.iov_len;
+			memcpy(clue_out->pc_label, value.iov_buf, value.iov_len);
+		}
 	} else if (rc == -DER_NONEXIST) {
 		clue_out->pc_label_len = 0;
 	} else {
