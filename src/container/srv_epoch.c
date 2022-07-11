@@ -101,9 +101,8 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t		 epoch = in->cei_epoch;
 	int			 rc = 0;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -121,7 +120,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: epoch="DF_U64", "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p epoch=" DF_U64 ", " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch, DP_RC(rc));
 	return rc;
 }
@@ -223,7 +222,7 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -239,9 +238,8 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	uint32_t			 nsnapshots;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
-		rpc, in->cei_epoch);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
 
 	/* Verify the handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -289,7 +287,7 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		in->cei_epoch);
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
@@ -406,9 +404,9 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int				 snap_count;
 	int				 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid),
-		rpc, DP_UUID(in->sli_op.ci_hdl));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc,
+		DP_UUID(in->sli_op.ci_hdl));
 
 	/* Verify the handle has read access */
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
@@ -424,7 +422,7 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	out->slo_count = snap_count;
 
 out:
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }

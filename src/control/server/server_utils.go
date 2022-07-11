@@ -197,7 +197,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
-// required for emulated file launchedNVMe.
+// required for emulated NVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
@@ -225,16 +225,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
 
+	enableVMD := true
+	if srv.cfg.DisableVMD != nil && *srv.cfg.DisableVMD {
+		enableVMD = false
+	}
+
 	switch {
-	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
+	case enableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
-	case !srv.cfg.DisableVMD && !iommuEnabled:
+	case enableVMD && !iommuEnabled:
 		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
-	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+	case enableVMD && bdevCfgs.HaveEmulatedNVMe():
 		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
 		// If no case above matches, set enable VMD flag in request otherwise leave false.
-		prepReq.EnableVMD = !srv.cfg.DisableVMD
+		prepReq.EnableVMD = enableVMD
 	}
 
 	if bdevCfgs.HaveBdevs() {
