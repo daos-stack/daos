@@ -8,24 +8,9 @@
 import os
 from collections import OrderedDict
 import general_utils
-import distro
 
-from avocado import skip
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
-
-
-def skip_on_centos7():
-    """Decorator to allow selective skipping of test"""
-    dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
-        return skip('Newer software distribution needed')
-
-    def _do(func):
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return wrapper
-    return _do
 
 
 class DaosBuild(DfuseTestBase):
@@ -35,7 +20,20 @@ class DaosBuild(DfuseTestBase):
     :avocado: recursive
     """
 
-    @skip_on_centos7()
+    def test_single_build(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusebuild
+        """
+        self.run_build_test("writeback", False)
+
     def test_daos_build(self):
         """Jira ID: DAOS-8937.
 
@@ -52,6 +50,13 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=dfusedaosbuild
         """
 
+        cache_mode = self.params.get('name', '/run/dfuse/*')
+        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
+        self.run_build_test(cache_mode, intercept)
+
+    def run_build_test(self, cache_mode, intercept):
+        """"Run an actual test from above"""
+
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
@@ -59,9 +64,6 @@ class DaosBuild(DfuseTestBase):
         daos_cmd = self.get_daos_command()
 
         cont_attrs = OrderedDict()
-
-        cache_mode = self.params.get('name', '/run/dfuse/*')
-        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         # How long to cache things for, if caching is enabled.
         cache_time = '60m'
