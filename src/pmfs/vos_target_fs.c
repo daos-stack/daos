@@ -1118,7 +1118,7 @@ pmfs_init_target_env(uint64_t tsc_nvme_size,  uint64_t tsc_scm_size)
 		return NULL;
 	}
 
-	g_vfca->pmfs_ctx = pmfs_set_ctx(tsc_nvme_size, tsc_nvme_size);
+	g_vfca->pmfs_ctx = pmfs_set_ctx(tsc_nvme_size, tsc_scm_size);
 	/* Start to init process env */
 	vos_task_process_init(g_vfca);
 	pmfs_combine_pool_fini_list(&g_vos_fini_list);
