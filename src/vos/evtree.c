@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2541,7 +2541,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * change while we decide how to handle this
 				 * properly.
 				 */
-				if (range_overlap != RT_OVERLAP_SAME) {
+				if (range_overlap != RT_OVERLAP_SAME &&
+				    range_overlap != RT_OVERLAP_INCLUDES &&
+				    range_overlap != RT_OVERLAP_INCLUDED) {
 					D_ERROR("Same epoch partial "
 						"overwrite not supported:"
 						DF_RECT" overlaps with "DF_RECT
@@ -2549,6 +2551,22 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 						DP_RECT(&rtmp));
 					rc = -DER_NO_PERM;
 					goto out;
+				}
+				/* For EC obj rebuild, different exts may be inserted with different
+				 * epoch that is less than spc_rebuild_fence, so can not avoid vos
+				 * aggregation merge adjacent exts when rebuild WIP, when rebuild
+				 * retry possibly hit the case range overlap and same epoch. Here
+				 * +1 the epoch/minor_epoch for new rebuild.
+				 */
+				if (range_overlap != RT_OVERLAP_SAME) {
+					if (rect->rc_minor_epc == EVT_MINOR_EPC_MAX - 1 ||
+					    rect->rc_minor_epc == EVT_MINOR_EPC_MAX)
+						((struct evt_rect *)rect)->rc_epc++;
+					else
+						((struct evt_rect *)rect)->rc_minor_epc++;
+
+					V_TRACE(DB_TRACE, DF_RECT" increased epoch\n",
+						DP_RECT(rect));
 				}
 				break; /* we can update the record in place */
 			case EVT_FIND_SAME:
