@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -406,6 +406,8 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New("nil request")
 	}
 
+	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, req:%+v\n", req)
+
 	var errs []string
 
 	for idx, ei := range svc.harness.Instances() {
@@ -445,5 +447,9 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New(strings.Join(errs, ", "))
 	}
 
-	return new(ctlpb.SetLogMasksResp), nil
+	resp := new(ctlpb.SetLogMasksResp)
+
+	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, resp:%+v\n", resp)
+
+	return resp, nil
 }

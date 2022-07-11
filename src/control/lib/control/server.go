@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
@@ -21,7 +22,7 @@ import (
 // request.
 type SetEngineLogMasksReq struct {
 	unaryRequest
-	Masks string
+	Masks string `json:"masks"`
 }
 
 // SetEngineLogMasksResp contains the results of a set engine log level
@@ -42,12 +43,19 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		}
 	}
 
+	pbReq := new(ctlpb.SetLogMasksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	pbReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, &ctlpb.SetLogMasksReq{Masks: req.Masks})
+		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, pbReq)
 	})
+	rpcClient.Debugf("DAOS set engine log masks request: %+v", pbReq)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
+		rpcClient.Debugf("failed to invoke set engine log masks RPC: %s", err)
 		return nil, err
 	}
 
@@ -60,5 +68,6 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		}
 	}
 
+	rpcClient.Debugf("DAOS set engine log masks response: %+v", resp)
 	return resp, nil
 }
