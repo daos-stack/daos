@@ -161,6 +161,8 @@ def main():
 
     set_output('message', '\n'.join(output))
 
+    gh_label.append('priority')
+
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
@@ -183,9 +185,8 @@ def main():
         if to_remove:
             set_output('label-clear', '\n'.join(to_remove))
 
+        # Could possibly query/verify more data using this URL however no use-case for this yet.
         gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
-        with urllib.request.urlopen(gh_url) as gh_label_data:
-            print(json.loads(gh_label_data.read()))
 
     if errors:
         sys.exit(1)

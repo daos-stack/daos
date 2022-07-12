@@ -28,7 +28,7 @@ jobs:
             ${{ steps.jira-data.outputs.message }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set labels
-        if: always() && ${{ steps.jira-data.outputs.label }}
+        if: always() && ${{ steps.jira-data.outputs.label != '' }}
         uses: actions-ecosystem/action-add-labels@v1
         with:
           labels: ${{ steps.jira-data.outputs.label }}
