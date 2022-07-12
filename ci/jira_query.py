@@ -170,9 +170,9 @@ def main():
 
         pr_number = os.getenv('GITHUB_REF_NAME').split('/')[0]
 
-        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'  # nosec
+        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
         print(gh_url)
-        with urllib.request.urlopen(gh_url) as gh_label_data:
+        with urllib.request.urlopen(gh_url) as gh_label_data:  # nosec
             gh_labels = json.loads(gh_label_data.read())
 
         # Remove all managed labels which are not to be set.
