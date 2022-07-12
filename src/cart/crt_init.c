@@ -116,7 +116,8 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
-	setenv("OFI_DOMAIN", "mlx5_0:1", 1);
+	//setenv("OFI_DOMAIN", "mlx5_0:1", 1);
+	setenv("UCX_MAX_RNDV_RAILS", "1", 1);
 	dump_envariables();
 
 
