@@ -1683,3 +1683,9 @@ out:
 		rpc, DP_RC(out->tmo_op.po_rc));
 	crt_reply_send(rpc);
 }
+
+void
+ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
+{
+	crt_reply_send(rpc);
+}

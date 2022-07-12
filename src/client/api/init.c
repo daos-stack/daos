@@ -29,8 +29,13 @@
 /** protect against concurrent daos_init/fini calls */
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/** daos_init has been called at least once */
+static bool module_initialized;
+/** whether the __daos_fini() destructor has been called already */
+static bool module_destructor_called;
+
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int module_refcount;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -137,9 +142,9 @@ daos_init(void)
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized > 0) {
+	if (module_initialized) {
 		/** already initialized, report success */
-		module_initialized++;
+		module_refcount++;
 		D_GOTO(unlock, rc = 0);
 	}
 
@@ -219,7 +224,8 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	module_initialized++;
+	module_initialized = true;
+	module_refcount++;
 	D_GOTO(unlock, rc = 0);
 
 out_co:
@@ -252,28 +258,16 @@ unlock:
 /**
  * Turn down DAOS client library
  */
-int
-daos_fini(void)
+static int
+daos_cleanup(void)
 {
-	int	rc;
-
-	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized == 0) {
-		/** calling fini without init, report an error */
-		D_GOTO(unlock, rc = -DER_UNINIT);
-	} else if (module_initialized > 1) {
-		/**
-		 * DAOS was initialized multiple times.
-		 * Can happen when using multiple DAOS-aware middleware.
-		 */
-		module_initialized--;
-		D_GOTO(unlock, rc = 0);
-	}
+	int ret = 0;
+	int rc;
 
 	rc = daos_eq_lib_fini();
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(unlock, rc);
+		ret = rc;
 	}
 
 	dc_obj_fini();
@@ -282,9 +276,12 @@ daos_fini(void)
 	dc_mgmt_fini();
 
 	rc = dc_mgmt_notify_exit();
-	if (rc != 0)
+	if (rc) {
 		D_ERROR("failed to disconnect some resources may leak, "
 			DF_RC"\n", DP_RC(rc));
+		if (rc == 0)
+			ret = rc;
+	}
 
 	dc_agent_fini();
 	dc_job_fini();
@@ -292,8 +289,52 @@ daos_fini(void)
 	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
-	module_initialized = 0;
-unlock:
+
+	module_initialized = false;
+
+	return ret;
+}
+
+int
+daos_fini(void)
+{
+	int	rc = 0;
+
+	D_MUTEX_LOCK(&module_lock);
+	if (module_refcount == 0) {
+		/** calling fini without init, report an error */
+		rc = -DER_UNINIT;
+	} else if (module_refcount > 1) {
+		/**
+		 * DAOS was initialized multiple times.
+		 * Can happen when using multiple DAOS-aware middleware.
+		 */
+		module_refcount--;
+	} else if (module_destructor_called) {
+		/** called after the destructor, trigger clean up by myself */
+		rc = daos_cleanup();
+		if (rc == 0)
+			module_refcount--;
+	} else {
+		/**
+		 * Just decrement the refcount, destructor will take care of
+		 * the real cleanup.
+		 */
+		module_refcount--;
+	}
+
 	D_MUTEX_UNLOCK(&module_lock);
+
 	return rc;
+}
+
+static __attribute__((destructor)) void
+__daos_fini(void)
+{
+	D_MUTEX_LOCK(&module_lock);
+	if (module_initialized && module_refcount == 0)
+		/** Trigger real clean up */
+		(void)daos_cleanup();
+	module_destructor_called = true;
+	D_MUTEX_UNLOCK(&module_lock);
 }

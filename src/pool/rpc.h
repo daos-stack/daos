@@ -95,7 +95,10 @@
 		ds_pool_list_cont_handler, NULL),			\
 	X(POOL_TGT_QUERY_MAP,						\
 		0, &CQF_pool_tgt_query_map,				\
-		ds_pool_tgt_query_map_handler, NULL)
+		ds_pool_tgt_query_map_handler, NULL),			\
+	X(POOL_TGT_WARMUP,						\
+		0, &CQF_pool_tgt_warmup,				\
+		ds_pool_tgt_warmup_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_DISCONNECT,						\
@@ -444,6 +447,12 @@ CRT_RPC_DECLARE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE, DAOS_OSEQ_POOL_UPGRADE)
 
 CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+
+#define DAOS_ISEQ_POOL_TGT_WARMUP
+#define DAOS_OSEQ_POOL_TGT_WARMUP
+
+CRT_RPC_DECLARE(pool_tgt_warmup, DAOS_ISEQ_POOL_TGT_WARMUP,
+		DAOS_OSEQ_POOL_TGT_WARMUP)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

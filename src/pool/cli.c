@@ -21,6 +21,7 @@
 #include <daos/pool.h>
 #include <daos/security.h>
 #include <daos_types.h>
+#include <semaphore.h>
 #include "cli_internal.h"
 #include "rpc.h"
 
@@ -29,6 +30,8 @@ struct rsvc_client_state {
 	struct rsvc_client  scs_client;
 	struct dc_mgmt_sys *scs_sys;
 };
+
+static pthread_mutex_t	warmup_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Initialize pool interface
@@ -431,6 +434,109 @@ struct pool_connect_arg {
 	daos_handle_t		*hdlp;
 };
 
+static void
+warmup_cb(const struct crt_cb_info *info) {
+	sem_t   *sem;
+
+	if (info->cci_rc != 0)
+		D_ERROR("Ping failed with rc = %d\n", info->cci_rc);
+
+	sem = (sem_t *)info->cci_arg;
+
+	sem_post(sem);
+}
+
+/*
+ * Pro-actively ping each target in the pool map.
+ * This forces underlying connection to be set up.
+ */
+static void
+warmup(struct dc_pool *pool)
+{
+	static bool		parsed;
+	static bool		enabled = false;
+	crt_context_t		ctx;
+	int			i;
+	int			shift;
+	struct pool_target	*tgts;
+	sem_t			sem;
+	int			nr;
+	int			rc = 0;
+
+	if (parsed && !enabled)
+		/** fast path when disabled */
+		return;
+
+	D_MUTEX_LOCK(&warmup_lock);
+	if (!parsed) {
+		d_getenv_bool("D_POOL_WARMUP", &enabled);
+		parsed = true;
+	}
+	if (!enabled) {
+		D_MUTEX_UNLOCK(&warmup_lock);
+		return;
+	}
+
+	rc = sem_init(&sem, 0, 0);
+	if (rc < 0) {
+		D_ERROR("Failed to initialize semaphore\n");
+		D_MUTEX_UNLOCK(&warmup_lock);
+		return;
+	}
+
+	/** retrieve all targets from the pool map */
+	nr = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &tgts);
+
+	/** Randomize start order to minimize load for large-scale job */
+	shift = rand() + (int)getpid();
+	if (shift < 0)
+		shift = rand();
+
+	D_DEBUG(DB_TRACE, "Pinging %d targets, shifting at %d\n", nr, shift);
+
+	ctx = daos_get_crt_ctx();
+	for (i = 0; i < nr; i++) {
+		crt_endpoint_t		ep;
+		crt_rpc_t		*rpc = NULL;
+		int			idx;
+
+		idx = (i + shift) % nr;
+		ep.ep_grp = pool->dp_sys->sy_group;
+		ep.ep_rank = tgts[idx].ta_comp.co_rank;
+		ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT,
+					 tgts[idx].ta_comp.co_index);
+
+		rc = pool_req_create(ctx, &ep, POOL_TGT_WARMUP, &rpc);
+		if (rc != 0) {
+			D_ERROR("Failed to allocate req "DF_RC"\n", DP_RC(rc));
+			goto exit;
+		}
+		D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
+
+		rc = crt_req_send(rpc, warmup_cb, &sem);
+		if (rc != 0) {
+			D_ERROR("Failed to ping rank=%d:%d, "DF_RC"\n",
+				ep.ep_rank, ep.ep_tag, DP_RC(rc));
+			goto exit;
+		}
+
+		while (sem_trywait(&sem) == -1) {
+			rc = crt_progress(ctx, 0);
+			if (rc && rc != -DER_TIMEDOUT) {
+				D_ERROR("failed to progress context, "
+						DF_RC"\n", DP_RC(rc));
+				break;
+			}
+		}
+		rc = 0;
+	}
+	D_DEBUG(DB_TRACE, "Pinging done\n");
+
+exit:
+	(void)sem_destroy(&sem);
+	D_MUTEX_UNLOCK(&warmup_lock);
+}
+
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
@@ -500,6 +606,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 		" master\n", DP_UUID(pool->dp_pool), arg->hdlp->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
+	warmup(pool);
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
@@ -1076,6 +1183,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
+	warmup(pool);
 out:
 	if (rc != 0)
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
