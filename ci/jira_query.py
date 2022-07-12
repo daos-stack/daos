@@ -43,7 +43,7 @@ def set_output(key, value):
 
     clean_value = value.replace('\n', '%0A')
     print(f'::set-output name={key}::{clean_value}')
-    print(value)
+    print(f'{key}:{value}')
 
 
 # pylint: disable=too-many-branches
@@ -164,19 +164,28 @@ def main():
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
-    gh_url = 'https://api.github.com/repos/daos-stack/daos/issues/9610/labels'
-    with urllib.request.urlopen(gh_url) as gh_label_data:
-        gh_labels = json.loads(gh_label_data.read())
-        print(gh_labels)
+    github_repo = os.getenv('GITHUB_REPOSITORY')
 
-    # Remove all managed labels which are not to be set.
-    to_remove = []
-    for label in gh_labels:
-        name = label['name']
-        if name in MANAGED_LABELS and name not in gh_label:
-            to_remove.append(name)
-    if to_remove:
-        set_output('label-clear', '\n'.join(to_remove))
+    if github_repo:
+
+        pr_number = os.getenv('GITHUB_REF_NAME').split('/')[0]
+
+        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
+        with urllib.request.urlopen(gh_url) as gh_label_data:
+            gh_labels = json.loads(gh_label_data.read())
+
+        # Remove all managed labels which are not to be set.
+        to_remove = []
+        for label in gh_labels:
+            name = label['name']
+            if name in MANAGED_LABELS and name not in gh_label:
+                to_remove.append(name)
+        if to_remove:
+            set_output('label-clear', '\n'.join(to_remove))
+
+        gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+        with urllib.request.urlopen(gh_url) as gh_label_data:
+            print(json.loads(gh_label_data.read()))
 
     if errors:
         sys.exit(1)
