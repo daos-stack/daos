@@ -167,10 +167,13 @@ def main():
     gh_url = 'https://api.github.com/repos/daos-stack/daos/issues/9610/labels'
     with urllib.request.urlopen(gh_url) as gh_label_data:
         gh_labels = json.loads(gh_label_data.read())
+        print(gh_labels)
 
-    to_remove = gh_labels
-    for label in gh_label:
-        to_remove.remove(label)
+    # Remove all managed labels which are not to be set.
+    to_remove = []
+    for label in gh_labels:
+        if label.name in MANAGED_LABELS and label.name not in gh_label:
+            to_remove.append(label.name)
     if to_remove:
         set_output('label-clear', '\n'.join(to_remove))
 
