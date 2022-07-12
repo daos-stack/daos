@@ -47,14 +47,14 @@ func (ei *EngineInstance) NotifyStorageReady() {
 	}()
 }
 
-// publishFormatRequiredFn returns onAwaitFormatFn which will publish an
+// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
 // event using the provided publish function to indicate that host is awaiting
 // storage format.
-func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) onAwaitFormatFn {
+func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
 	return func(_ context.Context, engineIdx uint32, formatType string) error {
 		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
 			WithRank(uint32(system.NilRank))
-		publishFn(evt)
+		publish(evt)
 
 		return nil
 	}
