@@ -88,9 +88,6 @@ String getLPriority() {
 
     echo "Build priority set to " + p == '' ? 'default' : p
 
-    def newFile = new File('priority')
-    newFile.write('some contents')
-
     return p
 }
 
