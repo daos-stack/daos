@@ -75,6 +75,21 @@ def getuid() {
     return cached_uid
 }
 
+String getLPriority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '4'
+    } else {
+        string p = ''
+    }
+
+    String getResult = new URL("https://api.github.com/repos/daos-stack/daos/issues/9610/labels").text
+
+    echo "Resut is " + getResult
+
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -103,7 +118,7 @@ pipeline {
 
     parameters {
         string(name: 'BuildPriority',
-               defaultValue: getPriority(),
+               defaultValue: getLPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: "",
