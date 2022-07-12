@@ -171,6 +171,7 @@ def main():
         pr_number = os.getenv('GITHUB_REF_NAME').split('/')[0]
 
         gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'  # nosec
+        print(gh_url)
         with urllib.request.urlopen(gh_url) as gh_label_data:
             gh_labels = json.loads(gh_label_data.read())
 

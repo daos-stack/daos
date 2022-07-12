@@ -17,6 +17,8 @@ jobs:
       - name: Load jira metadata
         run: ./ci/jira_query.py
         id: jira-data
+      - name: envs
+        run: env
       - name: Comment on PR
         if: always()
         uses: thollander/actions-comment-pull-request@v1
