@@ -19,7 +19,7 @@ RUN dnf -y install dnf-plugins-core &&				\
     dnf -y install codespell diffutils file findutils git golang-bin	\
 	python3-clustershell python3-pygithub python3-numpy	\
 	python3-paramiko python3-pylint python3-pyxattr		\
-	python3-tabulate python-unversioned-command		\
+	python3-tabulate python-unversioned-command python3-jira \
 	python3-junit_xml python3-defusedxml ShellCheck &&	\
     dnf -y module enable avocado:latest &&			\
     dnf -y module install avocado &&				\
