@@ -9,12 +9,12 @@ hosts:
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
-timeout: 600
+timeout: 999999
 timeouts:
     test_daos_degraded_mode: 450
     test_daos_management: 110
     test_daos_pool: 120
-    test_daos_container: 450
+    test_daos_container: 999999
     test_daos_epoch: 125
     test_daos_verify_consistency: 105
     test_daos_io: 290
