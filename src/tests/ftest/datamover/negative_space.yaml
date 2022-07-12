@@ -3,10 +3,10 @@ hosts:
     test_clients: 1
 timeout: 180
 server_config:
-   name: daos_server
-   servers:
-     scm_class: dcpm
-     scm_list: ["/dev/pmem0"]
+    name: daos_server
+    servers:
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     mode: 146
     name: daos_server
@@ -20,7 +20,7 @@ ior:
         np: 1
     test_file: testFile
     flags: "-v -w -k"
-    block_size: '6G' # Over 5G
+    block_size: '6G'  # Over 5G
     transfer_size: '1M'
     signature: 5
 dcp:

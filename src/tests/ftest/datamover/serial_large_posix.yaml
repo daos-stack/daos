@@ -26,7 +26,7 @@ mdtest:
   api: DFS
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   num_of_files_dirs: 1667  # total 50K files and 50K dirs
   mdtest_flags:
@@ -43,4 +43,4 @@ ddeserialize:
     np: 16
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true

@@ -1,10 +1,14 @@
 hosts:
   test_servers: 1
   test_clients: 1
-# Hard limit the test at three hours, however individual tests have lower timeouts.
-timeout: 10800
+# Hard limit the test at six hours, however individual tests have lower timeouts.
+timeout: 21600
 server_config:
   name: daos_server
+  crt_timeout: 120
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
 pool:
   size: 5GiB
   control_method: dmg

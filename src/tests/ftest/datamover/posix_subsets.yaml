@@ -17,8 +17,8 @@ ior:
         np: 1
     test_file: testFile
     ior_flags:
-        - "-v -w -k" # write
-        - "-v -r -R" # read-verify
+        - "-v -w -k"  # write
+        - "-v -r -R"  # read-verify
     block_size: '1K'
     transfer_size: '1K'
     signature: 5

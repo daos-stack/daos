@@ -2,8 +2,8 @@ hosts:
   test_servers: 5
   test_clients: 3
 timeouts:
-    test_dm_obj_large_posix_dcp: 180
-    test_dm_obj_large_posix_cont_clone: 540
+  test_dm_obj_large_posix_dcp: 180
+  test_dm_obj_large_posix_cont_clone: 540
 server_config:
   name: daos_server
   servers:
@@ -28,7 +28,7 @@ mdtest:
   api: DFS
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   num_of_files_dirs: 1667  # total 50K files and 50K dirs
   mdtest_flags:

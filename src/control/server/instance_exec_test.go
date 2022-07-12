@@ -81,7 +81,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			}
 
 			hn, _ := os.Hostname()
-			engine.OnInstanceExit(publishInstanceExitFn(fakePublish, hn))
+			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
 			engine.exit(context.Background(), exitErr)
 
