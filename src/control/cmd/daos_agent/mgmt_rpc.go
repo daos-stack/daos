@@ -271,12 +271,18 @@ func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain stri
 }
 
 func (mod *mgmtModule) selectSecondaryAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, provIdx uint) (*mgmtpb.GetAttachInfoResp, error) {
+	if provIdx == 0 {
+		return nil, errors.New("provider index 0 is not a secondary provider")
+	}
 	maxIdx := len(srvResp.SecondaryClientNetHints)
 	if int(provIdx) > maxIdx {
-		return nil, errors.Errorf("configured provider index %d out of range (maximum: %d)", provIdx, maxIdx)
+		return nil, errors.Errorf("provider index %d out of range (maximum: %d)", provIdx, maxIdx)
 	}
 
 	hint := srvResp.SecondaryClientNetHints[provIdx-1]
+	if hint.ProviderIdx != uint32(provIdx) {
+		return nil, errors.Errorf("malformed network hint: expected provider index %d, got %d", provIdx, hint.ProviderIdx)
+	}
 	mod.log.Debugf("getting secondary provider %s URIs", hint.Provider)
 	uris, err := mod.getProviderIdxURIs(srvResp, provIdx)
 	if err != nil {

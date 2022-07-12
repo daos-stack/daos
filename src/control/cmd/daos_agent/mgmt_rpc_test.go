@@ -99,6 +99,11 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 					NetDevClass: uint32(hardware.Infiniband),
 					ProviderIdx: 1,
 				},
+				{
+					Provider:    "badidx",
+					NetDevClass: uint32(hardware.Ether),
+					ProviderIdx: 0, // bad for secondary
+				},
 			},
 		}
 	}
@@ -267,12 +272,26 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			},
 			expResp: priResp("notreal", "notreal"),
 		},
+		"client req iface idx malformed": {
+			reqIface: "bad1",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expErr: errors.New("not a secondary provider"),
+		},
 		"config provider idx out of range": {
-			providerIdx: 2,
+			providerIdx: 5,
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
 			expErr: errors.New("out of range"),
+		},
+		"malformed hint at sec provider idx": {
+			providerIdx: 2,
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expErr: errors.New("provider index"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -313,6 +332,13 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
 								Providers: common.NewStringSet("ofi+tcp"),
+							},
+						},
+						{
+							Name:        "bad1",
+							NetDevClass: hardware.Ether,
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("badidx"),
 							},
 						},
 					},
