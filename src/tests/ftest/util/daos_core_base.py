@@ -177,7 +177,9 @@ class DaosCoreBase(TestWithServers):
             # List any remote cmocka files
             self.log.debug("Remote %s directories:", cmocka_dir)
             ls_command = "ls -al {}".format(cmocka_dir)
-            log_task(" ".join([get_clush_command(self.hostlist_clients, "-B -S"), ls_command]))
+            clush_ls_command = "{} {}".format(
+                get_clush_command(self.hostlist_clients, "-B -S"), ls_command)
+            log_task(self.hostlist_clients, clush_ls_command)
 
             self.log.debug("Local %s directory before clush:", cmocka_dir)
             run_command(ls_command)
