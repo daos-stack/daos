@@ -22,7 +22,7 @@ class ConfigGenerateRun(TestWithServers):
 
         1. Start daos_server.
         2. Call dmg config generate with different parameters.
-        3. Store the generated output to a temporary directory - self.test_dir
+        3. Store the generated output to a temporary directory - self.test_dir.
         4. Copy the generated output from the temp dir to /etc/daos of the server node.
         5. Stop daos_server.
         6. Restart daos_server.
