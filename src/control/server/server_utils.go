@@ -224,16 +224,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
 
+	enableVMD := true
+	if srv.cfg.DisableVMD != nil && *srv.cfg.DisableVMD {
+		enableVMD = false
+	}
+
 	switch {
-	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
+	case enableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
-	case !srv.cfg.DisableVMD && !iommuEnabled:
+	case enableVMD && !iommuEnabled:
 		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
-	case !srv.cfg.DisableVMD && bdevCfgs.HaveEmulatedNVMe():
+	case enableVMD && bdevCfgs.HaveEmulatedNVMe():
 		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
 	default:
 		// If no case above matches, set enable VMD flag in request otherwise leave false.
-		prepReq.EnableVMD = !srv.cfg.DisableVMD
+		prepReq.EnableVMD = enableVMD
 	}
 
 	if bdevCfgs.HaveBdevs() {
@@ -499,9 +504,18 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+					if system.IsNotLeader(err) {
+						// If we've lost leadership while processing the event,
+						// attempt to re-forward it to the new leader.
+						evt = evt.WithForwarded(false).WithForwardable(true)
+						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
+						srv.evtForwarder.OnEvent(ctx, evt)
+					}
+					return
 				}
+				srv.mgmtSvc.reqGroupUpdate(ctx, false)
 			}
 		}))
 
