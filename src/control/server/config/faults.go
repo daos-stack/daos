@@ -95,6 +95,11 @@ var (
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"remove nr_hugepages parameter from config to have the value automatically calculated",
 	)
+	FaultConfigVMDSettingDuplicate = serverConfigFault(
+		code.ServerConfigVMDSettingDuplicate,
+		"enable_vmd and disable_vmd parameters both specified in config",
+		"remove legacy enable_vmd parameter from config",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
