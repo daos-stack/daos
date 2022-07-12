@@ -398,7 +398,7 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_key_t)		(er_dkey)		CRT_VAR)	\
 	((daos_iod_t)		(er_iod)		CRT_VAR)	\
 	((struct dcs_iod_csums)	(er_iod_csums)		CRT_ARRAY)	\
-	((uint64_t)		(er_epoch)		CRT_VAR)	\
+	((daos_epoch_range_t)	(er_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
 	((uint32_t)		(er_map_ver)		CRT_VAR)
