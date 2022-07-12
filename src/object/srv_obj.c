@@ -163,7 +163,10 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		orwo->orw_epoch = dss_get_start_epoch() -
 				  crt_hlc_epsilon_get() * 3;
 	} else {
-		orwo->orw_epoch = epoch;
+		/* orwo->orw_epoch possibly updated in obj_ec_recov_need_try_again(), reply
+		 * the max so client can fetch from that epoch.
+		 */
+		orwo->orw_epoch = max(epoch, orwo->orw_epoch);
 	}
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_X64
@@ -1210,7 +1213,8 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 }
 
 static bool
-obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
+obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
+			    struct obj_io_context *ioc)
 {
 	D_ASSERT(orw->orw_flags & ORF_EC_RECOV);
 
@@ -1224,8 +1228,10 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
 	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
-	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry)
+	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry) {
+		orwo->orw_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundry;
 		return true;
+	}
 
 	return false;
 }
@@ -1360,7 +1366,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
 		}
 		if (unlikely(ec_recov &&
-			     obj_ec_recov_need_try_again(orw, ioc))) {
+			     obj_ec_recov_need_try_again(orw, orwo, ioc))) {
 			rc = -DER_FETCH_AGAIN;
 			D_DEBUG(DB_IO, DF_UOID" "DF_X64"<"DF_X64
 				" ec_recov needs redo, "DF_RC".\n",
@@ -2015,7 +2021,6 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	struct dcs_iod_csums	*iod_csums;
 	struct bio_desc		*biod;
 	daos_recx_t		 recx = { 0 };
-	daos_epoch_range_t	 epoch_range = { 0 };
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	int			 rc;
@@ -2040,9 +2045,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	iod_csums = oer->er_iod_csums.ca_arrays;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
-			      oer->er_epoch, 0, dkey, 1, iod, iod_csums,
-			      0, &ioh, NULL);
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi, 0,
+			      dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2073,12 +2077,10 @@ end:
 			DP_UOID(oer->er_oid), DP_RC(rc));
 		goto out;
 	}
-	epoch_range.epr_lo = 0ULL;
-	epoch_range.epr_hi = oer->er_epoch;
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid,
-				  &epoch_range, dkey, &iod->iod_name, &recx);
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
+				  &iod->iod_name, &recx);
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
