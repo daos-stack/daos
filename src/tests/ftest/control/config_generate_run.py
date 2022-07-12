@@ -56,8 +56,8 @@ class ConfigGenerateRun(TestWithServers):
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
-        except yaml.YAMLError:
-            raise CommandFailure("Error loading dmg generated config!")
+        except yaml.YAMLError as error:
+            raise CommandFailure("Error loading dmg generated config!") from error
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
