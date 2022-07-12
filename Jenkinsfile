@@ -82,12 +82,15 @@ String getLPriority() {
         string p = ''
     }
 
-
-    String getResult = "https://api.github.com/repos/daos-stack/daos/issues/9610/labels".toURL().text
-
-    echo "Resut is " + getResult
+    if (fileExists('priority')) {
+        string p = '2'
+    }
 
     echo "Build priority set to " + p == '' ? 'default' : p
+
+    def newFile = new File('priority')
+    newFile.write('some contents')
+
     return p
 }
 
