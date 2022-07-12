@@ -1,10 +1,8 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
 import yaml
 
 from apricot import TestWithServers
@@ -13,10 +11,9 @@ from server_utils import ServerFailed
 
 
 class ConfigGenerateRun(TestWithServers):
-    """JIRA ID: DAOS-5986
+    """Jira ID: DAOS-5986
 
-    Verify dmg config generate by running daos_server with generated config
-    file.
+    Verify dmg config generate by running daos_server with generated config file.
 
     :avocado: recursive
     """
@@ -26,32 +23,36 @@ class ConfigGenerateRun(TestWithServers):
         1. Start daos_server.
         2. Call dmg config generate with different parameters.
         3. Store the generated output to a temporary directory - self.test_dir
-        4. Copy the generated output from the temp dir to /etc/daos of the
-        server node.
+        4. Copy the generated output from the temp dir to /etc/daos of the server node.
         5. Stop daos_server.
         6. Restart daos_server.
 
         See yaml for the test cases.
 
-        Note: When running locally, use 50 sec timeout in
-        DaosServerCommand.__init__()
-
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,config_generate_run
+        :avocado: tags=control
+        :avocado: tags=config_generate_entries,config_generate_run
         """
-        num_engines = self.params.get(
-            "num_engines", "/run/config_generate_params/*/")
-        min_ssds = self.params.get(
-            "min_ssds", "/run/config_generate_params/*/")
-        net_class = self.params.get(
-            "net_class", "/run/config_generate_params/*/")
+        num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")
+        min_ssds = self.params.get("min_ssds", "/run/config_generate_params/*/")
+        net_class = self.params.get("net_class", "/run/config_generate_params/*/")
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
             access_points=server_host, num_engines=num_engines,
             min_ssds=min_ssds, net_class=net_class)
+
+        ap_count = len(server_host.split(","))
+        # If there's only one AP, the first line would be a warning message.
+        # If we include this message, the server would fail to start, so remove it.
+        if ap_count == 1:
+            self.log.info("result.stdout (before) = %s", result.stdout)
+            result_lines = result.stdout.decode("utf-8").split("\n")
+            result_lines = result_lines[1:]
+            result.stdout = "\n".join(result_lines).encode("utf-8")
+            self.log.info("result (after) = %s", result)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
