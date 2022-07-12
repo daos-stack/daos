@@ -99,10 +99,13 @@
 #    iface: ib3
 #    domain: mlx5_3
 
-## Select a secondary fabric provider to be used by all clients, if the server is configured with
-## multiple providers. The provider index is 0-based and based on the order of fabric providers
-## listed in the "provider" field of the corresponding daos_server configuration. Index 0
-## corresponds to the primary provider.
+## Select the fabric provider to be used by all clients, if the server is configured with
+## multiple providers.
+## The provider index is 0-based and based on the order of fabric providers listed in the
+## "provider" field of the corresponding daos_server configuration. An administrator can
+## see the list of configured server providers and their indices by using the "dmg system
+## query" command.
+## Index 0 corresponds to the primary provider. Any index > 0 is a secondary provider.
 #
 ## default: 0
 #
