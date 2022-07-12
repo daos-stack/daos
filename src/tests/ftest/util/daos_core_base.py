@@ -174,11 +174,22 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
+            # List any remote cmocka files
+            self.log.debug("Remote %s directories:", cmocka_dir)
+            ls_command = "ls -al {}".format(cmocka_dir)
+            log_task(" ".join([get_clush_command(self.hostlist_clients, "-B -S"), ls_command]))
+
+            self.log.debug("Local %s directory before clush:", cmocka_dir)
+            run_command(ls_command)
+
             # Copy any remote cmocka files back to this host
-            command = "{} cp {} {}".format(
-                get_clush_command(self.hostlist_clients, "-S -v --rcopy"),
+            command = "{} --copy {} --dest {}".format(
+                get_clush_command(self.hostlist_clients, "-B -S -v --rcopy"),
                 os.path.join(cmocka_dir, "*_cmocka_results.xml"), cmocka_dir)
             run_command(command)
+
+            self.log.debug("Local %s directory after clush:", cmocka_dir)
+            run_command(ls_command)
 
             # Move local files to the avocado test variant data directory
             for cmocka_file in os.listdir(cmocka_dir):
