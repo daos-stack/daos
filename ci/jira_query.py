@@ -161,8 +161,6 @@ def main():
 
     set_output('message', '\n'.join(output))
 
-    gh_label.append('priority')
-
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
@@ -172,7 +170,7 @@ def main():
 
         pr_number = os.getenv('GITHUB_REF_NAME').split('/')[0]
 
-        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
+        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'  # nosec
         with urllib.request.urlopen(gh_url) as gh_label_data:
             gh_labels = json.loads(gh_label_data.read())
 
