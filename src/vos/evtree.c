@@ -2578,14 +2578,20 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * place so I did it this way to minimize
 				 * change while we decide how to handle this
 				 * properly.
+				 * RT_OVERLAP_INCLUDED is possible when vos aggregation
+				 * merged exts between retried rebuild, returned
+				 * DER_RECX_OVERLAP for that case.
 				 */
 				if (range_overlap != RT_OVERLAP_SAME) {
-					D_ERROR("Same epoch partial "
-						"overwrite not supported:"
-						DF_RECT" overlaps with "DF_RECT
-						"\n", DP_RECT(rect),
-						DP_RECT(&rtmp));
-					rc = -DER_NO_PERM;
+					if (range_overlap == RT_OVERLAP_INCLUDED)
+						rc = -DER_RECX_OVERLAP;
+					else
+						rc = -DER_NO_PERM;
+					D_CDEBUG(rc == -DER_NO_PERM, DLOG_ERR, DB_IO,
+						 "Same epoch partial overwrite not supported:"
+						 DF_RECT" overlaps with "DF_RECT", range_overlap %d"
+						 ", "DF_RC"\n", DP_RECT(rect), DP_RECT(&rtmp),
+						 range_overlap, DP_RC(rc));
 					goto out;
 				}
 				break; /* we can update the record in place */

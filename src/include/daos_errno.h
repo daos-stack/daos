@@ -281,6 +281,9 @@ extern "C" {
 	/** The TX ID may be reused. */					\
 	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
 	       TX ID may be reused)					\
+	/** recx overlapped (only used for rebuild IO) */		\
+	ACTION(DER_RECX_OVERLAP,	(DER_ERR_DAOS_BASE + 41),	\
+	       IO recx overlapped)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
