@@ -10,7 +10,7 @@ from pathlib import Path
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
-from general_utils import get_log_file, get_clush_command, run_command, log_task, check_file_exists
+from general_utils import get_log_file, get_clush_command, run_command, log_task
 from command_utils_base import EnvironmentVariables
 from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
@@ -117,7 +117,7 @@ class DaosCoreBase(TestWithServers):
 
         # Temporarily place cmocka results in a test_dir subdirectory
         cmocka_dir = os.path.join(self.test_dir, "cmocka")
-        log_task(self.hostlist_clients, " ".join(["mkdir", "-p", cmocka_dir]))
+        log_task(include_local_host(self.hostlist_clients), " ".join(["mkdir", "-p", cmocka_dir]))
 
         # Set up the daos test command and environment settings
         cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
@@ -165,26 +165,36 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
+            # List any remote cmocka files
+            self.log.debug("Remote %s directories:", cmocka_dir)
+            ls_command = "ls -al {}".format(cmocka_dir)
+            clush_ls_command = "{} {}".format(
+                get_clush_command(self.hostlist_clients, "-B -S"), ls_command)
+            log_task(self.hostlist_clients, clush_ls_command)
+
+            self.log.debug("Local %s directory before clush:", cmocka_dir)
+            run_command(ls_command)
+
             # Copy any remote cmocka files back to this host
-            cmocka_result_file = os.path.join(cmocka_dir, "*_cmocka_results.xml")
-            host_list = []
-            for host in self.hostlist_clients:
-                if check_file_exists(host, cmocka_result_file):
-                    host_list.append(host)
-            if host_list:
-                command = "{} cp {} {}".format(
-                    get_clush_command(host_list, "-S -v --rcopy"),
-                    cmocka_result_file, cmocka_dir)
-                run_command(command)
+            command = "{} --copy {} --dest {}".format(
+                get_clush_command(self.hostlist_clients, "-B -S -v --rcopy"),
+                os.path.join(
+                    cmocka_dir, "DAOS_FileSystem_DFS_Unit_cmocka_results.xml"), cmocka_dir)
+            run_command(command)
+
+            self.log.debug("Local %s directory after clush:", cmocka_dir)
+            run_command(ls_command)
 
             # Move local files to the avocado test variant data directory
             for cmocka_file in os.listdir(cmocka_dir):
                 if "_cmocka_results." in cmocka_file:
                     # Rename *_cmocka_results.xml.node1 to *_cmocka_results.node1.xml
                     cmocka_path = Path(cmocka_file)
-                    rename = cmocka_file.name.replace(
+                    rename = cmocka_file.replace(
                         "".join(cmocka_path.suffixes), "".join(reversed(cmocka_path.suffixes)))
-                    command = "mv {} {}".format(cmocka_file, os.path.join(self.outputdir, rename))
+                    command = "mv {} {}".format(
+                        os.path.join(
+                            cmocka_dir, cmocka_file), os.path.join(self.outputdir, rename))
                     run_command(command)
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
