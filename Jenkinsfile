@@ -82,7 +82,8 @@ String getLPriority() {
         string p = ''
     }
 
-    String getResult = new URL("https://api.github.com/repos/daos-stack/daos/issues/9610/labels").text
+
+    String getResult = "https://api.github.com/repos/daos-stack/daos/issues/9610/labels".toURL().text
 
     echo "Resut is " + getResult
 
