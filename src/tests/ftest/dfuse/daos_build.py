@@ -107,6 +107,8 @@ class DaosBuild(DfuseTestBase):
         # commands which can both take a long time.
         build_time = 30
 
+        self.load_dfuse(self.hostlist_clients)
+
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
             cont_attrs['dfuse-attr-time'] = cache_time
