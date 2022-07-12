@@ -302,6 +302,14 @@ class ObjectWithParameters():
         for name in self.get_param_names():
             getattr(self, name).get_yaml_value(name, test, self.namespace)
 
+    def update_params(self, **params):
+        """Update each of provided parameter name and value pairs."""
+        for name, value in params.items():
+            try:
+                getattr(self, name).update(value, name)
+            except AttributeError as error:
+                raise CommandFailure("Unknown parameter: {}".format(name)) from error
+
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with parameters."""
@@ -596,7 +604,7 @@ class CommonConfig(YamlParameters):
 
         Args:
             name (str): default value for the name configuration parameter
-            transport (TransportCredentials): transport credentails
+            transport (TransportCredentials): transport credentials
         """
         super().__init__(
             "/run/common_config/*", None, None, transport)
@@ -661,6 +669,7 @@ class EnvironmentVariables(dict):
             export_str = "".join([export_str, separator])
         return export_str
 
+
 class PositionalParameter(BasicParameter):
     """Parameter that defines position.
 
@@ -681,9 +690,7 @@ class PositionalParameter(BasicParameter):
 
     @property
     def position(self):
-        """Position property that defines the position of the parameter.
-
-        """
+        """Position property that defines the position of the parameter."""
         return self._position
 
     def __lt__(self, other):
@@ -703,6 +710,7 @@ class PositionalParameter(BasicParameter):
 
         """
         return self.position
+
 
 class CommandWithPositionalParameters(CommandWithParameters):
     """Command that uses positional parameters.

@@ -386,7 +386,7 @@ struct obj_auxi_args {
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
-	/* 64-bits alignment, bitmap for retry next replicas. */
+	uint32_t			 retry_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
@@ -600,6 +600,18 @@ obj_ptr2hdl(struct dc_object *obj)
 
 	daos_hhash_link_key(&obj->cob_hlink, &oh.cookie);
 	return oh;
+}
+
+static inline int
+shard_task_abort(tse_task_t *task, void *arg)
+{
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
 }
 
 static inline void
