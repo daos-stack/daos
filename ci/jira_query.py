@@ -22,7 +22,7 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'test')
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'test')
 
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
