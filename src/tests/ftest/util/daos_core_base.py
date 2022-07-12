@@ -126,7 +126,7 @@ class DaosCoreBase(TestWithServers):
 
         # Temporarily place cmocka results in a test_dir subdirectory
         cmocka_dir = os.path.join(self.test_dir, "cmocka")
-        log_task(self.hostlist_clients, " ".join(["mkdir", "-p", cmocka_dir]))
+        log_task(include_local_host(self.hostlist_clients), " ".join(["mkdir", "-p", cmocka_dir]))
 
         # Set up the daos test command and environment settings
         cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
