@@ -172,8 +172,9 @@ def main():
     # Remove all managed labels which are not to be set.
     to_remove = []
     for label in gh_labels:
-        if label.name in MANAGED_LABELS and label.name not in gh_label:
-            to_remove.append(label.name)
+        name = label['name']
+        if name in MANAGED_LABELS and name not in gh_label:
+            to_remove.append(name)
     if to_remove:
         set_output('label-clear', '\n'.join(to_remove))
 
