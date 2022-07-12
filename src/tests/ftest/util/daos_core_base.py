@@ -176,11 +176,11 @@ class DaosCoreBase(TestWithServers):
             run_command(ls_command)
 
             # Copy any remote cmocka files back to this host
-            command = "{} --copy {} --dest {}".format(
-                get_clush_command(self.hostlist_clients, "-B -S -v --rcopy"),
-                os.path.join(
-                    cmocka_dir, "DAOS_FileSystem_DFS_Unit_cmocka_results.xml"), cmocka_dir)
-            run_command(command)
+            for cmocka_file in os.listdir(cmocka_dir):
+                command = "{} --copy {} --dest {}".format(
+                    get_clush_command(self.hostlist_clients, "-B -S -v --rcopy"),
+                    os.path.join(cmocka_dir, cmocka_file), cmocka_dir)
+                run_command(command)
 
             self.log.debug("Local %s directory after clush:", cmocka_dir)
             run_command(ls_command)
