@@ -463,7 +463,6 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		D_ASSERT(bsgl != NULL);
 
 		buf_idx += bsgl->bs_nr_out;
-
 	}
 
 	D_ASSERT(buf_idx > 0);
@@ -2495,8 +2494,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = dkey_update_begin(ioc);
 	if (rc != 0) {
-		D_ERROR(DF_UOID"dkey update begin failed. %d\n", DP_UOID(oid),
-			rc);
+		D_ERROR(DF_UOID ": dkey update begin failed. %d\n", DP_UOID(oid), rc);
 		goto error;
 	}
 	*ioh = vos_ioc2ioh(ioc);
