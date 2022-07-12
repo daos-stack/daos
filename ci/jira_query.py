@@ -168,7 +168,7 @@ def main():
 
     if github_repo:
 
-        pr_number = os.getenv('GITHUB_REF_NAME').split('/')[0]
+        pr_number = os.getenv('PR_NUMBER')
 
         gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
         print(gh_url)

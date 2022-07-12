@@ -9,6 +9,7 @@ jobs:
     name: Report Jira data to PR comment
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
