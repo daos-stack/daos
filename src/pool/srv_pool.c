@@ -4114,6 +4114,9 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
 		}
+		/* also bump cached version */
+		svc->ps_global_version = DS_POOL_GLOBAL_VERSION;
+
 		connectable = 1;
 		d_iov_set(&value, &connectable, sizeof(connectable));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_connectable,
