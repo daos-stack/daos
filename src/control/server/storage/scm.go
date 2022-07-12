@@ -61,7 +61,7 @@ func (ss ScmState) String() string {
 type (
 	// ScmSocketState indicates the state of PMem for either a specific socket or all sockets.
 	ScmSocketState struct {
-		SocketID int
+		SocketID *uint // If set, state applies to a specific socket.
 		State    ScmState
 	}
 

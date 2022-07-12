@@ -14,31 +14,36 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-// FaultScmNotInterleaved represents an error where PMem regions exist in non-interleaved
+// FaultScmNotInterleaved creates a fault for the case where the PMem region is in non-interleaved
 // mode, this is unsupported.
-func FaultScmNotInterleaved(sockID int) *fault.Fault {
+func FaultScmNotInterleaved(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d is in non-interleaved mode which is unsupported", sockID),
 		"Remove and recreate region in AppDirect interleaved mode")
 }
 
-func FaultScmNotHealthy(sockID int) *fault.Fault {
+// FaultScmNotHealthy create a fault for the case where the PMem region is in an unhealthy state.
+func FaultScmNotHealthy(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d is unhealthy", sockID),
 		"Check persistent memory modules are not faulty and then remove and recreate region")
 }
 
-func FaultScmPartialCapacity(sockID int) *fault.Fault {
+// FaultScmPartialCapacity creates a fault for the case where the PMem region has only partial
+// free capacity, this is unsupported.
+func FaultScmPartialCapacity(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d only has partial capacity free", sockID),
-		"Creating namespaces on regions with only partial capacity available is unsupported, remove"+
+		"Creating namespaces on regions with partial free-capacity is unsupported, remove "+
 			"namespaces and try again")
 }
 
-func FaultScmUnknownMemoryMode(sockID int) *fault.Fault {
+// FaultScmUnknownMemoryMode creates a Fault for the case where the PMem region has an unsupported
+// persistent memory type (not AppDirect).
+func FaultScmUnknownMemoryMode(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type", sockID),
@@ -49,18 +54,6 @@ func FaultScmUnknownMemoryMode(sockID int) *fault.Fault {
 var FaultScmNoModules = storageFault(code.ScmNoModules,
 	"No PMem modules exist on storage server",
 	"Install PMem modules and retry command")
-
-// FaultScmNamespacesNrMismatch creates a Fault for the case where the number of SCM namespaces
-// doesn't match the number expected.
-func FaultScmNamespacesNrMismatch(nrExpPerNUMA, nrNUMA, nrExisting uint) *fault.Fault {
-	return storageFault(
-		code.ScmNamespacesNrMismatch,
-		fmt.Sprintf("want %d PMem namespaces but got %d, %d PMem namespaces expected per "+
-			"NUMA node and found %d nodes", (nrExpPerNUMA*nrNUMA), nrExisting,
-			nrExpPerNUMA, nrNUMA),
-		"Rerun the command first with the --reset option and then without to recreate the "+
-			"required number of PMem regions")
-}
 
 // FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
 // non-emulated NVMe devices are present in the storage config.

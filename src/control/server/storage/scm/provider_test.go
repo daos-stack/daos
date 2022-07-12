@@ -39,6 +39,8 @@ func TestProvider_Scan(t *testing.T) {
 				GetModulesRes: storage.ScmModules{},
 			},
 			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{},
+				Namespaces: storage.ScmNamespaces{},
 				State: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
@@ -66,7 +68,7 @@ func TestProvider_Scan(t *testing.T) {
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 				State: storage.ScmSocketState{
-					State: storage.ScmFreeCap,
+					State: storage.ScmNoFreeCap,
 				},
 			},
 		},
@@ -110,155 +112,167 @@ func TestProvider_Scan(t *testing.T) {
 	}
 }
 
-//func TestProvider_Prepare(t *testing.T) {
-//	cmpRes := func(t *testing.T, want, got *storage.ScmPrepareResponse) {
-//		t.Helper()
-//		if diff := cmp.Diff(want, got); diff != "" {
-//			t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-//		}
-//	}
-//
-//	for name, tc := range map[string]struct {
-//		reset    bool
-//		mbc      *MockBackendConfig
-//		scanErr  error
-//		scanResp *storage.ScmScanResponse
-//		expErr   error
-//		expResp  *storage.ScmPrepareResponse
-//	}{
-//		"scan fails": {
-//			scanResp: &storage.ScmScanResponse{},
-//			scanErr:  FaultGetModulesFailed,
-//			expErr:   FaultGetModulesFailed,
-//		},
-//		"no modules": {
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{},
-//				State:   storage.ScmNoModules,
-//			},
-//			expResp: &storage.ScmPrepareResponse{
-//				State:      storage.ScmNoModules,
-//				Namespaces: storage.ScmNamespaces{},
-//			},
-//		},
-//		"prep fails": {
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{defaultModule},
-//				State:   storage.ScmNoRegions,
-//			},
-//			mbc: &MockBackendConfig{
-//				PrepErr: errors.New("fail"),
-//			},
-//			expErr: errors.New("fail"),
-//		},
-//		"prep succeeds": {
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{defaultModule},
-//				State:   storage.ScmNoRegions,
-//			},
-//			mbc: &MockBackendConfig{
-//				PrepRes: &storage.ScmPrepareResponse{
-//					State:          storage.ScmNoFreeCap,
-//					Namespaces:     storage.ScmNamespaces{defaultNamespace},
-//					RebootRequired: true,
-//				},
-//			},
-//			expResp: &storage.ScmPrepareResponse{
-//				State:          storage.ScmNoFreeCap,
-//				Namespaces:     storage.ScmNamespaces{defaultNamespace},
-//				RebootRequired: true,
-//			},
-//		},
-//		"reset fails": {
-//			reset: true,
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{defaultModule},
-//				State:   storage.ScmFreeCap,
-//			},
-//			mbc: &MockBackendConfig{
-//				PrepResetErr: errors.New("fail"),
-//			},
-//			expErr: errors.New("fail"),
-//		},
-//		"reset; no namespaces": {
-//			reset: true,
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{defaultModule},
-//				State:   storage.ScmFreeCap,
-//			},
-//			mbc: &MockBackendConfig{
-//				PrepResetRes: &storage.ScmPrepareResponse{
-//					State:          storage.ScmFreeCap,
-//					RebootRequired: true,
-//				},
-//			},
-//			expResp: &storage.ScmPrepareResponse{
-//				State:          storage.ScmFreeCap,
-//				RebootRequired: true,
-//			},
-//		},
-//		"reset; with namespaces": {
-//			reset: true,
-//			scanResp: &storage.ScmScanResponse{
-//				Modules: storage.ScmModules{defaultModule},
-//				Namespaces: storage.ScmNamespaces{
-//					defaultNamespace,
-//					storage.MockScmNamespace(1),
-//				},
-//				State: storage.ScmNoFreeCap,
-//			},
-//			mbc: &MockBackendConfig{
-//				PrepResetRes: &storage.ScmPrepareResponse{
-//					State:          storage.ScmNoFreeCap,
-//					RebootRequired: true,
-//				},
-//			},
-//			expResp: &storage.ScmPrepareResponse{
-//				State:          storage.ScmNoFreeCap,
-//				RebootRequired: true,
-//			},
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer test.ShowBufferOnFailure(t, buf)
-//
-//			p := NewMockProvider(log, tc.mbc, nil)
-//
-//			for _, ns := range tc.scanResp.Namespaces {
-//				if err := p.sys.Mount("", "/dev/"+ns.BlockDevice, "", 0, ""); err != nil {
-//					t.Fatal(err)
-//				}
-//			}
-//
-//			mockScan := func(storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-//				return tc.scanResp, tc.scanErr
-//			}
-//
-//			res, err := p.prepare(storage.ScmPrepareRequest{
-//				Reset: tc.reset,
-//			}, mockScan)
-//
-//			test.CmpErr(t, tc.expErr, err)
-//			if tc.expErr != nil {
-//				return
-//			}
-//
-//			cmpRes(t, tc.expResp, res)
-//
-//			// Verify namespaces get unmounted on reset.
-//			for _, ns := range tc.scanResp.Namespaces {
-//				isMounted, err := p.sys.IsMounted("/dev/" + ns.BlockDevice)
-//				if err != nil {
-//					t.Fatal(err)
-//				}
-//				test.AssertEqual(t, !tc.reset, isMounted,
-//					fmt.Sprintf("unexpected ns %s mounted state, want %v got %v",
-//						ns.BlockDevice, !tc.reset, isMounted))
-//			}
-//		})
-//	}
-//}
+func TestProvider_Prepare(t *testing.T) {
+	cmpRes := func(t *testing.T, want, got *storage.ScmPrepareResponse) {
+		t.Helper()
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		reset    bool
+		mbc      *MockBackendConfig
+		scanErr  error
+		scanResp *storage.ScmScanResponse
+		expErr   error
+		expResp  *storage.ScmPrepareResponse
+	}{
+		"scan fails": {
+			scanResp: &storage.ScmScanResponse{},
+			scanErr:  FaultGetModulesFailed,
+			expErr:   FaultGetModulesFailed,
+		},
+		"prep fails": {
+			scanResp: &storage.ScmScanResponse{
+				Modules: storage.ScmModules{defaultModule},
+				State: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
+			},
+			mbc: &MockBackendConfig{
+				PrepErr: errors.New("fail"),
+			},
+			expErr: errors.New("fail"),
+		},
+		"prep succeeds": {
+			scanResp: &storage.ScmScanResponse{
+				Modules: storage.ScmModules{defaultModule},
+				State: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
+			},
+			mbc: &MockBackendConfig{
+				PrepRes: &storage.ScmPrepareResponse{
+					State: storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
+					Namespaces:     storage.ScmNamespaces{defaultNamespace},
+					RebootRequired: true,
+				},
+			},
+			expResp: &storage.ScmPrepareResponse{
+				State: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+				Namespaces:     storage.ScmNamespaces{defaultNamespace},
+				RebootRequired: true,
+			},
+		},
+		"reset fails": {
+			reset: true,
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
+				Modules: storage.ScmModules{defaultModule},
+			},
+			mbc: &MockBackendConfig{
+				PrepResetErr: errors.New("fail"),
+			},
+			expErr: errors.New("fail"),
+		},
+		"reset; no namespaces": {
+			reset: true,
+			scanResp: &storage.ScmScanResponse{
+				Modules: storage.ScmModules{defaultModule},
+				State: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
+			},
+			mbc: &MockBackendConfig{
+				PrepResetRes: &storage.ScmPrepareResponse{
+					State: storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
+					RebootRequired: true,
+				},
+			},
+			expResp: &storage.ScmPrepareResponse{
+				State: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
+				RebootRequired: true,
+			},
+		},
+		"reset; with namespaces": {
+			reset: true,
+			scanResp: &storage.ScmScanResponse{
+				Modules: storage.ScmModules{defaultModule},
+				Namespaces: storage.ScmNamespaces{
+					defaultNamespace,
+					storage.MockScmNamespace(1),
+				},
+				State: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+			},
+			mbc: &MockBackendConfig{
+				PrepResetRes: &storage.ScmPrepareResponse{
+					State: storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
+					RebootRequired: true,
+				},
+			},
+			expResp: &storage.ScmPrepareResponse{
+				State: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+				RebootRequired: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			p := NewMockProvider(log, tc.mbc, nil)
+
+			for _, ns := range tc.scanResp.Namespaces {
+				if err := p.sys.Mount("", "/dev/"+ns.BlockDevice, "", 0, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			mockScan := func(storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
+				return tc.scanResp, tc.scanErr
+			}
+
+			res, err := p.prepare(storage.ScmPrepareRequest{
+				Reset: tc.reset,
+			}, mockScan)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpRes(t, tc.expResp, res)
+
+			// Verify namespaces get unmounted on reset.
+			for _, ns := range tc.scanResp.Namespaces {
+				isMounted, err := p.sys.IsMounted("/dev/" + ns.BlockDevice)
+				if err != nil {
+					t.Fatal(err)
+				}
+				test.AssertEqual(t, !tc.reset, isMounted,
+					fmt.Sprintf("unexpected ns %s mounted state, want %v got %v",
+						ns.BlockDevice, !tc.reset, isMounted))
+			}
+		})
+	}
+}
 
 func TestProvider_CheckFormat(t *testing.T) {
 	const (

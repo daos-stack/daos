@@ -268,7 +268,9 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Payload: scmPrepareReqPayload,
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateNoModules,
+				State: &storage.ScmSocketState{
+					State: storage.ScmStateNoModules,
+				},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},

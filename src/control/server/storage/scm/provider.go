@@ -288,6 +288,9 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse,
 	resp := &storage.ScmScanResponse{
 		Modules:    storage.ScmModules{},
 		Namespaces: storage.ScmNamespaces{},
+		State: storage.ScmSocketState{
+			SocketID: req.SocketID,
+		},
 	}
 
 	// If socket ID set in request, only scan devices attached to that socket.
@@ -304,11 +307,8 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse,
 
 	// If there are no modules, don't bother with the rest of the scan.
 	if len(modules) == 0 {
-		resp.State = storage.ScmSocketState{
-			SocketID: sockAny,
-			State:    storage.ScmNoModules,
-		}
-		msg = fmt.Sprintf(": pmem state %q", resp.State)
+		resp.State.State = storage.ScmNoModules
+		msg = fmt.Sprintf(": pmem state %q", resp.State.State)
 		return resp, nil
 	}
 	resp.Modules = modules
@@ -318,7 +318,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse,
 		return nil, err
 	}
 	resp.State = *sockState
-	msg = fmt.Sprintf(": pmem state %+v", sockState)
+	msg = fmt.Sprintf(": pmem state %+v", *sockState)
 
 	if sockState.State != storage.ScmNoRegions {
 		namespaces, err := p.backend.getNamespaces(sockSelector)

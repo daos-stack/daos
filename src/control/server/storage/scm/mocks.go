@@ -199,7 +199,13 @@ func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
 }
 
 func (mb *MockBackend) getPMemState(int) (*storage.ScmSocketState, error) {
-	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
+	if mb.cfg.GetStateErr != nil {
+		return nil, mb.cfg.GetStateErr
+	}
+	if mb.cfg.GetStateRes == nil {
+		return &storage.ScmSocketState{}, nil
+	}
+	return mb.cfg.GetStateRes, nil
 }
 
 func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
