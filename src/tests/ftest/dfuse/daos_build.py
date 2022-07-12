@@ -121,22 +121,21 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
                 build_time = 180
-            # TODO: This isn't being honoured.
-            self.dfuse.disable_wb_cache = True
+            self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            self.dfuse.disable_wb_cache = True
+            self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
             build_time = 180
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
-            self.dfuse.disable_wb_cache = True
-            self.dfuse.disable_caching = True
+            self.dfuse.disable_wb_cache.value = True
+            self.dfuse.disable_caching.value = True
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
