@@ -283,7 +283,8 @@ d_rank_list_t		*ds_mgmt_pool_query_ranks_out;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info)
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
