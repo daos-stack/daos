@@ -1,8 +1,7 @@
 name: Jira Report
 
 on:
-  # This should probably be pull_request_target.
-  pull_request:
+  pull_request_target:
 
 jobs:
   example_comment_pr:
@@ -18,6 +17,8 @@ jobs:
       - name: Load jira metadata
         run: ./ci/jira_query.py
         id: jira-data
+      - name: Run env
+        run: env
       - name: Comment on PR
         if: always()
         uses: thollander/actions-comment-pull-request@v1

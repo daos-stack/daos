@@ -3,6 +3,8 @@
 
 import os
 import sys
+import json
+import urllib
 import jira
 
 # Script to improve interaction with Jenkins, GitHub and Jira.  This is intended to work in several
@@ -22,7 +24,7 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'test')
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test')
 
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
@@ -162,7 +164,11 @@ def main():
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
-    to_remove = list(MANAGED_LABELS)
+    gh_url = 'https://api.github.com/repos/daos-stack/daos/issues/9610/labels'
+    with urllib.request.urlopen(gh_url) as gh_label_data:
+        gh_labels = json.loads(gh_label_data.read())
+
+    to_remove = gh_labels
     for label in gh_label:
         to_remove.remove(label)
     if to_remove:
