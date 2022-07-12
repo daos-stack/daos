@@ -20,7 +20,7 @@ class DaosBuild(DfuseTestBase):
     :avocado: recursive
     """
 
-    def test_single_build(self):
+    def test_writeback(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -30,31 +30,67 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusebuild
+        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wb
         """
-        self.run_build_test("writeback", False)
+        self.run_build_test("writeback")
 
-    def test_daos_build(self):
-        """Jira ID: DAOS-8937.
-
-        Test Description:
-            This test builds DAOS on a dfuse filesystem.
+    def test_writethrough(self):
+        """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild
+        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt
         """
+        self.run_build_test("writethrough")
 
-        cache_mode = self.params.get('name', '/run/dfuse/*')
-        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
-        self.run_build_test(cache_mode, intercept)
+    def test_writethrough_il(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt,dfusedaosbuild_il
+        """
+        self.run_build_test("writethrough", True)
 
-    def run_build_test(self, cache_mode, intercept):
+    def test_metadata(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusedaosbuild,dfusedaosbuild_metadata
+        """
+        self.run_build_test("metadata", True)
+
+    def test_nocache(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusebuild,dfusedaosbuild_nocache
+        """
+        self.run_build_test("nocache", True)
+
+    def run_build_test(self, cache_mode, intercept=False):
         """"Run an actual test from above"""
 
         # Create a pool, container and start dfuse.
@@ -83,17 +119,21 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
                 build_time = 180
+            self.dfuse.disable_wb_cache = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            self.dfuse.disable_wb_cache = True
         elif cache_mode == 'nocache':
             build_time = 180
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
+            self.dfuse.disable_wb_cache = True
+            self.dfuse.disable_caching = True
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
