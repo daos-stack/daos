@@ -61,7 +61,7 @@ class DfuseTestBase(TestWithServers):
         """
         if self.dfuse is None:
             self.dfuse = Dfuse(hosts, self.tmp)
-        self.dfuse.get_params(self)
+            self.dfuse.get_params(self)
 
         dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
 
