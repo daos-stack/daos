@@ -2047,8 +2047,8 @@ err:
 }
 
 static int
-punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
-	     daos_off_t record_i, daos_size_t num_records, tse_task_t *task)
+punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t record_i,
+	     daos_size_t num_records, tse_task_t *task, d_list_t *task_list)
 {
 	daos_obj_update_t	*io_arg;
 	daos_iod_t		*iod;
@@ -2058,8 +2058,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	tse_task_t		*io_task = NULL;
 	int			rc;
 
-	D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %zu\n",
-		record_i + 1, num_records, dkey_val);
+	D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %zu\n", record_i + 1, num_records, dkey_val);
 
 	D_ALLOC_PTR(params);
 	if (params == NULL)
@@ -2104,9 +2103,9 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = tse_task_schedule(io_task, false);
-	if (rc)
-		D_GOTO(err, rc);
+	/* decref in adjust_array_size_task_process() */
+	tse_task_addref(io_task);
+	tse_task_list_add(io_task, task_list);
 
 	return rc;
 err:
@@ -2202,8 +2201,8 @@ out:
 }
 
 static int
-check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
-	     daos_off_t record_i, daos_size_t cell_size, tse_task_t *task)
+check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t record_i,
+	     daos_size_t cell_size, tse_task_t *task, d_list_t *task_list)
 {
 	daos_obj_fetch_t	*io_arg;
 	daos_iod_t		*iod;
@@ -2261,11 +2260,11 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = tse_task_schedule(io_task, false);
-	if (rc)
-		D_GOTO(err, rc);
-
+	/* decref in adjust_array_size_task_process() */
+	tse_task_addref(io_task);
+	tse_task_list_add(io_task, task_list);
 	return rc;
+
 err:
 	D_FREE(params);
 	if (io_task)
@@ -2274,7 +2273,7 @@ err:
 }
 
 static int
-add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
+add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_list_t *task_list)
 {
 	daos_obj_update_t	*io_arg;
 	daos_iod_t		*iod;
@@ -2336,11 +2335,11 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = tse_task_schedule(io_task, false);
-	if (rc)
-		D_GOTO(err, rc);
-
+	/* decref in adjust_array_size_task_process() */
+	tse_task_addref(io_task);
+	tse_task_list_add(io_task, task_list);
 	return rc;
+
 err:
 	D_FREE(params);
 	if (io_task)
@@ -2349,19 +2348,37 @@ err:
 }
 
 static int
+adjust_array_size_task_process(tse_task_t *task, void *arg)
+{
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+
+	if (rc == 0)
+		tse_task_schedule(task, false);
+	else
+		tse_task_complete(task, rc);
+
+	tse_task_decref(task);
+	return 0;
+}
+
+static int
 adjust_array_size_cb(tse_task_t *task, void *data)
 {
 	daos_obj_list_dkey_t	*args = daos_task_get_args(task);
 	struct set_size_props	*props = *((struct set_size_props **)data);
 	char			*ptr;
-	uint32_t		i;
-	int			rc = task->dt_result;
+	d_list_t		 task_list;
+	uint32_t		 i;
+	int			 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("Array DKEY enumermation Failed "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
+	D_INIT_LIST_HEAD(&task_list);
 	for (ptr = props->buf, i = 0; i < props->nr; i++) {
 		daos_size_t dkey_val;
 
@@ -2388,22 +2405,18 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				D_ASSERT(props->record_i + 1 <
 					 props->chunk_size);
 				/** Punch all records above record_i */
-				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n",
-					dkey_val);
-				rc = punch_extent(args->oh, args->th,
-						  dkey_val, props->record_i,
-						  props->num_records,
-						  props->ptask);
+				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n", dkey_val);
+				rc = punch_extent(args->oh, args->th, dkey_val, props->record_i,
+						  props->num_records, props->ptask, &task_list);
 				if (rc)
-					return rc;
+					goto out;
 			}
 
 			/** Check record_i if exists, add one if it doesn't */
-			rc = check_record(args->oh, args->th, dkey_val,
-					  props->record_i, props->cell_size,
-					  props->ptask);
+			rc = check_record(args->oh, args->th, dkey_val, props->record_i,
+					  props->cell_size, props->ptask, &task_list);
 			if (rc)
-				return rc;
+				goto out;
 		}
 		continue;
 	}
@@ -2418,15 +2431,13 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
 		if (rc)
-			return rc;
+			goto out;
 
 		rc = tse_task_reinit(task);
-		if (rc) {
+		if (rc)
 			D_ERROR("FAILED to reinit task\n");
-			return rc;
-		}
 
-		return rc;
+		goto out;
 	}
 
 	/** if array is smaller, write a record at the new size */
@@ -2435,10 +2446,13 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			props->dkey_val, (int)props->record_i);
 
 		/** no need to check the record, we know it's not there */
-		rc = add_record(args->oh, args->th, props);
+		rc = add_record(args->oh, args->th, props, &task_list);
 		if (rc)
-			return rc;
+			goto out;
 	}
+
+out:
+	tse_task_list_traverse(&task_list, adjust_array_size_task_process, &rc);
 	return rc;
 }
 

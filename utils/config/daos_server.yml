@@ -211,13 +211,13 @@
 #
 ## Enable daos_admin (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #helper_log_file: /tmp/daos_admin.log
 #
 #
 ## Enable daos_firmware (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
@@ -313,7 +313,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.0.log
 #
 #  # Pass specific environment variables to the engine process.
@@ -445,7 +445,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.1.log
 #
 #  # Pass specific environment variables to the engine process.
