@@ -56,7 +56,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 			pproto->completed = true;
 		}
 
-		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_0.cpf_base, ver_array, 2,
+		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base, ver_array, 2,
 					      query_cb, pproto, daos_get_crt_ctx());
 		if (rc) {
 			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
@@ -107,8 +107,8 @@ dc_pool_init(void)
 	num_ranks = dc_mgmt_net_get_num_srv_ranks();
 	pproto->ep.ep_rank = rand() % num_ranks;
 
-	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_0.cpf_base, ver_array, 2,
-				      query_cb, pproto, ctx);
+	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base,
+				      ver_array, 2, query_cb, pproto, ctx);
 	if (rc) {
 		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_rsvc, rc);
@@ -136,14 +136,14 @@ dc_pool_init(void)
 	}
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_0, POOL_PROTO_CLI_COUNT, NULL,
-				       DAOS_POOL_MODULE);
+		rc = daos_rpc_register(&pool_proto_fmt_v4, POOL_PROTO_CLI_COUNT,
+				       NULL, DAOS_POOL_MODULE);
 		if (rc) {
 			D_ERROR("failed to register daos obj RPCs: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_rsvc, rc);
 		}
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_1, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 		if (rc) {
 			D_ERROR("failed to register pool RPCs: "DF_RC"\n", DP_RC(rc));
@@ -169,9 +169,9 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1)
-		rc = daos_rpc_unregister(&pool_proto_fmt_0);
+		rc = daos_rpc_unregister(&pool_proto_fmt_v4);
 	else
-		rc = daos_rpc_unregister(&pool_proto_fmt_1);
+		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
 	if (rc != 0)
 		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
@@ -555,8 +555,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	struct dc_pool		  *pool = dc_task_get_priv(task);
 	daos_pool_info_t	  *info = arg->pca_info;
 	struct pool_buf		  *map_buf = arg->pca_map_buf;
-	struct pool_connect_1_in  *pci = crt_req_get(arg->rpc);
-	struct pool_connect_1_out *pco = crt_reply_get(arg->rpc);
+	struct pool_connect_v5_in  *pci = crt_req_get(arg->rpc);
+	struct pool_connect_v5_out *pco = crt_reply_get(arg->rpc);
 	bool			   put_pool = true;
 	int			   rc = task->dt_result;
 
@@ -678,7 +678,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	struct dc_pool		 *pool;
 	crt_endpoint_t		  ep;
 	crt_rpc_t		 *rpc;
-	struct pool_connect_1_in *pci;
+	struct pool_connect_v5_in *pci;
 	struct pool_buf		 *map_buf;
 	struct pool_connect_arg	  con_args;
 	int			  rc;
@@ -1456,8 +1456,8 @@ pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
-	struct pool_query_0_in	       *in = crt_req_get(arg->rpc);
-	struct pool_query_0_out	       *out = crt_reply_get(arg->rpc);
+	struct pool_query_v4_in	       *in = crt_req_get(arg->rpc);
+	struct pool_query_v4_out       *out = crt_reply_get(arg->rpc);
 	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
@@ -1528,7 +1528,7 @@ dc_pool_query(tse_task_t *task)
 	struct dc_pool		       *pool;
 	crt_endpoint_t			ep;
 	crt_rpc_t		       *rpc;
-	struct pool_query_0_in	       *in;
+	struct pool_query_v4_in	       *in;
 	struct pool_buf		       *map_buf;
 	struct pool_query_arg		query_args;
 	int				rc;

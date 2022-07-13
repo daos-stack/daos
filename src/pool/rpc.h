@@ -37,15 +37,16 @@
 		0, &CQF_pool_create,					\
 		ds_pool_create_handler, NULL),				\
 	X(POOL_CONNECT,							\
-	  0, ver == 0 ? &CQF_pool_connect_0 : &CQF_pool_connect_1,	\
-	  ver == 0 ? ds_pool_connect_handler_0 :			\
-	  ds_pool_connect_handler_1, NULL),				\
+	  0, ver == 4 ? &CQF_pool_connect_v4 : &CQF_pool_connect_v5,	\
+	  ver == 4 ? ds_pool_connect_handler_v4 :			\
+	  ds_pool_connect_handler_v5, NULL),				\
 	X(POOL_DISCONNECT,						\
 		0, &CQF_pool_disconnect,				\
 		ds_pool_disconnect_handler, NULL),			\
 	X(POOL_QUERY,							\
-	  0, ver == 0 ? &CQF_pool_query_0 : &CQF_pool_query_1,		\
-	  ver == 0 ? ds_pool_query_handler_0 : ds_pool_query_handler_1, \
+	  0, ver == 4 ? &CQF_pool_query_v4 : &CQF_pool_query_v5,	\
+	  ver == 4 ? ds_pool_query_handler_v4 :				\
+			ds_pool_query_handler_v5,			\
 	  NULL),							\
 	X(POOL_QUERY_INFO,						\
 		0, &CQF_pool_query_info,				\
@@ -140,7 +141,7 @@
 #define X(a, b, c, d, e) a
 
 enum pool_operation {
-	POOL_PROTO_CLI_RPC_LIST(1),
+	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION),
 	POOL_PROTO_CLI_COUNT,
 	POOL_PROTO_CLI_LAST = POOL_PROTO_CLI_COUNT - 1,
 	POOL_PROTO_SRV_RPC_LIST,
@@ -148,8 +149,8 @@ enum pool_operation {
 
 #undef X
 
-extern struct crt_proto_format pool_proto_fmt_0;
-extern struct crt_proto_format pool_proto_fmt_1;
+extern struct crt_proto_format pool_proto_fmt_v4;
+extern struct crt_proto_format pool_proto_fmt_v5;
 extern int dc_pool_proto_version;
 
 #define DAOS_ISEQ_POOL_OP	/* input fields */		 \
@@ -176,7 +177,7 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
 CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
-#define DAOS_ISEQ_POOL_CONNECT_0 /* input fields */		 \
+#define DAOS_ISEQ_POOL_CONNECT_V4 /* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
 	((d_iov_t)		(pci_cred)		CRT_VAR) \
 	((uint64_t)		(pci_flags)		CRT_VAR) \
@@ -190,9 +191,9 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_connect_0, DAOS_ISEQ_POOL_CONNECT_0, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DECLARE(pool_connect_v4, DAOS_ISEQ_POOL_CONNECT_V4, DAOS_OSEQ_POOL_CONNECT)
 
-#define DAOS_ISEQ_POOL_CONNECT_1 /* input fields */		 \
+#define DAOS_ISEQ_POOL_CONNECT_V5 /* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
 	((d_iov_t)		(pci_cred)		CRT_VAR) \
 	((uint64_t)		(pci_flags)		CRT_VAR) \
@@ -200,7 +201,7 @@ CRT_RPC_DECLARE(pool_connect_0, DAOS_ISEQ_POOL_CONNECT_0, DAOS_OSEQ_POOL_CONNECT
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR) \
 	((uint32_t)		(pci_pool_version)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_connect_1, DAOS_ISEQ_POOL_CONNECT_1, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DECLARE(pool_connect_v5, DAOS_ISEQ_POOL_CONNECT_V5, DAOS_OSEQ_POOL_CONNECT)
 
 #define DAOS_ISEQ_POOL_DISCONNECT /* input fields */		 \
 	((struct pool_op_in)	(pdi_op)		CRT_VAR)
@@ -216,7 +217,7 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
 	((uint64_t)		(pqi_query_bits)	CRT_VAR)
 
-#define DAOS_OSEQ_POOL_QUERY_0	/* output fields */		 \
+#define DAOS_OSEQ_POOL_QUERY_V4	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
 	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
 	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
@@ -224,9 +225,9 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_query_0, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_0)
+CRT_RPC_DECLARE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
 
-#define DAOS_OSEQ_POOL_QUERY_1	/* output fields */		 \
+#define DAOS_OSEQ_POOL_QUERY_V5	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
 	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
 	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
@@ -236,7 +237,7 @@ CRT_RPC_DECLARE(pool_query_0, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_0)
 	((uint32_t)		(pqo_pool_layout_ver)	CRT_VAR) \
 	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_query_1, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_1)
+CRT_RPC_DECLARE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 
 #define DAOS_ISEQ_POOL_QUERY_INFO	/* input fields */	 \
 	((struct pool_op_in)	(pqii_op)		CRT_VAR) \

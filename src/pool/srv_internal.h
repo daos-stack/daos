@@ -90,6 +90,7 @@ struct pool_iv_conns {
 struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
+	daos_epoch_t	pik_eph;
 };
 
 struct pool_iv_hdl {
@@ -121,11 +122,11 @@ int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler_0(crt_rpc_t *rpc);
-void ds_pool_connect_handler_1(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
-void ds_pool_query_handler_0(crt_rpc_t *rpc);
-void ds_pool_query_handler_1(crt_rpc_t *rpc);
+void ds_pool_query_handler_v4(crt_rpc_t *rpc);
+void ds_pool_query_handler_v5(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);

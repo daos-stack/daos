@@ -152,7 +152,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		D_FREE(dbpa);
 	}
 
-	D_FREE_PTR(dbca);
+	D_FREE(dbca);
 	ds_cont_child_put(cont);
 }
 
@@ -1152,7 +1152,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */
 	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL, false);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			D_GOTO(abort, result = 0);
@@ -1734,7 +1734,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, false);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;
@@ -1978,7 +1978,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	rc = ABT_future_create(dlh->dlh_normal_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (1): "DF_RC"\n", DP_RC(rc));
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 		return dss_abterr2der(rc);
 	}
 
@@ -2031,7 +2031,7 @@ exec:
 	rc = ABT_future_create(dlh->dlh_delay_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (3): "DF_RC"\n", DP_RC(rc));
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 		return dss_abterr2der(rc);
 	}
 
