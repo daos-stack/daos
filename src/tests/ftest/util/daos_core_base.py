@@ -5,7 +5,6 @@
 """
 
 import os
-from pathlib import Path
 
 from avocado import fail_on
 from avocado.utils import process
@@ -160,22 +159,21 @@ class DaosCoreBase(TestWithServers):
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
                 self.create_results_xml(
-                    self.subtest_name, result, "Failed to run {}.".format(self.daos_test))
+                    self.subtest_name, result, "Failed to run {0}.".format(self.daos_test))
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
             # List any remote cmocka files
             self.log.debug("Remote %s directories:", cmocka_dir)
-            ls_command = "ls -alR {}".format(cmocka_dir)
-            clush_ls_command = "{} {}".format(
+            ls_command = "ls -alR {0}".format(cmocka_dir)
+            clush_ls_command = "{0} {1}".format(
                 get_clush_command(self.hostlist_clients, "-B -S"), ls_command)
             log_task(self.hostlist_clients, clush_ls_command)
 
             # Copy any remote cmocka files back to this host
-            command = "{} --rcopy {} --dest {}".format(
-                get_clush_command(self.hostlist_clients),
-                cmocka_dir, cmocka_dir)
+            command = "{0} --rcopy {1} --dest {1}".format(
+                get_clush_command(self.hostlist_clients), cmocka_dir)
             try:
                 run_command(command)
 
@@ -189,7 +187,7 @@ class DaosCoreBase(TestWithServers):
                         for cmocka_file in os.listdir(cmocka_node_path):
                             cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
                             if "_cmocka_results." in cmocka_file:
-                                command = "mv {} {}".format(cmocka_file_path, self.outputdir)
+                                command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
                                 run_command(command)
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
