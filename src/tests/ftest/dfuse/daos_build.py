@@ -28,7 +28,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_wb
         """
@@ -42,7 +42,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt
         """
@@ -70,7 +70,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_metadata
         """
@@ -84,7 +84,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusebuild,dfusedaosbuild_nocache
         """
@@ -128,6 +128,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
+            build_time = 45
         elif cache_mode == 'nocache':
             build_time = 180
             cont_attrs['dfuse-data-cache'] = 'off'
