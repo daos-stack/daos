@@ -3,7 +3,7 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 
-## DAOS Version 2.0.3-RC4 (2022-07-07)
+## DAOS Version 2.0.3 (2022-07-14)
 
 ### Updates in this Release
 
@@ -12,15 +12,13 @@ The DAOS 2.0.3 release contains the following updates on top of DAOS 2.0.2:
 - `libfabric` has been updated to version 1.15.1-1.
   This fixes [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
 
-- `mercury` has been updated to version 2.1.0~rc4-9.
-  Note that `mercury` should not be updated to version 2.2,
-  see [DAOS-10828](https://daosio.atlassian.net/browse/DAOS-10828).
+- `mercury` has been updated to version 2.1.0~rc4-9,
+  `raft` has been updated to version 0.9.1-1401.gc18bcb8, and
+  `spdk` has been updated to version 21.07-16.
+  This does not fix any specific DAOS 2.0 issues, those are minor
+  updates to keep those package levels in sync with DAOS 2.2 development.
 
-- `raft` has been updated to version 0.9.1-1401.gc18bcb8.
-
-- `spdk` has been updated to version 21.07-16.
-
-- The following DAOS issues are addressed in DAOS 2.0.3:
+- The following DAOS 2.0 issues are addressed in DAOS 2.0.3:
 ```
     DAOS-11029 tse/dfs: bug fix in tse or dfs about task
     DAOS-10833 object: keep the same epoch for replicate rebuild
@@ -56,6 +54,13 @@ The DAOS 2.0.3 release contains the following updates on top of DAOS 2.0.2:
 ```
 
 ### Known Issues and limitations
+
+- Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
+  `daos_server storage prepare -n [--reste]` command) can sporadically cause
+  the NVMe SSDs to become inaccessible. This situation can be corrected by
+  running `rmmod vfio_pci; modprobe vfio_pci` and `rmmod nvme; modprobe nvme`.
+  See [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and the
+  corresponding [SPDK ticket](https://github.com/spdk/spdk/issues/2587).
 
 - For Replication and Erasure Coding (EC), in DAOS 2.0 the redundancy level (`rf_lvl`)
   is set to `1 (rank=engine)`. On servers with more than one engine per server,
