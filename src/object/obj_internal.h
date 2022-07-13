@@ -156,8 +156,6 @@ struct obj_reasb_req {
 	uint32_t			 orr_tgt_nr;
 	/* number of targets that with IOM handled */
 	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -171,6 +169,8 @@ struct obj_reasb_req {
 	/* parity recx list (to compare parity ext/epoch when data recovery) */
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
+	/* number of iom extends */
+	uint32_t			 orr_iom_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
@@ -597,7 +597,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX ||
+	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
 	       daos_crt_network_error(err);
 }
 

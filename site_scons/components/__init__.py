@@ -236,12 +236,11 @@ def define_mercury(reqs):
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
-                libs=['mercury', 'na', 'mercury_util'],
+                libs=['mercury'],
                 pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
-                patch_rpath=['lib'])
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
 
 
 def define_common(reqs):
@@ -402,11 +401,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
-                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
-                extra_include_path=['/usr/include/dpdk',
-                                    '$SPDK_PREFIX/include/dpdk',
-                                    # debian dpdk rpm puts rte_config.h here
-                                    '/usr/include/x86_64-linux-gnu/dpdk'],
+                headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',
