@@ -19,52 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// MockDiscovery returns a mock SCM module of type exported from ipmctl.
-func MockDiscovery(sockID ...int) ipmctl.DeviceDiscovery {
-	m := proto.MockScmModule()
-
-	sid := m.Socketid
-	if len(sockID) > 0 {
-		sid = uint32(sockID[0])
-	}
-
-	result := ipmctl.DeviceDiscovery{
-		Physical_id:          uint16(m.Physicalid),
-		Channel_id:           uint16(m.Channelid),
-		Channel_pos:          uint16(m.Channelposition),
-		Memory_controller_id: uint16(m.Controllerid),
-		Socket_id:            uint16(sid),
-		Capacity:             m.Capacity,
-	}
-
-	_ = copy(result.Uid[:], m.Uid)
-	_ = copy(result.Part_number[:], m.PartNumber)
-	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
-
-	return result
-}
-
-// MockModule converts ipmctl type SCM module and returns storage/scm
-// internal type.
-func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
-	if d == nil {
-		md := MockDiscovery()
-		d = &md
-	}
-
-	return storage.ScmModule{
-		PhysicalID:       uint32(d.Physical_id),
-		ChannelID:        uint32(d.Channel_id),
-		ChannelPosition:  uint32(d.Channel_pos),
-		ControllerID:     uint32(d.Memory_controller_id),
-		SocketID:         uint32(d.Socket_id),
-		Capacity:         d.Capacity,
-		UID:              d.Uid.String(),
-		PartNumber:       d.Part_number.String(),
-		FirmwareRevision: d.Fw_revision.String(),
-	}
-}
-
 type (
 	mockIpmctlCfg struct {
 		initErr           error
@@ -117,102 +71,313 @@ func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
 	}
 }
 
-func TestIpmctl_getPMemState(t *testing.T) {
+// MockDiscovery returns a mock SCM module of type exported from ipmctl.
+func MockDiscovery(sockID ...int) ipmctl.DeviceDiscovery {
+	m := proto.MockScmModule()
+
+	sid := m.Socketid
+	if len(sockID) > 0 {
+		sid = uint32(sockID[0])
+	}
+
+	result := ipmctl.DeviceDiscovery{
+		Physical_id:          uint16(m.Physicalid),
+		Channel_id:           uint16(m.Channelid),
+		Channel_pos:          uint16(m.Channelposition),
+		Memory_controller_id: uint16(m.Controllerid),
+		Socket_id:            uint16(sid),
+		Capacity:             m.Capacity,
+	}
+
+	_ = copy(result.Uid[:], m.Uid)
+	_ = copy(result.Part_number[:], m.PartNumber)
+	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
+
+	return result
+}
+
+// MockModule converts ipmctl type SCM module and returns storage/scm
+// internal type.
+func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
+	if d == nil {
+		md := MockDiscovery()
+		d = &md
+	}
+
+	return storage.ScmModule{
+		PhysicalID:       uint32(d.Physical_id),
+		ChannelID:        uint32(d.Channel_id),
+		ChannelPosition:  uint32(d.Channel_pos),
+		ControllerID:     uint32(d.Memory_controller_id),
+		SocketID:         uint32(d.Socket_id),
+		Capacity:         d.Capacity,
+		UID:              d.Uid.String(),
+		PartNumber:       d.Part_number.String(),
+		FirmwareRevision: d.Fw_revision.String(),
+	}
+}
+
+func TestIpmctl_getModules(t *testing.T) {
+	testDevices := []ipmctl.DeviceDiscovery{
+		MockDiscovery(0),
+		MockDiscovery(0),
+		MockDiscovery(1),
+	}
+
+	expModules := storage.ScmModules{}
+	for _, dev := range testDevices {
+		mod := MockModule(&dev)
+		expModules = append(expModules, &mod)
+	}
+
 	for name, tc := range map[string]struct {
-		selectSock0 bool
-		selectSock1 bool
-		runOut      []string
-		runErr      []error
-		expErr      error
-		expState    *storage.ScmSocketState
+		cfg       *mockIpmctlCfg
+		sockID    int
+		expErr    error
+		expResult storage.ScmModules
 	}{
-		"show regions fails": {
-			runErr: []error{
-				errors.New("fail"),
+		"ipmctl GetModules failed": {
+			cfg: &mockIpmctlCfg{
+				getModulesErr: errors.New("mock GetModules"),
 			},
-			expErr: errors.New("fail"),
+			sockID: sockAny,
+			expErr: errors.New("failed to discover pmem modules: mock GetModules"),
+		},
+		"no modules": {
+			cfg:       &mockIpmctlCfg{},
+			sockID:    sockAny,
+			expResult: storage.ScmModules{},
+		},
+		"get modules with no socket filter": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			sockID:    sockAny,
+			expResult: expModules,
+		},
+		"filter modules by socket 0": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			sockID:    0,
+			expResult: expModules[:2],
+		},
+		"filter modules by socket 1": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			sockID:    1,
+			expResult: expModules[2:],
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := cr.getModules(tc.sockID)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+//		"socket 0 only; free capacity": {
+//			selectSock0: true,
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				mockXMLRegions(t, "sock-zero"),
+//			},
+//			expState: &storage.ScmSocketState{
+//				State: storage.ScmFreeCap,
+//			},
+//		},
+//		"regions only one with free capacity": {
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+//					"   SocketID=0x0000\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=0.0 GiB\n" +
+//					"---ISetID=0x81187f4881f02ccc---\n" +
+//					"   SocketID=0x0001\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=3012.0 GiB\n",
+//			},
+//			expState: storage.ScmFreeCap,
+//		},
+//		"regions with free capacity": {
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+//					"   SocketID=0x0000\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=3012.0 GiB\n" +
+//					"---ISetID=0x81187f4881f02ccc---\n" +
+//					"   SocketID=0x0001\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=3012.0 GiB\n",
+//			},
+//			expState: storage.ScmFreeCap,
+//		},
+//		"regions with no free capacity": {
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+//					"   SocketID=0x0000\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=0.0 GiB\n" +
+//					"---ISetID=0x81187f4881f02ccb---\n" +
+//					"   SocketID=0x0001\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=0.0 GiB\n",
+//			},
+//			expState: storage.ScmNoFreeCap,
+//		},
+//		"v2 regions with no capacity": {
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+//					"   SocketID=0x0000\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=0.000 GiB\n" +
+//					"---ISetID=0x81187f4881f02ccb---\n" +
+//					"   SocketID=0x0001\n" +
+//					"   PersistentMemoryType=AppDirect\n" +
+//					"   FreeCapacity=0.000 GiB\n",
+//			},
+//			expState: storage.ScmNoFreeCap,
+//		},
+//		"unexpected output": {
+//			runOut: []string{
+//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+//				"---ISetID=0x2aba7f4828ef2ccc---\n",
+//			},
+//			expErr: errors.New("expecting at least 4 lines, got 1"),
+//		},
+
+// TestIpmctl_getPMemState verifies the appropriate PMem state is returned for either a specific
+// socket region or all regions when either a specific socket is requested or a state is specific to
+// a particular socket.
+func TestIpmctl_getPMemState(t *testing.T) {
+	verOut := `Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825`
+
+	for name, tc := range map[string]struct {
+		runOut   []string
+		runErr   []error
+		expErr   error
+		expState storage.ScmState
+		expSock0 bool
+		expSock1 bool
+	}{
+		"get regions fails": {
+			runOut: []string{
+				verOut, `text that is invalid xml`,
+			},
+			expErr: errors.New("parse show region cmd"),
+		},
+		"zero modules": {
+			runOut: []string{
+				verOut, outNoPMemModules,
+			},
+			expState: storage.ScmNoModules,
 		},
 		"modules but no regions": {
 			runOut: []string{
-				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-				outNoPMemRegions,
+				verOut, outNoPMemRegions,
 			},
-			expState: &storage.ScmSocketState{
-				State: storage.ScmNoRegions,
-			},
+			expState: storage.ScmNoRegions,
 		},
-		//		"socket 0 only; free capacity": {
-		//			selectSock0: true,
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				mockXMLRegions(t, "sock-zero"),
+		"single region with uncorrectable error": {
+			runOut: []string{
+				verOut, mockXMLRegions(t, "unhealthy"),
+			},
+			expSock0: true,
+			expState: storage.ScmNotHealthy,
+		},
+		"single region with free capacity": {
+			runOut: []string{
+				verOut, mockXMLRegions(t, "full-free"),
+			},
+			expState: storage.ScmFreeCap,
+		},
+		"single region with no free capacity": {
+			runOut: []string{
+				verOut, mockXMLRegions(t, "no-free"),
+			},
+			expState: storage.ScmNoFreeCap,
+		},
+		"second region has uncorrectable error": {
+			runOut: []string{
+				verOut, mockXMLRegions(t, "unhealthy-2nd-sock"),
+			},
+			expSock1: true,
+			expState: storage.ScmNotHealthy,
+		},
+		"second region has free capacity": {
+			runOut: []string{
+				verOut, mockXMLRegions(t, "full-free-2nd-sock"),
+			},
+			expSock1: true,
+			expState: storage.ScmFreeCap,
+		},
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Free_capacity: 111111},
+		//				},
 		//			},
-		//			expState: &storage.ScmSocketState{
-		//				State: storage.ScmFreeCap,
-		//			},
+		//			expErr: errors.New("unexpected PMem region type"),
 		//		},
-		//		"regions only one with free capacity": {
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-		//					"   SocketID=0x0000\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=0.0 GiB\n" +
-		//					"---ISetID=0x81187f4881f02ccc---\n" +
-		//					"   SocketID=0x0001\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=3012.0 GiB\n",
+		//		"single region with not interleaved type": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeNotInterleaved),
+		//					},
+		//				},
+		//			},
+		//			expState: storage.ScmNotInterleaved,
+		//		},
+		//		"single region with free capacity": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
+		//					},
+		//				},
 		//			},
 		//			expState: storage.ScmFreeCap,
 		//		},
 		//		"regions with free capacity": {
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-		//					"   SocketID=0x0000\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=3012.0 GiB\n" +
-		//					"---ISetID=0x81187f4881f02ccc---\n" +
-		//					"   SocketID=0x0001\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=3012.0 GiB\n",
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
+		//					},
+		//				},
 		//			},
 		//			expState: storage.ScmFreeCap,
 		//		},
-		//		"regions with no free capacity": {
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-		//					"   SocketID=0x0000\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=0.0 GiB\n" +
-		//					"---ISetID=0x81187f4881f02ccb---\n" +
-		//					"   SocketID=0x0001\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=0.0 GiB\n",
+		//		"regions with no capacity": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//				},
 		//			},
 		//			expState: storage.ScmNoFreeCap,
-		//		},
-		//		"v2 regions with no capacity": {
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-		//					"   SocketID=0x0000\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=0.000 GiB\n" +
-		//					"---ISetID=0x81187f4881f02ccb---\n" +
-		//					"   SocketID=0x0001\n" +
-		//					"   PersistentMemoryType=AppDirect\n" +
-		//					"   FreeCapacity=0.000 GiB\n",
-		//			},
-		//			expState: storage.ScmNoFreeCap,
-		//		},
-		//		"unexpected output": {
-		//			runOut: []string{
-		//				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n",
-		//			},
-		//			expErr: errors.New("expecting at least 4 lines, got 1"),
 		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -242,128 +407,31 @@ func TestIpmctl_getPMemState(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			sockSelector := -1
-			if tc.selectSock0 {
-				sockSelector = 0
-			} else if tc.selectSock1 {
-				sockSelector = 1
-			}
-
-			scmState, err := cr.getPMemState(sockSelector)
+			resp, err := cr.getPMemState(sockAny)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expState, scmState); diff != "" {
+			sockID := new(uint)
+			if tc.expSock0 {
+				*sockID = 0
+			} else if tc.expSock1 {
+				*sockID = 1
+			}
+
+			expResp := &storage.ScmSocketState{
+				SocketID: sockID,
+				State:    tc.expState,
+			}
+			t.Logf("socket state: %+v", expResp)
+
+			if diff := cmp.Diff(expResp, resp); diff != "" {
 				t.Fatalf("unexpected scm state (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
 }
-
-//// TestIpmctl_getPMemState tests the internals of GetState and verifies correct behavior based
-//// on different output from GetRegions() bindings call.
-//func TestIpmctl_getPMemState(t *testing.T) {
-//	for name, tc := range map[string]struct {
-//		ipmctlCfg *mockIpmctlCfg
-//		expErr    error
-//		expState  storage.ScmState
-//	}{
-//		"get regions fails": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				getRegionsErr: errors.New("fail"),
-//			},
-//			expErr: errors.New("fail"),
-//		},
-//		"modules but no regions": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{},
-//			},
-//			expState: storage.ScmNoRegions,
-//		},
-//		"single region with unknown type": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{
-//					{Free_capacity: 111111},
-//				},
-//			},
-//			expErr: errors.New("unexpected PMem region type"),
-//		},
-//		"single region with not interleaved type": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{
-//					{
-//						Free_capacity: 111111,
-//						Type:          uint32(ipmctl.RegionTypeNotInterleaved),
-//					},
-//				},
-//			},
-//			expState: storage.ScmNotInterleaved,
-//		},
-//		"single region with free capacity": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{
-//					{
-//						Free_capacity: 111111,
-//						Type:          uint32(ipmctl.RegionTypeAppDirect),
-//					},
-//				},
-//			},
-//			expState: storage.ScmFreeCap,
-//		},
-//		"regions with free capacity": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{
-//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-//					{
-//						Free_capacity: 111111,
-//						Type:          uint32(ipmctl.RegionTypeAppDirect),
-//					},
-//				},
-//			},
-//			expState: storage.ScmFreeCap,
-//		},
-//		"regions with no capacity": {
-//			ipmctlCfg: &mockIpmctlCfg{
-//				regions: []ipmctl.PMemRegion{
-//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-//				},
-//			},
-//			expState: storage.ScmNoFreeCap,
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer test.ShowBufferOnFailure(t, buf)
-//
-//			mockLookPath := func(string) (string, error) {
-//				return "", nil
-//			}
-//
-//			mockRun := func(string) (string, error) {
-//				return "", nil
-//			}
-//
-//			mockBinding := newMockIpmctl(tc.ipmctlCfg)
-//			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
-//			if err != nil {
-//				t.Fatal(err)
-//			}
-//
-//			scmState, err := cr.getPMemStateFromBindings()
-//			test.CmpErr(t, tc.expErr, err)
-//			if tc.expErr != nil {
-//				return
-//			}
-//
-//			if diff := cmp.Diff(tc.expState, scmState); diff != "" {
-//				t.Fatalf("unexpected scm state (-want, +got):\n%s\n", diff)
-//			}
-//		})
-//	}
-//}
 
 //func TestIpmctl_prep(t *testing.T) {
 //	verStr := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825"
@@ -1133,76 +1201,3 @@ func TestIpmctl_getPMemState(t *testing.T) {
 //		})
 //	}
 //}
-
-func TestIpmctl_getModules(t *testing.T) {
-	testDevices := []ipmctl.DeviceDiscovery{
-		MockDiscovery(0),
-		MockDiscovery(0),
-		MockDiscovery(1),
-	}
-
-	expModules := storage.ScmModules{}
-	for _, dev := range testDevices {
-		mod := MockModule(&dev)
-		expModules = append(expModules, &mod)
-	}
-
-	for name, tc := range map[string]struct {
-		cfg       *mockIpmctlCfg
-		sockID    int
-		expErr    error
-		expResult storage.ScmModules
-	}{
-		"ipmctl GetModules failed": {
-			cfg: &mockIpmctlCfg{
-				getModulesErr: errors.New("mock GetModules"),
-			},
-			sockID: sockAny,
-			expErr: errors.New("failed to discover pmem modules: mock GetModules"),
-		},
-		"no modules": {
-			cfg:       &mockIpmctlCfg{},
-			sockID:    sockAny,
-			expResult: storage.ScmModules{},
-		},
-		"get modules with no socket filter": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    sockAny,
-			expResult: expModules,
-		},
-		"filter modules by socket 0": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    0,
-			expResult: expModules[:2],
-		},
-		"filter modules by socket 1": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    1,
-			expResult: expModules[2:],
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mockBinding := newMockIpmctl(tc.cfg)
-			cr, err := newCmdRunner(log, mockBinding, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			result, err := cr.getModules(tc.sockID)
-
-			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
