@@ -1108,10 +1108,17 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		grp_idx = shard_idx / obj_get_grp_size(obj);
 		grp_start = grp_idx * obj_get_grp_size(obj);
 		if (req_tgts->ort_srv_disp) {
-			leader_shard = obj_grp_leader_get(obj, grp_idx,
-							  obj_ec_dkey_hash_get(obj,
-									       obj_auxi->dkey_hash),
-							  obj_auxi->cond_modify, map_ver, bit_map);
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+				leader_shard = 0;
+			} else {
+				uint64_t	hash;
+
+				hash = obj_ec_dkey_hash_get(obj, obj_auxi->dkey_hash),
+				leader_shard = obj_grp_leader_get(obj, grp_idx, hash,
+								  obj_auxi->cond_modify,
+								  map_ver, bit_map);
+			}
 			if (leader_shard < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u: "DF_RC"\n",
@@ -4990,7 +4997,9 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	    daos_gettime_coarse() - obj->cob_time_fetch_leader[grp_idx])
 		to_leader = true;
 
-	if (to_leader)
+	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+		rc = obj->cob_shards_nr - 1;
+	else if (to_leader)
 		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
 	else
 		rc = obj_grp_valid_shard_get(obj, grp_idx, map_ver, obj_auxi->failed_tgt_list);
