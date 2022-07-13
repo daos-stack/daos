@@ -723,6 +723,44 @@ dtx_19(void **state)
 	dtx_resend_delay(arg, OC_RP_2G1);
 }
 
+static void
+dtx_20(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*update_buf;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+
+	print_message("do not abort partially committed DTX\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	D_ALLOC(update_buf, dts_dtx_iosize);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, dts_dtx_iosize);
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	dtx_set_fail_loc(arg, DAOS_DTX_FAIL_COMMIT);
+	/*
+	 * The DTX that create the object will trigger synchronous commit. One of
+	 * the replicas will fail commit locally because of DAOS_DTX_FAIL_COMMIT.
+	 * But the other replicas will commit successfully, then related data can
+	 * be accessed.
+	 */
+	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+	dtx_set_fail_loc(arg, 0);
+
+	dtx_check_replicas(dkey, akey, "update_succ", update_buf, dts_dtx_iosize, &req);
+
+	D_FREE(update_buf);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -762,6 +800,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_18, NULL, test_case_teardown},
 	{"DTX19: DTX resend during bulk data transfer - multiple reps",
 	 dtx_19, NULL, test_case_teardown},
+	{"DTX20: do not abort partially committed DTX",
+	 dtx_20, NULL, test_case_teardown},
 };
 
 static int
