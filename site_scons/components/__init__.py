@@ -232,12 +232,11 @@ def define_mercury(reqs):
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
-                libs=['mercury', 'na', 'mercury_util'],
+                libs=['mercury'],
                 pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
-                patch_rpath=['lib'])
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
 
 
 def define_common(reqs):
