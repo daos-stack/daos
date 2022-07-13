@@ -28,11 +28,11 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_POOL_VERSION 4
+#define DAOS_POOL_VERSION 5
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define POOL_PROTO_CLI_RPC_LIST						\
+#define POOL_PROTO_CLI_RPC_LIST(ver)					\
 	X(POOL_CREATE,							\
 		0, &CQF_pool_create,					\
 		ds_pool_create_handler, NULL),				\
@@ -43,8 +43,10 @@
 		0, &CQF_pool_disconnect,				\
 		ds_pool_disconnect_handler, NULL),			\
 	X(POOL_QUERY,							\
-		0, &CQF_pool_query,					\
-		ds_pool_query_handler, NULL),				\
+	  0, ver == 4 ? &CQF_pool_query_v4 : &CQF_pool_query_v5,	\
+	  ver == 4 ? ds_pool_query_handler_v4 :				\
+			ds_pool_query_handler_v5,			\
+	  NULL),							\
 	X(POOL_QUERY_INFO,						\
 		0, &CQF_pool_query_info,				\
 		ds_pool_query_info_handler, NULL),			\
@@ -138,7 +140,7 @@
 #define X(a, b, c, d, e) a
 
 enum pool_operation {
-	POOL_PROTO_CLI_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION),
 	POOL_PROTO_CLI_COUNT,
 	POOL_PROTO_CLI_LAST = POOL_PROTO_CLI_COUNT - 1,
 	POOL_PROTO_SRV_RPC_LIST,
@@ -146,7 +148,9 @@ enum pool_operation {
 
 #undef X
 
-extern struct crt_proto_format pool_proto_fmt;
+extern struct crt_proto_format pool_proto_fmt_v4;
+extern struct crt_proto_format pool_proto_fmt_v5;
+extern int dc_pool_proto_version;
 
 #define DAOS_ISEQ_POOL_OP	/* input fields */		 \
 	((uuid_t)		(pi_uuid)		CRT_VAR) \
@@ -202,7 +206,7 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
 	((uint64_t)		(pqi_query_bits)	CRT_VAR)
 
-#define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
+#define DAOS_OSEQ_POOL_QUERY_V4	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
 	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
 	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
@@ -210,7 +214,19 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR)
 
-CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+CRT_RPC_DECLARE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
+
+#define DAOS_OSEQ_POOL_QUERY_V5	/* output fields */		 \
+	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
+	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
+	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
+	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_RAW) \
+	/* only set on -DER_TRUNC */				 \
+	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
+	((uint32_t)		(pqo_pool_layout_ver)	CRT_VAR) \
+	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 
 #define DAOS_ISEQ_POOL_QUERY_INFO	/* input fields */	 \
 	((struct pool_op_in)	(pqii_op)		CRT_VAR) \
@@ -451,7 +467,8 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 {
 	crt_opcode_t opcode;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE,
+				 dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_POOL, tgt_ep->ep_tag);
 
@@ -465,8 +482,7 @@ void
 pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 			 uint32_t map_version, uint32_t leader_rank,
 			 struct daos_pool_space *ps,
-			 struct daos_rebuild_status *rs,
-			 daos_pool_info_t *info);
+			 struct daos_rebuild_status *rs, daos_pool_info_t *info);
 
 int list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 			  struct daos_pool_cont_info *buf, daos_size_t ncont);
