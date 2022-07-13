@@ -639,11 +639,13 @@ out:
  * Pack sgl's data size in the reply, client fetch can based on
  * it to update sgl's iov_len.
  *
+ * @echo_sgl is set only for echo_rw()
+ *
  * Note: this is only needed for bulk transfer, for inline transfer,
  * it will pack the complete sgls inside the req/reply, see obj_shard_rw().
  */
 static int
-obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
+obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *echo_sgl)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -676,14 +678,11 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	nrs = orwo->orw_nrs.ca_arrays;
 	data_sizes = orwo->orw_data_sizes.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
-		struct bio_sglist	*bsgl;
-		d_sg_list_t		*sgl;
-
-		if (sgls != NULL) {
-			sgl = &sgls[i];
-			D_ASSERT(sgl != NULL);
-			nrs[i] = sgl->sg_nr_out;
+		if (echo_sgl != NULL) {
+			nrs[i] = echo_sgl->sg_nr_out;
 		} else {
+			struct bio_sglist *bsgl;
+
 			bsgl = vos_iod_sgl_at(ioh, i);
 			D_ASSERT(bsgl != NULL);
 			nrs[i] = bsgl->bs_nr_out;
