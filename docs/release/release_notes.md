@@ -62,7 +62,7 @@ The DAOS 2.0.3 release contains the following updates on top of DAOS 2.0.2:
 ### Known Issues and limitations
 
 - Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
-  `daos_server storage prepare -n [--reste]` command) can sporadically cause
+  `daos_server storage prepare -n [--reset]` command) can sporadically cause
   the NVMe SSDs to become inaccessible. This situation can be corrected by
   running `rmmod vfio_pci; modprobe vfio_pci` and `rmmod nvme; modprobe nvme`.
   See [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and the
