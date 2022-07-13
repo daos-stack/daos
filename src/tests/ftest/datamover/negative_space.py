@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrNegativeSpaceTest(DataMoverTestBase):
