@@ -9,7 +9,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-#include "mercury_util.h"
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -496,7 +495,10 @@ crt_provider_ip_str_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_ip_str;
+	if (provider == CRT_NA_OFI_CXI)
+		return NULL;
+	else
+		return prov_data->cpg_na_ofi_config.noc_ip_str;
 }
 
 static bool
@@ -596,12 +598,21 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		D_ASPRINTF(*string, "%s://%s/%s:%d",
-			   provider_str, domain_str, ip_str,
-			   start_port + ctx_idx);
+		if (ip_str == NULL)
+			D_ASPRINTF(*string, "%s://%s:%d",
+				   provider_str, domain_str,
+				   start_port + ctx_idx);
+		else
+			D_ASPRINTF(*string, "%s://%s/%s:%d",
+				   provider_str, domain_str, ip_str,
+				   start_port + ctx_idx);
 	} else {
-		D_ASPRINTF(*string, "%s://%s/%s",
-			   provider_str, domain_str, ip_str);
+		if (ip_str == NULL)
+			D_ASPRINTF(*string, "%s://%s",
+				   provider_str, domain_str);
+		else
+			D_ASPRINTF(*string, "%s://%s/%s",
+				   provider_str, domain_str, ip_str);
 	}
 
 out:
@@ -643,20 +654,17 @@ crt_hg_init(void)
 	#define EXT_FAC DD_FAC(external)
 
 	env = getenv("HG_LOG_SUBSYS");
-	if (!env)
-		HG_Set_log_subsys("hg,na");
-
-	env = getenv("HG_LOG_LEVEL");
 	if (!env) {
-		HG_Set_log_level("warning");
-		HG_Util_set_log_level("warning");
+		env = getenv("HG_LOG_LEVEL");
+		if (!env)
+			HG_Set_log_level("warning");
 	}
 
 	/* import HG log */
-	hg_log_set_func(crt_hg_log);
-	hg_log_set_stream_debug((FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
-	hg_log_set_stream_warning((FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
-	hg_log_set_stream_error((FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
+	HG_Set_log_func(crt_hg_log);
+	HG_Set_log_stream("debug", (FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
+	HG_Set_log_stream("warning", (FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
+	HG_Set_log_stream("error", (FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
 
 	#undef EXT_FAC
 out:
