@@ -9,6 +9,12 @@ We are pleased to announce the release of DAOS version 2.0.
 
 The DAOS 2.0.3 release contains the following updates on top of DAOS 2.0.2:
 
+- The DAOS 2.0 RPMs for RHEL 8 and clones are now built on EL 8.4
+  (they were previously built on EL 8.3). This has the consequence that
+  DAOS 2.0.3 should not be applied to DAOS nodes running EL 8.3
+  (which has reached end of support in 2021).
+  Update the OS to a supported level before updating to DAOS 2.0.3.
+
 - `libfabric` has been updated to version 1.15.1-1.
   This fixes [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
 
