@@ -352,7 +352,6 @@ type (
 		HugePageCount      int
 		HugeNodes          string
 		CleanHugePagesOnly bool
-		CleanHugePagesPID  uint64
 		PCIAllowList       string
 		PCIBlockList       string
 		TargetUser         string
