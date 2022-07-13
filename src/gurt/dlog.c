@@ -96,20 +96,20 @@ struct cache_entry {
  * global data. Zero initialization means the log is not open.
  * this is global so clog_filter() in dlog.h can get at it.
  */
-struct d_log_xstate d_log_xst;
+struct d_log_xstate       d_log_xst;
 
 static struct d_log_state mst;
-static d_list_t	d_log_caches;
+static d_list_t           d_log_caches;
 
 /* default name for facility 0 */
-static const char *default_fac0name = "CLOG";
+static const char        *default_fac0name = "CLOG";
 
 /* whether we should merge log and stderr */
-static bool merge_stderr = false;
+static bool               merge_stderr;
 
 #ifdef DLOG_MUTEX
-#define clog_lock()		D_MUTEX_LOCK(&mst.clogmux)
-#define clog_unlock()		D_MUTEX_UNLOCK(&mst.clogmux)
+#define clog_lock()   D_MUTEX_LOCK(&mst.clogmux)
+#define clog_unlock() D_MUTEX_UNLOCK(&mst.clogmux)
 #else
 #define clog_lock()
 #define clog_unlock()
@@ -343,20 +343,18 @@ static __thread int	 pre_err;
 static __thread int	 pre_err_line;
 static __thread uint64_t pre_err_time;
 
-#define dlog_print_err(err, fmt, ...)				\
-do {								\
-	struct timeval	_tv;					\
-								\
-	gettimeofday(&_tv, NULL);				\
-	if (pre_err_line == __LINE__ &&				\
-	    pre_err == (err) &&	_tv.tv_sec <= pre_err_time)	\
-		break;						\
-	pre_err_time = _tv.tv_sec;				\
-	pre_err_line = __LINE__;				\
-	pre_err	     = err;					\
-	fprintf(stderr, "%s: %d: err=%d " fmt,			\
-		__func__, __LINE__, err,  ## __VA_ARGS__);	\
-} while (0)
+#define dlog_print_err(err, fmt, ...)                                                              \
+	do {                                                                                       \
+		struct timeval _tv;                                                                \
+		gettimeofday(&_tv, NULL);                                                          \
+		if (pre_err_line == __LINE__ && pre_err == (err) && _tv.tv_sec <= pre_err_time)    \
+			break;                                                                     \
+		pre_err_time = _tv.tv_sec;                                                         \
+		pre_err_line = __LINE__;                                                           \
+		pre_err      = err;                                                                \
+		fprintf(stderr, "%s: %d: err=%d (%s) " fmt, __func__, __LINE__, err,               \
+			strerror(err), ##__VA_ARGS__);                                             \
+	} while (0)
 
 #define LOG_BUF_SIZE	(16 << 10)
 
@@ -447,12 +445,22 @@ d_log_write(char *msg, int len, bool flush)
 				return -1;
 			}
 		} else {
-			mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT, 0644);
+			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
 			if (mst.log_fd < 0) {
 				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
 					mst.log_file, strerror(errno));
 				return -1;
 			}
+			rc = fcntl(mst.log_fd, F_DUPFD, 128);
+			if (rc < 0) {
+				fprintf(stderr,
+					"d_log_write(): failed to recreate log file %s: %s\n",
+					mst.log_file, strerror(errno));
+				close(mst.log_fd);
+				return -1;
+			}
+			close(mst.log_fd);
+			mst.log_fd = rc;
 		}
 
 		mst.log_size = 0;
@@ -461,7 +469,11 @@ d_log_write(char *msg, int len, bool flush)
 	/* flush the cached log messages */
 	rc = write(mst.log_fd, mst.log_buf, mst.log_buf_nob);
 	if (rc < 0) {
-		dlog_print_err(errno, "failed to write log\n");
+		int err = errno;
+
+		dlog_print_err(err, "failed to write log %d\n", mst.log_fd);
+		if (err == EBADF)
+			mst.log_fd = -1;
 		return -1;
 	}
 	mst.log_size += mst.log_buf_nob;
@@ -483,14 +495,19 @@ d_log_sync(void)
 
 	if (mst.log_fd >= 0) {
 		rc = fsync(mst.log_fd);
-		if (rc < 0)
-			dlog_print_err(errno, "failed to sync log file\n");
+		if (rc < 0) {
+			int err = errno;
+
+			dlog_print_err(err, "failed to sync log file %d\n", mst.log_fd);
+			if (err == EBADF)
+				mst.log_fd = -1;
+		}
 	}
 
 	if (mst.log_old_fd >= 0) {
 		rc = fsync(mst.log_old_fd);
 		if (rc < 0)
-			dlog_print_err(errno, "failed to sync log backup\n");
+			dlog_print_err(errno, "failed to sync log backup %d\n", mst.log_old_fd);
 
 		close(mst.log_old_fd);
 		mst.log_old_fd = -1; /* nobody is going to write it again */
@@ -564,7 +581,6 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 		if (mst.log_id_cb)
 			mst.log_id_cb(NULL, &uid);
-
 	}
 
 	/*
@@ -874,7 +890,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.def_mask = default_mask;
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
-		int log_flags = O_RDWR | O_CREAT;
+		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
 		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
@@ -893,11 +909,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		 * messages from Mercury/libfabric
 		 */
 		if (merge_stderr) {
-			if (freopen(mst.log_file, truncate ? "w" : "a",
-				    stderr) == NULL) {
-				fprintf(stderr, "d_log_open: cannot "
-					"open %s: %s\n",
-					mst.log_file, strerror(errno));
+			if (freopen(mst.log_file, truncate ? "w" : "a", stderr) == NULL) {
+				fprintf(stderr, "d_log_open: cannot open %s: %s\n", mst.log_file,
+					strerror(errno));
 				goto error;
 			}
 			/* set per-line buffering to limit jumbling */
@@ -912,6 +926,16 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 				mst.log_file, strerror(errno));
 			goto error;
 		}
+		rc = fcntl(mst.log_fd, F_DUPFD, 128);
+		if (rc < 0) {
+			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				mst.log_file, strerror(errno));
+			close(mst.log_fd);
+			return -1;
+		}
+		close(mst.log_fd);
+		mst.log_fd = rc;
+
 		if (!truncate) {
 			rc = fstat(mst.log_fd, &st);
 			if (rc)
