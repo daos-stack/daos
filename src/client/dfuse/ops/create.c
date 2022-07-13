@@ -156,6 +156,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
+	dfuse_open_handle_init(oh, ie);
+
 	rc = _dfuse_mode_update(req, parent, &mode);
 	if (rc != 0)
 		D_GOTO(err, rc);
@@ -172,8 +174,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(release, rc);
 
-	oh->doh_dfs = dfs->dfs_ns;
-	oh->doh_ie = ie;
 	oh->doh_writeable = true;
 
 	if (dfs->dfc_data_caching) {
