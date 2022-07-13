@@ -74,10 +74,10 @@
 ## default: false
 #disable_caching: true
 
-# Manually define the fabric interfaces and domains to be used by the agent,
-# organized by NUMA node.
-# If not defined, the agent will automatically detect all fabric interfaces and
-# select appropriate ones based on the server preferences.
+## Manually define the fabric interfaces and domains to be used by the agent,
+## organized by NUMA node.
+## If not defined, the agent will automatically detect all fabric interfaces and
+## select appropriate ones based on the server preferences.
 #
 #fabric_ifaces:
 #-
@@ -99,7 +99,14 @@
 #    iface: ib3
 #    domain: mlx5_3
 
-# Manually force a specific fabric provider to be used by all clients, in the event that the server
-# supports multiple providers.
+## Select the fabric provider to be used by all clients, if the server is configured with
+## multiple providers.
+## The provider index is 0-based and based on the order of fabric providers listed in the
+## "provider" field of the corresponding daos_server configuration. An administrator can
+## see the list of configured server providers and their indices by using the "dmg system
+## query" command.
+## Index 0 corresponds to the primary provider. Any index > 0 is a secondary provider.
 #
-#provider: ofi+verbs
+## default: 0
+#
+#provider_idx: 1

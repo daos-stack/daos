@@ -107,14 +107,12 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank:     msReplica.Rank.Uint32(),
-						Uri:      msReplica.PrimaryFabricURI,
-						Provider: "ofi+verbs",
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.PrimaryFabricURI,
 					},
 					{
-						Rank:     nonReplica.Rank.Uint32(),
-						Uri:      nonReplica.PrimaryFabricURI,
-						Provider: "ofi+verbs",
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.PrimaryFabricURI,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -140,14 +138,12 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank:     msReplica.Rank.Uint32(),
-						Uri:      msReplica.PrimaryFabricURI,
-						Provider: "ofi+tcp",
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.PrimaryFabricURI,
 					},
 					{
-						Rank:     nonReplica.Rank.Uint32(),
-						Uri:      nonReplica.PrimaryFabricURI,
-						Provider: "ofi+tcp",
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.PrimaryFabricURI,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -173,9 +169,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank:     msReplica.Rank.Uint32(),
-						Uri:      msReplica.PrimaryFabricURI,
-						Provider: "ofi+tcp",
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.PrimaryFabricURI,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -1044,11 +1039,13 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 		emptyDb        bool
 		ranks          string
 		hosts          string
+		clientNetHints []*mgmtpb.ClientNetHint
 		expMembers     []*mgmtpb.SystemMember
 		expRanks       string
 		expAbsentHosts string
 		expAbsentRanks string
 		expErrMsg      string
+		expProviders   []string
 	}{
 		"nil req": {
 			nilReq:    true,
@@ -1161,6 +1158,60 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			emptyDb:   true,
 			expErrMsg: system.ErrRaftUnavail.Error(),
 		},
+		"use clientNetHint for providers": {
+			clientNetHints: []*mgmtpb.ClientNetHint{
+				{
+					Provider: "prov1",
+				},
+				{
+					Provider: "prov2",
+				},
+				{
+					Provider: "prov3",
+				},
+			},
+			expProviders: []string{"prov1", "prov2", "prov3"},
+			expMembers: []*mgmtpb.SystemMember{
+				{
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					Uuid:  test.MockUUID(0),
+					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
+					FaultDomain: "/",
+				},
+				{
+					Rank: 1, Addr: test.MockHostAddr(1).String(),
+					Uuid: test.MockUUID(1),
+					// transition to "ready" illegal
+					State:       stateString(system.MemberStateStopping),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(2),
+					State:       stateString(system.MemberStateUnresponsive),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(3),
+					State:       stateString(system.MemberStateJoined),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 4, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(4),
+					State:       stateString(system.MemberStateStarting),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 5, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(5),
+					State:       stateString(system.MemberStateStopped),
+					FaultDomain: "/",
+				},
+			},
+			expRanks: "0-5",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1178,6 +1229,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
+			svc.clientNetworkHint = tc.clientNetHints
 
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			defer cancel()
@@ -1212,13 +1264,17 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			}
 
 			cmpOpts := append(test.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{},
+					"last_update", "fault_domain", "fabric_uri", "fabric_contexts", "incarnation"),
 			)
 			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
+				t.Errorf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+			if diff := cmp.Diff(tc.expProviders, gotResp.Providers); diff != "" {
+				t.Errorf("unexpected results (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }

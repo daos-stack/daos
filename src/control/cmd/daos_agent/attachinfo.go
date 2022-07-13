@@ -107,7 +107,7 @@ func getServiceRanksForProviderIdx(inResp *control.GetAttachInfoResp, idx int) (
 	hint := inResp.AlternateClientNetHints[secIdx]
 	ranks := make([]*control.PrimaryServiceRank, 0)
 	for _, r := range inResp.AlternateServiceRanks {
-		if r.Provider == hint.Provider {
+		if r.ProviderIdx == hint.ProviderIdx {
 			ranks = append(ranks, r)
 		}
 	}

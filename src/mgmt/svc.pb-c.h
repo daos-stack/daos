@@ -145,10 +145,15 @@ struct  _Mgmt__JoinReq
    */
   size_t n_secondary_uris;
   char **secondary_uris;
+  /*
+   * CaRT context count for each secondary provider
+   */
+  size_t n_secondary_nctxs;
+  uint32_t *secondary_nctxs;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL }
 
 
 struct  _Mgmt__JoinResp
@@ -279,11 +284,11 @@ struct  _Mgmt__GetAttachInfoResp__RankUri
   ProtobufCMessage base;
   uint32_t rank;
   char *uri;
-  char *provider;
+  uint32_t provider_idx;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp

@@ -41,6 +41,7 @@ message JoinReq {
 	uint32 idx = 8;			// Instance index on server node.
 	uint64 incarnation = 9; 	// rank incarnation
 	repeated string secondary_uris = 10; // URIs for any secondary providers
+	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
 }
 
 message JoinResp {
@@ -88,7 +89,7 @@ message GetAttachInfoResp {
 	message RankUri {
 		uint32 rank = 1;
 		string uri = 2;
-		string provider = 3;
+		uint32 provider_idx = 3;
 	}
 	repeated RankUri rank_uris = 2;	// Rank URIs for the primary provider
 					// These CaRT settings are shared with the

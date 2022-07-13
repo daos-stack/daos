@@ -8,6 +8,7 @@ package main
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ type mgmtModule struct {
 	useDefaultNUMA bool
 
 	numaGetter     hardware.ProcessNUMAProvider
-	provider       string
+	providerIdx    uint
 	devClassGetter hardware.NetDevClassProvider
 	devStateGetter hardware.NetDevStateProvider
 	fabricScanner  *hardware.FabricScanner
@@ -169,16 +170,10 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 		return nil, err
 	}
 
-	mod.log.Debugf("full GetAttachInfoResp: %+v", rawResp)
-
-	reqProviders := mod.getInterfaceProviders(req.Interface, req.Domain)
-
-	resp, err := mod.selectAttachInfo(rawResp, reqProviders)
+	resp, err := mod.selectAttachInfo(ctx, rawResp, req.Interface, req.Domain)
 	if err != nil {
 		return nil, err
 	}
-
-	mod.log.Debugf("provider idx: %d", resp.ClientNetHint.ProviderIdx)
 
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
@@ -216,81 +211,102 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
 }
 
-func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.StringSet {
+func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.GetAttachInfoResp, iface, domain string) (*mgmtpb.GetAttachInfoResp, error) {
+	reqProviders := mod.getIfaceProviders(ctx, iface, domain)
+	mod.log.Debugf("requested interface %q (domain: %q) supports providers: %s", iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
+
+	if mod.providerIdx > 0 {
+		// Secondary provider indices begin at 1
+		resp, err := mod.selectSecondaryAttachInfo(srvResp, mod.providerIdx)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(reqProviders) != 0 && !reqProviders.Has(resp.ClientNetHint.Provider) {
+			mod.log.Errorf("requested fabric interface %q (domain: %q) does not report support for configured provider %q (idx %d)",
+				iface, domain, resp.ClientNetHint.Provider, mod.providerIdx)
+		}
+
+		return resp, nil
+	}
+
+	if len(reqProviders) == 0 || reqProviders.Has(srvResp.ClientNetHint.Provider) {
+		return srvResp, nil
+	}
+
+	mod.log.Debugf("primary provider is not supported by requested interface %q domain %q (supports: %s)", iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
+
+	// We can try to be smart about choosing a provider if the client requested a specific interface
+	for _, hint := range srvResp.SecondaryClientNetHints {
+		if reqProviders.Has(hint.Provider) {
+			mod.log.Debugf("found secondary provider supported by requested interface: %q (idx %d)", hint.Provider, hint.ProviderIdx)
+			return mod.selectSecondaryAttachInfo(srvResp, uint(hint.ProviderIdx))
+		}
+	}
+
+	mod.log.Errorf("no supported provider for requested interface %q domain %q, using primary by default")
+	return srvResp, nil
+}
+
+func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain string) common.StringSet {
+	providers := common.NewStringSet()
 	if iface == "" {
-		return nil
+		return providers
 	}
 
 	if domain == "" {
 		domain = iface
 	}
 
-	fis, err := mod.fabricInfo.localNUMAFabric.FindDevice(&FabricIfaceParams{
+	if fis, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 		Interface: iface,
 		Domain:    domain,
-	})
-	if err != nil {
-		mod.log.Errorf("client-requested fabric interface/domain not detected: %s", err.Error())
-		mod.log.Error("communications on this interface may fail")
-		return nil
+	}); err != nil {
+		mod.log.Errorf("requested fabric interface %q (domain %q) may not function as desired: %s", iface, domain, err)
+	} else {
+		providers.Add(fis.Providers()...)
 	}
 
-	providers := common.NewStringSet()
-	for _, fi := range fis {
-		providers.AddUnique(fi.Providers()...)
-	}
 	return providers
 }
 
-func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqProviders common.StringSet) (*mgmtpb.GetAttachInfoResp, error) {
-	providers := reqProviders
-	if mod.provider != "" {
-		if len(reqProviders) > 0 && !reqProviders.Has(mod.provider) {
-			mod.log.Errorf("configured provider %q not included in requested interface's detected providers: %s", reqProviders)
-			mod.log.Error("communications on this interface may fail")
-		}
-		providers = common.NewStringSet(mod.provider)
-
-		mod.log.Debugf("using configured provider: %s", mod.provider)
+func (mod *mgmtModule) selectSecondaryAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, provIdx uint) (*mgmtpb.GetAttachInfoResp, error) {
+	if provIdx == 0 {
+		return nil, errors.New("provider index 0 is not a secondary provider")
+	}
+	maxIdx := len(srvResp.SecondaryClientNetHints)
+	if int(provIdx) > maxIdx {
+		return nil, errors.Errorf("provider index %d out of range (maximum: %d)", provIdx, maxIdx)
 	}
 
-	if len(providers) == 0 {
-		return srvResp, nil
+	hint := srvResp.SecondaryClientNetHints[provIdx-1]
+	if hint.ProviderIdx != uint32(provIdx) {
+		return nil, errors.Errorf("malformed network hint: expected provider index %d, got %d", provIdx, hint.ProviderIdx)
+	}
+	mod.log.Debugf("getting secondary provider %s URIs", hint.Provider)
+	uris, err := mod.getProviderIdxURIs(srvResp, provIdx)
+	if err != nil {
+		return nil, err
 	}
 
-	if providers.Has(srvResp.ClientNetHint.Provider) {
-		return srvResp, nil
-	}
-
-	for _, hint := range srvResp.SecondaryClientNetHints {
-		if providers.Has(hint.Provider) {
-			mod.log.Debugf("getting secondary provider %s URIs", hint.Provider)
-			uris, err := mod.getProviderURIs(srvResp, hint.Provider)
-			if err == nil {
-				return &mgmtpb.GetAttachInfoResp{
-					Status:        srvResp.Status,
-					RankUris:      uris,
-					MsRanks:       srvResp.MsRanks,
-					ClientNetHint: hint,
-				}, nil
-			}
-			mod.log.Error(err.Error())
-		}
-	}
-
-	return nil, errors.Errorf("no valid connection information for providers: %s", providers)
+	return &mgmtpb.GetAttachInfoResp{
+		Status:        srvResp.Status,
+		RankUris:      uris,
+		MsRanks:       srvResp.MsRanks,
+		ClientNetHint: hint,
+	}, nil
 }
 
-func (mod *mgmtModule) getProviderURIs(srvResp *mgmtpb.GetAttachInfoResp, provider string) ([]*mgmtpb.GetAttachInfoResp_RankUri, error) {
+func (mod *mgmtModule) getProviderIdxURIs(srvResp *mgmtpb.GetAttachInfoResp, idx uint) ([]*mgmtpb.GetAttachInfoResp_RankUri, error) {
 	uris := []*mgmtpb.GetAttachInfoResp_RankUri{}
 	for _, uri := range srvResp.SecondaryRankUris {
-		if uri.Provider == provider {
+		if uri.ProviderIdx == uint32(idx) {
 			uris = append(uris, uri)
 		}
 	}
 
 	if len(uris) == 0 {
-		return nil, errors.Errorf("no rank URIs for provider %q", provider)
+		return nil, errors.Errorf("no rank URIs for provider idx %d", mod.providerIdx)
 	}
 
 	return uris, nil

@@ -19,6 +19,7 @@ message NotifyReadyReq {
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
 	uint64 incarnation = 6; // HLC incarnation number
 	repeated string secondaryUris = 7; // secondary CaRT URIs
+	repeated uint32 secondaryNctxs = 8; // number of CaRT contexts for each secondary provider
 }
 
 // NotifyReadyResp is nil.

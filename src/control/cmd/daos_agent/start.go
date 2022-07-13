@@ -100,7 +100,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		devClassGetter: hwprov.DefaultNetDevClassProvider(cmd.Logger),
 		devStateGetter: hwprov.DefaultNetDevStateProvider(cmd.Logger),
 		monitor:        procmon,
-		provider:       cmd.cfg.Provider,
+		providerIdx:    cmd.cfg.ProviderIdx,
 	})
 
 	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
