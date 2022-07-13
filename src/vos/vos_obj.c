@@ -642,17 +642,18 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		toh = obj->obj_toh;
 	}
 
-	key_tree_delete(obj, toh, key);
+	rc = key_tree_delete(obj, toh, key);
 	if (rc) {
 		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
-		goto out_tx;
+		goto out_tree;
 	}
+	/* fall through */
+out_tree:
+	if (akey)
+		key_tree_release(toh, false);
 out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
-	if (akey)
-		key_tree_release(toh, false);
-
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
