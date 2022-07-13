@@ -193,8 +193,8 @@ set_local_repo() {
     version=${version%%.*}
     if [ "$repo_server" = "artifactory" ] &&
        [ -z "$(rpm_test_version)" ] &&
-       { [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]] ||
-         [[ ${CHANGE_TARGET:-$BRANCH_NAME} != provider-testing* ]]; }; then
+       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]] &&
+       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != provider-testing* ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
@@ -312,7 +312,7 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     # shellcheck disable=SC2154
-    if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! RETRY_COUNT=4 retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         return 1
     fi

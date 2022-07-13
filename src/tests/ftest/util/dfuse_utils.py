@@ -270,6 +270,9 @@ class Dfuse(DfuseCommand):
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
 
+        if 'COVFILE' not in self.env:
+            self.env['COVFILE'] = '/tmp/test.cov'
+
         # create dfuse dir if does not exist
         self.create_mount_point()
 

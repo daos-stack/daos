@@ -12,19 +12,19 @@ import re
 from ClusterShell.NodeSet import NodeSet
 
 from exception_utils import CommandFailure
-from general_utils import run_task, display_task
+from general_utils import run_task, display_task, run_pcmd
 
-SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x")
+SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x", "ofi+cxi")
 
 
 class NetworkDevice():
     """A class to represent the information of a network device."""
 
-    def __init__(self, host, device, ib_device, port, provider, numa):
+    def __init__(self, host, name, device, port, provider, numa):
         """Initialize the network device data object."""
         self.host = host
+        self.name = name
         self.device = device
-        self.ib_device = ib_device
         self.port = port
         self.provider = provider
         self.numa = numa
@@ -63,8 +63,8 @@ class NetworkDevice():
 
         """
         if "ucx" in self.provider:
-            return ":".join([self.ib_device, self.port])
-        return self.ib_device
+            return ":".join([self.device, self.port])
+        return self.device
 
 
 def get_active_network_interfaces(hosts, verbose=True):
@@ -80,7 +80,7 @@ def get_active_network_interfaces(hosts, verbose=True):
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
     operstate = os.path.join(net_path, "*", "operstate")
-    command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"])
+    command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bond)/'", "sort"])
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -208,38 +208,42 @@ def get_interface_numa_node(hosts, interface, verbose=True):
     return numa_nodes
 
 
-def get_interface_ib_name(hosts, interface, verbose=True):
-    """Get the InfiniBand name of this network interface on each host.
+def get_interface_device_name(hosts, interface, verbose=True):
+    """Get the device name of this network interface on each host.
 
     Args:
-        hosts (NodeSet): hosts on which to detect the InfiniBand name
-        interface (str): interface for which to obtain the InfiniBand name
-        verbose (bool, optional): display command details. Defaults to True.
+        hosts (NodeSet): hosts on which to detect the device name
+        interface (str): interface for which to obtain the device name
+        verbose (bool, optional): display command details. Defaults to True
 
     Returns:
-        dict: a dictionary of InfiniBand name keys and NodeSet values on which they were detected
+        dict: a dictionary of device name keys and NodeSet values on which they were detected
 
     """
+    device_names = {}
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = f"ls -1 {os.path.join(net_path, interface, 'device', 'infiniband')}"
-    task = run_task(hosts, command, verbose=verbose)
-    if verbose:
-        display_task(task)
+    device_dirs = ["infiniband", "cxi"]
 
-    # Populate a dictionary of IB names with a NodSet of hosts on which it was detected
-    ib_names = {}
-    results = dict(task.iter_retcodes())
-    if 0 in results:
-        for output, nodelist in task.iter_buffers(results[0]):
-            ib_name_list = []
-            for line in output:
-                match = re.findall(r"([A-Za-z0-9;_+]+)", line.decode("utf-8"))
-                if len(match) == 1:
-                    ib_name_list.append(match[0])
-            if ib_name_list:
-                ib_names[",".join(ib_name_list)] = NodeSet.fromlist(nodelist)
+    while not device_names and device_dirs:
+        device_dir = device_dirs.pop(0)
+        command = f"ls -1 {os.path.join(net_path, interface, 'device', device_dir)}"
+        task = run_task(hosts, command, verbose=verbose)
+        if verbose:
+            display_task(task)
 
-    return ib_names
+        # Populate a dictionary of IB names with a NodSet of hosts on which it was detected
+        results = dict(task.iter_retcodes())
+        if 0 in results:
+            for output, nodelist in task.iter_buffers(results[0]):
+                device_name_list = []
+                for line in output:
+                    match = re.findall(r"([A-Za-z0-9;_+]+)", line.decode("utf-8"))
+                    if len(match) == 1:
+                        device_name_list.append(match[0])
+                if device_name_list:
+                    device_names[",".join(device_name_list)] = NodeSet.fromlist(nodelist)
+
+    return device_names
 
 
 def get_ofi_info(hosts, supported=None, verbose=True):
@@ -457,14 +461,14 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
     """
     ofi_info = get_ofi_info(hosts, supported, verbose)
     providers = get_interface_providers(interface, ofi_info)
-    for ib_name in get_interface_ib_name(hosts, interface, verbose):
-        providers.update(get_interface_providers(ib_name, ofi_info))
+    for dev_name in get_interface_device_name(hosts, interface, verbose):
+        providers.update(get_interface_providers(dev_name, ofi_info))
 
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)
-        for ib_name in get_interface_ib_name(hosts, interface, verbose):
+        for dev_name in get_interface_device_name(hosts, interface, verbose):
             for add_on in ([], ["1"]):
-                device = ":".join([ib_name] + add_on)
+                device = ":".join([dev_name] + add_on)
                 providers.update(get_interface_providers(device, ucx_info))
 
     # Only include the providers supported by the interface on all of the hosts
@@ -499,15 +503,15 @@ def get_network_information(hosts, supported=None, verbose=True):
         for interface, node_set in interfaces.items():
             if host not in node_set:
                 continue
-            kwargs = {"host": host, "device": interface, "port": 1}
+            kwargs = {"host": host, "name": interface, "port": 1}
             data_gather = {
-                "ib_device": get_interface_ib_name(node_set, interface, verbose),
+                "device": get_interface_device_name(node_set, interface, verbose),
                 "provider": get_interface_providers(interface, ofi_info),
                 "numa": get_interface_numa_node(node_set, interface, verbose),
             }
-            for ib_name in data_gather["ib_device"]:
+            for dev_name in data_gather["device"]:
                 for add_on in ([], ["1"]):
-                    device = ":".join([ib_name] + add_on)
+                    device = ":".join([dev_name] + add_on)
                     data_gather["provider"].update(get_interface_providers(device, ofi_info))
                     data_gather["provider"].update(get_interface_providers(device, ucx_info))
             for key, data in data_gather.items():
@@ -520,10 +524,11 @@ def get_network_information(hosts, supported=None, verbose=True):
                 else:
                     kwargs[key] = None
 
-            for item in kwargs["provider"].split(","):
-                these_kwargs = kwargs.copy()
-                these_kwargs["provider"] = item
-                network_devices.append(NetworkDevice(**these_kwargs))
+            if kwargs["provider"] is not None:
+                for item in kwargs["provider"].split(","):
+                    these_kwargs = kwargs.copy()
+                    these_kwargs["provider"] = item
+                    network_devices.append(NetworkDevice(**these_kwargs))
 
     return network_devices
 
@@ -557,3 +562,19 @@ def get_dmg_network_information(dmg_network_scan):
             f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices
+
+
+def update_network_interface(interface, state, host, errors=None):
+    """Turn on or off the given network interface.
+
+    Args:
+        interface (str): Interface name such as ib0.
+        state (str): "up" or "down".
+        host (str): Host to update the interface.
+        errors (list): List to store the error message, if the command fails.
+            Defaults to None.
+    """
+    command = "sudo ip link set {} {}".format(interface, state)
+    results = run_pcmd(hosts=[host], command=command)
+    if errors is not None and results[0]["exit_status"] != 0:
+        errors.append(f"{command} didn't return 0!")
