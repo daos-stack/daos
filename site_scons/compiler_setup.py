@@ -22,7 +22,7 @@ PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
 
-def base_setup(env, prereqs=None):
+def base_setup(env):
     """Setup the scons environment for the compiler
 
     Include all our preferred compile options for the chosen

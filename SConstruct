@@ -386,7 +386,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     base_env_mpi = env.Clone()
 
-    compiler_setup.base_setup(env, prereqs=prereqs)
+    compiler_setup.base_setup(env)
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(base_env_mpi)
