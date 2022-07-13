@@ -168,7 +168,7 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 
 			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				getModulesErr: nil,
-				modules:       []ipmctl.DeviceDiscovery{MockDiscovery()},
+				modules:       []ipmctl.DeviceDiscovery{mockDiscovery()},
 			})
 			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 			if err != nil {

@@ -283,7 +283,7 @@ func (srm *socketRegionMap) keys() []int {
 		return []int{}
 	}
 
-	keys := make([]int, len(*srm))
+	keys := make([]int, 0, len(*srm))
 	for k := range *srm {
 		keys = append(keys, k)
 	}
@@ -325,8 +325,6 @@ func (cr *cmdRunner) getRegionDetails(sockID int) (socketRegionMap, error) {
 	if err != nil {
 		return nil, errors.WithMessage(err, "show regions cmd")
 	}
-
-	cr.log.Debugf("show region output: %s\n", out)
 
 	switch {
 	case strings.Contains(out, outNoCLIPerms):
@@ -373,6 +371,6 @@ func getRegionState(region Region) storage.ScmState {
 	case 0:
 		return storage.ScmNoFreeCap
 	default:
-		return storage.ScmPartCap
+		return storage.ScmPartFreeCap
 	}
 }

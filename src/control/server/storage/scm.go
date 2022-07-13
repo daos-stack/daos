@@ -38,8 +38,8 @@ const (
 	ScmNoModules
 	// ScmNotHealthy indicates a PMem AppDirect region is showing health state as "Error".
 	ScmNotHealthy
-	// ScmPartCap indicates a PMem AppDirect region has only partial free capacity.
-	ScmPartCap
+	// ScmPartFreeCap indicates a PMem AppDirect region has only partial free capacity.
+	ScmPartFreeCap
 	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
 	ScmUnknownMode
 )
@@ -53,7 +53,7 @@ func (ss ScmState) String() string {
 		ScmNotInterleaved: "NotInterleaved",
 		ScmNoModules:      "NoModules",
 		ScmNotHealthy:     "NotHealthy",
-		ScmPartCap:        "PartCapacity",
+		ScmPartFreeCap:    "PartialFreeCapacity",
 		ScmUnknownMode:    "UnknownMode",
 	}[ss]
 }

@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	mm               = MockModule(nil)
+	mm               = mockModule(nil)
 	defaultModule    = &mm
 	defaultNamespace = storage.MockScmNamespace()
 )

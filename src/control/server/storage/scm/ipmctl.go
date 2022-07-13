@@ -103,6 +103,10 @@ func (cr *cmdRunner) getPMemState(sockID int) (*storage.ScmSocketState, error) {
 	resp := &storage.ScmSocketState{
 		State: storage.ScmStateUnknown,
 	}
+	if sockID >= 0 {
+		s := uint(sockID)
+		resp.SocketID = &s
+	}
 
 	regionsPerSocket, err := cr.getRegionDetails(sockID)
 	if err != nil {
@@ -125,10 +129,10 @@ func (cr *cmdRunner) getPMemState(sockID int) (*storage.ScmSocketState, error) {
 		state := getRegionState(r)
 
 		switch state {
-		case storage.ScmNotInterleaved, storage.ScmNotHealthy, storage.ScmPartCap, storage.ScmUnknownMode:
+		case storage.ScmNotInterleaved, storage.ScmNotHealthy, storage.ScmPartFreeCap, storage.ScmUnknownMode:
 			cr.log.Debugf("socket %d region in state %q", sid, state)
-			id := uint(sid)
-			resp.SocketID = &id
+			s := uint(sid)
+			resp.SocketID = &s
 			resp.State = state
 			return resp, nil
 
@@ -171,23 +175,18 @@ func (cr *cmdRunner) createNamespaces(nrNsPerSocket uint, sockID int) (storage.S
 		return nil, errors.New("unexpected number of pmem regions (0)")
 	}
 
-	for socketID, region := range regionsPerSocket {
-		if region.FreeCapacity == 0 || region.FreeCapacity != region.Capacity {
-			// Sanity check that we are working on a region with full free capacity.
-			return nil, errors.Errorf("region for socket %d does not have full free capacity", socketID)
-		}
-
+	for sid, region := range regionsPerSocket {
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
 		pmemBytes := uint64(region.FreeCapacity) / uint64(nrNsPerSocket)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
-			return nil, errors.New("free region size is not 2MiB aligned")
+			return nil, errors.Errorf("socket %d: free region size is not 2MiB aligned", sid)
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
 		for j := uint(0); j < nrNsPerSocket; j++ {
 			if _, err := cr.createNamespace(int(region.ID), pmemBytes); err != nil {
-				return nil, errors.WithMessage(err, "create namespace cmd")
+				return nil, errors.WithMessagef(err, "socket %d: create namespace cmd", sid)
 			}
 		}
 	}
@@ -283,6 +282,10 @@ func (cr *cmdRunner) verifyPMem(nss storage.ScmNamespaces, nrNsPerSocket uint, s
 // * regions exist and free capacity -> create all namespaces, return created
 // * regions exist but no free capacity -> no-op, return namespaces
 func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	if scanRes == nil {
+		return nil, errors.New("nil scan response")
+	}
+
 	sockState := scanRes.State
 	resp := &storage.ScmPrepareResponse{
 		State: sockState,
@@ -301,7 +304,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 	case storage.ScmNotHealthy:
 		// A PMem AppDirect region is not healthy.
 		return nil, checkStateHasSock(sockState, storage.FaultScmNotHealthy)
-	case storage.ScmPartCap:
+	case storage.ScmPartFreeCap:
 		// Only create namespaces if none already exist, partial state should not be
 		// supported and user should reset PMem before trying again.
 		return nil, checkStateHasSock(sockState, storage.FaultScmPartialCapacity)
@@ -309,6 +312,8 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		// A PMem AppDirect region is reporting unsupported value for persistent memory
 		// type.
 		return nil, checkStateHasSock(sockState, storage.FaultScmUnknownMemoryMode)
+	case storage.ScmStateUnknown:
+		return nil, errors.New("no valid scm state in scan response")
 	}
 
 	// If socket ID set in request, only scan devices attached to that socket.
@@ -384,7 +389,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	case storage.ScmNoModules, storage.ScmNoRegions:
 		return resp, nil
 	case storage.ScmFreeCap, storage.ScmNoFreeCap, storage.ScmNotInterleaved, storage.ScmNotHealthy,
-		storage.ScmPartCap, storage.ScmUnknownMode:
+		storage.ScmPartFreeCap, storage.ScmUnknownMode:
 		// Continue to remove namespaces and regions.
 		resp.RebootRequired = true
 	default:
