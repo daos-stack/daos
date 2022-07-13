@@ -138,6 +138,7 @@ Requires: openssl
 # of mercury, at which time the autoprov shared library version should
 # suffice
 Requires: mercury >= %{mercury_version}, mercury < %{mercury_max_version}
+Conflicts: mercury-ucx
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -166,6 +167,7 @@ Requires: ipmctl > 02.00.00.3816
 Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}, mercury < %{mercury_max_version}
+Conflicts: mercury-ucx
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -179,6 +181,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}, mercury < %{mercury_max_version}
+Conflicts: mercury-ucx
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
