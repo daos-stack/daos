@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.0.3
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -33,6 +33,7 @@ BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}, mercury-devel < %{mercury_max_version}
+BuildConflicts: mercury-ucx
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -529,6 +530,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Jul 13 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.0.3-6
+- Prevent from using mercury-ucx
+
 * Thu Jul 07 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-5
 - Version bump to 2.0.3 (rc4)
 
