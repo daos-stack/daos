@@ -104,12 +104,6 @@ def define_mercury(reqs):
         libs = []
     else:
         reqs.define('rt', libs=['rt'])
-    reqs.define('stdatomic', headers=['stdatomic.h'])
-
-    if reqs.check_component('stdatomic'):
-        atomic = 'stdatomic'
-    else:
-        atomic = 'openpa'
 
     reqs.define('psm2',
                 retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
@@ -162,16 +156,6 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-    reqs.define('openpa',
-                retriever=GitRepoRetriever('https://github.com/pmodels/openpa.git'),
-                commands=[['libtoolize'],
-                          ['./autogen.sh'],
-                          ['./configure', '--prefix=$OPENPA_PREFIX'],
-                          ['make'],
-                          ['make', 'install']],
-                libs=['opa'],
-                package='openpa-devel' if inst(reqs, 'openpa') else None)
-
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
                      '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
@@ -199,7 +183,6 @@ def define_mercury(reqs):
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
-                     '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/',
                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX',
                      '-DCMAKE_CXX_FLAGS="-std=c++11"',
                      '-DBUILD_EXAMPLES=OFF',
@@ -216,11 +199,6 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    mercury_build.append(check(reqs,
-                               'openpa',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a'))
-
     mercury_build.extend(check(reqs,
                                'ofi',
                                ['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
@@ -234,7 +212,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=[atomic, 'boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None)
 

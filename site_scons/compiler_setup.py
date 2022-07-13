@@ -77,13 +77,8 @@ def base_setup(env, prereqs=None):
     cenv.Append(CFLAGS='-Werror')
     config = Configure(cenv)
     if config.CheckHeader('stdatomic.h'):
-        config.Finish()
         env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC': '1'})
-    elif prereqs:
-        config.Finish()
-        prereqs.require(env, 'openpa', headers_only=True)
-    else:
-        config.Finish()
+    config.Finish()
 
     if compiler == 'icx' and not GetOption('no_rpath'):
         # Hack to add rpaths

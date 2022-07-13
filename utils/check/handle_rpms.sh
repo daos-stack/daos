@@ -43,7 +43,7 @@ sudo yum -y remove cart cart-debuginfo cart-devel cart-tests \
                    daos-tests CUnit dpdk fio fuse fuse-lib hwloc \
                    libabt0 libcmocka libfabric libfabric-devel libisa-l \
                    libisa-l_crypto libopa1 libpmem libpmemblk mercury ndctl\
-                   ompi openmpi3 openpa-devel \
+                   ompi openmpi3 \
                    pexpect protobuf-c pmix \
                    python-configshell python-urwid \
                    raft raft-debuginfo raft-devel \
