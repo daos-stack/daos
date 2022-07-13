@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -8,6 +9,9 @@ import yaml
 from apricot import TestWithServers
 from exception_utils import CommandFailure
 from server_utils import ServerFailed
+
+AP_WARN_MSG = ("WARNING: Configuration includes only one access point. "
+               "This provides no redundancy in the event of an access point failure.")
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -44,15 +48,17 @@ class ConfigGenerateRun(TestWithServers):
             access_points=server_host, num_engines=num_engines,
             min_ssds=min_ssds, net_class=net_class)
 
-        ap_count = len(server_host.split(","))
         # If there's only one AP, the first line would be a warning message.
         # If we include this message, the server would fail to start, so remove it.
+        ap_count = len(server_host.split(","))
         if ap_count == 1:
             self.log.info("result.stdout (before) = %s", result.stdout)
             result_lines = result.stdout.decode("utf-8").split("\n")
-            result_lines = result_lines[1:]
-            result.stdout = "\n".join(result_lines).encode("utf-8")
-            self.log.info("result (after) = %s", result)
+            # Check that the warning message is the AP message that we're expecting.
+            if result_lines[0] == AP_WARN_MSG:
+                result_lines = result_lines[1:]
+                result.stdout = "\n".join(result_lines).encode("utf-8")
+                self.log.info("result (after) = %s", result)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
