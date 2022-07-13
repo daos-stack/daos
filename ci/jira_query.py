@@ -185,7 +185,7 @@ def main():
             set_output('label-clear', '\n'.join(to_remove))
 
         # Could possibly query/verify more data using this URL however no use-case for this yet.
-        gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+        # gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
     if errors:
         sys.exit(1)

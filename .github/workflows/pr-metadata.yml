@@ -1,6 +1,8 @@
 name: Jira Report
 
 on:
+  # Having this be pull_request_target rather than pull_request means it runs in the context of the
+  # target branch rather than the PR, which in turn means the checkout is of the target.
   pull_request_target:
 
 jobs:
