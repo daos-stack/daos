@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,7 +13,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include "tests_lib.h"
+#include <daos/tests_lib.h>
 #include "wrap_cmocka.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"

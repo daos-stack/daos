@@ -529,7 +529,7 @@ dmg_pool_create(const char *dmg_config_file,
 		if (tmp_fd < 0) {
 			D_ERROR("failed to generate unique label: %s\n",
 				strerror(errno));
-			D_GOTO(out, rc = d_errno2der(errno));
+			D_GOTO(out_cmd, rc = d_errno2der(errno));
 		}
 		close(tmp_fd);
 		unlink(path);

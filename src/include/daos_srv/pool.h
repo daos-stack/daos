@@ -120,6 +120,7 @@ struct ds_pool_child {
 	struct ds_pool		*spc_pool;
 	uuid_t			spc_uuid;	/* pool UUID */
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	d_list_t		spc_cont_list;
 
@@ -188,7 +189,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   const char *principal_name);
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info);
+		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		      uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -276,13 +278,13 @@ int dsc_pool_close(daos_handle_t ph);
  * pool map device status.
  */
 static inline int
-ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
 {
 	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	if (last_ver < pool_map_get_version(pool->sp_map))
-		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rlvl, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

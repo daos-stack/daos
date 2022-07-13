@@ -33,7 +33,7 @@ mdtest:
     dcp: 30
   api: DFS
   test_dir: "/"
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   mux_dataset: !mux
     many_files:                # total 15K files for dcp

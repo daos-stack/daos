@@ -71,18 +71,18 @@ class ListVerboseTest(IorTestBase):
             "query_status_msg": "",
             "state": "Ready",
             "usage": [
-            {
-                "tier_name": "SCM",
-                "size": scm_size,
-                "free": scm_free,
-                "imbalance": scm_imbalance
-            },
-            {
-                "tier_name": "NVME",
-                "size": nvme_size,
-                "free": nvme_free,
-                "imbalance": nvme_imbalance
-            }
+                {
+                    "tier_name": "SCM",
+                    "size": scm_size,
+                    "free": scm_free,
+                    "imbalance": scm_imbalance
+                },
+                {
+                    "tier_name": "NVME",
+                    "size": nvme_size,
+                    "free": nvme_free,
+                    "imbalance": nvme_imbalance
+                }
             ]
         }
 

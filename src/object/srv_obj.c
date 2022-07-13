@@ -163,7 +163,10 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		orwo->orw_epoch = dss_get_start_epoch() -
 				  crt_hlc_epsilon_get() * 3;
 	} else {
-		orwo->orw_epoch = epoch;
+		/* orwo->orw_epoch possibly updated in obj_ec_recov_need_try_again(), reply
+		 * the max so client can fetch from that epoch.
+		 */
+		orwo->orw_epoch = max(epoch, orwo->orw_epoch);
 	}
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_X64
@@ -309,6 +312,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	}
 }
 
+#define MAX_BULK_IOVS	1024
+
 static int
 bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		  off_t remote_off, crt_bulk_op_t bulk_op, bool bulk_bind,
@@ -321,7 +326,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	unsigned int		local_off;
 	unsigned int		iov_idx = 0;
 	size_t			remote_size;
-	int			rc;
+	int			rc, bulk_iovs = 0;
 
 	if (remote_bulk == NULL) {
 		D_ERROR("Remote bulk is NULL\n");
@@ -391,6 +396,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 			};
+			bulk_iovs += 1;
 		} else {
 			start = iov_idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
@@ -406,11 +412,15 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 
+				/* Don't create bulk handle with too many IOVs */
+				if ((iov_idx - start) >= MAX_BULK_IOVS)
+					break;
 			};
 			D_ASSERT(iov_idx > start);
 
 			local_off = 0;
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
+			bulk_iovs += sgl_sent.sg_nr;
 
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
@@ -460,6 +470,12 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			break;
 		}
 		remote_off += length;
+
+		/* Give cart progress a chance to complete some inflight bulk transfers */
+		if (bulk_iovs >= MAX_BULK_IOVS) {
+			bulk_iovs = 0;
+			ABT_thread_yield();
+		}
 	}
 
 	return rc;
@@ -1212,7 +1228,8 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 }
 
 static bool
-obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
+obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_rw_out *orwo,
+			    struct obj_io_context *ioc)
 {
 	D_ASSERT(orw->orw_flags & ORF_EC_RECOV);
 
@@ -1226,8 +1243,10 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
 	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
-	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry)
+	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry) {
+		orwo->orw_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundry;
 		return true;
+	}
 
 	return false;
 }
@@ -1365,7 +1384,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
 		}
 		if (unlikely(ec_recov &&
-			     obj_ec_recov_need_try_again(orw, ioc))) {
+			     obj_ec_recov_need_try_again(orw, orwo, ioc))) {
 			rc = -DER_FETCH_AGAIN;
 			D_DEBUG(DB_IO, DF_UOID" "DF_X64"<"DF_X64
 				" ec_recov needs redo, "DF_RC".\n",
@@ -1388,7 +1407,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			 */
 			rc = daos_iod_recx_dup(iods, orw->orw_nr, &iods_dup);
 			if (rc != 0) {
-				D_ERROR(DF_UOID"iod_recx_dup failed: "DF_RC"\n",
+				D_ERROR(DF_UOID ": iod_recx_dup failed: " DF_RC "\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
@@ -2019,7 +2038,6 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	struct dcs_iod_csums	*iod_csums;
 	struct bio_desc		*biod;
 	daos_recx_t		 recx = { 0 };
-	daos_epoch_range_t	 epoch_range = { 0 };
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	int			 rc;
@@ -2044,9 +2062,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	iod_csums = oer->er_iod_csums.ca_arrays;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
-			      oer->er_epoch, 0, dkey, 1, iod, iod_csums,
-			      0, &ioh, NULL);
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi, 0,
+			      dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2077,12 +2094,10 @@ end:
 			DP_UOID(oer->er_oid), DP_RC(rc));
 		goto out;
 	}
-	epoch_range.epr_lo = 0ULL;
-	epoch_range.epr_hi = oer->er_epoch;
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid,
-				  &epoch_range, dkey, &iod->iod_name, &recx);
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
+				  &iod->iod_name, &recx);
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2180,8 +2195,8 @@ end:
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 	if (rc1)
-		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc1));
+		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
+			DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2256,11 +2271,19 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * record/akey/dkey on some non-leader.
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
-		if (orw->orw_dti_cos.ca_count > 0)
-			vos_dtx_commit(ioc.ioc_vos_coh,
-				       orw->orw_dti_cos.ca_arrays,
-				       orw->orw_dti_cos.ca_count, NULL);
-
+		if (orw->orw_dti_cos.ca_count > 0) {
+			rc = vos_dtx_commit(ioc.ioc_vos_coh,
+					    orw->orw_dti_cos.ca_arrays,
+					    orw->orw_dti_cos.ca_count, NULL);
+			if (rc < 0) {
+				D_WARN(DF_UOID": Failed to DTX CoS commit "DF_RC".\n",
+				       DP_UOID(orw->orw_oid), DP_RC(rc));
+			} else if (rc < orw->orw_dti_cos.ca_count) {
+				D_WARN(DF_UOID": Incomplete DTX CoS commit rc = %d expected "
+				       "%" PRIu64 ".\n", DP_UOID(orw->orw_oid),
+				       rc, orw->orw_dti_cos.ca_count);
+			}
+		}
 		D_GOTO(out, rc = 0);
 	}
 

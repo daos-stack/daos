@@ -1,0 +1,44 @@
+"""Build mpi abstraction libraries"""
+import daos_build
+import compiler_setup
+
+
+def build_dpar(env, mpi_env):
+    """Build MPI abstraction library"""
+
+    senv = env.Clone()
+    compiler_setup.base_setup(senv)
+
+    serial_lib = daos_build.library(senv, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    senv.Install('$PREFIX/lib64/', serial_lib)
+
+    if not mpi_env:
+        return
+
+    denv = mpi_env.Clone()
+
+    mpi_lib = daos_build.library(denv, 'dpar_mpi', ['dpar_mpi.c'])
+    denv.Install('$PREFIX/lib64/', mpi_lib)
+    return
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
+
+    if not prereqs.test_requested():
+        return
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    daos_build.add_build_rpath(env)
+    daos_build.add_build_rpath(base_env)
+    if base_env_mpi:
+        base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
+        daos_build.add_build_rpath(base_env_mpi)
+
+    build_dpar(base_env, base_env_mpi)
+
+
+if __name__ == "SCons.Script":
+    scons()

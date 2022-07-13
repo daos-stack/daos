@@ -51,8 +51,8 @@ SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
 BASIC_SRC = ['crt_basic.c']
 IV_TESTS = ['iv_client.c', 'iv_server.c']
-#TEST_RPC_ERR_SRC = 'test_rpc_error.c'
-#CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
+# TEST_RPC_ERR_SRC = 'test_rpc_error.c'
+# CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 SWIM_TESTS = ['test_swim.c', 'test_swim_net.c', 'test_swim_emu.c']
 HLC_TESTS = ['test_hlc_net.c']
 TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
@@ -73,33 +73,29 @@ def scons():
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     tenv.AppendUnique(LIBS=['daos', 'daos_common'])
+    tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
     prereqs.require(tenv, 'crypto', 'mercury')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, [test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, [test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, [test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, [test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, [test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
