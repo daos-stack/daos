@@ -235,14 +235,13 @@ def get_available_interfaces(args):
     all_hosts = NodeSet()
     all_hosts.update(args.test_servers)
     all_hosts.update(args.test_clients)
-    host_list = list(all_hosts)
 
     # Find any active network interfaces on the server or client hosts
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
     operstate = os.path.join(net_path, "*", "operstate")
     command = " | ".join(
         ["grep -l 'up' {}".format(operstate), "grep -Ev '/(lo|bonding_masters)/'", "sort"])
-    task = get_remote_output(list(host_list), command)
+    task = get_remote_output(all_hosts, command)
     if check_remote_output(task, command):
         # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
         active_interfaces = {}
@@ -273,7 +272,7 @@ def get_available_interfaces(args):
         for interface in common_interfaces:
             speed = None
             command = "cat {}".format(os.path.join(net_path, interface, "speed"))
-            task = get_remote_output(list(host_list), command)
+            task = get_remote_output(all_hosts, command)
             if check_remote_output(task, command):
                 # Verify each host has the same interface speed
                 output_data = list(task.iter_buffers())
@@ -330,7 +329,7 @@ def set_provider_environment(interface, args):
 
         # Check for a Omni-Path interface
         command = "sudo opainfo"
-        task = get_remote_output(list(args.test_servers), command)
+        task = get_remote_output(args.test_servers, command)
         if check_remote_output(task, command):
             # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
             print("  Excluding verbs provider for Omni-Path adapters")
@@ -338,7 +337,7 @@ def set_provider_environment(interface, args):
 
         # Detect all supported providers
         command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
-        task = get_remote_output(list(args.test_servers), command)
+        task = get_remote_output(args.test_servers, command)
         if check_remote_output(task, command):
             # Verify each server host has the same interface driver
             output_data = list(task.iter_buffers())
@@ -381,6 +380,12 @@ def set_python_environment():
         os.path.abspath("util"),
         os.path.abspath("cart"),
     ]
+
+    # Include the cart directory paths when running from sources
+    for cart_dir in os.listdir(os.path.abspath("cart")):
+        cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
+        if os.path.isdir(cart_path):
+            required_python_paths.append(cart_path)
 
     required_python_paths.extend(site.getsitepackages())
 
@@ -470,11 +475,11 @@ def time_command(cmd):
     return return_code
 
 
-def get_remote_output(host_list, command, timeout=120):
-    """Run the command on each specified host in parallel.
+def get_remote_output(hosts, command, timeout=120):
+    """Run the command on eachis specified host in parallel.
 
     Args:
-        host_list (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): command to run on each host
         timeout (int, optional): number of seconds to wait for all jobs to
             complete. Defaults to 120 seconds.
@@ -485,16 +490,12 @@ def get_remote_output(host_list, command, timeout=120):
 
     """
     # Create a ClusterShell Task to run the command in parallel on the hosts
-    if isinstance(host_list, list):
-        nodes = NodeSet.fromlist(host_list)
-    else:
-        nodes = NodeSet(host_list)
     task = task_self()
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    print("Running on {}: {}".format(nodes, command))
-    task.run(command=command, nodes=nodes, timeout=timeout)
+    print("Running on {}: {}".format(hosts, command))
+    task.run(command=command, nodes=hosts, timeout=timeout)
     return task
 
 
@@ -558,11 +559,11 @@ def check_remote_output(task, command):
     return status
 
 
-def spawn_commands(host_list, command, timeout=120):
+def spawn_commands(hosts, command, timeout=120):
     """Run the command on each specified host in parallel.
 
     Args:
-        host_list (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): command to run on each host
         timeout (int, optional): number of seconds to wait for all jobs to
             complete. Defaults to 120 seconds.
@@ -573,7 +574,7 @@ def spawn_commands(host_list, command, timeout=120):
 
     """
     # Create a dictionary of hosts for each unique return code
-    task = get_remote_output(host_list, command, timeout)
+    task = get_remote_output(hosts, command, timeout)
 
     # Determine if the command completed successfully across all the hosts
     return check_remote_output(task, command)
@@ -766,7 +767,6 @@ def get_device_replacement(args):
     """
     devices = []
     device_types = []
-    host_list = list(args.test_servers)
 
     # Separate any optional filter from the key
     dev_filter = None
@@ -776,20 +776,21 @@ def get_device_replacement(args):
 
     # First check for any VMD disks, if requested
     if nvme_args[0] in ["auto", "auto_vmd"]:
-        vmd_devices = auto_detect_devices(host_list, "NVMe", "5", dev_filter)
+        vmd_devices = auto_detect_devices(args.test_servers, "NVMe", "5", dev_filter)
         if vmd_devices:
             # Find the VMD controller for the matching VMD disks
-            vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
-            devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
+            vmd_controllers = auto_detect_devices(args.test_servers, "VMD", "4", None)
+            devices.extend(get_vmd_address_backed_nvme(
+                args.test_servers, vmd_devices, vmd_controllers))
         elif not dev_filter:
             # Use any VMD controller if no VMD disks found w/o a filter
-            devices = auto_detect_devices(host_list, "VMD", "4", None)
+            devices = auto_detect_devices(args.test_servers, "VMD", "4", None)
         if devices:
             device_types.append("VMD")
 
     # Second check for any non-VMD NVMe disks, if requested
     if nvme_args[0] in ["auto", "auto_nvme"]:
-        dev_list = auto_detect_devices(host_list, "NVMe", "4", dev_filter)
+        dev_list = auto_detect_devices(args.test_servers, "NVMe", "4", dev_filter)
         if dev_list:
             devices.extend(dev_list)
             device_types.append("NVMe")
@@ -805,11 +806,11 @@ def get_device_replacement(args):
     return ",".join(devices)
 
 
-def auto_detect_devices(host_list, device_type, length, device_filter=None):
+def auto_detect_devices(hosts, device_type, length, device_filter=None):
     """Get a list of NVMe/VMD devices found on each specified host.
 
     Args:
-        host_list (list): list of host on which to find the NVMe/VMD devices
+        hosts (NodeSet): hosts on which to find the NVMe/VMD devices
         device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
         length (str): number of digits to match in the first PCI domain number
         device_filter (str, optional): optional filter to apply to device searching. Defaults to
@@ -842,7 +843,7 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
         print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
         sys.exit(1)
     command = " | ".join(command_list) + " || :"
-    task = get_remote_output(host_list, command)
+    task = get_remote_output(hosts, command)
 
     # Verify the command was successful on each server host
     if check_remote_output(task, command):
@@ -858,11 +859,11 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
     return devices
 
 
-def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
+def get_vmd_address_backed_nvme(hosts, vmd_disks, vmd_controllers):
     """Find valid VMD address which has backing NVMe.
 
     Args:
-        host_list (list): list of hosts
+        hosts (NodeSet): hosts on which to find the VMD addresses
         vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
         vmd_controllers (list): list of PCI domain numbers for each VMD controller
 
@@ -876,7 +877,7 @@ def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
         command_list.append("grep -E '({0})'".format("|".join(vmd_disks)))
     command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
     command = " | ".join(command_list) + " || :"
-    task = get_remote_output(host_list, command)
+    task = get_remote_output(hosts, command)
 
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
@@ -1153,21 +1154,19 @@ def setup_test_directory(args, mode="all"):
             "list"  = list the contents of the directory
             "all"  = execute all of the mode options
     """
-    host_list = NodeSet(socket.gethostname().split(".")[0])
-    host_list.update(args.test_clients)
-    host_list.update(args.test_servers)
+    all_hosts = NodeSet(socket.gethostname().split(".")[0])
+    all_hosts.update(args.test_clients)
+    all_hosts.update(args.test_servers)
     test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    print(
-        "Setting up '{}' on {}:".format(
-            test_dir, str(NodeSet.fromlist(host_list))))
+    print("Setting up '{}' on {}:".format(test_dir, all_hosts))
     if mode in ["all", "rm"]:
-        spawn_commands(host_list, "sudo rm -fr {}".format(test_dir))
+        spawn_commands(all_hosts, "sudo rm -fr {}".format(test_dir))
     if mode in ["all", "mkdir"]:
-        spawn_commands(host_list, "mkdir -p {}".format(test_dir))
+        spawn_commands(all_hosts, "mkdir -p {}".format(test_dir))
     if mode in ["all", "chmod"]:
-        spawn_commands(host_list, "chmod a+wr {}".format(test_dir))
+        spawn_commands(all_hosts, "chmod a+wr {}".format(test_dir))
     if mode in ["all", "list"]:
-        spawn_commands(host_list, "ls -al {}".format(test_dir))
+        spawn_commands(all_hosts, "ls -al {}".format(test_dir))
 
 
 def generate_certs():
@@ -1290,35 +1289,34 @@ def run_tests(test_files, tag_filter, args):
             # and archive remote logs and report big log files, if any.
             if args.archive:
                 test_hosts = get_hosts_from_yaml(test_file["yaml"], args)
-                test_log_dir = os.environ.get(
-                    "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+                test_servers = get_hosts_from_yaml(
+                    test_file["yaml"], args, YAML_KEYS["test_servers"])
+                test_clients = get_hosts_from_yaml(
+                    test_file["yaml"], args, YAML_KEYS["test_clients"])
+                test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
 
                 # Archive local config files
                 return_code |= archive_files(
                     "local configuration files",
                     os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    socket.gethostname().split(".")[0:1],
+                    NodeSet(socket.gethostname().split(".")[0]),
                     "{}/*_*_*.yaml".format(
-                        get_temporary_directory(
-                            args, get_build_environment(args)["PREFIX"])),
+                        get_temporary_directory(args, get_build_environment(args)["PREFIX"])),
                     args)
 
                 # Archive remote server configuration files
                 return_code |= archive_files(
                     "remote server config files",
                     os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    get_hosts_from_yaml(
-                        test_file["yaml"], args, YAML_KEYS["test_servers"]),
-                    "{}/daos_server*.yml".format(
-                        os.path.join(os.sep, "etc", "daos")),
+                    test_servers,
+                    "{}/daos_server*.yml".format(os.path.join(os.sep, "etc", "daos")),
                     args)
 
                 # Archive remote client configuration files
                 return_code |= archive_files(
                     "remote client config files",
                     os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    get_hosts_from_yaml(
-                        test_file["yaml"], args, YAML_KEYS["test_clients"]),
+                    test_clients,
                     "{0}/daos_agent*.yml {0}/daos_control*.yml".format(
                         os.path.join(os.sep, "etc", "daos")),
                     args)
@@ -1337,8 +1335,7 @@ def run_tests(test_files, tag_filter, args):
                 return_code |= archive_files(
                     "ULTs stacks dump files",
                     os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
-                    get_hosts_from_yaml(
-                        test_file["yaml"], args, YAML_KEYS["test_servers"]),
+                    test_servers,
                     "/tmp/daos_dump*.txt*",
                     args,
                     avocado_logs_dir,
@@ -1357,14 +1354,13 @@ def run_tests(test_files, tag_filter, args):
                 # Compress any log file that haven't been remotely compressed.
                 compress_log_files(avocado_logs_dir, args)
 
-                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR",
-                                                   os.environ['HOME'])
+                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
 
                 # Archive valgrind log files from shared dir
                 return_code |= archive_files(
                     "valgrind log files",
                     os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
-                    [test_hosts[0]],
+                    NodeSet(test_hosts[0]),
                     "{}/valgrind*".format(valgrind_logs_dir),
                     args,
                     avocado_logs_dir)
@@ -1377,8 +1373,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally process core files
             if args.process_cores:
                 try:
-                    if not process_the_cores(
-                            avocado_logs_dir, test_file["yaml"], args):
+                    if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
                         return_code |= 256
                 except Exception as error:  # pylint: disable=broad-except
                     print("Detected unhandled exception processing core files: {}".format(error))
@@ -1386,8 +1381,8 @@ def run_tests(test_files, tag_filter, args):
 
         if args.jenkinslog:
             # Archive bullseye coverage logs
-            hosts = list(args.test_servers)
-            hosts += socket.gethostname().split(".")[0:1]
+            hosts = NodeSet(socket.gethostname().split('.', 1)[0])
+            hosts.add(args.test_servers)
             return_code |= archive_files(
                 "bullseye coverage logs",
                 os.path.join(avocado_logs_dir, "bullseye_coverage_logs"),
@@ -1472,32 +1467,29 @@ def get_hosts_from_yaml(test_yaml, args, key_match=None):
             find.  Defaults to None which will match all keys.
 
     Returns:
-        list: a unique list of hosts specified in the test's yaml file
+        NodeSet: hosts specified in the test's yaml file
 
     """
-    display(
-        args,
-        "Extracting hosts from {} - matching key '{}'".format(
-            test_yaml, key_match))
-    host_set = set()
+    display(args, "Extracting hosts from {} - matching key '{}'".format(test_yaml, key_match))
+    local_host = NodeSet(socket.gethostname().split(".")[0])
+    yaml_hosts = NodeSet()
     if args.include_localhost and key_match != YAML_KEYS["test_servers"]:
-        host_set.add(socket.gethostname().split(".")[0])
+        yaml_hosts.add(local_host)
     found_client_key = False
     for key, value in list(find_yaml_hosts(test_yaml).items()):
         display(args, "  Found {}: {}".format(key, value))
         if key_match is None or key == key_match:
             display(args, "    Adding {}".format(value))
-            host_set.update(value)
+            yaml_hosts.add(NodeSet(value))
         if key in YAML_KEYS["test_clients"]:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
     if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-        local_host = socket.gethostname().split(".")[0]
         display(args, "    Adding the localhost: {}".format(local_host))
-        host_set.add(local_host)
+        yaml_hosts.add(local_host)
 
-    return sorted(list(host_set))
+    return yaml_hosts
 
 
 def clean_logs(test_yaml, args):
@@ -1509,13 +1501,13 @@ def clean_logs(test_yaml, args):
     """
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    host_list = get_hosts_from_yaml(test_yaml, args)
+    test_hosts = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     # also remove any ABT infos/stacks dumps
     command += " /tmp/daos_dump*.txt*"
     print("-" * 80)
-    print("Cleaning logs on {}".format(host_list))
-    if not spawn_commands(host_list, command):
+    print("Cleaning logs on {}".format(test_hosts))
+    if not spawn_commands(test_hosts, command):
         print("Error cleaning logs, aborting")
         return False
 
@@ -1573,7 +1565,7 @@ def archive_files(description, destination, hosts, source_files, args,
     Args:
         description (str): string identifying the archiving operation
         destination (str): path in which to archive files
-        hosts (list): hosts from which to archive files
+        hosts (NodeSet): hosts from which to archive files
         source_files (str): remote files to archive
         args (argparse.Namespace): command line arguments for this program
         avocado_logs_dir (optional, str): path to the avocado log files.
@@ -1591,9 +1583,7 @@ def archive_files(description, destination, hosts, source_files, args,
     status = 0
     if hosts:
         print("-" * 80)
-        print(
-            "Archiving {} from {} in {}".format(
-                description, hosts, destination))
+        print("Archiving {} from {} in {}".format(description, hosts, destination))
 
         # Create the destination directory
         if not os.path.exists(destination):
@@ -2016,12 +2006,12 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
 
     return_status = True
     this_host = socket.gethostname().split(".")[0]
-    host_list = get_hosts_from_yaml(test_yaml, args)
+    test_hosts = get_hosts_from_yaml(test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
 
     # Create a subdirectory in the avocado logs directory for this test
     print("-" * 80)
-    print("Processing cores from {} in {}".format(host_list, daos_cores_dir))
+    print("Processing cores from {} in {}".format(test_hosts, daos_cores_dir))
     get_output(["mkdir", daos_cores_dir], check=False)
 
     # Copy any core files that exist on the test hosts and remove them from the
@@ -2053,7 +2043,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
+    if not spawn_commands(test_hosts, "; ".join(commands), timeout=1800):
         # we might have still gotten some core files, so don't return here
         # but save a False return status for later
         return_status = False
@@ -2156,15 +2146,11 @@ def stop_daos_agent_services(test_file, args):
 
     """
     service = "daos_agent.service"
-    client_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_clients"])
-    local_host = socket.gethostname().split(".")[0]
-    if local_host not in client_hosts:
-        client_hosts.append(local_host)
+    hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_clients"])
+    hosts.add(NodeSet(socket.gethostname().split('.', 1)[0]))
     print("-" * 80)
-    print(
-        "Verifying {} on {} after running '{}'".format(
-            service, NodeSet.fromlist(client_hosts), test_file["py"]))
-    return stop_service(client_hosts, service)
+    print("Verifying {} on {} after running '{}'".format(service, hosts, test_file["py"]))
+    return stop_service(hosts, service)
 
 
 def stop_daos_server_service(test_file, args):
@@ -2179,19 +2165,17 @@ def stop_daos_server_service(test_file, args):
 
     """
     service = "daos_server.service"
-    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
+    hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
     print("-" * 80)
-    print(
-        "Verifying {} on {} after running '{}'".format(
-            service, NodeSet.fromlist(server_hosts), test_file["py"]))
-    return stop_service(server_hosts, service)
+    print("Verifying {} on {} after running '{}'".format(service, hosts, test_file["py"]))
+    return stop_service(hosts, service)
 
 
 def stop_service(hosts, service):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
-        hosts (list): list of hosts on which to stop the service.
+        hosts (NodeSet): list of hosts on which to stop the service.
         service (str): name of the service
 
     Returns:
@@ -2201,7 +2185,7 @@ def stop_service(hosts, service):
     result = {"status": 0}
     status_keys = ["reset-failed", "stop", "disable"]
     mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-    check_hosts = NodeSet.fromlist(hosts)
+    check_hosts = NodeSet(hosts)
     loop = 1
     # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
     # has been resolved
@@ -2222,7 +2206,7 @@ def stop_service(hosts, service):
                     # Issue the appropriate systemctl command to remedy the
                     # detected state, e.g. 'stop' for 'active'.
                     command = "sudo systemctl {} {}".format(key, service)
-                    get_remote_output(str(result[key]), command)
+                    get_remote_output(result[key], command)
 
                     # Run the status check again on this group of hosts
                     check_hosts.add(result[key])
@@ -2230,11 +2214,11 @@ def stop_service(hosts, service):
     return result["status"]
 
 
-def get_service_status(host_list, service):
+def get_service_status(hosts, service):
     """Get the status of the daos_server.service.
 
     Args:
-        host_list (list): list of hosts on which to get the service state
+        hosts (NodeSet): hosts on which to get the service state
         service (str): name of the service
 
     Returns:
@@ -2255,7 +2239,7 @@ def get_service_status(host_list, service):
         "disable": ["active", "activating", "deactivating"],
         "reset-failed": ["failed"]}
     command = "systemctl is-active {}".format(service)
-    task = get_remote_output(host_list, command)
+    task = get_remote_output(hosts, command)
     for output, nodelist in task.iter_buffers():
         output_lines = [line.decode("utf-8") for line in output]
         nodeset = NodeSet.fromlist(nodelist)
@@ -2307,18 +2291,16 @@ def reset_server_storage(test_file, args):
         int: status code: 0 = success, 512 = failure
 
     """
-    server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
+    hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
     print("-" * 80)
-    if server_hosts:
+    if hosts:
         commands = [
             "if lspci | grep -i nvme",
             "then daos_server storage prepare -n --reset && " +
             "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
             "fi"]
-        print(
-            "Resetting server storage on {} after running '{}'".format(
-                NodeSet.fromlist(server_hosts), test_file["py"]))
-        if not spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
+        print("Resetting server storage on {} after running '{}'".format(hosts, test_file["py"]))
+        if not spawn_commands(hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
             print(indent_text(2, "Ignoring any errors from these workaround commands"))
     else:
         print(
