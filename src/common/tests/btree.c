@@ -830,8 +830,10 @@ ik_btr_drain(void **state)
 	int		 i;
 
 	D_ALLOC_ARRAY(arr, drain_keys);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		fail();
+	}
 
 	D_PRINT("Batch add %d records.\n", drain_keys);
 	ik_btr_gen_keys(arr, drain_keys);
