@@ -487,13 +487,14 @@ d_log_write(char *msg, int len, bool flush)
 void
 d_log_sync(void)
 {
-	int	rc;
+	int rc = 0;
 
 	clog_lock();
 	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
-		d_log_write(NULL, 0, true);
+		rc = d_log_write(NULL, 0, true);
 
-	if (mst.log_fd >= 0) {
+	/* Skip flush if there was a problem on write */
+	if (mst.log_fd >= 0 && rc == 0) {
 		rc = fsync(mst.log_fd);
 		if (rc < 0) {
 			int err = errno;
