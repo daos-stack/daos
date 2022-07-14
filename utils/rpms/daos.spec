@@ -533,7 +533,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Thu Jul 13 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.0.3-6
+* Thu Jul 14 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.0.3-6
 - Prevent from using mercury-ucx
 
 * Thu Jul 07 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-5
