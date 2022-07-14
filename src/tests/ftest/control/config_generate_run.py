@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -53,12 +52,10 @@ class ConfigGenerateRun(TestWithServers):
         ap_count = len(server_host.split(","))
         if ap_count == 1:
             self.log.info("result.stdout (before) = %s", result.stdout)
-            result_lines = result.stdout.decode("utf-8").split("\n")
-            # Check that the warning message is the AP message that we're expecting.
-            if result_lines[0] == AP_WARN_MSG:
-                result_lines = result_lines[1:]
-                result.stdout = "\n".join(result_lines).encode("utf-8")
-                self.log.info("result (after) = %s", result)
+            # Remove the AP warning message from the output.
+            warn_removed = result.stdout.decode("utf-8").replace(AP_WARN_MSG + '\n', '')
+            result.stdout = warn_removed.encode("utf-8")
+            self.log.info("result (after) = %s", result)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
