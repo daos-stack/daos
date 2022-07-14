@@ -2267,11 +2267,19 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * record/akey/dkey on some non-leader.
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
-		if (orw->orw_dti_cos.ca_count > 0)
-			vos_dtx_commit(ioc.ioc_vos_coh,
-				       orw->orw_dti_cos.ca_arrays,
-				       orw->orw_dti_cos.ca_count, NULL);
-
+		if (orw->orw_dti_cos.ca_count > 0) {
+			rc = vos_dtx_commit(ioc.ioc_vos_coh,
+					    orw->orw_dti_cos.ca_arrays,
+					    orw->orw_dti_cos.ca_count, NULL);
+			if (rc < 0) {
+				D_WARN(DF_UOID": Failed to DTX CoS commit "DF_RC".\n",
+				       DP_UOID(orw->orw_oid), DP_RC(rc));
+			} else if (rc < orw->orw_dti_cos.ca_count) {
+				D_WARN(DF_UOID": Incomplete DTX CoS commit rc = %d expected "
+				       "%" PRIu64 ".\n", DP_UOID(orw->orw_oid),
+				       rc, orw->orw_dti_cos.ca_count);
+			}
+		}
 		D_GOTO(out, rc = 0);
 	}
 
@@ -4408,9 +4416,6 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 			break;
 		}
-
-		if (dcu->dcu_ec_split_req != NULL)
-			*flags |= ORF_HAS_EC_SPLIT;
 	}
 
 	return rc;

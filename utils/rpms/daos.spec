@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
+%global mercury_version 2.2.0~rc6-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -563,6 +563,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jun 27 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-14
+- Update to mercury 2.2.0rc6
+
 * Fri Jun 17 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-13
 - Remove libdts.so, replace with build time static
 
