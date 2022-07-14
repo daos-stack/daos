@@ -256,6 +256,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din->di_dtx_array.ca_count = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
+		if (dra->dra_opc == DTX_REFRESH && DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+			crt_req_set_timeout(req, 3);
+
 		rc = crt_req_send(req, dtx_req_cb, drr);
 	}
 

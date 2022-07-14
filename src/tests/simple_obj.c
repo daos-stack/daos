@@ -663,7 +663,8 @@ example_daos_kv()
 	ASSERT(num_keys == (KEYS - 1) * rankn,
 	       "KV enumerate after remove failed");
 
-	daos_kv_close(oh, NULL);
+	rc = daos_kv_close(oh, NULL);
+	ASSERT(rc == 0, "KV close failed with %d", rc);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0)

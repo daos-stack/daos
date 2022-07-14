@@ -210,13 +210,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 size_t size, off_t offset, bool plus)
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	char			*reply_buff;
-	off_t			buff_offset = 0;
-	int			added = 0;
-	int			rc = 0;
-	int			large_fetch = true;
+	char                         *reply_buff;
+	off_t                         buff_offset = 0;
+	int                           added       = 0;
+	int                           rc          = 0;
+	bool                          large_fetch = true;
 
 	if (offset == READDIR_EOD) {
+		oh->doh_kreaddir_finished = true;
 		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
@@ -235,8 +236,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	/* if starting from the beginning, reset the anchor attached to
 	 * the open handle.
 	 */
-	if (offset == 0)
+	if (offset == 0) {
+		if (oh->doh_kreaddir_started)
+			oh->doh_kreaddir_invalid = true;
+		oh->doh_kreaddir_started = true;
 		dfuse_readdir_reset(oh);
+	}
 
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %ld idx %d idx_offset %ld",
 			plus, offset, oh->doh_dre_index,
@@ -249,6 +254,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	    oh->doh_dre[oh->doh_dre_index].dre_offset != offset &&
 	    oh->doh_anchor_index + OFFSET_BASE != offset) {
 		uint32_t num;
+
+		oh->doh_kreaddir_invalid = true;
 
 		/*
 		 * otherwise we are starting at an earlier offset where we left
