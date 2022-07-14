@@ -19,6 +19,10 @@ server_config:
     bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+    env_vars:
+      - SWIM_PROTOCOL_PERIOD_LEN=2000
+      - SWIM_SUSPECT_TIMEOUT=19000
+      - SWIM_PING_TIMEOUT=1900
 testparams:
   ranks_to_kill:
     - [6]
