@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -945,7 +945,7 @@ int main(int argc, char **argv)
 	char			*endp;
 	int			 i, rc;
 
-	rand_seed = time(0);
+	rand_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 	memset(pool_file, 0, sizeof(pool_file));
 	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {

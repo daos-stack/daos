@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -173,7 +173,7 @@ init_tests(void **state)
 	unsigned int seed;
 
 	/* Seed the random number generator once per test run */
-	seed = time(NULL);
+	seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 

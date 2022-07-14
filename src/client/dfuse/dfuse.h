@@ -73,32 +73,41 @@ struct dfuse_readdir_entry {
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t				*doh_dfs;
+	dfs_t                           *doh_dfs;
 	/** the DFS object handle */
-	dfs_obj_t			*doh_obj;
+	dfs_obj_t                       *doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry	*doh_ie;
+	struct dfuse_inode_entry        *doh_ie;
 
-	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
-	daos_anchor_t			doh_anchor;
+	daos_anchor_t                    doh_anchor;
 
 	/** Array of entries returned by dfs but not reported to kernel */
-	struct dfuse_readdir_entry	*doh_dre;
+	struct dfuse_readdir_entry      *doh_dre;
 	/** Current index into doh_dre array */
-	uint32_t			doh_dre_index;
+	uint32_t                         doh_dre_index;
 	/** Last index containing valid data */
-	uint32_t			doh_dre_last_index;
+	uint32_t                         doh_dre_last_index;
 	/** Next value from anchor */
-	uint32_t			doh_anchor_index;
+	uint32_t                         doh_anchor_index;
 
 	ATOMIC uint32_t                  doh_il_calls;
 
 	/** True if caching is enabled for this file. */
-	bool				doh_caching;
+	bool                             doh_caching;
 
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                             doh_writeable;
+
+	/* Track possible kernel cache of readdir on this directory */
+	/* Set to true if there is any reason the kernel will not use this directory handle as the
+	 * basis for a readdir cache.  Includes if seekdir or rewind are used.
+	 */
+	bool                             doh_kreaddir_invalid;
+	/* Set to true if readdir calls are made on this handle */
+	bool                             doh_kreaddir_started;
+	/* Set to true if readdir calls are made on this handle */
+	bool                             doh_kreaddir_finished;
 };
 
 /*
