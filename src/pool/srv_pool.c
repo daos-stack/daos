@@ -2353,7 +2353,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	/*
 	 * Reject pool connection if client is unable to access newer pool.
 	 */
-	if (handler_version > 0) {
+	if (handler_version >= 5) {
 		struct pool_connect_v5_in *in1 = (struct pool_connect_v5_in *)in;
 
 		if (in1->pci_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
@@ -2528,13 +2528,13 @@ out:
 void
 ds_pool_connect_handler_v4(crt_rpc_t *rpc)
 {
-	ds_pool_connect_handler(rpc, 0);
+	ds_pool_connect_handler(rpc, 4);
 }
 
 void
 ds_pool_connect_handler_v5(crt_rpc_t *rpc)
 {
-	ds_pool_connect_handler(rpc, 1);
+	ds_pool_connect_handler(rpc, 5);
 }
 
 static int
