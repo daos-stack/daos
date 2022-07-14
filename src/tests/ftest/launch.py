@@ -9,6 +9,7 @@
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from datetime import datetime
+from tabnanny import verbose
 from tempfile import TemporaryDirectory
 import errno
 import json
@@ -580,7 +581,7 @@ def spawn_commands(hosts, command, timeout=120):
     return check_remote_output(task, command)
 
 
-def find_values(obj, keys, key=None, val_type=list):
+def find_values(obj, keys, key=None, val_type=str):
     """Find dictionary values of a certain type specified with certain keys.
 
     Args:
