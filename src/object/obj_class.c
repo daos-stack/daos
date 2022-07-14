@@ -109,7 +109,8 @@ daos_oclass_name2id(const char *name)
 
 	/* slow search path, it's for tool and not performance sensitive. */
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
+		if (strlen(name) == strlen(oc->oc_name) &&
+		    strncmp(oc->oc_name, name, strlen(name)) == 0)
 			return oc->oc_id;
 	}
 
