@@ -83,6 +83,7 @@ from Version 2.0.x to Version 2.2.y without updating to Version 2.2.0 first.
 Due to the end of life of CentOS Linux 8, DAOS servers running DAOS Version 2.0
 on CentOS Linux 8 need to be reinstalled with a supported EL8 operating system
 (Rocky Linux 8.6, RHEL 8.4 EUS, or RHEL 8.6) in order to use DAOS Version 2.2.
+The RHEL 8.3 and RHEL 8.5 releases are also no longer supported.
 
 The process of reinstalling a DAOS server's EL8 operating system while maintaining
 the data on PMem and NVMe has not been validated, and is not supported with DAOS 2.2.
