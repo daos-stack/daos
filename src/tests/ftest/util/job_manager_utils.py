@@ -311,7 +311,7 @@ class Orterun(JobManager):
                 hostfile. Defaults to None.
         """
         self._hosts = hosts.copy()
-        kwargs = {"hostlist": self._hosts, "slots": slots}
+        kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -421,7 +421,7 @@ class Mpirun(JobManager):
                 hostfile. Defaults to None.
         """
         self._hosts = hosts.copy()
-        kwargs = {"hostlist": self._hosts, "slots": slots}
+        kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -511,7 +511,7 @@ class Srun(JobManager):
                 hostfile. Defaults to None.
         """
         self._hosts = hosts.copy()
-        kwargs = {"hostlist": self._hosts, "slots": None}
+        kwargs = {"hosts": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
         self.nodefile.value = write_host_file(**kwargs)

@@ -9,7 +9,6 @@
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from datetime import datetime
-from tabnanny import verbose
 from tempfile import TemporaryDirectory
 import errno
 import json
