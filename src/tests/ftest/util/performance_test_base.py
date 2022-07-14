@@ -301,7 +301,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
     def run_performance_ior(self, namespace=None, use_intercept=True, stop_delay_write=None,
                             stop_delay_read=None, num_iterations=1,
-                            restart_between_iterations=True):
+                            restart_between_iterations=True, use_stonewalling_read=False):
         """Run an IOR performance test.
 
         Write and Read are ran separately.
@@ -396,8 +396,12 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             self.log.info("Running IOR read (%s)", str(iteration))
             self.ior_cmd.flags.update(read_flags)
-            self.ior_cmd.sw_wearout.update(None)
-            self.ior_cmd.sw_deadline.update(None)
+            if use_stonewalling_read:
+                self.ior_cmd.sw_wearout.update(write_sw_wearout)
+                self.ior_cmd.sw_deadline.update(write_sw_deadline)
+            else:
+                self.ior_cmd.sw_wearout.update(None)
+                self.ior_cmd.sw_deadline.update(None)
             self._run_performance_ior_single(stop_rank_read_s, intercept)
 
             # Manually stop dfuse after ior read completes
