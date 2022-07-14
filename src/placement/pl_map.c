@@ -238,7 +238,7 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
-		    target->ta_comp.co_index == target_index && i == id_shard)
+		    target->ta_comp.co_index == target_index && layout->ol_shards[i].po_shard == id_shard)
 			return true; /* Found a target and rank matches */
 	}
 
