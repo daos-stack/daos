@@ -3,6 +3,89 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 
+## DAOS Version 2.0.3 (2022-07-14)
+
+### Updates in this Release
+
+The DAOS 2.0.3 release contains the following updates on top of DAOS 2.0.2:
+
+- The DAOS 2.0 RPMs for RHEL 8 and clones are now built on EL 8.4
+  (they were previously built on EL 8.3). This has the consequence that
+  DAOS 2.0.3 should not be applied to DAOS nodes running EL 8.3
+  (which has reached end of support in 2021).
+  Update the OS to a supported level before updating to DAOS 2.0.3.
+
+- `libfabric` has been updated to version 1.15.1-1.
+  This fixes [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
+
+- `mercury` has been updated to version 2.1.0~rc4-9,
+  `raft` has been updated to version 0.9.1-1401.gc18bcb8, and
+  `spdk` has been updated to version 21.07-16.
+  This does not fix any specific DAOS 2.0 issues, those are minor
+  updates to keep those package levels in sync with DAOS 2.2 development.
+
+- The following DAOS 2.0 issues are addressed in DAOS 2.0.3:
+```
+    DAOS-11029 tse/dfs: bug fix in tse or dfs about task
+    DAOS-10833 object: keep the same epoch for replicate rebuild
+    DAOS-10435 IV: add update and sync epoch for pool IV.
+    DAOS-10756 event: check before setting the event to READY
+    DAOS-10756 event: move the ev lock to outside the comp_locked function
+    DAOS-8870 pool: Allow srv_hdls in TGT_QUERY_MAP
+    DAOS-10748 bio: missed error code in bulk_map_one()
+    DAOS-7133 tse: refine task re-init checking
+    DAOS-10414 coverity: fixes for various issues
+    DAOS-10381 vos: GC to take a vos_container reference
+    DAOS-10148 tse: fix TSE task buffer to account for aarch64 architecture
+    DAOS-10569 client: fix build on aarch64
+    DAOS-10741 java: Update Netty to Latest Version
+    DAOS-10673 fixes: remove usage of na_* types
+    DAOS-10675 pool: fix potential program hang
+    DAOS-10567 pool: track failed pool lists
+    DAOS-10530 agent: Fix NUMA node rotation
+    DAOS-10194 container: delete iv entry before close cont hdl
+    DAOS-10541 pool: backport compatibility check
+    DAOS-9636 EC: various fixes about EC
+    DAOS-10494 common: Assert macros run the condition more than once
+    DAOS-10435 ec: set peer parity before checking
+    DAOS-10200 vos: Avoid setting dth in TLS across yield
+    DAOS-10222 control: Allow rejoin with NilRank
+    DAOS-10168 control: Retry Join on leadership loss
+    DAOS-10194 control: Fix forced PoolDestroy flow
+    DAOS-8640 obj: bug fixes in EC degraded update, key query and aggregation
+    DAOS-10202 event: private event needs lock on completion and poll
+    DAOS-10249 rdb: Fix uninitialized raft node ID
+    DAOS-10168 control: Don't exit monitoring loop on leadership loss
+    DAOS-10131 dtx: IO forward ULT avoids holding CPU for too long time
+```
+
+### Known Issues and limitations
+
+- Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
+  `daos_server storage prepare -n [--reset]` command) can sporadically cause
+  the NVMe SSDs to become inaccessible. This situation can be corrected by
+  running `rmmod vfio_pci; modprobe vfio_pci` and `rmmod nvme; modprobe nvme`.
+  See [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and the
+  corresponding [SPDK ticket](https://github.com/spdk/spdk/issues/2587).
+
+- For Replication and Erasure Coding (EC), in DAOS 2.0 the redundancy level (`rf_lvl`)
+  is set to `1 (rank=engine)`. On servers with more than one engine per server,
+  setting the redundancy level to `2 (server)` would be more appropriate
+  but the `daos cont create` command currently does not support this
+  [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215).
+
+- DFS POSIX containers and the `daos fs copy` do not support symlinks /
+  [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
+
+- No OPA/PSM2 support.
+  Please refer to the "Fabric Support" section of the
+  [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/) for details.
+
+- Premature ENOSPC error / [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943)
+  Reclaiming free NVMe space is too slow and can cause early out-of-space errors
+  to be reported to applications.
+
+
 ## DAOS Version 2.0.2 (2022-03-21)
 
 ### Updates in this Release

@@ -10,16 +10,28 @@ containers.
 The recommended procedure for the upgrade is:
 
 - Ensure that there are no client applications with open pool connections.
-  If necessary, the `dmg pool evict` command can be used to disconnect
-  any active pool connections.
-- Stop the `daos_agent` daemons.
-- Stop the DAOS engines by running `dmg system stop`.
-- Stop the `daos_server` daemons.
-- Perform the RPM update to the new DAOS fix level.
-- Start the `daos_server` daemons.
+  If necessary, the `dmg pool evict` command can be used on an admin node
+  to disconnect any active pool connections.
+
+- Stop the `daos_agent` daemons on all client nodes,
+  for example by running `systemctl stop daos_agent` in a parallel shell.
+
+- Stop the DAOS engines by running `dmg system stop` on one admin node.
+
+- Stop the `daos_server` daemons on all server nodes,
+  for example by running `systemctl stop daos_server` in a parallel shell.
+
+- On all servers, admin nodes, and clients,
+  perform the RPM update to the new DAOS fix level.
+
+- Start the `daos_server` daemons on all server nodes,
+  for example by running `systemctl start daos_server` in a parallel shell.
+
 - Validate that all engines have started successfully,
-  for example using `dmg system query -v`.
-- Start the `daos_agent` daemons.
+  for example using `dmg system query -v` on an admin node.
+
+- Start the `daos_agent` daemons on all client nodes,
+  for example by running `systemctl start daos_agent` in a parallel shell.
 
 DAOS fix levels include all previous fix levels. So it is possible to updating
 from Version 2.0.0 to Version 2.0.2 without updating to Version 2.0.1 first.
