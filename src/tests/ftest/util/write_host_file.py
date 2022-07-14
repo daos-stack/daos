@@ -8,14 +8,12 @@ from logging import getLogger
 import os
 import random
 
-from ClusterShell.NodeSet import NodeSet
 
-
-def write_host_file(hostlist, path='/tmp', slots=1):
+def write_host_file(hosts, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
 
     Args:
-        hostlist (NodeSet): hosts to write to the hostfile
+        hosts (NodeSet): hosts to write to the hostfile
         path (str, optional): where to write the hostfile. Defaults to '/tmp'.
         slots (int, optional): slots per host to specify in the hostfile.
             Defaults to 1.
@@ -34,19 +32,16 @@ def write_host_file(hostlist, path='/tmp', slots=1):
         os.makedirs(path)
     hostfile = os.path.join(path, "".join(["hostfile", str(unique)]))
 
-    if not hostlist:
+    if not hosts:
         raise ValueError("host list parameter must be provided.")
-    if isinstance(hostlist, list):
-        hostlist = NodeSet.fromlist(hostlist)
 
-    log.info(
-        "Writing hostfile:\n  hosts: %s\n  slots: %s\n  file:  %s",
-        hostlist, slots, hostfile)
+    log.debug("Writing hostfile: %s (hosts=%s, slots=%s)", hostfile, hosts, slots)
     with open(hostfile, "w") as hostfile_handle:
-        for host in hostlist:
-            if slots is None:
-                hostfile_handle.write("{0}\n".format(host))
-            else:
-                hostfile_handle.write("{0} slots={1}\n".format(host, slots))
+        for host in hosts:
+            hostfile_line = [host]
+            if slots:
+                hostfile_line.append(f"slots={slots}")
+            hostfile_handle.write(f"{' '.join(hostfile_line)}\n")
+            log.debug("  %s", " ".join(hostfile_line))
 
     return hostfile

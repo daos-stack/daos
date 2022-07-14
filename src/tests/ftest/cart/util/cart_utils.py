@@ -388,13 +388,9 @@ class CartTest(TestWithoutServers):
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_slt)
+            hostfile = write_host_file(NodeSet(tst_host), daos_test_shared_dir, tst_slt)
         else:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_ppn)
+            hostfile = write_host_file(NodeSet(tst_host), daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
