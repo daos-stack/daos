@@ -109,14 +109,14 @@ mdtest:
   manager: "MPICH"
   mdtest_params:
 #     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
-    - [POSIX, 0, 0, 1, 1000, 0, ' ']
-    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 1, 25, 0, ' ']
+    - [DFS, 4096, 4096, 1, 25, 20, ' ']
+    - [POSIX, 0, 0, 1, 25, 0, '-C -T -r']
+    - [POSIX, 0, 0, 1, 25, 20, '-C -T -r']
     - [DFS, 4096, 4096, 2, 10, 5, ' ']
     - [POSIX, 4096, 4096, 2, 10, 5, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
-    - [POSIX, 0, 0, 2, 10, 5, '-u']
+    - [DFS, 4096, 4096, 1, 25, 20, '-u']
+    - [POSIX, 0, 0, 2, 10, 5, '-u -C -T -r']
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
