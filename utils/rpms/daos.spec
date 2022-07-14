@@ -33,7 +33,6 @@ BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}, mercury-devel < %{mercury_max_version}
-BuildConflicts: mercury-ucx
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
