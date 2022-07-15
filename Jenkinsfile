@@ -104,6 +104,7 @@ pipeline {
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
         buildDiscarder(logRotator(artifactDaysToKeepStr: '100', daysToKeepStr: '730'))
+        copyArtifactPermission("${env.JOB_NAME}/*")
     }
 
     parameters {

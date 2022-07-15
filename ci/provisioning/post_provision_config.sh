@@ -14,6 +14,11 @@ host wolf-*
     LogLevel error
 EOF
 
+if [ $((BUILD_NUMBER%2)) -ne 0 ]; then
+   echo "Job selected to die for test"
+   exit 1
+fi
+
 # shellcheck disable=SC1091
 source ci/provisioning/post_provision_config_common_functions.sh
 # shellcheck disable=SC1091
