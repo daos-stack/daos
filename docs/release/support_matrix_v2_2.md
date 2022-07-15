@@ -11,7 +11,7 @@ can be searched for known issues and possible solutions.
 Community support is provided on a best effort basis
 without any guaranteed SLAs.
 
-Starting with DAOS Version 2, the Intel DAOS engineering team
+Starting with DAOS Version 2.0, the Intel DAOS engineering team
 can also be contracted to provide Commercial Level-3 Support for DAOS.
 Under such a support agreement, Intel partners that offer DAOS
 Commercial Support to their end customers will provide the DAOS
@@ -63,9 +63,9 @@ It is also strongly recommended that all DAOS engines in a DAOS system
 have identical NVMe storage configurations.
 The number of targets per DAOS engine must be identical for all DAOS engines.
 
-DAOS Version 2.2 supports Intel Volume Management Devices (VMD) on the
-DAOS servers. Enabling VMD is platform-dependent; details are provided
-in the Administration Guide.
+DAOS Version 2.2 supports Intel Volume Management Devices (VMD) to manage the
+NVMe disks on the DAOS servers. Enabling VMD is platform-dependent;
+details are provided in the Administration Guide.
 
 Each DAOS engine needs one high-speed network port for communication in the
 DAOS data plane. DAOS Version 2.2 does not support more than one
@@ -89,6 +89,9 @@ DAOS clients have no specific hardware dependencies.
 Each DAOS client needs a network port on the same high-speed interconnect
 that the DAOS servers are connected to.
 Multiple high-speed network ports per DAOS client are supported.
+Note that a single task on a DAOS client will always use a single network port,
+but when multiple tasks per client node are used then the DAOS agent will
+distribute the load by allocating different network ports to different tasks.
 
 
 ## Operating Systems supported for DAOS Servers
@@ -97,7 +100,7 @@ The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
 DAOS Version 2.2 is primarily validated
-on [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
+on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
 and [openSUSE Leap 15.3](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.2 supports on DAOS servers.
@@ -128,22 +131,21 @@ description on the Red Hat support website for information on RHEL support phase
 
 CentOS Linux 8 has reached End Of Life (EOL) on December 31st, 2021.
 Consequently, DAOS Version 2.2 does not support CentOS Linux 8.
-DAOS clusters that have been running CentOS Linux 8 have to be migrated to
-Rocky Linux 8 or RHEL 8 in order to deploy DAOS Version 2.2.
+DAOS clusters that have been running CentOS Linux 8 must be be migrated to
+a supported EL8 operating system in order to deploy DAOS Version 2.2.
 
 ### Red Hat Enterprise Linux 8
 
-DAOS Version 2.2 supports RHEL 8.5 and RHEL 8.6.
+DAOS Version 2.2 is supported on RHEL 8.4 and RHEL 8.6. RHEL 8.5 is no longer supported by RedHat.
 
 !!! note
-    Most validation of DAOS 2.2 has been done on RHEL 8.5,
-    which is expected to be superseded by RHEL 8.6 by the end of May 2022.
-    DAOS 2.2 support of RHEL 8.6 may therefore not be available with
-    the initial DAOS 2.2.0 release: If validation issues are discovered that
-    require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
+    Most validation of DAOS 2.2 has been done on the Rocky Linux 8.6 release.
+    DAOS 2.2 should work on RHEL 8.4 and RHEL 8.5, but fixing DAOS issues that are
+    discovered on RHEL 8.5 may require an OS upgrade to a supported release.
 
 Links to RHEL 8 Release Notes:
 
+* [RHEL 8.4](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.4_release_notes/index)
 * [RHEL 8.5](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.5_release_notes/index)
 * [RHEL 8.6](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.6_release_notes/index)
 
@@ -152,14 +154,12 @@ description on the Red Hat support website for information on RHEL support phase
 
 ### Rocky Linux 8
 
-DAOS Version 2.2 supports Rocky Linux 8.5 and 8.6.
+DAOS Version 2.2 is supported on Rocky Linux 8.6.
 
 !!! note
-    Most validation of DAOS 2.2 has been done on the Rocky Linux 8.5 release,
-    which is expected to be superseded by Rocky Linux 8.6 by the end of May 2022.
-    DAOS 2.2 support of Rocky Linux 8.6 may therefore not be available with
-    the initial DAOS 2.2.0 release: If validation issues are discovered that
-    require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
+    Most validation of DAOS 2.2 has been done on the Rocky Linux 8.6 release.
+    DAOS 2.2 should work on Rocky Linux 8.5, but fixing DAOS issues that are
+    discovered on Rocky Linux 8.5 may require an OS upgrade to a supported release.
 
 Links to Rocky Linux Release Notes:
 
@@ -191,6 +191,7 @@ DAOS does not support
 openSUSE Tumbleweed,
 Fedora,
 CentOS Stream,
+CentOS Linux,
 Alma Linux,
 Ubuntu, or
 Oracle Linux.
@@ -213,7 +214,7 @@ Linux distributions and/or versions.
 DAOS relies on [libfabric](https://ofiwg.github.io/libfabric/)
 for communication in the DAOS data plane.
 
-DAOS Version 2.2 requires at least libfabric Version 1.14. The RPM distribution
+DAOS Version 2.2 requires at least libfabric Version 1.15-1. The RPM distribution
 of DAOS includes libfabric RPM packages with the correct version.
 It is strongly recommended to use exactly the provided libfabric version
 on all DAOS servers and all DAOS clients.
@@ -223,32 +224,25 @@ DAOS Version 2.2 has been validated mainly with the `verbs` provider
 for InfiniBand fabrics, and the `tcp` provider for other fabrics.
 Future DAOS releases may add support for additional libfabric providers.
 
-Note:
-DAOS Version 2.2 has been validated with and supports the `tcp` provider.
-Please refer to the
-[Provider Feature Matrix v1.14](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix-v1.14.x)
-for information on the `tcp` provider in libfabric-1.14.
-
-Note:
-The `psm2` provider for Omni-Path fabrics has known issues
-when used in a DAOS context, and is not supported for production
-environments. Please refer to the
-[Cornelis Networks presentation](https://daosio.atlassian.net/wiki/download/attachments/11015454821/12_Update_on_Omni-Path_Support_for_DAOS_DUG21_19Nov2021.pdf)
-at [DUG21](https://daosio.atlassian.net/wiki/spaces/DC/pages/11015454821/DUG21)
-for an outlook on future Omni-Path Express support for DAOS.
-In the meantime, please use the `tcp` provider on Omni-Path fabrics.
+!!! note
+    The `psm2` provider for Omni-Path fabrics has known issues
+    when used in a DAOS context, and is not supported for production
+    environments. Please refer to the
+    [Cornelis Networks presentation](https://daosio.atlassian.net/wiki/download/attachments/11015454821/12_Update_on_Omni-Path_Support_for_DAOS_DUG21_19Nov2021.pdf)
+    at [DUG21](https://daosio.atlassian.net/wiki/spaces/DC/pages/11015454821/DUG21)
+    for an outlook on future Omni-Path Express support for DAOS.
+    In the meantime, please use the `tcp` provider on Omni-Path fabrics.
 
 On InfiniBand fabrics with the `verbs` provider, DAOS requires that the
 [Mellanox OFED (MLNX\_OFED)](https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed)
 software stack is installed on the DAOS servers and DAOS clients.
 DAOS Version 2.2 has been validated with MLNX\_OFED Version 5.5-1 and
-Version 5.6-1. Versions older than 5.4-3 are not supported by DAOS 2.2.
+Version 5.6-1. Versions older than 5.5-1 are not supported by DAOS 2.2.
 
 Links to MLNX\_OFED Release Notes:
 
-* [MLNX\_OFED 5.4-3](https://docs.nvidia.com/networking/display/MLNXOFEDv543100/Release+Notes)
 * [MLNX\_OFED 5.5-1](https://docs.nvidia.com/networking/display/MLNXOFEDv551032/Release+Notes)
-* [MLNX\_OFED 5.6-1](https://docs.nvidia.com/networking/display/MLNXOFEDv561000/Release+Notes)
+* [MLNX\_OFED 5.6-1](https://docs.nvidia.com/networking/display/MLNXOFEDv561033/Release+Notes)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -261,6 +255,15 @@ adapter configurations.
 The only exception to this recommendation is the mix of single-port
 and dual-port adapters of the same generation, where only one of the ports
 of the dual-port adapter(s) is used by DAOS.
+
+For InfiniBand fabrics, DAOS 2.2 also includes a Technology Preview of
+[UCX](https://openucx.org/) fabric support, that can be used as an alternative
+to libfabric.  Note that UCX is not yet fully validated on DAOS 2.2,
+and should not be used in production environments.
+
+!!! note
+    The MLNX\_OFED 5.6-1 release is not yet supported in conjunction with UCX,
+    due to a known issue with the UCX 1.13 version in MLNX\_OFED 5.6-1.
 
 
 ## DAOS Scaling
