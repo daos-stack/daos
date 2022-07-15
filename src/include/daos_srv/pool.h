@@ -81,6 +81,10 @@ struct ds_pool {
 	 * DAOS_SYS_TAG.
 	 */
 	void			*sp_metrics[DAOS_NR_MODULE];
+	/** checksum scrubbing properties */
+	uint64_t		sp_scrub_mode;
+	uint64_t		sp_scrub_freq_sec;
+	uint64_t		sp_scrub_thresh;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
