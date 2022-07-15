@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -563,6 +563,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
+- Add pool_scrubbing_tests to test package
+
 * Wed Jul 13 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.100-15
 - Update SPDK dependency requirement to greater than or equal to 22.01.1.
 
