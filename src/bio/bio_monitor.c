@@ -39,6 +39,11 @@ struct bio_dev_list_msg_arg {
 	int				 rc;
 };
 
+/* Used for getting vendor ID from PCI device */
+struct vid_opts {
+	struct spdk_pci_addr		 pci_addr;
+	uint16_t			 vid;
+};
 
 /* Collect space utilization for blobstore */
 static void
@@ -967,6 +972,16 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 }
 
 
+static void
+get_vendor_id(void *ctx, struct spdk_pci_device *pci_device)
+{
+	struct vid_opts *opts = ctx;
+
+	if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) == 0) {
+		opts->vid = spdk_pci_device_get_vendor_id(pci_device);
+	}
+}
+
 /*
  * Set the PCI Vendor ID for the NVMe SSD. This is used to determine if
  * Intel SMART stats will be monitored (vendor specific).
@@ -975,9 +990,7 @@ void
 bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 {
 	struct bio_dev_info		 binfo = { 0 };
-	struct spdk_pci_addr		 pci_addr;
-	struct spdk_pci_device		*pci_device;
-	uint16_t			 vid = 0;
+	struct vid_opts			 opts = { 0 };
 	int				 rc;
 
 	rc = fill_in_traddr(&binfo, bdev_name);
@@ -986,19 +999,19 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 		return;
 	}
 
-	if (spdk_pci_addr_parse(&pci_addr, binfo.bdi_traddr)) {
+	if (spdk_pci_addr_parse(&opts.pci_addr, binfo.bdi_traddr)) {
 		D_ERROR("Unable to parse PCI address: %s\n", binfo.bdi_traddr);
 		goto free_traddr;
 	}
 
-	for (pci_device = spdk_pci_get_first_device(); pci_device != NULL;
-	     pci_device = spdk_pci_get_next_device(pci_device)) {
-		if (spdk_pci_addr_compare(&pci_addr, &pci_device->addr) == 0) {
-			vid = spdk_pci_device_get_vendor_id(pci_device);
-			break;
-		}
-	}
-	bb->bb_dev_health.bdh_vendor_id = vid;
+	opts.vid = 0;
+
+	spdk_pci_for_each_device(&opts, get_vendor_id);
+
+	if (opts.vid == 0)
+		D_ERROR("No vendor ID retrieved for device at address: %s\n", binfo.bdi_traddr);
+
+	bb->bb_dev_health.bdh_vendor_id = opts.vid;
 
 free_traddr:
 	D_FREE(binfo.bdi_traddr);
