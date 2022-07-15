@@ -2359,7 +2359,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		if (in1->pci_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
 			if (global_ver > pool_max_supported_version[in1->pci_pool_version]) {
 				D_ERROR(DF_UUID": cannot connect, pool format version(%u) > "
-					"max client supported format version(%u) try to upgrade client firstly.\n",
+					"max client supported format version(%u) try to upgrade "
+					"client firstly.\n",
 					DP_UUID(in->pci_op.pi_uuid), global_ver,
 					pool_max_supported_version[in1->pci_pool_version]);
 				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
@@ -2368,8 +2369,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	} else {
 		/* Assuming 2.0 client */
 		if (global_ver > 1) {
-			D_ERROR(DF_UUID": cannot connect, 2.0 clients unable to access pool format version > 1,"
-				"try to upgrade client firstly.\n",
+			D_ERROR(DF_UUID": cannot connect, 2.0 clients unable to access pool format "
+				"version > 1, try to upgrade client firstly.\n",
 				DP_UUID(in->pci_op.pi_uuid));
 			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
 		}
