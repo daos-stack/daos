@@ -339,7 +339,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
 	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
 	}
 
