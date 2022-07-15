@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
@@ -31,6 +32,7 @@ class DaosTestError(Exception):
 
 class SimpleProfiler():
     """Simple profiler class.
+
     Counts the number of times a function is called and measure its execution
     time.
     """
@@ -51,7 +53,6 @@ class SimpleProfiler():
             fn (function): Function to be executed
             args  (tuple): Argument list
             kwargs (dict): Keyworded, variable-length argument list
-
         """
         self._logger.info("Running function: %s()", fn.__name__)
 
@@ -89,6 +90,7 @@ class SimpleProfiler():
 
     def set_logger(self, fn):
         """Assign the function to be used for logging.
+
         Set the function that will be used to print the elapsed time on each
         function call. If this value is not set, the profiling will be
         performed silently.
@@ -101,6 +103,7 @@ class SimpleProfiler():
 
     def print_stats(self):
         """Print all the stats collected so far.
+
         If the logger has not been set, the stats will be printed by using the
         built-in print function.
         """
@@ -201,6 +204,7 @@ def bytes_to_human(size, digits=2, binary=True):
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 output_check="both", env=None):
     """Run the command on the local host.
+
     This method uses the avocado.utils.process.run() method to run the specified
     command string on the local host using subprocess.Popen(). Even though the
     command is specified as a string, since shell=False is passed to process.run
@@ -326,6 +330,7 @@ def check_task(task, logger=None):
     """
     def check_task_log(message):
         """Log the provided text if a logger is present.
+
         Args:
             message (str): text to display
         """
@@ -603,6 +608,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 def check_file_exists(hosts, filename, user=None, directory=False,
                       sudo=False):
     """Check if a specified file exist on each specified hosts.
+
     If specified, verify that the file exists and is owned by the user.
 
     Args:
@@ -641,7 +647,9 @@ def check_file_exists(hosts, filename, user=None, directory=False,
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
+
     e.g. server-[26-27] becomes a list with entries server-26, server-27
+
     This works for every thing that has come up so far but I don't know what
     all slurm finds acceptable so it might not parse everything possible.
     """
@@ -676,6 +684,7 @@ def process_host_list(hoststr):
 
 def get_random_string(length, exclude=None, include=None):
     """Create a specified length string of random ascii letters and numbers.
+
     Optionally exclude specific random strings from being returned.
 
     Args:
@@ -703,6 +712,7 @@ def get_random_string(length, exclude=None, include=None):
 
 def get_random_bytes(length, exclude=None, encoding="utf-8"):
     """Create a specified length string of random ascii letters and numbers.
+
     Optionally exclude specific random strings from being returned.
 
     Args:
@@ -930,6 +940,7 @@ def get_partition_hosts(partition, reservation=None):
 
 def get_log_file(name):
     """Get the full log file name and path.
+
     Prepends the DAOS_TEST_LOG_DIR path (or /tmp) to the specified file name.
 
     Args:
@@ -958,6 +969,7 @@ def check_uuid_format(uuid):
 
 def get_numeric_list(numeric_range):
     """Convert a string of numeric ranges into an expanded list of integers.
+
     Example: "0-3,7,9-13,15" -> [0, 1, 2, 3, 7, 9, 10, 11, 12, 13, 15]
 
     Args:
@@ -1008,6 +1020,7 @@ def get_remote_file_size(host, file_name):
 
 def error_count(error, hostlist, log_file):
     """Count the number of specific ERRORs found in the log file.
+
     This function also returns a count of the other ERRORs from same log file.
 
     Args:
@@ -1062,6 +1075,7 @@ def get_module_class(name, module):
 
 def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     """Get the job manager class that matches the specified name.
+
     Enables assigning a JobManager class from the test's yaml settings.
 
     Args:
@@ -1092,6 +1106,7 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
 
 def convert_string(item, separator=","):
     """Convert the object into a string.
+
     If the object is a list, tuple, NodeSet, etc. return a comma-separated
     string of the values.
 
@@ -1189,6 +1204,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
                      verbose=True, raise_exception=True, sudo=False,
                      owner=None):
     """Copy the source to the destination on each of the specified hosts.
+
     Optionally (by default) ensure the destination directory exists on each of
     the specified hosts prior to copying the source.
 
@@ -1352,6 +1368,7 @@ def get_subprocess_stdout(subprocess):
 
 def create_string_buffer(value, size=None):
     """Create a ctypes string buffer.
+
     Converts any string to a bytes object before calling
     ctypes.create_string_buffer().
 
@@ -1389,7 +1406,6 @@ def report_errors(test, errors):
     Args:
         test (Test): Test class.
         errors (list): List of errors.
-
     """
     if errors:
         test.log.error("Errors detected:")
@@ -1411,6 +1427,7 @@ def percent_change(val1, val2):
 
     Returns:
         float: decimal percent change.
+
     """
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
@@ -1484,7 +1501,6 @@ def set_avocado_config_value(section, key, value):
         section (str): the configuration section, e.g. 'runner.timeout'
         key (str): the configuration key, e.g. 'process_died'
         value (object): the value to set
-
     """
     if int(MAJOR) >= 82:
         settings.update_option(".".join([section, key]), value)

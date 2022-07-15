@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -60,6 +61,7 @@ class DaosCoreBase(TestWithServers):
     @fail_on(CommandFailure)
     def start_server_managers(self, force=False):
         """Start the daos_server processes on each specified list of hosts.
+
         Enable scalable endpoint if requested with a test-specific
         'scalable_endpoint' yaml parameter.
 
@@ -203,7 +205,6 @@ class DaosCoreBase(TestWithServers):
         Args:
             testname (str): name of the test
             result (CmdResult): result of the failed command.
-
         """
         filename = "".join([testname, "_results.xml"])
         filename = os.path.join(self.outputdir, filename)
