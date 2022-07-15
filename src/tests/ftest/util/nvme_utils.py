@@ -56,7 +56,6 @@ class ServerFillUp(IorTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
         super().__init__(*args, **kwargs)
-        self.no_of_pools = 1
         self.capacity = 1
         self.no_of_servers = 1
         self.no_of_drives = 1
@@ -149,8 +148,8 @@ class ServerFillUp(IorTestBase):
             for line in output.stdout_text.splitlines():
                 if 'WARNING' in line and self.fail_on_warning:
                     self.result.append("FAIL-IOR command issued warnings.")
-        except (CommandFailure, TestFail):
-            self.result.append("FAIL")
+        except (CommandFailure, TestFail) as error:
+            self.result.append("FAIL - {}".format(error))
 
     def calculate_ior_block_size(self):
         """Calculate IOR Block size to fill up the Server.

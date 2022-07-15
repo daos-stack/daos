@@ -4,9 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
 from nvme_utils import ServerFillUp
-from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
 
 class NvmeFault(ServerFillUp):
@@ -19,44 +17,37 @@ class NvmeFault(ServerFillUp):
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.no_of_pools = self.params.get("number_of_pools", '/run/pool/*', 1)
-        self.capacity = self.params.get("percentage",
-                                        '/run/faulttests/pool_capacity/*')
-        self.no_of_servers = self.params.get("count",
-                                             '/run/faulttests/no_of_servers/*/')
-        self.no_of_drives = self.params.get("count",
-                                            '/run/faulttests/no_of_drives/*/')
-        self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        self.dmg.get_params(self)
-        self.dmg.insecure.update(
-            self.server_managers[0].get_config_value("allow_insecure"),
-            "dmg.insecure")
-        #Set to True to generate the NVMe fault during IO
+        self.capacity = self.params.get('pool_capacity', '/run/faulttests/*')
+        self.no_of_servers = self.params.get('no_of_servers', '/run/faulttests/*')
+        self.no_of_drives = self.params.get('no_of_drives', '/run/faulttests/*')
+        self.dmg = self.get_dmg_command()
+
+        # Set to True to generate the NVMe fault during IO
         self.set_faulty_device = True
 
     def test_nvme_fault(self):
         """Jira ID: DAOS-4722.
 
         Test Description: Test NVMe disk fault.
-        Use Case: Create the large size of pool and start filling up the pool.
-                  while IO is in progress remove single disks from
-                  single/multiple servers.
+        Use Case: Create a large pool and start filling it up. While IO is in progress,
+                  remove a single disk from a single server.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,nvme_fault,full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme
+        :avocado: tags=nvme_fault
         """
-        #Create the Pool with Maximum NVMe size
+        # Create the Pool with Maximum NVMe size
         self.create_pool_max_size(nvme=True)
 
-        #Start the IOR Command and generate the NVMe fault.
+        # Start the IOR Command and generate the NVMe fault.
         self.start_ior_load(operation="Auto_Write", percent=self.capacity)
 
-        print(
-            "pool_percentage_used -- After -- {}".format(
-                self.pool.pool_percentage_used()))
+        self.log.info("pool_percentage_used -- After -- %s", self.pool.pool_percentage_used())
 
-        #Check nvme-health command works
+        # Check nvme-health command works
         try:
             self.dmg.hostlist = self.hostlist_servers
             self.dmg.storage_scan_nvme_health()
-        except CommandFailure as _error:
-            self.fail("dmg storage scan --nvme-health failed")
+        except CommandFailure as error:
+            self.fail("dmg storage scan --nvme-health failed: {}".format(error))
