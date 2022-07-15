@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -517,8 +517,6 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 		return -DER_ENOENT;
 	}
 
-	D_DEBUG(DB_MEM, "Instantiate memory class %s\n", umc->umc_name);
-
 	umm->umm_id		= umc->umc_id;
 	umm->umm_ops		= umc->umc_ops;
 	umm->umm_name		= umc->umc_name;
@@ -531,6 +529,11 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 #endif
 
 	set_offsets(umm);
+
+	D_DEBUG(DB_MEM, "Instantiate memory class %s id=%d nospc_rc=%d pool=%p pool_uuid_lo="DF_X64
+		" base="DF_X64"\n", umc->umc_name, umm->umm_id, umm->umm_nospc_rc, umm->umm_pool,
+		umm->umm_pool_uuid_lo, umm->umm_base);
+
 	return 0;
 }
 

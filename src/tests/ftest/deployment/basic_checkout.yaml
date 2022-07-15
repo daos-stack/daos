@@ -36,19 +36,79 @@ server_config:
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 25G
-    nvme_size: 250G
-    control_method: dmg
+  mode: 146
+  name: daos_server
+  size: 50%
+  control_method: dmg
+  properties: ec_cell_sz:128KiB
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
+
+# ior easy
+ior_easy: &ior_easy_base
+  client_processes:
+    ppn: 16
+  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
+  read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
+  block_size: '150G'
+  sw_deadline: 30
+  sw_wearout: 1
+  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+ior_dfs_sx:
+  <<: *ior_easy_base
+  api: DFS
+  dfs_oclass: SX
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+ior_dfs_ec_8p2gx:
+  <<: *ior_easy_base
+  api: DFS
+  dfs_oclass: EC_8P2GX
+  dfs_chunk: 8MiB
+  transfer_size: 8MiB
+ior_dfs_ec_16p2gx:
+  <<: *ior_easy_base
+  api: DFS
+  dfs_oclass: EC_16P2GX
+  dfs_chunk: 16MiB
+  transfer_size: 16MiB
+
+# mdtest easy
+mdtest_easy: &mdtest_easy_base
+  client_processes:
+    ppn: 16
+  test_dir: "/"
+  manager: "MPICH"
+  flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -u -L"
+  api: "DFS"
+  read_bytes: 0
+  write_bytes: 0
+  num_of_files_dirs: 100000000
+  stonewall_timer: 30
+  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  dfs_destroy: False
+mdtest_dfs_s1:
+  <<: *mdtest_easy_base
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_chunk: 1MiB
+mdtest_dfs_ec_8p2g1:
+  <<: *mdtest_easy_base
+  dfs_oclass: EC_8P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 8MiB
+mdtest_dfs_ec_16p2g1:
+  <<: *mdtest_easy_base
+  dfs_oclass: EC_16P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 16MiB
+
+# ior small
 ior:
     client_processes:
-        ppn_8:
-          ppn: 8
+          ppn: 16
     test_file: daos:testFile
     repetitions: 2
     dfs_destroy: False
@@ -88,8 +148,7 @@ ior:
 ior_dm:
       client_processes:
         fs_copy: 10
-        ppn_8:
-          ppn: 8
+        ppn: 16
       api: DFS
       flags: "-w -F -k"
       signature: "5"
@@ -101,22 +160,21 @@ ior_dm:
 
 mdtest:
   client_processes:
-    ppn_8:
-      ppn: 8
+    ppn: 16
   test_dir: "/"
   iteration: 1
   dfs_destroy: True
   manager: "MPICH"
   mdtest_params:
 #     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
-    - [POSIX, 0, 0, 1, 1000, 0, ' ']
-    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 1, 25, 0, ' ']
+    - [DFS, 4096, 4096, 1, 25, 20, ' ']
+    - [POSIX, 0, 0, 1, 25, 0, '-C -T -r']
+    - [POSIX, 0, 0, 1, 25, 20, '-C -T -r']
     - [DFS, 4096, 4096, 2, 10, 5, ' ']
     - [POSIX, 4096, 4096, 2, 10, 5, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
-    - [POSIX, 0, 0, 2, 10, 5, '-u']
+    - [DFS, 4096, 4096, 1, 25, 20, '-u']
+    - [POSIX, 0, 0, 2, 10, 5, '-u -C -T -r']
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
