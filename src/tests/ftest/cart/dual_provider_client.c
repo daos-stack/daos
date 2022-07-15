@@ -73,7 +73,7 @@ int main(int argc, char **argv)
 	int			num_remote_tags;
 	bool			use_primary = true;
 
-	while ((c = getopt(argc, argv, "i:p:d:s")) != -1) {
+	while ((c = getopt(argc, argv, "i:p:d:c:s")) != -1) {
 		switch (c) {
 		case 'i':
 			arg_interface = optarg;
