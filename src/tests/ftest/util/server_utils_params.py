@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
         self.provider = BasicParameter(None, default_provider)
-        self.crt_timeout = BasicParameter(None, 10)
+        self.crt_timeout = BasicParameter(None, 60)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         # Auto-calculate if unset or set to zero
