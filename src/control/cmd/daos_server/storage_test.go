@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -147,7 +148,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			spc := commands.StoragePrepareCmd{
 				ScmOnly: true,
@@ -172,7 +173,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			}
 
 			err := cmd.prepScm(&scanErrors, mockScmPrep)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -181,7 +182,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			if len(scanErrors) > 0 {
 				se = common.ConcatErrors(scanErrors, nil)
 			}
-			common.CmpErr(t, tc.expScanErr, se)
+			test.CmpErr(t, tc.expScanErr, se)
 
 			if tc.expLogMsg != "" {
 				if !strings.Contains(buf.String(), tc.expLogMsg) {
@@ -199,85 +200,88 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 	// bdev mock commands
-	bdevPrepCmd := commands.StoragePrepareCmd{
-		NvmeOnly: true,
+	newBdevPrepCmd := func() *commands.StoragePrepareCmd {
+		cmd := &commands.StoragePrepareCmd{
+			NvmeOnly: true,
+		}
+		cmd.NrHugepages = testNrHugePages
+		cmd.TargetUser = username
+		cmd.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+			storage.BdevPciAddrSep, test.MockPCIAddr(2))
+		cmd.PCIBlockList = test.MockPCIAddr(1)
+		return cmd
 	}
-	bdevPrepCmd.NrHugepages = testNrHugePages
-	bdevPrepCmd.TargetUser = username
-	bdevPrepCmd.PCIAllowList = fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-		storage.BdevPciAddrSep, common.MockPCIAddr(2))
-	bdevPrepCmd.PCIBlockList = common.MockPCIAddr(1)
-	bdevResetCmd := bdevPrepCmd
+	bdevResetCmd := newBdevPrepCmd()
 	bdevResetCmd.Reset = true
 
 	for name, tc := range map[string]struct {
-		prepCmd      commands.StoragePrepareCmd
-		bmbc         *bdev.MockBackendConfig
-		expLogMsg    string
-		expErr       error
-		expPrepCall  *storage.BdevPrepareRequest
-		expResetCall *storage.BdevPrepareRequest
+		prepCmd       *commands.StoragePrepareCmd
+		bmbc          *bdev.MockBackendConfig
+		iommuDisabled bool
+		expLogMsg     string
+		expErr        error
+		expPrepCall   *storage.BdevPrepareRequest
+		expResetCall  *storage.BdevPrepareRequest
 	}{
-		"no devices; no consent given": {
-			expPrepCall: &storage.BdevPrepareRequest{
-				TargetUser: username,
-				// always set in local storage prepare to allow automatic detection
-				EnableVMD: true,
-			},
-			expErr: errors.New("consent not given"), // prompts for confirmation and gets EOF
-		},
 		"no devices; success": {
-			prepCmd: commands.StoragePrepareCmd{
-				Force: true,
-			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				TargetUser: username,
 				// always set in local storage prepare to allow automatic detection
 				EnableVMD: true,
-			},
-			expErr: storage.FaultScmNoModules,
-		},
-		"nvme-only no devices; success": {
-			prepCmd: commands.StoragePrepareCmd{
-				NvmeOnly: true,
-			},
-			expPrepCall: &storage.BdevPrepareRequest{
-				TargetUser: username,
-				EnableVMD:  true,
 			},
 		},
 		"setting nvme-only and scm-only should fail": {
-			prepCmd: commands.StoragePrepareCmd{
+			prepCmd: &commands.StoragePrepareCmd{
 				ScmOnly:  true,
 				NvmeOnly: true,
 			},
 			expErr: errors.New("should not be set"),
 		},
 		"nvme prep succeeds; user params": {
-			prepCmd: bdevPrepCmd,
+			prepCmd: newBdevPrepCmd(),
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PCIBlockList: common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
 		},
 		"nvme prep fails; user params": {
-			prepCmd: bdevPrepCmd,
+			prepCmd: newBdevPrepCmd(),
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("backed prep setup failed"),
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PCIBlockList: common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
 			expErr: errors.New("backed prep setup failed"),
+		},
+		"non-root; vfio disabled": {
+			prepCmd: newBdevPrepCmd().WithDisableVFIO(true),
+			expErr:  errors.New("VFIO can not be disabled"),
+		},
+		"non-root; iommu not detected": {
+			iommuDisabled: true,
+			expErr:        errors.New("no IOMMU detected"),
+		},
+		"root; vfio disabled; iommu not detected": {
+			prepCmd:       newBdevPrepCmd().WithTargetUser("root").WithDisableVFIO(true),
+			iommuDisabled: true,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    "root",
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIBlockList: test.MockPCIAddr(1),
+				DisableVFIO:  true,
+			},
 		},
 		"nvme prep reset succeeds; user params": {
 			prepCmd: bdevResetCmd,
@@ -285,9 +289,9 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 				Reset_:        true,
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PCIBlockList: common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
 		},
@@ -300,9 +304,9 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 				Reset_:        true,
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PCIBlockList: common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
 			expErr: errors.New("backed prep reset failed"),
@@ -310,15 +314,18 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 
+			if tc.prepCmd == nil {
+				tc.prepCmd = &commands.StoragePrepareCmd{}
+			}
 			tc.prepCmd.NrNamespacesPerSocket = 1 // default applied by goflags
 
 			cmd := &storagePrepareCmd{
-				StoragePrepareCmd: tc.prepCmd,
+				StoragePrepareCmd: *tc.prepCmd,
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
@@ -326,16 +333,18 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 					scm.NewMockProvider(log, nil, nil), mbp),
 			}
 
-			gotErr := cmd.Execute(nil)
+			gotErr := cmd.prepNvme(cmd.scs.NvmePrepare, !tc.iommuDisabled)
 
 			mbb.RLock()
 			if tc.expPrepCall == nil {
 				if len(mbb.PrepareCalls) != 0 {
-					t.Fatal("unexpected number of prepared calls")
+					t.Fatalf("unexpected number of prepare calls, want 0 got %d",
+						len(mbb.PrepareCalls))
 				}
 			} else {
 				if len(mbb.PrepareCalls) != 1 {
-					t.Fatal("unexpected number of prepared calls")
+					t.Fatalf("unexpected number of prepare calls, want 1 got %d",
+						len(mbb.PrepareCalls))
 				}
 				if diff := cmp.Diff(*tc.expPrepCall, mbb.PrepareCalls[0]); diff != "" {
 					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
@@ -346,19 +355,21 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 			mbb.RLock()
 			if tc.expResetCall == nil {
 				if len(mbb.ResetCalls) != 0 {
-					t.Fatal("unexpected number of prepared calls")
+					t.Fatalf("unexpected number of reset calls, want 0 got %d",
+						len(mbb.ResetCalls))
 				}
 			} else {
 				if len(mbb.ResetCalls) != 1 {
-					t.Fatal("unexpected number of prepared calls")
+					t.Fatalf("unexpected number of reset calls, want 1 got %d",
+						len(mbb.PrepareCalls))
 				}
 				if diff := cmp.Diff(*tc.expResetCall, mbb.ResetCalls[0]); diff != "" {
-					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+					t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 				}
 			}
 			mbb.RUnlock()
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

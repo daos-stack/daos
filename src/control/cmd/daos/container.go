@@ -20,7 +20,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -211,7 +211,6 @@ type containerCreateCmd struct {
 	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -220,13 +219,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 	defer deallocCmdArgs()
-
-	if cmd.ContFlag.HasUUID() {
-		cmd.contUUID = cmd.ContFlag.UUID
-		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-			return err
-		}
-	}
 
 	if cmd.PoolID().Empty() {
 		if cmd.Path == "" {
@@ -334,7 +326,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	var ci *containerInfo
 	ci, err = cmd.queryContainer()
 	if err != nil {
-		if errors.Cause(err) != drpc.DaosNoPermission {
+		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", co_id)
 		}
 
@@ -1043,7 +1035,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 
 	if len(cmd.Properties.names) == len(propHdlrs) {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
-		if err != nil && err != drpc.DaosNoPermission {
+		if err != nil && err != daos.NoPermission {
 			return errors.Wrapf(err,
 				"failed to query ACL for container %s",
 				cmd.ContainerID())

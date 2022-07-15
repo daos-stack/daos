@@ -142,8 +142,12 @@ struct dfs {
 	int			amode;
 	/** Open pool handle of the DFS mount */
 	daos_handle_t		poh;
+	/** refcount on pool handle that through the DFS API */
+	uint32_t		poh_refcount;
 	/** Open container handle of the DFS mount */
 	daos_handle_t		coh;
+	/** refcount on cont handle that through the DFS API */
+	uint32_t		coh_refcount;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
 	/** superblock object OID */
@@ -161,6 +165,8 @@ struct dfs {
 	struct dfs_mnt_hdls	*pool_hdl;
 	/** hash entry for cont open handle - valid on dfs_connect() */
 	struct dfs_mnt_hdls	*cont_hdl;
+	/** the root dir stat buf */
+	struct stat		root_stbuf;
 };
 
 struct dfs_entry {
@@ -954,8 +960,6 @@ restart:
 		entry->mode = file->mode;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = chunk_size;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
@@ -1099,8 +1103,6 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		/** since it's a single conditional op, we don't need a DTX */
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
@@ -1187,8 +1189,6 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		oid_cp(&entry->oid, sym->oid);
 		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
-		entry->uid = geteuid();
-		entry->gid = getegid();
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -1371,9 +1371,13 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-static int
-dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
-		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
+/**
+ * Real latest & greatest implementation of container create. Used by anyone including the
+ * daos_fs.h header file.
+ */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
+		daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
@@ -1473,10 +1477,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	if (uuid_is_set)
-		rc = daos_cont_create(poh, in_uuid, prop, NULL);
-	else
-		rc = daos_cont_create(poh, cuuid, prop, NULL);
+	rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1563,44 +1564,6 @@ err_prop:
 	return rc;
 }
 
-/** Disable backward compat code */
-#undef dfs_cont_create
-
-/** Kept for backward ABI compatibility when a UUID is provided by the caller */
-int
-dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
-{
-	const unsigned char     *uuid = (const unsigned char *)cuuid;
-	uuid_t			co_uuid;
-
-	if (!daos_uuid_valid(uuid))
-		return EINVAL;
-
-	uuid_copy(co_uuid, uuid);
-	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
-}
-
-/** API version for when the uuid is required to be passed in. */
-int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
-
-	return dfs_cont_create(poh, u, attr, coh, dfs);
-}
-
-/*
- * Real latest & greatest implementation of container create. Used by anyone including the
- * daos_fs.h header file.
- */
-int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	return dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
-}
-
 int
 dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
 			   uuid_t *cuuid, daos_handle_t *coh, dfs_t **dfs)
@@ -1636,9 +1599,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 	if (cuuid == NULL) {
 		uuid_t u;
 
-		rc = dfs_cont_create_int(poh, &u, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, &u, attr, coh, dfs);
 	} else {
-		rc = dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, cuuid, attr, coh, dfs);
 	}
 	attr->da_props = orig;
 	daos_prop_free(merged_props);
@@ -1935,6 +1898,15 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		D_GOTO(err_super, rc);
 	}
 
+	dfs->root_stbuf.st_nlink = 1;
+	dfs->root_stbuf.st_size = sizeof(root_dir);
+	dfs->root_stbuf.st_mode = dfs->root.mode;
+	dfs->root_stbuf.st_uid = root_dir.uid;
+	dfs->root_stbuf.st_gid = root_dir.gid;
+	dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
+	dfs->root_stbuf.st_mtim.tv_sec = root_dir.mtime;
+	dfs->root_stbuf.st_ctim.tv_sec = root_dir.ctime;
+
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
@@ -1980,13 +1952,97 @@ dfs_umount(dfs_t *dfs)
 		return EINVAL;
 	}
 
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount != 0) {
+		D_ERROR("Pool open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	if (dfs->coh_refcount != 0) {
+		D_ERROR("Cont open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	D_MUTEX_UNLOCK(&dfs->lock);
+
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
 	D_FREE(dfs->prefix);
-
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->poh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*poh = dfs->poh;
+	return 0;
+}
+
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (poh.cookie != dfs->poh.cookie) {
+		D_ERROR("Pool handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount <= 0) {
+		D_ERROR("Invalid pool handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->poh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	return 0;
+}
+
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->coh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*coh = dfs->coh;
+	return 0;
+}
+
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (coh.cookie != dfs->coh.cookie) {
+		D_ERROR("Cont handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->coh_refcount <= 0) {
+		D_ERROR("Invalid cont handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->coh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
 
 	return 0;
 }
@@ -2866,6 +2922,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	char			*token;
 	char			*rem, *sptr = NULL; /* bogus compiler warning */
 	bool			exists;
+	bool			is_root = true;
 	int			daos_mode;
 	struct dfs_entry	entry = {0};
 	size_t			len;
@@ -2915,6 +2972,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	for (token = strtok_r(rem, "/", &sptr);
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
+		is_root = false;
 lookup_rel_path_loop:
 
 		/*
@@ -3125,13 +3183,17 @@ lookup_rel_path_loop:
 		*mode = obj->mode;
 
 	if (stbuf) {
-		stbuf->st_nlink = 1;
-		stbuf->st_mode = obj->mode;
-		stbuf->st_uid = entry.uid;
-		stbuf->st_gid = entry.gid;
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_ctim.tv_sec = entry.ctime;
+		if (is_root) {
+			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
+		} else {
+			stbuf->st_nlink = 1;
+			stbuf->st_mode = obj->mode;
+			stbuf->st_uid = entry.uid;
+			stbuf->st_gid = entry.gid;
+			stbuf->st_atim.tv_sec = entry.atime;
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_ctim.tv_sec = entry.ctime;
+		}
 	}
 
 	obj->flags = flags;
@@ -3414,6 +3476,9 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		} else {
 			dfs_obj_t *sym;
 
+			/** this should not happen, but to silence coverity */
+			if (entry.value == NULL)
+				D_GOTO(err_obj, rc = EIO);
 			/* dereference the symlink */
 			rc = lookup_rel_path(dfs, parent, entry.value, flags,
 					     &sym, mode, stbuf, 0);
@@ -3532,6 +3597,16 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
 		return ENOMEM;
+
+	if (flags & O_CREAT) {
+		if (stbuf) {
+			entry.uid = stbuf->st_uid;
+			entry.gid = stbuf->st_gid;
+		} else {
+			entry.uid = geteuid();
+			entry.gid = getegid();
+		}
+	}
 
 	strncpy(obj->name, name, len + 1);
 	obj->mode = mode;
@@ -3803,6 +3878,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
+	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode = obj_glob->mode;
 	obj->flags = flags ? flags : obj_glob->flags;
 
@@ -4324,7 +4400,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	/** sticky bit, set-user-id and set-group-id, are not supported */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
 		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
-		return EINVAL;
+		return ENOTSUP;
 	}
 
 	/* Check if parent has the entry */

@@ -49,7 +49,7 @@ ior:
     fs_copy: 10
   api: DFS
   flags: "-w -k"
-  dfs_destroy: False
+  dfs_destroy: false
   test_file: /testFile
   signature: 5
   transfer_size: 4M

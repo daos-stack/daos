@@ -12,6 +12,8 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -41,6 +43,7 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
+	pid_t           iog_init_tid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
@@ -73,14 +76,8 @@ static __thread int saved_errno;
 			errno = saved_errno; \
 	} while (0)
 
-static const char * const bypass_status[] = {
-	"external",
-	"on",
-	"off-mmap",
-	"off-flag",
-	"off-fcntl",
-	"off-stream",
-	"off-rsrc",
+static const char *const bypass_status[] = {
+    "external", "on", "off-mmap", "off-flag", "off-fcntl", "off-stream", "off-rsrc", "off-ioerr",
 };
 
 /* Unwind after close or error on container.  Closes container handle
@@ -300,6 +297,8 @@ ioil_init(void)
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
+	ioil_iog.iog_init_tid = syscall(SYS_gettid);
+
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
@@ -351,7 +350,13 @@ ioil_fini(void)
 {
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
-	int rc;
+	int               rc;
+	pid_t             tid = syscall(SYS_gettid);
+
+	if (tid != ioil_iog.iog_init_tid) {
+		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
+		return;
+	}
 
 	ioil_iog.iog_initialized = false;
 
@@ -790,7 +795,7 @@ get_file:
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
 		entry->fd_fstat = true;
 
-	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
+	DFUSE_LOG_DEBUG("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
@@ -811,7 +816,8 @@ get_file:
 
 	cont->ioc_open_count += 1;
 
-	pthread_mutex_unlock(&ioil_iog.iog_lock);
+	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
+	D_ASSERT(rc == 0);
 
 	return true;
 
@@ -1140,17 +1146,16 @@ DFUSE_PUBLIC ssize_t
 dfuse_read(int fd, void *buf, size_t len)
 {
 	struct fd_entry *entry;
-	ssize_t bytes_read;
-	off_t oldpos;
-	int rc;
+	ssize_t          bytes_read;
+	off_t            oldpos;
+	off_t            seekpos;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_read;
 
-	DFUSE_LOG_DEBUG("read(fd=%d, buf=%p, len=%zu) "
-			"intercepted, bypass=%s", fd,
-			buf, len,
+	DFUSE_LOG_DEBUG("read(fd=%d, buf=%p, len=%zu) intercepted, bypass=%s", fd, buf, len,
 			bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
@@ -1158,14 +1163,32 @@ dfuse_read(int fd, void *buf, size_t len)
 
 	oldpos = entry->fd_pos;
 	bytes_read = pread_rpc(entry, buf, len, oldpos);
-	if (bytes_read > 0)
+	if (bytes_read < 0)
+		goto disable_file;
+	else if (bytes_read > 0)
 		entry->fd_pos = oldpos + bytes_read;
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_read < 0);
 
 	return bytes_read;
-
+disable_file:
+	/* The read failed to this file so disable I/O to this file, but do it in such a way that
+	 * future reads can be handled by the kernel
+	 */
+	/* First seek to where the current position is, if there is an error here then ensure
+	 * errno is set, but do not disable I/O as bypass could not work correctly.
+	 */
+	seekpos = __real_lseek(fd, entry->fd_pos, SEEK_SET);
+	if (seekpos != entry->fd_pos) {
+		if (seekpos != (off_t)-1)
+			errno = EIO;
+		return -1;
+	}
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on I/O error");
+	entry->fd_status = DFUSE_IO_DIS_IOERR;
+	vector_decref(&fd_table, entry);
+	/* Fall through and do the read */
 do_real_read:
 	return __real_read(fd, buf, len);
 }

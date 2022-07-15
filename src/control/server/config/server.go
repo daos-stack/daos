@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -39,26 +38,25 @@ const (
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort     int                       `yaml:"port"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	// Detect outdated "servers" config, to direct users to change their config file
-	Servers             []*engine.Config       `yaml:"servers,omitempty"`
-	Engines             []*engine.Config       `yaml:"engines"`
-	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool                   `yaml:"disable_vfio"`
-	EnableVMD           bool                   `yaml:"enable_vmd"`
-	EnableHotplug       bool                   `yaml:"enable_hotplug"`
-	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
-	ControlLogMask      common.ControlLogLevel `yaml:"control_log_mask"`
-	ControlLogFile      string                 `yaml:"control_log_file"`
-	ControlLogJSON      bool                   `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                 `yaml:"helper_log_file"`
-	FWHelperLogFile     string                 `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool                   `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string                 `yaml:"fault_path"`
-	TelemetryPort       int                    `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter      uint8                  `yaml:"core_dump_filter,omitempty"`
+	ControlPort         int                       `yaml:"port"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	Engines             []*engine.Config          `yaml:"engines"`
+	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool                      `yaml:"disable_vfio"`
+	DisableVMD          *bool                     `yaml:"disable_vmd"`
+	EnableHotplug       bool                      `yaml:"enable_hotplug"`
+	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
+	DisableHugepages    bool                      `yaml:"disable_hugepages"`
+	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile      string                    `yaml:"control_log_file"`
+	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
+	RecreateSuperblocks bool                      `yaml:"recreate_superblocks,omitempty"`
+	FaultPath           string                    `yaml:"fault_path"`
+	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -73,6 +71,9 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
+
+	// Legacy config file parameters stored in a separate struct.
+	Legacy ServerLegacy `yaml:",inline"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -223,28 +224,34 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableVMD can be used to set the state of VMD functionality,
-// if enabled then VMD devices will be used if they exist.
-func (cfg *Server) WithEnableVMD(enable bool) *Server {
-	cfg.EnableVMD = enable
+// WithDisableVMD can be used to set the state of VMD functionality,
+// if disabled then VMD devices will not be used if they exist.
+func (cfg *Server) WithDisableVMD(disabled bool) *Server {
+	cfg.DisableVMD = &disabled
 	return cfg
 }
 
 // WithEnableHotplug can be used to enable hotplug
-func (cfg *Server) WithEnableHotplug(enable bool) *Server {
-	cfg.EnableHotplug = enable
+func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
+	cfg.EnableHotplug = enabled
 	return cfg
 }
 
 // WithHyperthreads enables or disables hyperthread support.
-func (cfg *Server) WithHyperthreads(enable bool) *Server {
-	cfg.Hyperthreads = enable
+func (cfg *Server) WithHyperthreads(enabled bool) *Server {
+	cfg.Hyperthreads = enabled
 	return cfg
 }
 
 // WithNrHugePages sets the number of huge pages to be used (total for all engines).
 func (cfg *Server) WithNrHugePages(nr int) *Server {
 	cfg.NrHugepages = nr
+	return cfg
+}
+
+// WithDisableHugePages disables the use of huge pages.
+func (cfg *Server) WithDisableHugePages(disabled bool) *Server {
+	cfg.DisableHugepages = disabled
 	return cfg
 }
 
@@ -296,14 +303,13 @@ func DefaultServer() *Server {
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
 		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableVMD:       false, // disabled by default
 		EnableHotplug:   false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
 }
 
-// Load reads the serialized configuration from disk and validates it.
+// Load reads the serialized configuration from disk and validates file syntax.
 func (cfg *Server) Load() error {
 	if cfg.Path == "" {
 		return FaultConfigNoPath
@@ -315,11 +321,17 @@ func (cfg *Server) Load() error {
 	}
 
 	if err = yaml.UnmarshalStrict(bytes, cfg); err != nil {
-		return errors.WithMessage(err, "parse failed; config contains invalid "+
-			"parameters and may be out of date, see server config examples")
+		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples",
+			cfg.Path)
 	}
 
-	// propagate top-level settings to server configs
+	// Update server config based on legacy parameters.
+	if err := updateFromLegacyParams(cfg); err != nil {
+		return errors.Wrap(err, "updating config from legacy parameters")
+	}
+
+	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
 	}
@@ -400,7 +412,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.FabricInterfaceSet) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -417,13 +429,19 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	}()
 
 	// The config file format no longer supports "servers"
-	if len(cfg.Servers) > 0 {
+	if len(cfg.Legacy.Servers) > 0 {
 		return errors.New("\"servers\" server config file parameter is deprecated, use " +
 			"\"engines\" instead")
 	}
 
+	// Set DisableVMD reference if unset in config file.
+	if cfg.DisableVMD == nil {
+		f := false
+		cfg.DisableVMD = &f
+	}
+
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, cfg.EnableVMD)
+		cfg.EnableHotplug, !(*cfg.DisableVMD))
 
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
@@ -454,6 +472,9 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
+	case len(cfg.AccessPoints) == 1:
+		log.Infof("WARNING: Configuration includes only one access point. This provides no redundancy " +
+			"in the event of an access point failure.")
 	}
 
 	switch {
@@ -511,7 +532,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			ec.LegacyStorage = engine.LegacyStorage{}
 		}
 
-		if ec.Storage.Tiers.CfgHasBdevs() {
+		if ec.Storage.Tiers.HaveBdevs() {
 			cfgHasBdevs = true
 			if ec.TargetCount == 0 {
 				return errors.Errorf("engine %d: Target count cannot be zero if "+
@@ -521,7 +542,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 
 		ec.Fabric.Update(cfg.Fabric)
 
-		if err := ec.Validate(log, fis); err != nil {
+		if err := ec.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 
@@ -529,12 +550,12 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
 	}
 
-	if cfg.NrHugepages < -1 || cfg.NrHugepages > math.MaxInt32 {
-		return FaultConfigNrHugepagesOutOfRange
+	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
+		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
 	if cfgHasBdevs {
-		if cfg.NrHugepages == -1 {
+		if cfg.DisableHugepages {
 			return FaultConfigHugepagesDisabled
 		}
 
@@ -648,6 +669,98 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 		seenBdevCount = bdevCount
 		seenTargetCount = engine.TargetCount
 		seenHelperStreamCount = engine.HelperStreamCount
+	}
+
+	return nil
+}
+
+var (
+	// ErrNoAffinityDetected is a sentinel error used to indicate that no affinity was detected.
+	ErrNoAffinityDetected = errors.New("no NUMA affinity detected")
+)
+
+// EngineAffinityFn defines a function which returns the NUMA node affinity of a given engine.
+type EngineAffinityFn func(logging.Logger, *engine.Config) (uint, error)
+
+func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSources ...EngineAffinityFn) (node uint, err error) {
+	for _, affSource := range affSources {
+		if affSource == nil {
+			return 0, errors.New("nil affinity source")
+		}
+
+		node, err = affSource(log, engineCfg)
+		if err == nil {
+			return
+		}
+
+		if err != nil && err != ErrNoAffinityDetected {
+			return
+		}
+	}
+
+	return 0, ErrNoAffinityDetected
+}
+
+func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) error {
+	if engineCfg.PinnedNumaNode != nil && engineCfg.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	if engineCfg.PinnedNumaNode != nil {
+		if *engineCfg.PinnedNumaNode != node {
+			// TODO: This should probably be a fatal error, but we may need to allow the config
+			// override in case our affinity detection is incorrect.
+			log.Errorf("engine config pinned_numa_node is set to %d but detected affinity is with NUMA node %d",
+				*engineCfg.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		engineCfg.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	engineCfg.Fabric.NumaNodeIndex = *engineCfg.PinnedNumaNode
+	engineCfg.Storage.NumaNodeIndex = *engineCfg.PinnedNumaNode
+
+	// TODO: Remove this special case when we have removed first_core as an exposed config
+	// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
+	// so that the engine uses its legacy core allocation algorithm.
+	if engineCfg.ServiceThreadCore != 0 {
+		log.Debugf("engine is pinned to core %d; not setting NUMA affinity", engineCfg.ServiceThreadCore)
+		engineCfg.PinnedNumaNode = nil
+	}
+
+	return nil
+}
+
+// SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
+func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
+	defaultAffinity := uint(0)
+
+	for idx, engineCfg := range cfg.Engines {
+		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
+		if err != nil {
+			if err != ErrNoAffinityDetected {
+				return errors.Wrap(err, "failure while detecting engine affinity")
+			}
+
+			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx, defaultAffinity)
+			numaAffinity = defaultAffinity
+		} else {
+			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
+		}
+
+		// Special case: If only one engine is defined and engine's detected NUMA node is zero,
+		// don't pin the engine to any NUMA node in order to enable the engine's legacy core
+		// allocation algorithm.
+		if len(cfg.Engines) == 1 && numaAffinity == 0 {
+			log.Debug("enabling single-engine legacy core allocation algorithm")
+			continue
+		}
+
+		if err := setEngineAffinity(log, engineCfg, numaAffinity); err != nil {
+			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
+		}
 	}
 
 	return nil

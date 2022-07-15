@@ -46,14 +46,14 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 
 ### POSIX Compliance
 
-The following features from POSIX will not be supported:
+The following features from POSIX are not supported:
 
 * Hard links
 * mmap support with MAP\_SHARED will be consistent from single client only. Note
   that this is supported through DFUSE only (i.e. not through the DFS API).
 * Char devices, block devices, sockets and pipes
 * User/group quotas
-* setuid(), setgid() programs, supplementary groups, ACLs are not supported
+* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
   within the DFS namespace.
 * [access/change/modify] time not updated appropriately, potentially on close only.
 * Flock (maybe at dfuse local node level only)
@@ -63,6 +63,16 @@ The following features from POSIX will not be supported:
 * POSIX permissions inside an encapsulated namespace
   * Still enforced at the DAOS pool/container level
   * Effectively means that all files belong to the same "project"
+
+!!! note
+    DFS directories do not include the `.` (current directory) and `..` (parent directory)
+    directory entries that are known from other POSIX filesystems.
+    Commands like `ls -al` will not include these entries in their output.
+    Those directory entries are not required by POSIX, so this is not a limitation to POSIX
+    compliance. But scripts that parse directory listings under the assumption that those dot
+    directories are present may need to be adapted to to correctly handle this situation.
+    Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
+    containers.
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
 DFS provides two modes that offer different levels of consistency. The modes can
@@ -277,7 +287,7 @@ The following types of data will be cached by default.
 * Kernel caching of negative dentries
 * Kernel caching of inodes (file sizes, permissions etc)
 * Kernel caching of file contents
-* Readahead in dfuse and inserting data into kernel cache
+* Kernel caching of directory contents (when supported by libfuse)
 * MMAP write optimization
 
 !!! warning
@@ -289,30 +299,35 @@ To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed
 to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 
-| **Attribute name**    | **Description**                                                  |
-| --------------------- | ---------------------------------------------------------------- |
-| dfuse-attr-time       | How long file attributes are cached                              |
-| dfuse-dentry-time     | How long directory entries are cached                            |
-| dfuse-dentry-dir-time | How long dentries are cached, if the entry is itself a directory |
-| dfuse-ndentry-time    | How long negative dentries are cached                            |
-| dfuse-data-cache      | Data caching enabled for this file ("on"/"off")                  |
-| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"off")        |
+| **Attribute name**      | **Description**                                                        |
+| ----------------------- | ---------------------------------------------------------------------- |
+| dfuse-attr-time         | How long file attributes are cached                                    |
+| dfuse-dentry-time       | How long directory entries are cached                                  |
+| dfuse-dentry-dir-time   | How long dentries are cached, if the entry is itself a directory       |
+| dfuse-ndentry-time      | How long negative dentries are cached                                  |
+| dfuse-data-cache        | Data caching enabled for this file ("on"/"true"/"off"/"false")         |
+| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false") |
 
 For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
 minutes, hours or days.
 
-dfuse-data-cache should be set to "on", or "off" if set, any other value will
+dfuse-data-cache should be set to "on", "true", "off" or "false" if set, other values will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open
 files will be honoured with this option enabled, files which do not set
 O\_DIRECT will be cached.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
-however if this is set to "on" then the O\_DIRECT flag will be ignored, and all
-files will use the page cache.  This default value for this is "off".
+however if this is enabled then the O\_DIRECT flag will be ignored, and all
+files will use the page cache.  This default value for this is disabled.
 
 With no options specified attr and dentry timeouts will be 1 second, dentry-dir
 and ndentry timeouts will be 5 seconds, and data caching will be enabled.
+
+Readdir caching is available when supported by libfuse; however, on many distributions the system
+libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is required at both
+compile and run-time.  Use `dfuse --version` or the runtime logs to see the fuse version used and if
+the feature is compiled into dfuse.  Readir caching is controlled by the dfuse-dentry-time setting.
 
 These are two command line options to control the DFuse process itself.
 

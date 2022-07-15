@@ -15,7 +15,7 @@
 #include <daos/rpc.h>
 #include <daos_types.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static inline bool
 obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
@@ -44,7 +44,8 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
  * split it for different targets before dispatch.
  */
 int
-obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
+obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash,
+		    struct obj_iod_array *iod_array,
 		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
 		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
 		    struct daos_oclass_attr *oca, uint32_t tgt_nr,
@@ -152,7 +153,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	}
 
 	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,
-					 tgt_max_idx, count);
+					 tgt_max_idx, count, dkey_hash, oca);
 	if (tgt_oiods == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -199,7 +200,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 					split_iod_csum->ic_data = split_ci;
 					split_ci->cs_nr = 1;
 					split_ci->cs_csum +=
-						leader * ci->cs_len;
+						obj_ec_shard_off(dkey_hash, oca, leader) *
+						ci->cs_len;
 					split_ci->cs_buf_len = ci->cs_len;
 				}
 			}

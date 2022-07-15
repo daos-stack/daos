@@ -1,11 +1,11 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrPosixMetaEntry(DataMoverTestBase):
@@ -148,7 +148,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         Args:
             path1 (str): The left-hand side to compare.
             path2 (str): The right-hand side to compare.
-            cmp_filetype (bool, optional): Whether to compare the filetype.
+            cmp_filetype (bool, optional): Whether to compare the file-type.
                 Default is True.
             cmp_perms (bool, optional): Whether to compare the permissions.
                 Default is True.

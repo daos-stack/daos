@@ -13,7 +13,6 @@
 #define __BIO_API_H__
 
 #include <daos/mem.h>
-#include <daos/common.h>
 #include <daos_srv/control.h>
 #include <abt.h>
 
@@ -452,7 +451,7 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -531,6 +530,17 @@ int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
  * \returns		Zero on success, negative value on error
  */
 int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
+
+/*
+ * Unmap (TRIM) a SGL consists of freed extents.
+ *
+ * \param[IN] ctxt	I/O context
+ * \param[IN] unmap_sgl	The SGL to be unmapped (offset & length are in blocks)
+ * \param[IN] blk_sz	Block size
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz);
 
 /**
  * Write to per VOS instance blob.

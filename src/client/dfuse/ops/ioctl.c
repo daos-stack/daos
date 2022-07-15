@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,10 +14,23 @@
 #define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 
 static void
+handle_user_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
+{
+	struct dfuse_user_reply dur;
+
+	dur.uid = getuid();
+	dur.gid = getgid();
+
+	DFUSE_REPLY_IOCTL(oh, req, dur);
+}
+
+static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
-	struct dfuse_il_reply	il_reply = {0};
-	int			rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_il_reply         il_reply  = {0};
+	int                           rc;
+	uint32_t                      old_calls;
 
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
@@ -30,6 +43,26 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	if (oh->doh_ie->ie_dfs->dfc_attr_timeout > 0)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
+
+	if (oh->doh_writeable) {
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+						      oh->doh_ie->ie_stat.st_ino, 0, 0);
+
+		if (rc == 0) {
+			DFUSE_TRA_DEBUG(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
+					rc);
+		} else {
+			DFUSE_TRA_ERROR(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
+					rc);
+		}
+
+		/* Mark this file handle as using the IL or similar, and if this is new then mark
+		 * the inode as well
+		 */
+		old_calls = atomic_fetch_add_relaxed(&oh->doh_il_calls, 1);
+		if (old_calls == 0)
+			atomic_fetch_add_relaxed(&oh->doh_ie->ie_il_count, 1);
+	}
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
 	return;
@@ -286,6 +319,11 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
+	if (cmd == TIOCGWINSZ) {
+		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGWINSZ ioctl");
+		D_GOTO(out_err, rc = ENOTTY);
+	}
+
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
 		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
@@ -299,6 +337,13 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 			D_GOTO(out_err, rc = EIO);
 
 		handle_il_ioctl(oh, req);
+		return;
+	}
+
+	if (cmd == DFUSE_IOCTL_DFUSE_USER) {
+		if (out_bufsz < sizeof(struct dfuse_user_reply))
+			D_GOTO(out_err, rc = EIO);
+		handle_user_ioctl(oh, req);
 		return;
 	}
 

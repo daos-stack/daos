@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,9 +82,10 @@ blob_common_cb(struct blob_cp_arg *ba, int rc)
 {
 	ba->bca_rc = daos_errno2der(-rc);
 
-	D_ASSERT(ba->bca_inflights == 1);
+	D_ASSERT(ba->bca_inflights > 0);
 	ba->bca_inflights--;
-	ABT_eventual_set(ba->bca_eventual, NULL, 0);
+	if (ba->bca_inflights == 0)
+		ABT_eventual_set(ba->bca_eventual, NULL, 0);
 }
 
 /*
@@ -157,6 +158,21 @@ blob_close_cb(void *arg, int rc)
 }
 
 static void
+blob_unmap_cb(void *arg, int rc)
+{
+	struct blob_msg_arg	*bma = arg;
+	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
+	struct bio_xs_context	*xs_ctxt;
+
+	xs_ctxt = bma->bma_ioc->bic_xs_ctxt;
+	D_ASSERT(xs_ctxt != NULL);
+	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
+	xs_ctxt->bxc_blob_rw--;
+
+	blob_common_cb(ba, rc);
+}
+
+static void
 blob_cb(void *arg, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
@@ -171,7 +187,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	int	rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
 		D_ASSERT(rc == 0);
@@ -454,8 +470,8 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
 			       &blob_id);
 	if (rc != 0) {
-		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(ctxt->bic_pool_id));
+		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID", tgt:%d\n",
+			xs_ctxt, DP_UUID(ctxt->bic_pool_id), xs_ctxt->bxc_tgt_id);
 		return -DER_NONEXIST;
 	}
 
@@ -679,8 +695,9 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	ioctxt->bic_inflight_dmas++;
 	ba->bca_inflights = 1;
 	spdk_blob_io_unmap(ioctxt->bic_blob, channel,
-			   page2io_unit(ioctxt, pg_off),
-			   page2io_unit(ioctxt, pg_cnt), blob_cb, &bma);
+			   page2io_unit(ioctxt, pg_off, BIO_DMA_PAGE_SZ),
+			   page2io_unit(ioctxt, pg_cnt, BIO_DMA_PAGE_SZ),
+			   blob_cb, &bma);
 
 	/* Wait for blob unmap done */
 	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);
@@ -705,6 +722,82 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 skip_media_error:
 	blob_cp_arg_fini(ba);
 
+	return rc;
+}
+
+int
+bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz)
+{
+	struct bio_xs_context	*xs_ctxt;
+	struct blob_msg_arg	 bma = { 0 };
+	struct blob_cp_arg	*ba = &bma.bma_cp_arg;
+	struct spdk_io_channel	*channel;
+	d_iov_t			*unmap_iov;
+	uint64_t		 pg_off, pg_cnt;
+	int			 i, rc;
+
+	D_ASSERT(blk_sz >= ioctxt->bic_io_unit && (blk_sz & (ioctxt->bic_io_unit - 1)) == 0);
+	xs_ctxt = ioctxt->bic_xs_ctxt;
+	D_ASSERT(xs_ctxt != NULL);
+	channel = xs_ctxt->bxc_io_channel;
+
+	if (!is_blob_valid(ioctxt)) {
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_closing);
+		return -DER_NO_HDL;
+	}
+
+	rc = blob_cp_arg_init(ba);
+	if (rc)
+		return rc;
+
+	bma.bma_ioc = ioctxt;
+	ioctxt->bic_inflight_dmas++;
+	ba->bca_inflights = 1;
+	for (i = 0; i < unmap_sgl->sg_nr_out; i++) {
+		unmap_iov = &unmap_sgl->sg_iovs[i];
+
+		/* NVMe poll needs be scheduled */
+		if (bio_need_nvme_poll(xs_ctxt))
+			bio_yield();
+
+		ba->bca_inflights++;
+		xs_ctxt->bxc_blob_rw++;
+
+		pg_off = (uint64_t)unmap_iov->iov_buf;
+		pg_cnt = unmap_iov->iov_len;
+
+		D_DEBUG(DB_IO, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
+			ioctxt->bic_blob, pg_off, pg_cnt);
+
+		spdk_blob_io_unmap(ioctxt->bic_blob, channel,
+				   page2io_unit(ioctxt, pg_off, blk_sz),
+				   page2io_unit(ioctxt, pg_cnt, blk_sz),
+				   blob_unmap_cb, &bma);
+	}
+	ba->bca_inflights--;
+
+	blob_wait_completion(xs_ctxt, ba);
+	rc = ba->bca_rc;
+	ioctxt->bic_inflight_dmas--;
+
+	if (rc) {
+		struct media_error_msg	*mem;
+
+		D_ERROR("Unmap blob %p for xs: %p failed. "DF_RC"\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, DP_RC(rc));
+
+		D_ALLOC_PTR(mem);
+		if (mem == NULL)
+			goto done;
+
+		mem->mem_err_type = MET_UNMAP;
+		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+	}
+done:
+	blob_cp_arg_fini(ba);
 	return rc;
 }
 

@@ -4,8 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 import os
+from data_mover_test_base import DataMoverTestBase
+
 
 # pylint: disable=too-many-ancestors
 class DmvrPosixLargeFile(DataMoverTestBase):

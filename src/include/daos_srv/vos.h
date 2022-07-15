@@ -76,6 +76,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
+ * \param for_refresh	[IN]	It is for DTX_REFRESH or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -94,7 +95,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh);
 
 /**
  * Commit the specified DTXs.
@@ -218,7 +220,7 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
  * \return		Zero on success, negative value if error
  */
 int
-vos_self_init(const char *db_path);
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 /**
  * Finalize the environment for a VOS instance
@@ -288,6 +290,14 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
+
+/** Enable any version specific features on the pool
+ *
+ * \param poh	[IN]	Container open handle
+ * \param feats	[IN]	Features to enable
+ */
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -1097,14 +1107,14 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
  *
  *  \param alloc_overhead[IN]	Expected allocation overhead
  *  \param tclass[IN]		The type of tree to query
- *  \param ofeat[IN]		Relevant object features
+ *  \param otype[IN]		Relevant object features
  *  \param ovhd[IN,OUT]		Returned overheads
  *
  *  \return 0 on success, error otherwise.
  */
 int
 vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-		      uint64_t ofeat, struct daos_tree_overhead *ovhd);
+		      uint64_t otype, struct daos_tree_overhead *ovhd);
 
 /** Return the size of the pool metadata in persistent memory on-disk format */
 int
@@ -1139,6 +1149,9 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
+int
+vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1176,7 +1189,9 @@ struct sys_db *vos_db_get(void);
  * System DB is KV store that can support insert/delete/traverse
  * See \a sys_db for more details.
  */
-int  vos_db_init(const char *db_path, const char *db_name, bool self_mode);
+int vos_db_init(const char *db_path);
+int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
+		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

@@ -21,22 +21,16 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+// getVMD returns VMD endpoint address when provided string is a VMD backing device PCI address.
+// If the input string is not a VMD backing device PCI address, hardware.ErrNotVMDBackingAddress
+// is returned.
 func getVMD(inAddr string) (*hardware.PCIAddress, error) {
 	addr, err := hardware.NewPCIAddress(inAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "controller pci address invalid")
 	}
 
-	if !addr.IsVMDBackingAddress() {
-		return nil, nil
-	}
-
-	vmdAddr, err := addr.BackingToVMDAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	return vmdAddr, nil
+	return addr.BackingToVMDAddress()
 }
 
 // mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
@@ -46,10 +40,10 @@ func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storag
 	for _, ctrlr := range foundCtrlrs {
 		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
+			if err == hardware.ErrNotVMDBackingAddress {
+				continue
+			}
 			return nil, err
-		}
-		if vmdAddr == nil {
-			continue // not a backing device address
 		}
 
 		if _, exists := vmds[vmdAddr.String()]; !exists {
@@ -70,10 +64,10 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 	for _, ctrlr := range foundCtrlrs {
 		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
+			if err == hardware.ErrNotVMDBackingAddress {
+				continue
+			}
 			return nil, err
-		}
-		if vmdAddr == nil {
-			continue // not a backing device address
 		}
 
 		if _, exists := vmds[vmdAddr.String()]; !exists {
@@ -89,13 +83,15 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 	return vmds, nil
 }
 
-// substVMDAddrs replaces VMD PCI addresses in input device list with the PCI
-// addresses of the backing devices behind the VMD.
+// substVMDAddrs replaces VMD endpoint PCI addresses in input device list with the PCI
+// addresses of the backing devices behind the VMD endpoint.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
+//
+// Add addresses that are not VMD endpoints to the output list.
 func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if len(foundCtrlrs) == 0 {
-		return nil, nil
+		return inPCIAddrs, nil
 	}
 
 	vmds, err := mapVMDToBackingAddrs(foundCtrlrs)
@@ -103,7 +99,8 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 		return nil, err
 	}
 
-	// swap input vmd addresses with respective backing addresses
+	// Swap any input VMD endpoint addresses with respective backing device addresses.
+	// inAddr entries that are already backing device addresses will be added to output list.
 	outPCIAddrs := new(hardware.PCIAddressSet)
 	for _, inAddr := range inPCIAddrs.Addresses() {
 		toAdd := []*hardware.PCIAddress{inAddr}
@@ -120,12 +117,16 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 	return outPCIAddrs, nil
 }
 
-// substituteVMDAddresses wraps around substVMDAddrs and takes a BdevScanResponse
-// reference along with a logger.
+// substituteVMDAddresses wraps around substVMDAddrs to substitute VMD addresses with the relevant
+// backing device addresses.
+// Function takes a BdevScanResponse reference to derive address map and a logger.
 func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
+	if inPCIAddrs == nil {
+		return nil, errors.New("nil input PCIAddressSet")
+	}
 	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
 		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
-		return nil, nil
+		return inPCIAddrs, nil
 	}
 
 	msg := fmt.Sprintf("vmd detected, processing addresses (input %v, existing %v)",

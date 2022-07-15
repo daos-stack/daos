@@ -308,7 +308,6 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
 		}
-
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -322,6 +321,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
+	struct cont_props		co_props;
 	int				snapshot_cnt;
 	uint32_t			yield_freq;
 };
@@ -499,8 +499,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
-		D_ERROR(DF_UOID"Cannot find valid placement map"
-			DF_UUID"\n", DP_UOID(oid),
+		D_ERROR(DF_UOID ": Cannot find valid placement map" DF_UUID "\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -517,6 +516,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
+	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
 
 	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
 	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
@@ -692,7 +692,16 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
+	if (rc) {
+		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		vos_cont_close(coh);
 		return rc;
 	}
@@ -869,9 +878,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
+	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d gen %u\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver);
+		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -889,13 +898,11 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	}
 
 	/* check if the rebuild is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild "DF_UUID"/%d"
-			       " is not cleanup yet\n",
-			       DP_UUID(rsi->rsi_pool_uuid),
-		               rsi->rsi_rebuild_ver);
+			D_WARN("the previous rebuild " DF_UUID "/%d is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 			D_GOTO(out, rc = -DER_BUSY);
 		}
 
@@ -932,8 +939,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.
 			 */
-			ds_rebuild_leader_stop(rsi->rsi_pool_uuid,
-					       rsi->rsi_rebuild_ver);
+			ds_rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+					       rsi->rsi_rebuild_gen);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;

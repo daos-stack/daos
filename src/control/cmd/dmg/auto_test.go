@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -162,9 +162,10 @@ engines:
   fabric_iface_port: 32416
   pinned_numa_node: 1
 disable_vfio: false
-enable_vmd: false
+disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
+disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 helper_log_file: ""
@@ -186,6 +187,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
+		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
@@ -201,7 +203,7 @@ hyperthreads: false
 						WithScmMountPoint("/mnt/daos0"),
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+						WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2, 3)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
@@ -222,7 +224,7 @@ hyperthreads: false
 						WithScmMountPoint("/mnt/daos1"),
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+						WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 				WithStorageVosEnv("NVME").

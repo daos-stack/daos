@@ -127,7 +127,7 @@ vts_dtx_end(struct dtx_handle *dth)
 	vos_dtx_rsrvd_fini(dth);
 	vos_dtx_detach(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
-	D_FREE_PTR(dth);
+	D_FREE(dth);
 }
 
 static void
@@ -144,12 +144,12 @@ vts_dtx_prep_update(struct io_test_args *args,
 	memset(rex, 0, sizeof(*rex));
 
 	args->ta_flags = TF_ZERO_COPY;
-	args->ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64;
+	args->otype = DAOS_OT_MULTI_UINT64;
 
 	*epoch = crt_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
-	set_iov(dkey, dkey_buf, args->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(dkey, dkey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 	*dkey_hash = d_hash_murmur64((const unsigned char *)dkey_buf,
 				      args->dkey_size, 5731);
 
@@ -160,10 +160,10 @@ vts_dtx_prep_update(struct io_test_args *args,
 	sgl->sg_nr = 1;
 
 	d_iov_set(dkey_iov, dkey_buf, args->dkey_size);
-	rex->rx_idx = hash_key(dkey_iov, args->ofeat & DAOS_OF_DKEY_UINT64);
+	rex->rx_idx = hash_key(dkey_iov, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 
 	vts_key_gen(akey_buf, args->akey_size, false, args);
-	set_iov(akey, akey_buf, args->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(akey, akey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_AKEY_UINT64));
 
 	iod->iod_name = *akey;
 	if (ext) {
@@ -474,7 +474,8 @@ dtx_14(void **state)
 	assert_rc_equal(rc, 1);
 
 	/* Double commit the DTX is harmless. */
-	vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -568,7 +569,8 @@ dtx_15(void **state)
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Aborted DTX cannot be committed. */
-	vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert(rc >= 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -828,7 +830,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -839,7 +841,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
@@ -857,7 +859,7 @@ dtx_18(void **state)
 static int
 dtx_tst_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
 	return 0;
 }
 

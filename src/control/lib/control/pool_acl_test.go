@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -38,7 +38,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -47,7 +47,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -63,14 +63,14 @@ func TestControl_PoolGetACL(t *testing.T) {
 				}),
 			},
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expResp: &PoolGetACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -81,7 +81,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -103,7 +103,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"local failure": {
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -113,7 +113,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -122,7 +122,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolOverwriteACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
@@ -136,14 +136,14 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 			},
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			expResp: &PoolOverwriteACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -154,7 +154,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolOverwriteACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -176,7 +176,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"local failure": {
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -186,7 +186,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -195,7 +195,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolUpdateACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
@@ -209,14 +209,14 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 			},
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			expResp: &PoolUpdateACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -227,7 +227,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolUpdateACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -250,7 +250,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -260,7 +260,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -270,7 +270,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"empty principal": {
 			req: &PoolDeleteACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("no principal provided"),
 		},
@@ -282,7 +282,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 				}),
 			},
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			expResp: &PoolDeleteACLResp{
@@ -295,7 +295,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -306,7 +306,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolDeleteACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

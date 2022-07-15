@@ -5,7 +5,7 @@ hosts:
 timeout: 100
 
 pool:
-  scm_size: 10G
+  scm_size: 1G
   control_method: dmg
 
 container:

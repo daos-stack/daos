@@ -18,6 +18,17 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func getTierNameText(tierIdx int) string {
+	switch tierIdx {
+	case int(control.StorageMediaTypeScm):
+		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
+	case int(control.StorageMediaTypeNvme):
+		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+	default:
+		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
+	}
+}
+
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
 func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
@@ -29,6 +40,10 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
+	if pqr.PoolLayoutVer != pqr.UpgradeLayoutVer {
+		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
+			pqr.PoolLayoutVer, pqr.UpgradeLayoutVer)
+	}
 	fmt.Fprintln(w, "Pool space info:")
 	if pqr.EnabledRanks != nil {
 		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
@@ -39,13 +54,7 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
 		for tierIdx, tierStats := range pqr.TierStats {
-			var tierName string
-			if tierIdx == 0 {
-				tierName = "- Storage tier 0 (SCM):"
-			} else {
-				tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
-			}
-			fmt.Fprintln(w, tierName)
+			fmt.Fprintln(w, getTierNameText(tierIdx))
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
 			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
 				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
@@ -58,6 +67,29 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 				pqr.Rebuild.State, pqr.Rebuild.Objects, pqr.Rebuild.Records)
 		} else {
 			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d\n", pqr.Status, pqr.Rebuild.Status)
+		}
+	}
+
+	return w.Err
+}
+
+// PrintPoolQueryTargetResponse generates a human-readable representation of the supplied
+// PoolQueryTargetResp struct and writes it to the supplied io.Writer.
+func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writer, opts ...PrintConfigOption) error {
+	if pqtr == nil {
+		return errors.Errorf("nil %T", pqtr)
+	}
+	w := txtfmt.NewErrWriter(out)
+
+	// Maintain output compatibility with the `daos pool query-targets` output.
+	for infosIdx := range pqtr.Infos {
+		fmt.Fprintf(w, "Target: type %s, state %s\n", pqtr.Infos[infosIdx].Type, pqtr.Infos[infosIdx].State)
+		if pqtr.Infos[infosIdx].Space != nil {
+			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
+				fmt.Fprintln(w, getTierNameText(tierIdx))
+				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
+				fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
+			}
 		}
 	}
 
@@ -116,7 +148,7 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
-func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
+func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 	// display size of the largest non-empty tier
 	var size uint64
 	for ti := len(pool.Usage) - 1; ti >= 0; ti-- {
@@ -144,7 +176,6 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 			imbalance = pool.Usage[ti].Imbalance
 		}
 	}
-
 	row := txtfmt.TableRow{
 		"Pool":      pool.GetName(),
 		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
@@ -152,6 +183,15 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 		"Used":      fmt.Sprintf("%d%%", used),
 		"Imbalance": fmt.Sprintf("%d%%", imbalance),
 		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+	}
+
+	if upgrade {
+		upgradeString := "None"
+
+		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+			upgradeString = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
+		}
+		row["Upgrade?"] = upgradeString
 	}
 
 	return row
@@ -162,15 +202,28 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
+	upgrade := false
+	for _, pool := range resp.Pools {
+		if pool.HasErrors() {
+			continue
+		}
+		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+			upgrade = true
+		}
+	}
 
-	formatter := txtfmt.NewTableFormatter("Pool", "Size", "State", "Used", "Imbalance", "Disabled")
+	titles := []string{"Pool", "Size", "State", "Used", "Imbalance", "Disabled"}
+	if upgrade {
+		titles = append(titles, "Upgrade?")
+	}
+	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
 		if pool.HasErrors() {
 			continue
 		}
-		table = append(table, poolListCreateRow(pool))
+		table = append(table, poolListCreateRow(pool, upgrade))
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
@@ -198,12 +251,18 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		svcReps = formatRanks(rl)
 	}
 
+	upgrade := "None"
+	if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
+		upgrade = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
+	}
+
 	row := txtfmt.TableRow{
 		"Label":    label,
 		"UUID":     pool.UUID,
 		"State":    pool.State,
 		"SvcReps":  svcReps,
 		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"Upgrade?": upgrade,
 	}
 
 	for _, tu := range pool.Usage {
@@ -227,6 +286,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 			t.TierName+" Imbalance")
 	}
 	titles = append(titles, "Disabled")
+	titles = append(titles, "Upgrade?")
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow

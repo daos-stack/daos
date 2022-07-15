@@ -10,10 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -23,7 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -43,7 +41,7 @@ func addrListFromStrings(addrs ...string) *hardware.PCIAddressSet {
 func mockAddrList(idxs ...int) *hardware.PCIAddressSet {
 	var addrs []string
 	for _, idx := range idxs {
-		addrs = append(addrs, common.MockPCIAddr(int32(idx)))
+		addrs = append(addrs, test.MockPCIAddr(int32(idx)))
 	}
 	return addrListFromStrings(addrs...)
 }
@@ -169,7 +167,7 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 			}
 
 			gotCtrlrs, gotErr := groomDiscoveredBdevs(reqAddrs, tc.inCtrlrs, tc.vmdEnabled)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -235,7 +233,7 @@ func TestBackend_Scan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
 			sr, _ := mockScriptRunner(t, log, nil)
@@ -249,7 +247,7 @@ func TestBackend_Scan(t *testing.T) {
 			}
 
 			gotResp, gotErr := b.Scan(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -257,9 +255,9 @@ func TestBackend_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
+			test.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
 			// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-			//common.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
+			//test.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
 		})
 	}
 }
@@ -269,7 +267,7 @@ func TestBackend_Format(t *testing.T) {
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
 
-	testDir, clean := common.CreateTestDir(t)
+	testDir, clean := test.CreateTestDir(t)
 	defer clean()
 
 	for name, tc := range map[string]struct {
@@ -550,7 +548,7 @@ func TestBackend_Format(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
 			sr, _ := mockScriptRunner(t, log, nil)
@@ -568,7 +566,7 @@ func TestBackend_Format(t *testing.T) {
 			tc.req.OwnerGID = os.Getegid()
 
 			gotResp, gotErr := b.Format(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -590,7 +588,7 @@ func TestBackend_Format(t *testing.T) {
 					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 				}
 				// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-				//common.AssertEqual(t, 1, len(mei.FiniCalls),
+				//test.AssertEqual(t, 1, len(mei.FiniCalls),
 				//	"unexpected number of spdk fini calls")
 			}
 		})
@@ -612,7 +610,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -623,7 +621,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -636,7 +634,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -648,7 +646,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -686,7 +684,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sr, _ := mockScriptRunner(t, log, nil)
 			b := newBackend(log, sr)
@@ -703,7 +701,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
 			}
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -742,12 +740,12 @@ func TestBackend_Update(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
 			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -790,16 +788,13 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
-		prefix     string
-		tgtUID     string
-		testInputs []*testWalkInput
-		removeErr  error
-		expRemoved []string
-		expCount   uint
+		testInputs   []*testWalkInput
+		statExistMap map[string]bool
+		removeErr    error
+		expRemoved   []string
+		expCount     uint
 	}{
 		"ignore subdirectory": {
-			prefix: "prefix1",
-			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -813,7 +808,6 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 					expErr: errors.New("skip this directory"),
 				},
 			},
-			expRemoved: []string{},
 		},
 		"input error propagated": {
 			testInputs: []*testWalkInput{
@@ -824,7 +818,6 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 					expErr: errors.New("walk failed"),
 				},
 			},
-			expRemoved: []string{},
 		},
 		"nil fileinfo": {
 			testInputs: []*testWalkInput{
@@ -834,88 +827,72 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 					expErr: errors.New("nil fileinfo"),
 				},
 			},
-			expRemoved: []string{},
 		},
-		"nil file stat": {
-			prefix: "prefix1",
-			tgtUID: "42",
+		"no matching filenames": {
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
 					info: &mockFileInfo{
 						name: "prefix1_foo",
-						stat: nil,
 					},
-					expErr: errors.New("stat missing for file"),
 				},
 			},
-			expRemoved: []string{},
 		},
-		"prefix matching": {
-			prefix: "prefix1",
-			tgtUID: "42",
+		"matching filenames; one inactive pid": {
 			testInputs: []*testWalkInput{
 				{
-					path: filepath.Join(testDir, "prefix2_foo"),
-					info: testFileInfo(t, "prefix2_foo", 42),
+					path: filepath.Join(testDir, "spdk_pid69299map_990"),
+					info: testFileInfo(t, "spdk_pid69299map_990", 42),
 				},
 				{
-					path: filepath.Join(testDir, "prefix1_foo"),
-					info: testFileInfo(t, "prefix1_foo", 42),
+					path: filepath.Join(testDir, "spdk_pid69300map_98"),
+					info: testFileInfo(t, "spdk_pid69300map_98", 42),
 				},
 			},
-			expRemoved: []string{filepath.Join(testDir, "prefix1_foo")},
-			expCount:   1,
-		},
-		"uid matching": {
-			prefix: "prefix1",
-			tgtUID: "42",
-			testInputs: []*testWalkInput{
-				{
-					path: filepath.Join(testDir, "prefix1_foo"),
-					info: testFileInfo(t, "prefix1_foo", 41),
-				},
-				{
-					path: filepath.Join(testDir, "prefix1_bar"),
-					info: testFileInfo(t, "prefix1_bar", 42),
-				},
-			},
-			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
-			expCount:   1,
+			statExistMap: map[string]bool{"/proc/69299": true},
+			expRemoved:   []string{filepath.Join(testDir, "spdk_pid69300map_98")},
+			expCount:     1,
 		},
 		"remove fails": {
-			prefix: "prefix1",
-			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
-					path:   filepath.Join(testDir, "prefix1_foo"),
-					info:   testFileInfo(t, "prefix1_foo", 42),
+					path:   filepath.Join(testDir, "spdk_pid69299map_990"),
+					info:   testFileInfo(t, "spdk_pid69299map_990", 42),
 					expErr: errors.New("could not remove"),
 				},
 			},
-			expRemoved: []string{},
-			removeErr:  errors.New("could not remove"),
+			removeErr: errors.New("could not remove"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			removedFiles := make([]string, 0)
-			removeFn := func(path string) error {
+			remove := func(path string) error {
 				if tc.removeErr == nil {
 					removedFiles = append(removedFiles, path)
 				}
 				return tc.removeErr
 			}
+			stat := func(path string) (os.FileInfo, error) {
+				if tc.statExistMap[path] {
+					return nil, nil
+				}
+				return nil, os.ErrNotExist
+			}
 
 			var count uint = 0
-			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn, &count)
+			testFn := createHugePageWalkFunc(testDir, stat, remove, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
-				common.CmpErr(t, ti.expErr, gotErr)
+				test.CmpErr(t, ti.expErr, gotErr)
+			}
+
+			if tc.expRemoved == nil {
+				tc.expRemoved = []string{}
 			}
 			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
 				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expCount, count, "unexpected remove count")
+			test.AssertEqual(t, tc.expCount, count, "unexpected remove count")
 		})
 	}
 }
@@ -927,16 +904,12 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 
-	usr, _ := user.Current()
-
-	defaultHpCleanCall := strings.Join([]string{hugePageDir, hugePagePrefix, usr.Uid}, ",")
+	defaultHpCleanCall := hugePageDir
 
 	for name, tc := range map[string]struct {
 		reset          bool
 		req            storage.BdevPrepareRequest
 		mbc            *MockBackendConfig
-		userLookupRet  *user.User
-		userLookupErr  error
 		vmdDetectRet   *hardware.PCIAddressSet
 		vmdDetectErr   error
 		hpRemCount     uint
@@ -946,14 +919,6 @@ func TestBackend_Prepare(t *testing.T) {
 		expResp        *storage.BdevPrepareResponse
 		expHpCleanCall string
 	}{
-		"unknown target user": {
-			req: storage.BdevPrepareRequest{
-				TargetUser: username,
-			},
-			userLookupErr:  errors.New("unknown user"),
-			expErr:         errors.New("lookup on local host: unknown user"),
-			expHpCleanCall: "",
-		},
 		"prepare reset; defaults": {
 			reset: true,
 			req: storage.BdevPrepareRequest{
@@ -1035,7 +1000,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{
@@ -1062,7 +1026,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; blocklist": {
 			req: storage.BdevPrepareRequest{
@@ -1087,7 +1050,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; blocklist allowlist": {
 			req: storage.BdevPrepareRequest{
@@ -1116,7 +1078,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; fails": {
 			req: storage.BdevPrepareRequest{
@@ -1141,7 +1102,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled": {
 			req: storage.BdevPrepareRequest{
@@ -1169,7 +1129,6 @@ func TestBackend_Prepare(t *testing.T) {
 			expResp: &storage.BdevPrepareResponse{
 				VMDPrepared: true,
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled; vmd detect failed": {
 			req: storage.BdevPrepareRequest{
@@ -1177,10 +1136,9 @@ func TestBackend_Prepare(t *testing.T) {
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
-			vmdDetectRet:   mockAddrList(1, 2),
-			vmdDetectErr:   errors.New("vmd detect failed"),
-			expErr:         errors.New("vmd detect failed"),
-			expHpCleanCall: defaultHpCleanCall,
+			vmdDetectRet: mockAddrList(1, 2),
+			vmdDetectErr: errors.New("vmd detect failed"),
+			expErr:       errors.New("vmd detect failed"),
 		},
 		"prepare setup; vmd enabled; no vmd devices; vmd disabled in req": {
 			req: storage.BdevPrepareRequest{
@@ -1204,7 +1162,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled; vmd device allowed": {
 			req: storage.BdevPrepareRequest{
@@ -1233,7 +1190,6 @@ func TestBackend_Prepare(t *testing.T) {
 			expResp: &storage.BdevPrepareResponse{
 				VMDPrepared: true,
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled; vmd device blocked": {
 			req: storage.BdevPrepareRequest{
@@ -1264,7 +1220,6 @@ func TestBackend_Prepare(t *testing.T) {
 			expResp: &storage.BdevPrepareResponse{
 				VMDPrepared: true,
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled; vmd devices all blocked; vmd disabled in req": {
 			req: storage.BdevPrepareRequest{
@@ -1291,7 +1246,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; vmd enabled; vmd devices allowed and blocked": {
 			req: storage.BdevPrepareRequest{
@@ -1323,31 +1277,20 @@ func TestBackend_Prepare(t *testing.T) {
 			expResp: &storage.BdevPrepareResponse{
 				VMDPrepared: true,
 			},
-			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; huge page clean only": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:      testNrHugepages,
 				CleanHugePagesOnly: true,
-				CleanHugePagesPID:  654321,
-				TargetUser:         username,
-				PCIAllowList:       mockAddrListStr(1, 2, 3),
-				PCIBlockList:       mockAddrListStr(4, 3),
 			},
 			hpRemCount: 555,
 			expResp: &storage.BdevPrepareResponse{
 				NrHugePagesRemoved: 555,
 			},
-			expHpCleanCall: strings.Join([]string{
-				hugePageDir, fmt.Sprintf("%s_pid%dmap", hugePagePrefix, 654321), usr.Uid,
-			}, ","),
+			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; huge page clean fail": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
-				TargetUser:    username,
-				PCIAllowList:  mockAddrListStr(1, 2, 3),
-				PCIBlockList:  mockAddrListStr(4, 3),
+				CleanHugePagesOnly: true,
 			},
 			hpCleanErr:     errors.New("clean failed"),
 			expErr:         errors.New("clean failed"),
@@ -1356,26 +1299,20 @@ func TestBackend_Prepare(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
 			b := newBackend(log, sss)
 
-			if tc.userLookupRet == nil {
-				tc.userLookupRet = usr
-			}
 			if tc.expResp == nil {
 				tc.expResp = &storage.BdevPrepareResponse{}
-			}
-			mockUserLookup := func(string) (*user.User, error) {
-				return tc.userLookupRet, tc.userLookupErr
 			}
 			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			var hpCleanCall string
-			mockHpClean := func(a, b, c string) (uint, error) {
-				hpCleanCall = strings.Join([]string{a, b, c}, ",")
+			mockHpClean := func(in string) (uint, error) {
+				hpCleanCall = in
 				return tc.hpRemCount, tc.hpCleanErr
 			}
 
@@ -1384,12 +1321,12 @@ func TestBackend_Prepare(t *testing.T) {
 				gotErr = b.reset(tc.req, mockVmdDetect)
 			} else {
 				var gotResp *storage.BdevPrepareResponse
-				gotResp, gotErr = b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
+				gotResp, gotErr = b.prepare(tc.req, mockVmdDetect, mockHpClean)
 				if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 					t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
 				}
 			}
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 
 			if len(tc.expScriptCalls) != len(*calls) {
 				t.Fatalf("\nunmatched number of calls (-want, +got):\n%s\n",
@@ -1405,7 +1342,7 @@ func TestBackend_Prepare(t *testing.T) {
 					t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
 				}
 			}
-			common.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
+			test.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
 		})
 	}
 }

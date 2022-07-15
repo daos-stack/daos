@@ -884,8 +884,11 @@ class TestContainer(TestDaosApiBase):
         return count
 
     @fail_on(CommandFailure)
-    def get_prop(self):
+    def get_prop(self, properties=None):
         """Get container property by calling daos container get-prop.
+
+        Args:
+            properties (list): "name" field(s). Defaults to None.
 
         Returns:
             str: JSON output of daos container get-prop.
@@ -896,7 +899,8 @@ class TestContainer(TestDaosApiBase):
         """
         if self.control_method.value == self.USE_DAOS and self.daos:
             # Get container property using daos utility.
-            return self.daos.container_get_prop(pool=self.pool.uuid, cont=self.uuid)
+            return self.daos.container_get_prop(
+                pool=self.pool.uuid, cont=self.uuid, properties=properties)
 
         if self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")
@@ -906,3 +910,18 @@ class TestContainer(TestDaosApiBase):
                 "Error: Undefined control_method: %s", self.control_method.value)
 
         return None
+
+    def verify_health(self, expected_health):
+        """Check container property's Health field by calling daos container get-prop.
+
+        Args:
+            expected_health (str): Expected value in the Health field.
+
+        Returns:
+            bool: True if expected_health matches the one obtained from get-prop.
+
+        """
+        output = self.get_prop(properties=["status"])
+        actual_health = output["response"][0]["value"]
+
+        return actual_health == expected_health

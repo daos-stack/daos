@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -91,15 +90,15 @@ var (
 		"only a single fault domain layer below the root is supported",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigNrHugepagesOutOfRange = serverConfigFault(
-		code.ServerConfigNrHugepagesOutOfRange,
-		"number of hugepages specified is out of range",
-		fmt.Sprintf("specify a nr_hugepages value between -1 and %d", math.MaxInt32),
-	)
 	FaultConfigHugepagesDisabled = serverConfigFault(
 		code.ServerConfigHugepagesDisabled,
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"remove nr_hugepages parameter from config to have the value automatically calculated",
+	)
+	FaultConfigVMDSettingDuplicate = serverConfigFault(
+		code.ServerConfigVMDSettingDuplicate,
+		"enable_vmd and disable_vmd parameters both specified in config",
+		"remove legacy enable_vmd parameter from config",
 	)
 )
 
@@ -199,6 +198,16 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
 			"not a symbolic link, does not have the setuid bit set, and does not have "+
 			"write permissions for non-owners", requiredDir),
+	)
+}
+
+// FaultConfigNrHugepagesOutOfRange creates a fault for the scenario where the number of configured
+// huge pages is smaller than zero or larger than the maximum value allowed.
+func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigNrHugepagesOutOfRange,
+		fmt.Sprintf("number of hugepages specified (%d) is out of range (0 - %d)", req, max),
+		fmt.Sprintf("specify a nr_hugepages value between 0 and %d", max),
 	)
 }
 

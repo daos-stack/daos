@@ -216,7 +216,7 @@ dc_tx_free(struct d_hlink *hlink)
 	D_FREE(tx->tx_req_cache);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
-	D_FREE_PTR(tx);
+	D_FREE(tx);
 }
 
 static struct d_hlink_ops tx_h_ops = {
@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
 	if (rc != 0) {
 		D_FREE(tx->tx_req_cache);
-		D_FREE_PTR(tx);
+		D_FREE(tx);
 		return rc;
 	}
 
@@ -785,6 +785,7 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * already choosing it. We'll "wait" for that "epoch task" to
 		 * complete.
 		 */
+		tse_disable_propagate(task);
 		D_DEBUG(DB_IO, DF_X64"/%p: waiting for epoch task %p\n",
 			th.cookie, task, tx->tx_epoch_task);
 		rc = tse_task_register_deps(task, 1, &tx->tx_epoch_task);
@@ -909,6 +910,20 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
+	if (unlikely(rc == -DER_TX_ID_REUSED)) {
+		if (tx->tx_retry)
+			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
+			D_ASSERTF(0,
+				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
+				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
+
+		D_INFO("TX ID "DF_DTI" for CPD RPC is reused, re-generate\n", DP_DTI(&tx->tx_id));
+		/* For non-retry case, restart TX with new TX ID. */
+		daos_dti_gen(&tx->tx_id, false);
+		tx->tx_status = TX_FAILED;
+		D_GOTO(out, rc = -DER_TX_RESTART);
+	}
+
 	if (rc != -DER_TX_RESTART && !obj_retry_error(rc)) {
 		tx->tx_retry = 0;
 		tx->tx_status = TX_ABORTED;
@@ -1004,6 +1019,7 @@ struct dc_tx_req_group {
 	uint32_t			 dtrg_read_cnt;
 	uint32_t			 dtrg_write_cnt;
 	uint32_t			 dtrg_slot_cnt;
+	uint8_t				 dtrg_flags; /* see daos_tgt_flags */
 	struct daos_cpd_req_idx		*dtrg_req_idx;
 };
 
@@ -1067,6 +1083,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			return rc;
 
 		rc = obj_ec_req_reasb(dcu->dcu_iod_array.oia_iods,
+				      obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
 				      dcsr->dcsr_sgls, obj->cob_md.omd_id, oca,
 				      dcsr->dcsr_reasb, dcsr->dcsr_nr, true);
 		if (rc != 0)
@@ -1146,6 +1163,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	int			 start;
 	int			 rc = 0;
 	int			 idx;
+	uint8_t			 tgt_flags = 0;
 
 	if (d_list_empty(dtr_list))
 		leader_dtr = NULL;
@@ -1171,6 +1189,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			dcu->dcu_start_shard = start;
+			if (dcu->dcu_iod_array.oia_oiods != NULL)
+				tgt_flags = DTF_REASSEMBLE_REQ;
 		}
 	}
 
@@ -1217,6 +1237,11 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			  shard->do_target_id, dtrg_nr);
 
 		dtrg = &dtrgs[shard->do_target_id];
+
+		dtrg->dtrg_flags |= tgt_flags;
+		if (unlikely(shard->do_shard != idx))
+			dtrg->dtrg_flags |= DTF_REASSEMBLE_REQ;
+
 		if (dtrg->dtrg_req_idx == NULL) {
 			/* dtrg->dtrg_req_idx will be released by caller. */
 			D_ALLOC_ARRAY(dtrg->dtrg_req_idx, DTX_SUB_REQ_DEF);
@@ -1623,7 +1648,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		else
 			bit_map = NIL_BITMAP;
 
-		i = obj_grp_leader_get(obj, grp_idx, tx->tx_pm_ver, bit_map);
+		i = obj_grp_leader_get(obj, grp_idx,
+				       obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
+				       false, tx->tx_pm_ver, bit_map);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
@@ -1679,6 +1706,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	shard_tgts[0].st_rank = dtrgs[leader_dtrg_idx].dtrg_rank;
 	shard_tgts[0].st_tgt_id = leader_dtrg_idx;
 	shard_tgts[0].st_tgt_idx = dtrgs[leader_dtrg_idx].dtrg_tgt_idx;
+	shard_tgts[0].st_flags = dtrgs[leader_dtrg_idx].dtrg_flags;
 
 	for (i = 0, j = 1; i < tgt_cnt; i++) {
 		if (dtrgs[i].dtrg_req_idx == NULL || i == leader_dtrg_idx)
@@ -1697,6 +1725,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		shard_tgts[j].st_rank = dtrgs[i].dtrg_rank;
 		shard_tgts[j].st_tgt_id = i;
 		shard_tgts[j].st_tgt_idx = dtrgs[i].dtrg_tgt_idx;
+		shard_tgts[j].st_flags = dtrgs[i].dtrg_flags;
 		j++;
 	}
 
@@ -1733,7 +1762,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_head.dcs_type = DCST_HEAD;
 	tx->tx_head.dcs_nr = 1;
 	tx->tx_head.dcs_buf = dcsh;
-
 
 	/* XXX: Currently, we only pack single DTX per CPD RPC, then elect
 	 *	the first targets in the dispatch list as the leader.
@@ -2540,8 +2568,72 @@ struct dc_tx_check_existence_cb_args {
 	uint64_t		nr;
 	void			*iods_or_akeys;
 	d_sg_list_t		*sgls;
+	uint64_t		tmp_iod_nr;
 	daos_iod_t		*tmp_iods;
 };
+
+static int
+dc_tx_check_update(uint64_t flags, int result)
+{
+	if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_DKEY_INSERT)) {
+		if (result == 0)
+			return -DER_EXIST;
+
+		if (result != -DER_NONEXIST)
+			return result;
+
+		return 0;
+	}
+
+	if (flags & (DAOS_COND_AKEY_UPDATE | DAOS_COND_DKEY_UPDATE) && result != 0)
+		return result;
+
+	return 0;
+}
+
+static int
+dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
+{
+	struct dc_tx_check_existence_cb_args	*args = data;
+
+	D_ASSERT(args->opc == DAOS_OBJ_RPC_UPDATE);
+	D_ASSERT(args->flags & DAOS_COND_PER_AKEY);
+	D_ASSERT(args->tmp_iods != NULL);
+	D_ASSERT(args->tmp_iod_nr == 1);
+
+	task->dt_result = dc_tx_check_update(args->tmp_iods->iod_flags, task->dt_result);
+
+	daos_iov_free(&args->tmp_iods->iod_name);
+	D_FREE(args->tmp_iods);
+
+	return 0;
+}
+
+static int
+dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
+{
+	struct dc_tx_check_existence_cb_args	*args = data;
+	struct dc_object			*obj = NULL;
+	struct dc_tx				*tx = args->tx;
+	int					 rc = task->dt_result;
+
+	D_ASSERT(args->opc == DAOS_OBJ_RPC_UPDATE);
+	D_ASSERT(args->flags & DAOS_COND_PER_AKEY);
+
+	if (rc == 0) {
+		obj = obj_hdl2ptr(args->oh);
+		D_MUTEX_LOCK(&tx->tx_lock);
+		rc = dc_tx_add_update(tx, &obj, args->flags, args->dkey, args->nr,
+				      args->iods_or_akeys, args->sgls);
+		D_MUTEX_UNLOCK(&tx->tx_lock);
+		obj_decref(obj);
+	}
+
+	/* Drop the reference that is held via dc_tx_attach(). */
+	dc_tx_decref(tx);
+
+	return rc;
+}
 
 static int
 dc_tx_check_existence_cb(tse_task_t *task, void *data)
@@ -2550,24 +2642,16 @@ dc_tx_check_existence_cb(tse_task_t *task, void *data)
 	struct dc_object			*obj = NULL;
 	struct dc_tx				*tx = args->tx;
 	int					 rc = 0;
+	int					 i;
 
 	obj = obj_hdl2ptr(args->oh);
 	D_MUTEX_LOCK(&tx->tx_lock);
 
 	switch (args->opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		if (args->flags & (DAOS_COND_DKEY_INSERT |
-				   DAOS_COND_AKEY_INSERT)) {
-			if (task->dt_result == 0)
-				D_GOTO(out, rc = -DER_EXIST);
-
-			if (task->dt_result != -DER_NONEXIST)
-				D_GOTO(out, rc = task->dt_result);
-		} else if (args->flags & (DAOS_COND_DKEY_UPDATE |
-					  DAOS_COND_AKEY_UPDATE)) {
-			if (task->dt_result != 0)
-				D_GOTO(out, rc = task->dt_result);
-		}
+		rc = dc_tx_check_update(args->flags, task->dt_result);
+		if (rc != 0)
+			D_GOTO(out, rc);
 
 		rc = dc_tx_add_update(tx, &obj, args->flags,
 				      args->dkey, args->nr,
@@ -2600,8 +2684,6 @@ out:
 	D_MUTEX_UNLOCK(&tx->tx_lock);
 
 	if (args->tmp_iods != NULL) {
-		int		i;
-
 		for (i = 0; i < args->nr; i++)
 			daos_iov_free(&args->tmp_iods[i].iod_name);
 
@@ -2618,6 +2700,117 @@ out:
 		obj_decref(obj);
 
 	return 0;
+}
+
+static int
+dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_tx *tx,
+			      uint64_t flags, daos_key_t *dkey, uint32_t nr, void *iods_or_akeys,
+			      d_sg_list_t *sgls, tse_task_t *parent)
+{
+	struct dc_tx_check_existence_cb_args	 cb_args = { 0 };
+	daos_iod_t				*in_iods = iods_or_akeys;
+	daos_iod_t				*iods = NULL;
+	tse_task_t				*task = NULL;
+	d_list_t				 task_list;
+	int					 rc;
+	int					 i;
+
+	D_INIT_LIST_HEAD(&task_list);
+
+	cb_args.opc		= opc;
+	cb_args.tx		= tx;
+	cb_args.oh		= oh;
+	cb_args.flags		= flags;
+	cb_args.dkey		= dkey;
+	cb_args.nr		= nr;
+	cb_args.iods_or_akeys	= iods_or_akeys;
+	cb_args.sgls		= sgls;
+
+	/* XXX: individual sub-task for checking each akey's existence independently. */
+
+	for (i = 0; i < nr; i++) {
+		if (!(in_iods[i].iod_flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_AKEY_UPDATE)))
+			continue;
+
+		D_ALLOC_ARRAY(iods, 1);
+		if (iods == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		rc = daos_iov_copy(&iods->iod_name, &in_iods[i].iod_name);
+		if (rc != 0)
+			goto out;
+
+		iods->iod_flags = in_iods[i].iod_flags;
+		cb_args.tmp_iod_nr = 1;
+		cb_args.tmp_iods = iods;
+
+		rc = dc_obj_fetch_task_create(oh, dc_tx_ptr2hdl(tx), DAOS_COND_AKEY_FETCH, dkey, 1,
+					      DIOF_CHECK_EXISTENCE, iods, NULL, NULL, NULL, NULL,
+					      NULL, tse_task2sched(parent), &task);
+		if (rc != 0)
+			goto out;
+
+		rc = tse_task_register_comp_cb(task, dc_tx_per_akey_existence_sub_cb,
+					       &cb_args, sizeof(cb_args));
+		if (rc != 0)
+			goto out;
+
+		/* decref and delete from head at shard_task_remove */
+		tse_task_addref(task);
+		tse_task_list_add(task, &task_list);
+
+		iods = NULL;
+
+		rc = dc_task_depend(parent, 1, &task);
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	if (rc == 0) {
+		if (unlikely(d_list_empty(&task_list))) {
+			struct dc_object	*obj;
+
+			obj_hdl2ptr(oh);
+			D_MUTEX_LOCK(&tx->tx_lock);
+			rc = dc_tx_add_update(tx, &obj, flags, dkey, nr, iods_or_akeys, sgls);
+			D_MUTEX_UNLOCK(&tx->tx_lock);
+			obj_decref(obj);
+
+			/* Drop the reference that is held via dc_tx_attach(). */
+			dc_tx_decref(tx);
+		} else {
+			rc = tse_task_register_comp_cb(parent, dc_tx_per_akey_existence_parent_cb,
+						       &cb_args, sizeof(cb_args));
+			if (rc != 0)
+				goto fail;
+
+			tse_task_list_sched(&task_list, true);
+
+			/*
+			 * Return positive value to notify the sponsor to not call
+			 * complete() the task until the checking existence callback.
+			 */
+			rc = 1;
+		}
+	} else {
+		if (iods != NULL) {
+			if (task != NULL)
+				dc_task_decref(task);
+
+			daos_iov_free(&iods->iod_name);
+			D_FREE(iods);
+		}
+
+fail:
+		tse_task_list_traverse(&task_list, shard_task_abort, &rc);
+		parent->dt_result = rc;
+
+		/* Drop the reference that is held via dc_tx_attach(). */
+		dc_tx_decref(tx);
+	}
+
+	return rc;
 }
 
 static int
@@ -2643,12 +2836,13 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 	cb_args.sgls		= sgls;
 
 	/* XXX: Use conditional fetch (with empty sgls) to check the target
-	 *	existence on related server.
+	 *	existence on related target.
 	 */
 	if (nr != 0) {
 		D_ASSERT(iods_or_akeys != NULL);
 
 		if (opc != DAOS_OBJ_RPC_UPDATE) {
+			/* For punch akey. */
 			D_ALLOC_ARRAY(iods, nr);
 			if (iods == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -2661,39 +2855,41 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 			}
 
 			api_flags = DAOS_COND_AKEY_FETCH;
+			cb_args.tmp_iod_nr = nr;
 			cb_args.tmp_iods = iods;
-		} else if (flags & (DAOS_COND_AKEY_INSERT |
-				    DAOS_COND_AKEY_UPDATE)) {
-			iods = iods_or_akeys;
-			api_flags = DAOS_COND_AKEY_FETCH |
-				    (flags & DAOS_COND_PER_AKEY);
 		} else {
-			/* Only check dkey existence. */
-			api_flags = DAOS_COND_DKEY_FETCH;
-			nr = 0;
+			if (flags & (DAOS_COND_AKEY_INSERT | DAOS_COND_AKEY_UPDATE)) {
+				iods = iods_or_akeys;
+				api_flags = DAOS_COND_AKEY_FETCH;
+			} else {
+				/* Only check dkey existence. */
+				api_flags = DAOS_COND_DKEY_FETCH;
+				nr = 0;
+			}
 		}
 	} else {
+		/* For punch dkey */
 		api_flags = DAOS_COND_DKEY_FETCH;
 	}
 
 	rc = dc_obj_fetch_task_create(oh, dc_tx_ptr2hdl(tx), api_flags, dkey,
-				      nr, DIOF_CHECK_EXISTENCE | DIOF_TO_LEADER,
+				      nr, DIOF_CHECK_EXISTENCE,
 				      iods, NULL, NULL, NULL, NULL, NULL,
 				      tse_task2sched(parent), &task);
 	if (rc != 0)
 		goto out;
 
-	rc = dc_task_depend(parent, 1, &task);
-	if (rc != 0) {
-		D_ERROR("Fail to add dep on check existence task: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
-
 	rc = tse_task_register_comp_cb(task, dc_tx_check_existence_cb,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		D_ERROR("Fail to add CB for check existence task: "DF_RC"\n",
+			DP_RC(rc));
+		goto out;
+	}
+
+	rc = dc_task_depend(parent, 1, &task);
+	if (rc != 0) {
+		D_ERROR("Fail to add dep on check existence task: "DF_RC"\n",
 			DP_RC(rc));
 		goto out;
 	}
@@ -2749,6 +2945,19 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 			return dc_tx_check_existence_task(opc, up->oh, tx,
 						up->flags, up->dkey, up->nr,
 						up->iods, up->sgls, task);
+		}
+
+		if (up->flags & DAOS_COND_PER_AKEY) {
+			D_MUTEX_UNLOCK(&tx->tx_lock);
+
+			if (up->nr == 0 || up->iods == NULL)
+				D_GOTO(out, rc = -DER_INVAL);
+
+			if (obj != NULL)
+				obj_decref(obj);
+
+			return dc_tx_per_akey_existence_task(opc, up->oh, tx, up->flags, up->dkey,
+							     up->nr, up->iods, up->sgls, task);
 		}
 
 		rc = dc_tx_add_update(tx, &obj, up->flags, up->dkey,
@@ -2962,60 +3171,22 @@ int
 dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 {
 	struct tx_convert_cb_args	 conv = { 0 };
-	daos_handle_t			 coh;
 	daos_tx_commit_t		*args;
-	daos_obj_update_t		*up = NULL;
-	daos_obj_punch_t		*pu = NULL;
 	tse_task_t			*tx_task = NULL;
 	struct dc_tx			*tx = NULL;
 	int				 rc = 0;
 
 	D_ASSERT(obj != NULL);
 
-	switch (opc) {
-	case DAOS_OBJ_RPC_UPDATE:
-		up = dc_task_get_args(task);
-		coh = dc_obj_hdl2cont_hdl(up->oh);
-		break;
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-		pu = dc_task_get_args(task);
-		coh = dc_obj_hdl2cont_hdl(pu->oh);
-		break;
-	default:
-		D_ERROR("Unsupportted TX convert opc %d\n", opc);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = dc_tx_alloc(coh, 0, DAOS_TF_ZERO_COPY, &tx);
+	rc = dc_tx_alloc(obj->cob_coh, 0, DAOS_TF_ZERO_COPY, &tx);
 	if (rc != 0) {
 		D_ERROR("Fail to open TX for opc %u: "DF_RC"\n",
 			opc, DP_RC(rc));
 		goto out;
 	}
 
-	tx->tx_pm_ver = dc_pool_get_version(tx->tx_pool);
-
-	switch (opc) {
-	case DAOS_OBJ_RPC_UPDATE:
-		rc = dc_tx_add_update(tx, &obj, up->flags, up->dkey,
-				      up->nr, up->iods, up->sgls);
-		break;
-	case DAOS_OBJ_RPC_PUNCH:
-		rc = dc_tx_add_punch_obj(tx, &obj, pu->flags);
-		break;
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-		rc = dc_tx_add_punch_dkey(tx, &obj, pu->flags, pu->dkey);
-		break;
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-		rc = dc_tx_add_punch_akeys(tx, &obj, pu->flags, pu->dkey,
-					   pu->akey_nr, pu->akeys);
-		break;
-	default:
-		D_ASSERT(0);
-	}
-
+	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task);
+	obj = NULL;
 	if (rc != 0) {
 		D_ERROR("Fail to attach TX for opc %u: "DF_RC"\n",
 			opc, DP_RC(rc));

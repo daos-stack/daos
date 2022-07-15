@@ -31,7 +31,7 @@ struct stats_cycle {
 	uint64_t	sc_kicked_wts[SCHED_REQ_MAX];
 };
 
-#define SW_CYCLE_MAX	5000
+#define SW_CYCLE_MAX	10000
 
 struct stats_window {
 	/* All schedule cycles in the stats window */
@@ -55,7 +55,7 @@ struct stats_window {
  * pool) when the total kicked weights are less than the SW_MIN_WEIGHTS within a
  * stats window.
  */
-#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 2 */
+#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 4 */
 
 static inline void
 sw_cycle_update(struct stats_window *sw, unsigned int req_type)
@@ -876,7 +876,7 @@ apportion_wts(uint64_t avail_wts, uint32_t *kick, unsigned int req_type)
 		return 0;
 	}
 
-	pending_wts = kick[req_type] * req_weights[req_type];
+	pending_wts = (uint64_t)kick[req_type] * req_weights[req_type];
 	if (avail_wts <= pending_wts) {
 		kick_cnt = avail_wts / req_weights[req_type];
 		if (kick_cnt < kick[req_type])
@@ -930,18 +930,14 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 		return;
 
 	gc_wts = kicked_wts[SCHED_REQ_GC];
-	gc_wts += kick[SCHED_REQ_GC] * req_weights[SCHED_REQ_GC];
+	gc_wts += (uint64_t)kick[SCHED_REQ_GC] * req_weights[SCHED_REQ_GC];
 
 	tot_wts = sw->sw_kicked_wts_tot;
 	for (req_type = SCHED_REQ_UPDATE; req_type < SCHED_REQ_MAX; req_type++)
-		tot_wts += kick[req_type] * req_weights[req_type];
-
-	/* CPU is under utilized, no throttling on any ULTs */
-	if (tot_wts < SW_MIN_WEIGHTS)
-		return;
+		tot_wts += (uint64_t)kick[req_type] * req_weights[req_type];
 
 	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
-	avail_wts = kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
+	avail_wts = (uint64_t)kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
 	if (gc_wts > gc_wts_max) {
 		if (kick[SCHED_REQ_GC] == 0)
 			goto done;
@@ -958,11 +954,11 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 		if (pr->pr_free != 0 && !is_gc_pending(spi))
 			goto done;
 		/*
-		 * If space pressure stays in same level for a while, we just assume that
+		 * If space pressure stays in highest level for a while, we just assume that
 		 * no available space can be reclaimed, so throttling will be skipped and
 		 * ENOSPACE could be returned to client sooner.
 		 */
-		if (!is_pressure_recent(info, spi))
+		if (pr->pr_free == 0 && !is_pressure_recent(info, spi))
 			goto done;
 
 		D_ASSERT(sw->sw_kicked_wts_tot >= kicked_wts[SCHED_REQ_GC]);
@@ -1001,8 +997,8 @@ throttle_sys(struct stats_window *sw, uint32_t *kick, struct pressure_ratio *pr)
 	kicked_wts = &sw->sw_kicked_wts[0];
 
 	io_wts = kicked_wts[SCHED_REQ_UPDATE] + kicked_wts[SCHED_REQ_FETCH];
-	io_wts += kick[SCHED_REQ_UPDATE] * req_weights[SCHED_REQ_UPDATE];
-	io_wts += kick[SCHED_REQ_FETCH] * req_weights[SCHED_REQ_FETCH];
+	io_wts += (uint64_t)kick[SCHED_REQ_UPDATE] * req_weights[SCHED_REQ_UPDATE];
+	io_wts += (uint64_t)kick[SCHED_REQ_FETCH] * req_weights[SCHED_REQ_FETCH];
 
 	/* No recent IO and pending IO, no throttling on sys ULTs */
 	if (io_wts == 0)

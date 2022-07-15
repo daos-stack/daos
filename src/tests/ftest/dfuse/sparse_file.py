@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -91,7 +91,7 @@ class SparseFile(IorTestBase):
                                                    sparse_file)
         self.log.info("File size (in bytes) after writing first byte: %s",
                       fsize_write_1stbyte)
-        # verify file did not got overriten after dd write.
+        # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file

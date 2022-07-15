@@ -55,7 +55,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/srv_obj_ec.h>
 #include "obj_ec.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 #define EC_AGG_ITERATION_MAX	2048
 
@@ -91,8 +91,8 @@ struct ec_agg_stripe {
 	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
 	d_list_t	as_dextents;    /* list of stripe's data extents     */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
+	uint64_t	as_offset;      /* start offset in stripe            */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
-	unsigned int	as_offset;      /* start offset in stripe            */
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
@@ -105,12 +105,16 @@ struct ec_agg_entry {
 	d_sg_list_t		 ae_sgl;	 /* Mem for entry processing  */
 	daos_handle_t		 ae_thdl;	 /* Iterator handle           */
 	daos_key_t		 ae_dkey;	 /* Current dkey              */
+	uint64_t		 ae_dkey_hash;
 	daos_key_t		 ae_akey;	 /* Current akey              */
 	daos_size_t		 ae_rsize;	 /* Record size of cur array  */
 	struct ec_agg_stripe	 ae_cur_stripe;  /* Struct for current stripe */
 	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
+	struct pl_obj_layout	*ae_obj_layout;
 	struct daos_shard_loc	 ae_peer_pshards[OBJ_EC_MAX_P];
+	uint32_t		 ae_grp_idx;
+	uint32_t		 ae_rotate_parity:1; /* ec parity rotation or not */
 };
 
 /* Parameters used to drive iterate all.
@@ -205,14 +209,13 @@ ec_age2shard(struct ec_agg_entry *entry)
 static inline uint32_t
 ec_age2pidx(struct ec_agg_entry *entry)
 {
-	uint32_t	k, p, shard;
+	uint32_t shard;
 
-	k = ec_age2k(entry);
-	p = ec_age2p(entry);
-	shard = ec_age2shard(entry) % (k + p);
-	D_ASSERT(shard >= k && shard < (k + p));
+	shard = ec_age2shard(entry) % obj_ec_tgt_nr(&entry->ae_oca);
 
-	return (shard - k) % p;
+	D_ASSERT(is_ec_parity_shard(shard, entry->ae_dkey_hash, &entry->ae_oca));
+	return (obj_ec_shard_off(entry->ae_dkey_hash, &entry->ae_oca, shard) -
+		obj_ec_data_tgt_nr(&entry->ae_oca));
 }
 
 #define EC_AGE_EPOCH_NO_PARITY		((daos_epoch_t)(~(0ULL)))
@@ -437,23 +440,23 @@ out:
 /* Determines if an extent overlaps a cell.
  */
 static bool
-agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
-	    unsigned int k, unsigned int len, daos_off_t stripenum)
+agg_overlap(uint64_t estart, uint64_t elen, unsigned int cell_idx,
+	    unsigned int k, unsigned int len, uint64_t stripenum)
 {
-	daos_off_t cell_start = k * len * stripenum + len * cell;
+	daos_recx_t	recx, cell_recx;
 
-	estart += k * len * stripenum;
-	if (cell_start <= estart && estart < cell_start + len)
-		return true;
-	if (estart <= cell_start && cell_start < estart + elen)
-		return true;
-	return false;
+	recx.rx_idx		= estart + k * len * stripenum;
+	recx.rx_nr		= elen;
+	cell_recx.rx_idx	= k * len * stripenum + len * cell_idx;
+	cell_recx.rx_nr		= len;
+
+	return DAOS_RECX_PTR_OVERLAP(&recx, &cell_recx);
 }
 
 static unsigned int
-agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
-		unsigned int elen, unsigned int k, unsigned int len,
-		unsigned int stripenum, unsigned int *full_cell_cnt)
+agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
+		uint64_t elen, unsigned int k, unsigned int len,
+		uint64_t stripenum, unsigned int *full_cell_cnt)
 {
 	unsigned int i, cell_cnt = 0;
 
@@ -483,16 +486,14 @@ agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
 static int
 agg_get_obj_handle(struct ec_agg_entry *entry)
 {
-	struct daos_obj_layout	*layout;
 	struct ec_agg_param	*agg_param;
-	unsigned int		 k = ec_age2k(entry);
-	d_rank_t		 myrank;
-	uint32_t		 grp_idx;
-	struct daos_obj_shard	*sd;
-	int			 i, p, rc = 0;
+	uint32_t		grp_start;
+	uint32_t		tgt_ec_idx;
+	int			i;
+	int			rc;
 
 	if (daos_handle_is_valid(entry->ae_obj_hdl))
-		return rc;
+		return 0;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
@@ -501,22 +502,27 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	crt_group_rank(NULL, &myrank);
-	rc = dc_obj_layout_get(entry->ae_obj_hdl, &layout);
-	if (rc)
-		goto out;
+	if (entry->ae_peer_pshards[0].sd_rank != DAOS_TGT_IGNORE)
+		D_GOTO(out, rc = 0);
 
-	grp_idx = ec_age2shard(entry) / (ec_age2k(entry) + ec_age2p(entry));
-	sd = layout->ol_shards[grp_idx];
-	for (i = k, p = 0; i < sd->os_replica_nr; i++) {
-		entry->ae_peer_pshards[p].sd_rank = sd->os_shard_loc[i].sd_rank;
-		entry->ae_peer_pshards[p].sd_tgt_idx = sd->os_shard_loc[i].sd_tgt_idx;
-		D_DEBUG(DB_TRACE, "ae_peer_pshards[%d] (grp %d), rank %d, tgt_idx %d\n",
-			p, grp_idx, entry->ae_peer_pshards[p].sd_rank,
-			entry->ae_peer_pshards[p].sd_tgt_idx);
-		p++;
+	grp_start = entry->ae_grp_idx * entry->ae_obj_layout->ol_grp_size;
+	tgt_ec_idx = obj_ec_parity_start(entry->ae_dkey_hash, &entry->ae_oca);
+	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++,
+	     tgt_ec_idx = (tgt_ec_idx + 1) % entry->ae_obj_layout->ol_grp_size) {
+		struct pl_obj_shard	*p_shard;
+		struct pool_target	*tgt;
+		int			shard_idx;
+
+		shard_idx = grp_start + tgt_ec_idx;
+		p_shard = &entry->ae_obj_layout->ol_shards[shard_idx];
+		rc = pool_map_find_target(agg_param->ap_pool_info.api_pool->sp_map,
+					  p_shard->po_target, &tgt);
+		if (rc == 1) {
+			entry->ae_peer_pshards[i].sd_rank = tgt->ta_comp.co_rank;
+			entry->ae_peer_pshards[i].sd_tgt_idx = tgt->ta_comp.co_index;
+			rc = 0;
+		}
 	}
-	daos_obj_layout_free(layout);
 out:
 	/* NB: entry::ae_obj_hdl will be closed externally */
 	return rc;
@@ -916,17 +922,12 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	unsigned char	*buf = NULL;
 	uint32_t	 len = ec_age2cs(entry);
 	uint64_t	 cell_b = ec_age2cs_b(entry);
-	uint32_t	 k = ec_age2k(entry);
-	uint32_t	 p = ec_age2p(entry);
 	uint32_t	 shard  = ec_age2shard(entry);
-	uint32_t	 pidx, sidx, peer_shard;
+	uint32_t	 pidx, peer_shard;
 	int		 i, rc = 0;
 
 	/* Only called when p > 1. */
-	D_ASSERT(p > 1);
-	sidx = shard % (k + p);
-	D_ASSERT(sidx >= k && sidx < k + p);
-	pidx = sidx - k;
+	pidx = ec_age2pidx(entry);
 
 	/* set up the iod */
 	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len)
@@ -941,11 +942,13 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
-	for (i = 0; i < p; i++) {
+	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++) {
 		if (i == pidx)
 			continue;
 		d_iov_set(&iov, &buf[i * cell_b], cell_b);
-		peer_shard = rounddown(shard, k + p) + k + i;
+		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
+						 &entry->ae_oca,
+						 shard / obj_ec_tgt_nr(&entry->ae_oca), i);
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_par_extent.ape_epoch,
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
@@ -1139,11 +1142,11 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	uint8_t			 tbit_map[OBJ_TGT_BITMAP_LEN] = {0};
 	unsigned int		 len = ec_age2cs(entry);
 	unsigned int		 k = ec_age2k(entry);
-	unsigned long            ss;
 	unsigned int		 i, full_cell_cnt = 0;
 	unsigned int		 cell_cnt = 0;
-	unsigned int		 estart, elen = 0;
-	unsigned int		 eend = 0;
+	uint64_t		 ss;
+	uint64_t		 estart, elen = 0;
+	uint64_t		 eend = 0;
 	bool			 has_old_replicas = false;
 	int			 tid, rc = 0;
 
@@ -1167,8 +1170,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 		}
 		if (extent->ae_recx.rx_idx - ss > eend) {
 			cell_cnt += agg_count_cells(fcbit_map, tbit_map, estart,
-						    elen, k, len, entry->
-						    ae_cur_stripe.as_stripenum,
+						    elen, k, len, entry->ae_cur_stripe.as_stripenum,
 						    &full_cell_cnt);
 			estart = extent->ae_recx.rx_idx - ss;
 			elen = 0;
@@ -1240,7 +1242,7 @@ out:
 
 /* Sends the generated parity and the stripe number to the peer
  * parity target. Handler writes the parity and deletes the replicas
- * for the stripe.  Has to be extended to support p > 2.
+ * for the stripe.
  */
 static void
 agg_peer_update_ult(void *arg)
@@ -1263,7 +1265,6 @@ agg_peer_update_ult(void *arg)
 	uint32_t		 shard  = ec_age2shard(entry);
 	uint32_t		 pidx = ec_age2pidx(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
-	uint32_t		 k = ec_age2k(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint32_t		 peer, peer_shard;
 	crt_rpc_t		*rpc = NULL;
@@ -1278,7 +1279,8 @@ agg_peer_update_ult(void *arg)
 	iod.iod_name = entry->ae_akey;
 	iod.iod_size = entry->ae_rsize;
 	for (peer = 0; peer < p; peer++) {
-		if (peer == pidx)
+		/* Only update the available parities */
+		if (peer == pidx || entry->ae_peer_pshards[peer].sd_rank == DAOS_TGT_IGNORE)
 			continue;
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1300,7 +1302,9 @@ agg_peer_update_ult(void *arg)
 		uuid_copy(ec_agg_in->ea_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_agg_in->ea_oid = entry->ae_oid;
-		peer_shard = rounddown(shard, k + p) + k + peer;
+		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
+						 &entry->ae_oca,
+						 shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
 		ec_agg_in->ea_oid.id_shard = peer_shard;
 		ec_agg_in->ea_dkey = entry->ae_dkey;
 		ec_agg_in->ea_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
@@ -1409,22 +1413,35 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	D_ASSERT(!write_parity ||
 		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
 
+	rc = agg_get_obj_handle(entry);
+	if (rc) {
+		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
 		D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "DF_RC"\n",
 			DP_UOID(entry->ae_oid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = agg_get_obj_handle(entry);
+	if (rc) {
+		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
 	if (targets != NULL) {
 		for (peer = 0; peer < p; peer++) {
 			peer_loc = &entry->ae_peer_pshards[peer];
 			for (i = 0; i < failed_tgts_cnt; i++) {
-				if (targets[i].ta_comp.co_rank ==
-				    peer_loc->sd_rank) {
+				if (targets[i].ta_comp.co_rank == peer_loc->sd_rank ||
+				    peer_loc->sd_rank == DAOS_TGT_IGNORE) {
 					D_DEBUG(DB_EPC, DF_UOID" peer parity "
-						"tgt failed rank %d, tgt_idx "
+						"tgt gailed rank %d, tgt_idx "
 						"%d.\n", DP_UOID(entry->ae_oid),
 						peer_loc->sd_rank,
 						peer_loc->sd_tgt_idx);
@@ -1437,11 +1454,6 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	stripe_ud.asu_write_par = write_parity;
 	stripe_ud.asu_agg_entry = entry;
 
-	rc = agg_get_obj_handle(entry);
-	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1582,6 +1594,8 @@ agg_process_holes_ult(void *arg)
 
 	/* Invoke peer re-replicate */
 	for (peer = 0; peer < p; peer++) {
+		uint32_t peer_shard;
+
 		if (pidx == peer)
 			continue;
 
@@ -1594,6 +1608,7 @@ agg_process_holes_ult(void *arg)
 			}
 		}
 
+		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
@@ -1613,16 +1628,18 @@ agg_process_holes_ult(void *arg)
 		uuid_copy(ec_rep_in->er_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_rep_in->er_oid = entry->ae_oid;
-		ec_rep_in->er_oid.id_shard--;
+		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
+						 &entry->ae_oca,
+				entry->ae_oid.id_shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
+		ec_rep_in->er_oid.id_shard = peer_shard;
 		ec_rep_in->er_dkey = entry->ae_dkey;
 		ec_rep_in->er_iod = *iod;
 		ec_rep_in->er_iod_csums.ca_arrays = stripe_ud->asu_iod_csums;
-		ec_rep_in->er_iod_csums.ca_count =
-			stripe_ud->asu_iod_csums == NULL ? 0 : 1;
+		ec_rep_in->er_iod_csums.ca_count = stripe_ud->asu_iod_csums == NULL ? 0 : 1;
 		ec_rep_in->er_stripenum = entry->ae_cur_stripe.as_stripenum;
-		ec_rep_in->er_epoch = entry->ae_cur_stripe.as_hi_epoch;
-		ec_rep_in->er_map_ver =
-			agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_rep_in->er_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
+		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 		ec_rep_in->er_bulk = bulk_hdl;
 		rc = dss_rpc_send(rpc);
 		if (rc) {
@@ -1981,20 +1998,130 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 	return rc;
 }
 
-/* Handles dkeys returned by the per-object nested iteratior.
-*/
-static int
-agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
-	 struct ec_agg_entry *agg_entry, unsigned int *acts)
+/* Compare function for keys.  Used to reset iterator position.  */
+static inline int
+agg_key_compare(daos_key_t key1, daos_key_t key2)
 {
-	agg_entry->ae_dkey	= entry->ie_key;
+	if (key1.iov_len != key2.iov_len)
+		return 1;
 
-	return 0;
+	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
 }
 
-/* Handles akeys returned by the iteratior.
- *
- */
+static inline void
+agg_reset_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
+{
+	switch (type) {
+	case VOS_ITER_OBJ:
+		memset(&agg_entry->ae_oid, 0, sizeof(agg_entry->ae_oid));
+		break;
+	case VOS_ITER_DKEY:
+		memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
+		break;
+	case VOS_ITER_AKEY:
+		memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+		break;
+	default:
+		break;
+	}
+}
+
+static int
+agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
+{
+	struct pl_obj_shard	*shard;
+	struct daos_oclass_attr *oca;
+	uint32_t		grp_idx;
+	uint32_t		grp_start;
+	uint32_t		ec_tgt_idx;
+	int			shard_idx;
+	int			rc;
+
+	oca = &agg_entry->ae_oca;
+	grp_idx = agg_entry->ae_oid.id_shard / daos_oclass_grp_size(oca);
+	grp_start = grp_idx * daos_oclass_grp_size(oca);
+	ec_tgt_idx = obj_ec_shard_idx(agg_entry->ae_dkey_hash, oca,
+				      daos_oclass_grp_size(oca) - 1);
+
+	/**
+	 * FIXME: only the last parity shard can be the EC agg leader. What about
+	 * Degraded mode?
+	 */
+	if (agg_entry->ae_oid.id_shard != ec_tgt_idx + grp_start)
+		return 0;
+
+	/* If last parity unavailable, then skip the object via returning -DER_STALE. */
+	shard_idx = grp_idx * agg_entry->ae_obj_layout->ol_grp_size + ec_tgt_idx;
+	shard = pl_obj_get_shard(agg_entry->ae_obj_layout, shard_idx);
+	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding)
+		rc = (agg_entry->ae_oid.id_shard == shard->po_shard) ? 1 : 0;
+	else
+		rc = -DER_STALE;
+
+	return rc;
+}
+
+/* Initializes the struct holding the iteration state (ec_agg_entry). */
+static void
+agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
+{
+	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
+
+	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
+	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
+	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
+	agg_entry->ae_cur_stripe.as_offset	= 0U;
+}
+
+/* Handles dkeys returned by the per-object nested iteratior. */
+static int
+agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
+	 struct ec_agg_param *agg_param, struct ec_agg_entry *agg_entry,
+	 unsigned int *acts)
+{
+	uint64_t	dkey_hash;
+	int		rc;
+
+	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
+		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
+			DP_KEY(&entry->ie_key));
+		*acts |= VOS_ITER_CB_SKIP;
+		return 0;
+	}
+	agg_entry->ae_rotate_parity = 0;
+	agg_entry->ae_dkey = entry->ie_key;
+	agg_entry->ae_grp_idx = agg_entry->ae_oid.id_shard /
+				daos_oclass_grp_size(&agg_entry->ae_oca);
+
+	dkey_hash = obj_dkey2hash(agg_entry->ae_oid.id_pub, &agg_entry->ae_dkey);
+	if (agg_entry->ae_rotate_parity)
+		agg_entry->ae_dkey_hash = dkey_hash;
+	else
+		agg_entry->ae_dkey_hash = 0;
+
+	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
+	rc = agg_shard_is_leader(agg_param->ap_pool_info.api_pool, agg_entry);
+	if (rc == 1) {
+		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting\n",
+			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey));
+		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
+		rc = 0;
+	} else {
+		if (rc < 0) {
+			D_ERROR("oid:"DF_UOID" ds_pool_check_leader failed "
+				DF_RC"\n", DP_UOID(entry->ie_oid), DP_RC(rc));
+			if (rc == -DER_STALE)
+				agg_param->ap_obj_skipped = 1;
+			rc = 0;
+		}
+		*acts |= VOS_ITER_CB_SKIP;
+	}
+
+	return rc;
+}
+
+/* Handles akeys returned by the iteratior. */
 static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
@@ -2009,8 +2136,7 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
-/* Invokes the yield function pointer.
-*/
+/* Invokes the yield function pointer. */
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
@@ -2028,8 +2154,7 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	return false;
 }
 
-/* Post iteration call back for outer iterator
-*/
+/* Post iteration call back for outer iterator */
 static int
 agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		    vos_iter_type_t type, vos_iter_param_t *param,
@@ -2041,8 +2166,13 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_OBJ:
+		if (agg_entry->ae_obj_layout) {
+			pl_obj_layout_free(agg_entry->ae_obj_layout);
+			agg_entry->ae_obj_layout = NULL;
+		}
 		break;
 	case VOS_ITER_DKEY:
+		agg_reset_pos(VOS_ITER_DKEY, agg_entry);
 		break;
 	case VOS_ITER_AKEY:
 		rc = agg_akey_post(ih, agg_param, entry, agg_entry, acts);
@@ -2056,12 +2186,12 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-/* Initializes the struct holding the iteration state (ec_agg_entry).
-*/
 static void
 agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		struct daos_oclass_attr *oca)
 {
+	int i;
+
 	agg_entry->ae_rsize	= 0UL;
 	if (entry) {
 		agg_entry->ae_oid	= entry->ie_oid;
@@ -2077,58 +2207,14 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
 	}
-	memset(agg_entry->ae_peer_pshards, 0,
-	       (OBJ_EC_MAX_P) * sizeof(struct daos_shard_loc));
 
-	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
-	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
-	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
-	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
-	agg_entry->ae_cur_stripe.as_offset	= 0U;
-}
-
-static int
-agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
-		  daos_unit_oid_t *oid, uint32_t version)
-{
-	struct daos_obj_md	 md = { 0 };
-	struct pl_map		*map;
-	struct pl_obj_layout	*layout = NULL;
-	struct pl_obj_shard	*shard;
-	uint32_t		 idx;
-	int			 rc;
-
-	/* Only last parity shard can be EC-AGG leader. */
-	if ((oid->id_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
-		return 0;
-
-	map = pl_map_find(pool->sp_uuid, oid->id_pub);
-	if (map == NULL) {
-		D_ERROR("Failed to find pool map to check leader for "DF_UOID"\n", DP_UOID(*oid));
-		return -DER_INVAL;
+	for (i = 0; i < OBJ_EC_MAX_P; i++) {
+		agg_entry->ae_peer_pshards[i].sd_rank = DAOS_TGT_IGNORE;
+		agg_entry->ae_peer_pshards[i].sd_tgt_idx = DAOS_TGT_IGNORE;
 	}
 
-	md.omd_id = oid->id_pub;
-	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
-	if (rc != 0)
-		goto out;
-
-	idx = (oid->id_shard / daos_oclass_grp_size(oca)) * layout->ol_grp_size +
-	      daos_oclass_grp_size(oca) - 1;
-	shard = pl_obj_get_shard(layout, idx);
-	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
-		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
-	} else {
-		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
-		rc = -DER_STALE;
-	}
-
-out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-	pl_map_decref(map);
-	return rc;
+	agg_reset_pos(VOS_ITER_DKEY, agg_entry);
+	agg_reset_dkey_entry(agg_entry, entry);
 }
 
 static int
@@ -2185,7 +2271,7 @@ done:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 /* Iterator pre-callback for objects. Determines if object is subject
@@ -2197,36 +2283,30 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	      unsigned int *acts)
 {
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+	struct daos_obj_md	 md = { 0 };
+	struct pl_map		*map;
 	struct daos_oclass_attr  oca;
+	struct cont_props	 props;
 	int			 rc = 0;
 
 	/** We should have filtered it if it isn't EC */
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	D_ASSERT(rc == 0 && daos_oclass_is_ec(&oca));
-	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
-			       info->api_pool->sp_map_version);
-	if (rc == 1) {
-		char	obj_class_name[32] = {0};
-
-		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
-			 obj_ec_tgt_nr(&oca) - 1);
-		daos_oclass_id2name(daos_obj_id2class(entry->ie_oid.id_pub), obj_class_name);
-		D_DEBUG(DB_EPC, "oid:"DF_UOID"(%s) ec agg starting\n",
-			DP_UOID(entry->ie_oid), obj_class_name);
-
-		agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
-		rc = 0;
-		goto out;
-	} else {
-		if (rc < 0) {
-			D_ERROR("oid:"DF_UOID" ds_pool_check_leader failed "
-				DF_RC"\n", DP_UOID(entry->ie_oid), DP_RC(rc));
-			if (rc == -DER_STALE)
-				agg_param->ap_obj_skipped = 1;
-			rc = 0;
-		}
-		*acts |= VOS_ITER_CB_SKIP;
+	agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
+	map = pl_map_find(agg_param->ap_pool_info.api_pool_uuid, entry->ie_oid.id_pub);
+	if (map == NULL) {
+		D_ERROR("Failed to find pool map to check leader for "DF_UOID"\n",
+			DP_UOID(entry->ie_oid));
+		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	props = dc_cont_hdl2props(info->api_cont_hdl);
+	md.omd_id = entry->ie_oid.id_pub;
+	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
+	md.omd_fdom_lvl = props.dcp_redun_lvl;
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &agg_entry->ae_obj_layout);
+
 out:
 	return rc;
 }
@@ -2250,7 +2330,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = ec_agg_object(ih, entry, agg_param, acts);
 		break;
 	case VOS_ITER_DKEY:
-		rc = agg_dkey(ih, entry, agg_entry, acts);
+		rc = agg_dkey(ih, entry, agg_param, agg_entry, acts);
 		break;
 	case VOS_ITER_AKEY:
 		rc = agg_akey(ih, entry, agg_entry, acts);

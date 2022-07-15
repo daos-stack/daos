@@ -15,6 +15,7 @@ from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
+
 class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
@@ -444,6 +445,26 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
+    def server_set_logmasks(self):
+        """Set engine log-masks at runtime.
+
+        Raises:
+            CommandFailure: if the dmg server set logmasks command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "host_errors": {}
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("server", "set-logmasks"))
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
@@ -555,7 +576,7 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "EDAE0965-7A6E-48BD-A71C-A29F199C679F",
         #         "total_targets": 8,
         #         "active_targets": 8,
-        #         "total_nodes": 1,
+        #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
         #         "leader": 0,
@@ -586,7 +607,7 @@ class DmgCommand(DmgCommandBase):
         #     "status": 0
         # }
         return self._get_json_result(("pool", "query"), pool=pool,
-                show_enabled=show_enabled, show_disabled=show_disabled)
+                                     show_enabled=show_enabled, show_disabled=show_disabled)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -893,7 +914,7 @@ class DmgCommand(DmgCommandBase):
         #  },
         #  "error": null,
         #  "status": 0
-        #}
+        # }
 
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
@@ -1222,6 +1243,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(["version"])
+
 
 def check_system_query_status(data):
     """Check if any server crashed.

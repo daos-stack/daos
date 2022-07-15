@@ -11,11 +11,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -142,7 +143,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockRun := func(_ string) (string, error) {
 				return preTxt + tc.verOut, nil
@@ -152,7 +153,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			common.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
+			test.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
 		})
 	}
 }
@@ -244,7 +245,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			callIdx := 0
 
@@ -270,7 +271,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 			}
 
 			scmState, err := cr.getRegionState()
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -356,7 +357,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (string, error) {
 				return "", nil
@@ -373,7 +374,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 			}
 
 			scmState, err := cr.getRegionStateFromBindings()
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -387,38 +388,34 @@ func TestIpmctl_getRegionState(t *testing.T) {
 
 func TestIpmctl_prep(t *testing.T) {
 	verStr := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825"
-	ndctlNsStr := `[{
-   "dev":"namespace1.0",
-   "mode":"fsdax",
-   "map":"dev",
-   "size":3183575302144,
-   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
-   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
-   "sector_size":512,
-   "blockdev":"pmem1",
-   "numa_node":1
-}]`
-	ndctl2NsStr := `[{
-   "dev":"namespace1.0",
-   "mode":"fsdax",
-   "map":"dev",
-   "size":3183575302144,
-   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
-   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
-   "sector_size":512,
-   "blockdev":"pmem1",
-   "numa_node":1
-},{
-   "dev":"namespace0.0",
-   "mode":"fsdax",
-   "map":"dev",
-   "size":3183575302144,
-   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1529",
-   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91265",
-   "sector_size":512,
-   "blockdev":"pmem0",
-   "numa_node":0
-}]`
+
+	genNsJSON := func(numa, nsNum, size, id string) string {
+		nsName := fmt.Sprintf("%s.%s", numa, nsNum)
+		bdName := numa
+		if nsNum != "0" {
+			bdName = nsName
+		}
+		sizeBytes, err := humanize.ParseBytes(size)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf("{\"dev\":\"namespace%s\",\"mode\":\"fsdax\",\"map\":\"dev\","+
+			"\"size\":%d,\"uuid\":\"842fc847-28e0-4bb6-8dfc-d24afdba15%s\","+
+			"\"raw_uuid\":\"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264\",\"sector_size\":512,"+
+			"\"blockdev\":\"pmem%s\",\"numa_node\":%s}", nsName, sizeBytes, id, bdName, numa)
+	}
+
+	ndctlNsStr := fmt.Sprintf("[%s]", genNsJSON("1", "0", "3012GiB", "28"))
+	ndctl2NsStr := fmt.Sprintf("[%s,%s]", genNsJSON("1", "0", "3012GiB", "28"),
+		genNsJSON("0", "0", "3012GiB", "29"))
+	ndctl1of4NsStr := fmt.Sprintf("[%s]", genNsJSON("0", "0", "1506GiB", "28"))
+	ndctl2of4NsStr := fmt.Sprintf("[%s,%s]", genNsJSON("0", "0", "1506GiB", "28"),
+		genNsJSON("0", "1", "1506GiB", "29"))
+	ndctl3of4NsStr := fmt.Sprintf("[%s,%s,%s]", genNsJSON("0", "0", "1506GiB", "28"),
+		genNsJSON("0", "1", "1506GiB", "29"), genNsJSON("1", "0", "1506GiB", "30"))
+	ndctl4of4NsStr := fmt.Sprintf("[%s,%s,%s,%s]", genNsJSON("0", "0", "1506GiB", "28"),
+		genNsJSON("0", "1", "1506GiB", "29"), genNsJSON("1", "0", "1506GiB", "30"),
+		genNsJSON("1", "1", "1506GiB", "31"))
 
 	for name, tc := range map[string]struct {
 		prepReq     *storage.ScmPrepareRequest
@@ -505,14 +502,14 @@ func TestIpmctl_prep(t *testing.T) {
 						BlockDevice: "pmem1",
 						Name:        "namespace1.0",
 						NumaNode:    1,
-						Size:        3183575302144,
+						Size:        3012 * humanize.GiByte,
 					},
 					{
 						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
 						BlockDevice: "pmem0",
 						Name:        "namespace0.0",
 						NumaNode:    0,
-						Size:        3183575302144,
+						Size:        3012 * humanize.GiByte,
 					},
 				},
 			},
@@ -520,6 +517,77 @@ func TestIpmctl_prep(t *testing.T) {
 				"ndctl create-namespace",
 				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 				"ndctl create-namespace",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+				"ndctl list -N -v",
+			},
+		},
+		"state free capacity; multiple namespaces requested": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerSocket: 2,
+			},
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			runOut: []string{
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+				ndctl1of4NsStr,
+				ndctl2of4NsStr,
+				ndctl3of4NsStr,
+				ndctl4of4NsStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+				ndctl4of4NsStr,
+			},
+			// TODO DAOS-10173: re-enable when bindings can be used instead of cli
+			//regions: []ipmctl.PMemRegion{{Type: uint32(ipmctl.RegionTypeAppDirect)}},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        1506 * humanize.GiByte,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0.1",
+						Name:        "namespace0.1",
+						NumaNode:    0,
+						Size:        1506 * humanize.GiByte,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1530",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        1506 * humanize.GiByte,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1531",
+						BlockDevice: "pmem1.1",
+						Name:        "namespace1.1",
+						NumaNode:    1,
+						Size:        1506 * humanize.GiByte,
+					},
+				},
+			},
+			expCalls: []string{
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+				fmt.Sprintf("ndctl create-namespace --region 0 --size %d", 1506*humanize.GiByte),
+				fmt.Sprintf("ndctl create-namespace --region 0 --size %d", 1506*humanize.GiByte),
+				fmt.Sprintf("ndctl create-namespace --region 1 --size %d", 1506*humanize.GiByte),
+				fmt.Sprintf("ndctl create-namespace --region 1 --size %d", 1506*humanize.GiByte),
 				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 				"ndctl list -N -v",
 			},
@@ -831,7 +899,7 @@ func TestIpmctl_prep(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var calls []string
 			var callIdx int
@@ -854,7 +922,8 @@ func TestIpmctl_prep(t *testing.T) {
 					e = tc.runErr[callIdx]
 				}
 
-				log.Debugf("mockRun call %d: ret/err %v/%v", callIdx, o, e)
+				log.Debugf("mockRun call %d: ret/err %+v/%v", callIdx, o, e)
+
 				callIdx++
 				return o, e
 			}
@@ -873,8 +942,8 @@ func TestIpmctl_prep(t *testing.T) {
 			}
 
 			resp, err := cr.prep(*tc.prepReq, tc.scanResp)
-			log.Debugf("calls made %+v", calls)
-			common.CmpErr(t, tc.expErr, err)
+			log.Debugf("calls made: %+q", calls)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -1036,7 +1105,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var calls []string
 
@@ -1065,7 +1134,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			}
 
 			resp, err := cr.prepReset(tc.scanResp)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -1142,7 +1211,7 @@ func TestIpmctl_parseNamespaces(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotNamespaces, gotErr := parseNamespaces(tc.in)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
 				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
 			}
@@ -1207,7 +1276,7 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				if tt.lookPathErrMsg != "" {
@@ -1239,14 +1308,14 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 			namespaces, err := cr.getNamespaces()
 			if err != nil {
 				if tt.lookPathErrMsg != "" {
-					common.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+					test.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
 					return
 				}
 				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
 			}
 
-			common.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
-			common.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+			test.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
+			test.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
 		})
 	}
 }
@@ -1288,7 +1357,7 @@ func TestIpmctl_getModules(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1298,7 +1367,7 @@ func TestIpmctl_getModules(t *testing.T) {
 
 			result, err := cr.getModules()
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -1335,7 +1404,7 @@ func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := scmFirmwareUpdateStatusFromIpmctl(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "didn't match")
+			test.AssertEqual(t, tc.expResult, result, "didn't match")
 		})
 	}
 }
@@ -1401,7 +1470,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1411,7 +1480,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 
 			result, err := cr.GetFirmwareStatus(tc.inputUID)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -1444,7 +1513,7 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1453,7 +1522,7 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 			}
 
 			err = cr.UpdateFirmware(tc.inputUID, "/dont/care")
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

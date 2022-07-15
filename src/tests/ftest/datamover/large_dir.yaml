@@ -48,7 +48,7 @@ mdtest:
     dcp: 32
   api: DFS
   test_dir: "/"
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   dfs_oclass: EC_4P2G1
   dfs_dir_oclass: RP_3GX

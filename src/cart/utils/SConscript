@@ -5,44 +5,32 @@
 #
 """Build crt_utils component"""
 
-import os
-import sys
 import daos_build
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
-# pylint: disable=ungrouped-imports
 
 LIB_SRC = ['crt_utils.c']
+
 
 ####################################
 # Create cart utility share objects
 ####################################
 def build_utility_shared_obj(env):
     """Build cart utility library"""
-    cart_utils_objs  = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
+    cart_utils_objs = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
     Export('cart_utils_objs')
+
 
 def scons():
     """Scons function"""
 
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'prereqs')
 
     prereqs.require(env, 'protobufc')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
-
-    env.Alias('install', '$PREFIX')
-
-    # There is probably a better way to do this but let's get it linking first
-    env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     # Generate cart utility shared objects
     build_utility_shared_obj(env)
+
 
 if __name__ == "SCons.Script":
     scons()
