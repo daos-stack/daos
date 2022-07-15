@@ -33,7 +33,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
 			// Skip metadata bucket
-			*nbuck--;
+			(*nbuck)--;
 			continue;
 		}
 

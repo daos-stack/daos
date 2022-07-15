@@ -27,37 +27,37 @@ ds3_fini(void)
 static int
 create_metadir(dfs_t *dfs, const char *dir)
 {
-	int ret;
+	int rc;
 
-	ret = dfs_mkdir(dfs, NULL, dir, DEFFILEMODE, 0);
-	if (ret != 0 && ret != EEXIST)
-		D_ERROR("failed to create meta dir %s, rc = %d\n", dir, ret);
+	rc = dfs_mkdir(dfs, NULL, dir, DEFFILEMODE, 0);
+	if (rc != 0 && rc != EEXIST)
+		D_ERROR("failed to create meta dir %s, rc = %d\n", dir, rc);
 
-	return ret;
+	return rc;
 }
 
 static int
 open_metadir(dfs_t *dfs, const char *dir, dfs_obj_t **obj)
 {
-	int ret;
+	int rc;
 
-	ret = dfs_lookup_rel(dfs, NULL, dir, O_RDWR, obj, NULL, NULL);
-	if (ret != 0)
-		D_ERROR("failed to open meta dir %s, rc = %d\n", dir, ret);
+	rc = dfs_lookup_rel(dfs, NULL, dir, O_RDWR, obj, NULL, NULL);
+	if (rc != 0)
+		D_ERROR("failed to open meta dir %s, rc = %d\n", dir, rc);
 
-	return ret;
+	return rc;
 }
 
 static int
 close_metadir(const char *dir, dfs_obj_t *obj)
 {
-	int ret;
+	int rc;
 
-	ret = dfs_release(obj);
-	if (ret != 0)
-		D_ERROR("failed to release meta dir %s, rc = %d\n", dir, ret);
+	rc = dfs_release(obj);
+	if (rc != 0)
+		D_ERROR("failed to release meta dir %s, rc = %d\n", dir, rc);
 
-	return ret;
+	return rc;
 }
 
 /**
@@ -67,7 +67,7 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
-	int    ret;
+	int    rc;
 	ds3_t *ds3_tmp;
 
 	D_ALLOC_PTR(ds3_tmp);
@@ -75,58 +75,58 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		return ENOMEM;
 
 	/** Connect to the pool first */
-	ret = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, NULL);
-	if (ret != 0) {
-		D_ERROR("Failed to connect to pool %s, rc = %d\n", pool, ret);
-		ret = daos_der2errno(ret);
+	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to connect to pool %s, rc = %d\n", pool, rc);
+		rc = daos_der2errno(rc);
 		goto err_poh;
 	}
 
 	/** Check whether mdata container already exist */
-	ret = dfs_cont_create_with_label(ds3_tmp->poh, METADATA_BUCKET, NULL, NULL,
-					 &ds3_tmp->meta_coh, &ds3_tmp->meta_dfs);
-	if (ret == 0) {
+	rc = dfs_cont_create_with_label(ds3_tmp->poh, METADATA_BUCKET, NULL, NULL,
+					&ds3_tmp->meta_coh, &ds3_tmp->meta_dfs);
+	if (rc == 0) {
 /** Create inner directories */
 #define X(a, b)                                                                                    \
 	do {                                                                                       \
-		ret = create_metadir(ds3_tmp->meta_dfs, b);                                        \
-		if (ret)                                                                           \
+		rc = create_metadir(ds3_tmp->meta_dfs, b);                                         \
+		if (rc)                                                                            \
 			goto err;                                                                  \
 	} while (0);
 
 		METADATA_DIR_LIST
 
 #undef X
-	} else if (ret == EEXIST) {
+	} else if (rc == EEXIST) {
 		/** Metadata container exists, mount it */
-		ret = daos_cont_open(ds3_tmp->poh, METADATA_BUCKET, DAOS_COO_RW, &ds3_tmp->meta_coh,
-				     NULL, NULL);
-		if (ret != 0) {
+		rc = daos_cont_open(ds3_tmp->poh, METADATA_BUCKET, DAOS_COO_RW, &ds3_tmp->meta_coh,
+				    NULL, NULL);
+		if (rc != 0) {
 			D_ERROR("Failed to open metadata container for pool %s, rc = %d\n", pool,
-				ret);
-			ret = daos_der2errno(ret);
+				rc);
+			rc = daos_der2errno(rc);
 			goto err_poh;
 		}
 
-		ret = dfs_mount(ds3_tmp->poh, ds3_tmp->meta_coh, O_RDWR, &ds3_tmp->meta_dfs);
-		if (ret != 0) {
+		rc = dfs_mount(ds3_tmp->poh, ds3_tmp->meta_coh, O_RDWR, &ds3_tmp->meta_dfs);
+		if (rc != 0) {
 			D_ERROR("Failed to mount metadata container for pool %s, rc = %d\n", pool,
-				ret);
-			ret = daos_der2errno(ret);
+				rc);
+			rc = daos_der2errno(rc);
 			goto err_coh;
 		}
 
 	} else {
-		D_ERROR("Failed to create metadata container in pool %s, rc = %d\n", pool, ret);
-		ret = daos_der2errno(ret);
+		D_ERROR("Failed to create metadata container in pool %s, rc = %d\n", pool, rc);
+		rc = daos_der2errno(rc);
 		goto err_poh;
 	}
 
 /** Open metadata dirs */
 #define X(a, b)                                                                                    \
 	do {                                                                                       \
-		ret = open_metadir(ds3_tmp->meta_dfs, b, &ds3_tmp->meta_dirs[a]);                  \
-		if (ret)                                                                           \
+		rc = open_metadir(ds3_tmp->meta_dfs, b, &ds3_tmp->meta_dirs[a]);                   \
+		if (rc)                                                                            \
 			goto err;                                                                  \
 	} while (0);
 
@@ -149,7 +149,7 @@ err_coh:
 	daos_cont_close(ds3_tmp->meta_coh, NULL);
 err_poh:
 	daos_pool_disconnect(ds3_tmp->poh, NULL);
-	return ret;
+	return rc;
 }
 
 int
@@ -158,15 +158,16 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 	if (ds3 == NULL) {
 		return 0;
 	}
-	
+
 #define X(a, b) close_metadir(b, ds3->meta_dirs[a]);
 
 	METADATA_DIR_LIST
 
 #undef X
 
-	dfs_umount(ds3->meta_dfs);
+	int rc = 0;
+	rc     = dfs_umount(ds3->meta_dfs);
 	daos_cont_close(ds3->meta_coh, ev);
 	daos_pool_disconnect(ds3->poh, ev);
-	return 0;
+	return rc;
 }
