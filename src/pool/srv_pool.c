@@ -2984,21 +2984,22 @@ out:
 	crt_reply_send(rpc);
 }
 
-void
-ds_pool_query_handler(crt_rpc_t *rpc)
+static void
+ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 {
-	struct pool_query_in   *in = crt_req_get(rpc);
-	struct pool_query_out  *out = crt_reply_get(rpc);
-	daos_prop_t	       *prop = NULL;
-	struct pool_buf	       *map_buf;
-	uint32_t		map_version = 0;
-	struct pool_svc	       *svc;
-	struct pool_metrics    *metrics;
-	struct rdb_tx		tx;
-	d_iov_t			key;
-	d_iov_t			value;
-	struct pool_hdl		hdl = {0};
-	int			rc;
+	struct pool_query_v5_in	 *in = crt_req_get(rpc);
+	struct pool_query_v5_out *out = crt_reply_get(rpc);
+	daos_prop_t		 *prop = NULL;
+	struct pool_buf		 *map_buf;
+	uint32_t		  map_version = 0;
+	struct pool_svc		 *svc;
+	struct pool_metrics	 *metrics;
+	struct rdb_tx		  tx;
+	d_iov_t			  key;
+	d_iov_t			  value;
+	struct pool_hdl		  hdl = {0};
+	int			  rc;
+	struct daos_prop_entry	 *entry;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
@@ -3037,6 +3038,19 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	if (return_pool_ver) {
+		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+		D_ASSERT(entry != NULL);
+		out->pqo_pool_layout_ver = entry->dpe_val;
+		out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
+		daos_prop_free(prop);
+		prop = NULL;
+	}
+
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
 	if (rc != 0)
@@ -3045,7 +3059,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL)) {
 		daos_prop_t		*iv_prop = NULL;
-		struct daos_prop_entry	*entry, *iv_entry;
+		struct daos_prop_entry	*iv_entry;
 		int			i;
 
 		D_ALLOC_PTR(iv_prop);
@@ -3183,6 +3197,18 @@ out:
 		DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
+}
+
+void
+ds_pool_query_handler_v4(crt_rpc_t *rpc)
+{
+	ds_pool_query_handler(rpc, false);
+}
+
+void
+ds_pool_query_handler_v5(crt_rpc_t *rpc)
+{
+	ds_pool_query_handler(rpc, true);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */
@@ -3363,15 +3389,17 @@ out:
 /**
  * Query the pool without holding a pool handle.
  *
- * \param[in]	pool_uuid	UUID of the pool
- * \param[in]	ps_ranks	Ranks of pool svc replicas
- * \param[out]	ranks		Optional, returned storage ranks in this pool.
- *				If #pool_info is NULL, engines with disabled targets.
- *				If #pool_info is passed, engines with enabled or disabled
- *				targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *				Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *				The caller must free the list with d_rank_list_free().
- * \param[out]	pool_info	Results of the pool query
+ * \param[in]	pool_uuid		UUID of the pool
+ * \param[in]	ps_ranks		Ranks of pool svc replicas
+ * \param[out]	ranks			Optional, returned storage ranks in this pool.
+ *					If #pool_info is NULL, engines with disabled targets.
+ *					If #pool_info is passed, engines with enabled or disabled
+ *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					The caller must free the list with d_rank_list_free().
+ * \param[out]	pool_info		Results of the pool query
+ * \param[out]	pool_layout_ver		Results of the current pool global version
+ * \param[out]	pool_upgrade_layout_ver	Results of the target latest pool global version
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -3379,17 +3407,18 @@ out:
  */
 int
 ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		  daos_pool_info_t *pool_info)
+		  daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		  uint32_t *upgrade_layout_ver)
 {
-	int			rc;
-	struct rsvc_client	client;
-	crt_endpoint_t		ep;
-	struct dss_module_info	*info = dss_get_module_info();
-	crt_rpc_t		*rpc;
-	struct pool_query_in	*in;
-	struct pool_query_out	*out;
-	struct pool_buf		*map_buf;
-	uint32_t		map_size = 0;
+	int			  rc;
+	struct rsvc_client	  client;
+	crt_endpoint_t		  ep;
+	struct dss_module_info	 *info = dss_get_module_info();
+	crt_rpc_t		 *rpc;
+	struct pool_query_v5_in	 *in;
+	struct pool_query_v5_out *out;
+	struct pool_buf		 *map_buf;
+	uint32_t		  map_size = 0;
 
 	if (ranks == NULL || pool_info == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -3455,6 +3484,10 @@ realloc:
 	rc = process_query_result(ranks, pool_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
 				  &out->pqo_space, &out->pqo_rebuild_st, map_buf);
+	if (pool_layout_ver)
+		*pool_layout_ver = out->pqo_pool_layout_ver;
+	if (upgrade_layout_ver)
+		*upgrade_layout_ver = out->pqo_upgrade_layout_ver;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));

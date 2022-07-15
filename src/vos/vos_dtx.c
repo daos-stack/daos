@@ -1737,7 +1737,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1803,8 +1804,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared)
+		if (dae->dae_prepared) {
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
+
 			return DTX_ST_PREPARED;
+		}
 
 		return DTX_ST_INITED;
 	}
@@ -2041,26 +2052,19 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_dtx_act_ent	 *dae = NULL;
-	struct vos_dtx_cmt_ent	 *dce = NULL;
 	struct vos_container	 *cont;
 	int			  committed = 0;
 	int			  rc = 0;
 
 	D_ASSERT(count > 0);
 
-	if (count > 1) {
-		D_ALLOC_ARRAY(daes, count);
-		if (daes == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(daes, count);
+	if (daes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, count);
-		if (dces == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		daes = &dae;
-		dces = &dce;
-	}
+	D_ALLOC_ARRAY(dces, count);
+	if (dces == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -2080,10 +2084,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	}
 
 out:
-	if (daes != &dae)
-		D_FREE(daes);
-	if (dces != &dce)
-		D_FREE(dces);
+	D_FREE(daes);
+	D_FREE(dces);
 
 	return rc < 0 ? rc : committed;
 }
