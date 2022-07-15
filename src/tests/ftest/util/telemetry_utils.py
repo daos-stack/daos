@@ -81,6 +81,20 @@ class TelemetryUtils():
         "engine_sched_cycle_size_mean",
         "engine_sched_cycle_size_min",
         "engine_sched_cycle_size_stddev"]
+    ENGINE_DMABUFF_METRICS = [
+        "engine_dmabuff_total_chunks",
+        "engine_dmabuff_used_chunks_io",
+        "engine_dmabuff_used_chunks_local",
+        "engine_dmabuff_used_chunks_rebuild",
+        "engine_dmabuff_bulk_grps",
+        "engine_dmabuff_active_reqs",
+        "engine_dmabuff_queued_reqs",
+        "engine_dmabuff_grab_errs",
+        "engine_dmabuff_grab_retries",
+        "engine_dmabuff_grab_retries_max",
+        "engine_dmabuff_grab_retries_mean",
+        "engine_dmabuff_grab_retries_min",
+        "engine_dmabuff_grab_retries_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -444,6 +458,7 @@ class TelemetryUtils():
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
+        all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)

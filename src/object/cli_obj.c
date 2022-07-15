@@ -1418,8 +1418,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
 		if (req_tgts->ort_srv_disp) {
-			rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver,
-						obj_auxi->cond_modify, bit_map);
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER))
+				rc = 0;
+			else
+				rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver,
+							obj_auxi->cond_modify, bit_map);
 			if (rc < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u, is %s: "
@@ -2788,9 +2792,11 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 
 				rc = *shard;
 			} else {
-				rc = obj_dkey2shard(obj, dkey_hash, map_ver,
-						    to_leader,
-						    obj_auxi->failed_tgt_list);
+				if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+					rc = obj->cob_shards_nr - 1;
+				else
+					rc = obj_dkey2shard(obj, dkey_hash, map_ver, to_leader,
+							    obj_auxi->failed_tgt_list);
 				if (rc < 0)
 					goto out;
 			}
