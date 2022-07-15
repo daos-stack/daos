@@ -45,8 +45,6 @@ static void
 gen_maps(int num_domains, int nodes_per_domain, int vos_per_target,
 	 struct pool_map **po_map, struct pl_map **pl_map)
 {
-	*po_map = NULL;
-	*pl_map = NULL;
 	gen_pool_and_placement_map(num_domains, nodes_per_domain,
 				   vos_per_target, PL_TYPE_JUMP_MAP,
 				   po_map, pl_map);
