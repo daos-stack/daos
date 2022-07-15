@@ -96,12 +96,9 @@ smoke:
         - fio_smoke
         - daos_racer
         - mdtest_smoke
-<<<<<<< HEAD
-=======
         #- vpic_smoke
         #- lammps_smoke
         - macsio_smoke
->>>>>>> fe9a6411a (DAOS-5181 test: Add vpic and lammps to soak (#6858))
     # num of bytes to write to reserved container
     resv_bytes: 500
 # Commandline parameters

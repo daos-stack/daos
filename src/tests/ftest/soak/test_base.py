@@ -26,12 +26,8 @@ from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
-<<<<<<< HEAD
-    get_journalctl, get_daos_server_logs
-=======
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
     create_app_cmdline
->>>>>>> fe9a6411a (DAOS-5181 test: Add vpic and lammps to soak (#6858))
 
 
 class SoakTestBase(TestWithServers):
@@ -331,15 +327,12 @@ class SoakTestBase(TestWithServers):
                             self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
-<<<<<<< HEAD
-=======
                     elif "vpic" in job:
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "lammps" in job:
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
->>>>>>> fe9a6411a (DAOS-5181 test: Add vpic and lammps to soak (#6858))
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))

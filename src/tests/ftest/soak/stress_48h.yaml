@@ -103,12 +103,9 @@ soak_stress:
         - daos_racer
         - ior_stress
         - mdtest_stress
-<<<<<<< HEAD
-=======
         - vpic_stress
         - lammps_stress
         - macsio_stress
->>>>>>> fe9a6411a (DAOS-5181 test: Add vpic and lammps to soak (#6858))
     ignore_soak_errors: False
 # Commandline parameters
 # Benchmark and application params
