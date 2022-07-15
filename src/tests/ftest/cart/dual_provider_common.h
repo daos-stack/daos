@@ -148,7 +148,7 @@ handler_ping(crt_rpc_t *rpc)
 		error_exit();
 	}
 
-	DBG_PRINT("RPC arived on a %s context (idx=%d intended_tag=%d); origin was %s\n",
+	DBG_PRINT("RPC arrived on a %s context (idx=%d intended_tag=%d); origin was %s\n",
 		  crt_context_is_primary(ctx) ? "primary" : "secondary",
 		  my_tag, hdr_dst_tag,
 		  primary_origin ? "primary" : "secondary");
