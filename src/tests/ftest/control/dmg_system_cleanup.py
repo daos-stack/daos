@@ -32,8 +32,9 @@ class DmgSystemCleanupTest(TestWithServers):
         Test Description: Test dmg system cleanup.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small,dmg
-        :avocado: tags=control,dmg_system_cleanup
+        :avocado: tags=vm
+        :avocado: tags=control,dmg
+        :avocado: tags=dmg_system_cleanup,test_dmg_system_cleanup_one_host
         """
         # Print out where this is running
         hostname = gethostname().split(".")[0]
@@ -85,6 +86,8 @@ class DmgSystemCleanupTest(TestWithServers):
         expected_count = {pool.uuid.lower(): 6 for pool in self.pool}
 
         # Clear pool and container list to avoid trying to destroy them.
+        for pool in self.pool:
+            pool.skip_cleanup()
         self.pool = []
         self.container = []
 
