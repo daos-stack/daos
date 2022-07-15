@@ -24,13 +24,16 @@ import jira
 # past.
 VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'test')
 
+# Expected ticket prefix.
+VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
+
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 
-# Expected values for Status.  Tickets which are closed should not be being worked on, and tickets
+# Excluded values for Status.  Tickets which are closed should not be being worked on, and tickets
 # which are Open or Reopened should be set to In Progress when being worked on.
-STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
+STATUS_VALUES_NOT_ALLOWED = ('Open', 'Reopened', 'To Do', 'Resolved')
 
 # Labels in GitHub which this script will set/clear based on the logic below.
 MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
@@ -86,7 +89,7 @@ def main():
 
     # Check format of ticket_number.
     parts = ticket_number.split('-', maxsplit=1)
-    if parts[0] not in ('DAOS', 'CORCI'):
+    if parts[0] not in VALID_TICKET_PREFIX:
         errors.append('Ticket number prefix incorrect')
     try:
         int(parts[1])
@@ -103,7 +106,7 @@ def main():
         return
     print(ticket.fields.summary)
     print(ticket.fields.status)
-    if str(ticket.fields.status) not in STATUS_VALUES_ALLOWED:
+    if str(ticket.fields.status) in STATUS_VALUES_NOT_ALLOWED:
         errors.append('Ticket status value not as expected')
 
     # Highest priority, tickets with "Approved to Merge" set.
