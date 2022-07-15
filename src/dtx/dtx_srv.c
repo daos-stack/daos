@@ -166,6 +166,9 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 			break;
 
+		if (unlikely(din->di_epoch == 1))
+			D_GOTO(out, rc = -DER_IO);
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
