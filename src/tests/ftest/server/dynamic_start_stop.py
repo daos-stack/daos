@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,7 +76,10 @@ class DynamicStartStop(TestWithServers):
         4. Stop two of the remaining added servers - Multiple stop.
         5. Stop one of the original servers - Stopping with pool.
 
-        :avocado: tags=all,hw,large,server,full_regression,dynamic_start_stop
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server
+        :avocado: tags=dynamic_start_stop,test_dynamic_server_addition
         """
         self.add_pool()
 
@@ -101,4 +104,4 @@ class DynamicStartStop(TestWithServers):
         self.stop_server_ranks([1])
 
         # Stopping newly added server and destroy pool causes -1006. DAOS-5606
-        self.pool = None
+        self.pool.skip_cleanup()
