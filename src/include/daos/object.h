@@ -178,6 +178,8 @@ struct daos_obj_layout {
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
 	DTF_DELAY_FORWARD	= (1 << 0),
+	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	DTF_REASSEMBLE_REQ	= (1 << 1),
 };
 
 /** to identify each obj shard's target */
