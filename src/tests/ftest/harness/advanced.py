@@ -20,6 +20,14 @@ class HarnessAdvancedTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a TestWithServers object."""
+        super().__init__(*args, **kwargs)
+
+        # Always start the servers for each test variant
+        self.start_agents_once = False
+        self.start_servers_once = False
+
     def test_core_files(self):
         """Test to verify core file creation.
 

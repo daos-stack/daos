@@ -1480,7 +1480,10 @@ def get_hosts_from_yaml(test_yaml, args, key_match=None):
         display(args, "  Found {}: {}".format(key, value))
         if key_match is None or key == key_match:
             display(args, "    Adding {}".format(value))
-            yaml_hosts.add(NodeSet(value))
+            if isinstance(value, list):
+                yaml_hosts.add(NodeSet.fromlist(value))
+            else:
+                yaml_hosts.add(NodeSet(value))
         if key in YAML_KEYS["test_clients"]:
             found_client_key = True
 
