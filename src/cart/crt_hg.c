@@ -140,7 +140,7 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 		*prov = crt_prov_str_to_prov(provider_str);
 
 	if (addr)
-		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
+		strncpy(addr, addr_str + 2, CRT_ADDR_STR_MAX_LEN - 1);
 
 	return 0;
 }
@@ -197,12 +197,11 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		}
 		D_INIT_LIST_HEAD(&hdl->chh_link);
 
-		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
-				   CRT_HG_RPCID, &hdl->chh_hdl);
+		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL, CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
 			D_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
-			rc = -DER_HG;
+			rc = crt_hgret_2_der(hg_ret);
 			break;
 		}
 
@@ -371,7 +370,7 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 	ret = HG_Addr_free(hg_ctx->chc_hgcla, addr);
 	if (ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_free() failed, hg_ret %d.\n", ret);
-		return -DER_HG;
+		return crt_hgret_2_der(ret);
 	}
 
 	return 0;
@@ -390,17 +389,37 @@ crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
 	hg_ret = HG_Addr_self(hg_class, &self_addr);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_self() failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	hg_ret = HG_Addr_to_string(hg_class, addr_str, str_size, self_addr);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_to_string() failed, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 	HG_Addr_free(hg_class, self_addr);
 
 out:
+	return rc;
+}
+
+/* some simple helper functions */
+typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
+static inline int
+crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb, crt_proc_cb_t out_proc_cb,
+	   crt_hg_rpc_cb_t rpc_cb)
+{
+	hg_return_t hg_ret;
+	int         rc = 0;
+
+	D_ASSERT(hg_class != NULL);
+
+	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb, (hg_proc_cb_t)out_proc_cb,
+			     rpc_cb);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n", rpcid, hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
+	}
 	return rc;
 }
 
@@ -416,7 +435,7 @@ crt_hg_reg_rpcid(hg_class_t *hg_class)
 	if (rc != 0) {
 		D_ERROR("crt_hg_reg(rpcid: %#x), failed rc: %d.\n",
 			CRT_HG_RPCID, rc);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 	}
 
 	rc = crt_hg_reg(hg_class, CRT_HG_ONEWAY_RPCID,
@@ -426,13 +445,14 @@ crt_hg_reg_rpcid(hg_class_t *hg_class)
 	if (rc != 0) {
 		D_ERROR("crt_hg_reg(rpcid: %#x), failed rc: %d.\n",
 			CRT_HG_ONEWAY_RPCID, rc);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 	}
-	rc = HG_Registered_disable_response(hg_class, CRT_HG_ONEWAY_RPCID,
-					    HG_TRUE);
-	if (rc != 0)
+	rc = HG_Registered_disable_response(hg_class, CRT_HG_ONEWAY_RPCID, HG_TRUE);
+	if (rc != 0) {
 		D_ERROR("HG_Registered_disable_response(rpcid: %#x), "
 			"failed rc: %d.\n", CRT_HG_ONEWAY_RPCID, rc);
+		rc = crt_hgret_2_der(rc);
+	}
 
 out:
 	return rc;
@@ -574,7 +594,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	return &(prov_data->cpg_ctx_list);
+	return &prov_data->cpg_ctx_list;
 }
 
 static int
@@ -676,10 +696,7 @@ crt_hg_fini()
 	if (sep_hg_class)
 		ret = HG_Finalize(sep_hg_class);
 
-	if (ret != HG_SUCCESS)
-		return -DER_HG;
-
-	return DER_SUCCESS;
+	return crt_hgret_2_der(ret);
 }
 
 /* Currently provider is ignored as we only support 1 provider at a time */
@@ -735,11 +752,13 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_HG);
+	if (crt_is_service()) {
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
+			HG_Finalize(hg_class);
+			D_GOTO(out, rc);
+		}
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
@@ -754,7 +773,7 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 		D_ERROR("crt_hg_reg_rpcid() for prov=%d idx=%d failed; rc=%d\n",
 			provider, idx, rc);
 		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 	}
 
 out:
@@ -829,7 +848,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool prima
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Context_set_data() failed, ret: %d.\n", hg_ret);
 		HG_Context_destroy(hg_context);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	rc = crt_hg_pool_init(hg_ctx);
@@ -852,9 +871,8 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Could not destroy HG context, hg_ret: %d.\n",
-				hg_ret);
-			D_GOTO(out, rc = -DER_HG);
+			D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 		hg_ctx->chc_hgctx = NULL;
 	}
@@ -1055,10 +1073,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		if (hg_ret == HG_SUCCESS) {
 			hg_created = true;
 		} else {
-			RPC_ERROR(rpc_priv,
-				  "HG_Create failed, hg_ret: %d\n",
-				  hg_ret);
-			D_GOTO(out, rc = -DER_HG);
+			RPC_ERROR(rpc_priv, "HG_Create failed, hg_ret: %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -1066,10 +1082,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 				  0 /* reuse original rpcid */);
 		if (hg_ret != HG_SUCCESS) {
 			rpc_priv->crp_hg_hdl = NULL;
-			RPC_ERROR(rpc_priv,
-				  "HG_Reset failed, hg_ret: %d\n",
-				  hg_ret);
-			D_GOTO(out, rc = -DER_HG);
+			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
 
@@ -1079,10 +1093,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		if (hg_ret != HG_SUCCESS) {
 			if (hg_created)
 				HG_Destroy(rpc_priv->crp_hg_hdl);
-			RPC_ERROR(rpc_priv,
-				  "HG_Set_target_id failed, hg_ret: %d\n",
-				  hg_ret);
-			D_GOTO(out, rc = -DER_HG);
+			RPC_ERROR(rpc_priv, "HG_Set_target_id failed, hg_ret: %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
 out:
@@ -1213,14 +1225,9 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
-				if (hg_ret != HG_NOMEM) {
-					RPC_ERROR(rpc_priv,
-						  "HG_Get_output failed, "
-						  "hg_ret: %d\n", hg_ret);
-					rc = -DER_HG;
-				} else {
-					rc = -DER_NOMEM;
-				}
+				rc = crt_hgret_2_der(hg_ret);
+				RPC_ERROR(rpc_priv, "HG_Get_output failed, rc: " DF_RC "\n",
+					  DP_RC(rc));
 			}
 		}
 
@@ -1315,7 +1322,7 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, hg_ret: %d\n",
 			  hg_ret);
-		rc = -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 out:
@@ -1363,6 +1370,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			  hg_ret);
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
+		/* TODO: Fix this, DER_PROTO is not the same as HG_PROTOCOL_ERROR */
 		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -DER_PROTO : -DER_HG;
 	}
 
@@ -1421,7 +1429,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			rc = -DER_TIMEDOUT;
 		} else if (hg_ret != HG_SUCCESS) {
 			D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
-			return -DER_HG;
+			return crt_hgret_2_der(hg_ret);
 		}
 
 		/** some RPCs have progressed, call Trigger */
@@ -1431,7 +1439,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			return rc;
 		} else if (hg_ret != HG_SUCCESS) {
 			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-			return -DER_HG;
+			return crt_hgret_2_der(hg_ret);
 		}
 
 		if (count == 0 || rc)
@@ -1503,7 +1511,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		*bulk_hdl = hg_bulk_hdl;
 	} else {
 		D_ERROR("HG_Bulk_create failed, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 out:
@@ -1584,7 +1592,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_access failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 	D_ASSERT(actual_sgnum == bulk_sgnum);
 
@@ -1642,7 +1650,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 			D_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
 				hg_cbinfo->ret);
 			hg_ret = hg_cbinfo->ret;
-			rc = -DER_HG;
+			rc     = crt_hgret_2_der(hg_ret);
 		}
 	}
 

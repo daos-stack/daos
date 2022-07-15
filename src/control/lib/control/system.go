@@ -99,14 +99,16 @@ type SystemJoinReq struct {
 	unaryRequest
 	msRequest
 	retryableRequest
-	ControlAddr *net.TCPAddr
-	UUID        string
-	Rank        system.Rank
-	URI         string
-	NumContexts uint32              `json:"Nctxs"`
-	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
-	InstanceIdx uint32              `json:"Idx"`
-	Incarnation uint64              `json:"Incarnation"`
+	ControlAddr          *net.TCPAddr
+	UUID                 string
+	Rank                 system.Rank
+	URI                  string
+	SecondaryURIs        []string            `json:"secondary_uris"`
+	NumContexts          uint32              `json:"Nctxs"`
+	NumSecondaryContexts []uint32            `json:"secondary_nctxs"`
+	FaultDomain          *system.FaultDomain `json:"SrvFaultDomain"`
+	InstanceIdx          uint32              `json:"Idx"`
+	Incarnation          uint64              `json:"Incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -184,7 +186,8 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members `json:"members"`
+	Members   system.Members `json:"members"`
+	Providers []string       `json:"providers"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.

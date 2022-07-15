@@ -39,6 +39,7 @@ struct dc_mgmt_sys_info {
 	uint32_t	crt_timeout;
 	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
+	uint32_t	provider_idx; /* Provider index (if more than one available) */
 };
 
 /** Client system handle */

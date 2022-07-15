@@ -36,7 +36,7 @@ type Config struct {
 	DisableCache     bool                      `yaml:"disable_caching,omitempty"`
 	DisableAutoEvict bool                      `yaml:"disable_auto_evict,omitempty"`
 	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
-	Provider         string                    `yaml:"provider,omitempty"`
+	ProviderIdx      uint                      `yaml:"provider_idx"`
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

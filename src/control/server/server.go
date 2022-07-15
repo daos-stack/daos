@@ -414,6 +414,7 @@ func (srv *server) setupGrpc() error {
 			CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 			NetDevClass:     uint32(srv.netDevClass[i]),
 			SrvSrxSet:       srxSetting,
+			ProviderIdx:     uint32(i),
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints

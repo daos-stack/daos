@@ -78,16 +78,15 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 
 		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-			Rank:     rank.Uint32(),
-			Uri:      uris.Primary,
-			Provider: svc.clientNetworkHint[0].Provider,
+			Rank: rank.Uint32(),
+			Uri:  uris.Primary,
 		})
 
 		for i, uri := range uris.Secondary {
 			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank:     rank.Uint32(),
-				Uri:      uri,
-				Provider: svc.clientNetworkHint[i].Provider,
+				Rank:        rank.Uint32(),
+				Uri:         uri,
+				ProviderIdx: uint32(i + 1),
 			}
 
 			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
@@ -684,6 +683,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	members := svc.membership.Members(hitRanks)
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
+	}
+
+	for _, hint := range svc.clientNetworkHint {
+		resp.Providers = append(resp.Providers, hint.Provider)
 	}
 
 	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))

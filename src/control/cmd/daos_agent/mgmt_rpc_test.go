@@ -44,51 +44,48 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return &mgmtpb.GetAttachInfoResp{
 			RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 				{
-					Rank:     0,
-					Uri:      "uri0",
-					Provider: "ofi+verbs",
+					Rank: 0,
+					Uri:  "uri0",
 				},
 				{
-					Rank:     1,
-					Uri:      "uri1",
-					Provider: "ofi+verbs",
+					Rank: 1,
+					Uri:  "uri1",
 				},
 				{
-					Rank:     3,
-					Uri:      "uri3",
-					Provider: "ofi+verbs",
+					Rank: 3,
+					Uri:  "uri3",
 				},
 			},
 			SecondaryRankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 				{
-					Rank:     0,
-					Uri:      "uri4-sec",
-					Provider: "ofi+sockets",
+					Rank:        0,
+					Uri:         "uri4-sec",
+					ProviderIdx: 2,
 				},
 				{
-					Rank:     1,
-					Uri:      "uri5-sec",
-					Provider: "ofi+sockets",
+					Rank:        1,
+					Uri:         "uri5-sec",
+					ProviderIdx: 2,
 				},
 				{
-					Rank:     3,
-					Uri:      "uri6-sec",
-					Provider: "ofi+sockets",
+					Rank:        3,
+					Uri:         "uri6-sec",
+					ProviderIdx: 2,
 				},
 				{
-					Rank:     0,
-					Uri:      "uri0-sec",
-					Provider: "ofi+tcp",
+					Rank:        0,
+					Uri:         "uri0-sec",
+					ProviderIdx: 1,
 				},
 				{
-					Rank:     1,
-					Uri:      "uri1-sec",
-					Provider: "ofi+tcp",
+					Rank:        1,
+					Uri:         "uri1-sec",
+					ProviderIdx: 1,
 				},
 				{
-					Rank:     3,
-					Uri:      "uri3-sec",
-					Provider: "ofi+tcp",
+					Rank:        3,
+					Uri:         "uri3-sec",
+					ProviderIdx: 1,
 				},
 			},
 			MsRanks: []uint32{0, 1, 3},
@@ -100,6 +97,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				{
 					Provider:    "ofi+tcp",
 					NetDevClass: uint32(hardware.Infiniband),
+					ProviderIdx: 1,
+				},
+				{
+					Provider:    "badidx",
+					NetDevClass: uint32(hardware.Ether),
+					ProviderIdx: 0, // bad for secondary
 				},
 			},
 		}
@@ -117,19 +120,19 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return &mgmtpb.GetAttachInfoResp{
 			RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 				{
-					Rank:     0,
-					Uri:      "uri0-sec",
-					Provider: "ofi+tcp",
+					Rank:        0,
+					Uri:         "uri0-sec",
+					ProviderIdx: 1,
 				},
 				{
-					Rank:     1,
-					Uri:      "uri1-sec",
-					Provider: "ofi+tcp",
+					Rank:        1,
+					Uri:         "uri1-sec",
+					ProviderIdx: 1,
 				},
 				{
-					Rank:     3,
-					Uri:      "uri3-sec",
-					Provider: "ofi+tcp",
+					Rank:        3,
+					Uri:         "uri3-sec",
+					ProviderIdx: 1,
 				},
 			},
 			MsRanks: []uint32{0, 1, 3},
@@ -138,18 +141,19 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				NetDevClass: uint32(hardware.Infiniband),
 				Interface:   fi,
 				Domain:      domain,
+				ProviderIdx: 1,
 			},
 		}
 	}
 
 	for name, tc := range map[string]struct {
-		reqIface  string
-		reqDomain string
-		provider  string
-		numaNode  int
-		rpcResp   *control.HostResponse
-		expResp   *mgmtpb.GetAttachInfoResp
-		expErr    error
+		reqIface    string
+		reqDomain   string
+		providerIdx uint
+		numaNode    int
+		rpcResp     *control.HostResponse
+		expResp     *mgmtpb.GetAttachInfoResp
+		expErr      error
 	}{
 		"RPC error": {
 			rpcResp: &control.HostResponse{
@@ -162,9 +166,8 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				Message: &mgmtpb.GetAttachInfoResp{
 					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 						{
-							Rank:     0,
-							Uri:      "uri0",
-							Provider: "ofi+verbs",
+							Rank: 0,
+							Uri:  "uri0",
 						},
 					},
 					MsRanks: []uint32{0},
@@ -180,9 +183,8 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				Message: &mgmtpb.GetAttachInfoResp{
 					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 						{
-							Rank:     0,
-							Uri:      "uri0",
-							Provider: "notreal",
+							Rank: 0,
+							Uri:  "uri0",
 						},
 					},
 					MsRanks: []uint32{0},
@@ -194,22 +196,14 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			},
 			expErr: errors.New("no suitable fabric interface"),
 		},
-		"basic success": {
-
-			rpcResp: &control.HostResponse{
-				Message: testSrvResp(),
-			},
-			expResp: priResp("fi0", "d0"),
-		},
 		"primary provider": {
-			provider: "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
 			expResp: priResp("fi0", "d0"),
 		},
 		"secondary provider": {
-			provider: "ofi+tcp",
+			providerIdx: 1,
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
@@ -218,16 +212,15 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		"client req iface and domain": {
 			reqIface:  "fi1",
 			reqDomain: "d1",
-			provider:  "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
 			expResp: priResp("fi1", "d1"),
 		},
 		"client req secondary provider": {
-			reqIface:  "fi1",
-			reqDomain: "fi1",
-			provider:  "ofi+tcp",
+			reqIface:    "fi1",
+			reqDomain:   "fi1",
+			providerIdx: 1,
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
@@ -250,16 +243,15 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"client req domain-only ignored": {
 			reqDomain: "d2",
-			provider:  "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
 			expResp: priResp("fi0", "d0"),
 		},
 		"client req provider mismatch ignored": {
-			reqIface:  "fi1",
-			reqDomain: "d1",
-			provider:  "ofi+tcp",
+			reqIface:    "fi1",
+			reqDomain:   "d1",
+			providerIdx: 1,
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
@@ -268,7 +260,6 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		"client req iface/domain mismatch ignored": {
 			reqIface:  "fi0",
 			reqDomain: "d2",
-			provider:  "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
@@ -276,25 +267,31 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"client req iface not found ignored": {
 			reqIface: "notreal",
-			provider: "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
 			expResp: priResp("notreal", "notreal"),
 		},
-		"config provider not found": {
-			provider: "notreal",
+		"client req iface idx malformed": {
+			reqIface: "bad1",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("no valid connection information"),
+			expErr: errors.New("not a secondary provider"),
 		},
-		"config provider hint missing": {
-			provider: "ofi+sockets",
+		"config provider idx out of range": {
+			providerIdx: 5,
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("no valid connection information"),
+			expErr: errors.New("out of range"),
+		},
+		"malformed hint at sec provider idx": {
+			providerIdx: 2,
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expErr: errors.New("provider index"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -337,6 +334,13 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 								Providers: common.NewStringSet("ofi+tcp"),
 							},
 						},
+						{
+							Name:        "bad1",
+							NetDevClass: hardware.Ether,
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("badidx"),
+							},
+						},
 					},
 				},
 			}
@@ -353,7 +357,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 						Responses: []*control.HostResponse{tc.rpcResp},
 					},
 				}),
-				provider: tc.provider,
+				providerIdx: tc.providerIdx,
 			}
 
 			resp, err := mod.getAttachInfo(context.Background(), tc.numaNode,

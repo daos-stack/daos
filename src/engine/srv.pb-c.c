@@ -277,7 +277,7 @@ void   srv__pool_find_by_label_resp__free_unpacked
   assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[6] =
+static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[8] =
 {
   {
     "uri",
@@ -351,6 +351,30 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[6
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "secondaryUris",
+    7,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Srv__NotifyReadyReq, n_secondaryuris),
+    offsetof(Srv__NotifyReadyReq, secondaryuris),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "secondaryNctxs",
+    8,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__NotifyReadyReq, n_secondarynctxs),
+    offsetof(Srv__NotifyReadyReq, secondarynctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   2,   /* field[2] = drpcListenerSock */
@@ -358,12 +382,14 @@ static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   3,   /* field[3] = instanceIdx */
   1,   /* field[1] = nctxs */
   4,   /* field[4] = ntgts */
+  7,   /* field[7] = secondaryNctxs */
+  6,   /* field[6] = secondaryUris */
   0,   /* field[0] = uri */
 };
 static const ProtobufCIntRange srv__notify_ready_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
 {
@@ -373,7 +399,7 @@ const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
   "Srv__NotifyReadyReq",
   "srv",
   sizeof(Srv__NotifyReadyReq),
-  6,
+  8,
   srv__notify_ready_req__field_descriptors,
   srv__notify_ready_req__field_indices_by_name,
   1,  srv__notify_ready_req__number_ranges,
@@ -557,7 +583,7 @@ static const ProtobufCFieldDescriptor srv__get_pool_svc_resp__field_descriptors[
     offsetof(Srv__GetPoolSvcResp, svcreps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -658,7 +684,7 @@ static const ProtobufCFieldDescriptor srv__pool_find_by_label_resp__field_descri
     offsetof(Srv__PoolFindByLabelResp, svcreps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

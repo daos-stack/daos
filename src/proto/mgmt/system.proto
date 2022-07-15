@@ -76,6 +76,7 @@ message SystemQueryResp {
 	repeated SystemMember members = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
+	repeated string providers = 4; // Providers supported by system in configured order
 }
 
 // SystemEraseReq supplies system erase parameters.

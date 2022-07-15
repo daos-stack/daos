@@ -125,12 +125,14 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 			return err
 		}
 		printAbsentHosts(outErr, &resp.AbsentHosts)
-
+		printSystemProviders(out, resp.Providers)
 		return nil
 	}
 
 	printAbsentHosts(outErr, &resp.AbsentHosts)
 	printAbsentRanks(outErr, &resp.AbsentRanks)
+
+	printSystemProviders(out, resp.Providers)
 
 	return nil
 }
@@ -167,6 +169,26 @@ func printSystemResults(out, outErr io.Writer, results system.MemberResults, abs
 	printAbsentHosts(outErr, absentHosts)
 
 	return nil
+}
+
+func printSystemProviders(out io.Writer, providers []string) {
+	if len(providers) == 0 {
+		return
+	}
+
+	idxKey := "Idx"
+	provKey := "Provider"
+	formatter := txtfmt.NewTableFormatter(idxKey, provKey)
+
+	var table []txtfmt.TableRow
+	for i, prov := range providers {
+		table = append(table, txtfmt.TableRow{
+			idxKey:  fmt.Sprintf("%d", i),
+			provKey: prov,
+		})
+	}
+
+	fmt.Fprint(out, formatter.Format(table))
 }
 
 // PrintSystemStartResponse generates a human-readable representation of the

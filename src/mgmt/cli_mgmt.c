@@ -178,13 +178,15 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 			info->ms_ranks->rl_ranks[i]);
 	}
 
+	info->provider_idx = resp->client_net_hint->provider_idx;
+
 	D_DEBUG(DB_MGMT,
 		"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
 		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u, "
-		"FI_OFI_RXM_USE_SRX: %d\n",
+		"FI_OFI_RXM_USE_SRX: %d, CRT_SECONDARY_PROVIDER: %d\n",
 		info->provider, info->interface, info->domain,
 		info->crt_ctx_share_addr, info->crt_timeout,
-		info->srv_srx_set);
+		info->srv_srx_set, info->provider_idx);
 
 	return 0;
 }
@@ -407,13 +409,19 @@ int dc_mgmt_net_cfg(const char *name)
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
+	sprintf(buf, "%d", info.provider_idx);
+	rc = setenv("CRT_SECONDARY_PROVIDER", buf, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
-		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, CRT_SECONDARY_PROVIDER: %s\n",
 		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
 		getenv("CRT_PHY_ADDR_STR"),
-		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"),
+		getenv("CRT_SECONDARY_PROVIDER"));
 
 cleanup:
 	put_attach_info(&info, resp);

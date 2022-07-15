@@ -41,7 +41,6 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 static inline bool
 crt_provider_is_ucx(crt_provider_t prov)
 {
-
 	return (prov >= CRT_PROV_UCX_RC) &&
 	       (prov <= CRT_PROV_UCX_LAST);
 }
@@ -153,6 +152,8 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
+	case HG_BUSY:
+		return -DER_BUSY;
 	default:
 		return -DER_HG;
 	};
@@ -174,100 +175,19 @@ crt_der_2_hgret(int der)
 		return HG_NOMEM;
 	case -DER_CANCELED:
 		return HG_CANCELED;
+	case -DER_BUSY:
+		return HG_BUSY;
 	default:
 		return HG_OTHER_ERROR;
 	};
-}
-
-/* some simple helper functions */
-typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
-static inline int
-crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
-	   crt_proc_cb_t out_proc_cb, crt_hg_rpc_cb_t rpc_cb)
-{
-	hg_return_t hg_ret;
-	int         rc = 0;
-
-	D_ASSERT(hg_class != NULL);
-
-	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
-			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n",
-			rpcid, hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-	return rc;
-}
-
-static inline int
-crt_hg_bulk_free(crt_bulk_t bulk_hdl)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = HG_Bulk_free(bulk_hdl);
-	if (hg_ret != HG_SUCCESS)
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-
-	return crt_hgret_2_der(hg_ret);
-}
-
-static inline int
-crt_hg_bulk_addref(crt_bulk_t bulk_hdl)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
-	if (hg_ret != HG_SUCCESS)
-		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
-
-	return crt_hgret_2_der(hg_ret);
-}
-
-static inline int
-crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
-{
-	hg_size_t	hg_size;
-
-	if (bulk_len == NULL) {
-		D_ERROR("bulk_len is NULL\n");
-		return -DER_INVAL;
-	}
-
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("bulk_hdl is NULL\n");
-		return -DER_INVAL;
-	}
-
-	hg_size = HG_Bulk_get_size(bulk_hdl);
-	*bulk_len = hg_size;
-
-	return 0;
-}
-
-static inline int
-crt_hg_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
-{
-	hg_uint32_t	hg_sgnum;
-
-	D_ASSERT(bulk_sgnum != NULL);
-	hg_sgnum = HG_Bulk_get_segment_count(bulk_hdl);
-	*bulk_sgnum = hg_sgnum;
-
-	return 0;
 }
 
 int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 int crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
-int crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc,
-			 crt_bulk_cb_t complete_cb, void *arg,
-			 crt_bulk_opid_t *opid, bool bind);
-static inline int
-crt_hg_bulk_cancel(crt_bulk_opid_t opid)
-{
-	return HG_Bulk_cancel(opid);
-}
+int
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
+		     crt_bulk_opid_t *opid, bool bind);
 
 #endif /* __CRT_MERCURY_H__ */

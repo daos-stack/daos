@@ -207,9 +207,9 @@ type (
 	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
 	// Primary Service Rank (PSR).
 	PrimaryServiceRank struct {
-		Rank     uint32
-		Uri      string
-		Provider string
+		Rank        uint32
+		Uri         string
+		ProviderIdx uint32 `json:"provider_idx"`
 	}
 
 	ClientNetworkHint struct {
@@ -222,6 +222,7 @@ type (
 		CrtTimeout      uint32 `json:"crt_timeout"`
 		NetDevClass     uint32 `json:"net_dev_class"`
 		SrvSrxSet       int32  `json:"srv_srx_set"`
+		ProviderIdx     uint32 `json:"provider_idx"`
 	}
 
 	GetAttachInfoResp struct {

@@ -315,6 +315,28 @@ Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9
 `,
 		},
+		"providers": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+				},
+				Providers: []string{"ofi+verbs", "ofi+tcp", "ofi+tcp"},
+			},
+			expPrintStr: `
+Rank  State   
+----  -----   
+[0-1] Joined  
+2     Stopped 
+
+Idx Provider  
+--- --------  
+0   ofi+verbs 
+1   ofi+tcp   
+2   ofi+tcp   
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			tc.resp.AbsentRanks = *MustCreateRankSet(tc.absentRanks)

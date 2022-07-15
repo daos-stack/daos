@@ -441,7 +441,7 @@ out:
 }
 
 static int
-prov_settings_apply(crt_provider_t prov, bool primary, crt_init_options_t *opt)
+prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	char	*srx_env;
 	int	rc = 0;
