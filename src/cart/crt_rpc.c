@@ -1121,8 +1121,8 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	if (!crt_gdata.cg_provider_is_primary) {
 		/*
 		 * TODO: Add API to set number of destination tags
- 		 * for the secondary provider
- 		 */
+		 * for the secondary provider
+		 */
 		dst_tag = 0;
 	}
 
