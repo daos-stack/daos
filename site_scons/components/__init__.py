@@ -300,7 +300,8 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n',
-                           'install',
+                           'EXTRA_CFLAGS="-Wno-error"',
+			   'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
     abt_build = ['./configure',
