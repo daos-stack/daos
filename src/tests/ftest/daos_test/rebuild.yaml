@@ -6,6 +6,8 @@ hosts:
     - server-B
     - server-C
     - server-D
+  test_clients:
+    - client-E
 timeout: 800
 timeouts:
     test_rebuild_0to10: 2000
