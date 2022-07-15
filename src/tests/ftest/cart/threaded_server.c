@@ -123,7 +123,8 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_context_create(&crt_ctx);
+	rc = crt_context_create(&crt_ctx);
+	assert(rc == 0);
 	for (rc = 0; rc < NUM_THREADS; rc++)
 		pthread_create(&thread[rc], NULL, progress, &status);
 
