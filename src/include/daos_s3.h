@@ -41,13 +41,18 @@ struct ds3_bucket_info {
 };
 
 struct ds3_object_list_params {
+	/** List objects that start with this prefix */
 	char prefix[128];
+	/** Divide results by delim */
 	char delim[128];
+	/** Start listing from marker key */
 	char marker[128];
+	/** Also include versions */
 	bool list_versions;
-	bool allow_unordered;
+	// Returned:
 	/** If the reults are truncated */
 	bool is_truncated;
+	/** Next marker to be used by subsequent calls */
 	char next_marker[128]; // TODO adjust length
 			       // TODO fill
 };
@@ -186,13 +191,17 @@ ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, dao
  *			[out] Number of buckets returned.
  * \param[out]	buf	Array of bucket info structures.
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ * \param[in,out]
+ *		marker	[in] Start listing from marker key
+ *			[out] Returned marker key for next call
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, errno code on failure.
  */
 int
-ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, ds3_t *ds3, daos_event_t *ev);
+ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, ds3_t *ds3,
+		daos_event_t *ev);
 
 /**
  * Create a bucket in the DAOS pool identified by \a ds3.

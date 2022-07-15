@@ -155,5 +155,18 @@ err_poh:
 int
 ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 {
+	if (ds3 == NULL) {
+		return 0;
+	}
+	
+#define X(a, b) close_metadir(b, ds3->meta_dirs[a]);
+
+	METADATA_DIR_LIST
+
+#undef X
+
+	dfs_umount(ds3->meta_dfs);
+	daos_cont_close(ds3->meta_coh, ev);
+	daos_pool_disconnect(ds3->poh, ev);
 	return 0;
 }
