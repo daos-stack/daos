@@ -20,6 +20,7 @@ from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 class DaosCoreBase(TestWithServers):
     """Runs the daos_test subtests with multiple servers.
+
     :avocado: recursive
     """
 
@@ -44,11 +45,14 @@ class DaosCoreBase(TestWithServers):
 
     def get_test_param(self, name, default=None):
         """Get the test-specific test yaml parameter value.
+
         Args:
             name (str): name of the test yaml parameter to get
             default (object): value to return if a value is not found
+
         Returns:
             object: the test-specific test yaml parameter value
+
         """
         path = "/".join(["/run/daos_tests", name, "*"])
         return self.params.get(self.get_test_name(), path, default)
@@ -58,11 +62,14 @@ class DaosCoreBase(TestWithServers):
         """Start the daos_server processes on each specified list of hosts.
         Enable scalable endpoint if requested with a test-specific
         'scalable_endpoint' yaml parameter.
+
         Args:
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
+
         Returns:
             bool: whether or not to force the starting of the agents
+
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.get_test_param("scalable_endpoint")
@@ -192,9 +199,11 @@ class DaosCoreBase(TestWithServers):
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
+
         Args:
             testname (str): name of the test
             result (CmdResult): result of the failed command.
+
         """
         filename = "".join([testname, "_results.xml"])
         filename = os.path.join(self.outputdir, filename)

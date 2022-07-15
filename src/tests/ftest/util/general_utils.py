@@ -46,10 +46,12 @@ class SimpleProfiler():
 
     def run(self, fn, tag, *args, **kwargs):
         """Run a function and update its stats.
+
         Args:
             fn (function): Function to be executed
             args  (tuple): Argument list
             kwargs (dict): Keyworded, variable-length argument list
+
         """
         self._logger.info("Running function: %s()", fn.__name__)
 
@@ -72,11 +74,14 @@ class SimpleProfiler():
 
     def get_stat(self, tag):
         """Retrieve the stats of a function.
+
         Args:
             tag (str): Tag to be query
+
         Returns:
             tuple: A tuple of the fastest (max), slowest (min), and average
                 execution times.
+
         """
         data = self._stats.get(tag, [0, []])
 
@@ -87,8 +92,10 @@ class SimpleProfiler():
         Set the function that will be used to print the elapsed time on each
         function call. If this value is not set, the profiling will be
         performed silently.
+
         Parameters:
             fn (function): Function to be used for logging.
+
         """
         self._logger = fn
 
@@ -127,12 +134,16 @@ class SimpleProfiler():
 
 def human_to_bytes(size):
     """Convert a human readable size value to respective byte value.
+
     Args:
         size (str): human readable size value to be converted.
+
     Raises:
         DaosTestError: when an invalid human readable size value is provided
+
     Returns:
         int: value translated to bytes.
+
     """
     conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
     conversion = {
@@ -162,14 +173,17 @@ def human_to_bytes(size):
 
 def bytes_to_human(size, digits=2, binary=True):
     """Convert a byte value to the largest (> 1.0) human readable size.
+
     Args:
         size (int): byte size value to be converted.
         digits (int, optional): number of digits used to round the converted
             value. Defaults to 2.
         binary (bool, optional): convert to binary (True) or decimal (False)
             units. Defaults to True.
+
     Returns:
         str: value translated to a human readable size.
+
     """
     units = 1024 if binary else 1000
     conversion = ["B", "KB", "MB", "GB", "TB", "PB", "EB"]
@@ -193,6 +207,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     it will use shlex.spit() to break up the command into a list before it is
     passed to subprocess.Popen. The shell=False is forced for security. As a
     result typically any command containing ";", "|", "&&", etc. will fail.
+
     Args:
         command (str): command to run.
         timeout (int, optional): command timeout. Defaults to 60 seconds.
@@ -211,8 +226,10 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
             Defaults to "both".
         env (dict, optional): dictionary of environment variable names and
             values to set when running the command. Defaults to None.
+
     Raises:
         DaosTestError: if there is an error running the command
+
     Returns:
         CmdResult: an avocado.utils.process CmdResult object containing the
             result of the command execution.  A CmdResult object has the
@@ -226,6 +243,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
+
     """
     log = getLogger()
     msg = None
@@ -270,13 +288,16 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
 
 def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
+
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
         verbose (bool, optional): display message for command execution. Defaults to False.
+
     Returns:
         Task: a ClusterShell.Task.Task object for the executed command
+
     """
     if not isinstance(hosts, NodeSet):
         hosts = NodeSet.fromlist(hosts)
@@ -295,10 +316,13 @@ def run_task(hosts, command, timeout=None, verbose=False):
 
 def check_task(task, logger=None):
     """Check the results of the executed task and get the output.
+
     Args:
         task (Task): a ClusterShell.Task.Task object for the executed command
+
     Returns:
         bool: if the command returned an 0 exit status on every host
+
     """
     def check_task_log(message):
         """Log the provided text if a logger is present.
@@ -351,10 +375,13 @@ def check_task(task, logger=None):
 
 def display_task(task):
     """Display the output for the executed task.
+
     Args:
         task (Task): a ClusterShell.Task.Task object for the executed command
+
     Returns:
         bool: if the command returned an 0 exit status on every host
+
     """
     log = getLogger()
     return check_task(task, log)
@@ -362,18 +389,22 @@ def display_task(task):
 
 def log_task(hosts, command, timeout=None):
     """Display the output of the command executed on each host in parallel.
+
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
+
     Returns:
         bool: if the command returned an 0 exit status on every host
+
     """
     return display_task(run_task(hosts, command, timeout, True))
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the results.
+
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
@@ -382,6 +413,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         expect_rc (int, optional): display output if the command return code
             does not match this value. Defaults to 0. A value of None will
             bypass this feature.
+
     Returns:
         list: a list of dictionaries with each entry containing output, exit
             status, and interrupted status common to each group of hosts, e.g.:
@@ -408,6 +440,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
                         "stdout": [""]
                     },
                 ]
+
     """
     log = getLogger()
     results = []
@@ -474,14 +507,17 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
 def colate_results(command, results):
     """Colate the output of run_pcmd.
+
     Args:
         command (str): command used to obtain the data on each server
         results (list): list: a list of dictionaries with each entry
                         containing output, exit status, and interrupted
                         status common to each group of hosts (see run_pcmd()'s
                         return for details)
+
     Returns:
         str: a string colating run_pcmd()'s results
+
     """
     res = ""
     res += "Command: %s\n" % command
@@ -497,15 +533,18 @@ def colate_results(command, results):
 
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
+
     Args:
         hosts (list): list of hosts
         command (str): command used to obtain the data on each server
         text (str): data identification string
         error (str): data error string
+
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
             "hosts": NodeSet containing the hosts with this data
             "data":  data requested for the group of hosts
+
     """
     log = getLogger()
     host_data = []
@@ -538,15 +577,18 @@ def get_host_data(hosts, command, text, error, timeout=None):
 
 def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
+
     Args:
         hosts (list): list of hosts
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
         expect_rc (int, optional): expected return code. Defaults to 0.
+
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
+
     """
     # Run the command on each host in parallel
     results = run_pcmd(hosts, command, verbose, timeout, expect_rc)
@@ -562,16 +604,19 @@ def check_file_exists(hosts, filename, user=None, directory=False,
                       sudo=False):
     """Check if a specified file exist on each specified hosts.
     If specified, verify that the file exists and is owned by the user.
+
     Args:
         hosts (list): list of hosts
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
             False.
+
     Returns:
         (bool, NodeSet): A tuple of:
             - True if the file exists on each of the hosts; False otherwise
             - A NodeSet of hosts on which the file does not exist
+
     """
     missing_file = NodeSet()
     command = "test -e {0}".format(filename)
@@ -632,6 +677,7 @@ def process_host_list(hoststr):
 def get_random_string(length, exclude=None, include=None):
     """Create a specified length string of random ascii letters and numbers.
     Optionally exclude specific random strings from being returned.
+
     Args:
         length (int): length of the string to return
         exclude (list, optional): list of strings to not return. Defaults to
@@ -639,8 +685,10 @@ def get_random_string(length, exclude=None, include=None):
         include (list, optional): list of characters to use in the random
             string. Defaults to None, in which case use all upper case and
             digits.
+
     Returns:
         str: a string of random ascii letters and numbers
+
     """
     exclude = exclude if isinstance(exclude, list) else []
 
@@ -656,27 +704,33 @@ def get_random_string(length, exclude=None, include=None):
 def get_random_bytes(length, exclude=None, encoding="utf-8"):
     """Create a specified length string of random ascii letters and numbers.
     Optionally exclude specific random strings from being returned.
+
     Args:
         length (int): length of the string to return
         exclude (list, optional): list of strings to not return. Defaults to
             None.
         encoding (str, optional): bytes encoding. Defaults to "utf-8"
+
     Returns:
         bytes : a string of random ascii letters and numbers converted to
                 bytes object
+
     """
     return get_random_string(length, exclude).encode(encoding)
 
 
 def check_pool_files(log, hosts, uuid):
     """Check if pool files exist on the specified list of hosts.
+
     Args:
         log (logging): logging object used to display messages
         hosts (list): list of hosts
         uuid (str): uuid file name to look for in /mnt/daos.
+
     Returns:
         bool: True if the files for this pool exist on each host; False
             otherwise
+
     """
     status = True
     log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
@@ -691,22 +745,27 @@ def check_pool_files(log, hosts, uuid):
 
 def convert_list(value, separator=","):
     """Convert a list into a separator-separated string of its items.
+
     Examples:
         convert_list([1,2,3])        -> '1,2,3'
         convert_list([1,2,3], " ")   -> '1 2 3'
         convert_list([1,2,3], ", ")  -> '1, 2, 3'
+
     Args:
         value (list): list to convert into a string
         separator (str, optional): list item separator. Defaults to ",".
+
     Returns:
         str: a single string containing all the list items separated by the
             separator.
+
     """
     return separator.join([str(item) for item in value])
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     """Signal the engines on each hosts to generate their ULT stacks dump.
+
     Args:
         hosts (list): hosts on which to signal the engines
         verbose (bool, optional): display command output. Defaults to True.
@@ -714,6 +773,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             seconds.
         added_filter (str, optional): negative filter to better identify
             engines.
+
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
@@ -721,6 +781,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
                 0   No engine matched the criteria / No engine signaled.
                 1   One or more engine matched the criteria and a signal was
                     sent.
+
     """
     result = {}
     log = getLogger()
@@ -753,6 +814,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
 
 def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
+
     Args:
         hosts (list): hosts on which to stop the processes
         pattern (str): regular expression used to find process names to stop
@@ -761,6 +823,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
+
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
@@ -768,6 +831,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
                 0   No processes matched the criteria / No processes killed.
                 1   One or more processes matched the criteria and a kill was
                     attempted.
+
     """
     result = {}
     log = getLogger()
@@ -802,11 +866,14 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
 
 def get_partition_hosts(partition, reservation=None):
     """Get a list of hosts in the specified slurm partition and reservation.
+
     Args:
         partition (str): name of the partition
         reservation (str): name of reservation
+
     Returns:
         list: list of hosts in the specified partition
+
     """
     log = getLogger()
     hosts = []
@@ -864,20 +931,26 @@ def get_partition_hosts(partition, reservation=None):
 def get_log_file(name):
     """Get the full log file name and path.
     Prepends the DAOS_TEST_LOG_DIR path (or /tmp) to the specified file name.
+
     Args:
         name (str): log file name
+
     Returns:
         str: full log file name including path
+
     """
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
 def check_uuid_format(uuid):
     """Check for a correct UUID format.
+
     Args:
         uuid (str): Pool or Container UUID.
+
     Returns:
         bool: status of valid or invalid uuid
+
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
@@ -886,13 +959,17 @@ def check_uuid_format(uuid):
 def get_numeric_list(numeric_range):
     """Convert a string of numeric ranges into an expanded list of integers.
     Example: "0-3,7,9-13,15" -> [0, 1, 2, 3, 7, 9, 10, 11, 12, 13, 15]
+
     Args:
         numeric_range (str): the string of numbers and/or ranges of numbers to
             convert
+
     Raises:
         AttributeError: if the syntax of the numeric_range argument is invalid
+
     Returns:
         list: an expanded list of integers
+
     """
     numeric_list = []
     try:
@@ -914,10 +991,13 @@ def get_numeric_list(numeric_range):
 
 def get_remote_file_size(host, file_name):
     """Obtain remote file size.
+
     Args:
         file_name (str): name of remote file
+
     Returns:
         int: file size
+
     """
     cmd = "ssh" " {}@{}" " stat -c%s {}".format(
         getuser(), host, file_name)
@@ -929,13 +1009,16 @@ def get_remote_file_size(host, file_name):
 def error_count(error, hostlist, log_file):
     """Count the number of specific ERRORs found in the log file.
     This function also returns a count of the other ERRORs from same log file.
+
     Args:
         error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
         log_file (str): Log file name (server/client log).
+
     Returns:
         tuple: a tuple of the count of errors matching the specified error type
             and the count of other errors (int, int)
+
     """
     # Get the Client side Error from client_log file.
     requested_error_count = 0
@@ -955,13 +1038,17 @@ def error_count(error, hostlist, log_file):
 
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.
+
     Args:
         name (str): class name to obtain
         module (str): module name in which to find the class name
+
     Raises:
         DaosTestError: if the class name is not found in the module
+
     Returns:
         object: class matching the name in the specified module
+
     """
     try:
         name_module = import_module(module)
@@ -976,6 +1063,7 @@ def get_module_class(name, module):
 def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     """Get the job manager class that matches the specified name.
     Enables assigning a JobManager class from the test's yaml settings.
+
     Args:
         name (str): JobManager-based class name
         job (ExecutableCommand, optional): command object to manage. Defaults
@@ -984,10 +1072,13 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
             subprocess. Defaults to False.
         mpi (str, optional): MPI type to use with the Mpirun class only.
             Defaults to "openmpi".
+
     Raises:
         DaosTestError: if an invalid JobManager class name is specified.
+
     Returns:
         JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
     """
     manager_class = get_module_class(name, "job_manager_utils")
     if name in ["Mpirun", "Orterun"]:
@@ -1003,10 +1094,13 @@ def convert_string(item, separator=","):
     """Convert the object into a string.
     If the object is a list, tuple, NodeSet, etc. return a comma-separated
     string of the values.
+
     Args:
         separator (str, optional): list item separator. Defaults to ",".
+
     Returns:
         str: item to convert into a string
+
     """
     if isinstance(item, (list, tuple, set)):
         item = convert_list(item, separator)
@@ -1018,6 +1112,7 @@ def convert_string(item, separator=","):
 def create_directory(hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
+
     Args:
         hosts (list): hosts on which to create the directory
         directory (str): the directory to create
@@ -1028,8 +1123,10 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
             command returns a non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
             False.
+
     Raises:
         DaosTestError: if there is an error running the command
+
     Returns:
         CmdResult: an avocado.utils.process CmdResult object containing the
             result of the command execution.  A CmdResult object has the
@@ -1041,6 +1138,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
+
     """
     return run_command(
         "{} /usr/bin/mkdir -p {}".format(
@@ -1051,6 +1149,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
+
     Args:
         hosts (list): hosts on which to create the directory
         filename (str): the file for which to change ownership
@@ -1063,8 +1162,10 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
             command returns a non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
             False.
+
     Raises:
         DaosTestError: if there is an error running the command
+
     Returns:
         CmdResult: an avocado.utils.process CmdResult object containing the
             result of the command execution.  A CmdResult object has the
@@ -1076,6 +1177,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
+
     """
     return run_command(
         "{} chown {}:{} {}".format(
@@ -1089,6 +1191,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     """Copy the source to the destination on each of the specified hosts.
     Optionally (by default) ensure the destination directory exists on each of
     the specified hosts prior to copying the source.
+
     Args:
         hosts (list): hosts on which to copy the source
         source (str): the file to copy to the hosts
@@ -1105,8 +1208,10 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             False.
         owner (str, optional): if specified the owner to assign as the owner of
             the copied file. Defaults to None.
+
     Raises:
         DaosTestError: if there is an error running the command
+
     Returns:
         CmdResult: an avocado.utils.process CmdResult object containing the
             result of the command execution.  A CmdResult object has the
@@ -1118,6 +1223,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
+
     """
     result = None
     if mkdir:
@@ -1164,14 +1270,17 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
 
 def get_clush_command(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
+
     Args:
         hosts (object): hosts with which to use the clush command
         args (str, optional): additional clush command line arguments. Defaults
             to None.
         sudo (bool, optional): if set the clush command will be configured to
             run a command with sudo privileges. Defaults to False.
+
     Returns:
         str: the clush command
+
     """
     command = ["clush", "-w", convert_string(hosts)]
     if args:
@@ -1185,10 +1294,13 @@ def get_clush_command(hosts, args=None, sudo=False):
 
 def get_default_config_file(name):
     """Get the default config file.
+
     Args:
         name (str): daos component name, e.g. server, agent, control
+
     Returns:
         str: the default config file
+
     """
     file_name = "".join(["daos_", name, ".yml"])
     return os.path.join(os.sep, "etc", "daos", file_name)
@@ -1196,9 +1308,11 @@ def get_default_config_file(name):
 
 def get_file_listing(hosts, files):
     """Get the file listing from multiple hosts.
+
     Args:
         hosts (object): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
+
     Returns:
         CmdResult: an avocado.utils.process CmdResult object containing the
             result of the command execution.  A CmdResult object has the
@@ -1210,6 +1324,7 @@ def get_file_listing(hosts, files):
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
+
     """
     result = run_command(
         "{} /usr/bin/ls -la {}".format(
@@ -1221,10 +1336,13 @@ def get_file_listing(hosts, files):
 
 def get_subprocess_stdout(subprocess):
     """Get the stdout from the specified subprocess.
+
     Args:
         subprocess (process.SubProcess): subprocess from which to get stdout
+
     Returns:
         str: the std out of the subprocess
+
     """
     output = subprocess.get_stdout()
     if isinstance(output, bytes):
@@ -1236,11 +1354,14 @@ def create_string_buffer(value, size=None):
     """Create a ctypes string buffer.
     Converts any string to a bytes object before calling
     ctypes.create_string_buffer().
+
     Args:
     value (object): value to pass to ctypes.create_string_buffer()
     size (int, optional): size to pass to ctypes.create_string_buffer()
+
     Returns:
     array: return value from ctypes.create_string_buffer()
+
     """
     if isinstance(value, str):
         value = value.encode("utf-8")
@@ -1249,10 +1370,13 @@ def create_string_buffer(value, size=None):
 
 def get_display_size(size):
     """Get a string of the provided size in bytes and human-readable sizes.
+
     Args:
         size (int): size in bytes
+
     Returns:
         str: the size represented in bytes and human-readable sizes
+
     """
     return "{} ({}) ({})".format(
         size, bytes_to_human(size, binary=True),
@@ -1261,9 +1385,11 @@ def get_display_size(size):
 
 def report_errors(test, errors):
     """Print errors and fail the test if there's any errors.
+
     Args:
         test (Test): Test class.
         errors (list): List of errors.
+
     """
     if errors:
         test.log.error("Errors detected:")
@@ -1278,9 +1404,11 @@ def report_errors(test, errors):
 
 def percent_change(val1, val2):
     """Calculate percent change between two values as a decimal.
+
     Args:
         val1 (float): first value.
         val2 (float): second value.
+
     Returns:
         float: decimal percent change.
     """
@@ -1291,10 +1419,13 @@ def percent_change(val1, val2):
 
 def get_primary_group(user=None):
     """Get the name of the user's primary group.
+
     Args:
         user (str, optional): the user account name. Defaults to None, which uses the current user.
+
     Returns:
         str: the primary group name
+
     """
     if user is None:
         user = getuser()
@@ -1308,15 +1439,18 @@ def get_primary_group(user=None):
 
 def get_journalctl(hosts, since, until, journalctl_type):
     """Run the journalctl on the hosts.
+
     Args:
         hosts (list): List of hosts to run journalctl.
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.
+
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
             "hosts": NodeSet containing the hosts with this data
             "data":  data requested for the group of hosts
+
     """
     command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
                "--until=\"{}\"".format(journalctl_type, since, until))
@@ -1328,11 +1462,14 @@ def get_journalctl(hosts, since, until, journalctl_type):
 
 def get_avocado_config_value(section, key):
     """Get an avocado configuration value.
+
     Args:
         section (str): the configuration section, e.g. 'runner.timeout'
         key (str): the configuration key, e.g. 'process_died'
+
     Returns:
         object: the value of the requested config key in the specified section
+
     """
     if int(MAJOR) >= 82:
         config = settings.as_dict()
@@ -1342,10 +1479,12 @@ def get_avocado_config_value(section, key):
 
 def set_avocado_config_value(section, key, value):
     """Set an avocado configuration value.
+
     Args:
         section (str): the configuration section, e.g. 'runner.timeout'
         key (str): the configuration key, e.g. 'process_died'
         value (object): the value to set
+
     """
     if int(MAJOR) >= 82:
         settings.update_option(".".join([section, key]), value)
