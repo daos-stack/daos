@@ -143,6 +143,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	size_t	total = 0;
 	size_t	n;
 
+	printf("DBG_Lei> cmd_str = %s\n", cmd_str);
+	fflush(stdout);
 	while (1) {
 		if (total + JSON_CHUNK_SIZE + 1 > size) {
 			size = total + JSON_CHUNK_SIZE + 1;
@@ -159,6 +161,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		}
 
 		n = fread(jbuf + total, 1, JSON_CHUNK_SIZE, fp);
+		printf("DBG_Lei> n = %ld\n", n);
+		fflush(stdout);
 		if (n == 0)
 			break;
 
