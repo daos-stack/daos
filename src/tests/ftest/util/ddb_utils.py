@@ -33,13 +33,22 @@ class DdbCommand(DdbCommandBase):
                 usually in the form of vos-0, vos-1, and so on.
         """
         super().__init__(path)
-        self.mount_point = mount_point
-        self.pool_uuid = pool_uuid
-        self.vos_file = vos_file
 
         # Construct the VOS file path where ddb will inject the command.
-        self.vos_path.value = os.path.join(
-            self.mount_point, self.pool_uuid.lower(), self.vos_file)
+        self.update_vos_path(mount_point, pool_uuid, vos_file)
+
+    def update_vos_path(self, mount_point, pool_uuid, vos_file):
+        """Update the vos_path ddb command argument.
+
+        Args:
+            mount_point (str): DAOS mount point where pool directory is created. e.g.,
+                /mnt/daos, /mnt/daos0.
+            pool_uuid (str): Pool UUID.
+            vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
+                usually in the form of vos-0, vos-1, and so on.
+        """
+        vos_path = os.path.join(mount_point, pool_uuid.lower(), vos_file)
+        self.vos_path.update(vos_path, "vos_path")
 
     def list_component(self, component_path=None):
         """Call ddb -R "ls <component_path>"
@@ -59,6 +68,7 @@ class DdbCommand(DdbCommandBase):
         cmd = ["ls"]
         if component_path:
             cmd.append(component_path)
+        self.write_mode.value = False
         self.single_command.value = " ".join(cmd)
 
         return self.run()
@@ -80,6 +90,7 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
         self.single_command.value = " ".join(
             ["dump_value", component_path, out_file_path])
 
@@ -134,6 +145,7 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
         self.single_command.value = " ".join(["dump_ilog", component_path])
 
         return self.run()
@@ -149,6 +161,7 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
         self.single_command.value = " ".join(["commit_ilog", component_path])
 
         return self.run()
@@ -164,6 +177,7 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
         self.single_command.value = " ".join(["rm_ilog", component_path])
 
         return self.run()
@@ -179,6 +193,7 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
         self.single_command.value = " ".join(["dump_superblock", component_path])
 
         return self.run()
@@ -198,6 +213,8 @@ class DdbCommand(DdbCommandBase):
             CmdResult: Result object that contains exit_status, stdout, etc.
 
         """
+        self.write_mode.value = False
+
         commands = ["dump_dtx"]
         if committed:
             commands.append("-c")
