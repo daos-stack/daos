@@ -822,7 +822,8 @@ get_file:
 
 	cont->ioc_open_count += 1;
 
-	pthread_mutex_unlock(&ioil_iog.iog_lock);
+	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
+	D_ASSERT(rc == 0);
 
 	return true;
 
@@ -835,6 +836,7 @@ shrink:
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
+
 	return false;
 }
 
