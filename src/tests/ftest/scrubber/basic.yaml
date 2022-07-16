@@ -1,0 +1,81 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-C
+timeout: 150
+setup:
+  start_servers_once: False
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 6000000000
+  nvme_size: 54000000000
+  svcn: 4
+  control_method: dmg
+  rebuild_timeout: 120
+  pool_query_timeout: 30
+  properties: "scrub:timed,scrub-freq:1"
+container:
+  type: POSIX
+  control_method: daos
+  oclass: RP_2G1
+ior:
+  ior_timeout: 60
+  client_processes:
+    np_16:
+        np: 2
+  test_file: daos:testFile
+  repetitions: 2
+  dfs_destroy: False
+  iorflags:
+    ior_flags:
+      - "-v -W -w -r -R -k"
+    ior_api:
+      - DFS
+    transfer_block_size:
+      - [256B, 2M]
+      - [1M, 32M]
+    obj_class:
+      - RP_2G1

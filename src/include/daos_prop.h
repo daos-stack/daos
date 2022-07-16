@@ -98,6 +98,25 @@ enum daos_pool_props {
 	 * Pool upgrade status.
 	 */
 	DAOS_PROP_PO_UPGRADE_STATUS,
+	/**
+	 * Schedule that the checksum scrubber will run. See
+	 * DAOS_SCRUBBER_SCHED_*
+	 *
+	 * default: DAOS_SCRUB_MODE_OFF
+	 */
+	DAOS_PROP_PO_SCRUB_MODE,
+	/**
+	 * How frequently the schedule will run. In seconds.
+	 *
+	 * default: 604800 seconds (1 week)
+	 */
+	DAOS_PROP_PO_SCRUB_FREQ,
+	/**
+	 * Number of checksum errors before auto eviction is engaged.
+	 *
+	 * default: 0 (disabled)
+	 */
+	DAOS_PROP_PO_SCRUB_THRESH,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -148,7 +167,18 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
-/** self headling strategy bits */
+/**
+ * Pool checksum scrubbing schedule type
+ * It is expected that these stay contiguous.
+ */
+enum {
+	DAOS_SCRUB_MODE_OFF = 0,
+	DAOS_SCRUB_MODE_LAZY = 1,
+	DAOS_SCRUB_MODE_TIMED = 2,
+	DAOS_SCRUB_MODE_INVALID = 3,
+};
+
+/** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
 
@@ -265,6 +295,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_RP_PDA,
 	/** immutable container global version */
 	DAOS_PROP_CO_GLOBAL_VERSION,
+	/** Override the pool scrubbing property. */
+	DAOS_PROP_CO_SCRUBBER_DISABLED,
 	DAOS_PROP_CO_MAX,
 };
 

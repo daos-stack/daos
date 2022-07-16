@@ -1,3 +1,10 @@
+daos (2.3.100-16) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * Add pool_scrubbing_tests to test package
+
+ -- Jeff Olivier <Jeff Olivier <jeffrey.v.olivier@intel.com>  Fri, 15 Jul 2022 12:48:00 -0400
+
 daos (2.3.100-15) unstable; urgency=medium
 
   [ Tom Nabarro ]

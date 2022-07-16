@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,6 +41,7 @@
 	X(RAS_ENGINE_DIED,		"engine_died")			\
 	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
 	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
+	X(RAS_POOL_CORRUPTION_DETECTED,	"corruption_detected")		\
 	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
 	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
 	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
