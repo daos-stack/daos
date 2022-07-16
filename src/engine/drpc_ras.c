@@ -438,6 +438,11 @@ out_req:
 	return rc;
 }
 
+/*
+ * XXX: Register the pool information on MS via DRPC_METHOD_CHK_REG_POOL:
+ *	if the pool does not exist, then add it on MS; otherwise, refresh
+ *	the pool service replicas and label information.
+ */
 int
 ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps)
 {

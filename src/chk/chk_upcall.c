@@ -102,7 +102,7 @@ out:
 }
 
 int
-chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int32_t result,
+chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result,
 		  d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont, daos_unit_oid_t *obj,
 		  daos_key_t *dkey, daos_key_t *akey, char *msg, uint32_t option_nr,
 		  uint32_t *options, uint32_t detail_nr, d_sg_list_t *details)

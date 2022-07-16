@@ -15,7 +15,7 @@
 
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		    Mgmt__CheckInconsistPolicy **policies, uint32_t pool_nr, uuid_t pools[],
+		    Mgmt__CheckInconsistPolicy **policies, int32_t pool_nr, uuid_t pools[],
 		    uint32_t flags, int32_t phase)
 {
 	struct chk_policy *ply = NULL;
@@ -42,13 +42,13 @@ out:
 }
 
 int
-ds_mgmt_check_stop(uint32_t pool_nr, uuid_t pools[])
+ds_mgmt_check_stop(int32_t pool_nr, uuid_t pools[])
 {
 	return chk_leader_stop(pool_nr, pools);
 }
 
 int
-ds_mgmt_check_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+ds_mgmt_check_query(int32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		    chk_query_pool_cb_t pool_cb, void *buf)
 {
 	return chk_leader_query(pool_nr, pools, head_cb, pool_cb, buf);

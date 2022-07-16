@@ -44,7 +44,7 @@ RDB_STRING_KEY(ds_pool_attr_, user);
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_PO_LABEL,
-		.dpe_str	= "pool_label_not_set",
+		.dpe_str	= DAOS_PROP_NO_PO_LABEL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SPACE_RB,
 		.dpe_val	= 0,

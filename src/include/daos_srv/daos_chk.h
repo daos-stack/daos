@@ -74,12 +74,12 @@ typedef int (*chk_query_pool_cb_t)(struct chk_query_pool_shard *shard, uint32_t 
 typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies, int cnt, uint32_t flags);
 
 int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy *policies, uint32_t pool_nr, uuid_t pools[],
-		     uint32_t flags, int32_t phase);
+		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		     uint32_t flags, int phase);
 
-int chk_leader_stop(uint32_t pool_nr, uuid_t pools[]);
+int chk_leader_stop(int pool_nr, uuid_t pools[]);
 
-int chk_leader_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+int chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		     chk_query_pool_cb_t pool_cb, void *buf);
 
 int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);

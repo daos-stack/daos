@@ -513,6 +513,9 @@ daos_label_is_valid(const char *label)
 /* default policy string */
 #define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
 
+/* For the case of no label is set for the pool. */
+#define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"
+
 /** daos properties, for pool or container */
 typedef struct {
 	/** number of entries */
