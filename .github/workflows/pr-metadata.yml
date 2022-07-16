@@ -1,0 +1,39 @@
+name: Jira Report
+
+on:
+  # This should probably be pull_request_target.
+  pull_request:
+
+jobs:
+  example_comment_pr:
+    runs-on: ubuntu-latest
+    name: Report Jira data to PR comment
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: install jira
+        run: python3 -m pip install jira
+      - name: Load jira metadata
+        run: ./ci/jira_query.py
+        id: jira-data
+      - name: Comment on PR
+        if: always()
+        uses: thollander/actions-comment-pull-request@v1
+        with:
+          comment_includes: 'Bug-tracker data'
+          message: |
+            Bug-tracker data:
+            ${{ steps.jira-data.outputs.message }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set labels
+        if: always() && ${{ steps.jira-data.outputs.label }}
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{ steps.jira-data.outputs.label }}
+      - name: Clear labels
+        if: ${{ always() && steps.jira-data.outputs.label-clear != '' }}
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: ${{ steps.jira-data.outputs.label-clear }}
