@@ -2052,26 +2052,19 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_dtx_act_ent	 *dae = NULL;
-	struct vos_dtx_cmt_ent	 *dce = NULL;
 	struct vos_container	 *cont;
 	int			  committed = 0;
 	int			  rc = 0;
 
 	D_ASSERT(count > 0);
 
-	if (count > 1) {
-		D_ALLOC_ARRAY(daes, count);
-		if (daes == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(daes, count);
+	if (daes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, count);
-		if (dces == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		daes = &dae;
-		dces = &dce;
-	}
+	D_ALLOC_ARRAY(dces, count);
+	if (dces == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -2091,10 +2084,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	}
 
 out:
-	if (daes != &dae)
-		D_FREE(daes);
-	if (dces != &dce)
-		D_FREE(dces);
+	D_FREE(daes);
+	D_FREE(dces);
 
 	return rc < 0 ? rc : committed;
 }
