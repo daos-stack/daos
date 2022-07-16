@@ -101,7 +101,8 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 size_t
 pool_hdl_size(struct pool_svc *svc)
 {
-	if (svc->ps_global_version == DS_POOL_GLOBAL_VERSION)
+	/* return old size if pool is from version <= 2.0 */
+	if (svc->ps_global_version != 0)
 		return sizeof(struct pool_hdl);
 	else
 		return sizeof(struct pool_hdl) - sizeof(((struct pool_hdl *)0)->ph_machine);
