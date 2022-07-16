@@ -38,7 +38,7 @@ class CartCtlCommand(ExecutableCommand):
         #
         # set_fi_attr
         #         set fault injection attributes for a fault ID. This command
-        #         must be acompanied by the option
+        #         must be accompanied by the option
         #         --attr fault_id,max_faults,probability,err_code[,argument]
         #
         # options:

@@ -1221,6 +1221,13 @@ dfs_test_chown(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &obj, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_gid, getegid());
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
 		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
@@ -1336,7 +1343,7 @@ dfs_test_chown(void **state)
 	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
-	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
+	assert_int_equal(stbuf.st_gid, stbuf2.st_gid);
 }
 
 static bool

@@ -133,11 +133,10 @@ typedef struct {
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
-	uint32_t		omd_padding;
-	union {
-		uint32_t	omd_split;
-		uint64_t	omd_loff;
-	};
+	/* Fault domain level - PO_COMP_TP_RANK, or PO_COMP_TP_RANK. If it is zero then will
+	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
+	 */
+	uint32_t		omd_fdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -178,6 +177,8 @@ struct daos_obj_layout {
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
 	DTF_DELAY_FORWARD	= (1 << 0),
+	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	DTF_REASSEMBLE_REQ	= (1 << 1),
 };
 
 /** to identify each obj shard's target */

@@ -149,7 +149,7 @@ class DaosServerManager(SubprocessManager):
         This is only required to be called once and is included as part of
         calling prepare() and start().
 
-        It should be called idependently when a test variant is using servers
+        It should be called independently when a test variant is using servers
         started by a previous test variant.
 
         Args:

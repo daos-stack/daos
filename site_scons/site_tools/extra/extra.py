@@ -1,30 +1,14 @@
 #!/usr/bin/env python3
-"""Code to handle clang-format when used in the build.
+"""
+(C) Copyright 2018-2022 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
+Code to handle clang-format when used in the build.
 
 This is used by scons to reformat automatically generated header files to be readable, but also
 outside of scons by the clang-format commit hook to check the version.
 """
-
-# Copyright 2018-2022 Intel Corporation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import subprocess  # nosec
 import re
 import os
@@ -39,7 +23,7 @@ MIN_FORMAT_VERSION = 12
 
 
 def _supports_custom_format(clang_exe):
-    """Checks if the version of clang-foramt is new enough to parse the settings used by
+    """Checks if the version of clang-format is new enough to parse the settings used by
     the config file"""
 
     try:
@@ -93,18 +77,6 @@ def _find_indent():
     return f'{indent} --style={style}'
 
 
-def _pp_gen(source, target, env, indent):
-    """generate commands for preprocessor builder"""
-    action = []
-    cccom = env.subst("$CCCOM").replace(" -o ", " ")
-    for src, tgt in zip(source, target):
-        if indent:
-            action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
-        else:
-            action.append(f'{cccom} -E -P {src} > {tgt}')
-    return action
-
-
 def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
@@ -149,13 +121,20 @@ def generate(env):
 
     indent = _find_indent()
 
-    # In order to pass the indent function to the generator and only execute _find_indent
-    # once, we create a lambda function to wrap our own that takes indent as argument.
-    pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
-                                                                      indent)  # noqa
+    # pylint: disable-next=unused-argument
+    def _pp_gen(source, target, env, for_signature):
+        """generate commands for preprocessor builder"""
+        action = []
+        cccom = env.subst("$CCCOM").replace(" -o ", " ")
+        for src, tgt in zip(source, target):
+            if indent:
+                action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
+            else:
+                action.append(f'{cccom} -E -P {src} > {tgt}')
+        return action
 
     # Only handle C for now
-    preprocess = Builder(generator=pp_generator, emitter=_preprocess_emitter)
+    preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
     # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
     check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 

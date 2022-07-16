@@ -604,7 +604,7 @@ class CommonConfig(YamlParameters):
 
         Args:
             name (str): default value for the name configuration parameter
-            transport (TransportCredentials): transport credentails
+            transport (TransportCredentials): transport credentials
         """
         super().__init__(
             "/run/common_config/*", None, None, transport)

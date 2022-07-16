@@ -24,6 +24,9 @@ def scons():
     Default('self_test')
 
     if prereqs.test_requested():
+        # Build wrapper libraries
+        SConscript('wrap/SConscript')
+
         # Build crt_launch
         SConscript('crt_launch/SConscript')
 

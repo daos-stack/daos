@@ -24,7 +24,6 @@ def scons():
         return
 
     # generate server module
-    print("libs = %s" % denv.subst("$LIBS"))
     srv = daos_build.library(denv, 'placement', common_tgts,
                              install_off="../..", LIBS=libraries)
     denv.Install('$PREFIX/lib64/daos_srv', srv)

@@ -6,6 +6,7 @@ Ansible
 BW
 Broadwell
 CGO
+Cilk
 DArray
 DDict
 DFS
@@ -88,10 +89,13 @@ bullseye
 bw
 bytearray
 cancelled
+cd
 centric
+chdir
 checksum
 chgrp
 chmod
+chowned
 clush
 cmd
 cmdline
@@ -157,6 +161,7 @@ environ
 epcrange
 ethernet
 fchmod
+fcntl
 filename
 filesystem
 findcmd
@@ -168,8 +173,10 @@ fs
 fstat
 ftest
 fuseblk
+fusermount
 gcc
 gdb
+getattr
 getfattr
 getxattr
 gid
@@ -197,6 +204,7 @@ ioengine
 ior
 iotype
 iov
+ip
 iptable
 iptables
 iteratively
@@ -240,6 +248,7 @@ middleware
 mins
 mkdir
 mnt
+modprobe
 mountpoint
 mpi
 mpicc
@@ -296,6 +305,7 @@ ppn
 prebuild
 prebuilding
 prebuilt
+preload
 prepend
 prepended
 prepends
@@ -342,6 +352,8 @@ scm
 scons
 scontrol
 sharedctypes
+shlex
+simul
 slurm
 slurmctl
 spdk
@@ -350,6 +362,7 @@ src
 srun
 ssd
 ssds
+statfs
 statvfs
 stddev
 stderr
@@ -377,6 +390,8 @@ systemctl
 systemd
 tcp
 teardown
+teardowns
+testcase
 testcases
 testdata
 testname
@@ -403,6 +418,7 @@ unicode
 unittest
 unlink
 unlinked
+unlinking
 unmount
 unwritable
 uri

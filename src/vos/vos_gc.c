@@ -1139,6 +1139,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	struct vos_pool		*pool = vos_hdl2pool(poh);
 	struct vos_tls		*tls  = vos_tls_get();
 	struct vos_gc_param	 param;
+	uint32_t		 nr_flushed = 0;
 	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
@@ -1147,10 +1148,11 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;
 
+	/* To accelerate flush on container destroy done */
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
-			rc = vea_flush(pool->vp_vea_info, true);
-		return rc;
+			rc = vea_flush(pool->vp_vea_info, true, UINT32_MAX, &nr_flushed);
+		return rc < 0 ? rc : nr_flushed;
 	}
 
 	tls->vtl_gc_running++;
@@ -1180,15 +1182,12 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		}
 	}
 
-	if (pool->vp_vea_info != NULL)
-		rc = vea_flush(pool->vp_vea_info, false);
-
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 
 	D_ASSERT(tls->vtl_gc_running > 0);
 	tls->vtl_gc_running--;
-	return rc;
+	return rc < 0 ? rc : nr_flushed;
 }
 
 inline bool
@@ -1203,4 +1202,26 @@ gc_reserve_space(daos_size_t *rsrvd)
 {
 	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
+}
+
+/** Exported VOS API for explicit VEA flush */
+int
+vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+	int		 rc;
+
+	D_ASSERT(daos_handle_is_valid(poh));
+
+	if (pool->vp_vea_info == NULL) {
+		if (nr_flushed != NULL)
+			*nr_flushed = 0;
+		return 1;
+	}
+
+	rc = vea_flush(pool->vp_vea_info, force, nr_flush, nr_flushed);
+	if (rc)
+		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
+
+	return rc;
 }
