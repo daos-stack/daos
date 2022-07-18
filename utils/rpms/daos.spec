@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.103
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -34,7 +34,6 @@ BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 %endif
 BuildRequires: gcc-c++
@@ -572,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-4
+- Remove now unused openpa dependency
+
 * Fri Jul 15 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.103-3
 - Update SPDK dependency requirement to greater than or equal to 22.01.1.
 
