@@ -910,3 +910,18 @@ class TestContainer(TestDaosApiBase):
                 "Error: Undefined control_method: %s", self.control_method.value)
 
         return None
+
+    def verify_health(self, expected_health):
+        """Check container property's Health field by calling daos container get-prop.
+
+        Args:
+            expected_health (str): Expected value in the Health field.
+
+        Returns:
+            bool: True if expected_health matches the one obtained from get-prop.
+
+        """
+        output = self.get_prop(properties=["status"])
+        actual_health = output["response"][0]["value"]
+
+        return actual_health == expected_health

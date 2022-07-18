@@ -158,7 +158,7 @@ enum obj_rpc_flags {
 	ORF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	ORF_CPD_BULK		= (1 << 10),
-	/* Contain EC split req, only used on CPD leader locally. */
+	/* Contain EC split req, only used on CPD leader locally. Obsolete - DAOS-10348. */
 	ORF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
 	ORF_CHECK_EXISTENCE	= (1 << 12),
@@ -398,7 +398,7 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_key_t)		(er_dkey)		CRT_VAR)	\
 	((daos_iod_t)		(er_iod)		CRT_VAR)	\
 	((struct dcs_iod_csums)	(er_iod_csums)		CRT_ARRAY)	\
-	((uint64_t)		(er_epoch)		CRT_VAR)	\
+	((daos_epoch_range_t)	(er_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
 	((uint32_t)		(er_map_ver)		CRT_VAR)
