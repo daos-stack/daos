@@ -9,7 +9,7 @@ hosts:
     - server-G
   test_clients:
     - client-H
-timeout: 500
+timeout: 1200
 server_config:
   name: daos_server
   crt_timeout: 60
@@ -35,8 +35,8 @@ pool:
   nvme_size: 60G
   svcn: 5
   control_method: dmg
-  rebuild_timeout: 120
-  pool_query_timeout: 30
+  rebuild_timeout: 240
+  pool_query_timeout: 60
 container:
   type: POSIX
   control_method: daos
