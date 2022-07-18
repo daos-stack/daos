@@ -33,22 +33,8 @@
 
 /* Notes about streaming I/O:
  *
- * It's not completed yet, and never can be 100%.
- *
  * fopen can open files amend mode, so we check for this and disable if needed.
  *
- * We need to intercept, and disable/pass through all these functions:
-
- * getline, getdelim
- * ioctl
- * fgetln
- * fflush
- * fgetpos, fsetpos
- * setbuf, setbuffer, setlinebuf, setvbuf
- *
- * ftell and fseeko with 64 bit files.
- *
- * How does streaming I/O position match fd position.
  */
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
@@ -704,13 +690,13 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 }
 
 static bool
-check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
+check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 {
-	struct dfuse_il_reply	il_reply;
-	int			rc;
-	struct ioil_pool	*pool;
-	struct ioil_cont	*cont;
-	bool			pool_alloc = false;
+	struct dfuse_il_reply il_reply;
+	int                   rc;
+	struct ioil_pool     *pool;
+	struct ioil_cont     *cont;
+	bool                  pool_alloc = false;
 
 	if (ioil_iog.iog_no_daos) {
 		DFUSE_LOG_DEBUG("daos_init() has previously failed");
@@ -729,9 +715,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	}
 
 	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  il_reply.fir_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected %d got %d", fd,
+				  DFUSE_IOCTL_VERSION, il_reply.fir_version);
 		return false;
 	}
 
@@ -741,8 +726,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (!ioil_iog.iog_daos_init) {
 		rc = daos_init();
 		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
 			ioil_iog.iog_no_daos = true;
 			D_GOTO(err, 0);
 		}
@@ -753,10 +737,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
 			continue;
 
-		d_list_for_each_entry(cont, &pool->iop_container_head,
-				      ioc_containers) {
-			if (uuid_compare(cont->ioc_uuid,
-					 il_reply.fir_cont) != 0)
+		d_list_for_each_entry(cont, &pool->iop_container_head, ioc_containers) {
+			if (uuid_compare(cont->ioc_uuid, il_reply.fir_cont) != 0)
 				continue;
 
 			D_GOTO(get_file, rc = 0);
@@ -885,8 +867,7 @@ DFUSE_PUBLIC int
 dfuse___open64_2(const char *pathname, int flags)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real___open64_2(pathname, flags);
 
@@ -894,28 +875,25 @@ dfuse___open64_2(const char *pathname, int flags)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = "
-			"%d. intercepted, fstat=%d, bypass=%s",
-			pathname, flags, fd, entry.fd_fstat,
-			bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+			pathname, flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -924,8 +902,7 @@ DFUSE_PUBLIC int
 dfuse___open_2(const char *pathname, int flags)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real___open_2(pathname, flags);
 
@@ -933,28 +910,25 @@ dfuse___open_2(const char *pathname, int flags)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = "
-			"%d. intercepted, fstat=%d, bypass=%s",
-			pathname, flags, fd, entry.fd_fstat,
-			bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+			pathname, flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -963,11 +937,8 @@ DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
-	unsigned int mode; /* mode_t gets "promoted" to unsigned int
-			    * for va_arg routine
-			    */
+	int             fd;
+	unsigned int    mode; /* mode_t gets "promoted" to unsigned int for va_arg routine */
 
 	if (flags & O_CREAT) {
 		va_list ap;
@@ -986,19 +957,17 @@ dfuse_open(const char *pathname, int flags, ...)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -1022,11 +991,8 @@ DFUSE_PUBLIC int
 dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
-	unsigned int mode; /* mode_t gets "promoted" to unsigned int
-			    * for va_arg routine
-			    */
+	int             fd;
+	unsigned int    mode; /* mode_t gets "promoted" to unsigned int for va_arg routine */
 
 	if (flags & O_CREAT) {
 		va_list ap;
@@ -1045,19 +1011,17 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -1080,8 +1044,7 @@ DFUSE_PUBLIC int
 dfuse_mkstemp(char *template)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real_mkstemp(template);
 
@@ -1089,16 +1052,12 @@ dfuse_mkstemp(char *template)
 		return fd;
 
 	if (!dfuse_check_valid_path(template)) {
-		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path",
-				template);
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path", template);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR, status)) {
-		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible",
-				template);
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR)) {
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible", template);
 		return fd;
 	}
 
@@ -1123,14 +1082,12 @@ dfuse_creat(const char *pathname, mode_t mode)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_BYPASS)) {
-		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -1456,11 +1413,6 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		goto do_real_fseeko;
 
 	if (whence == SEEK_SET) {
-#if 0
-		off_t ni = __real_fseeko(stream, offset, whence);
-
-		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
-#endif
 		new_offset    = offset;
 		entry->fd_eof = false;
 
@@ -1878,9 +1830,10 @@ dfuse_fcntl(int fd, int cmd, ...)
 DFUSE_PUBLIC FILE *
 dfuse_fopen(const char *path, const char *mode)
 {
-	FILE *fp;
+	FILE           *fp;
 	struct fd_entry entry = {0};
-	int fd;
+	int             fd;
+	off_t           offset;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -1895,14 +1848,23 @@ dfuse_fopen(const char *path, const char *mode)
 	if (fd == -1)
 		return fp;
 
+	/* If open in append mode then the initial offset is at the end of file, not the
+	 * beginning so disable I/O at this point, in the same way we do for O_APPEND.
+	 */
+	offset = __real_ftello(fp);
+	if (offset != 0) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by offset %d %p", path, fd, fp);
+		return fp;
+	}
+
 	if (!dfuse_check_valid_path(path)) {
 		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path %d %p", path, fd, fp);
 		return fp;
 	}
 
-	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
+	offset = __real_ftello(fp);
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC)) {
 		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible %d %p", path, fd, fp);
 		return fp;
 	}
@@ -1941,8 +1903,7 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 
 	newfd = fileno(newstream);
 
-	if (newfd == -1 ||
-	    !check_ioctl_on_open(newfd, &new_entry, 0, DFUSE_IO_DIS_STREAM)) {
+	if (newfd == -1 || !check_ioctl_on_open(newfd, &new_entry, 0)) {
 		if (rc == 0) {
 			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
 					"(fd=%d) = %p(fd=%d) "
