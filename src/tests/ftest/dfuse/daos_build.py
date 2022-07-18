@@ -134,7 +134,7 @@ class DaosBuild(DfuseTestBase):
 
             self.log.info(cmd_ret['stdout'])
 
-            if cmd_ret['exis_status'] == 0:
+            if cmd_ret['exit_status'] == 0:
                 continue
 
             fail_type = 'Failure to build'
