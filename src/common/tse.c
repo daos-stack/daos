@@ -502,10 +502,14 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
-	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	uint32_t		 gen, new_gen;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+
+	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
+	 * re-init the task that may be completed immediately.
+	 */
+	tse_task_addref(task);
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
@@ -518,21 +522,16 @@ tse_task_complete_callback(tse_task_t *task)
 
 		D_FREE(dtc);
 
-		/** Task was re-initialized; break */
+		/** Task was re-initialized, or new dep-task added */
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
-			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
-			return false;
-		}
-
-		/** New dependent task added in completion call-back */
-		if (dtp->dtp_dep_cnt > dep_cnt) {
-			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
-				task);
+			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			tse_task_decref(task);
 			return false;
 		}
 	}
 
+	tse_task_decref(task);
 	return true;
 }
 
@@ -640,7 +639,7 @@ tse_task_post_process(tse_task_t *task)
 		D_FREE(tlink);
 
 		/* propagate dep task's failure */
-		if (task_tmp->dt_result == 0)
+		if (task_tmp->dt_result == 0 && !dtp_tmp->dtp_no_propagate)
 			task_tmp->dt_result = task->dt_result;
 
 		/* see if the dependent task is ready to be scheduled */
@@ -904,7 +903,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 
@@ -913,6 +912,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	dtp->dtp_dep_cnt++;
+	dtp_generation_inc(dtp);
 
 	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 
@@ -1308,4 +1308,12 @@ tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
 	}
 
 	return ret;
+}
+
+void
+tse_disable_propagate(tse_task_t *task)
+{
+	struct tse_task_private  *dtp = tse_task2priv(task);
+
+	dtp->dtp_no_propagate = 1;
 }

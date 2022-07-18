@@ -1,0 +1,54 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+    - server-H
+    - server-I
+  test_clients:
+    - client-A
+timeout: 850
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  servers:
+    0:
+      targets: 1
+      log_mask: DEBUG
+      env_vars:
+        - DD_MASK=mgmt,md,dsms,any
+        - D_LOG_FLUSH=DEBUG
+pool:
+  control_method: dmg
+  scm_size: 1G
+  name: daos_server
+container:
+  control_method: daos
+  type: POSIX
+  properties: rf:1
+attrtests:
+  num_attributes: 20
+dfuse:
+    mount_dir: "/tmp/daos_dfuse1/"
+    disable_caching: True
+ior:
+    ior_timeout: 120
+    client_processes:
+        np: 2
+    test_file: daos:/testFile
+    api: POSIX
+    dfs_oclass: "RP_2GX"
+    transfer_size: '1M'
+    block_size: '128M'
+    iorflags:
+        write_flg: "-w -W -k -G 1 -i 1"
+        read_flg: "-C -k -e -r -R -g -G 27 -Q 1 -vv"
+interop:
+    upgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc3/x86_64/daos-2.0.3-3.el8.x86_64.rpm"]
+    downgrade_rpms: ["/home/dinghwah/RPM/2.0.2-2-GA/daos-2.0.2-2.el8.x86_64.rpm",
+                     "/home/dinghwah/RPM/2.0.2-2-GA/mercury-2.1.0_rc4-5.el8.x86_64.rpm"
+                    ]

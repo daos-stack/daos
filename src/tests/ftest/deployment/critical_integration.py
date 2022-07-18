@@ -17,8 +17,7 @@ from apricot import TestWithServers
 from apricot import TestWithoutServers
 
 
-#TO-DO
-#Provision all daos nodes using provisioning tool provided by HPCM
+# TODO Provision all daos nodes using provisioning tool provided by HPCM
 
 
 class CriticalIntegrationWithoutServers(TestWithoutServers):
@@ -45,7 +44,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
         """
-        Test Description: Verify passwordless ssh amongst the server
+        Test Description: Verify password-less ssh amongst the server
                           server nodes available and verify all server
                           and client nodes have same daos versions.
         :avocado: tags=all,deployment,full_regression
@@ -142,7 +141,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
-        half_num_ranks = len(rank_list)//2
+        half_num_ranks = len(rank_list) // 2
         # divide total ranks list into two halves to save time during system stop
         sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
         self.log.info("sub_rank_list: %s", sub_rank_list)

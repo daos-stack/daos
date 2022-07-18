@@ -9,8 +9,8 @@ import math
 import os
 import socket
 import time
-import yaml
 import random
+import yaml
 
 from avocado import fail_on
 
@@ -149,7 +149,7 @@ class DaosServerManager(SubprocessManager):
         This is only required to be called once and is included as part of
         calling prepare() and start().
 
-        It should be called idependently when a test variant is using servers
+        It should be called independently when a test variant is using servers
         started by a previous test variant.
 
         Args:
@@ -797,7 +797,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("No available candidate ranks to stop.")
 
         # Stop a random rank
-        random_rank = random.choice(candidate_ranks) #nosec
+        random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def kill(self):
@@ -1080,8 +1080,7 @@ class DaosServerManager(SubprocessManager):
             # Reboot the servers if a reduced number of targets is required
             if adjusted_targets < targets:
                 self.log.info(
-                        "Updating targets per server engine: %s -> %s",
-                        targets, adjusted_targets)
+                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
                 self.set_config_value("targets", adjusted_targets)
                 self.stop()
                 self.start()

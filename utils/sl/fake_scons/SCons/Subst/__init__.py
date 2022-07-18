@@ -19,7 +19,7 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
-# pylint: disable=too-few-public-methods
+
 class Literal():
     """Fake Literal"""
 

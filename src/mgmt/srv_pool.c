@@ -167,31 +167,46 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*filtered_targets = NULL;
 	d_rank_list_t			*pg_ranks = NULL;
-	uint32_t			pg_size;
+	d_rank_list_t			*pg_targets = NULL;
 	int				rc;
 	int				rc_cleanup;
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
 	 */
-	rc = crt_group_size(NULL, &pg_size);
+	rc = crt_group_ranks_get(NULL, &pg_ranks);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	pg_ranks = d_rank_list_alloc(pg_size);
-	if (pg_ranks == NULL) {
-		rc = -DER_NOMEM;
+
+	rc = d_rank_list_dup(&pg_targets, targets);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
-	rc = d_rank_list_dup(&filtered_targets, targets);
-	if (rc) {
-		rc = -DER_NOMEM;
-		D_GOTO(out, rc);
-	}
-	/* Remove any targets not found in pg_ranks */
-	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
-	if (!d_rank_list_identical(filtered_targets, targets)) {
-		D_ERROR("some ranks not found in cart primary group\n");
+
+	/* The pg_ranks and targets lists should overlap perfectly.
+	 * If not, fail early to avoid expensive corpc failures.
+	 */
+	d_rank_list_filter(pg_ranks, pg_targets, false /* exclude */);
+	if (!d_rank_list_identical(pg_targets, targets)) {
+		char *pg_str, *tgt_str;
+
+		pg_str = d_rank_list_to_str(pg_ranks);
+		if (pg_str == NULL) {
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		tgt_str = d_rank_list_to_str(targets);
+		if (tgt_str == NULL) {
+			D_FREE(pg_str);
+			rc = -DER_NOMEM;
+			D_GOTO(out, rc);
+		}
+
+		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
+			DP_UUID(pool_uuid), tgt_str, pg_str);
+
+		D_FREE(pg_str);
+		D_FREE(tgt_str);
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
@@ -230,7 +245,7 @@ out_svcp:
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 	}
 out:
-	d_rank_list_free(filtered_targets);
+	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
@@ -424,6 +439,8 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
  *					The caller must free the list with d_rank_list_free().
  * \param[in][out]	pool_info	Query results
+ * \param[in][out]	pool_layout_ver	Pool global version
+ * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid inputs
@@ -431,7 +448,8 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info)
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -440,7 +458,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
+	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
+				 pool_layout_ver, upgrade_layout_ver);
 }
 
 /**

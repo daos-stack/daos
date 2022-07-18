@@ -529,7 +529,18 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
-		nil, nil,
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("rf_lvl", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"1": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"2": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
 				return propNotFound(name)
@@ -539,11 +550,13 @@ var propHdlrs = propHdlrMap{
 			switch lvl {
 			case C.DAOS_PROP_CO_REDUN_RANK:
 				return fmt.Sprintf("rank (%d)", lvl)
+			case C.DAOS_PROP_CO_REDUN_NODE:
+				return fmt.Sprintf("node (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
-		true,
+		false,
 	},
 	C.DAOS_PROP_ENTRY_SNAPSHOT_MAX: {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,

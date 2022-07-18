@@ -1,13 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
+from test_utils_pool import add_pool
 from nvme_utils import ServerFillUp
 from write_host_file import write_host_file
 
@@ -55,11 +55,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=self.label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]

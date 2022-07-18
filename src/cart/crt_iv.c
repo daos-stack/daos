@@ -2710,8 +2710,7 @@ handle_response_internal(void *arg)
 		handle_ivupdate_response(cb_info);
 		break;
 	default:
-		D_ERROR("wrong opc: cb_info %p: rpc %p: opc %#x\n",
-			cb_info, rpc, rpc->cr_opc);
+		D_ERROR("wrong opc cb_info: %p rpc: %p opc: %#x\n", cb_info, rpc, rpc->cr_opc);
 		D_FREE(cb_arg);
 	}
 }

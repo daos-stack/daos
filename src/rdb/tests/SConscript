@@ -1,20 +1,25 @@
 """Build rdb tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs', 'libdaos_tgts')
+
+    tenv = denv.Clone()
+    prereqs.require(tenv, 'isal')
 
     # rdbt server
-    librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'],
+    librdbt = daos_build.library(tenv, 'rdbt', ['rdb_test.c', 'rpc.c'],
                                  install_off='../..')
-    denv.Install('$PREFIX/lib64/daos_srv', librdbt)
+    tenv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client
-    rdbt = daos_build.program(denv, 'rdbt', ['rdbt.c', 'rpc.c'],
-                              LIBS=['cart', 'gurt', 'daos_common_pmem', 'uuid',
-                                    'daos'])
-    denv.Install('$PREFIX/bin', rdbt)
+    rdbt = daos_build.program(tenv, 'rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
+                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal',
+                                    'protobuf-c', 'pthread'])
+    tenv.Install('$PREFIX/bin', rdbt)
+
 
 if __name__ == "SCons.Script":
     scons()

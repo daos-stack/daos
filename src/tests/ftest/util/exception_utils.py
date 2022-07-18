@@ -9,8 +9,10 @@ import os
 from env_modules import show_avail, get_module_list
 from general_utils import run_command
 
+
 class CommandFailure(Exception):
     """Base exception for this module."""
+
 
 class MPILoadError(Exception):
     """Exception raised when loading an MPI module fails."""

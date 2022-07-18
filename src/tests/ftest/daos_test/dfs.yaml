@@ -65,3 +65,7 @@ daos_tests:
     test_daos_dfs_unit: 1
     test_daos_dfs_parallel: 32
     test_daos_dfs_sys: 1
+  pools_created:
+    test_daos_dfs_unit: 2
+    test_daos_dfs_parallel: 2
+    test_daos_dfs_sys: 1

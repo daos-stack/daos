@@ -3,13 +3,13 @@
 # pylint: disable=too-many-locals
 import sys
 import os
-import daos_build
 import subprocess
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
+import daos_build
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'client_common')
+Import('env', 'prereqs', 'daos_version', 'conf_dir')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -43,6 +43,7 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
+
 def get_build_tags(benv):
     "Get custom go build tags."
     tags = []
@@ -66,17 +67,16 @@ def get_build_flags(benv):
     return flags
 
 
-def install_go_manpage(menv, name):
+def install_go_manpage(menv, name, binary):
     """
-    Dynamically generate a manpage for a tool.
+    Dynamically generate a man-page for a tool.
     """
     gen_bin = join('$BUILD_DIR', 'src/control/bin', name)
     name_ver = f'{name}.8'
     build_path = join('$BUILD_DIR', 'src/control', name_ver)
     install_path = join(menv.subst("$PREFIX"), 'share/man/man8', name_ver)
-    menv.Command(build_path, [gen_bin, gurt_lib], f'{gen_bin} manpage -o {build_path}')
+    menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
     menv.InstallAs(install_path, build_path)
-    return install_path
 
 
 # pylint: disable=too-many-arguments
@@ -97,17 +97,12 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend([gurt_lib, cart_lib])
+    libs.extend(['daos_common', 'cart', 'gurt'])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
            https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
         buildid = b2a_hex(urandom(20))
-        if isinstance(buildid, str):
-            # Python 2 is a str already, using decode() here transforms it
-            # into a 'unicode' type
-            return '0x' + buildid
-        # Python 3 is a bytes, decode() it to a str
         return '0x' + buildid.decode()
 
     def go_ldflags():
@@ -122,15 +117,16 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    denv.Command(build_bin, src + libs,
-                 'cd %s; %s build -mod vendor %s %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
-                  get_build_tags(denv), build_bin, install_src))
+    target = daos_build.run_command(denv, build_bin, src, libs,
+                                    f'cd {gosrc}; {GO_BIN} build -mod vendor {go_ldflags()} '
+                                    + f'{get_build_flags(denv)} '
+                                    + f'{get_build_tags(denv)} '
+                                    + f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    denv.Requires(build_bin, [client_common])
-    denv.InstallAs(install_bin, build_bin)
-    return install_bin
+    AlwaysBuild(target)
+    denv.InstallAs(install_bin, target)
+    return target
 # pylint: enable=too-many-arguments
 
 
@@ -155,7 +151,7 @@ def configure_go(denv):
             context.Result('failed to get version from "%s"' % out)
             return 0
 
-        # go version go1.2.3 linux/amd64
+        # go version go1.2.3 Linux/amd64
         go_version = out.split(' ')[2].replace('go', '')
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
@@ -214,29 +210,24 @@ def scons():
     daos_build.add_rpaths(denv, "..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
     if prereqs.client_requested():
-        agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
+        install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
         dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
         if prereqs.test_requested():
-            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test",
-                                     "hello_drpc")
-            AlwaysBuild(drpcbin)
+            install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
-        AlwaysBuild([agentbin, dmgbin])
-
-        Import('daos_hdlrs_lib')
         dbenv = denv.Clone()
         dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
                              "-L$BUILD_DIR/src/cart "
+                             "-L$BUILD_DIR/src/common "
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
-        AlwaysBuild([daosbin])
+        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
+                                 "daos", "daos")
 
         menv = denv.Clone()
-        dmg_man = install_go_manpage(menv, "dmg")
-        daos_man = install_go_manpage(menv, "daos")
-        AlwaysBuild([dmg_man, daos_man])
+        install_go_manpage(menv, "dmg", dmgbin)
+        install_go_manpage(menv, "daos", daosbin)
 
     if not prereqs.server_requested():
         return
@@ -253,8 +244,7 @@ def scons():
     senv.Install(join('$PREFIX', 'share/daos/control'),
                  join(gosrc, 'server/init/setup_spdk.sh'))
 
-    serverbin = install_go_bin(senv, gosrc, None, "daos_server",
-                               "daos_server")
+    install_go_bin(senv, gosrc, None, "daos_server", "daos_server")
 
     aenv = denv.Clone()
     denv = aenv
@@ -266,6 +256,7 @@ def scons():
     cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
+                            "-L$BUILD_DIR/src/common "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
@@ -280,16 +271,11 @@ def scons():
 
     # Sets CGO_LDFLAGS for rpath
     daos_build.add_rpaths(aenv, None, True, True)
-    adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
-                              "daos_admin")
-
-    AlwaysBuild([serverbin, adminbin])
+    install_go_bin(aenv, gosrc, ['nvme_control'], "daos_admin", "daos_admin")
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
-        fwbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_firmware",
-                               "daos_firmware")
-        AlwaysBuild([fwbin])
+        install_go_bin(aenv, gosrc, ['nvme_control'], "daos_firmware", "daos_firmware")
 
 
 if __name__ == "SCons.Script":

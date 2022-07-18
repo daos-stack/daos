@@ -1,6 +1,7 @@
 """Build daos engine tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'drpc_test_utils')
@@ -36,6 +37,7 @@ def scons():
                      '../event.pb-c.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
                           'uuid', 'pthread', 'abt', 'cart'])
+
 
 if __name__ == "SCons.Script":
     scons()

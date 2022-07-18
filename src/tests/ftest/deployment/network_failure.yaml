@@ -1,0 +1,75 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+  test_clients:
+    - client-A
+
+timeout: 300
+daos_server:
+  pattern_timeout: 60
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:00:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      targets: 16
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:00:00.1"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      targets: 16
+
+pool_size_ratio_80:
+  size: 80%
+  control_method: dmg
+pool_size_value:
+  size: 50G
+  control_method: dmg
+
+container_wo_rf:
+  type: POSIX
+  control_method: daos
+container_with_rf:
+  type: POSIX
+  control_method: daos
+  properties: rf:1
+
+ior: &ior_base
+  client_processes:
+    np: 1
+  flags: -k -v -w -W
+  api: DFS
+  transfer_size: 1G
+  block_size: 5G
+ior_wo_rf:
+  <<: *ior_base
+  dfs_oclass: SX
+ior_with_rp:
+  <<: *ior_base
+  dfs_oclass: RP_2G1
+ior_with_ec:
+  <<: *ior_base
+  dfs_oclass: EC_2P1G1
+
+# Use ci or aurora.
+test_environment: ci

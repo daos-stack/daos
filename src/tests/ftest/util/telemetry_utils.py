@@ -55,7 +55,24 @@ class TelemetryUtils():
         "engine_pool_restarted",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
-        "engine_pool_xferred_update"]
+        "engine_pool_xferred_update",
+        'engine_pool_scrubber_corruption_current',
+        'engine_pool_scrubber_corruption_total',
+        'engine_pool_scrubber_csums_current',
+        'engine_pool_scrubber_csums_prev',
+        'engine_pool_scrubber_csums_total',
+        'engine_pool_scrubber_butes_scrubbed_current',
+        'engine_pool_scrubber_butes_scrubbed_prev',
+        'engine_pool_scrubber_butes_scrubbed_total',
+        'engine_pool_scrubber_last_duration',
+        'engine_pool_scrubber_last_duration_max',
+        'engine_pool_scrubber_last_duration_mean',
+        'engine_pool_scrubber_last_duration_min',
+        'engine_pool_scrubber_last_duration_stddev',
+        'engine_pool_scrubber_scrubber_started',
+        'engine_pool_scrubber_ult_start',
+        'engine_pool_scrubber_wait_gauge',
+    ]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -76,6 +93,20 @@ class TelemetryUtils():
         "engine_sched_cycle_size_mean",
         "engine_sched_cycle_size_min",
         "engine_sched_cycle_size_stddev"]
+    ENGINE_DMABUFF_METRICS = [
+        "engine_dmabuff_total_chunks",
+        "engine_dmabuff_used_chunks_io",
+        "engine_dmabuff_used_chunks_local",
+        "engine_dmabuff_used_chunks_rebuild",
+        "engine_dmabuff_bulk_grps",
+        "engine_dmabuff_active_reqs",
+        "engine_dmabuff_queued_reqs",
+        "engine_dmabuff_grab_errs",
+        "engine_dmabuff_grab_retries",
+        "engine_dmabuff_grab_retries_max",
+        "engine_dmabuff_grab_retries_mean",
+        "engine_dmabuff_grab_retries_min",
+        "engine_dmabuff_grab_retries_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -476,6 +507,7 @@ class TelemetryUtils():
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
+        all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
         all_metrics_names.extend(self.GO_METRICS)
         all_metrics_names.extend(self.PROCESS_METRICS)
         if with_pools:
@@ -805,7 +837,7 @@ class TelemetryUtils():
                 for rank in sorted(metrics_data[name][host]):
                     value = metrics_data[name][host][rank]
                     invalid = "Metric value in range"
-                    #Verify metrics are within allowable threshold
+                    # Verify metrics are within allowable threshold
                     if min_value is not None and value < min_value:
                         status = False
                         invalid = "Metric value is smaller than {}: {}".format(min_value, value)

@@ -20,7 +20,7 @@
 #define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
 #define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
 #define DAOS_PROP_ENTRY_STATUS		"status"
-#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell"
+#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
 #define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
 #define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
 #define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
@@ -43,6 +43,7 @@ struct cont_props {
 	uint32_t	 dcp_compress_type;
 	uint16_t	 dcp_csum_type;
 	uint16_t	 dcp_encrypt_type;
+	uint32_t	 dcp_redun_lvl;
 	uint32_t	 dcp_redun_fac;
 	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_ec_pda;
