@@ -812,9 +812,6 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
-                            stash name: 'centos7-fault-inject-memcheck',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
                         }
                     }
                 } // stage('Fault inection testing')
@@ -937,8 +934,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck',
-                                                     'centos7-fault-inject-memcheck']
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
