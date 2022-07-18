@@ -84,6 +84,10 @@ int main(int argc, char **argv)
 	}
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	if (grp_cfg_file == NULL) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		assert(0);
+	}
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
