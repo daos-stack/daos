@@ -534,6 +534,10 @@ func (o *object) blockDevice() (*hardware.BlockDevice, error) {
 			return nil, errors.Errorf("device %q has invalid size %q", o.name(), goVal)
 		}
 		*ptr = size
+
+		if key == "Size" {
+			*ptr *= 1024 // convert kB to bytes
+		}
 	}
 
 	return bd, nil

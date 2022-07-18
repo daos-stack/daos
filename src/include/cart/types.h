@@ -110,7 +110,8 @@ typedef enum {
 	CRT_PROV_UCX_UD_X	= 14,
 	CRT_PROV_UCX_RC_UD_X	= 15,
 	CRT_PROV_UCX_DC_X	= 16,
-	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_DC_X,
+	CRT_PROV_UCX_TCP	= 17,
+	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
 	/* Note: This entry should be the last valid one in enum */
 	CRT_PROV_COUNT,
 	CRT_PROV_UNKNOWN = -1,
