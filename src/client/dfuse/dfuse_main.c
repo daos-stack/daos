@@ -312,7 +312,7 @@ main(int argc, char **argv)
 					{"disable-wb-cache", no_argument, 0, 'B'},
 					{"version", no_argument, 0, 'v'},
 					{"help", no_argument, 0, 'h'},
-					{0, 0, 0, 0} };
+					{0, 0, 0, 0}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
