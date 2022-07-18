@@ -1760,10 +1760,6 @@ dfuse_fdopen(int fd, const char *mode)
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
 
-#if 0
-		/* Disable kernel bypass */
-		entry->fd_status = DFUSE_IO_DIS_STREAM;
-#endif
 
 		vector_decref(&fd_table, entry);
 	}
@@ -1906,10 +1902,8 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	if (newfd == -1 || !check_ioctl_on_open(newfd, &new_entry, 0)) {
 		if (rc == 0) {
 			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
-					"(fd=%d) = %p(fd=%d) "
-					"intercepted, bypass=%s",
-					path, mode, stream, oldfd, newstream, newfd,
-					bypass_status[DFUSE_IO_DIS_STREAM]);
+					"(fd=%d) = %p(fd=%d) intercepted",
+					path, mode, stream, oldfd, newstream, newfd);
 			vector_decref(&fd_table, old_entry);
 		}
 		return newstream;
@@ -1917,16 +1911,13 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 
 	if (rc == 0) {
 		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
-				" intercepted, bypass=%s",
-				path, mode, stream, oldfd, newstream, newfd,
-				bypass_status[DFUSE_IO_DIS_STREAM]);
+				" intercepted",
+				path, mode, stream, oldfd, newstream, newfd);
 		vector_decref(&fd_table, old_entry);
 	} else {
 		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d)) "
-				"= %p(fd=%d) intercepted, "
-				"bypass=%s",
-				path, mode, stream, oldfd, newstream, newfd,
-				bypass_status[DFUSE_IO_DIS_STREAM]);
+				"= %p(fd=%d) intercepted",
+				path, mode, stream, oldfd, newstream, newfd);
 	}
 
 	return newstream;
@@ -2495,9 +2486,9 @@ dfuse_fscanf(FILE *stream, const char *format, ...)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	vector_decref(&fd_table, entry);
-
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
+	vector_decref(&fd_table, entry);
 
 do_real_fn:
 	va_start(ap, format);
