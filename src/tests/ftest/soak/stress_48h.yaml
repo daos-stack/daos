@@ -108,6 +108,8 @@ soak_stress:
         - daos_racer
         - ior_stress
         - mdtest_stress
+        - vpic_stress
+        - lammps_stress
         - macsio_stress
     ignore_soak_errors: False
 # Commandline parameters
@@ -187,6 +189,34 @@ fio_stress:
     disable_wb_caching: True
 daos_racer:
     runtime: 120
+vpic_stress:
+# Requires opeapi
+    job_timeout: 20
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    module: mpi/latest
+    posix: True
+    workdir: "/tmp/daos_dfuse/vpic/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "EC_2P1GX"
+lammps_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 8
+    taskspernode:
+        - 32
+    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj"
+    posix: True
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "EC_2P1GX"
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 40

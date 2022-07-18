@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -40,7 +40,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             Create pool with pass-in user and group acl permission,
             verify pool user and group read, write, read-write and none
             permissions enforcement with all forms of input under different
-            test sceanrios.
+            test scenarios
         :avocado: tags=all,full_regression,security,pool_acl,sec_acl
         """
         user_uid = os.geteuid()

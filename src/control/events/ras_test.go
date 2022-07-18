@@ -50,12 +50,12 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	pbPSREvent, _ := psrEvent.ToProto()
 
 	for name, tc := range map[string]struct {
-		req         *sharedpb.ClusterEventReq
-		subType     RASTypeID
-		fwded       bool
-		expEvtTypes []string
-		expResp     *sharedpb.ClusterEventResp
-		expErr      error
+		req     *sharedpb.ClusterEventReq
+		subType RASTypeID
+		fwded   bool
+		expEvts []string
+		expResp *sharedpb.ClusterEventResp
+		expErr  error
 	}{
 		"nil req": {
 			expErr: errors.New("nil request"),
@@ -68,9 +68,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbGenericEvent,
 			},
-			subType:     RASTypeInfoOnly,
-			expEvtTypes: []string{RASTypeInfoOnly.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeInfoOnly,
+			expEvts: []string{genericEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered generic event": {
 			req: &sharedpb.ClusterEventReq{
@@ -83,9 +83,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbEngineDiedEvent,
 			},
-			subType:     RASTypeStateChange,
-			expEvtTypes: []string{RASTypeStateChange.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeStateChange,
+			expEvts: []string{engineDiedEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered rank down event": {
 			req: &sharedpb.ClusterEventReq{
@@ -98,9 +98,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbPSREvent,
 			},
-			subType:     RASTypeStateChange,
-			expEvtTypes: []string{RASTypeStateChange.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeStateChange,
+			expEvts: []string{psrEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered pool svc replica update event": {
 			req: &sharedpb.ClusterEventReq{
@@ -119,7 +119,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			ps := NewPubSub(ctx, log)
 			defer ps.Close()
 
-			tly1 := newTally(len(tc.expEvtTypes))
+			tly1 := newTally(len(tc.expEvts))
 
 			ps.Subscribe(tc.subType, tly1)
 
@@ -134,7 +134,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			case <-tly1.finished:
 			}
 
-			test.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
+			test.AssertStringsEqual(t, tc.expEvts, tly1.getRx(),
 				"unexpected received events")
 
 			if diff := cmp.Diff(tc.expResp, resp, defEvtCmpOpts...); diff != "" {

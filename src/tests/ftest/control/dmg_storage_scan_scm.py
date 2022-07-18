@@ -17,7 +17,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     (TR-1.0.34) admin can use daos_shell to collect information and create yaml
     file by himself. This means that daos_shell allows to list:
     SCM module and NVMe SSDs with NUMA affinity
-    network adaptor with NUMA affinity
+    network adapter with NUMA affinity
 
     This test focuses on the correctness of SCM info obtained by dmg storage
     scan (so that the admin can create a yaml file correctly). First, it
@@ -26,7 +26,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     --verbose.
     :avocado: recursive
     """
-    def verify_storage_scam_scm(self, storage_dict):
+    def verify_storage_scan_scm(self, storage_dict):
         """Main test component.
 
         Args:
@@ -79,4 +79,4 @@ class DmgStorageScanSCMTest(ControlTestBase):
         :avocado: tags=hw,small
         :avocado: tags=control,dmg_storage_scan_scm
         """
-        self.verify_dmg_storage_scan(self.verify_storage_scam_scm)
+        self.verify_dmg_storage_scan(self.verify_storage_scan_scm)

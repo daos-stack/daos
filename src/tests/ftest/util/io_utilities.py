@@ -113,19 +113,19 @@ class DirTree():
                 "{0} object is not initialized".format(
                     self.__class__.__name__))
 
-        needle_path = random.choice(self._needles_paths) #nosec
+        needle_path = random.choice(self._needles_paths)  # nosec
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
 
-    def set_logger(self, fn):
+    def set_logger(self, function):
         """
         Set the function that will be used to print log messages.
         If this value is not set, it will work silently.
 
         Parameters:
-            fn (function): Function to be used for logging.
+            function (function): Function to be used for logging.
         """
-        self._logger = fn
+        self._logger = function
 
     def _log(self, msg):
         """If logger function is set, print log messages"""
@@ -161,7 +161,7 @@ class DirTree():
             return
 
         for count in range(self._needles_count):
-            new_path = os.path.dirname(random.choice(self._needles_paths)) #nosec
+            new_path = os.path.dirname(random.choice(self._needles_paths))  # nosec
             suffix = "_{:05d}.needle".format(count)
             fd, _ = tempfile.mkstemp(
                 dir=new_path, prefix=self._needles_prefix, suffix=suffix)

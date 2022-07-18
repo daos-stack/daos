@@ -5,8 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from command_utils_base import \
-     BasicParameter, FormattedParameter
+from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure, MPILoadError
 from command_utils import ExecutableCommand
 from general_utils import pcmd, get_log_file

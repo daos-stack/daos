@@ -342,33 +342,64 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	return
 }
 
+// setHotplugRange sets request parameters related to bus-id range limits to restrict hotplug
+// actions of engine to a set of ssd devices.
+func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGetter, numaNode uint, tier *TierConfig, req *BdevWriteConfigRequest) error {
+	var begin, end uint8
+
+	switch {
+	case req.VMDEnabled:
+		log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+		begin = 0x00
+		end = 0xFF
+	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
+		log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		begin = tier.Bdev.BusidRange.LowAddress.Bus
+		end = tier.Bdev.BusidRange.HighAddress.Bus
+	default:
+		var err error
+		log.Debug("generating hotplug bus-id range based on hardware topology")
+		begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
+		if err != nil {
+			return errors.Wrapf(err, "get busid range limits")
+		}
+	}
+
+	log.Infof("NUMA %d: hotplug bus-ids %X-%X", numaNode, begin, end)
+	req.HotplugBusidBegin = begin
+	req.HotplugBusidEnd = end
+
+	return nil
+}
+
 type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
 
-// BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
-	req := BdevWriteConfigRequest{
-		OwnerUID: os.Geteuid(),
-		OwnerGID: os.Getegid(),
-	}
+// BdevWriteConfigRequestFromConfig returns a config write request derived from a storage config.
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (*BdevWriteConfigRequest, error) {
 	if cfg == nil {
-		return req, errors.New("received nil config")
+		return nil, errors.New("received nil config")
 	}
-	req.ConfigOutputPath = cfg.ConfigOutputPath
 	if getTopo == nil {
-		return req, errors.New("received nil GetTopology function")
+		return nil, errors.New("received nil GetTopology function")
 	}
 
 	hn, err := os.Hostname()
 	if err != nil {
-		log.Errorf("get hostname: %s", err)
-		return req, err
+		return nil, errors.Wrap(err, "get hostname")
 	}
-	req.Hostname = hn
-	req.HotplugEnabled = cfg.EnableHotplug
 
-	bdevTiers := cfg.Tiers.BdevConfigs()
-	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
-	for idx, tier := range bdevTiers {
+	req := &BdevWriteConfigRequest{
+		OwnerUID:         os.Geteuid(),
+		OwnerGID:         os.Getegid(),
+		Hostname:         hn,
+		ConfigOutputPath: cfg.ConfigOutputPath,
+		HotplugEnabled:   cfg.EnableHotplug,
+		VMDEnabled:       vmdEnabled,
+		TierProps:        []BdevTierProperties{},
+		AccelProps:       cfg.AccelProps,
+	}
+
+	for idx, tier := range cfg.Tiers.BdevConfigs() {
 		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
 
 		if !req.HotplugEnabled || idx != 0 {
@@ -376,40 +407,10 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		}
 
 		// Populate hotplug bus-ID range limits when processing the first bdev tier.
-
-		if vmdEnabled {
-			req.HotplugBusidBegin = 0x00
-			req.HotplugBusidEnd = 0xFF
-			log.Debug("hotplug bus-id filter allows all as vmd is enabled")
-			continue
+		if err := setHotplugRange(ctx, log, getTopo, cfg.NumaNodeIndex, tier, req); err != nil {
+			return nil, errors.Wrapf(err, "set busid range limits")
 		}
-
-		// Applying the bus-id range limits hotplug activity of engine to a set of ssd
-		// devices.
-
-		var begin, end uint8
-		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
-			log.Debugf("received user-specified hotplug bus-id range %q",
-				tier.Bdev.BusidRange)
-			begin = tier.Bdev.BusidRange.LowAddress.Bus
-			end = tier.Bdev.BusidRange.HighAddress.Bus
-		} else {
-			log.Debug("generating hotplug bus-id range based on hardware topology")
-			begin, end, err = getNumaNodeBusidRange(ctx, getTopo, cfg.NumaNodeIndex)
-		}
-
-		if err != nil {
-			return req, errors.Wrapf(err, "get busid range limits")
-		}
-
-		log.Debugf("NUMA %d: hotplug bus-ids %X-%X", cfg.NumaNodeIndex, uint8(begin),
-			uint8(end))
-
-		req.HotplugBusidBegin = begin
-		req.HotplugBusidEnd = end
 	}
-
-	req.VMDEnabled = vmdEnabled
 
 	return req, nil
 }
@@ -428,6 +429,9 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
+	if req == nil {
+		return errors.New("BdevWriteConfigRequestFromConfig returned nil request")
+	}
 
 	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
@@ -436,7 +440,7 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 	defer p.RUnlock()
 	req.BdevCache = &p.bdevCache
 
-	_, err = p.bdev.WriteConfig(req)
+	_, err = p.bdev.WriteConfig(*req)
 
 	return err
 }

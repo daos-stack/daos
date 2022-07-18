@@ -1,6 +1,9 @@
 """Build blob I/O"""
 import daos_build
 
+FILES = ['bio_buffer.c', 'bio_bulk.c', 'bio_config.c', 'bio_context.c', 'bio_device.c',
+         'bio_monitor.c', 'bio_recovery.c', 'bio_xstream.c']
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs', 'control_tgts')
@@ -31,9 +34,10 @@ def scons():
     # Other libs
     libs += ['numa', 'dl', 'smd']
 
-    tgts = Glob('*.c') + control_tgts
+    tgts = FILES + control_tgts
     bio = daos_build.library(denv, "bio", tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
+
 
 if __name__ == "SCons.Script":
     scons()

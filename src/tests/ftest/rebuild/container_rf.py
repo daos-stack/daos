@@ -14,11 +14,6 @@ class RbldContRfTest(ContRedundancyFactor):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        ["DAOS-8827", "properties", "rf:1", "rank", [3,4,5]],
-        ["DAOS-8827", "properties", "rf:2", "rank", [3]]
-    ]
-
     def __init__(self, *args, **kwargs):
         """Initialize a Rebuild Container RF with ObjClass Write object."""
         super().__init__(*args, **kwargs)

@@ -8,7 +8,7 @@ import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
-from test_utils_pool import TestPool
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -61,11 +61,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         # Exclude ranks [0, 3, 4]
         rank = [0, 3, 4]
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=self.label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]

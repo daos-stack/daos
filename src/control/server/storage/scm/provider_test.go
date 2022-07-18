@@ -539,6 +539,7 @@ func TestProvider_Format(t *testing.T) {
 		mountErr       error
 		unmountErr     error
 		mkfsErr        error
+		chmodErr       error
 		request        *storage.ScmFormatRequest
 		expResponse    *storage.ScmFormatResponse
 		expErr         error
@@ -648,6 +649,16 @@ func TestProvider_Format(t *testing.T) {
 			},
 			alreadyMounted: true,
 			unmountErr:     errors.New("unmount failed"),
+		},
+		"ramdisk: format succeeds, chmod fails": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Ramdisk: &storage.RamdiskParams{
+					Size: 1,
+				},
+			},
+			chmodErr: errors.New("chmod failed"),
+			expErr:   errors.New("chmod failed"),
 		},
 		"ramdisk: already mounted; reformat; mount fails": {
 			request: &storage.ScmFormatRequest{
@@ -805,6 +816,17 @@ func TestProvider_Format(t *testing.T) {
 			getFsStr: fsTypeNone,
 			mountErr: errors.New("mount failed"),
 		},
+		"dcpm: format succeeds, chmod fails": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			chmodErr: errors.New("chmod failed"),
+			expErr:   errors.New("chmod failed"),
+		},
 		"dcpm: missing device": {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
@@ -862,6 +884,7 @@ func TestProvider_Format(t *testing.T) {
 				GetfsStr:      tc.getFsStr,
 				GetfsErr:      tc.getFsErr,
 				MkfsErr:       tc.mkfsErr,
+				ChmodErr:      tc.chmodErr,
 				MountErr:      tc.mountErr,
 				UnmountErr:    tc.unmountErr,
 			}

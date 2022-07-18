@@ -318,3 +318,166 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 		})
 	}
 }
+
+func TestStorage_AccelProps_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expProps AccelProps
+		expErr   error
+	}{
+		"acceleration section missing": {
+			input: ``,
+		},
+		"acceleration section empty": {
+			input: `
+acceleration:
+`,
+		},
+		"engine unset": {
+			input: `
+acceleration:
+  engine:
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"engine set empty": {
+			input: `
+acceleration:
+  engine: ""
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"engine set; default opts": {
+			input: `
+acceleration:
+  engine: spdk
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+		},
+		"engine unset; opts set": {
+			input: `
+acceleration:
+  options:
+  - move
+  - crc
+`,
+			expProps: AccelProps{
+				Engine: AccelEngineNone,
+			},
+		},
+		"engine set; opts set": {
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - crc
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineDML,
+				Options: AccelOptCRCFlag,
+			},
+		},
+		"engine set; opts all set": {
+			input: `
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+		},
+		"unrecognized engine": {
+			input: `
+acceleration:
+  engine: native
+`,
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"unrecognized option": {
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - bar
+`,
+			expErr: errors.New("unknown acceleration option"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := new(Config)
+			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expProps, cfg.AccelProps, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad props (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_AccelProps_ToYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		props  AccelProps
+		expOut string
+		expErr error
+	}{
+		"nil props": {
+			expOut: `
+storage: []
+`,
+		},
+		"empty props": {
+			expOut: `
+storage: []
+`,
+		},
+		"engine set": {
+			props: AccelProps{Engine: AccelEngineNone},
+			expOut: `
+storage: []
+acceleration:
+  engine: none
+`,
+		},
+		"engine set; default opts": {
+			props: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+			expOut: `
+storage: []
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				AccelProps: tc.props,
+			}
+
+			bytes, err := yaml.Marshal(cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

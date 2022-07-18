@@ -64,8 +64,7 @@ class ContainerAsync(TestWithServers):
             # calls wait, but we're using DaosContainer, so we need to manually
             # call it.
             self.pool.destroy(1)
-            self.container[1].container.create(
-                poh=ph, con_uuid=None, cb_func=cbh2.callback)
+            self.container[1].container.create(poh=ph, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,

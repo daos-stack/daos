@@ -52,17 +52,16 @@ var (
 func adjustNvmeSize(smdDevices []*ctl.NvmeController_SmdDevice) {
 	const targetNb uint64 = 4
 
-	availBytes := uint64(math.MaxUint64)
+	clusterCount := uint64(math.MaxUint64)
 	for _, dev := range smdDevices {
-		unalignedMemory := dev.AvailBytes % (targetNb * clusterSize)
-		usabledMemory := dev.AvailBytes - unalignedMemory
-		if usabledMemory < availBytes {
-			availBytes = usabledMemory
+		targetClusterCount := dev.AvailBytes / (targetNb * clusterSize)
+		if targetClusterCount < clusterCount {
+			clusterCount = targetClusterCount
 		}
 	}
 
 	for _, dev := range smdDevices {
-		dev.AvailBytes = availBytes
+		dev.AvailBytes = clusterCount * targetNb * clusterSize
 	}
 }
 
@@ -2246,7 +2245,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 		input  *ctlpb.ScanNvmeResp
 		output ExpectedOutput
 	}{
-		"success": {
+		"homogeneous": {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
@@ -2261,20 +2260,22 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 							},
 							{
 								Uuid:        "nvme1",
-								TgtIds:      []int32{0, 1, 2, 3},
+								TgtIds:      []int32{4, 5, 6, 7},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
-								TgtIds:      []int32{0, 1, 2, 3},
+								Uuid:        "nvme2",
+								TgtIds:      []int32{8, 9, 10, 11},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
+								Uuid:        "nvme3",
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
@@ -2282,7 +2283,8 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								Rank:        1,
 							},
 							{
-								TgtIds:      []int32{0, 1, 2},
+								Uuid:        "nvme4",
+								TgtIds:      []int32{3, 4, 5},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
@@ -2296,6 +2298,65 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 				availableBytes: []uint64{
 					8 * humanize.GiByte,
 					8 * humanize.GiByte,
+					8 * humanize.GiByte,
+					18 * humanize.GiByte,
+					18 * humanize.GiByte,
+				},
+			},
+		},
+		"heterogeneous": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								Uuid:        "nvme0",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								Uuid:        "nvme1",
+								TgtIds:      []int32{4, 5, 6},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								Uuid:        "nvme2",
+								TgtIds:      []int32{7, 8, 9, 10},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								Uuid:        "nvme3",
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
+							},
+							{
+								Uuid:        "nvme4",
+								TgtIds:      []int32{3, 4, 5},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					6 * humanize.GiByte,
 					8 * humanize.GiByte,
 					18 * humanize.GiByte,
 					18 * humanize.GiByte,
@@ -2339,12 +2400,14 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 					{
 						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
+								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
 							},
 							{
+								Uuid:        "nvme1",
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,

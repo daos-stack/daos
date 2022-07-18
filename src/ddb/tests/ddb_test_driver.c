@@ -430,7 +430,7 @@ static void
 dvt_dtx_end(struct dtx_handle *dth)
 {
 	D_FREE(dth->dth_dte.dte_mbs);
-	D_FREE_PTR(dth);
+	D_FREE(dth);
 }
 
 void
