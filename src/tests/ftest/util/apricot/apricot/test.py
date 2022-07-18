@@ -1817,8 +1817,7 @@ class TestWithServers(TestWithoutServers):
         This method can be used to start a new daos_server during a test.
 
         Args:
-            additional_servers (list of str): List of hostnames to start
-                daos_server.
+            additional_servers (NodeSet): hosts on which to start daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
             access_points (list, optional): list of access point hosts. Defaults

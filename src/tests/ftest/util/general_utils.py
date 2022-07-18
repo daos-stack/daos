@@ -624,6 +624,26 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     return len(missing_file) == 0, missing_file
 
 
+def check_for_pool(host, uuid):
+    """Check if pool folder exist on server.
+
+    Args:
+        host (NodeSet): Server host name
+        uuid (str): Pool uuid to check if exists
+
+    Returns:
+        bool: True if pool folder exists, False otherwise
+
+    """
+    pool_dir = "/mnt/daos/{}".format(uuid)
+    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    if result[0]:
+        print("{} exists on {}".format(pool_dir, host))
+    else:
+        print("{} does not exist on {}".format(pool_dir, host))
+    return result[0]
+
+
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
