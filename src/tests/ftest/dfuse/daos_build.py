@@ -124,7 +124,8 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 timeout = build_time * 60
             start = time.time()
-            ret_code = general_utils.run_pcmd(self.hostlist_clients, command, timeout, 0)
+            ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
+                                              timeout=timeout, expect_rc=0)
             elapsed = time.time() - start
             self.log.info('Ran in {} seconds\n'.format(elapsed))
             assert len(ret_code) == 1
