@@ -156,6 +156,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != 0)
 		D_GOTO(err, rc);
 
+	dfuse_open_handle_init(oh, ie);
+
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
 
 	rc = dfs_open_stat(dfs->dfs_ns, parent->ie_obj, name, mode, fi->flags, 0, 0, NULL,
