@@ -29,7 +29,7 @@ class ListPoolsTest(TestWithServers):
             sr (str, optional): Service replicas. Defaults to None.
 
         Raises:
-            CommandFailure: if there was an error destoying pools
+            CommandFailure: if there was an error destroying pools
             TestFail: if there was an error verifying the created pools
 
         """

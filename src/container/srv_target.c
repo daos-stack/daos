@@ -90,7 +90,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(13);
+	props = daos_prop_alloc(14);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -107,6 +107,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -339,7 +340,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
 	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
 	}
 
@@ -493,7 +494,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, VOS_AGG_FL_FORCE_SCAN);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -618,6 +619,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_mutex;
 	}
+	rc = ABT_cond_create(&cont->sc_scrub_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_mutex;
+	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
@@ -674,6 +680,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
+	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -1155,6 +1162,14 @@ cont_child_destroy_one(void *vin)
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* Make sure checksum scrubbing has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_scrubbing) {
+			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		}
+		ABT_mutex_unlock(cont->sc_mutex);
 		/*
 		 * If this is the last user, ds_cont_child will be removed from
 		 * hash & freed on put.
@@ -1228,9 +1243,8 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 
 	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
-		DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
+		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1818,8 +1832,8 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(NULL, NULL), rpc, out->tqo_rc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n", DP_CONT(NULL, NULL), rpc,
+		out->tqo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2015,14 +2029,13 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
 	int					 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
+	D_DEBUG(DB_MD, DF_CONT ": handling rpc: %p epr (%p) [#" DF_U64 "]\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, in->tai_epr_list.ca_arrays,
+		in->tai_epr_list.ca_count);
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		DP_RC(out->tao_rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, DP_RC(out->tao_rc));
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;
@@ -2166,7 +2179,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
@@ -2185,18 +2198,16 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
 
 	D_ASSERT(opc == CONT_OID_ALLOC);
 
 	rc = cont_oid_alloc(pool_hdl, rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: hdl="DF_UUID
-		" opc=%u rc="DF_RC"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p hdl=" DF_UUID " opc=%u rc=" DF_RC "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc,
+		DP_RC(rc));
 
 	ds_pool_hdl_put(pool_hdl);
 out:
@@ -2459,6 +2470,7 @@ cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
 	int				rc = 0;
 
 	rc = ds_pool_rf_verify(ds_pool, cont_child->sc_status_pm_ver,
+			       cont_child->sc_props.dcp_redun_lvl,
 			       cont_child->sc_props.dcp_redun_fac);
 	if (rc != 0 && rc != -DER_RF)
 		goto out;
@@ -2652,4 +2664,3 @@ ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
 {
 	cont->sc_ec_update_timestamp = crt_hlc_get();
 }
-

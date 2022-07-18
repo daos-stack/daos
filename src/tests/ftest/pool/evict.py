@@ -215,6 +215,7 @@ class EvictTests(TestWithServers):
 
             # 10. Check that we were able to obtain the UUID of the non-evicted pools.
             if pool_info:
+                pool.connected = False
                 if c_uuid_to_str(pool_info.pi_uuid) == pool.uuid:
                     self.log.info(
                         "Pool # %d UUID matches pool_info.pi_uuid %s", index, pool.uuid)

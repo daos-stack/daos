@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+
 def format_path(pool=None, cont=None, path=None):
     """Format a DAOS UNS path of the form daos://pool/cont/path
 

@@ -50,7 +50,7 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
-	((int32_t)		(do_pad)		CRT_VAR)	\
+	((int32_t)		(do_misc)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
@@ -127,8 +127,21 @@ extern uint32_t dtx_agg_thd_age_up;
  */
 extern uint32_t dtx_agg_thd_age_lo;
 
+/* The default count of DTX batched commit ULTs. */
+#define DTX_BATCHED_ULT_DEF	32
+
+/*
+ * Ideally, dedicated DXT batched commit ULT for each opened container is the most simple model.
+ * But it may be burden for the engine if opened containers become more and more on the target.
+ * So it is necessary to restrict the count of DTX batched commit ULTs on the target. It can be
+ * adjusted via the environment "DAOS_DTX_BATCHED_ULT_MAX" when load the module.
+ *
+ * Zero:		disable DTX batched commit, all DTX will be committed synchronously.
+ * Others:		the max count of DXT batched commit ULTs.
+ */
+extern uint32_t dtx_batched_ult_max;
+
 /* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD_MAX	(~0U)
 #define DTX_RPC_HELPER_THD_MIN	18
 #define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
 
@@ -146,6 +159,7 @@ struct dtx_pool_metrics {
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	uint64_t		 dt_agg_gen;
+	uint32_t		 dt_batched_ult_cnt;
 };
 
 extern struct dss_module_key dtx_module_key;
@@ -184,7 +198,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, daos_epoch_t epoch);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

@@ -82,7 +82,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -112,7 +112,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, 0);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -173,8 +173,8 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 		return 1;
 
 	rc = dtx_leader_get(pool, mbs, &target);
-	if (rc != 0)
-		return 0;
+	if (rc < 0)
+		D_GOTO(out, rc);
 
 	D_ASSERT(target != NULL);
 	rc = crt_group_rank(NULL, &myrank);
@@ -313,7 +313,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL, false);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -776,6 +776,10 @@ dtx_resync_ult(void *data)
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 		arg->version);
 
+	/* Delay 5 seconds for DTX resync. */
+	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+		dss_sleep(5 * 1000);
+
 	rc = dss_thread_collective(dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
 	if (rc) {
 		/* If dtx resync fails, then let's still update
@@ -788,5 +792,5 @@ dtx_resync_ult(void *data)
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
 	ds_pool_put(pool);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }

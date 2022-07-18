@@ -55,15 +55,13 @@ class DynamicServerPool(TestWithServers):
             uuid_to_ranks (str to list of int dictionary): UUID to rank list
                 dictionary.
         """
-        RC_SUCCESS = 0
         errors = []
         for pool in self.pool:
             # Note that we don't check mapping between rank and hostname, but it
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
-                rc = check_for_pool(host, pool.uuid.lower())
-                pool_exists_on_host = rc == RC_SUCCESS
+                pool_exists_on_host = check_for_pool(host, pool.uuid.lower())
                 # If this rank is in the rank list, there should be the
                 # UUID-named directory; i.e., pool_exist_on_host is True.
                 pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]
@@ -100,7 +98,8 @@ class DynamicServerPool(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=control,dynamic_server_pool
+        :avocado: tags=pool,control
+        :avocado: tags=dynamic_server_pool
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)

@@ -1,5 +1,7 @@
 """Build DAOS client"""
+
 Import('prereqs')
+
 
 def scons():
     """Execute build"""
@@ -15,6 +17,7 @@ def scons():
         SConscript('dfuse/SConscript')
         SConscript('pydaos/SConscript')
         SConscript('serialize/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -8,17 +8,14 @@ Run the raft tests using make -C DIR tests, where DIR is the path to the raft
 Makefile. Check the output for the number of "not ok" occurrences and return
 this number as the return code.
 '''
-import subprocess # nosec
+import subprocess  # nosec
 import sys
 import os
 import json
 
-# Get rid of complaints about parens for print statements and short var names
-#pylint: disable=C0103
-#pylint: disable=C0325
-
 TEST_NOT_RUN = -1
 DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')
+
 
 def number_of_failures():
     """
@@ -56,6 +53,7 @@ def number_of_failures():
     if not successes and not failures:
         failures = TEST_NOT_RUN
     return failures
+
 
 def main():
     """

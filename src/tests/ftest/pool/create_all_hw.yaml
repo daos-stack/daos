@@ -1,3 +1,6 @@
+setup:
+    start_agents_once: False
+    start_servers_once: False
 hosts:
   test_servers:
     - server-A
@@ -15,7 +18,15 @@ server_config:
   name: daos_server
   servers:
     0:
-      targets: 4
+      targets_count: !mux
+        1_target:
+          targets: 1
+        2_targets:
+          targets: 2
+        3_targets:
+          targets: 3
+        4_targets:
+          targets: 4
       bdev_class: nvme
       bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
       scm_class: dcpm

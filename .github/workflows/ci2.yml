@@ -16,11 +16,11 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [ubuntu]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu:20.04
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -81,10 +81,10 @@ jobs:
             with: rockylinux/rockylinux:8
           - distro: fedora
             base: el.8
-            with: fedora:35
+            with: fedora:36
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.3
+            with: opensuse/leap:15.4
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}

@@ -1257,7 +1257,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		}
 		if (strcmp(argv[1], "set") == 0) {
 			for (i = 0; i < argc - 2; i++) {
-				shard[i] = atoi(argv[i + 2]) + 1;
+				shard[i] = atoi(argv[i + 2]);
 				print_message("will fail fetch from shard %d\n",
 					      shard[i]);
 			}

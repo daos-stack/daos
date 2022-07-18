@@ -1,15 +1,15 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2017-2021 Intel Corporation.
+  (C) Copyright 2017-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from apricot import TestWithServers
-import check_for_pool
+from check_for_pool import check_for_pool
 
 
-RESULT_PASS = "PASS" # nosec
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 
 
@@ -76,14 +76,12 @@ class MultiServerCreateDeleteTest(TestWithServers):
                     "Test was expected to fail but it passed at pool create.")
             if '0' in tgtlist:
                 # check_for_pool checks if the uuid directory exists in host1
-                exists = check_for_pool.check_for_pool(host1, self.pool.uuid)
-                if exists != 0:
+                if not check_for_pool(host1, self.pool.uuid):
                     self.fail(
                         "Pool {0} not found on host {1}.\n".format(
                             self.pool.uuid, host1))
             if '1' in tgtlist:
-                exists = check_for_pool.check_for_pool(host2, self.pool.uuid)
-                if exists != 0:
+                if not check_for_pool(host2, self.pool.uuid):
                     self.fail(
                         "Pool {0} not found on host {1}.\n".format(
                             self.pool.uuid, host2))
@@ -105,14 +103,12 @@ class MultiServerCreateDeleteTest(TestWithServers):
                     self.fail("Test was expected to fail but it passed at " +
                               "pool create.")
                 if '0' in tgtlist:
-                    exists = check_for_pool.check_for_pool(host1, uuid)
-                    if exists == 0:
+                    if check_for_pool(host1, self.pool.uuid):
                         self.fail(
                             "Pool {0} found on host {1} after destroy.".format(
                                 uuid, host1))
                 if '1' in tgtlist:
-                    exists = check_for_pool.check_for_pool(host2, uuid)
-                    if exists == 0:
+                    if check_for_pool(host2, self.pool.uuid):
                         self.fail(
                             "Pool {0} found on host {1} after destroy.".format(
                                 uuid, host2))

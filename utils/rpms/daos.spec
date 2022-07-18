@@ -3,21 +3,9 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.0~rc3-1
+%global mercury_version 2.2.0~rc6-1%{?dist}
+%global libfabric_version 1.15.1-1
 %global __python %{__python3}
-
-%if 0%{?rhel} > 0
-%if 0%{?rhel} > 7
-# only RHEL 8+ has a new enough ucx-devel
-%global ucx 1
-%else
-%global ucx 0
-%endif
-%else
-# but assume that anything else does also
-%global ucx 1
-%endif
 
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
@@ -27,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       9%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -86,7 +74,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07
+BuildRequires: spdk-devel >= 22.01.1
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -143,14 +131,13 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
-%if 0%{ucx} > 0
+
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
 BuildRequires: libucs-devel
 BuildRequires: libuct-devel
 %else
 BuildRequires: ucx-devel
-%endif
 %endif
 
 Requires: protobuf-c
@@ -175,7 +162,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07
+Requires: spdk-tools >= 22.01.1
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -196,6 +183,13 @@ Obsoletes: cart < 1000
 
 %description server
 This is the package needed to run a DAOS server
+
+%package admin
+Summary: DAOS admin tools
+Requires: %{name}%{?_isa} = %{version}-%{release}
+
+%description admin
+This package contains DAOS administrative tools (e.g. dmg).
 
 %package client
 Summary: The DAOS client
@@ -242,6 +236,7 @@ This is the package is a metapackage to install all of the internal test package
 %package client-tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
+Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
@@ -276,6 +271,7 @@ This is the package needed to run the DAOS client test suite openmpi tools
 %package server-tests
 Summary: The DAOS server test suite (server tests)
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
+Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
@@ -463,11 +459,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
 
+%files admin
+%{_bindir}/dmg
+%{_mandir}/man8/dmg.8*
+%config(noreplace) %{conf_dir}/daos_control.yml
+
 %files client
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
-%{_bindir}/dmg
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -490,10 +490,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
-%config(noreplace) %{conf_dir}/daos_control.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
-%{_mandir}/man8/dmg.8*
 
 %files client-tests
 %dir %{daoshome}
@@ -523,7 +521,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/jobtest
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
-%{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
 %files client-tests-openmpi
@@ -537,6 +534,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
 %{_bindir}/srv_checksum_tests
+%{_bindir}/pool_scrubbing_tests
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -568,6 +566,27 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
+- Add pool_scrubbing_tests to test package
+
+* Wed Jul 13 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.100-15
+- Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+* Mon Jun 27 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-14
+- Update to mercury 2.2.0rc6
+
+* Fri Jun 17 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-13
+- Remove libdts.so, replace with build time static
+
+* Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-12
+- Make ucx required for build on all platforms
+
+* Wed Jun 1 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.100-11
+- Move dmg to new daos-admin RPM
+
+* Wed May 18 2022 Lei Huang <lei.huang@intel.com> 2.3.100-10
+- Update to libfabric to v1.15.1-1 to include critical performance patches
+
 * Tue May 17 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-9
 - Remove doas-client-tests-openmpi dependency from daos-tests
 - Add daos-tests-internal package

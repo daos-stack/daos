@@ -1,11 +1,13 @@
 """Build daos common tests"""
 import daos_build
 
+
 def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common', 'gurt']
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
+
 
 def define_compress_timing(build, env):
     """Define the Compress Timing build"""
@@ -13,14 +15,12 @@ def define_compress_timing(build, env):
     build.test(env, 'compress_timing', 'compress_timing.c',
                LIBS=compress_timing_libs)
 
+
 def scons():
     """Execute build"""
-    Import('tenv')
+    Import('tenv', 'utest_utils')
 
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-
-    utest_utils = tenv.SharedObject('utest_common.c')
-    Export('utest_utils')
 
     daos_build.test(tenv, 'btree', ['btree.c', utest_utils],
                     LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
@@ -90,8 +90,6 @@ def scons():
     daos_build.test(unit_env, 'drpc_tests',
                     ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-
-
 
 
 if __name__ == "SCons.Script":

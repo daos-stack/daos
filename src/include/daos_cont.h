@@ -16,6 +16,8 @@
 #define daos_cont_open daos_cont_open2
 /** Please ignore (code for back-compatibility) */
 #define daos_cont_destroy daos_cont_destroy2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_create daos_cont_create2
 
 #if defined(__cplusplus)
 extern "C" {
@@ -53,8 +55,10 @@ typedef struct {
 	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
+	/** Redundancy level */
+	uint32_t		ci_redun_lvl;
 	/** Container information pad (not used) */
-	uint64_t		ci_pad[2];
+	uint32_t		ci_pad[3];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -661,55 +665,7 @@ int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
-
 #if defined(__cplusplus)
 }
-
-#define daos_cont_create daos_cont_create_cpp
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create2(poh, uuid, cont_prop, ev);
-}
-
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create1(poh, uuid, cont_prop, ev);
-}
-#else
-
-/**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define daos_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = daos_cont_create((poh), _u,		\
-						__VA_ARGS__);		\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = daos_cont_create2((poh), _u,		\
-						 __VA_ARGS__);		\
-		}							\
-		_ret;							\
-	})
-
 #endif /* __cplusplus */
 #endif /* __DAOS_CONT_H__ */

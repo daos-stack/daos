@@ -6,8 +6,7 @@
 """
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_base import LabelGenerator
+from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
 from apricot import skipForTicket
 
@@ -45,7 +44,6 @@ class OSAOfflineExtend(OSAUtils):
             oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         if oclass is None:
             oclass = []
@@ -59,11 +57,7 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             test_seq = self.ior_test_sequence[0]
             self.pool.set_property("reclaim", "disabled")

@@ -93,8 +93,9 @@ func (cmd *storagePrepareCmd) prepNvme(prep nvmePrepFn, iommuEnabled bool) error
 	case cmd.DisableVFIO:
 		cmd.Info("VMD not enabled because VFIO disabled in command options")
 	case !iommuEnabled:
-		cmd.Info("VMD not enabled because IOMMU disabled on system")
+		cmd.Info("VMD not enabled because IOMMU disabled on platform")
 	default:
+		// If none of the cases above match, set enable VMD flag in request.
 		req.EnableVMD = true
 	}
 

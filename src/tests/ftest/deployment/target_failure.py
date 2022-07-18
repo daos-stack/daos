@@ -68,24 +68,6 @@ class TargetFailure(IorTestBase):
             self.log.info("--- IOR command %d failed ---", job_num)
             results[job_num] = [False, "IOR failed: {}".format(error)]
 
-    @staticmethod
-    def check_container_health(container, expected_health):
-        """Check container property's Health field by calling daos container get-prop.
-
-        Args:
-            container (TestContainer): Container to call get-prop.
-            expected_health (str): Expected value in the Health field.
-
-        Returns:
-            bool: True if expected_health matches the one obtained from get-prop.
-
-        """
-        output = container.get_prop()
-        for cont_prop in output["response"]:
-            if cont_prop["name"] == "status":
-                return cont_prop["value"] == expected_health
-        return False
-
     def verify_failure_with_protection(self, ior_namespace):
         """Jira ID: DAOS-10001.
 
@@ -150,8 +132,7 @@ class TargetFailure(IorTestBase):
             errors.append("First IOR was supposed to fail, but worked!")
 
         # 5. Verify that the container's Health property is UNCLEAN.
-        if not self.check_container_health(
-                container=self.container, expected_health="UNCLEAN"):
+        if not self.container.verify_health(expected_health="UNCLEAN"):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 6. Reintegrate the excluded target.
@@ -167,8 +148,7 @@ class TargetFailure(IorTestBase):
             operation="Reintegrate rank 0 -> target 1", interval=5)
 
         # 7. Verify that the container's Health property is HEALTHY.
-        if not self.check_container_health(
-                container=self.container, expected_health="HEALTHY"):
+        if not self.container.verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after reintegrate!")
 
         # 8. Restart IOR. Should work.
@@ -264,8 +244,7 @@ class TargetFailure(IorTestBase):
                 "First IOR was supposed to fail, but worked! {}".format(ior_error))
 
         # 5. Verify that the container's Health property is UNCLEAN.
-        if not self.check_container_health(
-                container=self.container, expected_health="UNCLEAN"):
+        if not self.container.verify_health(expected_health="UNCLEAN"):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 6. Reintegrate the excluded target.
@@ -273,8 +252,7 @@ class TargetFailure(IorTestBase):
         self.pool.measure_rebuild_time(operation="Reintegrate 1 target", interval=5)
 
         # 7. Verify that the container's Health property is HEALTHY.
-        if not self.check_container_health(
-                container=self.container, expected_health="HEALTHY"):
+        if not self.container.verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after reintegrate!")
 
         # 8. Run IOR again.
@@ -407,8 +385,7 @@ class TargetFailure(IorTestBase):
             errors.append(msg)
 
         # 6. Verify that self.container[1]'s Health property is UNCLEAN.
-        if not self.check_container_health(
-                container=self.container[1], expected_health="UNCLEAN"):
+        if not self.container[1].verify_health(expected_health="UNCLEAN"):
             errors.append("Container health isn't UNCLEAN after first IOR!")
 
         # 7. Reintegrate the excluded target.
@@ -418,8 +395,7 @@ class TargetFailure(IorTestBase):
             operation="Reintegrate 1 target", interval=5)
 
         # 8. Verify that self.container[1]'s Health property is HEALTHY.
-        if not self.check_container_health(
-                container=self.container[1], expected_health="HEALTHY"):
+        if not self.container[1].verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after first IOR!")
 
         # 9. Run IOR again.

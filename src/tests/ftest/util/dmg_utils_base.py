@@ -79,6 +79,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.StorageSubCommand()
         elif self.sub_command.value == "system":
             self.sub_command_class = self.SystemSubCommand()
+        elif self.sub_command.value == "server":
+            self.sub_command_class = self.ServerSubCommand()
         elif self.sub_command.value == "cont":
             self.sub_command_class = self.ContSubCommand()
         elif self.sub_command.value == "config":
@@ -411,9 +413,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query target-health object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/target-health/*",
-                            "target-health")
+                    super().__init__("/run/dmg/storage/query/target-health/*", "target-health")
                     self.rank = FormattedParameter("-r {}", None)
                     self.tgtid = FormattedParameter("-t {}", None)
 
@@ -422,9 +422,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query device-health object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/device-health/*",
-                            "device-health")
+                    super().__init__("/run/dmg/storage/query/device-health/*", "device-health")
                     self.uuid = FormattedParameter("-u {}", None)
 
             class ListDevicesSubCommand(CommandWithParameters):
@@ -432,9 +430,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-devices object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/list-devices/*",
-                            "list-devices")
+                    super().__init__("/run/dmg/storage/query/list-devices/*", "list-devices")
                     self.rank = FormattedParameter("-r {}", None)
                     self.uuid = FormattedParameter("-u {}", None)
                     self.health = FormattedParameter("-b", False)
@@ -444,9 +440,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-pools object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/list-pools/*",
-                            "list-pools")
+                    super().__init__("/run/dmg/storage/query/list-pools/*", "list-pools")
                     self.rank = FormattedParameter("-r {}", None)
                     self.uuid = FormattedParameter("-u {}", None)
                     self.verbose = FormattedParameter("--verbose", False)
@@ -480,9 +474,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage set nvme-faulty object."""
-                    super().__init__(
-                            "/run/dmg/storage/query/device-state/*",
-                            "nvme-faulty")
+                    super().__init__("/run/dmg/storage/query/device-state/*", "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
                     self.force = FormattedParameter("--force", False)
 
@@ -571,6 +563,28 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system erase command object."""
                 super().__init__(
                     "/run/dmg/system/erase/*", "erase")
+
+    class ServerSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg server sub command."""
+
+        def __init__(self):
+            """Create a dmg server subcommand object."""
+            super().__init__("/run/dmg/server/*", "server")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg server sub command object."""
+            if self.sub_command.value == "set-logmasks":
+                self.sub_command_class = self.SetLogmasksSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class SetLogmasksSubCommand(CommandWithParameters):
+            """Defines an object for the dmg server set-logmasks command."""
+
+            def __init__(self):
+                """Create a dmg server set-logmasks command object."""
+                super().__init__("/run/dmg/server/set-logmasks/*", "set-logmasks")
 
     class TelemetrySubCommand(CommandWithSubCommand):
         """Defines an object for the dmg telemetry sub command."""

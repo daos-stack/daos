@@ -165,6 +165,7 @@ disable_vfio: false
 disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
+disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 helper_log_file: ""
@@ -186,6 +187,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
+		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
