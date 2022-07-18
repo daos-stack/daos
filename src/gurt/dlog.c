@@ -927,6 +927,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 				mst.log_file, strerror(errno));
 			goto error;
 		}
+		/* Use a higher, consistent, number for the daos log file.  This isn't strictly
+		 * necessary however it does avoid problems with the file descriptor being closed
+		 * incorrectly when using the interception library, see DAOS-11119
+		 */
 		rc = fcntl(mst.log_fd, F_DUPFD, 128);
 		if (rc < 0) {
 			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
