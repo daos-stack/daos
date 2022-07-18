@@ -1,3 +1,9 @@
+daos (2.1.103-3) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 15 Jul 2022 12:43:00 -0400
+
 daos (2.1.103-2) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Update to mercury 2.2.0rc6
