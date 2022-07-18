@@ -595,6 +595,47 @@ out:
 
 D_CASSERT(sizeof(((daos_anchor_t *)0)->da_buf) >= sizeof(struct evt_rect));
 
+int
+evt_iter_corrupt(daos_handle_t ih)
+{
+	struct evt_iterator	*iter;
+	struct evt_context	*tcx;
+	struct evt_trace	*trace;
+	struct evt_desc		*desc;
+	int			 rc;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	iter = &tcx->tc_iter;
+	rc = evt_iter_is_ready(iter);
+	if (rc != 0)
+		return rc;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	desc = evt_node_desc_at(tcx, evt_off2node(tcx, trace->tr_node),
+				trace->tr_at);
+	rc = evt_tx_begin(tcx);
+	if (rc != DER_SUCCESS)
+		return rc;
+
+	rc = umem_tx_add(&tcx->tc_umm,
+			 trace->tr_node + offsetof(struct evt_desc, dc_ex_addr),
+			 sizeof(*desc) - offsetof(struct evt_desc, dc_ex_addr));
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = evt_tx_end(tcx, rc);
+		return rc;
+	}
+
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);
+	rc = evt_tx_end(tcx, rc);
+
+	return rc;
+}
+
 /**
  * Fetch the extent and its data address from the current iterator position.
  * See daos_srv/evtree.h for the details.
@@ -631,9 +672,8 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	node = evt_off2node(tcx, trace->tr_node);
 	evt_node_rect_read_at(tcx, node, trace->tr_at, &rect);
 
-	if (entry)
-		evt_entry_fill(tcx, node, trace->tr_at, NULL,
-			       evt_iter_intent(iter), entry);
+	evt_entry_fill(tcx, node, trace->tr_at, NULL,
+		       evt_iter_intent(iter), entry);
 
 	/* There is no visibility flag for unsorted entries but go ahead and
 	 * set it EVT_COVERED if user has specified a punch epoch in the filter
