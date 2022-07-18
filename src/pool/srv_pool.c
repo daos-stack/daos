@@ -98,7 +98,7 @@ static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine);
 
-size_t
+static size_t
 pool_hdl_size(struct pool_svc *svc)
 {
 	/* return old size if pool is from version <= 2.0 */
@@ -4157,9 +4157,6 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
 		}
-		/* also bump cached version */
-		svc->ps_global_version = DS_POOL_GLOBAL_VERSION;
-
 		connectable = 1;
 		d_iov_set(&value, &connectable, sizeof(connectable));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_connectable,
@@ -4174,6 +4171,11 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	rc1 = rdb_tx_commit(&tx);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
+
+	if (rc == 0) {
+		/* also bump cached version */
+		svc->ps_global_version = DS_POOL_GLOBAL_VERSION;
+	}
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
@@ -5447,10 +5449,10 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 	if (val->iov_len != sizeof(struct pool_hdl)) {
 		/* old/2.0 pool handle format ? */
-		if (val->iov_len == sizeof(struct pool_hdl) - 
+		if (val->iov_len == sizeof(struct pool_hdl) -
 		    sizeof(((struct pool_hdl *)0)->ph_machine) &&
-		    arg->eia_pool_svc->ps_global_version < DS_POOL_GLOBAL_VERSION) {
-			D_INFO("2.0 pool handle format detected\n");
+		    arg->eia_pool_svc->ps_global_version < 1) {
+			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
 			/* if looking for a specific machine, do not select this handle */
 			if (arg->eia_machine)
 				return 0;
