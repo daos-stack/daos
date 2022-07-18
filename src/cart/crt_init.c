@@ -30,7 +30,7 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"RDMAV_HUGEPAGES_SAFE" };
+		"RDMAV_HUGEPAGES_SAFE", "UCX_LOG_LEVEL" };
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -115,7 +115,12 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint64_t	start_rpcid;
 	int		rc = 0;
 
+	if (crt_is_service())
+		sleep(30);
+
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
+
+	setenv("UCX_LOG_LEVEL", "info", 1);
 
 	dump_envariables();
 
