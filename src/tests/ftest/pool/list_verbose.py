@@ -384,5 +384,5 @@ class ListVerboseTest(IorTestBase):
         errors.extend(self.verify_used_imbalance("SCM"))
 
         self.log.info("##### Errors #####")
-        report_errors(errors=errors)
+        report_errors(test=self, errors=errors)
         self.log.info("##################")
