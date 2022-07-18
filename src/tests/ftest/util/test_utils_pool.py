@@ -222,7 +222,7 @@ class TestPool(TestDaosApiBase):
         """
         try:
             return self.pool.get_uuid_str()
-        except AttributeError:
+        except (AttributeError, TypeError):
             return None
         except IndexError:
             return self.pool.uuid

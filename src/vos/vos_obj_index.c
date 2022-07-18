@@ -18,6 +18,7 @@
 #include <vos_internal.h>
 #include <vos_ilog.h>
 #include <vos_obj.h>
+#include <daos_srv/vos.h>
 
 /** iterator for oid */
 struct vos_oi_iter {
@@ -683,12 +684,14 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-oi_iter_delete(struct vos_iterator *iter, void *args)
+oi_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
@@ -824,7 +827,7 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_probe		= oi_iter_probe,
 	.iop_next		= oi_iter_next,
 	.iop_fetch		= oi_iter_fetch,
-	.iop_delete		= oi_iter_delete,
+	.iop_process		= oi_iter_process,
 };
 
 /**
