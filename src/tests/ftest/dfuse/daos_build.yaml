@@ -9,7 +9,7 @@ server_config:
   name: daos_server
   crt_timeout: 120
 pool:
-  size: 5GiB
+  size: 8GiB
   control_method: dmg
 container:
   type: POSIX
