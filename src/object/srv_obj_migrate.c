@@ -1257,6 +1257,7 @@ post:
 end:
 	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL,
 			     NULL);
+	rc1 = migrate_update_rc(rc1);
 	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_iov_free(&csum_iov);
 	if (rc == 0)
