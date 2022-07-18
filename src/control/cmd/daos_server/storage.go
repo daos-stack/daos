@@ -139,20 +139,20 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 	}
 	cmd.Debugf("%s scm resp: %+v", op, resp)
 
-	state := resp.State
+	state := resp.State.State
 
 	// PMem resource allocations have been updated, prompt the user for reboot.
 	// State reported indicates state before reboot.
 	if resp.RebootRequired {
 		msg := ""
 		switch state {
-		case storage.ScmStateNoRegions:
+		case storage.ScmNoRegions:
 			msg = "PMem AppDirect interleaved regions will be created. "
-		case storage.ScmStateNotInterleaved:
+		case storage.ScmNotInterleaved:
 			msg = "PMem AppDirect non-interleaved regions will be removed. "
-		case storage.ScmStateFreeCapacity:
+		case storage.ScmFreeCap:
 			msg = "PMem AppDirect interleaved regions will be removed. "
-		case storage.ScmStateNoFreeCapacity:
+		case storage.ScmNoFreeCap:
 			msg = "PMem namespaces removed and AppDirect interleaved regions will be removed. "
 		}
 		cmd.Info(msg + storage.ScmMsgRebootRequired)
@@ -163,13 +163,13 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 	if state == storage.ScmStateUnknown {
 		return scanErrors.add(errors.New("failed to report state"))
 	}
-	if state == storage.ScmStateNoModules {
+	if state == storage.ScmNoModules {
 		return scanErrors.add(storage.FaultScmNoModules)
 	}
 
 	if cmd.Reset {
 		// Respond to resultant state on prepare reset.
-		if state == storage.ScmStateNoRegions {
+		if state == storage.ScmNoRegions {
 			cmd.Info("SCM reset successfully!")
 			return nil
 		}
@@ -179,11 +179,11 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 
 	// Respond to state reported by prepare setup.
 	switch state {
-	case storage.ScmStateNoRegions:
+	case storage.ScmNoRegions:
 		scanErrors.add(errors.New("failed to create regions"))
-	case storage.ScmStateFreeCapacity:
+	case storage.ScmFreeCap:
 		scanErrors.add(errors.New("failed to create namespaces"))
-	case storage.ScmStateNoFreeCapacity:
+	case storage.ScmNoFreeCap:
 		if len(resp.Namespaces) == 0 {
 			scanErrors.add(errors.New("failed to find namespaces"))
 			break
