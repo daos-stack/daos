@@ -145,7 +145,6 @@ class OSAOnlineDrain(OSAUtils):
                                                   '/run/checksum/*')
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_oclass(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain with different
@@ -160,7 +159,6 @@ class OSAOnlineDrain(OSAUtils):
         for oclass in self.test_oclass:
             self.run_online_drain_test(1, oclass=oclass)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_with_aggregation(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain with different
@@ -176,7 +174,6 @@ class OSAOnlineDrain(OSAUtils):
                                                        '/run/aggregation/*')
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_mdtest(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain with mdtest
