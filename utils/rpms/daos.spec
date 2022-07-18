@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -562,6 +562,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
+- Remove now unused openpa dependency
+
 * Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
 - Add pool_scrubbing_tests to test package
 
