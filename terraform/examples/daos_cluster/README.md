@@ -161,7 +161,7 @@ For more information about pools see
 - https://docs.daos.io/latest/admin/pool_operations/
 
 
-### Create a Container
+## Create a Container
 
 Create a container in the pool
 
