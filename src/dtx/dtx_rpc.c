@@ -131,7 +131,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 
 	dout = crt_reply_get(req);
 	if (dra->dra_opc == DTX_COMMIT) {
-		dra->dra_committed += dout->do_misc;
+		*dra->dra_committed += dout->do_misc;
 		D_GOTO(out, rc = dout->do_status);
 	}
 
@@ -392,7 +392,11 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, int *committed, d_
 	d_list_for_each_entry(drr, head, drr_link) {
 		drr->drr_parent = dra;
 		drr->drr_result = 0;
-		rc = dtx_req_send(drr, epoch);
+
+		if (unlikely(opc == DTX_COMMIT && i == 0 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_COMMIT)))
+			rc = dtx_req_send(drr, 1);
+		else
+			rc = dtx_req_send(drr, epoch);
 		if (rc != 0) {
 			/* If the first sub-RPC failed, then break, otherwise
 			 * other remote replicas may have already received the
@@ -406,7 +410,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, int *committed, d_
 		}
 
 		/* Yield to avoid holding CPU for too long time. */
-		if (++i >= DTX_RPC_YIELD_THD)
+		if (++i % DTX_RPC_YIELD_THD == 0)
 			ABT_thread_yield();
 	}
 
@@ -827,13 +831,16 @@ out:
 
 log:
 	if (rc != 0 || rc1 != 0 || rc2 != 0) {
-		D_ERROR("Failed to commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-			DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+		D_ERROR("Failed to commit DTXs "DF_DTI", count %d: rc %d %d %d, %s committed\n",
+			DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2,
+			committed > 0 ? "partial" : "nothing");
 
 		if (epoch != 0 && committed == 0) {
 			D_ASSERT(count == 1);
 
 			dtx_abort(cont, dtes[0], epoch);
+		} else {
+			rc = rc1 = rc2 = 0;
 		}
 	} else {
 		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI", count %d\n",
