@@ -31,12 +31,6 @@
 
 #include "ioil.h"
 
-/* Notes about streaming I/O:
- *
- * fopen can open files amend mode, so we check for this and disable if needed.
- *
- */
-
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
 struct ioil_pool {
@@ -101,8 +95,7 @@ ioil_shrink_pool(struct ioil_pool *pool)
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_pool_disconnect() failed, "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
 		pool->iop_poh = DAOS_HDL_INVAL;
@@ -134,8 +127,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_cont_close() failed, "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_cont_close() failed, " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
 		cont->ioc_coh = DAOS_HDL_INVAL;
@@ -1759,7 +1751,6 @@ dfuse_fdopen(int fd, const char *mode)
 
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
-
 
 		vector_decref(&fd_table, entry);
 	}
