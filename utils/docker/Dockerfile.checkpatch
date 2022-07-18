@@ -32,6 +32,8 @@ RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
 
 WORKDIR /home/daos
 
+# Actual CB1.  Do this every CB1 so the system is up to date.
+ARG CB1
 RUN dnf -y upgrade && dnf clean all
 
 USER daos:daos
