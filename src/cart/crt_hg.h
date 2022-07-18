@@ -51,6 +51,7 @@ enum crt_na_type {
 	CRT_NA_UCX_UD_X		= 14,
 	CRT_NA_UCX_RC_UD_X      = 15,
 	CRT_NA_UCX_DC_X         = 16,
+	CRT_NA_UCX_TCP		= 17,
 
 	/* Note: This entry should be the last valid one in enum */
 	CRT_NA_COUNT,

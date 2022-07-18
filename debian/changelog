@@ -1,3 +1,23 @@
+daos (2.3.100-17) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Remove now unused openpa dependency
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
+
+daos (2.3.100-16) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * Add pool_scrubbing_tests to test package
+
+ -- Jeff Olivier <Jeff Olivier <jeffrey.v.olivier@intel.com>  Fri, 15 Jul 2022 12:48:00 -0400
+
+daos (2.3.100-15) unstable; urgency=medium
+
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Wed, 13 Jul 2022 12:43:00 -0400
+
 daos (2.3.100-14) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Update to mercury 2.2.0rc6
