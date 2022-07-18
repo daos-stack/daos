@@ -112,9 +112,9 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 	return nil
 }
 
-// publishInstanceExitFn returns onInstanceExitFn which will publish an exit
+// createPublishInstanceExitFunc returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
-func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) onInstanceExitFn {
+func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname string) onInstanceExitFn {
 	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error, exPid uint64) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
@@ -124,7 +124,7 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) on
 			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
-		publishFn(evt.WithForwardable(!rank.Equals(system.NilRank)))
+		publish(evt.WithForwardable(!rank.Equals(system.NilRank)))
 
 		return nil
 	}
