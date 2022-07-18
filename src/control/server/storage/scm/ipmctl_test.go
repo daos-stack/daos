@@ -162,6 +162,56 @@ func TestIpmctl_getPMemState(t *testing.T) {
 			},
 			expState: storage.ScmNoFreeCap,
 		},
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Free_capacity: 111111},
+		//				},
+		//			},
+		//			expErr: errors.New("unexpected PMem region type"),
+		//		},
+		//		"single region with not interleaved type": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeNotInterleaved),
+		//					},
+		//				},
+		//			},
+		//			expState: storage.ScmNotInterleaved,
+		//		},
+		//		"single region with free capacity": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
+		//					},
+		//				},
+		//			},
+		//			expState: storage.ScmFreeCap,
+		//		},
+		//		"regions with free capacity": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//					{
+		//						Free_capacity: 111111,
+		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
+		//					},
+		//				},
+		//			},
+		//			expState: storage.ScmFreeCap,
+		//		},
+		//		"regions with no capacity": {
+		//			ipmctlCfg: &mockIpmctlCfg{
+		//				regions: []ipmctl.PMemRegion{
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+		//				},
+		//			},
+		//			expState: storage.ScmNoFreeCap,
+		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
