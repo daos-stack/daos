@@ -115,7 +115,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint64_t	start_rpcid;
 	int		rc = 0;
 
-	if (crt_is_service())
+	if (!crt_is_service())
 		sleep(30);
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
