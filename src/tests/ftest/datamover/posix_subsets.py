@@ -4,9 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
 import re
+from data_mover_test_base import DataMoverTestBase
+
 
 class DmvrPosixSubsets(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
@@ -58,7 +59,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
         dfuse_cont2 = self.create_cont(pool1)
         dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
         # destination directory should be created by program
-        dfuse_cont2_dir = self.new_posix_test_path(create=False,
+        dfuse_cont2_dir = self.new_posix_test_path(
+            create=False,
             parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries
         uns_cont = self.create_cont(pool1)
@@ -78,9 +80,10 @@ class DmvrPosixSubsets(DataMoverTestBase):
         copy_list = []
 
         if self.tool == "FS_COPY":
-            copy_list.append(["dfuse copy (dfuse cont1 dir to dfuse cont2 dir that doesn't exist)",
-                ["POSIX", dfuse_cont1_dir, None, None],
-                ["POSIX", dfuse_cont2_dir, None, None]])
+            copy_list.append(
+                ["dfuse copy (dfuse cont1 dir to dfuse cont2 dir that doesn't exist)",
+                    ["POSIX", dfuse_cont1_dir, None, None],
+                    ["POSIX", dfuse_cont2_dir, None, None]])
 
         # For each copy, use a new destination directory.
         # This ensures that the source directory is copied

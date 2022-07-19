@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrNegativeTest(DataMoverTestBase):
@@ -210,7 +210,7 @@ class DmvrNegativeTest(DataMoverTestBase):
                                  pool1, cont1)
 
         # Use a really long filename
-        dst_path = join(self.posix_local_test_paths[0], "d"*300)
+        dst_path = join(self.posix_local_test_paths[0], "d" * 300)
         self.run_datamover(
             self.test_id + " (filename is too long)",
             "DAOS_UUID", "/", pool1, cont1,
