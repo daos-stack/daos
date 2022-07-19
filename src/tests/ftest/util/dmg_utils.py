@@ -444,6 +444,26 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
+    def server_set_logmasks(self):
+        """Set engine log-masks at runtime.
+
+        Raises:
+            CommandFailure: if the dmg server set logmasks command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "host_errors": {}
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("server", "set-logmasks"))
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):

@@ -82,6 +82,7 @@ class ErasureCodeIor(ServerFillUp):
         self.cont_uuid = []
         self.cont_number = 0
         self.read_set_from_beginning = True
+        self.nvme_local_cont = None
 
     def setUp(self):
         """Set up each test case."""
@@ -108,12 +109,14 @@ class ErasureCodeIor(ServerFillUp):
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
         rf = "rf:{}".format(ec_object['parity'])
-        if self.container.properties.value is None:
+        if self.ec_container.properties.value is None:
             self.ec_container.properties.update(rf)
         else:
-            self.ec_container.properties.update("{},{}".format(self.container.properties.value, rf))
+            self.ec_container.properties.update("{},{}"
+                                                .format(self.ec_container.properties.value, rf))
         # create container
         self.ec_container.create()
+        self.nvme_local_cont = self.ec_container
 
     def ior_param_update(self, oclass, sizes):
         """Update the IOR command parameters.
@@ -154,7 +157,6 @@ class ErasureCodeIor(ServerFillUp):
         self.update_ior_cmd_with_pool(create_cont=False)
 
         # Start IOR Write
-        self.container.uuid = self.ec_container.uuid
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
         # Store the container UUID for future reading
@@ -192,7 +194,7 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_param_update(oclass, sizes)
 
         # retrieve the container UUID to read the existing data
-        self.container.uuid = self.cont_uuid[self.cont_number]
+        self.nvme_local_cont.uuid = self.cont_uuid[self.cont_number]
 
         # Start IOR Read
         self.start_ior_load(storage, operation, percent, create_cont=False)

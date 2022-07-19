@@ -1215,6 +1215,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	if (!empty) {
 		char	pp[L_COUNT + 1] = "coda";
 
+		D_ASSERT(strlen(rp) <= L_COUNT);
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_X64") before %s(%s, "
 			      DF_X64"): ", pp, re - 1, r->o_name, rp, re);
@@ -1477,8 +1478,8 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
-		D_ASSERT(strnlen(wp, L_COUNT) <= sizeof(pp) - 1);
-		memcpy(pp, wp, strnlen(wp, L_COUNT));
+		D_ASSERT(strlen(wp) <= L_COUNT);
+		memcpy(pp, wp, strlen(wp));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
 		rc = update_f(arg, NULL /* txh */, pp, pe);

@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0~rc5-1%{?dist}
+%global mercury_version 2.2.0~rc6-1%{?dist}
 %global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.103
-Release:       1%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -34,7 +34,6 @@ BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 %endif
 BuildRequires: gcc-c++
@@ -74,7 +73,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07, spdk-devel < 22
+BuildRequires: spdk-devel >= 22.01.1
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -162,7 +161,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07, spdk-tools < 22
+Requires: spdk-tools >= 22.01.1
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -572,6 +571,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-4
+- Remove now unused openpa dependency
+
+* Fri Jul 15 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.103-3
+- Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+* Mon Jun 27 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-2
+- Update to mercury 2.2.0rc6
+
 * Mon Jun 13 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-1
 - Bump version to 2.1.103
 

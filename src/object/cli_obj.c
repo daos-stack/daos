@@ -107,6 +107,8 @@ struct obj_auxi_args {
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
+	uint32_t			 retry_cnt;
+	uint32_t			 padding;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
@@ -1416,8 +1418,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
 		if (req_tgts->ort_srv_disp) {
-			rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver,
-						obj_auxi->cond_modify, bit_map);
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER))
+				rc = 0;
+			else
+				rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver,
+							obj_auxi->cond_modify, bit_map);
 			if (rc < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u, is %s: "
@@ -1918,6 +1924,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			D_GOTO(err, rc);
 		}
 		*io_task_reinited = true;
+		obj_auxi->retry_cnt++;
 	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
 		/* If the RPC sponsor specifies shard or group, we will NOT
 		 * reschedule the IO, but not prevent the pool map refresh.
@@ -2785,9 +2792,11 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 
 				rc = *shard;
 			} else {
-				rc = obj_dkey2shard(obj, dkey_hash, map_ver,
-						    to_leader,
-						    obj_auxi->failed_tgt_list);
+				if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+					rc = obj->cob_shards_nr - 1;
+				else
+					rc = obj_dkey2shard(obj, dkey_hash, map_ver, to_leader,
+							    obj_auxi->failed_tgt_list);
 				if (rc < 0)
 					goto out;
 			}
@@ -3174,19 +3183,21 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		}
 	}
 
+	/*
+	 * We mark the RPC as RESEND although @io_retry does not
+	 * guarantee that the RPC has ever been sent. It may cause
+	 * some overhead on server side, but no correctness issues.
+	 *
+	 * On the other hand, the client may resend the RPC to new
+	 * shard if leader switched. That is why the resend logic
+	 * is handled at object layer rather than shard layer.
+	 */
+	if (obj_auxi->io_retry)
+		obj_auxi->flags |= ORF_RESEND;
+
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
 	    !obj_auxi->new_shard_tasks) {
-		/* We mark the RPC as RESEND although @io_retry does not
-		 * guarantee that the RPC has ever been sent. It may cause
-		 * some overhead on server side, but no correctness issues.
-		 *
-		 * On the other hand, the client may resend the RPC to new
-		 * shard if leader switched. That is why the resend logic
-		 * is handled at object layer rather than shard layer.
-		 */
-		obj_auxi->flags |= ORF_RESEND;
-
 		/* if with shard task list, reuse it and re-schedule */
 		if (!d_list_empty(task_list)) {
 			struct shard_task_reset_arg reset_arg;
@@ -4661,6 +4672,45 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 		if (!obj_auxi->ec_in_recov)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
+	}
+
+	if (unlikely(task->dt_result == -DER_TX_ID_REUSED)) {
+		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+
+		if (obj_auxi->retry_cnt != 0)
+			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
+			D_ASSERTF(0,
+				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
+				  obj_auxi->flags, task, obj_auxi->retry_cnt);
+
+		/* For non-retry case, restart TX with new TX ID. */
+		switch (obj_auxi->opc) {
+		case DAOS_OBJ_RPC_UPDATE: {
+			struct shard_rw_args	*rw_arg = &obj_auxi->rw_args;
+
+			D_INFO("DTX ID "DF_DTI" for update is reused, re-generate\n",
+			       DP_DTI(&rw_arg->dti));
+			daos_dti_gen(&rw_arg->dti, false);
+			obj_auxi->io_retry = 1;
+			break;
+		}
+		case DAOS_OBJ_RPC_PUNCH:
+			/* fall through */
+		case DAOS_OBJ_RPC_PUNCH_DKEYS:
+			/* fall through */
+		case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+			struct shard_punch_args	*punch_arg = &obj_auxi->p_args;
+
+			D_INFO("DTX ID "DF_DTI" for punch (%u) is reused, re-generate\n",
+			       DP_DTI(&punch_arg->pa_dti), obj_auxi->opc);
+			daos_dti_gen(&punch_arg->pa_dti, false);
+			obj_auxi->io_retry = 1;
+			break;
+		}
+		default:
+			D_ASSERTF(0, "Unexpected opc %u for '-DER_TX_ID_REUSED'\n", obj_auxi->opc);
+			break;
+		}
 	}
 
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&

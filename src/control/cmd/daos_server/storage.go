@@ -108,8 +108,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		case cmd.DisableVFIO:
 			cmd.log.Info("VMD not enabled because VFIO disabled in command options")
 		case !iommuEnabled:
-			cmd.log.Info("VMD not enabled because IOMMU disabled on system")
+			cmd.log.Info("VMD not enabled because IOMMU disabled on platform")
 		default:
+			// If none of the cases above match, set enable VMD flag in request.
 			req.EnableVMD = true
 		}
 
