@@ -188,14 +188,14 @@ class DaosBuild(DfuseTestBase):
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
             elapsed = time.time() - start
-            self.log.info('Ran in %d seconds\n' % elapsed)
+            self.log.info('Ran in %d seconds', elapsed)
             assert len(ret_code) == 1
 
             cmd_ret = ret_code[0]
             for key in cmd_ret.items():
                 if key == 'stdout':
                     continue
-                self.log.info('%s:%s' % (key, cmd_ret))
+                self.log.info('%s:%s', key, cmd_ret)
 
             for line in cmd_ret['stdout']:
                 self.log.info(line)
