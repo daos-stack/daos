@@ -6,11 +6,11 @@
 """
 
 import os
+import time
 from collections import OrderedDict
 import general_utils
 
 from dfuse_test_base import DfuseTestBase
-from exception_utils import CommandFailure
 
 
 class DaosBuild(DfuseTestBase):
@@ -41,7 +41,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt
@@ -55,7 +55,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt,dfusedaosbuild_il
@@ -69,7 +69,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_metadata
@@ -83,7 +83,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusebuild,dfusedaosbuild_nocache
@@ -179,18 +179,38 @@ class DaosBuild(DfuseTestBase):
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
-            try:
-                command = '{};{}'.format(preload_cmd, cmd)
-                # Use a 10 minute timeout for most commands, but vary the build timeout based on
-                # the dfuse mode.
-                timeout = 10 * 60
-                if cmd.startswith('scons'):
-                    timeout = build_time * 60
-                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=timeout)
-                if 0 in ret_code:
+            command = '{};{}'.format(preload_cmd, cmd)
+            # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
+            timeout = 10 * 60
+            if cmd.startswith('scons'):
+                timeout = build_time * 60
+            start = time.time()
+            ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
+                                              timeout=timeout, expect_rc=0)
+            elapsed = time.time() - start
+            self.log.info('Ran in %d seconds\n' % elapsed)
+            assert len(ret_code) == 1
+
+            cmd_ret = ret_code[0]
+            for key in cmd_ret.items():
+                if key == 'stdout':
                     continue
-                self.log.info(ret_code)
-                raise CommandFailure("Error running '{}'".format(cmd))
-            except CommandFailure as error:
-                self.log.error('BuildDaos Test Failed: %s', str(error))
-                self.fail('Unable to build daos over dfuse in mode {}.\n'.format(cache_mode))
+                self.log.info('%s:%s' % (key, cmd_ret))
+
+            for line in cmd_ret['stdout']:
+                self.log.info(line)
+
+            if cmd_ret['exit_status'] == 0:
+                continue
+
+            fail_type = 'Failure to build'
+
+            if cmd_ret['interrupted']:
+                self.log.info('Command timed out')
+                fail_type = 'Timeout building'
+
+            self.log.error('BuildDaos Test Failed')
+            if intercept:
+                self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
+            else:
+                self.fail('{} over dfuse in mode {}.\n'.format(fail_type, cache_mode))
