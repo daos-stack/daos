@@ -1419,7 +1419,7 @@ dfs_test_mtime(void **state)
 	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 
-	/** verify mtime is now that it's the same as the one we just set */
+	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
