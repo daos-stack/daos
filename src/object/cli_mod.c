@@ -46,10 +46,11 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		rc = crt_proto_query_with_ctx(&oproto->ep, obj_proto_fmt_0.cpf_base, ver_array, 2,
 					      query_cb, oproto, daos_get_crt_ctx());
 		if (rc) {
-			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_proto_query_with_ctx() retry failed: "DF_RC"\n", DP_RC(rc));
 			oproto->rc = rc;
 			oproto->completed = true;
 		}
+		D_ERROR("crt_proto_query_with_ctx() retry succeeded");
 	} else {
 		oproto->rc = cb_info->pq_rc;
 		oproto->version = cb_info->pq_ver;
@@ -104,6 +105,7 @@ dc_obj_init(void)
 		D_ERROR("rsvc_client_init() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_grp, rc);
 	}
+	D_ERROR("crt_proto_query_with_ctx() initial succeeded");
 
 	oproto->ep.ep_grp = sys->sy_group;
 	rc = rsvc_client_choose(&oproto->cli, &oproto->ep);
