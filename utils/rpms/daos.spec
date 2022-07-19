@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       18%{?relval}%{?dist}
+Release:       19%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -565,13 +565,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Aug 1 2022 Dong Yi <dongx.yi@intel.com> 2.3.100-19
+- Add a new module named pmfs
+
 * Tue Jul 26 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.100-18
 - Bump min supported go version to 1.16
 
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
 - Remove now unused openpa dependency
 
-* Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
+* Fri Jul 15 2022  Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-16
 - Add pool_scrubbing_tests to test package
 
 * Wed Jul 13 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.100-15
