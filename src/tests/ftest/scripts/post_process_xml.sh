@@ -69,5 +69,8 @@ for file in "${FILES[@]}"; do
         else
             sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
         fi
+        sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
+        echo "</testsuites>" >> "$file"
     fi
 done
+
