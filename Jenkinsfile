@@ -262,8 +262,7 @@ pipeline {
                             if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
                                 error('Your PR branch name does not follow the rules. Please rename it ' +
                                       'according to the rules described here: ' +
-                                      /* groovylint-disable-next-line LineLength */
-                                      'https://daosio.atlassian.net/wiki/spaces/CI/pages/1359582959/The+New+CI+Pipeline#TheNewCIPipeline-TheGitHubWorkflow' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
                                       'Once you have renamed your branch locally to match the ' +
                                       'format, close this PR and open a new one using the newly renamed ' +
                                       'local branch.')
