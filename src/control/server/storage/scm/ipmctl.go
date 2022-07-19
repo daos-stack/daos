@@ -144,7 +144,7 @@ func (cr *cmdRunner) getPMemState(sockID int) (*storage.ScmSocketState, error) {
 			// Fall-through
 
 		default:
-			return nil, errors.New("unexpected state from getRegionState")
+			return nil, errors.Errorf("unexpected state %s (%d)", state, state)
 		}
 	}
 
@@ -179,7 +179,8 @@ func (cr *cmdRunner) createNamespaces(nrNsPerSocket uint, sockID int) (storage.S
 		pmemBytes := uint64(region.FreeCapacity) / uint64(nrNsPerSocket)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
-			return nil, errors.Errorf("socket %d: free region size is not 2MiB aligned", sid)
+			return nil, errors.Errorf("socket %d: free region size (%s) is not %s aligned", sid,
+				humanize.Bytes(pmemBytes), humanize.Bytes(alignmentBoundaryBytes))
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).

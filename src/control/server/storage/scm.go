@@ -26,7 +26,7 @@ type ScmState int
 const (
 	// ScmStateUnknown represents the default (unknown) state.
 	ScmStateUnknown ScmState = iota
-	// NoRegions indicates that PMem modules exist, but no regions have been created.
+	// ScmNoRegions indicates that PMem modules exist, but no regions have been created.
 	ScmNoRegions
 	// ScmFreeCap indicates that PMem AppDirect regions have free capacity.
 	ScmFreeCap
@@ -45,7 +45,7 @@ const (
 )
 
 func (ss ScmState) String() string {
-	return map[ScmState]string{
+	if val, exists := map[ScmState]string{
 		ScmStateUnknown:   "Unknown",
 		ScmNoRegions:      "NoRegions",
 		ScmFreeCap:        "FreeCapacity",
@@ -55,7 +55,10 @@ func (ss ScmState) String() string {
 		ScmNotHealthy:     "NotHealthy",
 		ScmPartFreeCap:    "PartialFreeCapacity",
 		ScmUnknownMode:    "UnknownMode",
-	}[ss]
+	}[ss]; exists {
+		return val
+	}
+	return "Unknown"
 }
 
 type (
