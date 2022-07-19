@@ -260,10 +260,13 @@ pipeline {
                     steps {
                         script {
                             if (!env.CHANGE_BRANCH.contains('/')) {
-                                error('This PR was not created on a branch of the format $your_unique_prefix/' +
-                                      '$your_branch_name.  Please rename your branch locally to match the ' +
-                                      'format and then close this PR and open a new one after you rename your ' +
-                                      'branch locally.')
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      /* groovylint-disable-next-line LineLength */
+                                      'https://daosio.atlassian.net/wiki/spaces/CI/pages/1359582959/The+New+CI+Pipeline#TheNewCIPipeline-TheGitHubWorkflow' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
                             }
                         }
                     }
