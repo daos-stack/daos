@@ -261,6 +261,8 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 	}
 
 	free_pool_and_placement_map(pool_map, pl_map);
+	D_FREE(obj_table);
+	D_FREE(layout_table);
 }
 
 void
@@ -397,9 +399,13 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 			/* Pad +1 for "ideal" */
 			num_map_types++;
 
+			if (map_types != NULL)
+				D_FREE(map_types);
 			D_ALLOC_ARRAY(map_types, num_map_types);
 			D_ASSERT(map_types != NULL);
 
+			if (map_keys != NULL)
+				D_FREE(map_keys);
 			D_ALLOC_ARRAY(map_keys, num_map_types);
 			D_ASSERT(map_keys != NULL);
 
