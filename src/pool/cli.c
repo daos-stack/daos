@@ -81,7 +81,6 @@ dc_pool_init(void)
 	struct pool_proto	*pproto = NULL;
 	crt_context_t		ctx = daos_get_crt_ctx();
 	int			rc;
-	int			num_ranks;
 
 	dc_pool_proto_version = 0;
 
@@ -102,10 +101,6 @@ dc_pool_init(void)
 	}
 
 	pproto->ep.ep_grp = sys->sy_group;
-	pproto->ep.ep_tag = 0;
-
-	num_ranks = dc_mgmt_net_get_num_srv_ranks();
-	pproto->ep.ep_rank = rand() % num_ranks;
 
 	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base,
 				      ver_array, 2, query_cb, pproto, ctx);
