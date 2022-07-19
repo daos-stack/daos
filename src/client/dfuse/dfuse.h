@@ -348,26 +348,22 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
 					O_CREAT | O_EXCL)
 
-#define DFUSE_REPLY_ERR_RAW(desc, req, status)				\
-	do {								\
-		int __err = status;					\
-		int __rc;						\
-		if (__err == 0) {					\
-			DFUSE_TRA_ERROR(desc,				\
-					"Invalid call to fuse_reply_err: 0"); \
-			__err = EIO;					\
-		}							\
-		if (__err == EIO || __err == EINVAL)			\
-			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
-					  __err, strerror(__err));	\
-		else							\
-			DFUSE_TRA_DEBUG(desc, "Returning %d '%s'",	\
-					__err, strerror(__err));	\
-		__rc = fuse_reply_err(req, __err);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_err returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_ERR_RAW(desc, req, status)                                                     \
+	do {                                                                                       \
+		int __err = status;                                                                \
+		int __rc;                                                                          \
+		if (__err == 0) {                                                                  \
+			DFUSE_TRA_ERROR(desc, "Invalid call to fuse_reply_err: 0");                \
+			__err = EIO;                                                               \
+		}                                                                                  \
+		if (__err == EIO || __err == EINVAL || __err == ENOSPC)                            \
+			DFUSE_TRA_WARNING(desc, "Returning %d '%s'", __err, strerror(__err));      \
+		else                                                                               \
+			DFUSE_TRA_DEBUG(desc, "Returning %d '%s'", __err, strerror(__err));        \
+		__rc = fuse_reply_err(req, __err);                                                 \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_err returned %d:%s", __rc,               \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_ZERO(desc, req)					\
