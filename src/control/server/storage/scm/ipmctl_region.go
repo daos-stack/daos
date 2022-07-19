@@ -44,6 +44,9 @@ type (
 		FreeCapacity         regionCapacity `xml:"FreeCapacity"`
 		Health               regionHealth   `xml:"HealthState"`
 	}
+
+	// Regions is an alias for a Region slice.
+	Regions []Region
 )
 
 func (ri *regionID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -288,28 +291,24 @@ func (srm socketRegionMap) keys() []int {
 	return keys
 }
 
-func (srm socketRegionMap) fromXML(data string) error {
-	// parseRegions takes nvmxml output from ipmctl tool and returns PMem region details.
-	var rl RegionList
-	if err := xml.Unmarshal([]byte(data), &rl); err != nil {
-		return errors.Wrap(err, "parse show region cmd output")
-	}
-
-	for _, region := range rl.Regions {
+func mapRegionsToSocket(regions Regions) (socketRegionMap, error) {
+	srm := make(socketRegionMap)
+	for _, region := range regions {
 		sockID := int(region.SocketID)
 		if _, exists := srm[sockID]; exists {
-			return errors.Errorf("unexpected second region assigned to socket %d", sockID)
+			return nil, errors.Errorf("multiple regions assigned to the same socket (%d)", sockID)
 		}
 		srm[sockID] = region
 	}
 
-	return nil
+	return srm, nil
 }
 
-func (cr *cmdRunner) getRegionDetails(sockID int) (socketRegionMap, error) {
+// getRegions takes nvmxml output from ipmctl tool and returns PMem region details.
+func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
 	out, err := cr.showRegions(sockID)
 	if err != nil {
-		return nil, errors.WithMessage(err, "show regions cmd")
+		return nil, errors.WithMessage(err, "showRegions")
 	}
 
 	switch {
@@ -321,15 +320,16 @@ func (cr *cmdRunner) getRegionDetails(sockID int) (socketRegionMap, error) {
 		return nil, errNoPMemRegions
 	}
 
-	var regionsPerSocket socketRegionMap
-	if err := regionsPerSocket.fromXML(out); err != nil {
-		return nil, errors.Wrap(err, "mapping regions to socket id")
+	var rl RegionList
+	if err := xml.Unmarshal([]byte(out), &rl); err != nil {
+		return nil, errors.Wrap(err, "parse show region cmd output")
 	}
-	if len(regionsPerSocket) == 0 {
+
+	if len(rl.Regions) == 0 {
 		return nil, errors.New("no app-direct pmem regions parsed")
 	}
 
-	return regionsPerSocket, nil
+	return Regions(rl.Regions), nil
 }
 
 func getRegionState(region Region) storage.ScmState {

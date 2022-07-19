@@ -47,7 +47,6 @@ type (
 	Backend interface {
 		getModules(int) (storage.ScmModules, error)
 		getNamespaces(int) (storage.ScmNamespaces, error)
-		getPMemState(int) (*storage.ScmSocketState, error)
 		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
@@ -288,9 +287,6 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse,
 	resp := &storage.ScmScanResponse{
 		Modules:    storage.ScmModules{},
 		Namespaces: storage.ScmNamespaces{},
-		State: storage.ScmSocketState{
-			SocketID: req.SocketID,
-		},
 	}
 
 	// If socket ID set in request, only scan devices attached to that socket.
@@ -303,31 +299,23 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse,
 	if err != nil {
 		return nil, err
 	}
-	msg = fmt.Sprintf(": %d pmem modules", len(modules))
-
-	// If there are no modules, don't bother with the rest of the scan.
 	if len(modules) == 0 {
-		resp.State.State = storage.ScmNoModules
-		msg = fmt.Sprintf(": pmem state %q", resp.State.State)
+		msg = fmt.Sprintf("%s: no pmem modules", msg)
 		return resp, nil
 	}
+	msg = fmt.Sprintf("%s: %d pmem modules", msg, len(modules))
 	resp.Modules = modules
 
-	sockState, err := p.backend.getPMemState(sockSelector)
+	namespaces, err := p.backend.getNamespaces(sockSelector)
 	if err != nil {
 		return nil, err
 	}
-	resp.State = *sockState
-	msg = fmt.Sprintf(": pmem state %+v", *sockState)
-
-	if sockState.State != storage.ScmNoRegions {
-		namespaces, err := p.backend.getNamespaces(sockSelector)
-		if err != nil {
-			return nil, err
-		}
-		msg = fmt.Sprintf(": pmem namespaces %+v", namespaces)
-		resp.Namespaces = namespaces
+	if len(namespaces) == 0 {
+		msg = fmt.Sprintf("%s: no pmem namespaces", msg)
+		return resp, nil
 	}
+	msg = fmt.Sprintf("%s: %d pmem namespace", msg, len(namespaces))
+	resp.Namespaces = namespaces
 
 	return resp, nil
 }

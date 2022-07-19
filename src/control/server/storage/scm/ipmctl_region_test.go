@@ -99,6 +99,11 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
+	case "dual-sock-full-free":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
 	case "same-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 	case "unhealthy-2nd-sock":
@@ -106,11 +111,6 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
 		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
-	case "part-free-2nd-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].FreeCapacity = (rl.Regions[1].Capacity / 2)
 	case "full-free-2nd-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
@@ -159,6 +159,7 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 		cmdOut    string
 		cmdErr    error
 		expErr    error
+		expMapErr error
 		expResult socketRegionMap
 	}{
 		"no permissions": {
@@ -178,8 +179,8 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 			expResult: expRegionMap,
 		},
 		"two regions; same socket": {
-			cmdOut: mockXMLRegions(t, "same-sock"),
-			expErr: errors.New("unexpected second region"),
+			cmdOut:    mockXMLRegions(t, "same-sock"),
+			expMapErr: errors.New("unexpected second region"),
 		},
 		"two regions; socket 0 selected": {
 			cmdOut: mockXMLRegions(t, "sock-zero"),
@@ -210,9 +211,15 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotRegionMap, gotErr := cr.getRegionDetails(sockAny)
+			gotRegions, gotErr := cr.getRegions(sockAny)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
+				return
+			}
+
+			gotRegionMap, gotMapErr := mapRegionsToSocket(gotRegions)
+			test.CmpErr(t, tc.expMapErr, gotMapErr)
+			if tc.expMapErr != nil {
 				return
 			}
 

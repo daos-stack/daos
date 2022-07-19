@@ -7,6 +7,7 @@
 package scm
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -162,56 +163,6 @@ func TestIpmctl_getPMemState(t *testing.T) {
 			},
 			expState: storage.ScmNoFreeCap,
 		},
-		//			ipmctlCfg: &mockIpmctlCfg{
-		//				regions: []ipmctl.PMemRegion{
-		//					{Free_capacity: 111111},
-		//				},
-		//			},
-		//			expErr: errors.New("unexpected PMem region type"),
-		//		},
-		//		"single region with not interleaved type": {
-		//			ipmctlCfg: &mockIpmctlCfg{
-		//				regions: []ipmctl.PMemRegion{
-		//					{
-		//						Free_capacity: 111111,
-		//						Type:          uint32(ipmctl.RegionTypeNotInterleaved),
-		//					},
-		//				},
-		//			},
-		//			expState: storage.ScmNotInterleaved,
-		//		},
-		//		"single region with free capacity": {
-		//			ipmctlCfg: &mockIpmctlCfg{
-		//				regions: []ipmctl.PMemRegion{
-		//					{
-		//						Free_capacity: 111111,
-		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
-		//					},
-		//				},
-		//			},
-		//			expState: storage.ScmFreeCap,
-		//		},
-		//		"regions with free capacity": {
-		//			ipmctlCfg: &mockIpmctlCfg{
-		//				regions: []ipmctl.PMemRegion{
-		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-		//					{
-		//						Free_capacity: 111111,
-		//						Type:          uint32(ipmctl.RegionTypeAppDirect),
-		//					},
-		//				},
-		//			},
-		//			expState: storage.ScmFreeCap,
-		//		},
-		//		"regions with no capacity": {
-		//			ipmctlCfg: &mockIpmctlCfg{
-		//				regions: []ipmctl.PMemRegion{
-		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-		//					{Type: uint32(ipmctl.RegionTypeAppDirect)},
-		//				},
-		//			},
-		//			expState: storage.ScmNoFreeCap,
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -240,7 +191,12 @@ func TestIpmctl_getPMemState(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resp, err := cr.getPMemState(sockAny)
+			regions, err := cr.getRegions(sockAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			resp, err := getPMemState(log, regions)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -269,26 +225,25 @@ func TestIpmctl_getPMemState(t *testing.T) {
 
 func TestIpmctl_prep(t *testing.T) {
 	verStr := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825"
-	//	genNsJSON := func(numa, nsNum, size, id string) string {
-	//		nsName := fmt.Sprintf("%s.%s", numa, nsNum)
-	//		bdName := numa
-	//		if nsNum != "0" {
-	//			bdName = nsName
-	//		}
-	//		sizeBytes, err := humanize.ParseBytes(size)
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//
-	//		return fmt.Sprintf(`{"dev":"namespace%s","mode":"fsdax","map":"dev",`+
-	//			`"size":%d,"uuid":"842fc847-28e0-4bb6-8dfc-d24afdba15%s",`+
-	//			`"raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264","sector_size":512,`+
-	//			`"blockdev":"pmem%s","numa_node":%s}`, nsName, sizeBytes, id, bdName, numa)
-	//	}
+	genNsJSON := func(numa, nsNum, size, id string) string {
+		nsName := fmt.Sprintf("%s.%s", numa, nsNum)
+		bdName := numa
+		if nsNum != "0" {
+			bdName = nsName
+		}
+		sizeBytes, err := humanize.ParseBytes(size)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	//	ndctlNsStr := fmt.Sprintf("[%s]", genNsJSON("1", "0", "3012GiB", "28"))
-	//	ndctl2NsStr := fmt.Sprintf("[%s,%s]", genNsJSON("1", "0", "3012GiB", "28"),
-	//		genNsJSON("0", "0", "3012GiB", "29"))
+		return fmt.Sprintf(`{"dev":"namespace%s","mode":"fsdax","map":"dev",`+
+			`"size":%d,"uuid":"842fc847-28e0-4bb6-8dfc-d24afdba15%s",`+
+			`"raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264","sector_size":512,`+
+			`"blockdev":"pmem%s","numa_node":%s}`, nsName, sizeBytes, id, bdName, numa)
+	}
+	ndctlSingleNsStr := fmt.Sprintf("[%s]", genNsJSON("0", "0", "3012GiB", "28"))
+	ndctlDualNsStr := fmt.Sprintf("[%s,%s]", genNsJSON("0", "0", "3012GiB", "28"),
+		genNsJSON("1", "0", "3012GiB", "29"))
 	// ndctl1of4NsStr := fmt.Sprintf("[%s]", genNsJSON("0", "0", "1506GiB", "28"))
 	// ndctl2of4NsStr := fmt.Sprintf("[%s,%s]", genNsJSON("0", "0", "1506GiB", "28"),
 	// 	genNsJSON("0", "1", "1506GiB", "29"))
@@ -297,7 +252,6 @@ func TestIpmctl_prep(t *testing.T) {
 	// ndctl4of4NsStr := fmt.Sprintf("[%s,%s,%s,%s]", genNsJSON("0", "0", "1506GiB", "28"),
 	// 	genNsJSON("0", "1", "1506GiB", "29"), genNsJSON("1", "0", "1506GiB", "30"),
 	// 	genNsJSON("1", "1", "1506GiB", "31"))
-
 	sock0 := uint(0)
 	sock1 := uint(1)
 
@@ -456,8 +410,10 @@ func TestIpmctl_prep(t *testing.T) {
 			runOut: []string{
 				verStr,
 				"",
-				mockXMLRegions(t, "part-free-2nd-sock"),
-				//				ndctlNsStr,
+				mockXMLRegions(t, "dual-sock-full-free"),
+				ndctlSingleNsStr,
+				ndctlDualNsStr,
+				mockXMLRegions(t, "dual-sock-no-free"),
 				//				ndctl2NsStr,
 				//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
 				//					"   SocketID=0x0000\n" +
