@@ -14,13 +14,15 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
+const recreateRegionsStr = "Remove regions by running the command with the --reset option, reboot, run the command again without --reset to recreate regions in AppDirect interleaved mode, reboot and then run the command again without --reset to create the PMem namespaces"
+
 // FaultScmNotInterleaved creates a fault for the case where the PMem region is in non-interleaved
 // mode, this is unsupported.
 func FaultScmNotInterleaved(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d is in non-interleaved mode which is unsupported", sockID),
-		"Remove and recreate region in AppDirect interleaved mode")
+		recreateRegionsStr)
 }
 
 // FaultScmNotHealthy create a fault for the case where the PMem region is in an unhealthy state.
@@ -28,7 +30,7 @@ func FaultScmNotHealthy(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d is unhealthy", sockID),
-		"Check persistent memory modules are not faulty and then remove and recreate region")
+		fmt.Sprintf("Refer to the ipmctl instructions in the troubleshooting section of the DAOS admin guide to check PMem module health and replace faulty PMem modules. %s", recreateRegionsStr))
 }
 
 // FaultScmPartialCapacity creates a fault for the case where the PMem region has only partial
@@ -37,8 +39,7 @@ func FaultScmPartialCapacity(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d only has partial capacity free", sockID),
-		"Creating namespaces on regions with partial free-capacity is unsupported, remove "+
-			"namespaces and try again")
+		"Creating namespaces on regions with partial free-capacity is unsupported, remove namespaces by running the command with --reset and then without --reset, no reboot should be required")
 }
 
 // FaultScmUnknownMemoryMode creates a Fault for the case where the PMem region has an unsupported
@@ -47,7 +48,7 @@ func FaultScmUnknownMemoryMode(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type", sockID),
-		"Remove and recreate region in AppDirect interleaved mode")
+		recreateRegionsStr)
 }
 
 // FaultScmNoModules represents an error where no PMem modules exist.

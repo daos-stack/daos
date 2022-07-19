@@ -102,12 +102,15 @@ func (pmrt PMemRegionType) String() string {
 }
 
 func PMemRegionTypeFromString(in string) PMemRegionType {
-	return map[string]PMemRegionType{
+	if val, exists := map[string]PMemRegionType{
 		"Unknown":                 RegionTypeUnknown,
 		"AppDirect":               RegionTypeAppDirect,
 		"AppDirectNotInterleaved": RegionTypeNotInterleaved,
 		"Volatile":                RegionTypeVolatile,
-	}[in]
+	}[in]; exists {
+		return val
+	}
+	return RegionTypeUnknown
 }
 
 // PMemRegionHealth represents PMem region health.
@@ -135,13 +138,16 @@ func (pmrh PMemRegionHealth) String() string {
 }
 
 func PMemRegionHealthFromString(in string) PMemRegionHealth {
-	return map[string]PMemRegionHealth{
+	if val, exists := map[string]PMemRegionHealthy{
 		"Healthy": RegionHealthNormal,
 		"Error":   RegionHealthError,
 		"Unknown": RegionHealthUnknown,
 		"Pending": RegionHealthPending,
 		"Locked":  RegionHealthLocked,
-	}[in]
+	}[in]; exists {
+		return val
+	}
+	return RegionHealthUnknown
 }
 
 // PMemRegion represents Go equivalent of C.struct_region from nvm_management.h (NVM API) as

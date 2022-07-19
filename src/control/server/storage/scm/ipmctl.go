@@ -9,7 +9,6 @@ package scm
 import (
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"sync"
 
@@ -210,8 +209,6 @@ func checkStateHasSock(sockState storage.ScmSocketState, faultFunc func(uint) *f
 	return faultFunc(*sockState.SocketID)
 }
 
-const namespaceMajorMinorPattern = `namespace([0-9]).([0-9])`
-
 // Verify that created namespaces' block device names match the socket ID of the underlying PMem
 // region and that the the expected number of namespaces exist per region.
 func (cr *cmdRunner) verifyPMem(nss storage.ScmNamespaces, nrNsPerSocket uint, sockID int) error {
@@ -220,12 +217,11 @@ func (cr *cmdRunner) verifyPMem(nss storage.ScmNamespaces, nrNsPerSocket uint, s
 		return err
 	}
 
-	re := regexp.MustCompile(namespaceMajorMinorPattern)
 	nsMajMinMap := make(map[uint64][]uint64)
 
 	// Verify each namespace has valid NUMA node and region ID
 	for _, ns := range namespaces {
-		matches := re.FindStringSubmatch(ns.Name)
+		matches := nsMajMinRegex.FindStringSubmatch(ns.Name)
 		if len(matches) != 3 {
 			return errors.Errorf("unexpected format of namespace dev string: %q", ns.Name)
 		}

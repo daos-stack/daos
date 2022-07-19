@@ -9,11 +9,22 @@ package scm
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+var nsMajMinRegex = regexp.MustCompile(`namespace([0-9]).([0-9])`)
+
+// Constants for ndctl commandline calls.
+const (
+	cmdCreateNamespace  = "ndctl create-namespace"  // returns ns info in json
+	cmdListNamespaces   = "ndctl list -N -v"        // returns ns info in json
+	cmdDisableNamespace = "ndctl disable-namespace" // expect device name param
+	cmdDestroyNamespace = "ndctl destroy-namespace" // expect device name param
 )
 
 func (cr *cmdRunner) checkNdctl() (errOut error) {
@@ -25,14 +36,6 @@ func (cr *cmdRunner) checkNdctl() (errOut error) {
 
 	return
 }
-
-// constants for ndctl commandline calls
-const (
-	cmdCreateNamespace  = "ndctl create-namespace"  // returns ns info in json
-	cmdListNamespaces   = "ndctl list -N -v"        // returns ns info in json
-	cmdDisableNamespace = "ndctl disable-namespace" // expect device name param
-	cmdDestroyNamespace = "ndctl destroy-namespace" // expect device name param
-)
 
 func (cr *cmdRunner) createNamespace(regionID int, sizeBytes uint64) (string, error) {
 	cmd := cmdCreateNamespace

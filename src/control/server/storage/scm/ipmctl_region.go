@@ -278,13 +278,9 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 // socketRegionMap maps regions based on socket ID key.
 type socketRegionMap map[int]Region
 
-func (srm *socketRegionMap) keys() []int {
-	if srm == nil || len(*srm) == 0 {
-		return []int{}
-	}
-
-	keys := make([]int, 0, len(*srm))
-	for k := range *srm {
+func (srm socketRegionMap) keys() []int {
+	keys := make([]int, 0, len(srm))
+	for k := range srm {
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
@@ -292,30 +288,20 @@ func (srm *socketRegionMap) keys() []int {
 	return keys
 }
 
-func (srm *socketRegionMap) isEmpty() bool {
-	if srm == nil || len(*srm) == 0 {
-		return true
-	}
-
-	return false
-}
-
-func (srm *socketRegionMap) fromXML(data string) error {
+func (srm socketRegionMap) fromXML(data string) error {
 	// parseRegions takes nvmxml output from ipmctl tool and returns PMem region details.
 	var rl RegionList
 	if err := xml.Unmarshal([]byte(data), &rl); err != nil {
 		return errors.Wrap(err, "parse show region cmd output")
 	}
 
-	regionsPerSocket := make(socketRegionMap)
 	for _, region := range rl.Regions {
 		sockID := int(region.SocketID)
-		if _, exists := regionsPerSocket[sockID]; exists {
+		if _, exists := srm[sockID]; exists {
 			return errors.Errorf("unexpected second region assigned to socket %d", sockID)
 		}
-		regionsPerSocket[sockID] = region
+		srm[sockID] = region
 	}
-	*srm = regionsPerSocket
 
 	return nil
 }
@@ -339,7 +325,7 @@ func (cr *cmdRunner) getRegionDetails(sockID int) (socketRegionMap, error) {
 	if err := regionsPerSocket.fromXML(out); err != nil {
 		return nil, errors.Wrap(err, "mapping regions to socket id")
 	}
-	if regionsPerSocket.isEmpty() {
+	if len(regionsPerSocket) == 0 {
 		return nil, errors.New("no app-direct pmem regions parsed")
 	}
 
