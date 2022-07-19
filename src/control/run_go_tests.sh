@@ -112,6 +112,7 @@ function setup_environment()
     echo "CGO_CFLAGS=${CGO_CFLAGS}"
     echo "listing libnvme_control source at ${SL_BUILD_DIR}/src/control/lib/spdk"
     ls ${SL_BUILD_DIR}/src/control/lib/spdk
+    echo 'cwd is ' $(pwd)
 
 	src_include="$(dirname "$build_source")/src/include"
 	if [ -d "$src_include" ]; then
