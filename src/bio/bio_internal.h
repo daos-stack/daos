@@ -98,6 +98,16 @@ struct bio_bulk_cache {
 	d_list_t		  bbc_grp_lru;
 };
 
+struct bio_dma_stats {
+	struct d_tm_node_t	*bds_chks_tot;
+	struct d_tm_node_t	*bds_chks_used[BIO_CHK_TYPE_MAX];
+	struct d_tm_node_t	*bds_bulk_grps;
+	struct d_tm_node_t	*bds_active_iods;
+	struct d_tm_node_t	*bds_queued_iods;
+	struct d_tm_node_t	*bds_grab_errs;
+	struct d_tm_node_t	*bds_grab_retries;
+};
+
 /*
  * Per-xstream DMA buffer, used as SPDK dma I/O buffer or as temporary
  * RDMA buffer for ZC fetch/update over NVMe devices.
@@ -109,9 +119,13 @@ struct bio_dma_buffer {
 	unsigned int		 bdb_used_cnt[BIO_CHK_TYPE_MAX];
 	unsigned int		 bdb_tot_cnt;
 	unsigned int		 bdb_active_iods;
-	ABT_cond		 bdb_wait_iods;
+	unsigned int		 bdb_queued_iods;
+	ABT_cond		 bdb_wait_iod;
+	ABT_cond		 bdb_fifo;
 	ABT_mutex		 bdb_mutex;
 	struct bio_bulk_cache	 bdb_bulk_cache;
+	struct bio_dma_stats	 bdb_stats;
+	uint64_t		 bdb_dump_ts;
 };
 
 #define BIO_PROTO_NVME_STATS_LIST					\
@@ -419,7 +433,8 @@ struct bio_desc {
 				 bd_dma_issued:1,
 				 bd_retry:1,
 				 bd_rdma:1,
-				 bd_copy_dst:1;
+				 bd_copy_dst:1,
+				 bd_in_fifo:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
@@ -442,9 +457,9 @@ is_blob_valid(struct bio_io_context *ctxt)
 }
 
 static inline uint64_t
-page2io_unit(struct bio_io_context *ctxt, uint64_t page)
+page2io_unit(struct bio_io_context *ctxt, uint64_t page, uint32_t pg_sz)
 {
-	return page * (BIO_DMA_PAGE_SZ / ctxt->bic_io_unit);
+	return page * (pg_sz / ctxt->bic_io_unit);
 }
 
 enum {
@@ -517,7 +532,7 @@ bool bypass_health_collect(void);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
-struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
+struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt, int tgt_id);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
@@ -561,35 +576,6 @@ int bulk_cache_create(struct bio_dma_buffer *bdb);
 void bulk_cache_destroy(struct bio_dma_buffer *bdb);
 int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 		       struct bio_bulk_group *ex_grp);
-static inline void
-dump_dma_info(struct bio_dma_buffer *bdb)
-{
-	struct bio_bulk_cache	*bbc = &bdb->bdb_bulk_cache;
-	struct bio_bulk_group	*bbg;
-	int			 i, bulk_grps = 0, bulk_chunks = 0;
-
-	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
-		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
-		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
-
-	/* cached bulk info */
-	for (i = 0; i < bbc->bbc_grp_cnt; i++) {
-		bbg = &bbc->bbc_grps[i];
-
-		if (bbg->bbg_chk_cnt == 0)
-			continue;
-
-		bulk_grps++;
-		bulk_chunks += bbg->bbg_chk_cnt;
-
-		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
-			i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
-	}
-	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
-}
-
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);

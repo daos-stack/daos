@@ -1262,6 +1262,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_GLOBAL_VERSION:
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1806,9 +1809,9 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID"\n",
-		 DP_CONT(pool->dp_pool, cont->dc_uuid),
-		 DP_UUID(cont->dc_cont_hdl));
+	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID" oid "DF_U64"/"DF_U64"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), DP_UUID(cont->dc_cont_hdl),
+		out->oid, arg->num_oids);
 
 	if (arg->oid)
 		*arg->oid = out->oid;
@@ -1866,9 +1869,9 @@ dc_cont_alloc_oids(tse_task_t *task)
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
-	D_DEBUG(DB_MD, DF_CONT": oid allocate: hdl="DF_UUID"\n",
-		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
-		DP_UUID(cont->dc_cont_hdl));
+	D_DEBUG(DB_MD, DF_CONT": oid allocate: hdl="DF_UUID" num "DF_U64"\n",
+		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid), DP_UUID(cont->dc_cont_hdl),
+		args->num_oids);
 
 	/** randomly select a rank from the pool map */
 	ep.ep_grp = pool->dp_sys->sy_group;
