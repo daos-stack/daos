@@ -183,7 +183,8 @@ func (r *poolRequest) getDeadline() time.Time {
 	if !r.deadline.IsZero() {
 		return r.deadline
 	}
-	return time.Now().Add(DefaultPoolTimeout)
+	r.setRetryTimeout(DefaultPoolTimeout)
+	return r.deadline
 }
 
 func (r *poolRequest) canRetry(reqErr error, try uint) bool {
