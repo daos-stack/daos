@@ -259,7 +259,7 @@ pipeline {
                     when { changeRequest() }
                     steps {
                         script {
-                            if (!env.CHANGE_BRANCH.contains('/')) {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
                                 error('Your PR branch name does not follow the rules. Please rename it ' +
                                       'according to the rules described here: ' +
                                       /* groovylint-disable-next-line LineLength */
