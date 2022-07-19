@@ -109,6 +109,10 @@ function setup_environment()
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
 
+    echo "CGO_CFLAGS=${CGO_CFLAGS}"
+    echo "listing libnvme_control source at ${SL_BUILD_DIR}/src/control/lib/spdk"
+    ls ${SL_BUILD_DIR}/src/control/lib/spdk
+
 	src_include="$(dirname "$build_source")/src/include"
 	if [ -d "$src_include" ]; then
 		echo "including path \"${src_include}\" in CGO_CFLAGS"
