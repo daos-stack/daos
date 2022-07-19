@@ -30,11 +30,6 @@ fi
 
 # shellcheck disable=SC1091
 source ./.build_vars.sh
-if [ -d "${SL_BUILD_DIR}/src/control/lib/spdk" ]; then
-    ls "${SL_BUILD_DIR}/src/control/lib/spdk"
-else
-    echo "${SL_BUILD_DIR}/src/control/lib/spdk does not exist"
-fi
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
 ln -s ../../../../../../../../src/control \

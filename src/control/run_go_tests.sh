@@ -95,13 +95,6 @@ function setup_environment()
 
 	source "${build_source}"
 
-    # the prefix for SL_BUILD_DIR may be in a different location so fix it
-    if [ ! -d "${SL_BUILD_DIR}" ]; then
-        build_root=$(dirname "$(dirname "${SL_BUILD_DIR}")")
-        newpath="$(pwd)/build"
-        SL_BUILD_DIR="${SL_BUILD_DIR/${build_root}/${newpath}}"
-    fi
-
 	# allow cgo to find and link to third-party libs
 	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib}
 	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64}"
