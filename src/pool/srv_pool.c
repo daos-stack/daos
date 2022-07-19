@@ -4210,6 +4210,8 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 			D_GOTO(out_free, rc);
 		}
 		val = ds_pool_svc_rf_from_nreplicas(replicas->rl_nr);
+		if (val < DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT)
+			val = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
 		d_rank_list_free(replicas);
 		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_redun_fac, &value);
 		if (rc) {
@@ -4951,7 +4953,7 @@ pool_svc_reconfigure_replicas(struct pool_svc *svc, int svc_rf, struct pool_map 
 		return;
 	}
 
-	rc = ds_pool_plan_svc_reconfs(svc_rf, map, current, &to_add, &to_remove);
+	rc = ds_pool_plan_svc_reconfs(svc_rf, map, current, dss_self_rank(), &to_add, &to_remove);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot plan pool service reconfigurations: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -4962,14 +4964,19 @@ pool_svc_reconfigure_replicas(struct pool_svc *svc, int svc_rf, struct pool_map 
 		DP_UUID(svc->ps_uuid), svc_rf, current->rl_nr, to_add->rl_nr, to_remove->rl_nr);
 
 	/*
-	 * Ignore the two return values here. If the "add" calls returns an
-	 * error, we continue to make the "remove" call, because to_remove
-	 * either comprises unnecessary (in which case to_add is empty) or DOWN
-	 * replicas. If any of the two calls returns an error, we still need to
-	 * report any chances to the MS.
+	 * Ignore the return values from the "add" and "remove" calls here. If
+	 * the "add" calls returns an error, to_add contains the N ranks that
+	 * have not been added. We delete N ranks from to_remove to account for
+	 * the failed additions, and continue to make the "remove" call. If any
+	 * of the two calls returns an error, we still need to report any
+	 * membership changes to the MS.
 	 */
 	if (to_add->rl_nr > 0)
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
+	if (to_add->rl_nr > to_remove->rl_nr)
+		to_remove->rl_nr = 0;
+	else
+		to_remove->rl_nr -= to_add->rl_nr;
 	if (to_remove->rl_nr > 0)
 		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, to_remove, false /* stop */);
 
@@ -5390,6 +5397,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 		uint32_t *domains, bool *updated_p,
 		uint32_t *map_version_p, struct rsvc_hint *hint)
 {
+	uint64_t		svc_rf;
 	struct pool_buf		*map_buf = NULL;
 	struct pool_map		*map = NULL;
 	uint32_t		map_version;
@@ -5398,6 +5406,14 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 	int			rc;
 
 	ntargets = nnodes * dss_tgt_nr;
+
+	rc = get_svc_rf(tx, svc);
+	if (rc == -DER_NONEXIST)
+		svc_rf = -1;
+	else if (rc >= 0)
+		svc_rf = rc;
+	else
+		return rc;
 
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(tx, &svc->ps_root, &map);
@@ -5446,6 +5462,8 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 	}
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
+
+	pool_svc_reconfigure_replicas(svc, svc_rf, map);
 
 out_map:
 	if (map_version_p != NULL) {
