@@ -1,8 +1,8 @@
 hosts:
-  test_servers: 2
+  test_servers: server-[1-2]
   test_clients: 1
 extra_servers:
-  test_servers: 2
+  test_servers: server-[3-4]
 timeout: 1100
 setup:
   start_servers_once: False

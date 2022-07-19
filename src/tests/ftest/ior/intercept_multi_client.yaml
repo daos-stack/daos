@@ -1,6 +1,6 @@
 hosts:
-    test_servers: 1
-    test_clients: 3
+    test_servers: 2
+    test_clients: 6
 timeout: 1000
 server_config:
   engines_per_host: 2
