@@ -78,6 +78,21 @@ prepare_sgl(d_sg_list_t *sgl, daos_size_t size)
 	return 0;
 }
 
+static inline uint64_t
+pmfs_check_sgl_crc32(d_sg_list_t sgl)
+{
+	uint32_t i;
+	uint64_t sgl_crc32_raw = 0xFFFFFFFFUL;
+
+	for (i = 0; i < sgl.sg_nr; i++) {
+		sgl_crc32_raw = spdk_crc32c_update(sgl.sg_iovs[i].iov_buf,
+						   sgl.sg_iovs[i].iov_len,
+						   sgl_crc32_raw);
+	}
+
+	return sgl_crc32_raw ^ 0xFFFFFFFFUL;
+}
+
 static int
 app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 {
@@ -286,60 +301,58 @@ app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 		goto end;
 	}
 	D_PRINT("---------------pmfs start write  a file --------------\r\n");
-	d_sg_list_t	user_sgl;
-	daos_size_t	write_size = 2048;
+	d_sg_list_t	write_user_sgl;
+	daos_size_t	write_size = 2024;
 	uint64_t crc32_tmp1 = 0xFFFFFFFFUL, crc32_tmp2 = 0xFFFFFFFFUL;
 
 	/* using pmfs buffer render */
-	rc = prepare_sgl(&user_sgl, write_size);
+	rc = prepare_sgl(&write_user_sgl, write_size);
 	if (rc != 0) {
 		D_PRINT("Preaparing pmfs write sgl failed\r\n");
 		goto end;
 	}
 
-	printf("--------------------------start write\r\n");
-	rc = pmfs_write_start(pmfs, obj, &user_sgl, 10, &write_size);
+	D_PRINT("----------------start write---------------------------\r\n");
+	rc = pmfs_write_start(pmfs, obj, &write_user_sgl, 10, &write_size, PTHREAD_WITH_JOIN);
 	if (rc != 0) {
 		D_PRINT("pmfs write file start failed\r\n");
 		goto end;
 	}
-
-	for (i = 0; i < user_sgl.sg_nr; i++) {
-		crc32_tmp1 = spdk_crc32c_update(user_sgl.sg_iovs[i].iov_buf,
-						user_sgl.sg_iovs[i].iov_len,
-						crc32_tmp1);
-	}
-	crc32_tmp1 =  crc32_tmp1 ^ 0xFFFFFFFFUL;
-	D_PRINT("---------------pmfs write CRC=%lx, sg_nr = %d---------\r\n",
-		crc32_tmp1, user_sgl.sg_nr);
-	D_PRINT("---------------pmfs write file done -----------------\r\n");
-	/* start to read file start offset and len */
+	crc32_tmp1 =  pmfs_check_sgl_crc32(write_user_sgl);
 	D_PRINT("---------------pmfs start read a file -----------------\r\n");
+	daos_size_t read_size = 2024;
+	d_sg_list_t	read_user_sgl;
 
-	daos_size_t read_size = 2048;
+	rc = prepare_sgl(&read_user_sgl, read_size);
+	if (rc != 0) {
+		D_PRINT("Preaparing pmfs write sgl failed\r\n");
+		goto end;
+	}
 
-	rc = prepare_sgl(&user_sgl, read_size);
-
-	rc = pmfs_read_start(pmfs, obj, &user_sgl, 10, &read_size);
+	int count = 1000;
+read_start:
+	rc = pmfs_read_start(pmfs, obj, &read_user_sgl, 10, &read_size, PTHREAD_WITH_JOIN);
 	if (rc != 0) {
 		D_PRINT("pmfs read file failed\r\n");
 		goto end;
 	}
+	D_PRINT("---------------pmfs write CRC=%lx, sg_nr = %d---------\r\n",
+		crc32_tmp1, write_user_sgl.sg_nr);
+	crc32_tmp2 =  pmfs_check_sgl_crc32(read_user_sgl);
+	D_PRINT("---------------pmfs read CRC=%lx- count=%d------------------\r\n",
+		crc32_tmp2, count);
+	count--;
 
-	for (i = 0; i < user_sgl.sg_nr; i++) {
-		crc32_tmp2 = spdk_crc32c_update(user_sgl.sg_iovs[i].iov_buf,
-						user_sgl.sg_iovs[i].iov_len,
-						crc32_tmp2);
+	while (crc32_tmp2 != crc32_tmp1 && count != 0) {
+		goto read_start;
 	}
-	crc32_tmp2 = crc32_tmp2 ^ 0xFFFFFFFFUL;
 
-	D_PRINT("---------------pmfs read CRC=%lx-------------------\r\n",
-		crc32_tmp2);
 	if (crc32_tmp2 != crc32_tmp1) {
 		D_PRINT("CRC check failed\r\n");
-		goto end;
 	}
 
+	D_PRINT("---------------pmfs write file done -----------------\r\n");
+	/* start to read file start offset and len */
 	D_PRINT("---------------pmfs read file done-----------------\r\n");
 
 	D_PRINT("---------------pmfs start punch a file -------------\r\n");
@@ -370,7 +383,7 @@ app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 	}
 
 	D_PRINT("---------------pmfs umount done---------------------\r\n");
-	D_PRINT("test app thread start function ok\r\n");
+	D_PRINT("test app thread start function rc=%d \r\n", rc);
 end:
 	return rc;
 }

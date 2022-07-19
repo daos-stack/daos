@@ -248,11 +248,11 @@ vos_fs_execute_command_ult(void *arg)
 }
 
 int
-pmfs_thread_create(void *fs_cb, void *arg, bool is_abt)
+pmfs_thread_create(void *fs_cb, void *arg, int thread_type)
 {
 	int rc;
 
-	if (is_abt) {
+	if (thread_type == ABT_THREAD) {
 		ABT_thread thread;
 		ABT_xstream xstream;
 
@@ -268,18 +268,21 @@ pmfs_thread_create(void *fs_cb, void *arg, bool is_abt)
 			return rc;
 		ABT_thread_free(&thread);
 		ABT_xstream_free(&xstream);
+	} else if (thread_type == PTHREAD_WITH_JOIN) {
+		pthread_t pid;
+
+		rc = pthread_create(&pid, NULL, fs_cb, arg);
+		if (rc != 0)
+			return rc;
+		rc = pthread_join(pid, NULL);
+		if (rc != 0)
+			return rc;
 	} else {
 		pthread_t pid;
 
 		rc = pthread_create(&pid, NULL, fs_cb, arg);
-		if (rc != 0) {
+		if (rc != 0)
 			return rc;
-		}
-
-		rc = pthread_join(pid, NULL);
-		if (rc != 0) {
-			return rc;
-		}
 	}
 
 	return 0;
@@ -573,8 +576,10 @@ pmfs_write_cb(void *arg)
 	int     rc = 0;
 
 	g_vfca->vfcmd = "PMFS_TASKS";
+	D_MUTEX_LOCK(&vos_fs_cmd_lock);
 	write_args->errorno = pmfs_write_sync(write_args->pmfs, write_args->obj,
 					      sgl, off);
+	D_MUTEX_UNLOCK(&vos_fs_cmd_lock);
 	rc = write_args->errorno;
 	if (rc != 0) {
 		D_PRINT("write error\r\n");
@@ -596,8 +601,10 @@ pmfs_read_cb(void *arg)
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
+	D_MUTEX_LOCK(&vos_fs_cmd_lock);
 	read_args->errorno = pmfs_read_sync(read_args->pmfs, read_args->obj, sgl, off,
 					    &read_size);
+	D_MUTEX_UNLOCK(&vos_fs_cmd_lock);
 	rc = read_args->errorno;
 	if (rc != 0) {
 		read_args->errorno = -EINVAL;
@@ -823,7 +830,7 @@ pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 
 int
 pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		 daos_off_t off, daos_size_t *write_size)
+		 daos_off_t off, daos_size_t *write_size, int thread_type)
 {
 	struct write_args write_args;
 	int rc = 0;
@@ -837,7 +844,7 @@ pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args, 0);
+	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args, thread_type);
 	if (rc != 0)
 		return rc;
 
@@ -846,7 +853,7 @@ pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 int
 pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		daos_off_t off,	daos_size_t *read_size)
+		daos_off_t off,	daos_size_t *read_size, int thread_type)
 {
 	struct read_args read_args;
 	int rc = 0;
@@ -860,7 +867,7 @@ pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args, 0);
+	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args, thread_type);
 	if (rc != 0)
 		return rc;
 
