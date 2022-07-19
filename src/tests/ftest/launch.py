@@ -521,7 +521,7 @@ def get_remote_output(host_list, command, timeout=120):
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    print("Running on {}: {}".format(nodes, command))
+    print("Running on {} with a {} second timeout: {}".format(nodes, timeout, command))
     task.run(command=command, nodes=nodes, timeout=timeout)
     return task
 
@@ -1314,7 +1314,8 @@ def run_tests(test_files, tag_filter, args):
                     "{}/*.log*".format(test_log_dir),
                     args,
                     avocado_logs_dir,
-                    get_test_category(test_file["py"]))
+                    get_test_category(test_file["py"]),
+                    1800)
 
                 # Archive remote ULTs stacks dump files
                 return_code |= archive_files(
@@ -1535,7 +1536,7 @@ def compress_log_files(avocado_logs_dir, args):
 
 
 def archive_files(description, destination, hosts, source_files, args,
-                  avocado_logs_dir=None, test_name=None):
+                  avocado_logs_dir=None, test_name=None, timeout=900):
     """Archive all of the remote files to a local directory.
 
     Args:
@@ -1551,6 +1552,8 @@ def archive_files(description, destination, hosts, source_files, args,
             cart_logtest.py will be run against each log file and the size of
             each log file will be checked against the threshold (if enabled).
             Defaults to None.
+        timeout (int, optional): number of seconds to wait for the archiving
+            operation to complete. Defaults to 900 seconds.
 
     Returns:
         int: status of archiving the files
@@ -1586,7 +1589,7 @@ def archive_files(description, destination, hosts, source_files, args,
             command.append("-t \"{}\"".format(args.logs_threshold))
         if args.verbose > 1:
             command.append("-v")
-        task = get_remote_output(hosts, " ".join(command), 900)
+        task = get_remote_output(hosts, " ".join(command), timeout)
 
         # Determine if the command completed successfully across all the hosts
         cmd_description = "archive_files command for {}".format(description)
