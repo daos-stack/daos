@@ -74,7 +74,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,dfusedaosbuild_metadata
         """
-        self.run_build_test("metadata", True)
+        self.run_build_test("metadata")
 
     def test_nocache(self):
         """ This test builds DAOS on a dfuse filesystem.
@@ -88,7 +88,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusebuild,dfusedaosbuild_nocache
         """
-        self.run_build_test("nocache", True)
+        self.run_build_test("nocache")
 
     def run_build_test(self, cache_mode, intercept=False):
         """"Run an actual test from above"""
@@ -120,7 +120,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 180
+                build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
@@ -128,9 +128,8 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
-            build_time = 90
         elif cache_mode == 'nocache':
-            build_time = 240
+            build_time = 180
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -165,8 +164,9 @@ class DaosBuild(DfuseTestBase):
         preload_cmd = ';'.join(envs)
 
         build_jobs = 6 * 5
+        intercept_jobs = build_jobs
         if intercept:
-            build_jobs = 1
+            intercept_jobs = 1
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work, so run this part in serial.  The VMs have 6 cores each.
@@ -176,8 +176,8 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 24 --build-deps=only'.format(build_dir),
-                'scons -C {} --jobs {}'.format(build_dir, build_jobs)]
+                'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
+                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
