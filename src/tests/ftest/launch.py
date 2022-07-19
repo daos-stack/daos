@@ -493,7 +493,7 @@ def get_remote_output(host_list, command, timeout=120):
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    print("Running on {}: {}".format(nodes, command))
+    print("Running on {} with a {} second timeout: {}".format(nodes, timeout, command))
     task.run(command=command, nodes=nodes, timeout=timeout)
     return task
 
@@ -1532,7 +1532,7 @@ def archive_files(description, destination, hosts, source_files, args,
             each log file will be checked against the threshold (if enabled).
             Defaults to None.
         timeout (int, optional): number of seconds to wait for the archiving
-            operation to complete. Defaults to 120 seconds.
+            operation to complete. Defaults to 900 seconds.
 
     Returns:
         int: status of archiving the files
@@ -1568,7 +1568,7 @@ def archive_files(description, destination, hosts, source_files, args,
             command.append("-t \"{}\"".format(args.logs_threshold))
         if args.verbose > 1:
             command.append("-v")
-        task = get_remote_output(hosts, " ".join(command), 900)
+        task = get_remote_output(hosts, " ".join(command), timeout)
 
         # Determine if the command completed successfully across all the hosts
         cmd_description = "archive_files command for {}".format(description)
