@@ -473,6 +473,12 @@ this container. If no cell size is specified, it will be inherited from the
 pool. The default cell size on the pool is set to 1MiB if not modified by the
 administrator at pool creation time.
 
+### Checksum Background Scrubbing
+A pool ULT can be configured to scan the VOS trees to discover silent data
+corruption proactively. (see data_integrity.md for more details). This can be
+disabled per container using the ```DAOS_PROP_CO_SCRUBBER_DISABLED``` container
+property.
+
 ### Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated

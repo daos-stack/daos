@@ -73,6 +73,20 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
 				"850505:14:00.0"),
 		},
+		"input vmd backing devices": {
+			inAddrs: addrListFromStrings(vmdBackingAddr2, vmdBackingAddr1),
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
+					"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+					"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+					"850505:14:00.0"),
+			},
+			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
+		},
+		"input vmd backing devices; no cache": {
+			inAddrs:     addrListFromStrings(vmdBackingAddr2, vmdBackingAddr1),
+			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

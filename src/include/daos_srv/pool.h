@@ -81,6 +81,10 @@ struct ds_pool {
 	 * DAOS_SYS_TAG.
 	 */
 	void			*sp_metrics[DAOS_NR_MODULE];
+	/** checksum scrubbing properties */
+	uint64_t		sp_scrub_mode;
+	uint64_t		sp_scrub_freq_sec;
+	uint64_t		sp_scrub_thresh;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -189,7 +193,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   const char *principal_name);
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info);
+		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		      uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -292,10 +297,11 @@ ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32
 static inline uint32_t
 ds_pool_get_version(struct ds_pool *pool)
 {
-	uint32_t	ver;
+	uint32_t	ver = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	ver = pool_map_get_version(pool->sp_map);
+	if (pool->sp_map != NULL)
+		ver = pool_map_get_version(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return ver;

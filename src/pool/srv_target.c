@@ -34,6 +34,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/srv_csum.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -1323,16 +1324,15 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 	if (in->tdi_hdls.ca_arrays == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DB_MD, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
-		DF_U64"\n", DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids),
-		in->tdi_hdls.ca_count);
+	D_DEBUG(DB_MD, DF_UUID ": handling rpc: %p hdls[0]=" DF_UUID " nhdls=" DF_U64 "\n",
+		DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids), in->tdi_hdls.ca_count);
 
 	for (i = 0; i < in->tdi_hdls.ca_count; i++)
 		ds_pool_tgt_disconnect(hdl_uuids[i]);
 out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d "DF_RC"\n",
-		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d " DF_RC "\n", DP_UUID(in->tdi_uuid), rpc,
+		out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1595,6 +1595,12 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	}
 	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
+	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
+		iv_prop->pip_scrub_mode);
+	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
+	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
+	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
+
 	return ret;
 }
 
@@ -1612,7 +1618,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	unsigned int			version;
 	int				rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_TRACE, DF_UUID ": handling rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_UUID(in->tmi_op.pi_hdl));
 
 	/* Validate the pool handle and get the ds_pool object. */
@@ -1680,7 +1686,7 @@ out_pool:
 	ds_pool_put(pool);
 out:
 	out->tmo_op.po_rc = rc;
-	D_DEBUG(DB_TRACE, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_RC(out->tmo_op.po_rc));
+	D_DEBUG(DB_TRACE, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->tmi_op.pi_uuid),
+		rpc, DP_RC(out->tmo_op.po_rc));
 	crt_reply_send(rpc);
 }
