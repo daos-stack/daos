@@ -267,6 +267,8 @@ test_setup_cont_open(void **state)
 		}
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
+		else
+			print_message("daos_cont_open succeed.\n");
 	}
 
 	/** broadcast container open result */
