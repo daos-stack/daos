@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -894,6 +894,7 @@ rebuild_multiple_tgts(void **state)
 	struct daos_obj_layout *layout;
 	d_rank_t	leader;
 	d_rank_t	exclude_ranks[2] = { 0 };
+	int		rc;
 	int		i;
 
 	if (!test_runable(arg, 6))
@@ -906,8 +907,8 @@ rebuild_multiple_tgts(void **state)
 	rebuild_io(arg, &oid, 1);
 
 	test_get_leader(arg, &leader);
-	daos_obj_layout_get(arg->coh, oid, &layout);
-
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	if (arg->myrank == 0) {
 		int fail_cnt = 0;
 
@@ -1105,6 +1106,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	daos_obj_id_t	oid;
 	struct daos_obj_layout *layout;
 	struct daos_obj_shard *shard;
+	int		rc;
 
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 3)
 		return;
@@ -1115,7 +1117,8 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 
 	rebuild_io(arg, &oid, 1);
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 
 	/* HOLD rebuild ULT */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -1160,6 +1163,7 @@ rebuild_fail_all_replicas(void **state)
 	daos_obj_id_t	oid;
 	struct daos_obj_layout *layout;
 	int		i;
+	int		rc;
 
 	/* This test will kill 3 replicas, which might include the ranks
 	 * in svcs, so make sure there are at least 6 ranks in svc, so
@@ -1176,8 +1180,8 @@ rebuild_fail_all_replicas(void **state)
 
 	rebuild_io(arg, &oid, 1);
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
-
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < layout->ol_nr; i++) {
 		int j;
 
