@@ -320,15 +320,15 @@ out_lock:
 }
 
 /* Get failed target index on the current node */
-int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
-			       unsigned int *failed_tgts_cnt)
+int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, int **tgts,
+				 unsigned int *tgts_cnt)
 {
 	struct ds_pool		*pool;
-	struct pool_target	**tgts = NULL;
+	struct pool_target	**pool_tgts = NULL;
 	d_rank_t		myrank;
 	int			rc;
 
-	*failed_tgts_cnt = 0;
+	*tgts_cnt = 0;
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL || pool->sp_map == NULL)
 		D_GOTO(output, rc = 0);
@@ -343,32 +343,35 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 		D_GOTO(output, rc);
 	}
 
-	rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
-					       failed_tgts_cnt, myrank);
-	if (rc) {
-		D_ERROR("get failed tgts "DF_RC"\n", DP_RC(rc));
-		D_GOTO(output, rc);
-	}
-
-	if (*failed_tgts_cnt != 0) {
+	rc = pool_map_find_by_rank_status(pool->sp_map, &pool_tgts, tgts_cnt, status,
+					  myrank);
+	if (*tgts_cnt != 0) {
 		int i;
 
-		D_ALLOC(*failed_tgts, *failed_tgts_cnt * sizeof(int));
-		if (*failed_tgts == NULL) {
-			D_FREE(tgts);
-			*failed_tgts_cnt = 0;
+		D_ALLOC(*tgts, *tgts_cnt * sizeof(int));
+		if (*tgts == NULL) {
+			*tgts_cnt = 0;
 			D_GOTO(output, rc = -DER_NOMEM);
 		}
-		for (i = 0; i < *failed_tgts_cnt; i++)
-			(*failed_tgts)[i] = tgts[i]->ta_comp.co_index;
-
-		D_FREE(tgts);
+		for (i = 0; i < *tgts_cnt; i++)
+			(*tgts)[i] = pool_tgts[i]->ta_comp.co_index;
 	}
 
 output:
 	if (pool)
 		ds_pool_put(pool);
+	if (pool_tgts)
+		D_FREE(pool_tgts);
 	return rc;
+}
+
+int
+ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts, unsigned int *failed_tgts_cnt)
+{
+	unsigned int status;
+
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	return ds_pool_get_tgt_idx_by_state(pool_uuid, status, failed_tgts, failed_tgts_cnt);
 }
 
 /* See nvme_reaction() for return values */
