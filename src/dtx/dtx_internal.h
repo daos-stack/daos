@@ -50,7 +50,7 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
-	((int32_t)		(do_pad)		CRT_VAR)	\
+	((int32_t)		(do_misc)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
@@ -184,7 +184,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, daos_epoch_t epoch);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

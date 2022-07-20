@@ -22,13 +22,12 @@ Build-Depends: debhelper (>= 10),
                libfuse3-dev,
                libprotobuf-c-dev,
                libjson-c-dev,
-               libisal-dev,
-               dpdk-dev (<<21.11),
+               dpdk-dev (>= 21.11.1),
                libisal-crypto-dev,
                libcunit1-dev,
                golang-go,
                libboost-dev,
-               libspdk-dev (>=21.07), libspdk-dev (<<22),
+               libspdk-dev (>= 22.01.1),
                libipmctl-dev,
                libraft-dev (= 0.9.1-1401.gc18bcb8),
                python3-tabulate,
@@ -180,7 +179,7 @@ Section: net
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
-         ipmctl (>02.00.00.3816), libfabric (>= 1.14.0-1)
+         ipmctl (>02.00.00.3816), libfabric (>= 1.14.0-1), spdk-tools (>= 22.01.1)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

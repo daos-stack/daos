@@ -3390,6 +3390,9 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		} else {
 			dfs_obj_t *sym;
 
+			/** this should not happen, but to silence coverity */
+			if (entry.value == NULL)
+				D_GOTO(err_obj, rc = EIO);
 			/* dereference the symlink */
 			rc = lookup_rel_path(dfs, parent, entry.value, flags,
 					     &sym, mode, stbuf, 0);
@@ -3779,6 +3782,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
+	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode = obj_glob->mode;
 	obj->flags = flags ? flags : obj_glob->flags;
 
