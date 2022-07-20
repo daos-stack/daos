@@ -95,10 +95,12 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		Status   int         `json:"status"`
 	}{in, errStr, status}, "", "  ")
 	if err != nil {
+		fmt.Fprintf(out, "unable to marshal json: %s\n", err.Error())
 		return err
 	}
 
 	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
+		fmt.Fprintf(out, "unable to write json: %s\n", err.Error())
 		return err
 	}
 

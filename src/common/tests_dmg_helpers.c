@@ -9,26 +9,12 @@
 #include <linux/limits.h>
 #include <json-c/json.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 #include <daos_srv/bio.h>
-
-#include <sys/sysinfo.h>
-
-static void
-log_free_mem(void)
-{
-	struct sysinfo	info = {0};
-
-	if (sysinfo(&info) != 0) {
-		D_ERROR("failed to get memory free from sysinfo: %s\n", strerror(errno));
-		return;
-	}
-
-	D_INFO("free mem: %lu MB\n", info.freeram / (1024 * 1024));
-}
 
 static void
 cmd_free_args(char **args, int argcount)
@@ -109,6 +95,47 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	return cmd_str;
 }
 
+static void
+log_stderr_pipe(int fd)
+{
+	char	buf[512];
+	char	*full_msg = NULL;
+	ssize_t	len = 0;
+
+	while (1) {
+		ssize_t n;
+		ssize_t new_len = 0;
+		char	*tmp;
+
+		n = read(fd, buf, sizeof(buf));
+		if (n == 0)
+			break;
+		if (n < 0) {
+			D_ERROR("read from stderr pipe failed: %s\n", strerror(errno));
+			break;
+		}
+
+		new_len = len + n;
+		D_REALLOC(tmp, full_msg, len, new_len);
+		if (tmp == NULL) {
+			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld\n",
+				new_len);
+			break;
+		}
+
+		strncpy(&full_msg[len], buf, n);
+	}
+
+	close(fd);
+
+	if (full_msg == NULL) {
+		D_INFO("no stderr output\n");
+		return;
+	}
+
+	D_ERROR("stderr: %s\n", full_msg);
+}
+
 #ifndef HAVE_JSON_TOKENER_GET_PARSE_END
 #define json_tokener_get_parse_end(tok) ((tok)->char_offset)
 #endif
@@ -128,7 +155,11 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			parse_depth = JSON_TOKENER_DEFAULT_DEPTH;
 	json_tokener		*tok = NULL;
 	FILE			*fp = NULL;
-	int			pc_rc, rc = 0;
+	/*FILE			*fperr = NULL;*/
+	int			stdoutfd[2];
+	int			stderrfd[2];
+	int			rc = 0;
+	int			child_rc = 0;
 	const char		*debug_flags = "-d --log-file=/tmp/suite_dmg.log";
 
 	if (dmg_config_file == NULL)
@@ -143,18 +174,82 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
-	log_free_mem();
 	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
+
+	/* Create pipes */
+	if (pipe(stdoutfd) == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to create stdout pipe: %s\n", strerror(errno));
+		goto out;
+	}
+
+	if (pipe(stderrfd) == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to create stderr pipe: %s\n", strerror(errno));
+		goto out;
+	}
+
+	if (fork() == 0) {
+		/* child doesn't need the read end of the pipes */
+		close(stdoutfd[0]);
+		close(stderrfd[0]);
+
+		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1) {
+			D_ERROR("failed to dup stdout pipe: %s\n", strerror(errno));
+			exit(daos_errno2der(errno));
+		}
+
+		if (dup2(stderrfd[1], STDERR_FILENO) == -1) {
+			D_ERROR("failed to dup stderr pipe: %s\n", strerror(errno));
+			exit(daos_errno2der(errno));
+		}
+
+		close(stdoutfd[1]);
+		close(stderrfd[1]);
+
+		if (system(cmd_str) == -1) {
+			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", cmd_str, errno, strerror(errno));
+			exit(-DER_IO);
+		}
+
+		exit(0);
+	}
+
+	/* parent doesn't need the write end of the pipes */
+	close(stdoutfd[1]);
+	close(stderrfd[1]);
+
+	/* Wait for child to finish executing */
+	if (wait(&child_rc) == -1) {
+		D_ERROR("wait failed: %s\n", strerror(errno));
+		D_GOTO(out, rc = daos_errno2der(errno));
+	}
+
+	log_stderr_pipe(stderrfd[0]);
+
+	if (child_rc != 0) {
+		D_ERROR("child process failed, "DF_RC"\n", DP_RC(child_rc));
+		D_GOTO(out, rc = child_rc);
+	}
+
+#if 0
 	fp = popen(cmd_str, "r");
 	if (!fp) {
 		D_ERROR("failed to invoke '%s', errno=%d (%s)\n", cmd_str, errno, strerror(errno));
 		D_GOTO(out, rc = -DER_IO);
 	}
-	log_free_mem();
+#endif
 
 	/* If the caller doesn't care about output, don't bother parsing it. */
 	if (json_out == NULL)
-		goto out_pclose;
+		goto out;
+		/*goto out_pclose;*/
+
+	fp = fdopen(stdoutfd[0], "r");
+	if (fp == NULL) {
+		D_ERROR("fdopen failed: %s\n", strerror(errno));
+		D_GOTO(out, rc = daos_errno2der(errno));
+	}
 
 	char	*jbuf = NULL, *temp;
 	size_t	size = 0;
@@ -182,8 +277,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
-
-	log_free_mem();
+	close(stdoutfd[0]);
 
 	if (total == 0) {
 		D_ERROR("dmg output is empty\n");
@@ -216,13 +310,20 @@ out_tokener:
 	json_tokener_free(tok);
 out_jbuf:
 	D_FREE(jbuf);
-out_pclose:
+/*out_pclose:*/
+	if (fclose(fp) == -1) {
+		D_ERROR("failed to close fp: %s\n", strerror(errno));
+		if (rc == 0)
+			rc = daos_errno2der(errno);
+	}
+#if 0
 	pc_rc = pclose(fp);
 	if (pc_rc != 0) {
 		D_ERROR("%s exited with error %d\n", cmd_str, pc_rc & 0xFF);
 		if (rc == 0)
 			rc = -DER_MISC;
 	}
+#endif
 out:
 	D_FREE(cmd_str);
 
