@@ -105,7 +105,8 @@ pool_hdl_size(struct pool_svc *svc)
 	if (svc->ps_global_version != 0)
 		return sizeof(struct pool_hdl);
 	else
-		return sizeof(struct pool_hdl) - sizeof(((struct pool_hdl *)0)->ph_machine);
+		return sizeof(((struct pool_hdl *)0)->ph_flags) +
+		       sizeof(((struct pool_hdl *)0)->ph_sec_capas);
 }
 
 static struct pool_svc *
@@ -5518,8 +5519,8 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 	if (val->iov_len != sizeof(struct pool_hdl)) {
 		/* old/2.0 pool handle format ? */
-		if (val->iov_len == sizeof(struct pool_hdl) -
-		    sizeof(((struct pool_hdl *)0)->ph_machine) &&
+		if (val->iov_len == sizeof(((struct pool_hdl *)0)->ph_flags) +
+		    sizeof(((struct pool_hdl *)0)->ph_sec_capas) &&
 		    arg->eia_pool_svc->ps_global_version < 1) {
 			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
 			/* if looking for a specific machine, do not select this handle */
