@@ -682,21 +682,23 @@ class EnvironmentVariables(dict):
 class PositionalParameter(FormattedParameter):
     """Parameter that defines position.
 
-    Used to support positional parameters for dmg and daos.
+    Used to support positional parameters for dmg, daos, and ddb.
     """
 
-    def __init__(self, position, default=None, str_format=None, yaml_key=None):
+    def __init__(self, position, default=None, str_format="{}", yaml_key=None):
         """Create a PositionalParameter object.
 
         Args:
             position (int): argument position/order
-            default (object, optional): default value for the param. Defaults to
-                None.
-
+            default (object, optional): default value for the param. Defaults to None.
+            str_format (str, optional): string format used for the parameter. Caller can
+                define the static parameter such as "-w" by passing it into here. Defaults
+                to "{}", in which case the value, which can be changed afterwards, would
+                be the parameter.
+            yaml_key (str, optional): the yaml key name to use when finding the value to
+                assign from the test yaml file. Default is None which will use the
+                object's variable name as the yaml key.
         """
-        if str_format is None:
-            str_format = "{}"
-
         super().__init__(str_format, default, yaml_key)
         self._position = position
 
