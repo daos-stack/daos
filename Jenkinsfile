@@ -233,6 +233,7 @@ pipeline {
                         }
                     }
                     env.pragmas = pragmas
+                    println(env.pragmas)
                 }
             }
         }
