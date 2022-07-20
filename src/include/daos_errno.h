@@ -280,7 +280,10 @@ extern "C" {
 	       No service available)					\
 	/** The TX ID may be reused. */				\
 	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
-	       TX ID may be reused)
+	       TX ID may be reused)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
+	       update again)						\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
