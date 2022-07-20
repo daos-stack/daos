@@ -277,7 +277,10 @@ test_setup_cont_open(void **state)
 			handle_share(&arg->coh, HANDLE_CO,
 				     arg->myrank, arg->pool.poh, 0);
 		print_message("daos_cont_open is returning.\n");
+	} else {
+		print_message("daos_cont_open is returning.\n");
 	}
+
 	return rc;
 }
 
