@@ -45,7 +45,11 @@ class DfuseTestBase(TestWithServers):
         return error_list
 
     def load_dfuse(self, hosts):
-        """Create a DfuseCommand object"""
+        """Create a DfuseCommand object
+
+        Args:
+            hosts (list): list of hosts on which to start Dfuse
+        """
 
         self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)
@@ -60,8 +64,7 @@ class DfuseTestBase(TestWithServers):
             mount_dir (str, optional): updated mount dir name. Defaults to None.
         """
         if self.dfuse is None:
-            self.dfuse = Dfuse(hosts, self.tmp)
-            self.dfuse.get_params(self)
+            self.load_dfuse(hosts)
 
         dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
 

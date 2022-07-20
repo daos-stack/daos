@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -20,7 +19,7 @@ class DaosBuild(DfuseTestBase):
     :avocado: recursive
     """
 
-    def test_writeback(self):
+    def test_dfuse_daos_build_wb(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -30,11 +29,11 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,pr
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wb
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")
 
-    def test_writethrough(self):
+    def test_dfuse_daos_build_wt(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -44,11 +43,11 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt
         """
         self.run_build_test("writethrough")
 
-    def test_writethrough_il(self):
+    def test_dfuse_daos_build_wt_il(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -58,11 +57,11 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt,dfusedaosbuild_il
+        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True)
 
-    def test_metadata(self):
+    def test_dfuse_daos_build_metadata(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -72,11 +71,11 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,dfusedaosbuild_metadata
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_metadata
         """
         self.run_build_test("metadata")
 
-    def test_nocache(self):
+    def test_dfuse_daos_build_nocache(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
@@ -86,7 +85,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusebuild,dfusedaosbuild_nocache
+        :avocado: tags=dfusebuild,test_dfuse_daos_build_nocache
         """
         self.run_build_test("nocache")
 
@@ -192,10 +191,10 @@ class DaosBuild(DfuseTestBase):
             assert len(ret_code) == 1
 
             cmd_ret = ret_code[0]
-            for key in cmd_ret.items():
+            for (key, value) in cmd_ret.items():
                 if key == 'stdout':
                     continue
-                self.log.info('%s:%s', key, cmd_ret)
+                self.log.info('%s:%s', key, value)
 
             for line in cmd_ret['stdout']:
                 self.log.info(line)
