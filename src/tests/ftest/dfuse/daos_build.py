@@ -57,7 +57,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,dfusedaosbuild_wt,test_dfuse_daos_build_wt_il
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True)
 
