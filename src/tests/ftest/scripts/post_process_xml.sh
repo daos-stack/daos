@@ -73,4 +73,3 @@ for file in "${FILES[@]}"; do
         echo "</testsuites>" >> "$file"
     fi
 done
-
