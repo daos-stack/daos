@@ -318,6 +318,11 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
+	if (grp_cfg_file == NULL) {
+		D_ERROR("No config filename was passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
 		D_ERROR("Failed to open %s for reading\n", grp_cfg_file);
