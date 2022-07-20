@@ -85,7 +85,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusebuild,test_dfuse_daos_build_nocache
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_nocache
         """
         self.run_build_test("nocache")
 
