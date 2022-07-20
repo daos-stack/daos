@@ -59,11 +59,12 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base, ver_array, 2,
 					      query_cb, pproto, daos_get_crt_ctx());
 		if (rc) {
-			D_ERROR("crt_proto_query_with_ctx() retry failed: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 			pproto->rc = rc;
 			pproto->completed = true;
+		} else {
+			D_ERROR("crt_proto_query_with_ctx() succeeded");
 		}
-		D_ERROR("crt_proto_query_with_ctx() retry succeeded");
 	} else {
 		pproto->rc = cb_info->pq_rc;
 		pproto->version = cb_info->pq_ver;
@@ -82,6 +83,7 @@ dc_pool_init(void)
 	struct pool_proto	*pproto = NULL;
 	crt_context_t		ctx = daos_get_crt_ctx();
 	int			rc;
+	int			num_ranks;
 
 	dc_pool_proto_version = 0;
 
@@ -102,6 +104,10 @@ dc_pool_init(void)
 	}
 
 	pproto->ep.ep_grp = sys->sy_group;
+	pproto->ep.ep_tag = 0;
+
+	num_ranks = dc_mgmt_net_get_num_srv_ranks();
+	pproto->ep.ep_rank = rand() % num_ranks;
 
 	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base,
 				      ver_array, 2, query_cb, pproto, ctx);
@@ -109,7 +115,6 @@ dc_pool_init(void)
 		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_rsvc, rc);
 	}
-	D_ERROR("crt_proto_query_with_ctx() initial succeeded");
 
 	while (!pproto->completed) {
 		rc = crt_progress(ctx, 0);
