@@ -175,13 +175,6 @@ pr_repos() {
     return 0
 }
 
-rpm_test_version() {
-    echo "$COMMIT_MESSAGE" |
-             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip' 
-    return 0
-
-}
-
 set_local_repo() {
     local repo_server="$1"
 
