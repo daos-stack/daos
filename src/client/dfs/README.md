@@ -86,6 +86,7 @@ Directory Object
         uid: user identifier
         gid: group identifier
         size: symlink size (0 for files/dirs)
+        object HLC: internal timestamp used to track max epoch of a file
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
