@@ -389,7 +389,7 @@ sys.path.append('site_scons')"""
             vals['category'] = 'error'
 
         # Flag some serious warnings as errors
-        if ftest and msg.symbol in ('condition-evals-to-constant'):
+        if msg.symbol in ('condition-evals-to-constant'):
             vals['category'] = 'error'
 
         types[vals['category']] += 1
