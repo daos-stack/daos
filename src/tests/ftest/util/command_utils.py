@@ -820,7 +820,7 @@ class YamlCommand(SubProcessCommand):
         """
         if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
             if self.yaml.create_yaml(self.temporary_file):
-                self.copy_configuration(self.temporary_file_hosts)
+                pass
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
