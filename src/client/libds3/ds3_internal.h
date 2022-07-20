@@ -46,6 +46,7 @@ struct ds3 {
 
 /** DAOS S3 Bucket handle */
 struct ds3_bucket {
+	dfs_t *dfs;
 };
 
 /** DAOS S3 Object handle */

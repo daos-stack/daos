@@ -198,7 +198,8 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
  *
  * \param[in]	name	Bucket name. Must be unique in the pool.
  * \param[in]	info	Bucket info to be added to the bucket.
- * \param[in]	props	Optional set of properties to set on the container. Pass NULL if none.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL if none.
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -206,7 +207,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
  * \return              0 on success, errno code on failure.
  */
 int
-ds3_bucket_create(const char *name, struct ds3_bucket_info *info, daos_prop_t *props, ds3_t *ds3,
+ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *attr, ds3_t *ds3,
 		  daos_event_t *ev);
 
 /**

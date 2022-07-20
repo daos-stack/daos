@@ -50,10 +50,27 @@ err:
 }
 
 int
-ds3_bucket_create(const char *name, struct ds3_bucket_info *info, daos_prop_t *props, ds3_t *ds3,
+ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *attr, ds3_t *ds3,
 		  daos_event_t *ev)
 {
-	return 0;
+	int rc = 0;
+
+	// Create dfs container
+	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create container, rc = %d\n", rc);
+		return rc;
+	}
+
+	// TODO do something with info
+
+	// Create multipart index
+	rc = dfs_mkdir(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, DEFFILEMODE, 0);
+	if (rc != 0 && rc != EEXIST) {
+		D_ERROR("Failed to create multipart index, rc = %d\n", rc);
+	}
+
+	return rc;
 }
 
 int
