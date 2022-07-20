@@ -11,8 +11,7 @@ cluster_reboot () {
   poll_cmd+=( cat /etc/os-release )
   reboot_timeout=600 # 10 minutes
   retry_wait=10 # seconds
-  SECONDS=0
-  timeout=${SECONDS+$reboot_timeout}
+  timeout=$((SECONDS + reboot_timeout))
   while [ "$SECONDS" -lt "$timeout" ]; do
     if "${poll_cmd[@]}"; then
      return 0
