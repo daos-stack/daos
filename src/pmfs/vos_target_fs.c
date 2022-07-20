@@ -260,29 +260,46 @@ pmfs_thread_create(void *fs_cb, void *arg, int thread_type)
 		ABT_xstream_get_main_pools(xstream, 1, &pool);
 
 		rc = ABT_thread_create(pool, fs_cb, arg, ABT_THREAD_ATTR_NULL, &thread);
-		if (rc != ABT_SUCCESS)
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_thread_create failed: " DF_RC "\n",
+				DP_RC(rc));
 			return rc;
+		}
 
 		rc = ABT_thread_join(thread);
-		if (rc != ABT_SUCCESS)
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_thread_join failed:" DF_RC "\n",
+				DP_RC(rc));
 			return rc;
+		}
+
 		ABT_thread_free(&thread);
 		ABT_xstream_free(&xstream);
 	} else if (thread_type == PTHREAD_WITH_JOIN) {
 		pthread_t pid;
 
 		rc = pthread_create(&pid, NULL, fs_cb, arg);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("pthread_create failed:" DF_RC "\n",
+				DP_RC(rc));
 			return rc;
+		}
+
 		rc = pthread_join(pid, NULL);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("pthread_join failed:" DF_RC "\n",
+				DP_RC(rc));
 			return rc;
+		}
 	} else {
 		pthread_t pid;
 
 		rc = pthread_create(&pid, NULL, fs_cb, arg);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("pthread_create failed:" DF_RC "\n",
+				DP_RC(rc));
 			return rc;
+		}
 	}
 
 	return 0;
@@ -329,14 +346,20 @@ vos_task_dequeue(struct vos_fs_cmd_args *vfca)
 			D_INFO("start to ult obj rw\r\n");
 			rc = vos_task_ult(&vct->args.obj_rw, vct->opc,
 					  vfca->duration);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("vos_task_ult starts object rw failed:" DF_RC "\n",
+					DP_RC(rc));
 				return rc;
+			}
 		} else {
 			D_INFO("start to ult obj list\r\n");
 			rc = vos_task_ult(&vct->args.obj_list, vct->opc,
 					  vfca->duration);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("vos_task_ult starts object list failed:" DF_RC "\n",
+					DP_RC(rc));
 				return rc;
+			}
 		}
 		D_INFO("start cb to sem wait\r\n");
 		vct->cb_fn(vct->cb_args, rc);
