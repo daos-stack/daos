@@ -268,6 +268,7 @@ test_setup_cont_open(void **state)
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 	}
+
 	/** broadcast container open result */
 	if (arg->multi_rank) {
 		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
@@ -275,6 +276,7 @@ test_setup_cont_open(void **state)
 		if (!rc)
 			handle_share(&arg->coh, HANDLE_CO,
 				     arg->myrank, arg->pool.poh, 0);
+		print_message("daos_cont_open is returning.\n");
 	}
 	return rc;
 }
