@@ -87,8 +87,9 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 }
 
 int
-ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf,
-		    struct ds3_object_list_params *params, ds3_bucket_t *ds3b, daos_event_t *ev)
+ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *prefix,
+		    const char *delim, char *marker, bool list_versions, ds3_bucket_t *ds3b,
+		    daos_event_t *ev)
 {
 	return 0;
 }

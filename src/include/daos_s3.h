@@ -21,6 +21,12 @@ extern "C" {
 
 #include <daos_event.h>
 
+/** Maximum bucket name length */
+#define DS3_MAX_BUCKET_NAME DAOS_PROP_LABEL_MAX_LEN + 1
+
+/** Maximum key length */
+#define DS3_MAX_KEY         DFS_MAX_PATH
+
 /** DAOS S3 Pool handle */
 typedef struct ds3        ds3_t;
 
@@ -37,24 +43,7 @@ struct ds3_user_info {
 /** S3 Bucket information */
 struct ds3_bucket_info {
 	/** Bucket name */
-	char name[DAOS_PROP_LABEL_MAX_LEN + 1];
-};
-
-struct ds3_object_list_params {
-	/** List objects that start with this prefix */
-	char prefix[128];
-	/** Divide results by delim */
-	char delim[128];
-	/** Start listing from marker key */
-	char marker[128];
-	/** Also include versions */
-	bool list_versions;
-	// Returned:
-	/** If the reults are truncated */
-	bool is_truncated;
-	/** Next marker to be used by subsequent calls */
-	char next_marker[128]; // TODO adjust length
-			       // TODO fill
+	char name[DS3_MAX_BUCKET_NAME];
 };
 
 /** S3 Object information */
@@ -292,9 +281,12 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  *		nobj	[in] \a buf length in items.
  *			[out] Number of objects returned.
  * \param[out]	buf	Array of object info structures.
+ * \param[in]	prefix	List objects that start with this prefix.
+ * \param[in]	delim	Divide results by delim.
  * \param[in,out]
- * 		params	[in] Params for the list operation
- *			[out] Results from the list operation
+ *		marker	[in] Start listing from marker key.
+ *			[out] Next marker to be used by subsequent calls.
+ * \param[in]	list_versions	Also include versions
  * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -302,8 +294,9 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \return              0 on success, errno code on failure.
  */
 int
-ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf,
-		    struct ds3_object_list_params *params, ds3_bucket_t *ds3b, daos_event_t *ev);
+ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *prefix,
+		    const char *delim, char *marker, bool list_versions, ds3_bucket_t *ds3b,
+		    daos_event_t *ev);
 
 // TODO multipart api
 
