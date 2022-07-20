@@ -104,7 +104,7 @@ log_stderr_pipe(int fd)
 
 	while (1) {
 		ssize_t n;
-		ssize_t new_len = 0;
+		ssize_t old_len = len;
 		char	*tmp;
 
 		n = read(fd, buf, sizeof(buf));
@@ -115,15 +115,16 @@ log_stderr_pipe(int fd)
 			break;
 		}
 
-		new_len = len + n;
-		D_REALLOC(tmp, full_msg, len, new_len);
+		len = len + n;
+		D_REALLOC(tmp, full_msg, old_len, len);
 		if (tmp == NULL) {
 			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld\n",
-				new_len);
+				len);
 			break;
 		}
 
-		strncpy(&full_msg[len], buf, n);
+		full_msg = tmp;
+		strncpy(&full_msg[old_len], buf, n);
 	}
 
 	close(fd);
@@ -186,6 +187,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (pipe(stderrfd) == -1) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to create stderr pipe: %s\n", strerror(errno));
+		close(stdoutfd[0]);
+		close(stdoutfd[1]);
 		goto out;
 	}
 
@@ -277,7 +280,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
-	close(stdoutfd[0]);
 
 	if (total == 0) {
 		D_ERROR("dmg output is empty\n");
@@ -316,6 +318,7 @@ out_jbuf:
 		if (rc == 0)
 			rc = daos_errno2der(errno);
 	}
+	close(stdoutfd[0]);
 #if 0
 	pc_rc = pclose(fp);
 	if (pc_rc != 0) {
