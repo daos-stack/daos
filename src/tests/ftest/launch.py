@@ -1306,7 +1306,7 @@ def run_tests(test_files, tag_filter, args):
                         os.path.join(os.sep, "etc", "daos")),
                     args)
 
-                # Archive remote daos log files
+                # Archive remote daos log files - use an extended timeout for potentially large logs
                 return_code |= archive_files(
                     "daos log files",
                     os.path.join(avocado_logs_dir, "latest", "daos_logs"),
