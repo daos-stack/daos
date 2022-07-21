@@ -46,7 +46,7 @@ else
                 TARGET=master
         fi
 
-        if [ $TARGET == "HEAD" ]
+        if [ $TARGET = "HEAD" ]
         then
                 echo "Checking against branch HEAD"
                 git diff HEAD^ -U10 | flake8 --diff
