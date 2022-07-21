@@ -1,14 +1,6 @@
 hosts:
-    test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-        - server-E
-        - server-F
-    test_clients:
-        - client-A
-        - client-B
+    test_servers: 6
+    test_clients: 2
 
 timeout: 300
 

@@ -1,8 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-C
+  test_servers: 1
+  test_clients: 1
 # Test typically takes around 15 minutes, set timeout for 30.
 timeout: 1800
 server_config:
