@@ -43,7 +43,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
