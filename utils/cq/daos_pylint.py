@@ -511,7 +511,6 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
-    print(args)
 
     rc_tmp = None
 
