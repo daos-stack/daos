@@ -53,6 +53,9 @@ int
 ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *attr, ds3_t *ds3,
 		  daos_event_t *ev)
 {
+	if (ds3 == NULL || name == NULL)
+		return EINVAL;
+	
 	int rc = 0;
 
 	// Create dfs container

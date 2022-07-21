@@ -9,6 +9,7 @@
 #ifndef __DAOS_S3_INTERNAL_H__
 #define __DAOS_S3_INTERNAL_H__
 
+#include <fcntl.h>
 #include "daos.h"
 #include "daos_fs.h"
 #include "daos_s3.h"
@@ -27,7 +28,7 @@
 
 /* Define for RPC enum population below */
 #define X(a, b) a,
-enum metadata_dirs { METADATA_DIR_LIST METADATA_DIR_LAST };
+enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
 #undef X
 
 /** DAOS S3 Pool handle */
@@ -52,5 +53,9 @@ struct ds3_bucket {
 /** DAOS S3 Object handle */
 struct ds3_obj {
 };
+
+/** Helper function, returns the meta dir name from the enum value */
+const char *
+meta_dir_name(enum meta_dir dir);
 
 #endif

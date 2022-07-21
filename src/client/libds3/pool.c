@@ -24,6 +24,20 @@ ds3_fini(void)
  * Helper functions for metadata directories management
  */
 
+const char *
+meta_dir_name(enum meta_dir dir)
+{
+#define X(a, b)                                                                                    \
+	case a:                                                                                    \
+		return b;
+	switch (dir) {
+		METADATA_DIR_LIST
+	default:
+		return "";
+	}
+#undef X
+}
+
 static int
 create_metadir(dfs_t *dfs, const char *dir)
 {

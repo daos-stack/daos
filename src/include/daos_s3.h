@@ -27,6 +27,9 @@ extern "C" {
 /** Maximum key length */
 #define DS3_MAX_KEY         DFS_MAX_PATH
 
+/** Maximum user info length */
+#define DS3_MAX_USER_NAME   DFS_MAX_NAME
+
 /** DAOS S3 Pool handle */
 typedef struct ds3        ds3_t;
 
@@ -38,6 +41,18 @@ typedef struct ds3_obj    ds3_obj_t;
 
 /** S3 User information */
 struct ds3_user_info {
+	/** User name */
+	const char  *name;
+	/** User email */
+	const char  *email;
+	/** User access ids */
+	const char **access_ids;
+	/** Length of access_ids */
+	const size_t access_ids_nr;
+	/** Opaque encoded user info */
+	void        *encoded;
+	/** Length of encoded data */
+	size_t       encoded_length;
 };
 
 /** S3 Bucket information */
