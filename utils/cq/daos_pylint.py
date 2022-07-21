@@ -532,7 +532,7 @@ def main():
         # check files changed and in GitHub actions where we check the entire tree and are more
         # strict for files which have changed.
         if args.git:
-         all_files = get_git_files()
+            all_files = get_git_files()
         else:
             all_files = FileTypeList()
         regions = None
