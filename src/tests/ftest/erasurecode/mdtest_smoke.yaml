@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - server-F
-    - server-G
-    - server-H
+  test_servers: 5
+  test_clients: 3
 timeout: 600
 server_config:
   engines_per_host: 2

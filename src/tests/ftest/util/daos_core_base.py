@@ -40,8 +40,9 @@ class DaosCoreBase(TestWithServers):
 
         super().setUp()
 
-        # if no clients are specified update self.hostlist_clients to be the local host
-        if self.hostlist_clients is None:
+        # if no client specified update self.hostlist_clients to local host
+        # and create a new self.hostfile_clients.
+        if not self.hostlist_clients:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
 
     def get_test_param(self, name, default=None):
