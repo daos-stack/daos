@@ -296,13 +296,10 @@ struct obj_auxi_list_obj_enum {
 	int		iods_nr;
 };
 
-typedef int (*obj_enum_process_cb_t)(daos_key_desc_t *kds, void *ptr,
-				     unsigned int size, void *arg);
-int
-obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
-		 unsigned int type, obj_enum_process_cb_t cb,
-		 void *cb_arg);
-#define CLI_OBJ_IO_PARMS	8
+struct shard_sync_args {
+	struct shard_auxi_args	 sa_auxi;
+	daos_epoch_t		*sa_epoch;
+};
 
 #define OBJ_TGT_INLINE_NR	9
 #define OBJ_INLINE_BTIMAP	4
@@ -342,11 +339,6 @@ struct obj_auxi_tgt_list {
 	uint32_t	tl_nr;
 };
 
-struct shard_sync_args {
-	struct shard_auxi_args	 sa_auxi;
-	daos_epoch_t		*sa_epoch;
-};
-
 /* Auxiliary args for object I/O */
 struct obj_auxi_args {
 	tse_task_t			*obj_task;
@@ -382,7 +374,8 @@ struct obj_auxi_args {
 					 tx_convert:1,
 					 cond_modify:1,
 					 /* conf_fetch split to multiple sub-tasks */
-					 cond_fetch_split:1;
+					 cond_fetch_split:1,
+					 reintegrating:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -407,8 +400,6 @@ struct obj_auxi_args {
 	};
 };
 
-#define obj_ec_dkey_hash_get(obj, dkey_hash)	\
-	(obj->cob_ec_parity_rotate ? dkey_hash : 0)
 /**
  * task memory space should enough to use -
  * obj API task with daos_task_args + obj_auxi_args,
@@ -419,6 +410,18 @@ D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct shard_auxi_args) <=
 	  TSE_TASK_ARG_LEN);
 D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct daos_task_args) <=
 	  TSE_TASK_ARG_LEN);
+
+
+typedef int (*obj_enum_process_cb_t)(daos_key_desc_t *kds, void *ptr,
+				     unsigned int size, void *arg);
+int
+obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
+		 unsigned int type, obj_enum_process_cb_t cb,
+		 void *cb_arg);
+#define CLI_OBJ_IO_PARMS	8
+
+#define obj_ec_dkey_hash_get(obj, dkey_hash)	\
+	(obj->cob_ec_parity_rotate ? dkey_hash : 0)
 
 int
 merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
@@ -590,7 +593,7 @@ obj_retry_error(int err)
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       daos_crt_network_error(err);
+	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t

@@ -524,7 +524,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	} else {
 		/* For pool map refresh. */
 		/* Leader: do nothing. */
-		if (ent->ie_dtx_flags & DTE_LEADER)
+		if (ent->ie_dtx_flags & DTE_LEADER && !dra->for_discard)
 			return 0;
 
 		/* Non-leader: handle the DTX with old version. */
