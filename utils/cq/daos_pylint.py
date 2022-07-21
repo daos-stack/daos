@@ -260,6 +260,47 @@ class FileTypeList():
         Returns True if warnings issued to GitHub."""
 
         # pylint: disable=too-many-branches
+
+        def word_is_allowed(word, code):
+            """Return True is misspelling is permitted"""
+
+            # pylint: disable=too-many-return-statements
+
+            # Skip the "Fake" annotations from fake scons.
+            if code.startswith(f'Fake {word}'):
+                return True
+            # Skip things that look like function documentation
+            if code.startswith(f'{word} ('):
+                return True
+            # Skip things that look like command options.
+            if f' -{word}' in code or f' --{word}' in code:
+                return True
+            # Skip things which are quoted
+            if f"'{word}'" in code:
+                return True
+            # Skip things which are quoted the other way
+            if f'"{word}"' in code:
+                return True
+            # Skip things which are in braces
+            if f'({word})' in code:
+                return True
+            # Skip words which appear to be part of a path
+            if f'/{word}/' in code:
+                return True
+            # Skip things are followed by open quotes
+            if f'{word}(' in code:
+                return True
+            # Skip things which look like source files.
+            if f'{word}.c' in code:
+                return True
+            # Skip things are followed by open colon
+            if f'{word}:' in code:
+                return True
+            # Skip test files.
+            if f'{word}.txt' in code:
+                return True
+            return False
+
         failed = False
         rep = CollectingReporter()
         wrapper = None
@@ -383,47 +424,6 @@ sys.path.append('site_scons')"""
         for (mtype, count) in symbols.most_common():
             print(f'{mtype}:{count}')
         return failed
-
-
-def word_is_allowed(word, code):
-    """Return True is misspelling is permitted"""
-
-    # pylint: disable=too-many-return-statements
-
-    # Skip the "Fake" annotations from fake scons.
-    if code.startswith(f'Fake {word}'):
-        return True
-    # Skip things that look like function documentation
-    if code.startswith(f'{word} ('):
-        return True
-    # Skip things that look like command options.
-    if f' -{word}' in code or f' --{word}' in code:
-        return True
-    # Skip things which are quoted
-    if f"'{word}'" in code:
-        return True
-    # Skip things which are quoted the other way
-    if f'"{word}"' in code:
-        return True
-    # Skip things which are in braces
-    if f'({word})' in code:
-        return True
-    # Skip words which appear to be part of a path
-    if f'/{word}/' in code:
-        return True
-    # Skip things are followed by open quotes
-    if f'{word}(' in code:
-        return True
-    # Skip things which look like source files.
-    if f'{word}.c' in code:
-        return True
-    # Skip things are followed by open colon
-    if f'{word}:' in code:
-        return True
-    # Skip test files.
-    if f'{word}.txt' in code:
-        return True
-    return False
 
 
 def run_git_files(args, directory=None):
