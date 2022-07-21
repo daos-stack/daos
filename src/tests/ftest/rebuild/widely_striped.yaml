@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-  test_clients:
-    - client-H
+  test_servers: 7
+  test_clients: 1
 timeout: 500
 server_config:
   name: daos_server

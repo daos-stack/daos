@@ -83,6 +83,8 @@ enum vos_pool_open_flags {
 	VOS_POF_EXCL	= (1 << 1),
 	/** Ignore the pool uuid passed into vos_pool_open */
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
+	/** Caller does VEA flush periodically */
+	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 };
 
 enum vos_oi_attr {
@@ -213,6 +215,12 @@ typedef enum {
 	VOS_IT_EPC_RR,
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
+
+typedef enum {
+	VOS_ITER_PROC_OP_UNKNOWN = 0,
+	VOS_ITER_PROC_OP_DELETE = 1,
+	VOS_ITER_PROC_OP_MARK_CORRUPT = 2,
+} vos_iter_proc_op_t;
 
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */

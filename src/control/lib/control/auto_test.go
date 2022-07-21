@@ -722,7 +722,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 	baseConfig := func(provider string) *config.Server {
 		return config.DefaultServer().
 			WithControlLogFile(defaultControlLogFile).
-			WithFabricProvider(provider)
+			WithFabricProvider(provider).
+			WithDisableVMD(false)
 	}
 
 	for name, tc := range map[string]struct {

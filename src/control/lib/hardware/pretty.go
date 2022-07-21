@@ -46,6 +46,20 @@ func PrintTopology(t *Topology, output io.Writer) error {
 			}
 		}
 
+		if len(numaNode.BlockDevices) > 0 {
+			var sectionPrinted bool
+			for _, blockDev := range numaNode.BlockDevices {
+				// Skip PCI-backed devices; they were already printed.
+				if blockDev.BackingDevice != nil {
+					continue
+				}
+				if !sectionPrinted {
+					fmt.Fprintln(ew, "  Non-PCI block devices:")
+					sectionPrinted = true
+				}
+				fmt.Fprintf(ew, "    %s\n", blockDev)
+			}
+		}
 	}
 
 	if len(t.VirtualDevices) > 0 {

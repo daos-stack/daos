@@ -10,6 +10,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos_srv/vos.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
 
@@ -49,7 +50,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (oiter->oit_cont != NULL)
 		vos_cont_decref(oiter->oit_cont);
 
-	D_FREE_PTR(oiter);
+	D_FREE(oiter);
 	return rc;
 }
 
@@ -276,9 +277,11 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-dtx_iter_delete(struct vos_iterator *iter, void *args)
+dtx_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
 	D_WARN("NOT allow to remove DTX entry via iteration!\n");
 
@@ -291,5 +294,5 @@ struct vos_iter_ops vos_dtx_iter_ops = {
 	.iop_probe   =	dtx_iter_probe,
 	.iop_next    =  dtx_iter_next,
 	.iop_fetch   =  dtx_iter_fetch,
-	.iop_delete  =	dtx_iter_delete,
+	.iop_process  =	dtx_iter_process,
 };
