@@ -22,3 +22,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get -y install enchant
       - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --format github
+      - name: See git diff
+        run: git diff ${{ github.event.pull_request.head.sha }} -U10
