@@ -161,6 +161,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
  * Remove user from S3 user database.
  *
  * \param[in]	name	Name of the S3 user to look up.
+ * \param[in]	info	User info. Necessary to remove symlinks
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -168,7 +169,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
  * \return              0 on success, errno code on failure.
  */
 int
-ds3_user_remove(const char *name, ds3_t *ds3, daos_event_t *ev);
+ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
 
 /**
  * Look-up S3 user information by name.

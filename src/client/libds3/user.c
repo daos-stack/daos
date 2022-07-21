@@ -12,9 +12,11 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	if (ds3 == NULL || name == NULL || info == NULL)
 		return EINVAL;
 
-	int        rc;
+	// Remove old user data
+	ds3_user_remove(name, info, ds3, ev);
 
 	// Open user file
+	int        rc;
 	dfs_obj_t *user_obj;
 	mode_t     mode = DEFFILEMODE;
 	rc              = dfs_open(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, S_IFREG | mode,
@@ -76,8 +78,49 @@ err:
 }
 
 int
-ds3_user_remove(const char *name, ds3_t *ds3, daos_event_t *ev)
+ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
+	if (ds3 == NULL || name == NULL || info == NULL)
+		return EINVAL;
+
+	int rc;
+
+	// Remove access keys
+	for (int i = 0; i < info->access_ids_nr; i++) {
+		if (dfs_access(ds3->meta_dfs, ds3->meta_dirs[ACCESS_KEYS_DIR], info->access_ids[i],
+			       W_OK) == 0) {
+			rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[ACCESS_KEYS_DIR],
+					info->access_ids[i], false, NULL);
+			if (rc != 0) {
+				D_ERROR("Failed to remove symlink, name = %s, rc = %d\n",
+					info->access_ids[i], rc);
+				return rc;
+			}
+		}
+	}
+
+	// Remove email if it exists
+	if (strlen(info->email) == 0) {
+		if (dfs_access(ds3->meta_dfs, ds3->meta_dirs[EMAILS_DIR], info->email, W_OK) == 0) {
+			rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[EMAILS_DIR], info->email,
+					false, NULL);
+			if (rc != 0) {
+				D_ERROR("Failed to remove symlink, name = %s, rc = %d\n",
+					info->email, rc);
+				return rc;
+			}
+		}
+	}
+
+	// Remove the user object
+	if (dfs_access(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, W_OK) == 0) {
+		rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, false, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to remove user file, name = %s, rc = %d\n", name, rc);
+			return rc;
+		}
+	}
+
 	return 0;
 }
 
