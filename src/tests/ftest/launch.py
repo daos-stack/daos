@@ -61,30 +61,40 @@ PROVIDER_KEYS = OrderedDict(
 )
 
 
-def log(message, details=None):
+def log(message, details=None, retry=None):
     """Log the specified message.
 
     Args:
         message (str): string to log
         details (str, optional): optional information to include with the error message if a
-            exception occurs during logging. Defaults to None.
+            exception occurs during logging. Defaults to "".
+        retry (dict, optional): information passed by this method to indicate a retry attempt when
+            an exception is detected during the previous method call.  Defaults to None
+
+    Raises:
+        Exception: if the retry limit is exceeded
+
     """
     retry_limit = 3
-    retry = 0
-    while retry <= retry_limit:
-        try:
-            print(message)
-            break
-        except (IOError, BlockingIOError) as error:
-            retry += 1
-            error_text = "Detected {}".format(error)
-            retry_text = "retry {}/{}".format(retry, retry_limit)
-            if details:
-                error_text = " ".join([error_text, details])
-            if retry <= retry_limit:
-                retry_text = "retry limit ({}) exceeded".format(retry_limit)
-                time.sleep(5)
-            print("*** {}, {} ***".format(error_text, retry_text))
+    try:
+        if retry:
+            print(retry["message"])
+        print(message)
+
+    except (IOError, BlockingIOError) as error:
+        if not retry:
+            retry = {"count": 0}
+        retry["count"] += 1
+        if retry["count"] > retry_limit:
+            raise Exception("Logging retry exceeded {} retries".format(retry_limit)) from error
+
+        # Retry logging the message
+        if details:
+            error = " ".join([str(error), str(details)])
+        retry["message"] = "*** Detected {}, retry {}/{} ***".format(
+            error, retry["count"], retry_limit)
+        # time.sleep(5)
+        log(message, details, retry)
 
 
 def display(args, message, level=1):
@@ -564,7 +574,6 @@ def check_remote_output(task, command):
                     log("    {}: rc={}, output: {}".format(n_set, code, line), err_msg)
                 else:
                     log("      {}".format(line), err_msg)
-
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
