@@ -12,10 +12,8 @@ env_CRT_PHY_ADDR_STR: !mux
 hosts: !mux
   hosts_1:
     config: one_node
-    test_servers:
-      - boro-A
-    test_clients:
-      - boro-A
+    test_servers: server-1
+    test_clients: server-1
 timeout: 600
 tests: !mux
   no_pmix_launcher:
