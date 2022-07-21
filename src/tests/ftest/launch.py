@@ -1032,7 +1032,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                                 # test_server/test_client arguments
                                 quantity = len(user_value)
                             elif args.override:
-                                print(
+                                log(
                                     "Warning: In order to override the node quantity a "
                                     "'--test_clients' argument must be specified: {}: {}".format(
                                         key, yaml_find_item))
@@ -2323,7 +2323,7 @@ def reset_server_storage(test_file, args):
             "fi"]
         log("Resetting server storage on {} after running '{}'".format(hosts, test_file["py"]))
         if not spawn_commands(hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
-            print(indent_text(2, "Ignoring any errors from these workaround commands"))
+            log(indent_text(2, "Ignoring any errors from these workaround commands"))
     else:
         log(
             "Skipping resetting server storage after running '{}' - no server hosts".format(
