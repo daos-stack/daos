@@ -599,9 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
-	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
