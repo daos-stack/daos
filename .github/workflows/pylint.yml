@@ -23,4 +23,4 @@ jobs:
       - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --format github
       - name: See git diff
-        run: git diff ${{ github.event.pull_request.head.sha }} -U10
+        run: git diff ${{ github.event.pull_request.base.sha }} -U10
