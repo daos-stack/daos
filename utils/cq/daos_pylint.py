@@ -427,7 +427,7 @@ sys.path.append('site_scons')"""
         return failed
 
 
-def run_git_files(args, directory=None):
+def get_git_files(directory=None):
     """Run pylint on contents of 'git ls-files'"""
 
     all_files = FileTypeList()
@@ -440,9 +440,7 @@ def run_git_files(args, directory=None):
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
-    if all_files.run(args):
-        print('Errors reported to github')
-        sys.exit(1)
+    return all_files
 
 
 def run_input_file(args, input_file):
@@ -530,10 +528,13 @@ def main():
         args.rcfile = rc_tmp.name
 
     if args.diff:
-        # There needs to be two different ways of driving this, for a commit-hook where we only
+        # There are to be two different ways of driving this, for a commit-hook where we only
         # check files changed and in GitHub actions where we check the entire tree and are more
         # strict for files which have changed.
-        all_files = FileTypeList()
+        if args.git:
+         all_files = get_git_files()
+        else:
+            all_files = FileTypeList()
         regions = None
         for line in sys.stdin.readlines():
             if line.startswith('diff --git a/'):
@@ -541,7 +542,8 @@ def main():
                 file = parts[3][2:-1]
                 regions = OutPutRegion()
                 all_files.add_regions(file, regions)
-                all_files.add(file)
+                if not args.git:
+                    all_files.add(file)
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
@@ -554,7 +556,9 @@ def main():
             sys.exit(1)
         return
     if args.git:
-        run_git_files(args)
+        all_files = get_git_files()
+        if all_files.run(args):
+            sys.exit(1)
         return
     if args.from_file:
         run_input_file(args, args.from_file)
@@ -571,7 +575,9 @@ def main():
             sys.exit(1)
     if all_dirs:
         if len(all_dirs) == 1 and all_files.file_count() == 0:
-            run_git_files(args, directory=all_dirs[0])
+            all_files = get_git_files(directory=all_dirs[0])
+            if all_files.run(args):
+                sys.exit(1)
         else:
             print('Only one directory can be shown at once')
             parser.print_usage()
