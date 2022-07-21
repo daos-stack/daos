@@ -93,7 +93,7 @@ def log(message, details=None, retry=None):
             error = " ".join([str(error), str(details)])
         retry["message"] = "*** Detected {}, retry {}/{} ***".format(
             error, retry["count"], retry_limit)
-        # time.sleep(5)
+        time.sleep(5)
         log(message, details, retry)
 
 
