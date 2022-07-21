@@ -401,6 +401,7 @@ sys.path.append('site_scons')"""
                 if line_changed:
                     print('Warning is in modified code')
                     failed = True
+                    vals['category'] = 'error'
                 else:
                     print('Warning is in modified file')
 
