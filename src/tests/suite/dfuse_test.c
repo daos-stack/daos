@@ -35,6 +35,7 @@ print_usage()
 {
 	printf("DFuse tests\n");
 	printf("dfuse_test --test-dir <path to test>\n");
+	printf("dfuse_test -m|--metadata\n");
 }
 
 char *test_dir;
@@ -176,6 +177,92 @@ do_ioctl(void **state)
 	assert_int_equal(dur.uid, geteuid());
 	assert_int_equal(dur.gid, getegid());
 
+	rc = unlinkat(root, "ioctl_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+static bool
+timespec_gt(struct timespec t1, struct timespec t2)
+{
+	if (t2.tv_sec == t1.tv_sec)
+		return t2.tv_nsec < t1.tv_nsec;
+	else
+		return t2.tv_sec < t1.tv_sec;
+}
+
+void
+do_mtime(void **state)
+{
+	struct stat	stbuf;
+	struct timespec	prev_ts;
+	struct timespec	now;
+	struct timespec	times[2];
+	int		fd;
+	int		rc;
+	char		input_buf[] = "hello";
+	int		root = open(test_dir, O_PATH | O_DIRECTORY);
+
+	assert_return_code(root, errno);
+
+	/* Open a file and sanity check the mtime */
+	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	assert_return_code(fd, errno);
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
+
+	/* Write to the file and verify mtime is newer */
+	rc = write(fd, input_buf, sizeof(input_buf));
+	assert_return_code(rc, errno);
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	printf("prev_ts.tv_sec        = %ld\n", prev_ts.tv_sec);
+	printf("prev_ts.tv_nsec       = %ld\n", prev_ts.tv_nsec);
+	printf("stbuf.st_mtim.tv_sec  = %ld\n", stbuf.st_mtim.tv_sec);
+	printf("stbuf.st_mtim.tv_nsec = %ld\n", stbuf.st_mtim.tv_nsec);
+	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/* Truncate the file and verify mtime is newer */
+	rc = ftruncate(fd, 0);
+	assert_return_code(rc, errno);
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	printf("prev_ts.tv_sec        = %ld\n", prev_ts.tv_sec);
+	printf("prev_ts.tv_nsec       = %ld\n", prev_ts.tv_nsec);
+	printf("stbuf.st_mtim.tv_sec  = %ld\n", stbuf.st_mtim.tv_sec);
+	printf("stbuf.st_mtim.tv_nsec = %ld\n", stbuf.st_mtim.tv_nsec);
+	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/* Set and verify mtime set in the past */
+	times[0] = now;
+	times[1].tv_sec = now.tv_sec - 10;
+	times[1].tv_nsec = 20;
+	rc = futimens(fd, times);
+	assert_return_code(fd, errno);
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);
+	assert_int_equal(stbuf.st_mtim.tv_nsec, times[1].tv_nsec);
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "my_file", 0);
+	assert_return_code(rc, errno);
+
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
@@ -185,18 +272,31 @@ main(int argc, char **argv)
 {
 	int                     index = 0;
 	int                     opt;
-	struct option           long_options[] = {{"test-dir", required_argument, NULL, 'M'},
-						  {NULL, 0, NULL, 0} };
+	bool			do_run_metadata = false;
+	int			nr_failed;
 
-	const struct CMUnitTest tests[] = {
+	struct option           long_options[] = {
+		{"test-dir",	required_argument,	NULL,	'M'},
+		{"metadata",	no_argument,		NULL,	'm'},
+		{NULL,		0,			NULL,	0}
+	};
+
+	const struct CMUnitTest basic_tests[] = {
 	    cmocka_unit_test(do_openat),
 	    cmocka_unit_test(do_ioctl),
 	};
 
-	while ((opt = getopt_long(argc, argv, "M:", long_options, &index)) != -1) {
+	const struct CMUnitTest metadata_tests[] = {
+	    cmocka_unit_test(do_mtime),
+	};
+
+	while ((opt = getopt_long(argc, argv, "M:m", long_options, &index)) != -1) {
 		switch (opt) {
 		case 'M':
 			test_dir = optarg;
+			break;
+		case 'm':
+			do_run_metadata = true;
 			break;
 		default:
 			printf("Unknown Option\n");
@@ -210,5 +310,9 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	nr_failed = cmocka_run_group_tests(basic_tests, NULL, NULL);
+	if (do_run_metadata)
+		nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
+
+	return nr_failed;
 }
