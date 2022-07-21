@@ -782,6 +782,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
+				D_ERROR("check i %d, orw->orw_nr %d\n", i, orw->orw_nr);
 				D_ERROR(DF_UOID" original iod_size "DF_U64", real size "DF_U64
 					", "DF_RC"\n", DP_UOID(orw->orw_oid),
 					iod->iod_size, sizes[i], DP_RC(rc));
