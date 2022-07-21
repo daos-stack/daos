@@ -295,10 +295,11 @@ ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 static inline uint32_t
 ds_pool_get_version(struct ds_pool *pool)
 {
-	uint32_t	ver;
+	uint32_t	ver = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	ver = pool_map_get_version(pool->sp_map);
+	if (pool->sp_map != NULL)
+		ver = pool_map_get_version(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return ver;
