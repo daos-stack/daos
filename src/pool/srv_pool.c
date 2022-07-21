@@ -2328,9 +2328,9 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
  * connection.
  */
 static unsigned int max_supported_pool_version[NUM_POOL_VERSIONS] = {
-	/* for client pool layout version DAOS_PROP_PO_GLOBAL_VERSION */
-	DAOS_PROP_PO_GLOBAL_VERSION,
-	/* for client pool layout version DAOS_PROP_PO_GLOBAL_VERSION - 1 */
+	/* for client pool layout version DAOS_POOL_GLOBAL_VERSION */
+	DAOS_POOL_GLOBAL_VERSION,
+	/* for client pool layout version DAOS_POOL_GLOBAL_VERSION - 1 */
 	1,
 };
 
