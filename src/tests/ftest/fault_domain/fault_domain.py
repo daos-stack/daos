@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers, skipForTicket
 
@@ -47,7 +48,7 @@ class FaultDomain(TestWithServers):
             self.configure_manager(
                 "daos_server",
                 self.server_managers[counter],
-                [server],
+                NodeSet(server),
                 self.hostfile_servers_slots
             )
             self.server_managers[counter].set_config_value("fault_path",

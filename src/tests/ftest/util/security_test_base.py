@@ -75,7 +75,7 @@ def add_del_user(hosts, bash_cmd, user):
     """Add or delete the daos user and group on host by sudo command.
 
     Args:
-        hosts (list): list of host.
+        hosts (NodeSet): hosts on which to add/delete the user.
         bash_cmd (str): linux bash command to create user or group.
         user (str): user or group name to be created or cleaned.
 

@@ -5,8 +5,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+
+from ClusterShell.NodeSet import NodeSet
+
 from apricot import TestWithServers
-from check_for_pool import check_for_pool
+from general_utils import check_for_pool
 
 
 RESULT_PASS = "PASS"  # nosec
@@ -56,8 +59,8 @@ class MultiServerCreateDeleteTest(TestWithServers):
         if RESULT_FAIL in expected_for_param:
             expected_result = RESULT_FAIL
 
-        host1 = self.hostlist_servers[0]
-        host2 = self.hostlist_servers[1]
+        host1 = NodeSet(self.hostlist_servers[0])
+        host2 = NodeSet(self.hostlist_servers[1])
         test_destroy = True
 
         self.add_pool(create=False)
@@ -72,26 +75,20 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         if self.pool.dmg.result.exit_status == 0:
             if expected_result == RESULT_FAIL:
-                self.fail(
-                    "Test was expected to fail but it passed at pool create.")
+                self.fail("Test was expected to fail but it passed at pool create.")
             if '0' in tgtlist:
                 # check_for_pool checks if the uuid directory exists in host1
                 if not check_for_pool(host1, self.pool.uuid):
-                    self.fail(
-                        "Pool {0} not found on host {1}.\n".format(
-                            self.pool.uuid, host1))
+                    self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host1))
             if '1' in tgtlist:
                 if not check_for_pool(host2, self.pool.uuid):
-                    self.fail(
-                        "Pool {0} not found on host {1}.\n".format(
-                            self.pool.uuid, host2))
+                    self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host2))
         else:
             test_destroy = False
             self.pool.dmg.exit_status_exception = True
 
             if expected_result == RESULT_PASS:
-                self.fail(
-                    "Test was expected to pass but it failed at pool create.")
+                self.fail("Test was expected to pass but it failed at pool create.")
 
         self.pool.dmg.exit_status_exception = True
 
@@ -100,19 +97,13 @@ class MultiServerCreateDeleteTest(TestWithServers):
             destroy_result = self.pool.destroy()
             if destroy_result:
                 if expected_result == RESULT_FAIL:
-                    self.fail("Test was expected to fail but it passed at " +
-                              "pool create.")
+                    self.fail("Test was expected to fail but it passed at pool create.")
                 if '0' in tgtlist:
                     if check_for_pool(host1, self.pool.uuid):
-                        self.fail(
-                            "Pool {0} found on host {1} after destroy.".format(
-                                uuid, host1))
+                        self.fail("Pool {0} found on host {1} after destroy.".format(uuid, host1))
                 if '1' in tgtlist:
                     if check_for_pool(host2, self.pool.uuid):
-                        self.fail(
-                            "Pool {0} found on host {1} after destroy.".format(
-                                uuid, host2))
+                        self.fail("Pool {0} found on host {1} after destroy.".format(uuid, host2))
             else:
                 if expected_result == RESULT_PASS:
-                    self.fail("Test was expected to pass but it failed at " +
-                              "pool destroy.")
+                    self.fail("Test was expected to pass but it failed at pool destroy.")

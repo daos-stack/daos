@@ -2,15 +2,8 @@
 # required quantity is indicated by the placeholders
 timeout: 360
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-  test_clients:
-    - client-G
+  test_servers: 6
+  test_clients: 1
 server_config:
   name: daos_server
   servers:
