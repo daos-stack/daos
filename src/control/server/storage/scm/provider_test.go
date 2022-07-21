@@ -23,8 +23,7 @@ import (
 )
 
 var (
-	mm               = mockModule(nil)
-	defaultModule    = &mm
+	defaultModule    = mockModule()
 	defaultNamespace = storage.MockScmNamespace()
 )
 
@@ -41,9 +40,6 @@ func TestProvider_Scan(t *testing.T) {
 			expResp: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{},
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
-					State: storage.ScmNoModules,
-				},
 			},
 		},
 		"no namespaces": {
@@ -60,16 +56,10 @@ func TestProvider_Scan(t *testing.T) {
 			mbc: &MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{defaultModule},
 				GetNamespacesRes: storage.ScmNamespaces{defaultNamespace},
-				GetStateRes: &storage.ScmSocketState{
-					State: storage.ScmNoFreeCap,
-				},
 			},
 			expResp: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
-				State: storage.ScmSocketState{
-					State: storage.ScmNoFreeCap,
-				},
 			},
 		},
 		"get modules fails": {
@@ -84,13 +74,6 @@ func TestProvider_Scan(t *testing.T) {
 				GetNamespacesErr: errors.New("get namespaces failed"),
 			},
 			expErr: errors.New("get namespaces failed"),
-		},
-		"get state fails": {
-			mbc: &MockBackendConfig{
-				GetModulesRes: storage.ScmModules{defaultModule},
-				GetStateErr:   errors.New("get state failed"),
-			},
-			expErr: errors.New("get state failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -136,9 +119,6 @@ func TestProvider_Prepare(t *testing.T) {
 		"prep fails": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State: storage.ScmSocketState{
-					State: storage.ScmNoRegions,
-				},
 			},
 			mbc: &MockBackendConfig{
 				PrepErr: errors.New("fail"),
@@ -148,9 +128,6 @@ func TestProvider_Prepare(t *testing.T) {
 		"prep succeeds": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State: storage.ScmSocketState{
-					State: storage.ScmNoRegions,
-				},
 			},
 			mbc: &MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
@@ -172,9 +149,6 @@ func TestProvider_Prepare(t *testing.T) {
 		"reset fails": {
 			reset: true,
 			scanResp: &storage.ScmScanResponse{
-				State: storage.ScmSocketState{
-					State: storage.ScmFreeCap,
-				},
 				Modules: storage.ScmModules{defaultModule},
 			},
 			mbc: &MockBackendConfig{
@@ -186,9 +160,6 @@ func TestProvider_Prepare(t *testing.T) {
 			reset: true,
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State: storage.ScmSocketState{
-					State: storage.ScmFreeCap,
-				},
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
@@ -212,9 +183,6 @@ func TestProvider_Prepare(t *testing.T) {
 				Namespaces: storage.ScmNamespaces{
 					defaultNamespace,
 					storage.MockScmNamespace(1),
-				},
-				State: storage.ScmSocketState{
-					State: storage.ScmNoFreeCap,
 				},
 			},
 			mbc: &MockBackendConfig{

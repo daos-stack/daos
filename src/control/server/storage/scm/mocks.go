@@ -96,13 +96,13 @@ func mockDiscovery(sockID ...int) ipmctl.DeviceDiscovery {
 
 // mockModule converts ipmctl type SCM module and returns storage/scm
 // internal type.
-func mockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
-	if d == nil {
-		md := mockDiscovery()
-		d = &md
+func mockModule(dIn ...ipmctl.DeviceDiscovery) *storage.ScmModule {
+	d := mockDiscovery()
+	if len(dIn) > 0 {
+		d = dIn[0]
 	}
 
-	return storage.ScmModule{
+	return &storage.ScmModule{
 		PhysicalID:       uint32(d.Physical_id),
 		ChannelID:        uint32(d.Channel_id),
 		ChannelPosition:  uint32(d.Channel_pos),

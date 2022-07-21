@@ -288,7 +288,6 @@ type (
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.
 	ScmScanResponse struct {
-		State      ScmSocketState
 		Modules    ScmModules
 		Namespaces ScmNamespaces
 	}

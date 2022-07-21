@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -317,7 +318,7 @@ func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
 	case strings.Contains(out, outNoPMemModules):
 		return nil, errNoPMemModules
 	case strings.Contains(out, outNoPMemRegions):
-		return nil, errNoPMemRegions
+		return Regions{}, nil
 	}
 
 	var rl RegionList
@@ -359,4 +360,58 @@ func getRegionState(region Region) storage.ScmState {
 	default:
 		return storage.ScmPartFreeCap
 	}
+}
+
+func getPMemState(log logging.Logger, regions Regions) (*storage.ScmSocketState, error) {
+	resp := &storage.ScmSocketState{
+		State: storage.ScmStateUnknown,
+	}
+
+	switch len(regions) {
+	case 0:
+		resp.State = storage.ScmNoRegions
+		return resp, nil
+	case 1:
+		s := uint(regions[0].SocketID)
+		resp.SocketID = &s
+	}
+
+	regionsPerSocket, err := mapRegionsToSocket(regions)
+	if err != nil {
+		return nil, errors.Wrap(err, "mapRegionsToSocket")
+	}
+
+	hasFreeCap := false
+	for _, sid := range regionsPerSocket.keys() {
+		r := regionsPerSocket[sid]
+		log.Debugf("region detail: %+v", r)
+		state := getRegionState(r)
+
+		switch state {
+		case storage.ScmNotInterleaved, storage.ScmNotHealthy, storage.ScmPartFreeCap, storage.ScmUnknownMode:
+			log.Debugf("socket %d region in state %q", sid, state)
+			s := uint(sid)
+			resp.SocketID = &s
+			resp.State = state
+			return resp, nil
+		case storage.ScmFreeCap:
+			log.Debugf("socket %d app-direct region has %s free", r.SocketID,
+				humanize.Bytes(uint64(r.FreeCapacity)))
+			hasFreeCap = true
+		case storage.ScmNoFreeCap:
+			// Fall-through
+		default:
+			return nil, errors.Errorf("unexpected state %s (%d)", state, state)
+		}
+	}
+
+	// If any of the processed regions has full free capacity, return free-cap state.
+	if hasFreeCap {
+		resp.State = storage.ScmFreeCap
+		return resp, nil
+	}
+
+	// If none of the processed regions has any free capacity, return no-free-cap state.
+	resp.State = storage.ScmNoFreeCap
+	return resp, nil
 }

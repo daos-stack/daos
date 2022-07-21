@@ -268,8 +268,8 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Payload: scmPrepareReqPayload,
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				State: &storage.ScmSocketState{
-					State: storage.ScmStateNoModules,
+				State: storage.ScmSocketState{
+					State: storage.ScmNoModules,
 				},
 				Namespaces: storage.ScmNamespaces{},
 			},
@@ -284,12 +284,16 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 					storage.MockScmModule(0),
 				},
 				PrepRes: &storage.ScmPrepareResponse{
-					State:      storage.ScmStateFreeCapacity,
+					State: storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateFreeCapacity,
+				State: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},

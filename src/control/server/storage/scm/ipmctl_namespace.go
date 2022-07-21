@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -42,7 +43,49 @@ func (cr *cmdRunner) createNamespace(regionID int, sizeBytes uint64) (string, er
 	cmd = fmt.Sprintf("%s --region %d", cmd, regionID)
 	cmd = fmt.Sprintf("%s --size %d", cmd, sizeBytes)
 
-	return cr.runCmd(cmd)
+	out, err := cr.runCmd(cmd)
+
+	return out, errors.Wrapf(err, cmd)
+}
+
+// For each region, create <nrNsPerSocket> namespaces.
+func (cr *cmdRunner) createNamespaces(regionsPerSocket socketRegionMap, nrNsPerSock uint) error {
+	if nrNsPerSock < minNrNssPerSocket || nrNsPerSock > maxNrNssPerSocket {
+		return errors.Errorf("unexpected number of namespaces requested per socket: want [%d-%d], got %d",
+			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSock)
+	}
+
+	nrRegions := len(regionsPerSocket)
+	if nrRegions == 0 {
+		return errors.New("unexpected number of pmem regions (0)")
+	}
+	cr.log.Debugf("creating %d namespaces per socket (%d regions)", nrNsPerSock, len(regionsPerSocket))
+
+	keys := regionsPerSocket.keys()
+	for sid := range keys {
+		region := regionsPerSocket[sid]
+		cr.log.Debugf("creating namespaces on region %d, socket %d", region.ID, sid)
+
+		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
+		pmemBytes := uint64(region.FreeCapacity) / uint64(nrNsPerSock)
+
+		if pmemBytes%alignmentBoundaryBytes != 0 {
+			return errors.Errorf("socket %d: free region size (%s) is not %s aligned", sid,
+				humanize.Bytes(pmemBytes), humanize.Bytes(alignmentBoundaryBytes))
+		}
+
+		// Create specified number of namespaces on a single region (NUMA node).
+		for j := uint(0); j < nrNsPerSock; j++ {
+			out, err := cr.createNamespace(int(region.ID), pmemBytes)
+			if err != nil {
+				return errors.WithMessagef(err, "socket %d", sid)
+			}
+			cr.log.Debugf("createNamespace on region %d size %s returned: %s", region.ID,
+				humanize.Bytes(pmemBytes), out)
+		}
+	}
+
+	return nil
 }
 
 func (cr *cmdRunner) listNamespaces(sockID int) (string, error) {

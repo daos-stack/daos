@@ -8,6 +8,7 @@ package scm
 
 import (
 	"encoding/xml"
+	"math"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -93,6 +94,12 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[0].SocketID = 1
 	case "unhealthy":
 		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
+	case "not-interleaved":
+		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
+	case "unknown-memtype":
+		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
+	case "part-free":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity / 2
 	case "full-free":
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 	case "dual-sock", "dual-sock-no-free":
@@ -128,7 +135,7 @@ func mockXMLRegions(t *testing.T, variant string) string {
 	return string(out)
 }
 
-func TestIpmctl_getRegionDetails(t *testing.T) {
+func TestIpmctl_getRegions(t *testing.T) {
 	expRegionMap := socketRegionMap{
 		0: {
 			XMLName: xml.Name{
@@ -153,7 +160,6 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 			Health:               regionHealth(ipmctl.RegionHealthNormal),
 		},
 	}
-	verOut := `Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825`
 
 	for name, tc := range map[string]struct {
 		cmdOut    string
@@ -162,6 +168,10 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 		expMapErr error
 		expResult socketRegionMap
 	}{
+		"invalid xml": {
+			cmdOut: `text that is invalid xml`,
+			expErr: errors.New("parse show region cmd"),
+		},
 		"no permissions": {
 			cmdOut: outNoCLIPerms,
 			expErr: errors.New("insufficient permissions"),
@@ -171,8 +181,8 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 			expErr: errNoPMemModules,
 		},
 		"no regions": {
-			cmdOut: outNoPMemRegions,
-			expErr: errNoPMemRegions,
+			cmdOut:    outNoPMemRegions,
+			expResult: socketRegionMap{},
 		},
 		"two regions; one per socket": {
 			cmdOut:    mockXMLRegions(t, "dual-sock"),
@@ -180,7 +190,7 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 		},
 		"two regions; same socket": {
 			cmdOut:    mockXMLRegions(t, "same-sock"),
-			expMapErr: errors.New("unexpected second region"),
+			expMapErr: errors.New("multiple regions"),
 		},
 		"two regions; socket 0 selected": {
 			cmdOut: mockXMLRegions(t, "sock-zero"),
@@ -201,7 +211,7 @@ func TestIpmctl_getRegionDetails(t *testing.T) {
 
 			mockRun := func(inCmd string) (string, error) {
 				if inCmd == cmdShowIpmctlVersion {
-					return verOut, nil
+					return verStr, nil
 				}
 				return tc.cmdOut, tc.cmdErr
 			}
@@ -280,6 +290,118 @@ func TestIpmctl_getRegionState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if diff := cmp.Diff(tc.expState, getRegionState(tc.region)); diff != "" {
 				t.Errorf("unexpected result of xml parsing (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// TestIpmctl_getPMemState verifies the appropriate PMem state is returned for either a specific
+// socket region or all regions when either a specific socket is requested or a state is specific to
+// a particular socket.
+func TestIpmctl_getPMemState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		runOut   []string
+		runErr   []error
+		expErr   error
+		expState storage.ScmState
+		expSock0 bool
+		expSock1 bool
+	}{
+		"single region with uncorrectable error": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "unhealthy"),
+			},
+			expSock0: true,
+			expState: storage.ScmNotHealthy,
+		},
+		"single region with free capacity": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "full-free"),
+			},
+			expSock0: true,
+			expState: storage.ScmFreeCap,
+		},
+		"single region with no free capacity": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "no-free"),
+			},
+			expSock0: true,
+			expState: storage.ScmNoFreeCap,
+		},
+		"second region has uncorrectable error": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "unhealthy-2nd-sock"),
+			},
+			expSock1: true,
+			expState: storage.ScmNotHealthy,
+		},
+		"second region has free capacity": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "full-free-2nd-sock"),
+			},
+			expState: storage.ScmFreeCap,
+		},
+		"two regions with no free capacity": {
+			runOut: []string{
+				verStr, mockXMLRegions(t, "dual-sock"),
+			},
+			expState: storage.ScmNoFreeCap,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			callIdx := 0
+
+			mockRun := func(in string) (string, error) {
+				out := ""
+				if len(tc.runOut) > callIdx {
+					out = tc.runOut[callIdx]
+				}
+
+				var err error = nil
+				if len(tc.runErr) > callIdx {
+					err = tc.runErr[callIdx]
+				}
+
+				callIdx++
+
+				return out, err
+			}
+
+			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			regions, err := cr.getRegions(sockAny)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			resp, err := getPMemState(log, regions)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			expResp := &storage.ScmSocketState{
+				State: tc.expState,
+			}
+
+			if tc.expSock0 {
+				s := uint(0)
+				expResp.SocketID = &s
+			} else if tc.expSock1 {
+				s := uint(1)
+				expResp.SocketID = &s
+			}
+
+			t.Logf("socket state: %+v", expResp)
+
+			if diff := cmp.Diff(expResp, resp); diff != "" {
+				t.Fatalf("unexpected scm state (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
