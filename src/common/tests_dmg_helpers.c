@@ -102,6 +102,7 @@ log_stderr_pipe(int fd)
 	char	*full_msg = NULL;
 	ssize_t	len = 0;
 
+	D_DEBUG(DB_TEST, "reading from stderr pipe\n");
 	while (1) {
 		ssize_t n;
 		ssize_t old_len = len;
@@ -127,6 +128,8 @@ log_stderr_pipe(int fd)
 		strncpy(&full_msg[old_len], buf, n);
 	}
 
+
+	D_DEBUG(DB_TEST, "done reading stderr pipe\n");
 	close(fd);
 
 	if (full_msg == NULL) {
@@ -134,7 +137,7 @@ log_stderr_pipe(int fd)
 		return;
 	}
 
-	D_ERROR("stderr: %s\n", full_msg);
+	D_DEBUG(DB_TEST, "stderr: %s\n", full_msg);
 }
 
 #ifndef HAVE_JSON_TOKENER_GET_PARSE_END
@@ -156,7 +159,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			parse_depth = JSON_TOKENER_DEFAULT_DEPTH;
 	json_tokener		*tok = NULL;
 	FILE			*fp = NULL;
-	/*FILE			*fperr = NULL;*/
 	int			stdoutfd[2];
 	int			stderrfd[2];
 	int			rc = 0;
@@ -175,7 +177,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
+	D_DEBUG(DB_TEST, "dmg cmd: %s\n", cmd_str);
 
 	/* Create pipes */
 	if (pipe(stdoutfd) == -1) {
@@ -210,11 +212,13 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
 
+		D_DEBUG(DB_TEST, "running dmg command\n");
 		if (system(cmd_str) == -1) {
 			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", cmd_str, errno, strerror(errno));
 			exit(-DER_IO);
 		}
 
+		D_DEBUG(DB_TEST, "dmg command executed successfully\n");
 		exit(0);
 	}
 
@@ -222,11 +226,12 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	close(stdoutfd[1]);
 	close(stderrfd[1]);
 
-	/* Wait for child to finish executing */
+	D_DEBUG(DB_TEST, "waiting for dmg to finish executing\n");
 	if (wait(&child_rc) == -1) {
 		D_ERROR("wait failed: %s\n", strerror(errno));
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
+	D_DEBUG(DB_TEST, "wait finished\n");
 
 	log_stderr_pipe(stderrfd[0]);
 
@@ -259,6 +264,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	size_t	total = 0;
 	size_t	n;
 
+	D_DEBUG(DB_TEST, "reading json from stdout\n");
 	while (1) {
 		if (total + JSON_CHUNK_SIZE + 1 > size) {
 			size = total + JSON_CHUNK_SIZE + 1;
@@ -280,6 +286,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
+	D_DEBUG(DB_TEST, "read %lu bytes\n", total);
 
 	if (total == 0) {
 		D_ERROR("dmg output is empty\n");
