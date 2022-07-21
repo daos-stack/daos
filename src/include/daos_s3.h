@@ -30,8 +30,35 @@ extern "C" {
 /** Maximum user info length */
 #define DS3_MAX_USER_NAME   DFS_MAX_NAME
 
+// TODO This is temporarily moved here
+#define METADATA_DIR_LIST                                                                          \
+	X(USERS_DIR, "users")                                                                      \
+	X(EMAILS_DIR, "emails")                                                                    \
+	X(ACCESS_KEYS_DIR, "access_keys")                                                          \
+	X(MULTIPART_DIR, "multipart")
+
+/* Define for RPC enum population below */
+#define X(a, b) a,
+enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
+#undef X
+
 /** DAOS S3 Pool handle */
-typedef struct ds3        ds3_t;
+typedef struct {
+	/** Pool handle */
+	daos_handle_t    poh;
+	/** Pool information */
+	daos_pool_info_t pinfo;
+	/** Metadata container handle */
+	daos_handle_t    meta_coh;
+	/** Metadata dfs mount */
+	dfs_t           *meta_dfs;
+	/** Array of metadata dir handle */
+	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
+} ds3_t;
+// TODO end of temporarily moved here
+
+/** DAOS S3 Pool handle */
+// typedef struct ds3        ds3_t;
 
 /** DAOS S3 Bucket handle */
 typedef struct ds3_bucket ds3_bucket_t;
