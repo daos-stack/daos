@@ -24,9 +24,10 @@ DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
 DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
 DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
-: "${CI_RPM_TEST_VERSION:-}"
-if [ -z "$CI_RPM_TEST_VERSION" ]; then
-    CI_RPM_TEST_VERSION="$(echo "$COMMIT_MESSAGE" |
+: "$CI_RPM_TEST_VERSION:-}"
+: "${DAOS_RPM_TEST_VERSION:=$CI_RPM_TEST_VERSION}"
+if [ -z "$DAOS_RPM_TEST_VERSION" ]; then
+    DAOS_RPM_TEST_VERSION="$(echo "$COMMIT_MESSAGE" |
       sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip')"
 fi
 
@@ -55,7 +56,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL:-}\"
            BRANCH_NAME=\"${BRANCH_NAME:-}\"
            CHANGE_TARGET=\"${CHANGE_TARGET:-}\"
-           CI_RPM_TEST_VERSION=\"$CI_RPM_TEST_VERSION\"
+           DAOS_RPM_TEST_VERSION=\"$DAOS_RPM_TEST_VERSION\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)
