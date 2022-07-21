@@ -1,8 +1,6 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - server-B
+    test_servers: 1
+    test_clients: 1
 timeouts:
     test_dm_obj_small_dcp: 120
     test_dm_obj_small_cont_clone: 90

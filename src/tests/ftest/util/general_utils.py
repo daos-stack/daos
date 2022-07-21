@@ -294,7 +294,7 @@ def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
         verbose (bool, optional): display message for command execution. Defaults to False.
@@ -392,7 +392,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the results.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -435,7 +435,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     task = run_task(hosts, command, timeout)
 
     # Get the exit status of each host
-    host_exit_status = {host: None for host in hosts}
+    host_exit_status = {str(host): None for host in hosts}
     for exit_status, host_list in task.iter_retcodes():
         for host in host_list:
             host_exit_status[host] = exit_status
@@ -520,7 +520,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): command used to obtain the data on each server
         text (str): data identification string
         error (str): data error string
@@ -551,7 +551,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                     result["interrupted"], result["command"])
                 for line in result["stdout"]:
                     log.info("        %s", line)
-        host_data.append({"hosts": NodeSet.fromlist(hosts), "data": DATA_ERROR})
+        host_data.append({"hosts": hosts, "data": DATA_ERROR})
     else:
         for result in results:
             host_data.append(
@@ -564,7 +564,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -592,7 +592,7 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     If specified, verify that the file exists and is owned by the user.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
@@ -622,6 +622,26 @@ def check_file_exists(hosts, filename, user=None, directory=False,
             missing_file.add(NodeSet.fromlist(node_list))
 
     return len(missing_file) == 0, missing_file
+
+
+def check_for_pool(host, uuid):
+    """Check if pool folder exist on server.
+
+    Args:
+        host (NodeSet): Server host name
+        uuid (str): Pool uuid to check if exists
+
+    Returns:
+        bool: True if pool folder exists, False otherwise
+
+    """
+    pool_dir = "/mnt/daos/{}".format(uuid)
+    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    if result[0]:
+        print("{} exists on {}".format(pool_dir, host))
+    else:
+        print("{} does not exist on {}".format(pool_dir, host))
+    return result[0]
 
 
 def process_host_list(hoststr):
@@ -714,7 +734,7 @@ def check_pool_files(log, hosts, uuid):
 
     Args:
         log (logging): logging object used to display messages
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
         uuid (str): uuid file name to look for in /mnt/daos.
 
     Returns:
@@ -723,7 +743,7 @@ def check_pool_files(log, hosts, uuid):
 
     """
     status = True
-    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    log.info("Checking for pool data on %s", hosts)
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
         result = check_file_exists(hosts, filename, sudo=True)
@@ -753,12 +773,60 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   dump_ult_stacks=False):
+def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
+    """Signal the engines on each hosts to generate their ULT stacks dump.
+
+    Args:
+        hosts (NodeSet): hosts on which to signal the engines
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+        added_filter (str, optional): negative filter to better identify
+            engines.
+
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No engine matched the criteria / No engine signaled.
+                1   One or more engine matched the criteria and a signal was
+                    sent.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Dumping ULT stacks of engines on %s", hosts)
+
+    if added_filter:
+        ps_cmd = "/usr/bin/ps xa | grep daos_engine | grep -vE {}".format(
+            added_filter)
+    else:
+        ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
+
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if " + ps_cmd,
+            "then rc=1",
+            "sudo pkill --signal USR2 daos_engine",
+            # leave some time for ABT info/stacks dump to complete.
+            # at this time there is no way to know when Argobots ULTs stacks
+            # has completed, see DAOS-1452/DAOS-9942.
+            "sleep 30",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+
+    return result
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
-        hosts (list): hosts on which to stop the processes
+        hosts (NodeSet): hosts on which to stop the processes
         pattern (str): regular expression used to find process names to stop
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
@@ -1082,7 +1150,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         directory (str): the directory to create
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
@@ -1119,7 +1187,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
@@ -1162,7 +1230,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     the specified hosts prior to copying the source.
 
     Args:
-        hosts (list): hosts on which to copy the source
+        hosts (NodeSet): hosts on which to copy the source
         source (str): the file to copy to the hosts
         destination (str): the host location in which to copy the source
         mkdir (bool, optional): whether or not to ensure the destination
@@ -1204,7 +1272,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
             localhost = gethostname().split(".")[0]
-            other_hosts = [host for host in hosts if host != localhost]
+            other_hosts = NodeSet.fromlist([host for host in hosts if host != localhost])
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
