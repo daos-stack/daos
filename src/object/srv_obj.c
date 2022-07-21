@@ -246,6 +246,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
+	D_INFO("after decrement, bulks_inflight=%d, rpc=%p\n", arg->bulks_inflight, rpc);
 	if (arg->bulks_inflight == 0)
 		ABT_eventual_set(arg->eventual, &arg->result,
 				 sizeof(arg->result));
@@ -452,14 +453,16 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		bulk_desc.bd_local_off	= local_off;
 
 		p_arg->bulks_inflight++;
-		if (bulk_bind)
+		if (bulk_bind) {
+			D_INFO("bulk_bind start rpc=%p\n", rpc);
 			rc = crt_bulk_bind_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
 				&bulk_opid);
-		else
+		} else {
 			rc = crt_bulk_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
 				&bulk_opid);
+		}
 		if (rc < 0) {
 			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n",
 				sgl_idx, DP_RC(rc));
@@ -509,6 +512,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
 
 	p_arg->bulks_inflight++;
+	D_INFO("bulk_op %d sgl_nr %d bulks_inflight=%d\n", bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	if (daos_handle_is_valid(ioh)) {
 		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
@@ -518,6 +522,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			goto done;
 		}
 	}
+	D_INFO("Done bulk_xfer_sgls rc=%d for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t	*sgl, tmp_sgl;
@@ -549,15 +555,21 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			break;
 	}
 done:
-	if (--(p_arg->bulks_inflight) == 0)
+	if (--(p_arg->bulks_inflight) == 0) {
+		D_INFO("bulks_inflight now 0, set the eventual\n");
 		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+	}
 
 	if (async)
 		return rc;
 
+	D_INFO("rc=%d wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
 	if (rc == 0)
 		rc = ret ? dss_abterr2der(ret) : *status;
+	D_INFO("\rc=%d done wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	ABT_eventual_free(&p_arg->eventual);
 
@@ -1344,6 +1356,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
+		D_INFO("vos_update_begin done for: "
+		       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+		       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+		       tag, orw->orw_epoch);
 	} else {
 		uint32_t			 fetch_flags = 0;
 		bool				 ec_deg_fetch;
@@ -1523,6 +1539,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto out;
 	}
+	D_INFO("bio_iod_prep() done for: "
+	       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+	       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+	       tag, orw->orw_epoch);
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
@@ -1746,7 +1766,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 			rc = -DER_NO_HDL;
 		return rc;
 	}
-
+	D_DEBUG(DB_MD, "hdl="DF_UUID": sch_ref=%d after find hdl\n",
+		DP_UUID(coh_uuid), coh->sch_ref);
 	/* normal container open handle with ds_cont_child attached */
 	if (coh->sch_cont != NULL) {
 		ds_cont_child_get(coh->sch_cont);
@@ -1795,6 +1816,8 @@ out:
 failed:
 	if (coc != NULL)
 		ds_cont_child_put(coc);
+	D_DEBUG(DB_MD, "hdl="DF_UUID": in failed path, sch_ref=%d before ds_cont_hdl_put()\n",
+		DP_UUID(coh_uuid), coh->sch_ref);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -1803,6 +1826,9 @@ static void
 obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
+		D_DEBUG(DB_MD, "hdl="DF_UUID": sch_ref=%d before ds_cont_hdl_put()\n",
+			DP_UUID(ioc->ioc_coh->sch_uuid), ioc->ioc_coh->sch_ref);
+
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
 	}
