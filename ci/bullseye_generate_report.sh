@@ -6,12 +6,12 @@ if [ ! -d '/opt/BullseyeCoverage/bin' ]; then
   echo 'Bullseye not found.'
   exit 1
 fi
-export COVFILE="$WORKSPACE/test.cov"
+export COVFILE="$DAOS_BASE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
-mv "$WORKSPACE/test.cov_1" "$COVFILE"
-if [ -e "$WORKSPACE/test.cov_2" ]; then
-  covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
+mv "$DAOS_BASE/test.cov_1" "$COVFILE"
+if [ -e "$DAOS_BASE/test.cov_2" ]; then
+  covmerge --no-banner --file "$COVFILE" "$DAOS_BASE"/test.cov_*
 fi
 
 if [ -e "$COVFILE" ]; then
