@@ -1,7 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 #JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:
