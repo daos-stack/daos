@@ -83,7 +83,8 @@ class DynamicStartStop(TestWithServers):
         """
         self.add_pool()
 
-        extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
+        extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
 
         # Start 3 extra servers.
         self.start_additional_servers(additional_servers=extra_servers)
