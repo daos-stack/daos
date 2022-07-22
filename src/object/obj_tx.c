@@ -76,7 +76,8 @@ struct dc_tx {
 	uint64_t		 tx_flags;
 	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
 				 tx_retry:1, /** Retry the commit RPC. */
-				 tx_set_resend:1; /** Set 'resend' flag. */
+				 tx_set_resend:1, /** Set 'resend' flag. */
+				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -949,7 +950,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
 		tx->tx_set_resend = 1;
 		tx->tx_status = TX_FAILED;
 
@@ -1019,6 +1020,7 @@ struct dc_tx_req_group {
 	uint32_t			 dtrg_read_cnt;
 	uint32_t			 dtrg_write_cnt;
 	uint32_t			 dtrg_slot_cnt;
+	uint8_t				 dtrg_flags; /* see daos_tgt_flags */
 	struct daos_cpd_req_idx		*dtrg_req_idx;
 };
 
@@ -1162,6 +1164,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	int			 start;
 	int			 rc = 0;
 	int			 idx;
+	uint8_t			 tgt_flags = 0;
 
 	if (d_list_empty(dtr_list))
 		leader_dtr = NULL;
@@ -1187,6 +1190,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			dcu->dcu_start_shard = start;
+			if (dcu->dcu_iod_array.oia_oiods != NULL)
+				tgt_flags = DTF_REASSEMBLE_REQ;
 		}
 	}
 
@@ -1223,6 +1228,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		if (rc != 0)
 			goto out;
 
+		if (shard->do_reintegrating)
+			tx->tx_reintegrating = 1;
 		/* XXX: It is possible that more than one shards locate on the
 		 *	same DAOS target under OSA mode, then the "idx" may be
 		 *	not equal to "shard->do_shard".
@@ -1233,6 +1240,11 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			  shard->do_target_id, dtrg_nr);
 
 		dtrg = &dtrgs[shard->do_target_id];
+
+		dtrg->dtrg_flags |= tgt_flags;
+		if (unlikely(shard->do_shard != idx))
+			dtrg->dtrg_flags |= DTF_REASSEMBLE_REQ;
+
 		if (dtrg->dtrg_req_idx == NULL) {
 			/* dtrg->dtrg_req_idx will be released by caller. */
 			D_ALLOC_ARRAY(dtrg->dtrg_req_idx, DTX_SUB_REQ_DEF);
@@ -1697,6 +1709,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	shard_tgts[0].st_rank = dtrgs[leader_dtrg_idx].dtrg_rank;
 	shard_tgts[0].st_tgt_id = leader_dtrg_idx;
 	shard_tgts[0].st_tgt_idx = dtrgs[leader_dtrg_idx].dtrg_tgt_idx;
+	shard_tgts[0].st_flags = dtrgs[leader_dtrg_idx].dtrg_flags;
 
 	for (i = 0, j = 1; i < tgt_cnt; i++) {
 		if (dtrgs[i].dtrg_req_idx == NULL || i == leader_dtrg_idx)
@@ -1715,6 +1728,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		shard_tgts[j].st_rank = dtrgs[i].dtrg_rank;
 		shard_tgts[j].st_tgt_id = i;
 		shard_tgts[j].st_tgt_idx = dtrgs[i].dtrg_tgt_idx;
+		shard_tgts[j].st_flags = dtrgs[i].dtrg_flags;
 		j++;
 	}
 
@@ -1842,6 +1856,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
 	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	if (tx->tx_reintegrating)
+		oci->oci_flags |= ORF_REINTEGRATING_IO;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

@@ -1,15 +1,10 @@
 hosts:
   servers: !mux
     1_server:
-      test_servers:
-        - server-A
+      test_servers: server-1
     3_servers:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
-  test_clients:
-    - client-A
+      test_servers: server-[1-3]
+  test_clients: 1
 timeout: 600
 setup:
   start_servers_once: False
