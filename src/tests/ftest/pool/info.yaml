@@ -13,7 +13,7 @@ pool:
   createsize: !mux
     size1gb:
       scm_size: 1073741824
-    size2gb:
+    size3gb:
       scm_size: 3221225472
 test:
   poolconnect: !mux
