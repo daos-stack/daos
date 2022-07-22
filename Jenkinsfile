@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -216,26 +217,61 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
         stage('Check PR') {
             when { changeRequest() }
-            steps {
-                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
-                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
-                           exit 1
-                        fi'''
+            parallel {
+                stage('Used Required Git Hooks') {
+                    steps {
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                                   message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                                   echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                                   exit 1
+                                fi'''
+                        }
+                    }
+                    post {
+                        unsuccessful {
+                            echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                        }
+                    }
+                } // stage('Used Required Git Hooks')
+                stage('Branch name check') {
+                    when { changeRequest() }
+                    steps {
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
+                        }
+                    }
                 }
-            }
-            post {
-                unsuccessful {
-                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
-                }
-            }
-        }
+            } // parallel
+        } // stage('Check PR')
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {

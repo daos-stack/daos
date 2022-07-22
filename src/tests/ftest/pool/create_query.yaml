@@ -1,9 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
+  test_servers: 4
 timeouts:
   test_create_and_query: 180
 server_config:

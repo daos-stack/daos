@@ -237,7 +237,13 @@ type containerGetACLCmd struct {
 }
 
 func (cmd *containerGetACLCmd) Execute(args []string) error {
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, nil)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}

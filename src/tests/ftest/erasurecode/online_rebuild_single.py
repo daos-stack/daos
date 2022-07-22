@@ -64,3 +64,5 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         # EC data was written with +2 parity so after killing Two servers data
         # should be intact and no data corruption observed.
         self.start_online_single_operation("READ", parity=2)
+        # Wait for rebuild to complete
+        self.pool.wait_for_rebuild(False)
