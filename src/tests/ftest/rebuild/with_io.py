@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
+
 
 class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
@@ -31,7 +31,10 @@ class RbldWithIO(TestWithServers):
             single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,pool,rebuild,daily_regression,medium,rebuildwithio
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=rebuildwithio,test_rebuild_with_io
         """
         # Get the test params
         self.add_pool(create=False)

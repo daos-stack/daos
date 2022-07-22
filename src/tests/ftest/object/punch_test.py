@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -37,7 +36,10 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the dkey punch function.
 
-        :avocado: tags=all,object,daily_regression,small,dkeypunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object,small
+        :avocado: tags=dkeypunch,test_dkey_punch
         """
 
         try:
@@ -92,7 +94,10 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the akey punch function.
 
-        :avocado: tags=all,object,daily_regression,small,akeypunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object,small
+        :avocado: tags=akeypunch,test_akey_punch
         """
 
         try:
@@ -146,7 +151,10 @@ class PunchTest(TestWithServers):
         The most basic test of the object punch function.  Really similar
         to above except the whole object is deleted.
 
-        :avocado: tags=all,object,daily_regression,small,objpunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object,small
+        :avocado: tags=objpunch,test_obj_punch
         """
 
         try:

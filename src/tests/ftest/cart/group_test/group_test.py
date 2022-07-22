@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -14,11 +13,13 @@ class GroupTest(CartTest):
     :avocado: recursive
     """
 
-    def test_group(self):
+    def test_cart_group(self):
         """Test CaRT NoPmix Launcher.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,group_test,one_node,memcheck
+        :avocado: tags=vm
+        :avocado: tags=cart,memcheck
+        :avocado: tags=group_test,one_node,test_cart_group
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)

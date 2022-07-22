@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
@@ -38,6 +37,7 @@ class HarnessAdvancedTest(TestWithServers):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_advanced_test,core_files
         :avocado: tags=test_core_files
         """
@@ -93,6 +93,7 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_advanced_test,pool_timeout
         :avocado: tags=test_pool_timeout
         """
