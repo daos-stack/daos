@@ -1000,6 +1000,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	if (obj_auxi->cond_modify && (obj_shard->do_rebuilding || obj_shard->do_reintegrating))
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
+	if (obj_shard->do_reintegrating)
+		obj_auxi->reintegrating = 1;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -1108,10 +1110,17 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		grp_idx = shard_idx / obj_get_grp_size(obj);
 		grp_start = grp_idx * obj_get_grp_size(obj);
 		if (req_tgts->ort_srv_disp) {
-			leader_shard = obj_grp_leader_get(obj, grp_idx,
-							  obj_ec_dkey_hash_get(obj,
-									       obj_auxi->dkey_hash),
-							  obj_auxi->cond_modify, map_ver, bit_map);
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+				leader_shard = 0;
+			} else {
+				uint64_t	hash;
+
+				hash = obj_ec_dkey_hash_get(obj, obj_auxi->dkey_hash),
+				leader_shard = obj_grp_leader_get(obj, grp_idx, hash,
+								  obj_auxi->cond_modify,
+								  map_ver, bit_map);
+			}
 			if (leader_shard < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u: "DF_RC"\n",
@@ -4537,6 +4546,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
+	obj_auxi->reintegrating = 0;
 	shard_task_list_init(obj_auxi);
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;
@@ -4990,7 +5000,9 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	    daos_gettime_coarse() - obj->cob_time_fetch_leader[grp_idx])
 		to_leader = true;
 
-	if (to_leader)
+	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+		rc = obj->cob_shards_nr - 1;
+	else if (to_leader)
 		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
 	else
 		rc = obj_grp_valid_shard_get(obj, grp_idx, map_ver, obj_auxi->failed_tgt_list);

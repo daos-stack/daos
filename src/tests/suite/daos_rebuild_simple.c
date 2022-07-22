@@ -825,7 +825,12 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
-		assert_string_equal(buffer, rec);
+		/* SX only has one replica, and reintegration will delete the "stale"
+		 * data anyway, so it may lose data here, so do not need verify data
+		 * for SX object. Incremental reintegration might fix this.
+		 */
+		if (oclass != OC_SX)
+			assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
 }

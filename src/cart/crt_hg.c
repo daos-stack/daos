@@ -9,7 +9,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-#include "mercury_util.h"
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -102,6 +101,11 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_UCX_DC_X,
 		.nad_str	= "ucx+dc_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_TCP,
+		.nad_str	= "ucx+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
@@ -496,7 +500,10 @@ crt_provider_ip_str_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_ip_str;
+	if (provider == CRT_NA_OFI_CXI)
+		return NULL;
+	else
+		return prov_data->cpg_na_ofi_config.noc_ip_str;
 }
 
 static bool
@@ -596,12 +603,21 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		D_ASPRINTF(*string, "%s://%s/%s:%d",
-			   provider_str, domain_str, ip_str,
-			   start_port + ctx_idx);
+		if (ip_str == NULL)
+			D_ASPRINTF(*string, "%s://%s:%d",
+				   provider_str, domain_str,
+				   start_port + ctx_idx);
+		else
+			D_ASPRINTF(*string, "%s://%s/%s:%d",
+				   provider_str, domain_str, ip_str,
+				   start_port + ctx_idx);
 	} else {
-		D_ASPRINTF(*string, "%s://%s/%s",
-			   provider_str, domain_str, ip_str);
+		if (ip_str == NULL)
+			D_ASPRINTF(*string, "%s://%s",
+				   provider_str, domain_str);
+		else
+			D_ASPRINTF(*string, "%s://%s/%s",
+				   provider_str, domain_str, ip_str);
 	}
 
 out:
@@ -643,20 +659,17 @@ crt_hg_init(void)
 	#define EXT_FAC DD_FAC(external)
 
 	env = getenv("HG_LOG_SUBSYS");
-	if (!env)
-		HG_Set_log_subsys("hg,na");
-
-	env = getenv("HG_LOG_LEVEL");
 	if (!env) {
-		HG_Set_log_level("warning");
-		HG_Util_set_log_level("warning");
+		env = getenv("HG_LOG_LEVEL");
+		if (!env)
+			HG_Set_log_level("warning");
 	}
 
 	/* import HG log */
-	hg_log_set_func(crt_hg_log);
-	hg_log_set_stream_debug((FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
-	hg_log_set_stream_warning((FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
-	hg_log_set_stream_error((FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
+	HG_Set_log_func(crt_hg_log);
+	HG_Set_log_stream("debug", (FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
+	HG_Set_log_stream("warning", (FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
+	HG_Set_log_stream("error", (FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
 
 	#undef EXT_FAC
 out:
@@ -1157,17 +1170,14 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		return rc;
 	}
 
-	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n",
-		  hg_cbinfo->ret);
+	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n", hg_cbinfo->ret);
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
 		state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
-		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp,
-				     rpc_pub->cr_ep.ep_rank)) {
-			RPC_TRACE(DB_NET, rpc_priv,
-				  "request target excluded\n");
+		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp, rpc_pub->cr_ep.ep_rank)) {
+			RPC_TRACE(DB_NET, rpc_priv, "request target excluded\n");
 			rc = -DER_EXCLUDED;
 		} else if (crt_req_timedout(rpc_priv)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
@@ -1181,11 +1191,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		hg_ret = hg_cbinfo->ret;
 		break;
 	default:
-		state = RPC_STATE_COMPLETED;
-		rc = -DER_HG;
+		state  = RPC_STATE_COMPLETED;
+		rc     = crt_hgret_2_der(hg_cbinfo->ret);
 		hg_ret = hg_cbinfo->ret;
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 		break;
 	}
 
@@ -1198,8 +1207,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		rpc_priv->crp_state = RPC_STATE_REPLY_RECVED;
 		if (rpc_priv->crp_opc_info->coi_no_reply == 0) {
 			/* HG_Free_output in crt_hg_req_destroy */
-			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
-					       &rpc_pub->cr_output);
+			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle, &rpc_pub->cr_output);
 			if (hg_ret == HG_SUCCESS) {
 				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
