@@ -29,6 +29,7 @@ class DaosCoreBase(TestWithServers):
         """Initialize the DaosCoreBase object."""
         super().__init__(*args, **kwargs)
         self.subtest_name = None
+        self.using_local_host = False
 
     def setUp(self):
         """Set up before each test."""
@@ -44,6 +45,7 @@ class DaosCoreBase(TestWithServers):
         # and create a new self.hostfile_clients.
         if not self.hostlist_clients:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
+            self.using_local_host = True
 
     def get_test_param(self, name, default=None):
         """Get the test-specific test yaml parameter value.
@@ -124,9 +126,16 @@ class DaosCoreBase(TestWithServers):
                 get_log_file("daosCA/certs"), self.hostlist_clients)
             dmg.copy_configuration(self.hostlist_clients)
 
-        # Temporarily place cmocka results in a test_dir subdirectory
-        cmocka_dir = os.path.join(self.test_dir, "cmocka")
-        log_task(include_local_host(self.hostlist_clients), " ".join(["mkdir", "-p", cmocka_dir]))
+        # For tests running locally place the cmocka results directly into the avocado
+        # job-results/*/test-results/*/data/ directory (self.outputdir).  For remotely
+        # running tests, place the cmocka results in a 'cmocka' subdirectory in the
+        # DAOS_TEST_LOG_DIR directory.  These files will then need to be copied back to
+        # this host after the test runs.
+        cmocka_dir = self.outputdir
+        if not self.using_local_host:
+            cmocka_dir = os.path.join(self.test_dir, "cmocka")
+            log_task(
+                include_local_host(self.hostlist_clients), " ".join(["mkdir", "-p", cmocka_dir]))
 
         # Set up the daos test command and environment settings
         cmd = " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)])
@@ -188,17 +197,18 @@ class DaosCoreBase(TestWithServers):
                 run_command(command)
 
             finally:
-                self.log.debug("Local %s directory after clush:", cmocka_dir)
-                run_command(ls_command)
-                # Move local files to the avocado test variant data directory
-                for cmocka_node_dir in os.listdir(cmocka_dir):
-                    cmocka_node_path = os.path.join(cmocka_dir, cmocka_node_dir)
-                    if os.path.isdir(cmocka_node_path):
-                        for cmocka_file in os.listdir(cmocka_node_path):
-                            cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
-                            if "_cmocka_results." in cmocka_file:
-                                command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
-                                run_command(command)
+                if not self.using_local_host:
+                    self.log.debug("Local %s directory after clush:", cmocka_dir)
+                    run_command(ls_command)
+                    # Move local files to the avocado test variant data directory
+                    for cmocka_node_dir in os.listdir(cmocka_dir):
+                        cmocka_node_path = os.path.join(cmocka_dir, cmocka_node_dir)
+                        if os.path.isdir(cmocka_node_path):
+                            for cmocka_file in os.listdir(cmocka_node_path):
+                                cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
+                                if "_cmocka_results." in cmocka_file:
+                                    command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
+                                    run_command(command)
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
