@@ -35,8 +35,9 @@ class DaosServerDumpTest(TestWithServers):
         # use mangling trick described at
         # https://stackoverflow.com/questions/3385317/private-variables-and-methods-in-python
         # to do so
-        self._Test__status = 'PASS'
-
+        # and this should only work after issue #5217/PR-5224 fix will be integrated
+        # in the Avocado version being used, which should be >= 95.
+        self._Test__status = 'PASS'  # pylint: disable=attribute-defined-outside-init
         # DAOS-1452 may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         # Report any failures
@@ -45,8 +46,9 @@ class DaosServerDumpTest(TestWithServers):
                 "{}: rc={}".format(val, key)
                 for key, val in ret_codes.items() if key != 0
             ]
-            print("no ULT stacks dump found on following hosts: {}".format(", ".join(failed)))
-            self._Test__status = 'FAIL'
+            self.log.info("no ULT stacks dump found on following hosts: {}".format(", ".join(failed)))
+            # see previous comment for similar forced update of status
+            self._Test__status = 'FAIL'  # pylint: disable=attribute-defined-outside-init
 
     def test_daos_server_dump_basic(self):
         """JIRA ID: DAOS-1452.
@@ -62,7 +64,7 @@ class DaosServerDumpTest(TestWithServers):
         # at this time there is no way to know when Argobots ULTs stacks
         # has completed, see DAOS-1452/DAOS-9942.
         if 1 in ret_codes:
-            print(
+            self.log.info(
                 "Dumped daos_engine stacks on {}".format(
                     str(ret_codes[1])))
         if 0 in ret_codes:
@@ -77,7 +79,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (error case).
 
-        :avocado: tags=all
+        :avocado: tags=all,manual
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_error
         """
 
@@ -89,7 +91,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (failure case).
 
-        :avocado: tags=all
+        :avocado: tags=all,manual
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_fail
         """
 
@@ -101,7 +103,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (timeout case).
 
-        :avocado: tags=all
+        :avocado: tags=all,manual
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_timeout
         """
 
@@ -113,7 +115,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (unexpected engine status case).
 
-        :avocado: tags=all
+        :avocado: tags=all,manual
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_unexpected_engine_status
         """
 
