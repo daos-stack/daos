@@ -107,10 +107,13 @@ daos_oclass_name2id(const char *name)
 {
 	struct daos_obj_class	*oc;
 
+	if (strnlen(name, MAX_OBJ_CLASS_NAME_LEN + 1) > MAX_OBJ_CLASS_NAME_LEN)
+		return OC_UNKNOWN;
+
 	/* slow search path, it's for tool and not performance sensitive. */
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (strlen(name) == strlen(oc->oc_name) &&
-		    strncmp(oc->oc_name, name, strlen(name)) == 0)
+		if (strlen(oc->oc_name) == strnlen(name, MAX_OBJ_CLASS_NAME_LEN) &&
+		    strcmp(oc->oc_name, name) == 0)
 			return oc->oc_id;
 	}
 
