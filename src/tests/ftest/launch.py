@@ -940,7 +940,7 @@ def find_pci_address(value):
 
 
 def replace_yaml_file(yaml_file, args, yaml_dir):
-    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks,too-many-branches
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
