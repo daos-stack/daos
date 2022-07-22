@@ -267,6 +267,15 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes: []*storage.ScmModule{},
+				PrepRes: &storage.ScmPrepareResponse{
+					State: storage.ScmSocketState{
+						State: storage.ScmNoModules,
+					},
+					Namespaces: storage.ScmNamespaces{},
+				},
+			},
 			expPayload: &storage.ScmPrepareResponse{
 				State: storage.ScmSocketState{
 					State: storage.ScmNoModules,
@@ -357,7 +366,10 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Method:  "ScmScan",
 				Payload: scmScanReqPayload,
 			},
-			expPayload: &storage.ScmScanResponse{},
+			expPayload: &storage.ScmScanResponse{
+				Namespaces: storage.ScmNamespaces{},
+				Modules:    storage.ScmModules{},
+			},
 		},
 		"ScmScan failure": {
 			req: &pbin.Request{

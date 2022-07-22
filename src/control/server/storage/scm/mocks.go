@@ -275,8 +275,6 @@ type MockBackendConfig struct {
 	GetModulesErr        error
 	GetNamespacesRes     storage.ScmNamespaces
 	GetNamespacesErr     error
-	GetStateRes          *storage.ScmSocketState
-	GetStateErr          error
 	PrepRes              *storage.ScmPrepareResponse
 	PrepErr              error
 	PrepResetRes         *storage.ScmPrepareResponse
@@ -296,16 +294,6 @@ func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
 
 func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
-}
-
-func (mb *MockBackend) getPMemState(int) (*storage.ScmSocketState, error) {
-	if mb.cfg.GetStateErr != nil {
-		return nil, mb.cfg.GetStateErr
-	}
-	if mb.cfg.GetStateRes == nil {
-		return &storage.ScmSocketState{}, nil
-	}
-	return mb.cfg.GetStateRes, nil
 }
 
 func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
