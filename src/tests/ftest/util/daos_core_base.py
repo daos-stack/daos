@@ -20,6 +20,7 @@ from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
 class DaosCoreBase(TestWithServers):
+    # pylint: disable=too-many-nested-blocks
     """Runs the daos_test subtests with multiple servers.
 
     :avocado: recursive
@@ -183,21 +184,21 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
-            # List any remote cmocka files
-            self.log.debug("Remote %s directories:", cmocka_dir)
-            ls_command = "ls -alR {0}".format(cmocka_dir)
-            clush_ls_command = "{0} {1}".format(
-                get_clush_command(self.hostlist_clients, "-B -S"), ls_command)
-            log_task(self.hostlist_clients, clush_ls_command)
+            if not self.using_local_host:
+                # List any remote cmocka files
+                self.log.debug("Remote %s directories:", cmocka_dir)
+                ls_command = "ls -alR {0}".format(cmocka_dir)
+                clush_ls_command = "{0} {1}".format(
+                    get_clush_command(self.hostlist_clients, "-B -S"), ls_command)
+                log_task(self.hostlist_clients, clush_ls_command)
 
-            # Copy any remote cmocka files back to this host
-            command = "{0} --rcopy {1} --dest {1}".format(
-                get_clush_command(self.hostlist_clients), cmocka_dir)
-            try:
-                run_command(command)
+                # Copy any remote cmocka files back to this host
+                command = "{0} --rcopy {1} --dest {1}".format(
+                    get_clush_command(self.hostlist_clients), cmocka_dir)
+                try:
+                    run_command(command)
 
-            finally:
-                if not self.using_local_host:
+                finally:
                     self.log.debug("Local %s directory after clush:", cmocka_dir)
                     run_command(ls_command)
                     # Move local files to the avocado test variant data directory
