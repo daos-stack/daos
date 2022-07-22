@@ -303,19 +303,17 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 // * regions exist and free capacity -> create all namespaces, return created
 // * regions exist but no free capacity -> no-op, return namespaces
 func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
-	emptyResp := &storage.ScmPrepareResponse{
-		Namespaces: storage.ScmNamespaces{},
-		State: storage.ScmSocketState{
-			State: storage.ScmNoModules,
-		},
-	}
-
 	if scanRes == nil {
 		return nil, errors.New("nil scan response")
 	}
 	if len(scanRes.Modules) == 0 {
 		cr.log.Info("Skip SCM prep, no PMem modules.")
-		return emptyResp, nil
+		return &storage.ScmPrepareResponse{
+			Namespaces: storage.ScmNamespaces{},
+			State: storage.ScmSocketState{
+				State: storage.ScmNoModules,
+			},
+		}, nil
 	}
 
 	// If socket ID set in request, only process PMem attached to that socket.
@@ -372,14 +370,14 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if scanRes == nil {
 		return nil, errors.New("nil scan response")
 	}
+	resp := &storage.ScmPrepareResponse{
+		Namespaces: storage.ScmNamespaces{},
+		State:      storage.ScmSocketState{},
+	}
 	if len(scanRes.Modules) == 0 {
 		cr.log.Info("Skip SCM prep as there are no PMem modules.")
-		return &storage.ScmPrepareResponse{
-			Namespaces: storage.ScmNamespaces{},
-			State: storage.ScmSocketState{
-				State: storage.ScmNoModules,
-			},
-		}, nil
+		resp.State.State = storage.ScmNoModules
+		return resp, nil
 	}
 
 	// If socket ID set in request, only process PMem attached to that socket.
@@ -397,12 +395,9 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if err != nil {
 		return nil, errors.Wrap(err, "getPMemState")
 	}
+	resp.State = *sockState
 
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
-
-	resp := &storage.ScmPrepareResponse{
-		State: *sockState,
-	}
 
 	if err := cr.deleteGoals(sockSelector); err != nil {
 		return nil, err
