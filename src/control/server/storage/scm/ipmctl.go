@@ -271,7 +271,7 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 	}
 
 	var keys []int
-	for k, _ := range nsMajMinMap {
+	for k := range nsMajMinMap {
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
