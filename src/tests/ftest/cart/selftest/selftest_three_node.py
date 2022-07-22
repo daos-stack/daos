@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -18,7 +17,9 @@ class CartSelfThreeNodeTest(CartTest):
         """Test CaRT Self Test.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,selftest,three_node,memcheck
+        :avocado: tags=vm
+        :avocado: tags=cart,memcheck,selftest
+        :avocado: tags=three_node,test_cart_selftest
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

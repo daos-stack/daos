@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -28,8 +27,9 @@ class LlnlMpi4py(MpiioTests):
         test_nb_readwrite, test_rdwr, test_readwrite
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=large
-        :avocado: tags=mpiio,smoke,mpich,llnl
+        :avocado: tags=vm
+        :avocado: tags=large,mpiio,smoke,mpich,llnl
+        :avocado: tags=test_llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
@@ -46,8 +46,9 @@ class LlnlMpi4py(MpiioTests):
         testIReadIWriteAll, testReadWriteAllBeginEnd
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=large
-        :avocado: tags=mpiio,mpich,mpi4py
+        :avocado: tags=vm
+        :avocado: tags=large,mpiio,mpich,mpi4py
+        :avocado: tags=test_mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -64,7 +63,10 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,object,full_regression,small,objbadhandle
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object,small
+        :avocado: tags=objbadhandle,test_bad_handle
         """
 
         try:
@@ -73,9 +75,7 @@ class ObjFetchBadParam(TestWithServers):
             self.obj.obj_handle = 99999
 
             # expecting this to fail with -1002
-            dummy_thedata2 = self.container.read_an_obj(self.datasize,
-                                                        self.dkey, self.akey,
-                                                        self.obj)
+            _ = self.container.read_an_obj(self.datasize, self.dkey, self.akey, self.obj)
 
             self.container.oh = saved_oh
             self.fail("Test was expected to return a -1002 but it has not.\n")
@@ -93,12 +93,14 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass null pointers for various fetch parameters.
 
-        :avocado: tags=all,object,full_regression,small,objfetchnull
+        :avocado: tags=all,full_regression
+        :avocado: tags=avmnull
+        :avocado: tags=object,small
+        :avocado: tags=objfetchnull,test_null_ptrs
         """
         try:
             # now try it with a bad dkey, expecting this to fail with -1003
-            dummy_thedata2 = self.container.read_an_obj(self.datasize, None,
-                                                        self.akey, self.obj)
+            _ = self.container.read_an_obj(self.datasize, None, self.akey, self.obj)
 
             self.container.close()
             self.container.destroy()

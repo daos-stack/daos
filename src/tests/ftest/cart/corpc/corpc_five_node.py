@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -18,7 +17,9 @@ class CartCoRpcFiveNodeTest(CartTest):
         """Test CaRT CoRPC.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,corpc,five_node,memcheck
+        :avocado: tags=vm
+        :avocado: tags=cart,memcheck
+        :avocado: tags=corpc,five_node,test_cart_corpc
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
