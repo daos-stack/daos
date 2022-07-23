@@ -58,6 +58,9 @@ struct pool_iv_prop {
 	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
+	uint64_t	pip_scrub_mode;
+	uint64_t	pip_scrub_freq;
+	uint64_t	pip_scrub_thresh;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
 	uint32_t	pip_redun_fac;
@@ -90,6 +93,7 @@ struct pool_iv_conns {
 struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
+	daos_epoch_t	pik_eph;
 };
 
 struct pool_iv_hdl {
@@ -160,6 +164,7 @@ void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c
@@ -193,11 +198,6 @@ int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
 				     uuid_t *srv_cont_hdl,
 				     uuid_t *srv_pool_hdl);
-/*
- * srv_pool_scrub.c
- */
-int ds_start_scrubbing_ult(struct ds_pool_child *child);
-void ds_stop_scrubbing_ult(struct ds_pool_child *child);
 
 /*
  * srv_metrics.c

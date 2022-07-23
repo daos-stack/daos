@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -13,6 +14,40 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+
+job_status_internal = [:]
+
+void job_status_write() {
+    if (!env.DAOS_STACK_JOB_STATUS_DIR) {
+        return
+    }
+    String jobName = env.JOB_NAME.replace('/', '_')
+    jobName += '_' + env.BUILD_NUMBER
+    String fileName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName
+
+    String job_status_text = writeYaml data: job_status_internal,
+                                       returnText: true
+
+    // Need to use shell script for creating files that are not
+    // in the workspace.
+    sh label: "Write jenkins_job_status ${fileName}",
+       script: "echo \"${job_status_text}\" >> ${fileName}"
+}
+
+// groovylint-disable-next-line MethodParameterTypeRequired
+void job_status_update(String name=env.STAGE_NAME,
+                       // groovylint-disable-next-line NoDef
+                       def value=currentBuild.currentResult) {
+    String key = name.replace(' ', '_')
+    key = key.replaceAll('[ .]', '_')
+    job_status_internal[key] = value
+}
+
+// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
+void job_step_update(def value) {
+    // Wrapper around a pipeline step to obtain a status.
+    job_status_update(env.STAGE_NAME, value)
+}
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -182,26 +217,61 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
         stage('Check PR') {
             when { changeRequest() }
-            steps {
-                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
-                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
-                           exit 1
-                        fi'''
+            parallel {
+                stage('Used Required Git Hooks') {
+                    steps {
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                                   message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                                   echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                                   exit 1
+                                fi'''
+                        }
+                    }
+                    post {
+                        unsuccessful {
+                            echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                        }
+                    }
+                } // stage('Used Required Git Hooks')
+                stage('Branch name check') {
+                    when { changeRequest() }
+                    steps {
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
+                        }
+                    }
                 }
-            }
-            post {
-                unsuccessful {
-                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
-                }
-            }
-        }
+            } // parallel
+        } // stage('Check PR')
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
@@ -244,6 +314,7 @@ pipeline {
                     }
                     post {
                         always {
+                            job_status_update()
                             archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
@@ -252,7 +323,13 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                             */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
+                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'pre-build/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
                         success {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -264,14 +341,7 @@ pipeline {
                                          description: env.STAGE_NAME,
                                          context: 'pre-build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
+                        } */
                     }
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
@@ -296,6 +366,7 @@ pipeline {
                             // find any issues.
                             junit testResults: 'bandit.xml',
                                   allowEmptyResults: true
+                            job_status_update()
                         }
                     }
                 } // stage('Python Bandit check')
@@ -344,6 +415,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -379,6 +451,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -414,6 +487,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -446,6 +520,9 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
                         }
                     }
                 }
@@ -480,6 +557,9 @@ pipeline {
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
                         }
+                        cleanup {
+                            job_status_update()
+                        }
                     }
                 }
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
@@ -511,6 +591,9 @@ pipeline {
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
                         }
+                        cleanup {
+                            job_status_update()
+                        }
                     }
                 }
             }
@@ -537,6 +620,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['unit_test_logs/*']
+                            job_status_update()
                         }
                     }
                 }
@@ -569,6 +653,7 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
+                            job_status_update()
                         }
                     }
                 }
@@ -595,6 +680,7 @@ pipeline {
                             unitTestPost ignore_failure: true,
                                          artifacts: ['covc_test_logs/*',
                                                      'covc_vm_test/**']
+                            job_status_update()
                         }
                     }
                 } // stage('Unit test Bullseye')
@@ -617,6 +703,7 @@ pipeline {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
+                            job_status_update()
                         }
                     }
                 } // stage('Unit Test with memcheck')
@@ -656,6 +743,9 @@ pipeline {
                         unsuccessful {
                             coverityPost condition: 'unsuccessful'
                         }
+                        cleanup {
+                            job_status_update()
+                        }
                     }
                 } // stage('Coverity on CentOS 7')
                 stage('Functional on EL 8 with Valgrind') {
@@ -674,6 +764,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional on EL 8 with Valgrind')
@@ -693,6 +784,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional on EL 8')
@@ -712,6 +804,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
@@ -731,6 +824,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -749,6 +843,7 @@ pipeline {
                     post {
                         always {
                             junit 'maldetect.xml'
+                            job_status_update()
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
@@ -767,6 +862,7 @@ pipeline {
                     post {
                         always {
                             junit 'maldetect.xml'
+                            job_status_update()
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
@@ -812,6 +908,7 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            job_status_update()
                         }
                     }
                 } // stage('Fault inection testing')
@@ -828,6 +925,12 @@ pipeline {
             steps {
                 storagePrepTest inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
+            }
+            post {
+                cleanup {
+                    job_status_update()
+                }
+
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -853,6 +956,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Small')
@@ -873,6 +977,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -893,6 +998,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Large')
@@ -927,17 +1033,21 @@ pipeline {
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
+                    post {
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
                 } // stage('Bullseye Report')
             } // parallel
         } // stage ('Test Report')
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
-        }
-        unsuccessful {
-            notifyBrokenBranch branches: target_branch
+          job_status_update('final_status')
+          job_status_write()
+          valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
+                                                   'centos7-gcc-unit-memcheck']
         }
     } // post
 }
