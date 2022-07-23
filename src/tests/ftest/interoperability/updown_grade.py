@@ -115,8 +115,8 @@ class UpgradeDowngradeTest(IorTestBase):
         """show daos version
 
         Args:
-            all_hosts (list): all hosts.
-            hosts_client (list): client hosts to show daos and dmg version.
+            all_hosts (NodeSet): all hosts.
+            hosts_client (NodeSet): client hosts to show daos and dmg version.
         """
         result = run_pcmd(all_hosts, "rpm -qa | grep daos")
         self.check_result(result)
@@ -129,7 +129,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """Upgrade downgrade hosts
 
         Args:
-            hosts (list): test hosts.
+            hosts (NodeSet): test hosts.
             updown (str): upgrade or downgrade
             rpms (list): full path of RPMs to be upgrade or downgrade
         """
@@ -150,7 +150,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """To display daos and dmg version, and check for error.
 
         Args:
-            host (str): test host.
+            host (NodeSet): test host.
         """
         cmds = [
                 "daos version",

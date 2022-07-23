@@ -1,6 +1,5 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 180
 server_config:
   name: daos_server
@@ -9,3 +8,5 @@ pool:
   name: daos_server
   scm_size: 160000000
   control_method: dmg
+container:
+  control_method: daos

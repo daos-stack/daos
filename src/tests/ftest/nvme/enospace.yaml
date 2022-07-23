@@ -1,10 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-C
-    - client-D
+  test_servers: 2
+  test_clients: 2
 #Few tests are in loop for ~10 times and single loop
 #is taking ~600 seconds to finish so larger timeout to run tests.
 timeout: 7500
