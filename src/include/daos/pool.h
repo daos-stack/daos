@@ -59,7 +59,6 @@
 
 /*
  * Aggregation of pool/container/object/keys disk format change.
- * Please update max_supported_pool_version array when you bump version.
  */
 #define DAOS_POOL_GLOBAL_VERSION		1
 

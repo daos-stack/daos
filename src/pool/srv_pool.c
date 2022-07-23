@@ -2323,17 +2323,6 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 /* Currently we only maintain compatibility between 2 versions */
 #define NUM_POOL_VERSIONS	2
 
-/*
- * Max supported pool version that server could handle from client pool
- * connection.
- */
-static unsigned int max_supported_pool_version[NUM_POOL_VERSIONS] = {
-	/* for client pool layout version DAOS_POOL_GLOBAL_VERSION */
-	DAOS_POOL_GLOBAL_VERSION,
-	/* for client pool layout version DAOS_POOL_GLOBAL_VERSION - 1 */
-	1,
-};
-
 static void
 ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -2432,7 +2421,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	D_ASSERT(global_ver_entry != NULL);
 	global_ver = global_ver_entry->dpe_val;
 	/*
-	 * Reject pool connection if client is unable to access newer pool.
+	 * Reject pool connection if old clients try to connect new format pool.
 	 */
 	if (handler_version >= 5) {
 		struct pool_connect_v5_in *in1 = (struct pool_connect_v5_in *)in;
@@ -2449,12 +2438,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
 			}
 
-			if (global_ver > max_supported_pool_version[diff]) {
+			if (global_ver > in1->pci_pool_version) {
 				D_ERROR(DF_UUID": cannot connect, pool layout version(%u) > "
-					"max client supported pool layout version(%u) "
+					"max client supported pool layout version(%u), "
 					"try to upgrade client firstly.\n",
 					DP_UUID(in->pci_op.pi_uuid), global_ver,
-					max_supported_pool_version[diff]);
+					in1->pci_pool_version);
 				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
 			}
 		} else {
