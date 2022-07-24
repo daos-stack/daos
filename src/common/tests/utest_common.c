@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,7 +82,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 
 	rc = pmemobj_ctl_set(ctx->uc_uma.uma_pool, "stats.enabled", &enabled);
 	if (rc) {
-		perror("Enable SCM usage statistics failed. rc:%d\n");
+		perror("Enable SCM usage statistics failed.");
 		goto free_ctx;
 	}
 
@@ -120,7 +120,8 @@ end:
 	return 0;
 destroy:
 	pmemobj_close(ctx->uc_uma.uma_pool);
-	remove(ctx->uc_pool_name);
+	if (remove(ctx->uc_pool_name) != 0)
+		D_ERROR("Failed to remove %s: %s\n", ctx->uc_pool_name, strerror(errno));
 free_ctx:
 	D_FREE(ctx);
 	return rc;
@@ -207,9 +208,12 @@ end:
 		return 0;
 
 	pmemobj_close(utx->uc_uma.uma_pool);
-	remove(utx->uc_pool_name);
+	if (remove(utx->uc_pool_name) != 0) {
+		D_ERROR("Failed to remove %s: %s\n", utx->uc_pool_name, strerror(errno));
+		rc = -DER_IO;
+	}
 	D_FREE(utx);
-	return 0;
+	return rc;
 }
 
 void *

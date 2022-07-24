@@ -1,6 +1,7 @@
 # Requirements which are not versioned.
 defusedxml
 distro
+jira
 junit_xml
 meson
 ninja

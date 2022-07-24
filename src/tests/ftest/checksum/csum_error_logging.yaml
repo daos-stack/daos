@@ -1,10 +1,7 @@
 # Run test on medium cluster
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
-    - client-C
+  test_servers: 1
+  test_clients: 2
 timeout: 600
 timeouts:
   test_csum_error_logging: 400

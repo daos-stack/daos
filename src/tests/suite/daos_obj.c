@@ -4236,7 +4236,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		if (nr == 1 || nr == 2) {
 			if (domain_nr >= 18)
 				assert_int_equal(attr->u.ec.e_k, 16);
-			if (domain_nr >= 10)
+			else if (domain_nr >= 10)
 				assert_int_equal(attr->u.ec.e_k, 8);
 			else if (domain_nr >= 6)
 				assert_int_equal(attr->u.ec.e_k, 4);
@@ -4245,7 +4245,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		} else if (nr == 3) {
 			if (domain_nr >= 20)
 				assert_int_equal(attr->u.ec.e_k, 16);
-			if (domain_nr >= 12)
+			else if (domain_nr >= 12)
 				assert_int_equal(attr->u.ec.e_k, 8);
 			else if (domain_nr >= 8)
 				assert_int_equal(attr->u.ec.e_k, 4);
