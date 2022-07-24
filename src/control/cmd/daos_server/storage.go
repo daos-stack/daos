@@ -139,7 +139,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 	}
 	cmd.Debugf("%s scm resp: %+v", op, resp)
 
-	state := resp.State.State
+	state := resp.Socket.State
 
 	// PMem resource allocations have been updated, prompt the user for reboot.
 	// State reported indicates state before reboot.
