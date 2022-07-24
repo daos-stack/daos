@@ -442,8 +442,8 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				"ndctl create-namespace --region 0 --size 1082331758592",
 				"ndctl create-namespace --region 1 --size 1082331758592",
-				"ndctl create-namespace --region 2 --size 1082331758592",
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
@@ -466,10 +466,10 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				"ndctl create-namespace --region 0 --size 541165879296",
+				"ndctl create-namespace --region 0 --size 541165879296",
 				"ndctl create-namespace --region 1 --size 541165879296",
 				"ndctl create-namespace --region 1 --size 541165879296",
-				"ndctl create-namespace --region 2 --size 541165879296",
-				"ndctl create-namespace --region 2 --size 541165879296",
 				cmdListNamespaces, cmdShowRegions,
 			},
 		},
@@ -485,9 +485,9 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
-				"ndctl create-namespace --region 1 --size 1082331758592",
+				"ndctl create-namespace --region 0 --size 1082331758592",
 			},
-			expErr: errors.New("ndctl create-namespace --region 1 --size 1082331758592: fail"),
+			expErr: errors.New("ndctl create-namespace --region 0 --size 1082331758592: fail"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

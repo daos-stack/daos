@@ -38,6 +38,8 @@ func (cr *cmdRunner) checkNdctl() (errOut error) {
 	return
 }
 
+// create PMem namespaces through ndctl commandline tool, region parameter is zero-based, not
+// one-based like in ipmctl.
 func (cr *cmdRunner) createNamespace(regionID int, sizeBytes uint64) (string, error) {
 	cmd := cmdCreateNamespace
 	cmd = fmt.Sprintf("%s --region %d", cmd, regionID)
@@ -76,11 +78,12 @@ func (cr *cmdRunner) createNamespaces(regionsPerSocket socketRegionMap, nrNsPerS
 
 		// Create specified number of namespaces on a single region (NUMA node).
 		for j := uint(0); j < nrNsPerSock; j++ {
-			out, err := cr.createNamespace(int(region.ID), pmemBytes)
+			// Specify socket ID for region ID in command as it takes a zero-based index.
+			out, err := cr.createNamespace(sid, pmemBytes)
 			if err != nil {
 				return errors.WithMessagef(err, "socket %d", sid)
 			}
-			cr.log.Debugf("createNamespace on region %d size %s returned: %s", region.ID,
+			cr.log.Debugf("createNamespace on region index %d size %s returned: %s", sid,
 				humanize.Bytes(pmemBytes), out)
 		}
 	}
@@ -154,6 +157,7 @@ func (cr *cmdRunner) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
 	if err != nil {
 		return nil, err
 	}
+	cr.log.Debugf("discovered %d pmem namespaces", len(nss))
 
 	return nss, nil
 }
