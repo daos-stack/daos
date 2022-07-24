@@ -51,21 +51,22 @@ func (cr *cmdRunner) createNamespace(regionID int, sizeBytes uint64) (string, er
 }
 
 // For each region, create <nrNsPerSocket> namespaces.
-func (cr *cmdRunner) createNamespaces(regionsPerSocket socketRegionMap, nrNsPerSock uint) error {
+func (cr *cmdRunner) createNamespaces(regionPerSocket socketRegionMap, nrNsPerSock uint) error {
 	if nrNsPerSock < minNrNssPerSocket || nrNsPerSock > maxNrNssPerSocket {
 		return errors.Errorf("unexpected number of namespaces requested per socket: want [%d-%d], got %d",
 			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSock)
 	}
 
-	nrRegions := len(regionsPerSocket)
+	// 1:1 mapping of sockets to regions so nrRegions == nrSockets.
+	nrRegions := len(regionPerSocket)
 	if nrRegions == 0 {
-		return errors.New("unexpected number of pmem regions (0)")
+		return errors.New("expected non-zero number of pmem regions")
 	}
-	cr.log.Debugf("creating %d namespaces per socket (%d regions)", nrNsPerSock, len(regionsPerSocket))
+	cr.log.Debugf("creating %d namespaces per socket (%d regions)", nrNsPerSock, nrRegions)
 
-	keys := regionsPerSocket.keys()
+	keys := regionPerSocket.keys()
 	for sid := range keys {
-		region := regionsPerSocket[sid]
+		region := regionPerSocket[sid]
 		cr.log.Debugf("creating namespaces on region %d, socket %d", region.ID, sid)
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.

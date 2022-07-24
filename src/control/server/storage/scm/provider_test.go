@@ -131,7 +131,7 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					State: storage.ScmSocketState{
+					Socket: storage.ScmSocketState{
 						State: storage.ScmNoFreeCap,
 					},
 					Namespaces:     storage.ScmNamespaces{defaultNamespace},
@@ -139,7 +139,7 @@ func TestProvider_Prepare(t *testing.T) {
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces:     storage.ScmNamespaces{defaultNamespace},
@@ -163,14 +163,14 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					State: storage.ScmSocketState{
+					Socket: storage.ScmSocketState{
 						State: storage.ScmFreeCap,
 					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
@@ -187,14 +187,14 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					State: storage.ScmSocketState{
+					Socket: storage.ScmSocketState{
 						State: storage.ScmNoFreeCap,
 					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				RebootRequired: true,

@@ -376,14 +376,14 @@ func getPMemState(log logging.Logger, regions Regions) (*storage.ScmSocketState,
 		resp.SocketID = &s
 	}
 
-	regionsPerSocket, err := mapRegionsToSocket(regions)
+	regionPerSocket, err := mapRegionsToSocket(regions)
 	if err != nil {
 		return nil, errors.Wrap(err, "mapRegionsToSocket")
 	}
 
 	hasFreeCap := false
-	for _, sid := range regionsPerSocket.keys() {
-		r := regionsPerSocket[sid]
+	for _, sid := range regionPerSocket.keys() {
+		r := regionPerSocket[sid]
 		log.Debugf("region detail: %+v", r)
 		state := getRegionState(r)
 

@@ -130,12 +130,12 @@ func checkStateForErrors(sockState storage.ScmSocketState) error {
 }
 
 func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regions Regions) (storage.ScmNamespaces, *storage.ScmSocketState, error) {
-	regionsPerSocket, err := mapRegionsToSocket(regions)
+	regionPerSocket, err := mapRegionsToSocket(regions)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "mapRegionsToSocket")
 	}
 
-	if err := cr.createNamespaces(regionsPerSocket, nrNsPerSock); err != nil {
+	if err := cr.createNamespaces(regionPerSocket, nrNsPerSock); err != nil {
 		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
@@ -185,7 +185,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: namespaces,
-		State: storage.ScmSocketState{
+		Socket: storage.ScmSocketState{
 			State:    state,
 			SocketID: req.SocketID,
 		},
@@ -203,12 +203,12 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 		// Regions exist but no namespaces, create block devices on PMem regions and
 		// populate response with namespace details.
 		cr.log.Info("Creating PMem namespaces...")
-		nss, state, err := cr.handleFreeCapacity(sockSelector, req.NrNamespacesPerSocket, regions)
+		nss, sockState, err := cr.handleFreeCapacity(sockSelector, req.NrNamespacesPerSocket, regions)
 		if err != nil {
 			return nil, errors.Wrap(err, "handleFreeCapacity")
 		}
 		resp.Namespaces = nss
-		resp.State = *state
+		resp.Socket = *sockState
 	case storage.ScmNoFreeCap:
 		// Regions and namespaces exist so no changes to response necessary.
 		cr.log.Info("PMem namespaces already exist.")
@@ -226,13 +226,13 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 		return errors.New("verifyPMem received nil ScmScanResponse")
 	}
 
-	switch resp.State.State {
+	switch resp.Socket.State {
 	case storage.ScmNoRegions:
 		return nil
 	case storage.ScmNoFreeCap:
 	default:
 		return errors.Errorf("unexpected state in response, want %s|%s got %s",
-			storage.ScmNoRegions, storage.ScmNoFreeCap, resp.State.State)
+			storage.ScmNoRegions, storage.ScmNoFreeCap, resp.Socket.State)
 	}
 
 	nsMajMinMap := make(map[int][]int)
@@ -244,7 +244,7 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 			return errors.Errorf("unexpected format of namespace dev string: %q", ns.Name)
 		}
 
-		maj, err := strconv.ParseUint(matches[1], 16, 10)
+		maj, err := strconv.Atoi(matches[1])
 		if err != nil {
 			return errors.Wrapf(err, "parse major namespace version (%q)", ns.Name)
 		}
@@ -254,15 +254,19 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 				maj, ns.NumaNode)
 		}
 
-		min, err := strconv.ParseUint(matches[2], 16, 10)
+		min, err := strconv.Atoi(matches[2])
 		if err != nil {
 			return errors.Wrapf(err, "parse minor namespace version (%q)", ns.Name)
 		}
 
+		if maj < 0 || min < 0 {
+			return errors.Errorf("unexpected negative value in regex matches %v", matches)
+		}
+
 		log.Debugf("found namespace %d.%d on numa %d", maj, min, ns.NumaNode)
 
-		nsMajMinMap[int(maj)] = append(nsMajMinMap[int(maj)], int(min))
-		sort.Ints(nsMajMinMap[int(maj)])
+		nsMajMinMap[maj] = append(nsMajMinMap[maj], min)
+		sort.Ints(nsMajMinMap[maj])
 	}
 
 	if len(nsMajMinMap) != len(regions) {
@@ -310,7 +314,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		cr.log.Info("Skip SCM prep, no PMem modules.")
 		return &storage.ScmPrepareResponse{
 			Namespaces: storage.ScmNamespaces{},
-			State: storage.ScmSocketState{
+			Socket: storage.ScmSocketState{
 				State: storage.ScmNoModules,
 			},
 		}, nil
@@ -372,11 +376,11 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	}
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: storage.ScmNamespaces{},
-		State:      storage.ScmSocketState{},
+		Socket:     storage.ScmSocketState{},
 	}
 	if len(scanRes.Modules) == 0 {
 		cr.log.Info("Skip SCM prep as there are no PMem modules.")
-		resp.State.State = storage.ScmNoModules
+		resp.Socket.State = storage.ScmNoModules
 		return resp, nil
 	}
 
@@ -395,7 +399,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if err != nil {
 		return nil, errors.Wrap(err, "getPMemState")
 	}
-	resp.State = *sockState
+	resp.Socket = *sockState
 
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
 

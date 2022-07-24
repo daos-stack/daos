@@ -156,7 +156,7 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -202,7 +202,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, outNoPMemRegions, "", "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
@@ -245,7 +245,7 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNS,
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
@@ -266,7 +266,7 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNSPerSock,
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
@@ -388,7 +388,7 @@ func TestIpmctl_prep(t *testing.T) {
 				verStr, mockXMLRegions(t, "dual-sock"), "", "",
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{
@@ -436,7 +436,7 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNS,
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
@@ -460,7 +460,7 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: dualNSPerSock,
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 			},
@@ -573,7 +573,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 			},
@@ -617,7 +617,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 			},
@@ -631,7 +631,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
@@ -650,7 +650,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				Namespaces: storage.ScmNamespaces{},
-				State: storage.ScmSocketState{
+				Socket: storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				RebootRequired: true,
