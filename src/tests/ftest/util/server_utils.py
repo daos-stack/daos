@@ -187,7 +187,7 @@ class DaosServerManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Copy certificates
@@ -894,7 +894,7 @@ class DaosServerManager(SubprocessManager):
         """Get the list of ranks for the specified hosts.
 
         Args:
-            hosts (list): a list of host names.
+            hosts (NodeSet): host from which to get ranks.
 
         Returns:
             list: a list of integer ranks matching the hosts provided
