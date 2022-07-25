@@ -818,7 +818,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # pass tmp_path + src_cont.uuid + .h5 to deserialize for --file, since
         # the daos deserialize utility only takes a file, not a directory
-        self.serial_file_path = join(tmp_path, "{}{}".format(src_cont.uuid, ".h5"))
+        self.serial_file_path = join(tmp_path, "{}{}".format(src.uuid, ".h5"))
 
         # Set the source params
         if src is not None:

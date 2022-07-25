@@ -24,10 +24,6 @@
 
 /* TODO: treat public (non-static) functions as API, respecting ABI breakage rules */
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 /* for user attr dataset */
 struct dsr_h5_usr_attr {
 	char	*attr_name;
@@ -356,7 +352,6 @@ prop_to_str(uint32_t type)
 static int
 get_dset_dims(hid_t file, char *dset_name, hsize_t *dims)
 {
-	//hid_t			status = 0;
 	int			rc = 0;
 	hid_t			akey_dset = -1;
 	hid_t			akey_dspace = -1;
@@ -2911,8 +2906,8 @@ out:
 }
 
 static int
-cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_off, int k,
-		       daos_handle_t *oh, struct dm_stats *stats)
+deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_off, int k,
+		  daos_handle_t *oh, struct dm_stats *stats, int akey_batch)
 {
 	int		rc = 0;
 	daos_key_t	aiov;
@@ -2936,105 +2931,110 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 	hsize_t		rx_dims[1];
 	uint64_t	*rec_dset_id;
 
-	memset(&aiov, 0, sizeof(aiov));
-	rec_dset_id = &args->akey_data[k].rec_dset_id;
-	akey_val = &args->akey_data[k].akey_val;
-	rec_single_val = &args->akey_data[k].rec_single_val;
-	d_iov_set(&aiov, (void *)akey_val->p, akey_val->len);
+	for (k = 0; k < akey_batch; k++) {
+		rx_dset = -1;
+		rx_dspace = -1;
+		rx_memspace = -1;
+		rx_dtype = -1;
+		plist = -1;
+		memset(&aiov, 0, sizeof(aiov));
+		rec_dset_id = &args->akey_data[k].rec_dset_id;
+		akey_val = &args->akey_data[k].akey_val;
+		rec_single_val = &args->akey_data[k].rec_single_val;
+		d_iov_set(&aiov, (void *)akey_val->p, akey_val->len);
 
-	/* if the len of the single value is set to zero,
-	 * then this akey points to an array record dataset
-	 */
-	if (rec_single_val->len == 0) {
-		index = *rec_dset_id;
-		len = snprintf(NULL, 0, "%lu", index);
-		D_ALLOC(dset_name, len + 1);
-		if (dset_name == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		snprintf(dset_name, len + 1, "%lu", index);
-		rx_dset = H5Dopen(args->file, dset_name, H5P_DEFAULT);
-		if (rx_dset < 0) {
-			D_ERROR("Failed to read rx_dset\n");
-			D_GOTO(out, rc = -DER_MISC);
+		/* if the len of the single value is set to zero,
+		 * then this akey points to an array record dataset
+		 */
+		if (rec_single_val->len == 0) {
+			index = *rec_dset_id;
+			len = snprintf(NULL, 0, "%lu", index);
+			D_ALLOC(dset_name, len + 1);
+			if (dset_name == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			snprintf(dset_name, len + 1, "%lu", index);
+			rx_dset = H5Dopen(args->file, dset_name, H5P_DEFAULT);
+			if (rx_dset < 0) {
+				D_ERROR("Failed to read rx_dset\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			rx_dspace = H5Dget_space(rx_dset);
+			if (rx_dspace < 0) {
+				D_ERROR("Failed to get rx_dsapce\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			rx_dtype = H5Dget_type(rx_dset);
+			if (rx_dtype < 0) {
+				D_ERROR("Failed to read rx_dtype\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			plist = H5Dget_create_plist(rx_dset);
+			if (plist < 0) {
+				D_ERROR("Failed to get plist\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			rx_ndims = H5Sget_simple_extent_dims(rx_dspace, rx_dims, NULL);
+			if (rx_ndims < 0) {
+				D_ERROR("Failed to get rx ndims\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			num_attrs = H5Aget_num_attrs(rx_dset);
+			if (num_attrs < 0) {
+				D_ERROR("Failed to get num attrs\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			rc = cont_deserialize_recx(&args->akey_data[k].akey_val, oh, diov,
+						   num_attrs, &rx_dtype, &rx_dspace, &rx_dset,
+						   &rx_memspace, stats);
+			if (rc != 0) {
+				D_ERROR("Failed to deserialize recx "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+			if (rx_dset >= 0)
+				H5Dclose(rx_dset);
+			if (rx_dspace >= 0)
+				H5Sclose(rx_dspace);
+			if (rx_dtype >= 0)
+				H5Tclose(rx_dtype);
+			if (plist >= 0)
+				H5Pclose(plist);
+			D_FREE(dset_name);
+		} else {
+			memset(&sgl, 0, sizeof(sgl));
+			memset(&iov, 0, sizeof(iov));
+			memset(&iod, 0, sizeof(iod));
+			single_tsize = rec_single_val->len;
+			if (single_tsize == 0) {
+				D_ERROR("Failed to get size of type in single record datatype\n");
+				D_GOTO(out, rc = -DER_MISC);
+			}
+			D_ALLOC(single_data, single_tsize);
+			if (single_data == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(single_data, rec_single_val->p, rec_single_val->len);
+			/* set iod values */
+			iod.iod_type  = DAOS_IOD_SINGLE;
+			iod.iod_size  = single_tsize;
+			iod.iod_nr    = 1;
+			iod.iod_recxs = NULL;
+			iod.iod_name  = aiov;
+			/* set sgl values */
+			sgl.sg_nr     = 1;
+			sgl.sg_nr_out = 0;
+			sgl.sg_iovs   = &iov;
+			d_iov_set(&iov, single_data, single_tsize);
+			/* update fetched recx values and place in destination object */
+			rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &diov, 1, &iod, &sgl, NULL);
+			if (rc != 0) {
+				D_ERROR("Failed to update object: "DF_RC, DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+			(stats->bytes_written) += single_tsize;
+			D_FREE(single_data);
 		}
-		rx_dspace = H5Dget_space(rx_dset);
-		if (rx_dspace < 0) {
-			D_ERROR("Failed to get rx_dsapce\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		rx_dtype = H5Dget_type(rx_dset);
-		if (rx_dtype < 0) {
-			D_ERROR("Failed to read rx_dtype\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		plist = H5Dget_create_plist(rx_dset);
-		if (plist < 0) {
-			D_ERROR("Failed to get plist\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		rx_ndims = H5Sget_simple_extent_dims(rx_dspace, rx_dims, NULL);
-		if (rx_ndims < 0) {
-			D_ERROR("Failed to get rx ndims\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		num_attrs = H5Aget_num_attrs(rx_dset);
-		if (num_attrs < 0) {
-			D_ERROR("Failed to get num attrs\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		rc = cont_deserialize_recx(&args->akey_data[k].akey_val, oh, diov,
-					   num_attrs, &rx_dtype, &rx_dspace, &rx_dset,
-					   &rx_memspace, stats);
-		if (rc != 0) {
-			D_ERROR("Failed to deserialize recx "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	} else {
-		memset(&sgl, 0, sizeof(sgl));
-		memset(&iov, 0, sizeof(iov));
-		memset(&iod, 0, sizeof(iod));
-		single_tsize = rec_single_val->len;
-		if (single_tsize == 0) {
-			D_ERROR("Failed to get size of type in single record datatype\n");
-			D_GOTO(out, rc = -DER_MISC);
-		}
-		D_ALLOC(single_data, single_tsize);
-		if (single_data == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		memcpy(single_data, rec_single_val->p, rec_single_val->len);
-
-		/* set iod values */
-		iod.iod_type  = DAOS_IOD_SINGLE;
-		iod.iod_size  = single_tsize;
-		iod.iod_nr    = 1;
-		iod.iod_recxs = NULL;
-		iod.iod_name  = aiov;
-
-		/* set sgl values */
-		sgl.sg_nr     = 1;
-		sgl.sg_nr_out = 0;
-		sgl.sg_iovs   = &iov;
-		d_iov_set(&iov, single_data, single_tsize);
-
-		/* update fetched recx values and place in destination object */
-		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &diov, 1, &iod, &sgl, NULL);
-		if (rc != 0) {
-			D_ERROR("Failed to update object: "DF_RC, DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-		(stats->bytes_written) += single_tsize;
-		D_FREE(single_data);
+		(stats->total_akeys)++;
 	}
-	(stats->total_akeys)++;
 out:
-	if (rx_dset >= 0)
-		H5Dclose(rx_dset);
-	if (rx_dspace >= 0)
-		H5Sclose(rx_dspace);
-	if (rx_dtype >= 0)
-		H5Tclose(rx_dtype);
-	if (plist >= 0)
-		H5Pclose(plist);
 	D_FREE(dset_name);
 	D_FREE(single_data);
 	return rc;
@@ -3108,15 +3108,13 @@ deserialize_keys(daos_handle_t *oh, struct dsr_h5_args *args, int dkey_end, int 
 							DP_RC(rc));
 						D_GOTO(out, rc);
 					}
-					for (k = 0; k < akey_batch; k++) {
-						/* deserialize keys */
-						rc = cont_deserialize_akeys(args, diov, &ak_off,
-									    k, oh, stats);
-						if (rc != 0) {
-							D_ERROR("cont_deserialize_akeys "
-								"failed "DF_RC"\n", DP_RC(rc));
-							D_GOTO(out, rc);
-						}
+					/* deserialize each akey in batch */
+					rc = deserialize_akeys(args, diov, &ak_off,
+							       k, oh, stats, akey_batch);
+					if (rc != 0) {
+						D_ERROR("deserialize_akeys "
+							"failed "DF_RC"\n", DP_RC(rc));
+						D_GOTO(out, rc);
 					}
 				akeys_to_read -= akey_batch;
 				D_FREE(args->akey_data);
@@ -3178,7 +3176,8 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 	oids_to_read = total_oid_dims;
 
 	/* need to read extra oid in order to calculate number of dkeys per oid.
-	 * This is done by subtracting next dkey offset from the current dkey offset */
+	 * This is done by subtracting next dkey offset from the current dkey offset
+	 */
 	oid_batch = DSR_OID_BATCH_SIZE + 1;
 	while (oids_to_read > 0) {
 		if (oids_to_read <= oid_batch) {
@@ -3187,7 +3186,8 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 		} else {
 			/* do not read/deserialize extra oid read when
 			 * deserialing multiple batches it is only for
-			 * computing number of dkeys per oid */
+			 * computing number of dkeys per oid
+			 */
 			oid_end = oid_batch - 1;
 		}
 
@@ -3372,7 +3372,3 @@ out:
 		H5Fclose(args.file);
 	return rc;
 }
-
-#if defined(__cplusplus)
-}
-#endif
