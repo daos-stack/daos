@@ -954,11 +954,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF)
-			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d  failed: "DF_RC"\n",
+			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_UOID" rpc %p opc %d to rank %d tag %d  failed: "DF_RC"\n",
+			D_ERROR(DF_CONT DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
+				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 
