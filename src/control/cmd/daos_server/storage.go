@@ -147,13 +147,15 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		msg := ""
 		switch state {
 		case storage.ScmNoRegions:
-			msg = "PMem AppDirect interleaved regions will be created. "
+			msg = "PMem AppDirect interleaved regions will be created on reboot. "
 		case storage.ScmNotInterleaved:
-			msg = "PMem AppDirect non-interleaved regions will be removed. "
+			msg = "PMem AppDirect non-interleaved regions will be removed on reboot. "
 		case storage.ScmFreeCap:
-			msg = "PMem AppDirect interleaved regions will be removed. "
-		case storage.ScmNoFreeCap:
-			msg = "PMem namespaces removed and AppDirect interleaved regions will be removed. "
+			msg = "PMem AppDirect interleaved regions will be removed on reboot. "
+		case storage.ScmNoFreeCap, storage.ScmPartFreeCap:
+			msg = "PMem namespaces have been removed and AppDirect interleaved regions will be removed on reboot. "
+		case storage.ScmNotHealthy, storage.ScmUnknownMode:
+			msg = "PMem namespaces have been removed and regions (some with an unexpected state) will be removed on reboot. "
 		}
 		cmd.Info(msg + storage.ScmMsgRebootRequired)
 

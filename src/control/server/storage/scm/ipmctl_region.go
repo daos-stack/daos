@@ -270,11 +270,10 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
 	}
 
-	out, err := cr.runCmd(cmd)
-	if err != nil {
+	if _, err := cr.runCmd(cmd); err != nil {
 		return errors.Wrapf(err, "cmd %q", cmd)
 	}
-	cr.log.Debugf("%q cmd returned: %q", cmd, out)
+	cr.log.Debugf("%q cmd was run", cmd)
 
 	return nil
 }

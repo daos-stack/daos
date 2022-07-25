@@ -280,8 +280,6 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 	}
 	sort.Ints(keys)
 
-	log.Debugf("nss: %+v", nsMajMinMap)
-
 	for _, maj := range keys {
 		mins := nsMajMinMap[maj]
 		if len(mins) != int(nrNsPerSock) {
