@@ -1361,6 +1361,8 @@ ds_pool_svc_rf_from_nreplicas(int nreplicas)
 		svc_rf = (nreplicas - 1) / 2;
 	else
 		svc_rf = nreplicas / 2;
+	if (svc_rf > DAOS_PROP_PO_SVC_REDUN_FAC_MAX)
+		svc_rf = DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
 	return svc_rf;
 }
 

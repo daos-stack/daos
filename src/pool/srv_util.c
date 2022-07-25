@@ -277,6 +277,7 @@ ds_pool_test_move_rank_except_for(void)
 
 	{
 		d_rank_t src_ranks[] = {2, 5};
+
 		src.rl_ranks = src_ranks;
 		src.rl_nr = 2;
 		dst.rl_ranks = NULL;
@@ -685,7 +686,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		call_d_rank_list_free
 	}
 
-	/* A PS holds its ground when there's no replacment. */
+	/* A PS holds its ground when there's no replacement. */
 	{
 		int		svc_rf = 1;
 		d_rank_t	ranks[] = {0, 1, 2};
