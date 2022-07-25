@@ -166,6 +166,7 @@ const (
 	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
+	ServerConfigVMDSettingDuplicate
 )
 
 // SPDK library bindings codes
