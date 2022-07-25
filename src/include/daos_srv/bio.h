@@ -722,7 +722,7 @@ static inline void
 bio_yield(void)
 {
 #ifdef DAOS_PMEM_BUILD
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	D_ASSERT(umem_tx_none());
 #endif
 	ABT_thread_yield();
 }

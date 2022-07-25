@@ -96,7 +96,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		 * This function can't be called in pmemobj transaction since
 		 * the callback for block header initialization could yield.
 		 */
-		D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+		D_ASSERT(umem_tx_none());
 
 		rc = cb(cb_data, umem);
 		if (rc != 0)
@@ -445,7 +445,7 @@ int
 vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	       d_list_t *resrvd_list)
 {
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+	D_ASSERT(umem_tx_inprogress() ||
 		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	D_ASSERT(vsi != NULL);
 	D_ASSERT(resrvd_list != NULL);
@@ -538,7 +538,7 @@ vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 	if (rc)
 		goto done;
 
-	rc = umem_tx_add_callback(umem, vsi->vsi_txd, TX_STAGE_ONCOMMIT,
+	rc = umem_tx_add_callback(umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
 				  free_commit_cb, fca);
 	if (rc == 0)
 		fca = NULL;	/* Will be freed by commit callback */
@@ -547,7 +547,7 @@ done:
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Flush the expired aging free extents to compound index */
 	if (rc == 0) {
-		if (pmemobj_tx_stage() == TX_STAGE_NONE)
+		if (umem_tx_none())
 			aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
 		else
 			schedule_aging_flush(vsi);
@@ -696,7 +696,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 int
 vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
 {
-	if (pmemobj_tx_stage() != TX_STAGE_NONE) {
+	if (!umem_tx_none()) {
 		D_ERROR("This function isn't supposed to be called in transaction!\n");
 		return -DER_INVAL;
 	}

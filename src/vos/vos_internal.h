@@ -1083,13 +1083,6 @@ void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
 
-/* Reserve SCM through umem_reserve() for a PMDK transaction */
-struct vos_rsrvd_scm {
-	unsigned int		rs_actv_cnt;
-	unsigned int		rs_actv_at;
-	struct pobj_action	rs_actv[0];
-};
-
 int
 vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
 
@@ -1109,7 +1102,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
  */
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
 	   int err);
 
 /* vos_obj.c */
@@ -1140,10 +1133,10 @@ void
 vos_dedup_invalidate(struct vos_pool *pool);
 
 umem_off_t
-vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
+vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 		daos_size_t size);
 int
-vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
+vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 		bool publish);
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
@@ -1309,8 +1302,7 @@ vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)
 		  umem_slab_registered(umm, slab_id),
 		  slab_id, size, umem_slab_usize(umm, slab_id));
 
-	return umem_alloc_verb(umm, umem_slab_flags(umm, slab_id) |
-					POBJ_FLAG_ZERO, size);
+	return umem_alloc_verb(umm, slab_id, UMEM_FLAG_ZERO, size);
 }
 
 /* vos_space.c */
