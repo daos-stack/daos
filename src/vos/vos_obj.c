@@ -498,7 +498,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 					rc = umem_tx_xadd_ptr(vos_cont2umm(cont),
 							      &obj->obj_df->vo_max_write,
 							      sizeof(obj->obj_df->vo_max_write),
-							      POBJ_XADD_NO_SNAPSHOT);
+							      UMEM_XADD_NO_SNAPSHOT);
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}

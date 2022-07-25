@@ -113,7 +113,7 @@ struct agg_io_context {
 	unsigned int		 ic_seg_max;
 	unsigned int		 ic_seg_cnt;
 	/* Reserved SCM extents for new physical entries */
-	struct vos_rsrvd_scm	*ic_rsrvd_scm;
+	struct umem_rsrvd_act	*ic_rsrvd_scm;
 	/* Reserved NVMe extents for new physical entries */
 	d_list_t		 ic_nvme_exts;
 };
@@ -426,8 +426,7 @@ merge_window_status(struct agg_merge_window *mw)
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 
 	D_ASSERT(io->ic_seg_cnt == 0);
-	D_ASSERT(io->ic_rsrvd_scm == NULL ||
-		 io->ic_rsrvd_scm->rs_actv_at == 0);
+	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
 
 	D_ASSERT(mw->mw_ext.ex_lo <= mw->mw_ext.ex_hi);
@@ -1246,7 +1245,6 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 	struct agg_lgc_seg	*lgc_seg;
-	struct pobj_action	*scm_exts;
 	unsigned int		 i, scm_max;
 	int			 rc = 0;
 
@@ -1256,22 +1254,10 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	if (io->ic_rsrvd_scm == NULL ||
-	    io->ic_rsrvd_scm->rs_actv_cnt < scm_max) {
-		struct vos_rsrvd_scm	*rsrvd_scm;
-		size_t			 size;
-
-		size = sizeof(*io->ic_rsrvd_scm) *
-			sizeof(*scm_exts) * scm_max;
-
-		D_REALLOC_Z(rsrvd_scm, io->ic_rsrvd_scm, size);
-		if (rsrvd_scm == NULL)
-			return -DER_NOMEM;
-
-		io->ic_rsrvd_scm = rsrvd_scm;
-		io->ic_rsrvd_scm->rs_actv_cnt = scm_max;
-	}
-	D_ASSERT(io->ic_rsrvd_scm->rs_actv_at == 0);
+	rc = umem_rsrvd_act_realloc(&io->ic_rsrvd_scm, scm_max);
+	if (rc)
+		return rc;
+	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
@@ -1536,8 +1522,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	/* Reset io context */
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
-	D_ASSERT(io->ic_rsrvd_scm == NULL ||
-		 io->ic_rsrvd_scm->rs_actv_at == 0);
+	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
 	io->ic_seg_cnt = 0;
 }
 
@@ -1885,7 +1870,7 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		io->ic_seg_max = 0;
 	}
 
-	D_FREE(io->ic_rsrvd_scm);
+	umem_rsrvd_act_free(&io->ic_rsrvd_scm);
 
 	if (io->ic_csum_recalcs != NULL) {
 		D_FREE(io->ic_csum_recalcs);

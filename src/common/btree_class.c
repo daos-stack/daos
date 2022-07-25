@@ -27,7 +27,7 @@ btr_check_tx(struct btr_attr *attr)
 		return BTR_NO_TX;
 
 #ifdef DAOS_PMEM_BUILD
-	if (pmemobj_tx_stage() == TX_STAGE_WORK)
+	if (umem_tx_inprogress())
 		return BTR_IN_TX;
 #endif
 	return BTR_SUPPORT_TX;

@@ -176,7 +176,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
-	struct vos_rsrvd_scm	*scm;
+	struct umem_rsrvd_act	*scm;
 	int			 rc;
 	int			 i;
 
@@ -255,7 +255,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts,
+	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
 	   bool started, int err)
 {
 	struct dtx_handle	*dth = dth_in;

@@ -992,15 +992,15 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		 * drain controller, however, test shows calling a persistent
 		 * copy and drain controller here is faster.
 		 */
-		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
+		if (DAOS_ON_VALGRIND && umem_tx_inprogress()) {
 			/** Ignore the update to what is reserved block.
 			 *  Ordinarily, this wouldn't be inside a transaction
 			 *  but in MVCC tests, it can happen.
 			 */
 			umem_tx_xadd_ptr(umem, media_addr, n,
-					 POBJ_XADD_NO_SNAPSHOT);
+					 UMEM_XADD_NO_SNAPSHOT);
 		}
-		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
+		umem_atomic_copy(umem, media_addr, addr, n);
 	} else {
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
 			memcpy(media_addr, addr, n);
@@ -1439,7 +1439,7 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
-	pmemobj_flush(umem->umm_pool, bio_iov2req_buf(biov),
+	umem_atomic_flush(umem, bio_iov2req_buf(biov),
 		      bio_iov2req_len(biov));
 	return 0;
 }
