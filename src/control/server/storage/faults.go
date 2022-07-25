@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-const recreateRegionsStr = "Remove regions by running the command with the --reset option, reboot, run the command again without --reset to recreate regions in AppDirect interleaved mode, reboot and then run the command again without --reset to create the PMem namespaces"
+const recreateRegionsStr = "Remove regions (and any namespaces) by running the command with the --reset option, reboot, run the command again without --reset to recreate regions in AppDirect interleaved mode, reboot and then run the command again without --reset to create the PMem namespaces"
 
 // FaultScmNotInterleaved creates a fault for the case where the PMem region is in non-interleaved
 // mode, this is unsupported.
@@ -25,7 +25,7 @@ func FaultScmNotInterleaved(sockID uint) *fault.Fault {
 		recreateRegionsStr)
 }
 
-// FaultScmNotHealthy create a fault for the case where the PMem region is in an unhealthy state.
+// FaultScmNotHealthy creates a fault for the case where the PMem region is in an unhealthy state.
 func FaultScmNotHealthy(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
@@ -48,6 +48,14 @@ func FaultScmUnknownMemoryMode(sockID uint) *fault.Fault {
 	return storageFault(
 		code.ScmBadRegion,
 		fmt.Sprintf("PMem region on socket %d has an unsupported persistent memory type", sockID),
+		recreateRegionsStr)
+}
+
+// FaultScmInvalidPMem creates a fault for the case where PMem validation has failed.
+func FaultScmInvalidPMem(msg string) *fault.Fault {
+	return storageFault(
+		code.ScmInvalidPMem,
+		"PMem is in an invalid state: "+msg,
 		recreateRegionsStr)
 }
 

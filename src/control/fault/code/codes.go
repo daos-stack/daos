@@ -75,8 +75,8 @@ const (
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
 	ScmNoModules
-	ScmNamespacesNrMismatch
 	ScmBadRegion
+	ScmInvalidPMem
 )
 
 // Bdev fault codes

@@ -358,7 +358,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 	cr.log.Info("Verifying that PMem is in a valid state...")
 
 	if err := verifyPMem(cr.log, resp, regions, req.NrNamespacesPerSocket); err != nil {
-		return nil, errors.Wrap(err, "verifyPMem")
+		return nil, storage.FaultScmInvalidPMem(err.Error())
 	}
 
 	return resp, nil
