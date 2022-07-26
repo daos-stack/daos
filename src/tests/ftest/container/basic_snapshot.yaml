@@ -2,9 +2,7 @@
 # required quantity is indicated by the placeholders
 timeout: 120
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 server_config:
     name: daos_server
 pool:

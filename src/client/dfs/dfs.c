@@ -57,20 +57,21 @@
 #define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	10
+#define INODE_AKEYS	11
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
 #define OID_IDX		(sizeof(mode_t))
 #define ATIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
-#define MTIME_IDX	(ATIME_IDX + sizeof(time_t))
-#define CTIME_IDX	(MTIME_IDX + sizeof(time_t))
-#define CSIZE_IDX	(CTIME_IDX + sizeof(time_t))
+#define MTIME_IDX	(ATIME_IDX + sizeof(uint64_t))
+#define CTIME_IDX	(MTIME_IDX + sizeof(uint64_t))
+#define CSIZE_IDX	(CTIME_IDX + sizeof(uint64_t))
 #define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
 #define UID_IDX		(OCLASS_IDX + sizeof(daos_oclass_id_t))
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
 #define SIZE_IDX	(GID_IDX + sizeof(gid_t))
-#define END_IDX		(SIZE_IDX + sizeof(daos_size_t))
+#define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
+#define END_IDX		(HLC_IDX + sizeof(uint64_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -173,11 +174,13 @@ struct dfs_entry {
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t		oid;
 	/* Time of last access */
-	time_t			atime;
+	uint64_t		atime;
 	/* Time of last modification */
-	time_t			mtime;
+	uint64_t		mtime;
+	/* for regular file, the time of last modification of the object */
+	uint64_t		obj_hlc;
 	/* Time of last status change */
-	time_t			ctime;
+	uint64_t		ctime;
 	/** chunk size of file or default for all files in a dir */
 	daos_size_t		chunk_size;
 	/** oclass of file or all files in a dir */
@@ -432,19 +435,20 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
+	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
-	/* if we are reading from a layout ver 2 or older, don't read the uid, gid, and val len */
+	/* if we are reading from a layout ver 2 or older, we only have up to oclass IDX */
 	if (ver <= 2) {
 		recx.rx_nr = UID_IDX;
-		i = i - 3;
+		i = i - 4;
 	}
 
 	sgl->sg_nr	= i;
@@ -613,16 +617,16 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(time_t));
-	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
+	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 
 	nr_iods = 1;
 	/*
-	 * if we are writing to a layout ver 2 or older container, don't add the uid/gid, and put
-	 * symlink value in the same akey.
+	 * if we are writing to a layout ver 2 or older container, don't add the uid, gid, internal
+	 * mtime and put symlink value in the same akey.
 	 */
 	if (ver <= 2) {
 		/*
@@ -641,6 +645,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 		/** Add file size / symlink length. for now, file size cached in the entry is 0. */
 		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+		d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
 		/** add the symlink as a separate akey */
 		if (S_ISLNK(entry->mode)) {
@@ -714,7 +719,7 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct dfs_obj *obj, struct stat *stbuf)
+	   size_t len, struct dfs_obj *obj, struct stat *stbuf, uint64_t *obj_hlc)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -746,7 +751,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
 		size = sizeof(entry);
-		stbuf->st_mtim.tv_sec = entry.mtime;
+		rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+		if (rc)
+			return daos_der2errno(rc);
 		break;
 	case S_IFREG:
 	{
@@ -779,14 +786,47 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		}
 
 		size = array_stbuf.st_size;
+		/** object was updated since creation */
 		if (array_stbuf.st_max_epoch) {
-			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &stbuf->st_mtim);
+			struct timespec obj_mtime, entry_mtime;
+
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &obj_mtime);
 			if (rc) {
 				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
+
+			if (obj_hlc)
+				*obj_hlc = array_stbuf.st_max_epoch;
+
+			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			if (obj_mtime.tv_sec == entry_mtime.tv_sec &&
+			    obj_mtime.tv_nsec == entry_mtime.tv_nsec) {
+				/*
+				 * internal mtime entry set through a user set mtime and is up to
+				 * date with the object epoch time, which means that the user set
+				 * mtime in the inode entry is the correct value to return.
+				 */
+				rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+				if (rc)
+					return daos_der2errno(rc);
+			} else {
+				/*
+				 * the user has not updated the mtime explicitly or the object
+				 * itself was modified after an explicit mtime update.
+				 */
+				stbuf->st_mtim.tv_sec = obj_mtime.tv_sec;
+				stbuf->st_mtim.tv_nsec = obj_mtime.tv_nsec;
+			}
 		} else {
-			stbuf->st_mtim.tv_sec = entry.mtime;
+			rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+			if (rc)
+				return daos_der2errno(rc);
 		}
 
 		/*
@@ -800,7 +840,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFLNK:
 		size = entry.value_len;
 		D_FREE(entry.value);
-		stbuf->st_mtim.tv_sec = entry.mtime;
+		rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+		if (rc)
+			return daos_der2errno(rc);
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -889,6 +931,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			oexcl = flags & O_EXCL;
 	bool			ocreat = flags & O_CREAT;
+	struct timespec		now;
+	uint64_t		hlc;
 	int			rc;
 
 	/*
@@ -954,7 +998,13 @@ restart:
 
 		/** Create and insert entry in parent dir object. */
 		entry->mode = file->mode;
-		entry->atime = entry->mtime = entry->ctime = time(NULL);
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc)
+			D_GOTO(out, rc = errno);
+		rc = crt_timespec2hlc(now, &hlc);
+		if (rc)
+			D_GOTO(out, rc = daos_der2errno(rc));
+		entry->atime = entry->mtime = entry->ctime = hlc;
 		entry->chunk_size = chunk_size;
 		entry->uid = geteuid();
 		entry->gid = getegid();
@@ -1089,6 +1139,9 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	parent_oh = parent ? parent->oh : dfs->super_oh;
 
 	if (flags & O_CREAT) {
+		struct timespec		now;
+		uint64_t		hlc;
+
 		D_ASSERT(parent);
 
 		/** this generates the OID and opens the object */
@@ -1098,7 +1151,18 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 		entry->oid = dir->oid;
 		entry->mode = dir->mode;
-		entry->atime = entry->mtime = entry->ctime = time(NULL);
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc) {
+			rc = errno;
+			daos_obj_close(dir->oh, NULL);
+			return rc;
+		}
+		rc = crt_timespec2hlc(now, &hlc);
+		if (rc) {
+			daos_obj_close(dir->oh, NULL);
+			return daos_der2errno(rc);
+		}
+		entry->atime = entry->mtime = entry->ctime = hlc;
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
 		entry->uid = geteuid();
@@ -1161,6 +1225,9 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	int			rc;
 
 	if (flags & O_CREAT) {
+		struct timespec	now;
+		uint64_t	hlc;
+
 		if (value == NULL)
 			return EINVAL;
 
@@ -1188,9 +1255,16 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 		oid_cp(&entry->oid, sym->oid);
 		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
-		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->uid = geteuid();
 		entry->gid = getegid();
+
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc)
+			return errno;
+		rc = crt_timespec2hlc(now, &hlc);
+		if (rc)
+			return daos_der2errno(rc);
+		entry->atime = entry->mtime = entry->ctime = hlc;
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -1388,6 +1462,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	struct daos_prop_co_roots roots;
 	int			rc;
 	struct daos_prop_entry  *dpe;
+	struct timespec		now;
+	uint64_t		hlc;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1496,7 +1572,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/** Add root object */
 	entry.oid = roots.cr_oids[1];
 	entry.mode = S_IFDIR | 0755;
-	entry.atime = entry.mtime = entry.ctime = time(NULL);
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(err_super, rc = errno);
+	rc = crt_timespec2hlc(now, &hlc);
+	if (rc)
+		D_GOTO(err_super, rc = daos_der2errno(rc));
+	entry.atime = entry.mtime = entry.ctime = hlc;
 	entry.chunk_size = dattr.da_chunk_size;
 	entry.oclass = dattr.da_oclass_id;
 	entry.uid = geteuid();
@@ -1901,9 +1983,15 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root_stbuf.st_mode = dfs->root.mode;
 	dfs->root_stbuf.st_uid = root_dir.uid;
 	dfs->root_stbuf.st_gid = root_dir.gid;
-	dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
-	dfs->root_stbuf.st_mtim.tv_sec = root_dir.mtime;
-	dfs->root_stbuf.st_ctim.tv_sec = root_dir.ctime;
+	rc = crt_hlc2timespec(root_dir.atime, &dfs->root_stbuf.st_atim);
+	if (rc)
+		D_GOTO(err_super, rc = daos_der2errno(rc));
+	rc = crt_hlc2timespec(root_dir.mtime, &dfs->root_stbuf.st_mtim);
+	if (rc)
+		D_GOTO(err_super, rc = daos_der2errno(rc));
+	rc = crt_hlc2timespec(root_dir.ctime, &dfs->root_stbuf.st_ctim);
+	if (rc)
+		D_GOTO(err_super, rc = daos_der2errno(rc));
 
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
@@ -2621,6 +2709,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_handle_t		th = DAOS_TX_NONE;
 	struct dfs_entry	entry = {0};
 	size_t			len;
+	struct timespec		now;
+	uint64_t		hlc;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -2644,7 +2734,14 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	entry.oid = new_dir.oid;
 	entry.mode = S_IFDIR | mode;
-	entry.atime = entry.mtime = entry.ctime = time(NULL);
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		return errno;
+	rc = crt_timespec2hlc(now, &hlc);
+	if (rc)
+		return daos_der2errno(rc);
+	entry.atime = entry.mtime = entry.ctime = hlc;
 	entry.chunk_size = parent->d.chunk_size;
 	entry.oclass = parent->d.oclass;
 	entry.uid = geteuid();
@@ -3104,9 +3201,13 @@ lookup_rel_path_loop:
 			stbuf->st_mode = obj->mode;
 			stbuf->st_uid = entry.uid;
 			stbuf->st_gid = entry.gid;
-			stbuf->st_atim.tv_sec = entry.atime;
-			stbuf->st_mtim.tv_sec = entry.mtime;
-			stbuf->st_ctim.tv_sec = entry.ctime;
+			/** assertion is fine here as we know the sink buffer is valid */
+			rc = crt_hlc2timespec(entry.atime, &stbuf->st_atim);
+			D_ASSERT(rc == 0);
+			rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+			D_ASSERT(rc == 0);
+			rc = crt_hlc2timespec(entry.ctime, &stbuf->st_ctim);
+			D_ASSERT(rc == 0);
 		}
 	}
 
@@ -3390,6 +3491,9 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		} else {
 			dfs_obj_t *sym;
 
+			/** this should not happen, but to silence coverity */
+			if (entry.value == NULL)
+				D_GOTO(err_obj, rc = EIO);
 			/* dereference the symlink */
 			rc = lookup_rel_path(dfs, parent, entry.value, flags,
 					     &sym, mode, stbuf, 0);
@@ -3433,9 +3537,13 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = entry.uid;
 		stbuf->st_gid = entry.gid;
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_ctim.tv_sec = entry.ctime;
+		/** assertion is fine here as we know the sink buffer is valid */
+		rc = crt_hlc2timespec(entry.atime, &stbuf->st_atim);
+		D_ASSERT(rc == 0);
+		rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+		D_ASSERT(rc == 0);
+		rc = crt_hlc2timespec(entry.ctime, &stbuf->st_ctim);
+		D_ASSERT(rc == 0);
 	}
 
 out:
@@ -3552,9 +3660,13 @@ out:
 			stbuf->st_mode = entry.mode;
 			stbuf->st_uid = entry.uid;
 			stbuf->st_gid = entry.gid;
-			stbuf->st_atim.tv_sec = entry.atime;
-			stbuf->st_mtim.tv_sec = entry.mtime;
-			stbuf->st_ctim.tv_sec = entry.ctime;
+			/** assertion is fine here as we know the sink buffer is valid */
+			rc = crt_hlc2timespec(entry.atime, &stbuf->st_atim);
+			D_ASSERT(rc == 0);
+			rc = crt_hlc2timespec(entry.mtime, &stbuf->st_mtim);
+			D_ASSERT(rc == 0);
+			rc = crt_hlc2timespec(entry.ctime, &stbuf->st_ctim);
+			D_ASSERT(rc == 0);
 		}
 		*_obj = obj;
 	} else {
@@ -3779,6 +3891,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
+	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode = obj_glob->mode;
 	obj->flags = flags ? flags : obj_glob->flags;
 
@@ -4149,7 +4262,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf, NULL);
 }
 
 int
@@ -4168,7 +4281,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4517,6 +4630,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	int			i = 0;
 	size_t			len;
 	int			rc;
+	uint64_t		obj_hlc = 0, atime_hlc = 0, mtime_hlc = 0;
 	struct stat		rstat = {};
 
 	if (dfs == NULL || !dfs->mounted)
@@ -4549,7 +4663,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	/* Fetch the remote entry first so we can check the oid, then keep
 	 * a track locally of what has been updated
 	 */
-	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat);
+	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
 	if (rc)
 		D_GOTO(out_obj, rc);
 
@@ -4569,18 +4683,30 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_mode = stbuf->st_mode;
 	}
 	if (flags & DFS_SET_ATTR_ATIME) {
-		d_iov_set(&sg_iovs[i], &stbuf->st_atim, sizeof(time_t));
+		rc = crt_timespec2hlc(stbuf->st_atim, &atime_hlc);
+		if (rc)
+			D_GOTO(out_obj, rc);
+		d_iov_set(&sg_iovs[i], &atime_hlc, sizeof(uint64_t));
 		recx[i].rx_idx = ATIME_IDX;
-		recx[i].rx_nr = sizeof(time_t);
+		recx[i].rx_nr = sizeof(uint64_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_ATIME;
 		rstat.st_atim = stbuf->st_atim;
 	}
 	if (flags & DFS_SET_ATTR_MTIME) {
-		d_iov_set(&sg_iovs[i], &stbuf->st_mtim, sizeof(time_t));
+		rc = crt_timespec2hlc(stbuf->st_mtim, &mtime_hlc);
+		if (rc)
+			D_GOTO(out_obj, rc);
+		d_iov_set(&sg_iovs[i], &mtime_hlc, sizeof(uint64_t));
 		recx[i].rx_idx = MTIME_IDX;
-		recx[i].rx_nr = sizeof(time_t);
+		recx[i].rx_nr = sizeof(uint64_t);
 		i++;
+
+		d_iov_set(&sg_iovs[i], &obj_hlc, sizeof(uint64_t));
+		recx[i].rx_idx = HLC_IDX;
+		recx[i].rx_nr = sizeof(uint64_t);
+		i++;
+
 		flags &= ~DFS_SET_ATTR_MTIME;
 		rstat.st_mtim = stbuf->st_mtim;
 	}
@@ -4996,7 +5122,17 @@ restart:
 		D_GOTO(out, rc);
 	}
 
-	entry.atime = entry.mtime = entry.ctime = time(NULL);
+	struct timespec		now;
+	uint64_t		hlc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out, rc = errno);
+	rc = crt_timespec2hlc(now, &hlc);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+	entry.atime = entry.mtime = entry.ctime = hlc;
+
 	/** insert old entry in new parent object */
 	rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
@@ -5132,7 +5268,17 @@ restart:
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	entry1.atime = entry1.mtime = entry1.ctime = time(NULL);
+	struct timespec		now;
+	uint64_t		hlc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out, rc = errno);
+	rc = crt_timespec2hlc(now, &hlc);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	entry1.atime = entry1.mtime = entry1.ctime = hlc;
 	/** insert entry1 in parent2 object */
 	rc = insert_entry(dfs->layout_v, parent2->oh, th, name1, len1,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry1);
@@ -5141,7 +5287,7 @@ restart:
 		D_GOTO(out, rc);
 	}
 
-	entry2.atime = entry2.mtime = entry2.ctime = time(NULL);
+	entry2.atime = entry2.mtime = entry2.ctime = hlc;
 	/** insert entry2 in parent1 object */
 	rc = insert_entry(dfs->layout_v, parent1->oh, th, name2, len2,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry2);

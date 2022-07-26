@@ -81,7 +81,7 @@ class ManagementServiceFailover(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", replica_count)
-        replicas = random.sample(self.hostlist_servers, replica_count)
+        replicas = random.sample(list(self.hostlist_servers), replica_count)
         server_groups = {
             self.server_group:
                 {

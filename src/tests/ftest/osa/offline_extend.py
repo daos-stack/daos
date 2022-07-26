@@ -27,8 +27,8 @@ class OSAOfflineExtend(OSAUtils):
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True

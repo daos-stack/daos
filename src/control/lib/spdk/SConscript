@@ -30,8 +30,6 @@ def scons():
                                           [senv.nc, senv.ncc] + control_tgts,
                                           LIBS=libs)
 
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
-
     if prereqs.test_requested():
         SConscript('ctests/SConscript', exports='senv')
 
