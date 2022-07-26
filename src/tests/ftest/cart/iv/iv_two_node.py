@@ -188,8 +188,7 @@ class CartIvTwoNodeTest(CartTest):
                             cli_rtn, command))
 
     def test_cart_iv(self):
-        """
-        Test CaRT IV
+        """Test CaRT IV
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,iv,two_node,memcheck
