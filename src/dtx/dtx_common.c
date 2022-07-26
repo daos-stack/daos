@@ -1152,7 +1152,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */
 	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL);
+		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL, false);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			D_GOTO(abort, result = 0);
@@ -1734,7 +1734,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, false);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;

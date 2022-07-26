@@ -1,8 +1,6 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - server-B
+    test_servers: 1
+    test_clients: 1
 timeout: 270
 server_config:
     name: daos_server
@@ -19,8 +17,8 @@ ior:
         np: 1
     test_file: testFile
     ior_flags:
-        - "-v -w -k" # write
-        - "-v -r -R" # read-verify
+        - "-v -w -k"  # write
+        - "-v -r -R"  # read-verify
     block_size: '1K'
     transfer_size: '1K'
     signature: 5
