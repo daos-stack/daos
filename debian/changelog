@@ -2,7 +2,7 @@ daos (2.3.100-18) unstable; urgency=medium
   [ Jeff Olivier ]
   * Update to 1.12.0
 
- -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 21 Jul 2022 10:24:00 -0600
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Tue, 26 Jul 2022 15:54:00 -0600
 
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]

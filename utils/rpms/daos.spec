@@ -560,7 +560,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Jul 21 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-18
+* Tue Jul 26 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-18
 - Upgrade to pmdk 1.12.0
 
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
