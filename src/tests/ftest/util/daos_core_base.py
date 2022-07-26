@@ -174,6 +174,7 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         try:
+            self.log.info("Running %s", job_str)
             process.run(job_str)
         except process.CmdError as result:
             if result.result.exit_status != 0:
@@ -181,8 +182,7 @@ class DaosCoreBase(TestWithServers):
                 self.create_results_xml(
                     self.subtest_name, result, "Failed to run {0}.".format(self.daos_test))
                 self.fail(
-                    "{0} failed with return code={1}.\n".format(
-                        job_str, result.result.exit_status))
+                    "{0} failed with return code={1}.\n".format(job_str, result.result.exit_status))
         finally:
             if not self.using_local_host:
                 # List any remote cmocka files

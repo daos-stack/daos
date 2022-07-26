@@ -7,6 +7,7 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from asyncore import write
 from collections import OrderedDict
 from datetime import datetime
 from tempfile import TemporaryDirectory
@@ -24,6 +25,8 @@ import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -32,6 +35,7 @@ ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
 
+# AVOCADO_CONFIG_DIR = os.path.join(os.path.expanduser("~") , ".config")
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
     [
@@ -180,6 +184,77 @@ def set_test_environment(args):
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
+
+    # Set up the avocado configuraton
+
+    # Set the output locations for running in CI
+    #
+    # [datadir.paths]
+    # logs_dir = $logs_prefix/ftest/avocado/job-results
+    # data_dir = $logs_prefix/ftest/avocado/data
+    if args.jenkinslog:
+        if os.getenv("TEST_RPMS", 'false') == 'true':
+            logs_prefix = os.path.join(os.path.sep, "var", "tmp")
+        else:
+            logs_prefix = os.path.abspath("..")
+        logs_dir = os.path.join(logs_prefix, "ftest", "avocado", "job-results")
+        data_dir = os.path.join(logs_prefix, "ftest", "avocado", "data")
+        add_avocado_setting("datadir.paths", "logs_dir", logs_dir)
+        add_avocado_setting("datadir.paths", "data_dir", data_dir)
+
+    # Limit the avocado job.log to INFO messages for clarity
+    #
+    # [job.output]
+    # loglevel = INFO
+    add_avocado_setting("job.output", "loglevel", "INFO")
+
+    # Give the avocado test tearDown method a minimum of 120 seconds to complete when the test
+    # process has timed out.  The test harness will increment this timeout based upon the number
+    # of pools created in the test to account for pool destroy command timeouts.
+    #
+    # [runner.timeout]
+    # after_interrupted = 120
+    # process_alive = 120
+    # process_died = 120
+    add_avocado_setting("runner.timeout", "after_interrupted", 120)
+    add_avocado_setting("runner.timeout", "process_alive", 120)
+    add_avocado_setting("runner.timeout", "process_died", 120)
+
+    # Define additional information to collect from the launch node after completing the test
+    #
+    # [sysinfo.collectibles]
+    # files = \$HOME/.config/avocado/sysinfo/files
+    # commands = \$HOME/.config/avocado/sysinfo/commands
+    sysinfo_files = os.path.expanduser(os.path.join("~", ".config", "avocado", "sysinfo", "files"))
+    sysinfo_cmds = os.path.expanduser(os.path.join("~", ".config", "avocado", "sysinfo", "command"))
+    add_avocado_setting("sysinfo.collectibles", "files", sysinfo_files)
+    add_avocado_setting("sysinfo.collectibles", "commands", sysinfo_cmds)
+
+    # Create the ~/.config/avocado/sysinfo/files file
+    with open(sysinfo_files, "w") as sysinfo_fd:
+        sysinfo_fd.write("{}\n".format(os.path.join(os.path.sep, "proc", "mounts")))
+
+    # Create the ~/.config/avocado/sysinfo/commands file
+    with open(sysinfo_cmds, "w") as sysinfo_fd:
+        sysinfo_fd.write("ps axf\n")
+        sysinfo_fd.write("dmesg\n")
+        sysinfo_fd.write("df -h\n")
+
+
+def add_avocado_setting(section, key, value):
+    """Add the key assigned with value to the avocado configuration section.
+
+    Args:
+        section (str): section name
+        key (str): key name
+        value (object): key assignment
+    """
+    if not settings.config.has_section(section):
+        settings.config.add_section(section)
+    if int(MAJOR) >= 82:
+        settings.register_option(section, key, value, "")
+    else:
+        settings.config.set(section, key, str(value))
 
 
 def set_interface_environment(args):

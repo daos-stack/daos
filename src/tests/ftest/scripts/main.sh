@@ -68,41 +68,6 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
-# Give the avocado test tearDown method a minimum of 120 seconds to complete when the test process
-# has timed out.  The test harness will increment this timeout based upon the number of pools
-# created in the test to account for pool destroy command timeouts.
-mkdir -p ~/.config/avocado/
-cat <<EOF > ~/.config/avocado/avocado.conf
-[datadir.paths]
-logs_dir = $logs_prefix/ftest/avocado/job-results
-data_dir = $logs_prefix/ftest/avocado/data
-
-[job.output]
-loglevel = DEBUG
-
-[runner.timeout]
-after_interrupted = 120
-process_alive = 120
-process_died = 120
-
-[sysinfo.collectibles]
-files = \$HOME/.config/avocado/sysinfo/files
-# File with list of commands that will be executed and have their output
-# collected
-commands = \$HOME/.config/avocado/sysinfo/commands
-EOF
-
-mkdir -p ~/.config/avocado/sysinfo/
-cat <<EOF > ~/.config/avocado/sysinfo/commands
-ps axf
-dmesg
-df -h
-EOF
-
-cat <<EOF > ~/.config/avocado/sysinfo/files
-/proc/mounts
-EOF
-
 # apply patches to Avocado
 pydir=""
 for loc in /usr/lib/python2*/site-packages/ \
