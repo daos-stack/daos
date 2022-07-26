@@ -1760,7 +1760,8 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
-                if not lib.endswith(".so"):
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
