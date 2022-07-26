@@ -529,7 +529,7 @@ def get_remote_output(hosts, command, timeout=120):
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    log("Running on {}: {}".format(hosts, command))
+    log("Running on {} with a {} second timeout: {}".format(hosts, timeout, command))
     task.run(command=command, nodes=hosts, timeout=timeout)
     return task
 
@@ -549,8 +549,11 @@ def check_remote_output(task, command):
     # Create a dictionary of hosts for each unique return code
     results = dict(task.iter_retcodes())
 
+    # Create a list of any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+
     # Determine if the command completed successfully across all the hosts
-    status = len(results) == 1 and 0 in results
+    status = len(results) == 1 and 0 in results and len(timed_out) == 0
     if not status:
         log("  Errors detected running \"{}\":".format(command))
 
@@ -577,7 +580,6 @@ def check_remote_output(task, command):
                     log("      {}".format(line), err_msg)
 
     # List any hosts that timed out
-    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
     if timed_out:
         log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
 
@@ -1346,7 +1348,7 @@ def run_tests(test_files, tag_filter, args):
                         os.path.join(os.sep, "etc", "daos")),
                     args)
 
-                # Archive remote daos log files
+                # Archive remote daos log files - use an extended timeout for potentially large logs
                 return_code |= archive_files(
                     "daos log files",
                     os.path.join(avocado_logs_dir, "latest", "daos_logs"),
@@ -1354,7 +1356,8 @@ def run_tests(test_files, tag_filter, args):
                     "{}/*.log*".format(test_log_dir),
                     args,
                     avocado_logs_dir,
-                    get_test_category(test_file["py"]))
+                    get_test_category(test_file["py"]),
+                    1800)
 
                 # Archive remote ULTs stacks dump files
                 return_code |= archive_files(
@@ -1587,7 +1590,7 @@ def compress_log_files(avocado_logs_dir, args):
 
 
 def archive_files(description, destination, hosts, source_files, args,
-                  avocado_logs_dir=None, test_name=None):
+                  avocado_logs_dir=None, test_name=None, timeout=900):
     """Archive all of the remote files to a local directory.
 
     Args:
@@ -1603,6 +1606,8 @@ def archive_files(description, destination, hosts, source_files, args,
             cart_logtest.py will be run against each log file and the size of
             each log file will be checked against the threshold (if enabled).
             Defaults to None.
+        timeout (int, optional): number of seconds to wait for the archiving
+            operation to complete. Defaults to 900 seconds.
 
     Returns:
         int: status of archiving the files
@@ -1636,7 +1641,7 @@ def archive_files(description, destination, hosts, source_files, args,
             command.append("-t \"{}\"".format(args.logs_threshold))
         if args.verbose > 1:
             command.append("-v")
-        task = get_remote_output(hosts, " ".join(command), 900)
+        task = get_remote_output(hosts, " ".join(command), timeout)
 
         # Determine if the command completed successfully across all the hosts
         cmd_description = "archive_files command for {}".format(description)
