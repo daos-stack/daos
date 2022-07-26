@@ -1,0 +1,187 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+package main
+
+import (
+	"os"
+	"os/user"
+	"strings"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+
+type nvmeCmd struct {
+	Prepare prepareDrivesCmd `command:"prepare-drives" description:"Prepare NVMe SSDs for use with DAOS"`
+	Release releaseDrivesCmd `command:"release-drives" description:"Release NVMe SSDs for use with OS"`
+	Scan    scanDrivesCmd    `command:"scan" description:"Scan NVMe SSDs"`
+}
+
+type prepareDrivesCmd struct {
+	cmdutil.LogCmd
+	PCIAllowList  string `long:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+	PCIBlockList  string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	NrHugepages   int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	TargetUser    string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO   bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+}
+
+func (cmd *prepareDrivesCmd) WithDisableVFIO(b bool) *prepareDrivesCmd {
+	cmd.DisableVFIO = b
+	return cmd
+}
+
+func (cmd *prepareDrivesCmd) WithTargetUser(u string) *prepareDrivesCmd {
+	cmd.TargetUser = u
+	return cmd
+}
+
+func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
+	if cmd.TargetUser == "" {
+		runningUser, err := user.Current()
+		if err != nil {
+			return errors.Wrap(err, "couldn't lookup running user")
+		}
+		cmd.TargetUser = runningUser.Username
+	}
+
+	if cmd.TargetUser != "root" {
+		if cmd.DisableVFIO {
+			return errors.New("VFIO can not be disabled if running as non-root user")
+		}
+		if !iommuEnabled {
+			return errors.New("no IOMMU detected, to discover NVMe devices enable " +
+				"IOMMU per the DAOS Admin Guide")
+		}
+	}
+
+	cmd.Info("Prepare locally-attached NVMe storage...")
+
+	req := storage.BdevPrepareRequest{
+		HugePageCount: cmd.NrHugepages,
+		TargetUser:    cmd.TargetUser,
+		PCIAllowList:  cmd.PCIAllowList,
+		PCIBlockList:  cmd.PCIBlockList,
+		DisableVFIO:   cmd.DisableVFIO,
+	}
+
+	switch {
+	case cmd.DisableVFIO:
+		cmd.Info("VMD not enabled because VFIO disabled in command options")
+	case !iommuEnabled:
+		cmd.Info("VMD not enabled because IOMMU disabled on platform")
+	default:
+		// If none of the cases above match, set enable VMD flag in request.
+		req.EnableVMD = true
+	}
+
+	cmd.Debugf("nvme prepare request parameters: %+v", req)
+
+	// Configure NVMe device access.
+	_, err := backendCall(req)
+
+	return err
+}
+
+func (cmd *prepareDrivesCmd) Execute(args []string) error {
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
+	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+
+	return cmd.prepareNVMe(scs.NvmePrepare, iommuEnabled)
+}
+
+type releaseDrivesCmd struct {
+	cmdutil.LogCmd
+	PCIAllowList  string `long:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+	PCIBlockList  string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+}
+
+func (cmd *releaseDrivesCmd) resetNVMe(backendCall nvmePrepareResetFn) error {
+	cmd.Info("Release locally-attached NVMe storage...")
+
+	req := storage.BdevPrepareRequest{
+		PCIAllowList: cmd.PCIAllowList,
+		PCIBlockList: cmd.PCIBlockList,
+		Reset_:       true,
+	}
+
+	cmd.Debugf("nvme prepare request parameters: %+v", req)
+
+	// Configure NVMe device access.
+	_, err := backendCall(req)
+
+	return err
+}
+
+func (cmd *releaseDrivesCmd) Execute(args []string) error {
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
+	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+
+	return cmd.resetNVMe(scs.NvmePrepare)
+}
+
+type scanDrivesCmd struct {
+	cmdutil.LogCmd
+	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+}
+
+func (cmd *scanDrivesCmd) Execute(args []string) error {
+	var bld strings.Builder
+
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+	if !cmd.DisableVMD {
+		svc.WithVMDEnabled()
+	}
+
+	cmd.Info("Scanning locally-attached NVMe storage...\n")
+
+	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
+	if err != nil {
+		return err
+	}
+
+	if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+		return err
+	}
+
+	cmd.Info(bld.String())
+
+	return nil
+}
