@@ -34,19 +34,9 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 {
 	int		rc = 0;
 	void		*handle = NULL;
-	int		num_attrs = 0;
-	char		**names = NULL;
-	void		**buffers = NULL;
-	size_t		*sizes = NULL;
-	int (*daos_cont_serialize)(daos_prop_t *, int, char **, char **, size_t *, struct dm_stats*,
-				   daos_handle_t, char *);
+	int (*daos_cont_serialize)(daos_prop_t *, struct dm_stats*, daos_handle_t, char *);
 
 	/* Get all user attributes if any exist */
-	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
-	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
-		D_GOTO(out, rc);
-	}
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = -DER_INVAL;
@@ -59,13 +49,10 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
-	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes, stats,
-				    ca->src_coh, filename);
+	rc = (*daos_cont_serialize)(props, stats, ca->src_coh, filename);
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "Failed to serialize container");
 out:
-	if (num_attrs > 0)
-		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	if (handle != NULL)
 		dlclose(handle);
 	return rc;

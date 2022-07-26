@@ -2515,6 +2515,151 @@ out:
 	return rc;
 }
 
+/*
+ * Free the user attribute buffers created by get_usr_attrs.
+ */
+static void
+free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes)
+{
+	char	**names = *_names;
+	void	**buffers = *_buffers;
+	size_t	i;
+
+	if (names != NULL) {
+		for (i = 0; i < n; i++)
+			D_FREE(names[i]);
+		D_FREE(*_names);
+	}
+	if (buffers != NULL) {
+		for (i = 0; i < n; i++)
+			D_FREE(buffers[i]);
+		D_FREE(*_buffers);
+	}
+	D_FREE(*_sizes);
+}
+
+/*
+ * Get the user attributes for a container in a format similar
+ * to what daos_cont_set_attr expects.
+ * free_usr_attrs should be called to free the allocations.
+ */
+static int
+get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
+	      void ***_buffers, size_t **_sizes)
+{
+	int		rc = 0;
+	uint64_t	total_size = 0;
+	uint64_t	cur_size = 0;
+	uint64_t	num_attrs = 0;
+	uint64_t	name_len = 0;
+	char		*name_buf = NULL;
+	char		**names = NULL;
+	void		**buffers = NULL;
+	size_t		*sizes = NULL;
+	uint64_t	i;
+
+	/* Get the total size needed to store all names */
+	rc = daos_cont_list_attr(coh, NULL, &total_size, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to list container attributes: "DF_RC, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* no attributes found */
+	if (total_size == 0) {
+		*_n = 0;
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate a buffer to hold all attribute names */
+	D_ALLOC(name_buf, total_size);
+	if (name_buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Get the attribute names */
+	rc = daos_cont_list_attr(coh, name_buf, &total_size, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to list container attributes: "DF_RC, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* Figure out the number of attributes */
+	while (cur_size < total_size) {
+		name_len = strnlen(name_buf + cur_size, total_size - cur_size);
+		if (name_len == total_size - cur_size) {
+			/* end of buf reached but no end of string, ignoring */
+			break;
+		}
+		num_attrs++;
+		cur_size += name_len + 1;
+	}
+
+	/* Sanity check */
+	if (num_attrs == 0) {
+		rc = -DER_INVAL;
+		D_ERROR("Failed to parse user attributes: "DF_RC, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate arrays for attribute names, buffers, and sizes */
+	D_ALLOC_ARRAY(names, num_attrs);
+	if (names == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(sizes, num_attrs);
+	if (sizes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(buffers, num_attrs);
+	if (buffers == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Create the array of names */
+	cur_size = 0;
+	for (i = 0; i < num_attrs; i++) {
+		name_len = strnlen(name_buf + cur_size, total_size - cur_size);
+		if (name_len == total_size - cur_size) {
+			/* end of buf reached but no end of string, ignoring */
+			break;
+		}
+		D_STRNDUP(names[i], name_buf + cur_size, name_len + 1);
+		if (names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		cur_size += name_len + 1;
+	}
+
+	/* Get the buffer sizes */
+	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names, NULL, sizes, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to get user attribute sizes: "DF_RC, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate space for each value */
+	for (i = 0; i < num_attrs; i++) {
+		D_ALLOC(buffers[i], sizes[i] * sizeof(size_t));
+		if (buffers[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* Get the attribute values */
+	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names,
+				(void * const*)buffers, sizes, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to get user attribute values: "DF_RC, DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* Return values to the caller */
+	*_n = num_attrs;
+	*_names = names;
+	*_buffers = buffers;
+	*_sizes = sizes;
+out:
+	if (rc != 0)
+		free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	D_FREE(name_buf);
+	return rc;
+}
+
 /* TODO: put stats into a stat struct instead of passing several variables */
 /* TODO: signature should be something like:
  *	 daos_cont_serialize(coh, filename, optional snapshot, stats)
@@ -2522,8 +2667,7 @@ out:
  */
 /* TODO: daos_cont_serialize_obj so mpifileutils, etc. can share the API */
 int
-daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buffers, size_t *sizes,
-		    struct dm_stats *stats, daos_handle_t coh, char *filename)
+daos_cont_serialize(daos_prop_t *props, struct dm_stats *stats, daos_handle_t coh, char *filename)
 {
 	int			rc = 0;
 	int			rc2 = 0;
@@ -2545,6 +2689,17 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 	hid_t			usr_attr_memtype = -1;
 	hid_t			usr_attr_name_vtype = -1;
 	hid_t			usr_attr_val_vtype = -1;
+	int			num_attrs = 0;
+	char			**names = NULL;
+	void			**buffers = NULL;
+	size_t			*sizes = NULL;
+
+	/* Get all user attributes if any exist */
+	rc = get_usr_attrs(coh, &num_attrs, &names, &buffers, &sizes);
+	if (rc != 0) {
+		D_ERROR("Failed to get user attributes "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
 
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -2628,7 +2783,7 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		rc = daos_cont_serialize_attrs(args.file, &usr_attr_memtype,
-					       num_attrs, names, buffers,
+					       num_attrs, names, (char **)buffers,
 					       sizes);
 		if (rc != 0) {
 			D_ERROR("failed to serialize usr attributes "DF_RC"\n",
@@ -2745,6 +2900,8 @@ out_snap:
 	if (rc2 != 0)
 		D_ERROR("Failed to destroy snapshot "DF_RC"\n", DP_RC(rc));
 out:
+	if (num_attrs > 0)
+		free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	if (args.file >= 0)
 		H5Fclose(args.file);
 	D_FREE(oid_data);
@@ -3123,6 +3280,7 @@ deserialize_keys(daos_handle_t *oh, struct dsr_h5_args *args, int dkey_end, int 
 		(stats->total_dkeys)++;
 	}
 out:
+	D_FREE(args->akey_data);
 	return rc;
 }
 
@@ -3131,6 +3289,7 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 		 char *filename)
 {
 	int			rc = 0;
+	int			rc2 = 0;
 	int			i = 0;
 	struct dsr_h5_oid	*oid_data = NULL;
 	daos_obj_id_t		oid;
@@ -3261,12 +3420,12 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 				/* fetch/read dkey data */
 				D_ALLOC_ARRAY(args->dkey_data, dkey_batch);
 				if (args->dkey_data == NULL)
-					D_GOTO(out, rc =  -DER_NOMEM);
+					D_GOTO(err_obj, rc =  -DER_NOMEM);
 				rc = simple_batch_read(args->file, "Dkey Data", args->dkey_data,
 						       stats->total_dkeys, dkey_batch);
 				if (rc != 0) {
 					D_ERROR("failed to read dkey batch "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out, rc);
+					D_GOTO(err_obj, rc);
 				}
 
 				/* loop over dkeys in this batch and serialize akeys */
@@ -3274,7 +3433,7 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 						      total_akey_dims, stats);
 				if (rc != 0) {
 					D_ERROR("failed to deserialize keys: "DF_RC, DP_RC(rc));
-					D_GOTO(out, rc);
+					D_GOTO(err_obj, rc);
 				}
 				dkeys_to_read -= dkey_end;
 				D_FREE(args->dkey_data);
@@ -3298,7 +3457,19 @@ deserialize_oids(struct dsr_h5_args *args, struct dm_stats *stats, daos_handle_t
 		oids_to_read -= oid_end;
 		D_FREE(oid_data);
 	}
+err_obj:
+	if (is_kv) {
+		rc2 = daos_kv_close(oh, NULL);
+		if (rc2 != 0)
+			D_ERROR("failed to close kv object: "DF_RC, DP_RC(rc2));
+	} else {
+		rc2 = daos_obj_close(oh, NULL);
+		if (rc2 != 0)
+			D_ERROR("failed to close object: "DF_RC, DP_RC(rc2));
+	}
 out:
+	D_FREE(args->dkey_data);
+	D_FREE(oid_data);
 	return rc;
 }
 
