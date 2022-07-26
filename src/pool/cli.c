@@ -63,8 +63,6 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 			pproto->rc = rc;
 			pproto->completed = true;
-		} else {
-			D_ERROR("crt_proto_query_with_ctx() succeeded");
 		}
 	} else {
 		pproto->rc = cb_info->pq_rc;
