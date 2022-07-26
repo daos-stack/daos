@@ -1,11 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
+  test_servers: 4
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
