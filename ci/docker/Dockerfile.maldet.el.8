@@ -84,9 +84,9 @@ COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
 COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
 RUN /tmp/install_maldet.sh
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                             \
+# force an upgrade to get any newly built RPMs, but only if CB1 is set.
+ARG CB1
+RUN [ -z "$CB1" ] || {                                   \
         dnf upgrade && dnf clean all;                    \
     }
 
