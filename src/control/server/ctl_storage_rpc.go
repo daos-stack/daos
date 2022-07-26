@@ -280,7 +280,7 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 				scmNamespace.Mount.GetPath(), humanize.Bytes(mdBytes), mdBytes)
 			scmNamespace.Mount.AvailBytes -= mdBytes
 		} else {
-			c.log.Infof("WARNING: Adjusting available size to 0 Bytes of SCM device %q: "+
+			c.log.Noticef("WARNING: Adjusting available size to 0 Bytes of SCM device %q: "+
 				"old available size %s (%d Bytes), metadata size %s (%d Bytes)",
 				scmNamespace.Mount.GetPath(),
 				humanize.Bytes(availBytes), availBytes,

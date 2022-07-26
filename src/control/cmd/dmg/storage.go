@@ -264,7 +264,7 @@ type nvmeSetFaultyCmd struct {
 // Execute is run when nvmeSetFaultyCmd activates
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
-	cmd.Info("WARNING: This command will permanently mark the device as unusable!")
+	cmd.Notice("WARNING: This command will permanently mark the device as unusable!")
 	if !cmd.Force {
 		if cmd.jsonOutputEnabled() {
 			return errors.New("Cannot use --json without --force")
@@ -298,7 +298,7 @@ type nvmeReplaceCmd struct {
 // Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
 func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	if cmd.OldDevUUID == cmd.NewDevUUID {
-		cmd.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
+		cmd.Notice("WARNING: Attempting to reuse a previously set FAULTY device!")
 	}
 
 	// TODO: Implement no-reint flag option
