@@ -3,9 +3,16 @@ hosts:
 timeout: 3600
 server_config:
   name: daos_server
+  crt_timeout: 60
+  provider: ofi+tcp
   servers:
     scm_size: 600
     targets: 1
+    env_vars:
+      - DAOS_EC_AGG_DISABLE=0
+      - DAOS_MD_CAP=1024
+      - DAOS_SCHED_WATCHDOG_ALL=1
+      - DD_MASK=mgmt,io,md,epc,rebuild
 pool:
   name: daos_server
   scm_size: 200M
