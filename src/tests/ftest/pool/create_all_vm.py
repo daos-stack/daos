@@ -21,8 +21,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         self.scm_avail_bytes = self.get_available_bits()
 
-    # pylint: disable=dangerous-default-value
-    def get_available_bits(self, ranks=[]):
+    def get_available_bits(self, ranks=None):
         """Return the available size of SCM storage."""
         self.assertGreater(len(self.server_managers), 0, "No server managers")
         try:
@@ -37,7 +36,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             host_size = len(host_storage["hosts"].split(','))
             for scm_devices in host_storage["storage"]["scm_namespaces"]:
                 rank = scm_devices["mount"]["rank"]
-                if len(ranks) > 0 and rank not in ranks:
+                if ranks and len(ranks) > 0 and rank not in ranks:
                     self.log.info("Skipping rank %d", rank)
                     continue
                 scm_vos_bytes = min(scm_vos_bytes, scm_devices["mount"]["avail_bytes"])
@@ -95,7 +94,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_rank_filter_vm,test_pool_rank_filter
+        :avocado: tags=pool_create_all_rank_filter_vm,test_rank_filter
         """
         self.log.info("Test  basic pool creation with full storage")
 

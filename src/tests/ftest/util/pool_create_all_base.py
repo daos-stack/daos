@@ -44,12 +44,11 @@ class PoolCreateAllTestBase(TestWithServers):
 
         return end_time - start_time
 
-    # pylint: disable=dangerous-default-value
-    def create_one_pool(self, ranks=[]):
+    def create_one_pool(self, ranks=None):
         """Create one pool with all the available storage capacity"""
         self.add_pool_qty(1, namespace="/run/pool/*", create=False)
         self.pool[0].size.update("100%", "pool[0].size")
-        if len(ranks) > 0:
+        if ranks and len(ranks) > 0:
             self.pool[0].target_list.update(ranks, "pool[0].target_list")
 
         self.log.info("Creating a pool with 100% of the available storage")
