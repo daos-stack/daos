@@ -43,6 +43,7 @@ func TestSyslogOutput(t *testing.T) {
 	}
 	debugStr := randString("DEBUG", 8)
 	infoStr := randString("INFO", 8)
+	noticeStr := randString("NOTICE", 8)
 	errorStr := randString("ERROR", 8)
 
 	logger := logging.NewStdoutLogger("testPrefix").
@@ -66,6 +67,10 @@ func TestSyslogOutput(t *testing.T) {
 			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, infoStr))},
 		"Infof": {prio: syslog.LOG_INFO, fmtFn: logger.Infof, fmtFnFmt: fmt.Sprintf("%s: %%d", infoStr), fmtFnArgs: []interface{}{42},
 			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s: 42\n`, infoStr))},
+		"Notice": {prio: syslog.LOG_INFO, fn: logger.Notice, fnInput: noticeStr,
+			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, noticeStr))},
+		"Noticef": {prio: syslog.LOG_INFO, fmtFn: logger.Noticef, fmtFnFmt: fmt.Sprintf("%s: %%d", noticeStr), fmtFnArgs: []interface{}{42},
+			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s: 42\n`, noticeStr))},
 		"Error": {prio: syslog.LOG_ERR, fn: logger.Error, fnInput: errorStr,
 			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, errorStr))},
 		"Errorf": {prio: syslog.LOG_ERR, fmtFn: logger.Errorf, fmtFnFmt: fmt.Sprintf("%s: %%d", errorStr), fmtFnArgs: []interface{}{42},
