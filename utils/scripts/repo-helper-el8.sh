@@ -15,7 +15,7 @@ set -uex
 # installs/upgrades of epel-release add repos
 # Disable mirrorlist check when using local repos.
 DISTRO="rocky"
-if [[ $BASE_DISTRO =~ *alma* ]]; then
+if [[ $BASE_DISTRO == *alma* ]]; then
     DISTRO='alma'
 fi
 MAJOR_VER="${BASE_DISTRO##*:}"
@@ -24,7 +24,7 @@ if [ -n "$REPO_FILE_URL" ]; then
         curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
              "$REPO_FILE_URL"daos_ci-el${MAJOR_VER}-artifactory.repo
         for file in *.repo; do
-            true > $file
+            true > "$file"
         done
         mv daos_ci-el8-artifactory.repo{.tmp,}
     popd

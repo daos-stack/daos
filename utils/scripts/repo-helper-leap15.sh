@@ -39,7 +39,7 @@ if [ -n "$REPO_FILE_URL" ]; then
         curl -k -f -o daos_ci-leap15-artifactory.repo.tmp \
              "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo
         for file in *.repo; do
-            true > $file
+            true > "$file"
         done
         mv daos_ci-leap15-artifactory.repo{.tmp,}
     popd
@@ -49,13 +49,15 @@ zypper --non-interactive --gpg-auto-import-keys install \
 mkdir -p /etc/dnf/repos.d
 pushd /etc/zypp/repos.d/
     for file in *.repo; do
-        sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file
+        sed -e '/type=NONE/d' < "$file" > "/etc/dnf/repos.d/$file"
     done
 popd
 zypper --non-interactive clean --all
 dnf config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 
+daos_base="job/daos-stack/job/"
+artifacts="/artifacts/artifacts/leap15/"
 for repo in $REPOS; do
     branch="master"
     build_number="lastSuccessfulBuild"
@@ -69,7 +71,7 @@ for repo in $REPOS; do
     fi
     echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/\n\
+baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo
     cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo
@@ -84,7 +86,7 @@ if [ -e /tmp/install.sh ]; then
 fi
 
 if [ -e /etc/profile.d/lmod.sh ]; then
-    if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then
+    if ! grep "MODULEPATH=.*/usr/share/modules" /etc/profile.d/lmod.sh; then
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' \
                /etc/profile.d/lmod.sh
     fi
