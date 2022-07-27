@@ -15,7 +15,7 @@ if [[ $BASE_DISTRO =~ *alma* ]]; then
 fi
 MAJOR_VER="${BASE_DISTRO##*:}"
 if [ -n "$REPO_FILE_URL" ]; then
-    pushd/etc/yum.repos.d/
+    pushd /etc/yum.repos.d/
         curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
              "$REPO_FILE_URL"daos_ci-el${MAJOR_VER}-artifactory.repo
         for file in *.repo; do

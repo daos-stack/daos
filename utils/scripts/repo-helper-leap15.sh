@@ -30,7 +30,7 @@ if [ -n "$REPO_FILE_URL" ]; then
           temp_opensuse_oss_proxy
     zypper --non-interactive install curl
     mkdir -p /etc/zypp/repos.d
-    pushd/etc/zypp/repos.d/
+    pushd /etc/zypp/repos.d/
         curl -k -f -o daos_ci-leap15-artifactory.repo.tmp \
              "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo
         for file in *.repo; do
