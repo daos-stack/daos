@@ -38,6 +38,7 @@ def get_version(env):
         env.Append(DAOS_VERSION_MAJOR=major)
         env.Append(DAOS_VERSION_MINOR=minor)
         env.Append(DAOS_VERSION_FIX=fix)
+        print(f"version is {version}")
 
         return version
 
