@@ -2,6 +2,8 @@
 
 set -eux
 
+: "${STORAGE_PREP_OPT:=}"
+
 yum install -y daos-server-"${DAOS_PKG_VERSION}"
 
 lspci | grep Mellanox
@@ -15,7 +17,8 @@ if command -v ibv_devinfo; then ibv_devinfo || true; fi
 if lspci | grep NVMe; then
   find /dev -name 'pmem*'
 
-  daos_server storage prepare --scm-only --force
+  # shellcheck disable=SC2086
+  daos_server storage prepare --scm-only --force $STORAGE_PREP_OPT
 
   find /dev -name 'pmem*'
 else
