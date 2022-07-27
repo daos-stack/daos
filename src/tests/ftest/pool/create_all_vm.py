@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2022 Intel Corporation.
 
@@ -20,9 +19,10 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """Set up each test case."""
         super().setUp()
 
-        self.scm_avail_bytes = self.get_pool_available_bytes()
+        self.scm_avail_bytes = self.get_available_bits()
 
-    def get_pool_available_bytes(self):
+    # pylint: disable=dangerous-default-value
+    def get_available_bits(self, ranks=[]):
         """Return the available size of SCM storage."""
         self.assertGreater(len(self.server_managers), 0, "No server managers")
         try:
@@ -36,7 +36,12 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         for host_storage in result["response"]["HostStorage"].values():
             host_size = len(host_storage["hosts"].split(','))
             for scm_devices in host_storage["storage"]["scm_namespaces"]:
+                rank = scm_devices["mount"]["rank"]
+                if len(ranks) > 0 and rank not in ranks:
+                    self.log.info("Skipping rank %d", rank)
+                    continue
                 scm_vos_bytes = min(scm_vos_bytes, scm_devices["mount"]["avail_bytes"])
+                self.log.info("Adding SCM %d bytes from rank %d", scm_vos_bytes, rank)
                 scm_vos_size += host_size
 
         self.log.info("Available VOS size: scm_bytes=%d, scm_size=%d",
@@ -54,7 +59,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             Create a pool with all the capacity of all servers. Verify that the pool created
             effectively used all the available storage and there is no more available storage.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_one_vm,test_one_pool
@@ -62,8 +67,8 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.log.info("Test  basic pool creation with full storage")
 
         create_time = self.create_one_pool()
-        self.log.debug("Created one pool with 100% of the available storage "
-                "in {} seconds".format(create_time))
+        self.log.debug("Created one pool with 100%% of the available storage "
+                "in %f seconds", create_time)
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
@@ -75,9 +80,51 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
                 "Invalid SMD size: want=0, got={tier_bytes[1]}")
 
         self.log.info("Checking size of available storage")
-        self.scm_avail_bytes = self.get_pool_available_bytes()
+        self.scm_avail_bytes = self.get_available_bits()
         self.assertEqual(0, self.scm_avail_bytes,
                 "Invalid SCM size: want=0, got={}".format(self.scm_avail_bytes))
+
+    def test_rank_filter(self):
+        """Test the creation of one pool with filtering the rank to use
+
+        Test Description:
+            Create a pool with all the capacity of some servers. Verify that the pool created
+            effectively used all the available storage of the selected servers and the non selected
+            servers keep their available storage.
+
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_create_all
+        :avocado: tags=pool_create_all_rank_filter_vm,test_pool_rank_filter
+        """
+        self.log.info("Test  basic pool creation with full storage")
+
+        ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
+        ranks_used = ranks[:(len(ranks) // 2)]
+        ranks_unused = ranks[(len(ranks) // 2):]
+        scm_usable_bytes = self.get_available_bits(ranks_used)
+        scm_unused_bytes = self.scm_avail_bytes - scm_usable_bytes
+
+        create_time = self.create_one_pool(ranks_used)
+        self.log.debug("Created one pool with 100%% of the available storage "
+                "in %f seconds", create_time)
+
+        self.log.info("Checking size of the pool")
+        self.pool[0].get_info()
+        tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
+        delta_bytes = self.epsilon_bytes * len(ranks_used)
+        self.assertLessEqual(abs(scm_usable_bytes - tier_bytes[0]), delta_bytes,
+                "Invalid SCM size: want={}, got={}, delta={}".format(scm_usable_bytes,
+                    tier_bytes[0], delta_bytes))
+        self.assertEqual(0, tier_bytes[1],
+                "Invalid SMD size: want=0, got={tier_bytes[1]}")
+
+        self.log.info("Checking size of available storage")
+        self.scm_avail_bytes = self.get_available_bits(ranks_unused)
+        delta_bytes = self.epsilon_bytes * len(ranks_unused)
+        self.assertLessEqual(abs(scm_unused_bytes - self.scm_avail_bytes), delta_bytes,
+                "Invalid available SCM size: want={}, got={}, delta={}".format(scm_unused_bytes,
+                    self.scm_avail_bytes, delta_bytes))
 
     def test_recycle_pools(self):
         """Test the pool creation and destruction
@@ -87,7 +134,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             effectively used all the available storage. Destroy the pool and repeat these steps 100
             times. For each iteration, check that the size of the created pool is always the same.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_recycle_vm,test_recycle_pools
@@ -97,8 +144,8 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         for index in range(10):
             self.log.info("Creating pool %d", index)
             create_time = self.create_one_pool()
-            self.log.debug("Created one pool with 100% of the available storage "
-                    "in {} seconds".format(create_time))
+            self.log.debug("Created one pool with 100%% of the available storage "
+                    "in %f seconds", create_time)
 
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
@@ -112,7 +159,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
-            scm_avail_bytes = self.get_pool_available_bytes()
+            scm_avail_bytes = self.get_available_bits()
             self.assertLessEqual(abs(scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
                     "Invalid SCM size: want={}, got={}, delta={}".format(self.scm_avail_bytes,
                         tier_bytes[0], self.delta_bytes))
@@ -168,7 +215,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             Create a second pool with all the remaining storage. Verify that the pool created
             effectively used all the available storage and there is no more available storage.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_two_vm,test_two_pools
@@ -177,7 +224,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         create_time = self.create_first_of_two_pools()
         self.log.debug("Created a first pool with 50% of the available storage "
-                "in {} seconds".format(create_time))
+                "in %f seconds", create_time)
 
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
@@ -191,11 +238,11 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.log.info("Checking the distribution of the first pool")
         self.check_pool_distribution()
 
-        self.scm_avail_bytes = self.get_pool_available_bytes()
+        self.scm_avail_bytes = self.get_available_bits()
 
         create_time = self.create_second_of_two_pools()
-        self.log.debug("Created a second pool with 100% of the remaining storage "
-                "in {} seconds".format(create_time))
+        self.log.debug("Created a second pool with 100%% of the remaining storage "
+                "in %f seconds", create_time)
 
         self.pool[1].get_info()
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
@@ -215,7 +262,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.assertEqual(0, tier_bytes[1][1], "Invalid SMD size: want=0, "
                 "got={}".format(tier_bytes[1][1]))
 
-        self.scm_avail_bytes = self.get_pool_available_bytes()
+        self.scm_avail_bytes = self.get_available_bits()
 
         self.log.info("Checking size of available storage after the creation of the second pool")
         self.assertLessEqual(self.scm_avail_bytes, self.delta_bytes,

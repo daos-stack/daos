@@ -474,9 +474,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	ctrlrPBwMetaNormal.SmdDevices[0].ClusterSize = 0
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
+	mockPbScmMount0.Rank += 1
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)
 	mockPbScmNamespace0.Mount = mockPbScmMount0
 	mockPbScmMount1 := proto.MockScmMountPoint(1)
+	mockPbScmMount1.Rank += 1
 	mockPbScmNamespace1 := proto.MockScmNamespace(1)
 	mockPbScmNamespace1.Mount = mockPbScmMount1
 
@@ -790,6 +792,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Class:      mockPbScmMount0.Class,
 								DeviceList: mockPbScmMount0.DeviceList,
 								Path:       mockPbScmMount0.Path,
+								Rank:       mockPbScmMount0.Rank,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
 							},
@@ -881,6 +884,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+								Rank:       mockPbScmMount0.Rank,
 							},
 						},
 					},
@@ -967,6 +971,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+								Rank:       mockPbScmMount0.Rank,
 							},
 						},
 						&ctlpb.ScmNamespace{
@@ -981,6 +986,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount1.Path,
 								TotalBytes: mockPbScmMount1.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount1.AvailBytes),
+								Rank:       mockPbScmMount1.Rank,
 							},
 						},
 					},

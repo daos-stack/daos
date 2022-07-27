@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -1227,9 +1228,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 }
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-//
-// TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
-func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker) (uint64, uint64, error) {
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks []system.Rank) (uint64, uint64, error) {
 	storageScanReq := &StorageScanReq{Usage: true}
 	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
 	if err != nil {
@@ -1241,6 +1240,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	}
 
 	hostStorageMap := resp.HostStorage
+	ranksWithoutSmd := make(map[system.Rank]*storage.ScmNamespace, 0)
 	var scmBytes uint64 = math.MaxUint64
 	var nvmeBytes uint64 = math.MaxUint64
 	for _, key := range hostStorageMap.Keys() {
@@ -1252,20 +1252,31 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 				hostStorageSet.HostSet.String())
 		}
 
-		// FIXME (DAOS-9557) At this time the rank associated to one namespace is not
-		// defined in the StorageScanResp.  Thus we rely on the hypothesis that each SCM
-		// namespace is associated to one and only one rank. Eventually, the protocol should
-		// be changed to define if a SCM namespace is associated with one rank or not. If
-		// yes, it should define with which rank the SCM namespace is associated.
 		for _, scmNamespace := range hostStorage.ScmNamespaces {
 			if scmNamespace.Mount == nil {
+				log.Debugf("Skipping SCM device %s (bdev %s, name %s)",
+					scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
 				continue
 			}
+
+			if len(ranks) != 0 && !scmNamespace.Mount.Rank.InList(ranks) {
+				log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %s) not in ranklist: %s",
+					scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
+					scmNamespace.Mount.Rank, ranks)
+				continue
+			}
+
 			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
 
 			if scmBytes > scmNamespaceFreeBytes {
 				scmBytes = scmNamespaceFreeBytes
 			}
+
+			if sn, ok := ranksWithoutSmd[scmNamespace.Mount.Rank]; ok {
+				return 0, 0, errors.Errorf("Rank %s with multiple SCM devices: scm1=%s, scm2=%s",
+					scmNamespace.Mount.Rank.String(), sn.UUID, scmNamespace.UUID)
+			}
+			ranksWithoutSmd[scmNamespace.Mount.Rank] = scmNamespace
 		}
 
 		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
@@ -1279,17 +1290,25 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 					continue
 				}
 
+				if len(ranks) != 0 && !smdDevice.Rank.InList(ranks) {
+					log.Debugf("Skipping SMD device %s (instance %d, ctrlr %s, rank %s) not in ranklist: %s",
+						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank, ranks)
+					continue
+				}
+
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
-				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: "+
-					"device state=%q, size=%d total=%d",
+				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: device state=%q, size=%d total=%d",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
 					smdDevice.NvmeState.String(), smdDevice.AvailBytes,
 					nvmeRanksBytes[smdDevice.Rank])
 			}
 		}
-		for _, nvmeRankBytes := range nvmeRanksBytes {
+		for rank, nvmeRankBytes := range nvmeRanksBytes {
 			if nvmeBytes > nvmeRankBytes {
 				nvmeBytes = nvmeRankBytes
+			}
+			if _, ok := ranksWithoutSmd[rank]; ok {
+				delete(ranksWithoutSmd, rank)
 			}
 		}
 	}
@@ -1298,8 +1317,9 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		nvmeBytes = 0
 	}
 
-	// TODO (DAOS-9557) Check if there is no ranks (i.e. rank with SCM available) with some NVMe
-	// storage and other without
+	if len(ranksWithoutSmd) != 0 {
+		nvmeBytes = 0
+	}
 
 	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
 		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)

@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // ScmState represents the probed state of PMem modules on the system.
@@ -88,12 +89,13 @@ type (
 
 	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
-		Class      Class    `json:"class"`
-		DeviceList []string `json:"device_list"`
-		Info       string   `json:"info"`
-		Path       string   `json:"path"`
-		TotalBytes uint64   `json:"total_bytes"`
-		AvailBytes uint64   `json:"avail_bytes"`
+		Class      Class       `json:"class"`
+		DeviceList []string    `json:"device_list"`
+		Info       string      `json:"info"`
+		Path       string      `json:"path"`
+		Rank       system.Rank `json:"rank"`
+		TotalBytes uint64      `json:"total_bytes"`
+		AvailBytes uint64      `json:"avail_bytes"`
 	}
 
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
