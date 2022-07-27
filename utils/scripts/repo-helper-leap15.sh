@@ -82,6 +82,7 @@ if [ -e /etc/profile.d/lmod.sh ]; then
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' \
                /etc/profile.d/lmod.sh
     fi
+fi
 
 # this should not be needed, but docker containers have for leap 15
 # have failed in the past if it is not present.
