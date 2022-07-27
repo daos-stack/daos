@@ -261,7 +261,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "env": env,
     }
     if verbose:
-        log.info("Command environment vars:\n  %s", env)
+        log.debug("Command environment vars:\n  %s", env)
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
@@ -286,7 +286,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 command, error.result)
 
     if msg is not None:
-        log.info(msg)
+        log.debug(msg)
         raise DaosTestError(msg)
 
 

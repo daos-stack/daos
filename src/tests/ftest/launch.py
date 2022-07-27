@@ -7,7 +7,6 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from asyncore import write
 from collections import OrderedDict
 from datetime import datetime
 from tempfile import TemporaryDirectory
@@ -25,8 +24,6 @@ import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
 
-from avocado.core.settings import settings
-from avocado.core.version import MAJOR
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -185,8 +182,16 @@ def set_test_environment(args):
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
 
-    # Set up the avocado configuraton
+    if not args.list:
+        set_avocado_environment(args)
 
+
+def set_avocado_environment(args):
+    """Set up the avocado configuration.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+    """
     # Set the output locations for running in CI
     #
     # [datadir.paths]
@@ -249,6 +254,9 @@ def add_avocado_setting(section, key, value):
         key (str): key name
         value (object): key assignment
     """
+    from avocado.core.settings import settings  # pylint: disable=import-outside-toplevel
+    from avocado.core.version import MAJOR      # pylint: disable=import-outside-toplevel
+
     if not settings.config.has_section(section):
         settings.config.add_section(section)
     if int(MAJOR) >= 82:
