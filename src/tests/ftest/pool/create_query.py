@@ -25,8 +25,8 @@ class PoolCreateQueryTests(PoolTestBase):
             size.  Verify that the size of pool is equal to the size returned in the response of the
             pool create.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=pool_create_and_query
         """
