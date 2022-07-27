@@ -1240,7 +1240,10 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	}
 
 	hostStorageMap := resp.HostStorage
-	ranksWithoutSmd := make(map[system.Rank]*storage.ScmNamespace, 0)
+	// DAOS-10885: The variable ranksWithoutSmd is used for checking if there is no usable ranks
+	// (i.e. rank with SCM available and in ranks lists) with some NVMe storage and other
+	// without.  If such situation occurs then the nvme available size is equal to zero.
+	ranksWithoutSmd := make(map[system.Rank]*storage.ScmNamespace)
 	var scmBytes uint64 = math.MaxUint64
 	var nvmeBytes uint64 = math.MaxUint64
 	for _, key := range hostStorageMap.Keys() {
