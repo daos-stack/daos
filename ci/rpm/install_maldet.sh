@@ -13,10 +13,12 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC1091
 source "$mydir/distro_info.sh"
 
+# We need sudo for running the scan and git for backward
+# compatibility.
 if command -v dnf; then
-  dnf install clamav clamav-devel
+  dnf install git gzip sudo clamav clamav-devel
 elif command -v apt-get; then
-  apt-get --assume-yes install clamav libclamav-dev
+  apt-get --assume-yes install git gzip sudo clamav libclamav-dev
   service clamav-freshclam stop || true
   systemctl disable clamav-freshclam || true
 fi

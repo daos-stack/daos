@@ -14,82 +14,22 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# Use local repo server if present
-# if a local repo server is present and the distro repo server can not
-# be reached, have to bootstrap in an environment to get curl installed
-# to then install the pre-built repo file.
 ARG REPO_FILE_URL
-COPY ./utils/scripts/repo-helper-leap15.sh /tmp/repo-helper.sh
-RUN set -e;                                                      \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        zypper mr --all --disable;                               \
-        zypper addrepo                                           \
-          "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss" \
-          opensuse_oss_proxy;                                    \
-        zypper --non-interactive install curl;                   \
-        mkdir -p /etc/zypp/repos.d &&                            \
-        cd /etc/zypp/repos.d/ &&                                 \
-        curl -k -f -o daos_ci-leap15-artifactory.repo.tmp        \
-             "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo &&  \
-        for file in *.repo; do                                   \
-            true > $file;                                        \
-        done;                                                    \
-        mv daos_ci-leap15-artifactory.repo{.tmp,};               \
-    fi;                                                          \
-    zypper --non-interactive --gpg-auto-import-keys install      \
-        dnf dnf-plugins-core &&                                  \
-    mkdir -p /etc/dnf/repos.d &&                                 \
-    cd /etc/zypp/repos.d/ &&                                     \
-    for file in *.repo; do                                       \
-        sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
-    done;                                                        \
-    zypper --non-interactive clean --all;                        \
-    dnf config-manager --save --setopt=assumeyes=True;           \
-    dnf config-manager --save --setopt=install_weak_deps=False;  \
-    chmod +x /tmp/repo-helper.sh  && /tmp/repo-helper.sh
-
 ARG JENKINS_URL
 ARG REPOS
-RUN for repo in $REPOS; do                                                                                 \
-        branch="master";                                                                                   \
-        build_number="lastSuccessfulBuild";                                                                \
-        if [[ $repo = *@* ]]; then                                                                         \
-            branch="${repo#*@}";                                                                           \
-            repo="${repo%@*}";                                                                             \
-            if [[ $branch = *:* ]]; then                                                                   \
-                build_number="${branch#*:}";                                                               \
-                branch="${branch%:*}";                                                                     \
-            fi;                                                                                            \
-        fi;                                                                                                \
-        echo -e "[$repo:$branch:$build_number]\n\
-name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
-        cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
-    done
-
-# We need sudo for running the scan and git for backward
-# compatibility.
-RUN dnf upgrade &&                                      \
-    /tmp/repo-helper.sh &&                              \
-    dnf install git gzip sudo && dnf clean all
-
-RUN update-ca-certificates
-
-ARG UID=1000
+# script to translate lookup distro names to commonly used names
+COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
+# script to install OS updates basic tools and maldet
+COPY ci/rpm/install_maldet.sh /tmp/install.sh
+# script to setup local repo if available
+COPY ./utils/scripts/repo-helper-leap15.sh /tmp/repo-helper.sh
+RUN set -e;                                         \
+    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh
 
 # Add DAOS users
-RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
-            --home /home/daos daos_server
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
-    chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
-    visudo -c;                                                                     \
-    sudo -l -U daos_server
-
-COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
-COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
-RUN /tmp/install_maldet.sh
+ARG UID=1000
+COPY ./utils/scripts/daos-sudo-setup.sh /tmp/daos-sudo-setup.sh
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1

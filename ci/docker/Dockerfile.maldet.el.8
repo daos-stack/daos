@@ -8,81 +8,28 @@
 ARG BASE_DISTRO=rockylinux/rockylinux:8
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# Use local repo server if present
-# installs/upgrades of epel-release add repos
-# Disable mirrorlist check when using local repos.
 ARG REPO_FILE_URL
-RUN set -e;                                                      \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
-             "$REPO_FILE_URL"daos_ci-el8-artifactory.repo &&     \
-        for file in *.repo; do                                   \
-            true > $file;                                        \
-        done;                                                    \
-        mv daos_ci-el8-artifactory.repo{.tmp,};                  \
-    fi;                                                          \
-    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
-    dnf config-manager --save --setopt=assumeyes=True;           \
-    dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --disablerepo \*epel\* install epel-release;         \
-        if [ -n "$REPO_FILE_URL" ]; then                         \
-            PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
-            true > /etc/yum.repos.d/epel.repo;                   \
-            true > /etc/yum.repos.d/epel-modular.repo;           \
-            sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-                -i /etc/dnf/dnf.conf;                            \
-        else                                                     \
-            PT_REPO=powertools;                                  \
-        fi;                                                      \
-        dnf install epel-release;                                \
-        dnf config-manager --enable $PT_REPO;                    \
-    fi;                                                          \
-    dnf clean all
-
 ARG JENKINS_URL
 ARG REPOS
-RUN for repo in $REPOS; do                                                \
-        branch="master";                                                  \
-        build_number="lastSuccessfulBuild";                               \
-        if [[ $repo = *@* ]]; then                                        \
-            branch="${repo#*@}";                                          \
-            repo="${repo%@*}";                                            \
-            if [[ $branch = *:* ]]; then                                  \
-                build_number="${branch#*:}";                              \
-                branch="${branch%:*}";                                    \
-            fi;                                                           \
-        fi;                                                               \
-        echo -e "[$repo:$branch:$build_number]\n\
-name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
-        cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-    done
-
-# Install OS updates and package.
-# We need sudo for running the scan, git for backward compatibility.
-RUN dnf upgrade && dnf install git gzip sudo && dnf clean all
-
-ARG UID=1000
+# script to translate lookup distro names to commonly used names
+COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
+# script to install OS updates basic tools and maldet
+COPY ci/rpm/install_maldet.sh /tmp/install.sh
+# script to setup local repo if available
+COPY ./utils/scripts/repo-helper-el8.sh /tmp/repo-helper.sh
+RUN set -e;                                         \
+    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh
 
 # Add DAOS users
-RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
-            --home /home/daos daos_server
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
-    chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
-    visudo -c;                                                                     \
-    sudo -l -U daos_server
-
-COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
-COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
-RUN /tmp/install_maldet.sh
+ARG UID=1000
+COPY ./utils/scripts/daos-sudo-setup.sh /tmp/daos-sudo-setup.sh
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
