@@ -47,15 +47,15 @@
 // 	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
 // };
 
-/** DAOS S3 Bucket handle */
-struct ds3_bucket {
-	/** DAOS container handle */
-	daos_handle_t    coh;
-	/** Container information */
-	daos_cont_info_t cont_info;
-	/** DFS handle */
-	dfs_t           *dfs;
-};
+// /** DAOS S3 Bucket handle */
+// struct ds3_bucket {
+// 	/** DAOS container handle */
+// 	daos_handle_t    coh;
+// 	/** Container information */
+// 	daos_cont_info_t cont_info;
+// 	/** DFS handle */
+// 	dfs_t           *dfs;
+// };
 
 /** DAOS S3 Object handle */
 struct ds3_obj {

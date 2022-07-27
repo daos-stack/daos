@@ -55,13 +55,24 @@ typedef struct {
 	/** Array of metadata dir handle */
 	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
 } ds3_t;
+
+/** DAOS S3 Bucket handle */
+typedef struct ds3_bucket {
+	/** DAOS container handle */
+	daos_handle_t    coh;
+	/** Container information */
+	daos_cont_info_t cont_info;
+	/** DFS handle */
+	dfs_t           *dfs;
+} ds3_bucket_t;
+
 // TODO end of temporarily moved here
 
 /** DAOS S3 Pool handle */
 // typedef struct ds3        ds3_t;
 
 /** DAOS S3 Bucket handle */
-typedef struct ds3_bucket ds3_bucket_t;
+// typedef struct ds3_bucket ds3_bucket_t;
 
 /** DAOS S3 Object handle */
 typedef struct ds3_obj    ds3_obj_t;
