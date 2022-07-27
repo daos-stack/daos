@@ -1240,9 +1240,8 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	}
 
 	hostStorageMap := resp.HostStorage
-	// DAOS-10885: The variable ranksWithoutSmd is used for checking if there is no usable ranks
-	// (i.e. rank with SCM available and in ranks lists) with some NVMe storage and other
-	// without.  If such situation occurs then the nvme available size is equal to zero.
+	// DAOS-10885: The variable ranksWithoutSmd is used as a marking board for checking if there
+	// are any ranks with SCM storage but no NVMe.
 	ranksWithoutSmd := make(map[system.Rank]*storage.ScmNamespace)
 	var scmBytes uint64 = math.MaxUint64
 	var nvmeBytes uint64 = math.MaxUint64
@@ -1279,6 +1278,8 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 				return 0, 0, errors.Errorf("Rank %s with multiple SCM devices: scm1=%s, scm2=%s",
 					scmNamespace.Mount.Rank.String(), sn.UUID, scmNamespace.UUID)
 			}
+
+			// DAOS-10885: Initialize the marking board with all the usable ranks
 			ranksWithoutSmd[scmNamespace.Mount.Rank] = scmNamespace
 		}
 
@@ -1310,7 +1311,10 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 			if nvmeBytes > nvmeRankBytes {
 				nvmeBytes = nvmeRankBytes
 			}
+
 			if _, ok := ranksWithoutSmd[rank]; ok {
+				// DAOS-10885: Remove the usable rank with NVME storage from the
+				// marking board
 				delete(ranksWithoutSmd, rank)
 			}
 		}
@@ -1320,8 +1324,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		nvmeBytes = 0
 	}
 
-	// DAOS-10885: Check if there is no ranks (i.e. rank with SCM available) with some NVMe
-	// storage and other without
+	// DAOS-10885: Check if there are any ranks with SCM storage but no NVMe
 	if len(ranksWithoutSmd) != 0 {
 		nvmeBytes = 0
 	}
