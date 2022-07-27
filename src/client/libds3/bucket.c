@@ -93,13 +93,47 @@ ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev)
 int
 ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t *ev)
 {
+	if (ds3 == NULL || name == NULL || ds3b == NULL)
+		return EINVAL;
+
+	int           rc;
+	ds3_bucket_t *ds3b_tmp;
+	D_ALLOC_PTR(ds3b_tmp);
+	if (ds3b_tmp == NULL)
+		return ENOMEM;
+
+	// TODO: We need to cache open container handles
+	rc = daos_cont_open(ds3->poh, name, DAOS_COO_RW, &ds3b_tmp->coh, &ds3b_tmp->cont_info, ev);
+	if (rc != 0) {
+		D_ERROR("Failed to open to container %s, rc = %d\n", name, rc);
+		rc = daos_der2errno(rc);
+		goto err_ds3b;
+	}
+
+	rc = dfs_mount(ds3->poh, ds3b_tmp->coh, O_RDWR, &ds3b_tmp->dfs);
+
+	if (rc != 0) {
+		goto err;
+	}
+
+	*ds3b = ds3b_tmp;
 	return 0;
+
+err:
+	daos_cont_close(ds3b_tmp->coh, ev);
+err_ds3b:
+	D_FREE(ds3b);
+	return rc;
 }
 
 int
 ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	return 0;
+	int rc = 0;
+	rc     = dfs_umount(ds3b->dfs);
+	daos_cont_close(ds3b->coh, ev);
+	D_FREE(ds3b);
+	return rc;
 }
 
 int

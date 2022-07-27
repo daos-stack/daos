@@ -96,7 +96,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 	if (rc != 0) {
 		D_ERROR("Failed to connect to pool %s, rc = %d\n", pool, rc);
 		rc = daos_der2errno(rc);
-		return rc;
+		goto err_ds3;
 	}
 
 	/** Check whether mdata container already exist */
@@ -164,6 +164,8 @@ err_coh:
 	daos_cont_close(ds3_tmp->meta_coh, NULL);
 err_poh:
 	daos_pool_disconnect(ds3_tmp->poh, NULL);
+err_ds3:
+	D_FREE(ds3_tmp);
 	return rc;
 }
 
@@ -184,5 +186,6 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 	rc     = dfs_umount(ds3->meta_dfs);
 	daos_cont_close(ds3->meta_coh, ev);
 	daos_pool_disconnect(ds3->poh, ev);
+	D_FREE(ds3);
 	return rc;
 }
