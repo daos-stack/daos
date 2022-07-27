@@ -166,10 +166,8 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmemobj1 >= 1.12.0
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmemobj >= 1.12.0
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
