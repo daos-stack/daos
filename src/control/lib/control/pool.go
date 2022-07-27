@@ -1317,6 +1317,8 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		nvmeBytes = 0
 	}
 
+	// DAOS-10885: Check if there is no ranks (i.e. rank with SCM available) with some NVMe
+	// storage and other without
 	if len(ranksWithoutSmd) != 0 {
 		nvmeBytes = 0
 	}
