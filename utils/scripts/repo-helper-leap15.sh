@@ -1,6 +1,11 @@
 #!/bin/bash
 set -uex
 
+# This script is used by dockerfiles to optionally use
+# a local repository instead of a distro provided repository.
+# It will also optionally allow running a /tmp/install script
+# for custom packages if present.
+
 : "${REPO_FILE_URL:=}"
 : "${BASE_DISTRO:=opensuse/leap:15.3}"
 : "${JENKINS_URL:=}"
@@ -76,6 +81,7 @@ if [ -e /tmp/install.sh ]; then
     /tmp/install.sh
     dnf clean all
     rm -f /tmp/install.sh
+fi
 
 if [ -e /etc/profile.d/lmod.sh ]; then
     if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then
