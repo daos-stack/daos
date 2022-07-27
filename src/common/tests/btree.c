@@ -704,8 +704,10 @@ ik_btr_batch_oper(void **state)
 	}
 
 	D_ALLOC_ARRAY(arr, key_nr);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		return;
+	}
 
 	D_PRINT("Batch add %d records.\n", key_nr);
 	ik_btr_gen_keys(arr, key_nr);
@@ -832,7 +834,7 @@ ik_btr_drain(void **state)
 	D_ALLOC_ARRAY(arr, drain_keys);
 	if (arr == NULL) {
 		fail_msg("Array allocation failed");
-		fail();
+		return;
 	}
 
 	D_PRINT("Batch add %d records.\n", drain_keys);
