@@ -77,7 +77,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
                 "Invalid SCM size: want={}, got={}, delta={}".format(self.scm_avail_bytes,
                     tier_bytes[0], self.delta_bytes))
         self.assertEqual(0, tier_bytes[1],
-                "Invalid SMD size: want=0, got={tier_bytes[1]}")
+                "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
         self.log.info("Checking size of available storage")
         self.scm_avail_bytes = self.get_available_bits()
@@ -117,7 +117,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
                 "Invalid SCM size: want={}, got={}, delta={}".format(scm_usable_bytes,
                     tier_bytes[0], delta_bytes))
         self.assertEqual(0, tier_bytes[1],
-                "Invalid SMD size: want=0, got={tier_bytes[1]}")
+                "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
         self.log.info("Checking size of available storage")
         self.scm_avail_bytes = self.get_available_bits(ranks_unused)
