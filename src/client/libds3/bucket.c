@@ -55,17 +55,23 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 {
 	if (ds3 == NULL || name == NULL)
 		return EINVAL;
-	
-	int rc = 0;
 
-	// Create dfs container
-	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
+	int               rc = 0;
+
+	struct ds3_bucket ds3b;
+
+	// Create dfs container and open ds3b
+	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, &ds3b.coh, &ds3b.dfs);
 	if (rc != 0) {
 		D_ERROR("Failed to create container, rc = %d\n", rc);
 		return rc;
 	}
 
-	// TODO do something with info
+	rc = ds3_bucket_set_info(info, &ds3b, ev);
+	if (rc != 0) {
+		D_ERROR("Failed to put bucket info, rc = %d\n", rc);
+		goto err;
+	}
 
 	// Create multipart index
 	rc = dfs_mkdir(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, DEFFILEMODE, 0);
@@ -73,6 +79,8 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		D_ERROR("Failed to create multipart index, rc = %d\n", rc);
 	}
 
+err:
+	ds3_bucket_close(&ds3b, ev);
 	return rc;
 }
 
@@ -103,7 +111,13 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 int
 ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	return 0;
+	if (ds3b == NULL || info == NULL)
+		return EINVAL;
+
+	char const *const names[]  = {RGW_BUCKET_INFO};
+	void const *const values[] = {info->encoded};
+	size_t const      sizes[]  = {info->encoded_length};
+	return daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
 }
 
 int

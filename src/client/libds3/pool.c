@@ -81,6 +81,9 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
+	if (ds3 == NULL || pool == NULL)
+		return EINVAL;
+	
 	int    rc;
 	ds3_t *ds3_tmp;
 
@@ -89,11 +92,11 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		return ENOMEM;
 
 	/** Connect to the pool first */
-	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, NULL);
+	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
 	if (rc != 0) {
 		D_ERROR("Failed to connect to pool %s, rc = %d\n", pool, rc);
 		rc = daos_der2errno(rc);
-		goto err_poh;
+		return rc;
 	}
 
 	/** Check whether mdata container already exist */
@@ -126,13 +129,11 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		if (rc != 0) {
 			D_ERROR("Failed to mount metadata container for pool %s, rc = %d\n", pool,
 				rc);
-			rc = daos_der2errno(rc);
 			goto err_coh;
 		}
 
 	} else {
 		D_ERROR("Failed to create metadata container in pool %s, rc = %d\n", pool, rc);
-		rc = daos_der2errno(rc);
 		goto err_poh;
 	}
 

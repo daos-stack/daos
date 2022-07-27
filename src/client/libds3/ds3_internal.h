@@ -19,8 +19,9 @@
 #define MULTIPART_MAX_PARTS    10000
 #define LATEST_INSTANCE        "latest"
 #define LATEST_INSTANCE_SUFFIX "[latest]"
+#define RGW_BUCKET_INFO        "rgw_info"
 
-/* #define METADATA_DIR_LIST                                                                          \
+/* #define METADATA_DIR_LIST \
 // 	X(USERS_DIR, "users")                                                                      \
 // 	X(EMAILS_DIR, "emails")                                                                    \
 // 	X(ACCESS_KEYS_DIR, "access_keys")                                                          \
@@ -48,7 +49,12 @@
 
 /** DAOS S3 Bucket handle */
 struct ds3_bucket {
-	dfs_t *dfs;
+	/** DAOS container handle */
+	daos_handle_t    coh;
+	/** Container information */
+	daos_cont_info_t cont_info;
+	/** DFS handle */
+	dfs_t           *dfs;
 };
 
 /** DAOS S3 Object handle */

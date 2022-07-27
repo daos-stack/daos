@@ -85,14 +85,21 @@ struct ds3_user_info {
 /** S3 Bucket information */
 struct ds3_bucket_info {
 	/** Bucket name */
-	char name[DS3_MAX_BUCKET_NAME];
+	char   name[DS3_MAX_BUCKET_NAME];
+	/** Opaque encoded bucket info */
+	void  *encoded;
+	/** Length of encoded data */
+	size_t encoded_length;
 };
 
 /** S3 Object information */
 struct ds3_object_info {
 	/** Object key */
-	char key[128]; // TODO adjust length
-		       // TODO fill
+	char   key[DS3_MAX_KEY];
+	/** Opaque encoded bucket info */
+	void  *encoded;
+	/** Length of encoded data */
+	size_t encoded_length;
 };
 
 // General S3
