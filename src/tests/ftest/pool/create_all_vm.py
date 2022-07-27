@@ -36,7 +36,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             host_size = len(host_storage["hosts"].split(','))
             for scm_devices in host_storage["storage"]["scm_namespaces"]:
                 rank = scm_devices["mount"]["rank"]
-                if ranks and len(ranks) > 0 and rank not in ranks:
+                if ranks and rank not in ranks:
                     self.log.info("Skipping rank %d", rank)
                     continue
                 scm_vos_bytes = min(scm_vos_bytes, scm_devices["mount"]["avail_bytes"])

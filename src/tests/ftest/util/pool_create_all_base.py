@@ -48,7 +48,7 @@ class PoolCreateAllTestBase(TestWithServers):
         """Create one pool with all the available storage capacity"""
         self.add_pool_qty(1, namespace="/run/pool/*", create=False)
         self.pool[0].size.update("100%", "pool[0].size")
-        if ranks and len(ranks) > 0:
+        if ranks:
             self.pool[0].target_list.update(ranks, "pool[0].target_list")
 
         self.log.info("Creating a pool with 100% of the available storage")
