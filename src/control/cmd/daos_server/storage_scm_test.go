@@ -163,14 +163,76 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			// prompts for confirmation and gets EOF
 			expErr: errors.New("consent not given"),
 		},
-		"remove regions; reboot required": {
+		"remove regions; reboot required; illegal state": {
 			prepResp: &storage.ScmPrepareResponse{
 				Socket: storage.ScmSocketState{
 					State: storage.ScmNoRegions,
 				},
 				RebootRequired: true,
 			},
-			expLogMsg: storage.ScmMsgRebootRequired,
+			expErr: errors.New("unexpected state if reboot"),
+		},
+		"remove regions; reboot required; not interleaved": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNotInterleaved,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "regions will be removed",
+		},
+		"remove regions; reboot required; free capacity": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "regions will be removed",
+		},
+		"remove regions; reboot required; no free capacity": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "have been removed and regions will be removed",
+		},
+		"remove regions; reboot required; partial free capacity": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmPartFreeCap,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "have been removed and regions will be removed",
+		},
+		"remove regions; reboot required; unhealthy": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNotHealthy,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "have been removed and regions (some with an unexpected",
+		},
+		"remove regions; reboot required; unknown memory type": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmUnknownMode,
+				},
+				RebootRequired: true,
+			},
+			expLogMsg: "have been removed and regions (some with an unexpected",
+		},
+		"no modules": {
+			prepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoModules,
+				},
+			},
+			expErr: storage.FaultScmNoModules,
 		},
 		"no regions": {
 			prepResp: &storage.ScmPrepareResponse{

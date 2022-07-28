@@ -28,7 +28,7 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 
 type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
 
-type scmCmd struct {
+type pmemCmd struct {
 	Create createNamespacesCmd `command:"create-namespaces" description:"Configure PMem mode setting and create namespace block devices to be used by DAOS"`
 	Remove removeNamespacesCmd `command:"remove-namespaces" description:"Remove PMem namespace block devices and reset mode setting"`
 	Scan   scanPMemCmd         `command:"scan" description:"Scan PMem modules and namespaces"`
@@ -36,14 +36,14 @@ type scmCmd struct {
 
 type createNamespacesCmd struct {
 	cmdutil.LogCmd
-	NrNamespacesPerSocket uint   `short:"S" long:"scm-ns-per-socket" description:"Number of SCM namespaces to create per socket" default:"1"`
-	Force                 bool   `short:"f" long:"force" description:"Perform SCM prepare operation without waiting for confirmation"`
+	NrNamespacesPerSocket uint   `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
+	Force                 bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 	HelperLogFile         string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
 }
 
 func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error {
 	if cmd.NrNamespacesPerSocket == 0 {
-		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
+		return errors.New("(-S|--pmem-ns-per-socket) should be set to at least 1")
 	}
 
 	cmd.Info("Create locally-attached PMem namespaces...")
@@ -58,7 +58,7 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
-	// Prepare SCM modules to be presented as pmem device files.
+	// Prepare PMem modules to be presented as pmem device files.
 	resp, err := backendCall(req)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 	state := resp.Socket.State
 
 	if resp.RebootRequired {
-		// The only valid state that requires a reboot after SCM prepare is NoRegions.
+		// The only valid state that requires a reboot after PMem prepare is NoRegions.
 		if state != storage.ScmNoRegions {
 			return errors.Errorf("expected %s state if reboot required, got %s",
 				storage.ScmNoRegions, state)
@@ -103,7 +103,7 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 		}
 		cmd.Infof("%s\n", bld.String())
 	default:
-		return errors.Errorf("unexpected state %q after scm create-namespaces", state)
+		return errors.Errorf("unexpected state %q after pmem create-namespaces", state)
 	}
 
 	return nil
@@ -123,7 +123,7 @@ func (cmd *createNamespacesCmd) Execute(args []string) error {
 
 type removeNamespacesCmd struct {
 	cmdutil.LogCmd
-	Force         bool   `short:"f" long:"force" description:"Perform SCM prepare operation without waiting for confirmation"`
+	Force         bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
 }
 
@@ -140,7 +140,7 @@ func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
-	// Prepare SCM modules to be presented as pmem device files.
+	// Prepare PMem modules to be presented as pmem device files.
 	resp, err := backendCall(req)
 	if err != nil {
 		return err
@@ -151,19 +151,19 @@ func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
 	state := resp.Socket.State
 
 	if resp.RebootRequired {
-		// Address valid state that requires a reboot after SCM reset.
+		// Address valid state that requires a reboot after PMem reset.
 		msg := ""
 		switch state {
 		case storage.ScmNotInterleaved:
-			msg = "PMem AppDirect non-interleaved regions will be removed on reboot. "
+			msg = "Non-interleaved regions will be removed on reboot. "
 		case storage.ScmFreeCap:
-			msg = "PMem AppDirect interleaved regions will be removed on reboot. "
+			msg = "Interleaved regions will be removed on reboot. "
 		case storage.ScmNoFreeCap, storage.ScmPartFreeCap:
-			msg = "PMem namespaces have been removed and AppDirect interleaved regions will be removed on reboot. "
+			msg = "Namespaces have been removed and regions will be removed on reboot. "
 		case storage.ScmNotHealthy, storage.ScmUnknownMode:
-			msg = "PMem namespaces have been removed and regions (some with an unexpected state) will be removed on reboot. "
+			msg = "Namespaces have been removed and regions (some with an unexpected state) will be removed on reboot. "
 		default:
-			return errors.Errorf("unexpected state %q after scm remove-namespaces", state)
+			return errors.Errorf("unexpected state if reboot is required (%s)", state)
 		}
 		cmd.Info(msg + storage.ScmMsgRebootRequired)
 
@@ -176,7 +176,7 @@ func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
 	case storage.ScmNoModules:
 		return storage.FaultScmNoModules
 	default:
-		return errors.Errorf("unexpected state %q after scm remove-namespaces", state)
+		return errors.Errorf("unexpected state %q after pmem remove-namespaces", state)
 	}
 
 	return nil
@@ -212,17 +212,17 @@ func (cmd *scanPMemCmd) Execute(args []string) error {
 
 	cmd.Info("Scanning locally-attached PMem storage...\n")
 
-	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
+	pmemResp, err := svc.ScmScan(storage.ScmScanRequest{})
 	if err != nil {
 		return err
 	}
 
-	if len(scmResp.Namespaces) > 0 {
-		if err := pretty.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
+	if len(pmemResp.Namespaces) > 0 {
+		if err := pretty.PrintScmNamespaces(pmemResp.Namespaces, &bld); err != nil {
 			return err
 		}
 	} else {
-		if err := pretty.PrintScmModules(scmResp.Modules, &bld); err != nil {
+		if err := pretty.PrintScmModules(pmemResp.Modules, &bld); err != nil {
 			return err
 		}
 	}
