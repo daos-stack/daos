@@ -16,9 +16,11 @@ source "$mydir/distro_info.sh"
 # We need sudo for running the scan and git for backward
 # compatibility.
 if command -v dnf; then
-  dnf install git gzip sudo clamav clamav-devel
+  dnf install clamav clamav-devel \
+              coreutils git gzip hostnanme sudo
 elif command -v apt-get; then
-  apt-get --assume-yes install git gzip sudo clamav libclamav-dev
+  apt-get --assume-yes install clamav libclamav-dev \
+                       coreutils git gzip hostname sudo
   service clamav-freshclam stop || true
   systemctl disable clamav-freshclam || true
 fi
