@@ -1239,26 +1239,31 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 	/* If current job failed */
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
+		uint64_t delay = 5;
+
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		if (task->dst_rebuild_op == RB_OP_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 						 rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version, &task->dst_tgts,
-						 RB_OP_RECLAIM, 5);
+						 RB_OP_RECLAIM, delay);
 			return rc;
 		}
 
 		/* Schedule reclaim to clean up current op */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_stable_epoch, task->dst_new_layout_version,
-					 &task->dst_tgts, RB_OP_RECLAIM, 5);
+					 &task->dst_tgts, RB_OP_RECLAIM, delay);
 		if (rc)
 			return rc;
+
+		if (DAOS_FAIL_CHECK(DAOS_FAIL_MIGRATE_FAILURE))
+			delay = 60;
 
 		/* Then retry */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_stable_epoch, task->dst_new_layout_version,
-					 &task->dst_tgts, task->dst_rebuild_op, 5);
+					 &task->dst_tgts, task->dst_rebuild_op, delay);
 		return rc;
 	}
 

@@ -1049,6 +1049,70 @@ rebuild_ec_then_aggregation(void **state)
 	free(verify_data);
 }
 
+static int
+reset_fail_loc_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	sleep(30);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+			      0, 0, NULL);
+	return 0;
+}
+
+static void
+rebuild_ec_fail_and_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	int		rc;
+	char		*data;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	data = (char *)malloc(CELL_SIZE);
+	assert_true(data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 128; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = CELL_SIZE;
+		recx.rx_idx = i * CELL_SIZE;
+		memset(data, 'a' + i, CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, CELL_SIZE, &req);
+	}
+	ioreq_fini(&req);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_FAIL_MIGRATE_FAILURE | DAOS_FAIL_ALWAYS, 0,
+			      NULL);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+			      16 * CELL_SIZE, 0, NULL);
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	rank = get_rank_by_oid_shard(arg, oid, 2);
+
+	arg->rebuild_cb = reset_fail_loc_cb;
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_rc_equal(rc, 0);
+	free(data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1174,6 +1238,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD43: EC rebuild then aggregation",
 	 rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD44: EC rebuild failed and retry",
+	 rebuild_ec_fail_and_retry, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 
