@@ -162,8 +162,8 @@ class IorTestBase(DfuseTestBase):
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container, mount_dir)
+                params = {'mount_dir': mount_dir} if mount_dir else {}
+                self.start_dfuse(self.hostlist_clients, self.pool, self.container, **params)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -318,18 +318,21 @@ class IorTestBase(DfuseTestBase):
 
         Args:
             manager (str): mpi job manager command
+
+        Returns:
+            Object: result of job manager stop
         """
-        self.log.info("<IOR> Stopping in-progress IOR command: %s",
-                      str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
 
         try:
-            out = self.job_manager.stop()
-            return out
+            return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             self.display_pool_space()
+
+        return None
 
     def run_ior_threads_il(self, results, intercept, with_clients,
                            without_clients):
