@@ -375,7 +375,7 @@ rebuild_destroy_pool_cb(void *data)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
-				      NULL, true);
+				      NULL, true, true);
 		if (rc) {
 			print_message("failed to destroy pool"DF_UUIDF" %d\n",
 				      DP_UUID(arg->pool.pool_uuid), rc);

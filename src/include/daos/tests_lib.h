@@ -228,18 +228,19 @@ int dmg_pool_create(const char *dmg_config_file,
 		    d_rank_list_t *svc, uuid_t uuid);
 
 /**
- * Destroy a pool with \a uuid. If there is at least one connection to this
- * pool, and \a force is zero, then this operation completes with DER_BUSY.
- * Otherwise, the pool is destroyed when the operation completes.
+ * Destroy a pool with \a uuid. If there is at least one connection to this pool, and \a force is
+ * zero, then this operation completes with DER_BUSY. If there is at least one container in this
+ * pool, and \a recursive is zero, then this operation completes with DER_MISC. Otherwise, the
+ * pool is destroyed when the operation completes.
  *
- * \param dmg_config_file
- *		[IN]	DMG config file
- * \param uuid	[IN]	UUID of the pool to destroy
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param force	[IN]	Force destruction even if there are active connections
+ * \param dmg_config_file *	[IN]	DMG config file
+ * \param uuid			[IN]	UUID of the pool to destroy
+ * \param grp			[IN]	Process set name of the DAOS servers managing the pool
+ * \param force			[IN]	Force destruction even if there are active connections
+ * \param recursive		[IN]	Force destruction even if there are containers
  */
-int dmg_pool_destroy(const char *dmg_config_file,
-		     const uuid_t uuid, const char *grp, int force);
+int dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force,
+		     int recursive);
 
 /**
  * Set property of the pool with \a pool_uuid.

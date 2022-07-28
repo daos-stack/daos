@@ -100,8 +100,7 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = dmg_pool_destroy(dmg_config_file,
-				      uuid, arg->group, 1);
+		rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1, 1);
 		assert_rc_equal(rc, 0);
 	}
 	if (skip)
@@ -167,8 +166,7 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = dmg_pool_destroy(dmg_config_file,
-				      pool_uuid, arg->group, 1);
+		rc = dmg_pool_destroy(dmg_config_file, pool_uuid, arg->group, 1, 1);
 		assert_rc_equal(rc, 0);
 	}
 	if (skip)
