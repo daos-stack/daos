@@ -1241,12 +1241,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 	}
 
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
-		/* If current job failed */
+		uint64_t delay = 5;
+
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		if (task->dst_rebuild_op == RB_OP_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
-						 rgt->rgt_reclaim_epoch, task->dst_new_layout_version,
-						 &task->dst_tgts, RB_OP_RECLAIM, 5);
+						 rgt->rgt_reclaim_epoch,
+						 task->dst_new_layout_version, &task->dst_tgts,
+						 RB_OP_RECLAIM, delay);
 			return rc;
 		}
 
@@ -1255,15 +1257,18 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		 */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_reclaim_epoch, task->dst_new_layout_version,
-					 &task->dst_tgts, RB_OP_RECLAIM, 5);
+					 &task->dst_tgts, RB_OP_RECLAIM, delay);
 		if (rc)
 			D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
 
+		if (DAOS_FAIL_CHECK(DAOS_FAIL_MIGRATE_FAILURE))
+			delay = 60;
+
 		/* Then retry */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_reclaim_epoch, task->dst_new_layout_version,
-					 &task->dst_tgts, task->dst_rebuild_op, 5);
+					 &task->dst_tgts, task->dst_rebuild_op, delay);
 	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND ||
 		   task->dst_rebuild_op == RB_OP_UPGRADE) {
 		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
