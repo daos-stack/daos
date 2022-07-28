@@ -14,7 +14,7 @@ def check_if_run(name):
 
 
 def find_hooks():
-    """Find the required githooks"""
+    """Find the required git hooks"""
     hooks = []
     for fname in os.listdir('utils/githooks'):
         if fname == "commit-msg.d":
