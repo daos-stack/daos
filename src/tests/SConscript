@@ -59,11 +59,11 @@ def build_tests(prereqs, env):
 
     libs_pmfs = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'pthread', 'isal']
     libs_pmfs += ['pmfs', 'spdk_util', 'vos', 'bio']
-    pmfs_unittest = daos_build.program(denv, 'pmfs_unittest', ['pmfs_unittest.c'],
+    pmfs_utinitytest = daos_build.program(denv, 'pmfs_utinitytest', ['pmfs_utinitytest.c'],
 					LIBS=libs_pmfs)
     pmfs_demo = daos_build.program(denv, 'pmfs_demo', ['pmfs_demo.c'],
 					LIBS=libs_pmfs)
-    denv.Install('$PREFIX/bin/',pmfs_unittest)
+    denv.Install('$PREFIX/bin/',pmfs_utinitytest)
     denv.Install('$PREFIX/bin/',pmfs_demo)
 
     # tests
