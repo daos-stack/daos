@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Add watermark to commit message"""
-import re, sys, os
+import os
+import sys
 
 def check_if_run(name):
     """Check existence of a file, removes file"""
@@ -26,6 +27,7 @@ def find_hooks():
 def run_check():
     """Run the checks for the required commit hooks"""
     empty_commit = True
+    msg = []
     with open(sys.argv[1], "r") as commit_msg:
         for line in commit_msg.readlines():
             if line.startswith("Required-githooks: true"):
@@ -44,7 +46,7 @@ def run_check():
     missing = False
     for hook in hooks:
         if not check_if_run(hook):
-             missing = True
+            missing = True
     if missing:
         sys.exit(0)
 
@@ -65,6 +67,4 @@ def run_check():
             commit_msg.write(line)
 
 if __name__ == "__main__":
-   run_check()
-
-
+    run_check()
