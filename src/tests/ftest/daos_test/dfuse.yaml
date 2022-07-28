@@ -7,6 +7,10 @@ pool:
   control_method: dmg
 server_config:
   name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 container:
   type: POSIX
   control_method: daos
