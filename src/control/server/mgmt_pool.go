@@ -505,7 +505,7 @@ func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestr
 	lcResp, err := svc.ListContainers(ctx, lcReq)
 	if err != nil {
 		svc.log.Debugf("svc.ListContainers failed\n")
-		return false, 0, err
+		return false, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodListContainers, resp:%+v\n", lcResp)
@@ -518,7 +518,7 @@ func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestr
 	return len(lcResp.GetContainers()) > 0, nil
 }
 
-func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDestroyReq) (daosStatus, error) {
+func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDestroyReq) (daos.Status, error) {
 	evReq := &mgmtpb.PoolEvictReq{}
 	evReq.Sys = req.Sys
 	evReq.Id = req.Id
@@ -567,7 +567,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			// Check if error is related to response status code.
 			if dStatus, ok := err.(daos.Status); ok {
 				svc.log.Errorf("ListContainers during pool destroy failed: %s", dStatus)
-				resp.Status = dStatus
+				resp.Status = int32(dStatus)
 				return resp, nil
 			}
 			return nil, err
