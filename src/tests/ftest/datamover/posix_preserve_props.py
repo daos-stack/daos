@@ -238,5 +238,6 @@ class DmvrPreserveProps(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5
         :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
+        :avocado: tags=test_dm_preserve_props_fs_copy_posix_dfs
         """
         self.run_dm_preserve_props("FS_COPY", "POSIX", "DFS")

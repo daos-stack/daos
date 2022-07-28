@@ -148,7 +148,7 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,container_attribute
-        :avocado: tags=container_api_basic_attribute_sync
+        :avocado: tags=container_api_basic_attribute_sync,test_basic_attribute_sync
         """
         self.prepare_attribute_test()
 
@@ -215,7 +215,7 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,container_attribute
-        :avocado: tags=container_api_basic_attribute_async
+        :avocado: tags=container_api_basic_attribute_async,test_basic_attribute_async
         """
         self.prepare_attribute_test()
 

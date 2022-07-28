@@ -252,6 +252,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
+        :avocado: tags=test_dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
 
@@ -267,6 +268,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
+        :avocado: tags=test_dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
 
@@ -282,6 +284,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
+        :avocado: tags=test_dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
 
@@ -297,5 +300,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
+        :avocado: tags=test_dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

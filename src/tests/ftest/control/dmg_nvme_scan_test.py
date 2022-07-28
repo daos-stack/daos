@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,7 +31,11 @@ class DmgNvmeScanTest(TestWithServers):
         JIRA ID: DAOS-2485
         Test Description: Test basic dmg functionality to scan the nvme storage.
         on the system.
-        :avocado: tags=all,tiny,daily_regression,dmg,nvme_scan,basic
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,basic,dmg
+        :avocado: tags=nvme_scan,test_dmg_nvme_scan_basic
         """
         # Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
