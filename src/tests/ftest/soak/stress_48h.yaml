@@ -1,16 +1,6 @@
 hosts:
 # servers if no server partition is defined
-    test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-        - server-E
-        - server-F
-        - server-G
-        - server-H
-        - server-I
-        - server-J
+    test_servers: 10
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
