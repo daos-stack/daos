@@ -1,19 +1,20 @@
 #!/bin/bash
 set -eu
 
-hook=$(basename $0)
+hook=${0##*/}
 rm -f ".${hook}"
 
 run-parts() {
     local dir="$1"
     shift
 
-    for i in $(LC_ALL=C; echo ${dir%/}/*[^~,]); do
+    for i in $(LC_ALL=C; echo "${dir%/}"/*[^~,]); do
         # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
         $i "$@"
     done
 }
 
-run-parts utils/githooks/${0##*/}.d "$@" 1>&2
+run-parts utils/githooks/"${hook}".d "$@" 1>&2
+
 touch ".${hook}"
