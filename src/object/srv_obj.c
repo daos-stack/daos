@@ -573,7 +573,7 @@ done:
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
 
-		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		D_ERROR("csum: Corrupting data after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
 		bio_sgl_convert(fbsgl, &fsgl);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
@@ -642,11 +642,13 @@ out:
  * Pack sgl's data size in the reply, client fetch can based on
  * it to update sgl's iov_len.
  *
+ * @echo_sgl is set only for echo_rw()
+ *
  * Note: this is only needed for bulk transfer, for inline transfer,
  * it will pack the complete sgls inside the req/reply, see obj_shard_rw().
  */
 static int
-obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
+obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *echo_sgl)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -679,14 +681,11 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	nrs = orwo->orw_nrs.ca_arrays;
 	data_sizes = orwo->orw_data_sizes.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
-		struct bio_sglist	*bsgl;
-		d_sg_list_t		*sgl;
-
-		if (sgls != NULL) {
-			sgl = &sgls[i];
-			D_ASSERT(sgl != NULL);
-			nrs[i] = sgl->sg_nr_out;
+		if (echo_sgl != NULL) {
+			nrs[i] = echo_sgl->sg_nr_out;
 		} else {
+			struct bio_sglist *bsgl;
+
 			bsgl = vos_iod_sgl_at(ioh, i);
 			D_ASSERT(bsgl != NULL);
 			nrs[i] = bsgl->bs_nr_out;
@@ -856,10 +855,6 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	for (i = 0; i < iods_nr; i++) {
 		if (biov_csums_idx >= csum_info_nr)
 			break; /** no more csums to add */
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
-				 DF_C_IOD", csum: "DF_CI"\n",
-			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, 0)));
 		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
@@ -2001,6 +1996,13 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 			      opc, ioc);
 	if (rc != 0)
 		return rc;
+
+	if (obj_is_modification_opc(opc) && (flags & ORF_REINTEGRATING_IO) &&
+	    ioc->ioc_coc->sc_pool->spc_pool->sp_need_discard &&
+	    ioc->ioc_coc->sc_pool->spc_discard_done == 0) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(pool_uuid));
+		D_GOTO(failed, rc = -DER_UPDATE_AGAIN);
+	}
 
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
 			    obj_is_ec_agg_opc(opc) ||
@@ -4653,6 +4655,13 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 				opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0)
 		goto reply;
+
+	if ((oci->oci_flags & ORF_REINTEGRATING_IO) &&
+	    ioc.ioc_coc->sc_pool->spc_pool->sp_need_discard &&
+	    ioc.ioc_coc->sc_pool->spc_rebuild_fence == 0) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(oci->oci_pool_uuid));
+		D_GOTO(reply, rc = -DER_UPDATE_AGAIN);
+	}
 
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||

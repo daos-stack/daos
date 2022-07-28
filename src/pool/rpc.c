@@ -70,7 +70,8 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
-CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v4, DAOS_ISEQ_POOL_CONNECT_V4, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v5, DAOS_ISEQ_POOL_CONNECT_V5, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
 CRT_RPC_DEFINE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
@@ -119,6 +120,8 @@ CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
 		DAOS_OSEQ_POOL_QUERY_INFO)
 CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
+	       DAOS_OSEQ_POOL_TGT_DISCARD)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -223,6 +226,15 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			bits |= DAOS_PO_QUERY_PROP_UPGRADE_STATUS;
+			break;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_MODE;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_FREQ;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_THRESH;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

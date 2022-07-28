@@ -599,9 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
-	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
@@ -776,6 +774,7 @@ enum {
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 #define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
 #define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
+#define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
