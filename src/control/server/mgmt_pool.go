@@ -489,16 +489,16 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", req)
 
-	uuid, err := svc.resolvePoolID(req.Id)
+	poolUUID, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err
 	}
 
-	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
 	if err != nil {
 		return nil, err
 	}
-	req.SetUUID(uuid)
+	req.SetUUID(poolUUID)
 
 	resp := &mgmtpb.PoolDestroyResp{}
 	inCleanupMode := false
@@ -527,19 +527,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		ds := daos.Status(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
-		// If the destroy request is being forced, we should additionally zap the label
-		// so the entry doesn't prevent a new pool with the same label from being created.
-		if req.Force {
-			ps.PoolLabel = ""
-		}
-
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
 		// and persist the update(s).
 		if req.Force || ds != daos.Busy {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
 			}
 		}
 
@@ -576,13 +570,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			// Otherwise, we've done all we can to try to recover.
 			resp.Status = int32(daos.Success)
 		}
-		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
+		if err := svc.sysdb.RemovePoolService(poolUUID); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
 			// As we know the service entry existed when we started this handler,
 			// if the attempt to remove it now fails because it doesn't exist,
 			// then there's nothing else to do.
 			if !system.IsPoolNotFound(err) {
-				return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+				return nil, errors.Wrapf(err, "failed to remove pool %s", poolUUID)
 			}
 		}
 	default:
