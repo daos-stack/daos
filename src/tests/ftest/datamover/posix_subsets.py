@@ -159,6 +159,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
+        :avocado: tags=test_dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
 
@@ -171,5 +172,6 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
+        :avocado: tags=test_dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")
