@@ -245,7 +245,7 @@ class ServerRankFailure(IorTestBase):
         report_errors(test=self, errors=errors)
         self.log.info("############################")
 
-    def test_rank_failure_wo_rf(self):
+    def test_server_rank_failure_wo_rf(self):
         """Jira ID: DAOS-10002.
 
         Test rank failure without redundancy factor and SX object class. See
@@ -254,7 +254,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_rank_failure_wo_rf
+        :avocado: tags=test_server_rank_failure_wo_rf
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_wo_rf/*",
