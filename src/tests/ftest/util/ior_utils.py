@@ -342,7 +342,7 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=20):
+    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=30):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
