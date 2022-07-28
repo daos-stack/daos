@@ -3,6 +3,7 @@
 import os
 import sys
 
+
 def check_if_run(name):
     """Check existence of a file, removes file"""
     if not os.path.exists(f".{name}"):
@@ -10,6 +11,7 @@ def check_if_run(name):
         return False
     os.remove(f".{name}")
     return True
+
 
 def find_hooks():
     """Find the required githooks"""
@@ -23,6 +25,7 @@ def find_hooks():
             continue
         hooks.append(fname[:-2])
     return hooks
+
 
 def run_check():
     """Run the checks for the required commit hooks"""
@@ -65,6 +68,7 @@ def run_check():
     with open(sys.argv[1], "w") as commit_msg:
         for line in msg:
             commit_msg.write(line)
+
 
 if __name__ == "__main__":
     run_check()

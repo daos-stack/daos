@@ -1,7 +1,8 @@
 #!/bin/bash
 set -eu
 
-rm -f .pre-commit
+hook=$(basename $0)
+rm -f ".${hook}"
 
 run-parts() {
     local dir="$1"
@@ -15,4 +16,4 @@ run-parts() {
 }
 
 run-parts utils/githooks/${0##*/}.d "$@" 1>&2
-touch .pre-commit
+touch ".${hook}"
