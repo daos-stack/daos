@@ -118,7 +118,7 @@ struct ds3_object_info {
 /**
  * Initialize all the relevant DAOS libraries.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_init();
@@ -126,7 +126,7 @@ ds3_init();
 /**
  * Finalize the relevant DAOS libraries if necessary.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_fini();
@@ -142,7 +142,7 @@ ds3_fini();
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev);
@@ -154,7 +154,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
@@ -170,7 +170,7 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
@@ -184,7 +184,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
@@ -198,7 +198,7 @@ ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_e
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_user_get(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
@@ -212,7 +212,7 @@ ds3_user_get(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_user_get_by_email(const char *email, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
@@ -226,7 +226,7 @@ ds3_user_get_by_email(const char *email, struct ds3_user_info *info, ds3_t *ds3,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
@@ -247,7 +247,7 @@ ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, dao
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, ds3_t *ds3,
@@ -265,7 +265,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *attr, ds3_t *ds3,
@@ -279,7 +279,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev);
@@ -293,7 +293,7 @@ ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t *ev);
@@ -305,7 +305,7 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -318,7 +318,7 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -331,7 +331,7 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -353,7 +353,7 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *prefix,
@@ -373,7 +373,7 @@ ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -387,7 +387,7 @@ ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -399,7 +399,7 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_close(ds3_obj_t *ds3o, daos_event_t *ev);
@@ -412,7 +412,7 @@ ds3_obj_close(ds3_obj_t *ds3o, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_get_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev);
@@ -425,7 +425,7 @@ ds3_obj_get_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_set_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev);
@@ -444,7 +444,7 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev);
@@ -457,7 +457,7 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b, daos_event_t *ev);
@@ -474,7 +474,7 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              0 on success, errno code on failure.
+ * \return              0 on success, -errno code on failure.
  */
 int
 ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o,

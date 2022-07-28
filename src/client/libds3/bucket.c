@@ -11,20 +11,22 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
 		daos_event_t *ev)
 {
 	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	int                         rc = 0;
 	struct daos_pool_cont_info *conts;
 	daos_size_t                 ncont = *nbuck;
 	D_ALLOC_ARRAY(conts, *nbuck);
 	if (conts == NULL) {
-		return -DER_NOMEM;
+		return -ENOMEM;
 	}
 
 	// TODO: Handle markers and other bucket info
+	// TODO handle DER_TRUNC
 	rc = daos_pool_list_cont(ds3->poh, &ncont, conts, ev);
-	if (rc < 0 && rc != -DER_TRUNC) {
+	if (rc != 0 && rc != -DER_TRUNC) {
 		D_ERROR("Failed to list containers in pool, rc = %d\n", rc);
+		rc = daos_der2errno(rc);
 		goto err;
 	}
 
@@ -46,7 +48,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
 
 err:
 	D_FREE(conts);
-	return rc;
+	return -rc;
 }
 
 int
@@ -54,7 +56,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		  daos_event_t *ev)
 {
 	if (ds3 == NULL || name == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	int               rc = 0;
 
@@ -64,7 +66,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, &ds3b.coh, &ds3b.dfs);
 	if (rc != 0) {
 		D_ERROR("Failed to create container, rc = %d\n", rc);
-		return rc;
+		return -rc;
 	}
 
 	rc = ds3_bucket_set_info(info, &ds3b, ev);
@@ -81,7 +83,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 
 err:
 	ds3_bucket_close(&ds3b, ev);
-	return rc;
+	return -rc;
 }
 
 int
@@ -94,13 +96,13 @@ int
 ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t *ev)
 {
 	if (ds3 == NULL || name == NULL || ds3b == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	int           rc;
 	ds3_bucket_t *ds3b_tmp;
 	D_ALLOC_PTR(ds3b_tmp);
 	if (ds3b_tmp == NULL)
-		return ENOMEM;
+		return -ENOMEM;
 
 	// TODO: We need to cache open container handles
 	rc = daos_cont_open(ds3->poh, name, DAOS_COO_RW, &ds3b_tmp->coh, &ds3b_tmp->cont_info, ev);
@@ -123,7 +125,7 @@ err:
 	daos_cont_close(ds3b_tmp->coh, ev);
 err_ds3b:
 	D_FREE(ds3b);
-	return rc;
+	return -rc;
 }
 
 int
@@ -133,7 +135,7 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 	rc     = dfs_umount(ds3b->dfs);
 	daos_cont_close(ds3b->coh, ev);
 	D_FREE(ds3b);
-	return rc;
+	return -rc;
 }
 
 int
@@ -146,12 +148,12 @@ int
 ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
 	if (ds3b == NULL || info == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void const *const values[] = {info->encoded};
 	size_t const      sizes[]  = {info->encoded_length};
-	return daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
+	return -daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
 }
 
 int

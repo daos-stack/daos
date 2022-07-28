@@ -11,13 +11,13 @@
 int
 ds3_init(void)
 {
-	return dfs_init();
+	return -dfs_init();
 }
 
 int
 ds3_fini(void)
 {
-	return dfs_fini();
+	return -dfs_fini();
 }
 
 /**
@@ -82,14 +82,14 @@ int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
 	if (ds3 == NULL || pool == NULL)
-		return EINVAL;
+		return -EINVAL;
 	
 	int    rc;
 	ds3_t *ds3_tmp;
 
 	D_ALLOC_PTR(ds3_tmp);
 	if (ds3_tmp == NULL)
-		return ENOMEM;
+		return -ENOMEM;
 
 	/** Connect to the pool first */
 	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
@@ -166,7 +166,7 @@ err_poh:
 	daos_pool_disconnect(ds3_tmp->poh, NULL);
 err_ds3:
 	D_FREE(ds3_tmp);
-	return rc;
+	return -rc;
 }
 
 int
@@ -187,5 +187,5 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 	daos_cont_close(ds3->meta_coh, ev);
 	daos_pool_disconnect(ds3->poh, ev);
 	D_FREE(ds3);
-	return rc;
+	return -rc;
 }

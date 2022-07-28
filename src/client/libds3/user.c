@@ -10,7 +10,7 @@ int
 ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
 	if (ds3 == NULL || name == NULL || info == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	// Remove old user data
 	ds3_user_remove(name, info, ds3, ev);
@@ -23,7 +23,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 				   O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &user_obj);
 	if (rc != 0) {
 		D_ERROR("Failed to open user file, name = %s, rc = %d\n", name, rc);
-		return rc;
+		goto err_ret;
 	}
 
 	// Write user data
@@ -36,7 +36,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	dfs_release(user_obj);
 	if (rc != 0) {
 		D_ERROR("Failed to write to user file, name = %s, rc = %d\n", name, rc);
-		return rc;
+		goto err_ret;
 	}
 
 	// Build user path
@@ -74,16 +74,17 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 
 err:
 	D_FREE(user_path);
-	return rc;
+err_ret:
+	return -rc;
 }
 
 int
 ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
 	if (ds3 == NULL || name == NULL || info == NULL)
-		return EINVAL;
+		return -EINVAL;
 
-	int rc;
+	int rc = 0;
 
 	// Remove access keys
 	for (int i = 0; i < info->access_ids_nr; i++) {
@@ -94,7 +95,7 @@ ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_e
 			if (rc != 0) {
 				D_ERROR("Failed to remove symlink, name = %s, rc = %d\n",
 					info->access_ids[i], rc);
-				return rc;
+				return -rc;
 			}
 		}
 	}
@@ -107,7 +108,7 @@ ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_e
 			if (rc != 0) {
 				D_ERROR("Failed to remove symlink, name = %s, rc = %d\n",
 					info->email, rc);
-				return rc;
+				return -rc;
 			}
 		}
 	}
@@ -117,7 +118,7 @@ ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_e
 		rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, false, NULL);
 		if (rc != 0) {
 			D_ERROR("Failed to remove user file, name = %s, rc = %d\n", name, rc);
-			return rc;
+			return -rc;
 		}
 	}
 
@@ -132,7 +133,7 @@ ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds
 	      daos_event_t *ev)
 {
 	if (ds3 == NULL || name == NULL || info == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	// Open file
 	int        rc;
@@ -158,7 +159,7 @@ ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds
 
 	// Close file
 	dfs_release(user_obj);
-	return rc;
+	return -rc;
 }
 
 int
