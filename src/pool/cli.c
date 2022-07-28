@@ -55,7 +55,6 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 			pproto->rc = rc;
 			pproto->completed = true;
 		}
-		sleep(2);
 
 		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base, ver_array, 2,
 					      query_cb, pproto, daos_get_crt_ctx());
