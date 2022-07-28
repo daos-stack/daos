@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -146,7 +147,19 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	conn := NewStdioConn("server", binPath, fromChild, toChild)
 
 	// ensure that /usr/sbin is in $PATH
-	os.Setenv("PATH", os.Getenv("PATH")+":/usr/sbin")
+	pathEnv := os.Getenv("PATH")
+	env_slice := filepath.SplitList(pathEnv)
+	isExistSbin := false
+	usrSbin := "/usr/sbin"
+	for _, v := range env_slice {
+		if usrSbin == v {
+			isExistSbin = true
+		}
+	}
+	if !isExistSbin {
+		log.Debugf("add %s into PATH",usrSbin)
+		os.Setenv("PATH", os.Getenv("PATH")+":"+usrSbin)
+	}
 	child.Env = os.Environ()
 
 	if err := child.Start(); err != nil {
