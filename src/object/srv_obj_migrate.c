@@ -1549,6 +1549,11 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	tls->mpt_rec_count += mrone->mo_rec_num;
 	tls->mpt_size += mrone->mo_size;
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_MIGRATE_FAILURE) &&
+	    tls->mpt_size > daos_fail_value_get()) {
+		D_ERROR(DF_UUID" migrate failure: %d\n", DP_UUID(tls->mpt_pool_uuid), -DER_IO);
+		rc = -DER_IO;
+	}
 obj_close:
 	dsc_obj_close(oh);
 cont_close:
