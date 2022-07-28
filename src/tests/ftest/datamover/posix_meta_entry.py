@@ -26,6 +26,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
+        :avocado: tags=test_dm_posix_meta_entry_dcp
         """
         self.run_dm_posix_meta_entry("DCP")
 
