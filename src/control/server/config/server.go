@@ -473,7 +473,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
 	case len(cfg.AccessPoints) == 1:
-		log.Infof("WARNING: Configuration includes only one access point. This provides no redundancy " +
+		log.Noticef("WARNING: Configuration includes only one access point. This provides no redundancy " +
 			"in the event of an access point failure.")
 	}
 
@@ -493,7 +493,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 
 		ls := ec.LegacyStorage
 		if ls.WasDefined() {
-			log.Infof("engine %d: Legacy storage configuration detected. Please "+
+			log.Noticef("engine %d: Legacy storage configuration detected. Please "+
 				"migrate to new-style storage configuration.", idx)
 			var tierCfgs storage.TierConfigs
 			if ls.ScmClass != storage.ClassNone {
