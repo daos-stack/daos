@@ -374,7 +374,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
