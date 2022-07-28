@@ -1,6 +1,8 @@
 #!/bin/bash
 set -eu
 
+rm -f .pre-commit
+
 run-parts() {
     local dir="$1"
     shift
@@ -13,3 +15,4 @@ run-parts() {
 }
 
 run-parts utils/githooks/${0##*/}.d "$@" 1>&2
+touch .pre-commit
