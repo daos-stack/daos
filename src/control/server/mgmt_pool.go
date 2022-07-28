@@ -480,9 +480,10 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 
 		// Attempt to destroy the pool.
 		dr := &mgmtpb.PoolDestroyReq{
-			Sys:   svc.sysdb.SystemName(),
-			Force: true,
-			Id:    ps.PoolUUID.String(),
+			Sys:       svc.sysdb.SystemName(),
+			Force:     true,
+			Recursive: true,
+			Id:        ps.PoolUUID.String(),
 		}
 
 		_, err := svc.PoolDestroy(ctx, dr)
