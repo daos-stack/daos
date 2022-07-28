@@ -21,7 +21,7 @@ def find_hooks():
             continue
         if not fname.endswith('.d'):
             continue
-        if not os.path.isdir(os.path.join("utils/githooks")):
+        if not os.path.isdir(os.path.join("utils/githooks", fname)):
             continue
         hooks.append(fname[:-2])
     return hooks
