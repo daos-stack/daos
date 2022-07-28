@@ -248,60 +248,32 @@ vos_fs_execute_command_ult(void *arg)
 }
 
 int
-pmfs_thread_create(void *fs_cb, void *arg, int thread_type)
+pmfs_thread_create(void *fs_cb, void *arg)
 {
 	int rc;
 
-	if (thread_type == ABT_THREAD) {
-		ABT_thread thread;
-		ABT_xstream xstream;
+	ABT_thread thread;
+	ABT_xstream xstream;
 
-		ABT_xstream_create(ABT_SCHED_NULL, &xstream);
-		ABT_xstream_get_main_pools(xstream, 1, &pool);
+	ABT_xstream_create(ABT_SCHED_NULL, &xstream);
+	ABT_xstream_get_main_pools(xstream, 1, &pool);
 
-		rc = ABT_thread_create(pool, fs_cb, arg, ABT_THREAD_ATTR_NULL, &thread);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("ABT_thread_create failed: " DF_RC "\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		rc = ABT_thread_join(thread);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("ABT_thread_join failed:" DF_RC "\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		ABT_thread_free(&thread);
-		ABT_xstream_free(&xstream);
-	} else if (thread_type == PTHREAD_WITH_JOIN) {
-		pthread_t pid;
-
-		rc = pthread_create(&pid, NULL, fs_cb, arg);
-		if (rc != 0) {
-			D_ERROR("pthread_create failed:" DF_RC "\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		rc = pthread_join(pid, NULL);
-		if (rc != 0) {
-			D_ERROR("pthread_join failed:" DF_RC "\n",
-				DP_RC(rc));
-			return rc;
-		}
-	} else {
-		pthread_t pid;
-
-		rc = pthread_create(&pid, NULL, fs_cb, arg);
-		if (rc != 0) {
-			D_ERROR("pthread_create failed:" DF_RC "\n",
-				DP_RC(rc));
-			return rc;
-		}
+	rc = ABT_thread_create(pool, fs_cb, arg, ABT_THREAD_ATTR_NULL, &thread);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_thread_create failed: " DF_RC "\n",
+			DP_RC(rc));
+		return rc;
 	}
 
+	rc = ABT_thread_join(thread);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_thread_join failed:" DF_RC "\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	ABT_thread_free(&thread);
+	ABT_xstream_free(&xstream);
 	return 0;
 }
 
@@ -318,7 +290,7 @@ vos_task_ult(void *args, enum task_op opc, double *duration)
 	/* Performance comparing through changing thread mode
 	 * here use abt thread for update/fetch
 	 */
-	rc = pmfs_thread_create(vos_fs_execute_command_ult, (void *)&vfua, 1);
+	rc = pmfs_thread_create(vos_fs_execute_command_ult, (void *)&vfua);
 	if (rc)
 		return rc;
 	duration = vfua.duration;
@@ -677,7 +649,7 @@ pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
 	mount_args.pmfs = pmfs;
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_mount_cb, (void *)&mount_args, 0);
+	rc = pmfs_thread_create(pmfs_mount_cb, (void *)&mount_args);
 	if (rc != 0)
 		return rc;
 
@@ -699,7 +671,7 @@ pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_mkdir_cb, (void *)&mkdir_args, 0);
+	rc = pmfs_thread_create(pmfs_mkdir_cb, (void *)&mkdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -719,7 +691,7 @@ pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_listdir_cb, (void *)&listdir_args, 0);
+	rc = pmfs_thread_create(pmfs_listdir_cb, (void *)&listdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -744,7 +716,7 @@ pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_remove_cb, (void *)&remove_args, 0);
+	rc = pmfs_thread_create(pmfs_remove_cb, (void *)&remove_args);
 	if (rc != 0)
 		return rc;
 
@@ -772,7 +744,7 @@ pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_open_cb, (void *)&open_args, 0);
+	rc = pmfs_thread_create(pmfs_open_cb, (void *)&open_args);
 	if (rc != 0)
 		return rc;
 
@@ -796,7 +768,7 @@ pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_readdir_cb, (void *)&readdir_args, 0);
+	rc = pmfs_thread_create(pmfs_readdir_cb, (void *)&readdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -820,7 +792,7 @@ pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_lookup_cb, (void *)&lookup_args, 0);
+	rc = pmfs_thread_create(pmfs_lookup_cb, (void *)&lookup_args);
 	if (rc != 0)
 		return rc;
 
@@ -844,7 +816,7 @@ pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_punch_cb, (void *)&punch_args, 0);
+	rc = pmfs_thread_create(pmfs_punch_cb, (void *)&punch_args);
 	if (rc != 0)
 		return rc;
 
@@ -853,7 +825,7 @@ pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 
 int
 pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		 daos_off_t off, daos_size_t *write_size, int thread_type)
+		 daos_off_t off, daos_size_t *write_size)
 {
 	struct write_args write_args;
 	int rc = 0;
@@ -867,7 +839,7 @@ pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args, thread_type);
+	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args);
 	if (rc != 0)
 		return rc;
 
@@ -876,7 +848,7 @@ pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 int
 pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		daos_off_t off,	daos_size_t *read_size, int thread_type)
+		daos_off_t off,	daos_size_t *read_size)
 {
 	struct read_args read_args;
 	int rc = 0;
@@ -890,7 +862,7 @@ pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args, thread_type);
+	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args);
 	if (rc != 0)
 		return rc;
 
@@ -912,7 +884,7 @@ pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_stat_cb, (void *)&stat_args, 0);
+	rc = pmfs_thread_create(pmfs_stat_cb, (void *)&stat_args);
 	if (rc != 0)
 		return rc;
 
@@ -934,7 +906,7 @@ pmfs_rename_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *old_na
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_rename_cb, (void *)&rename_args, 0);
+	rc = pmfs_thread_create(pmfs_rename_cb, (void *)&rename_args);
 	if (rc != 0)
 		return rc;
 
@@ -954,7 +926,7 @@ pmfs_truncate_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_size_t len)
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_truncate_cb, (void *)&truncate_args, 0);
+	rc = pmfs_thread_create(pmfs_truncate_cb, (void *)&truncate_args);
 	if (rc != 0)
 		return rc;
 
@@ -972,7 +944,7 @@ pmfs_release_start(struct pmfs_obj *obj)
 
 	g_vfca->vfcmd = "PMFS_TASKS";
 
-	rc = pmfs_thread_create(pmfs_release_cb, (void *)&release_args, 0);
+	rc = pmfs_thread_create(pmfs_release_cb, (void *)&release_args);
 	if (rc != 0)
 		return rc;
 
@@ -989,7 +961,7 @@ pmfs_umount_start(struct pmfs *pmfs)
 	memset(&umount_args, 0, sizeof(umount_args));
 	umount_args.pmfs = pmfs;
 
-	rc = pmfs_thread_create(pmfs_umount_cb, (void *)&umount_args, 0);
+	rc = pmfs_thread_create(pmfs_umount_cb, (void *)&umount_args);
 	if (rc != 0)
 		return rc;
 
@@ -1053,7 +1025,7 @@ pmfs_start_mkfs(struct pmfs_pool *pmfs_pool)
 
 	g_vfca->vfcmd = "PMFS_MKFS";
 
-	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mkfs_args, 0);
+	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mkfs_args);
 	if (rc != 0)
 		return rc;
 
@@ -1175,7 +1147,7 @@ pmfs_prepare_mounted_env_in_pool(struct pmfs_pool *pmfs_pool, struct pmfs **pmfs
 
 	g_vfca->vfcmd = "PMFS_MKFS";
 	/* start mkfs start thread */
-	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mags, 0);
+	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mags);
 	if (rc != 0)
 		return rc;
 	/* start pmfs_init_pool */

@@ -122,7 +122,7 @@ demo_pmfs_mount_start(daos_handle_t poh, daos_handle_t coh, struct pmfs **pmfs)
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs mount---------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_mount_cb, (void *)&mount_args, 1);
+	rc = pmfs_thread_create(pmfs_mount_cb, (void *)&mount_args);
 	if (rc != 0)
 		return rc;
 
@@ -145,7 +145,7 @@ demo_pmfs_mkdir_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *na
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs mkdir---------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_mkdir_cb, (void *)&mkdir_args, 1);
+	rc = pmfs_thread_create(pmfs_mkdir_cb, (void *)&mkdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -167,7 +167,7 @@ demo_pmfs_listdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr)
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs listdir---------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_listdir_cb, (void *)&listdir_args, 1);
+	rc = pmfs_thread_create(pmfs_listdir_cb, (void *)&listdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -193,7 +193,7 @@ demo_pmfs_remove_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *n
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs remove ---------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_remove_cb, (void *)&remove_args, 1);
+	rc = pmfs_thread_create(pmfs_remove_cb, (void *)&remove_args);
 	if (rc != 0)
 		return rc;
 
@@ -222,7 +222,7 @@ demo_pmfs_open_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *nam
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs open obj------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_open_cb, (void *)&open_args, 1);
+	rc = pmfs_thread_create(pmfs_open_cb, (void *)&open_args);
 	if (rc != 0)
 		return rc;
 
@@ -247,7 +247,7 @@ demo_pmfs_readdir_start(struct pmfs *pmfs, struct pmfs_obj *obj, uint32_t *nr,
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start readdir------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_readdir_cb, (void *)&readdir_args, 1);
+	rc = pmfs_thread_create(pmfs_readdir_cb, (void *)&readdir_args);
 	if (rc != 0)
 		return rc;
 
@@ -272,7 +272,7 @@ demo_pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags, struct pm
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs lookup------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_lookup_cb, (void *)&lookup_args, 1);
+	rc = pmfs_thread_create(pmfs_lookup_cb, (void *)&lookup_args);
 	if (rc != 0)
 		return rc;
 
@@ -297,7 +297,7 @@ demo_pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("----start pmfs punch file obj offset=%ld, len=%ld--\r\n", offset, len);
-	rc = pmfs_thread_create(pmfs_punch_cb, (void *)&punch_args, 1);
+	rc = pmfs_thread_create(pmfs_punch_cb, (void *)&punch_args);
 	if (rc != 0)
 		return rc;
 
@@ -321,7 +321,7 @@ demo_pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user
 	g_vfca->vfcmd = "PMFS_TASKS";
 	D_PRINT("----start pmfs write file obj offset=%ld\r\n", off);
 
-	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args, 1);
+	rc = pmfs_thread_create(pmfs_write_cb, (void *)&write_args);
 	if (rc != 0)
 		return rc;
 
@@ -345,7 +345,7 @@ demo_pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_
 	g_vfca->vfcmd = "PMFS_TASKS";
 	D_PRINT("---------------start pmfs read file obj -------------------\r\n");
 
-	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args, 1);
+	rc = pmfs_thread_create(pmfs_read_cb, (void *)&read_args);
 	if (rc != 0)
 		return rc;
 
@@ -369,7 +369,7 @@ demo_pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *nam
 
 	D_PRINT("---------------start pmfs stat start -------------------\r\n");
 
-	rc = pmfs_thread_create(pmfs_stat_cb, (void *)&stat_args, 1);
+	rc = pmfs_thread_create(pmfs_stat_cb, (void *)&stat_args);
 	if (rc != 0)
 		return rc;
 
@@ -388,7 +388,7 @@ demo_pmfs_release_start(struct pmfs_obj *obj)
 	g_vfca->vfcmd = "PMFS_TASKS";
 
 	D_PRINT("---------------start pmfs release obj----------------------\r\n");
-	rc = pmfs_thread_create(pmfs_release_cb, (void *)&release_args, 1);
+	rc = pmfs_thread_create(pmfs_release_cb, (void *)&release_args);
 	if (rc != 0)
 		return rc;
 
@@ -406,7 +406,7 @@ demo_pmfs_umount_start(struct pmfs *pmfs)
 	umount_args.pmfs = pmfs;
 
 	D_PRINT("---------------start pmfs umount-------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_umount_cb, (void *)&umount_args, 1);
+	rc = pmfs_thread_create(pmfs_umount_cb, (void *)&umount_args);
 	if (rc != 0)
 		return rc;
 
@@ -473,7 +473,7 @@ demo_pmfs_start_mkfs(struct pmfs_pool *pmfs_pool)
 	uuid_generate(mags.uuid);
 
 	D_PRINT("---------------start pmfs mkfs---------------------------\r\n");
-	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mags, 1);
+	rc = pmfs_thread_create(pmfs_mkfs_cb, (void *)&mags);
 	if (rc != 0)
 		return rc;
 	D_PRINT("---------------pmfs mkfs done----------------------------\r\n");

@@ -313,7 +313,7 @@ app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 	}
 
 	D_PRINT("----------------start write---------------------------\r\n");
-	rc = pmfs_write_start(pmfs, obj, &write_user_sgl, 10, &write_size, PTHREAD_WITH_JOIN);
+	rc = pmfs_write_start(pmfs, obj, &write_user_sgl, 10, &write_size);
 	if (rc != 0) {
 		D_PRINT("pmfs write file start failed\r\n");
 		goto end;
@@ -329,9 +329,7 @@ app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 		goto end;
 	}
 
-	int count = 1000;
-read_start:
-	rc = pmfs_read_start(pmfs, obj, &read_user_sgl, 10, &read_size, PTHREAD_WITH_JOIN);
+	rc = pmfs_read_start(pmfs, obj, &read_user_sgl, 10, &read_size);
 	if (rc != 0) {
 		D_PRINT("pmfs read file failed\r\n");
 		goto end;
@@ -341,14 +339,11 @@ read_start:
 	crc32_tmp2 =  pmfs_check_sgl_crc32(read_user_sgl);
 	D_PRINT("---------------pmfs read CRC=%lx- count=%d------------------\r\n",
 		crc32_tmp2, count);
-	count--;
-
-	while (crc32_tmp2 != crc32_tmp1 && count != 0) {
-		goto read_start;
-	}
 
 	if (crc32_tmp2 != crc32_tmp1) {
 		D_PRINT("CRC check failed\r\n");
+		rc = -1;
+		goto end;
 	}
 
 	D_PRINT("---------------pmfs write file done -----------------\r\n");

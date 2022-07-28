@@ -22,12 +22,6 @@ enum {
 	MOUNT
 };
 
-enum {
-	PTHREAD_WITH_JOIN = 0,
-	ABT_THREAD,
-	PTHREAD_NO_JOIN
-};
-
 struct mkfs_args {
 	daos_handle_t poh;
 	uuid_t uuid;
@@ -176,8 +170,8 @@ struct vos_fs_cmd_args {
 };
 
 /* All the fs commands can use this function to create thread */
-/* Function : fs_cb arg: arg if using thread type: thread_type */
-int pmfs_thread_create(void *fs_cb, void *arg, int thread_type);
+/* Function : fs_cb arg: arg */
+int pmfs_thread_create(void *fs_cb, void *arg);
 
 /* Find the ring matched with the name , return the ring pinter */
 /* in the task ring */
@@ -239,14 +233,10 @@ int pmfs_lookup_start(struct pmfs *pmfs, const char *path, int flags,
 		      struct pmfs_obj **obj, mode_t *mode, struct stat *stbuf);
 int pmfs_punch_start(struct pmfs *pmfs, struct pmfs_obj *obj, daos_off_t offset,
 		     daos_size_t len);
-
-/* Thread_type : PTHREAD_WITH_JOIN/ABT_THREAD/PTHREAD_NO_JOIN */
 int pmfs_write_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		     daos_off_t off, daos_size_t *write_size, int thread_type);
-
-/* Thread_type : PTHREAD_WITH_JOIN/ABT_THREAD/PTHREAD_NO_JOIN */
+		     daos_off_t off, daos_size_t *write_size);
 int pmfs_read_start(struct pmfs *pmfs, struct pmfs_obj *obj, d_sg_list_t *user_sgl,
-		    daos_off_t off, daos_size_t *read_size, int thread_type);
+		    daos_off_t off, daos_size_t *read_size);
 int pmfs_stat_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *name,
 		    struct stat *stbuf);
 int pmfs_rename_start(struct pmfs *pmfs, struct pmfs_obj *parent, const char *old_name,
