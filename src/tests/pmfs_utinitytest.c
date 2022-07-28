@@ -337,8 +337,8 @@ app_send_thread_test_pmfs_cmds_in_pool(struct pmfs *pmfs)
 	D_PRINT("---------------pmfs write CRC=%lx, sg_nr = %d---------\r\n",
 		crc32_tmp1, write_user_sgl.sg_nr);
 	crc32_tmp2 =  pmfs_check_sgl_crc32(read_user_sgl);
-	D_PRINT("---------------pmfs read CRC=%lx- count=%d------------------\r\n",
-		crc32_tmp2, count);
+	D_PRINT("---------------pmfs read CRC=%lx----------------------\r\n",
+		crc32_tmp2);
 
 	if (crc32_tmp2 != crc32_tmp1) {
 		D_PRINT("CRC check failed\r\n");
