@@ -228,77 +228,64 @@ def set_avocado_environment(args):
     Args:
         args (argparse.Namespace): command line arguments for this program
     """
-    # Set the output locations for running in CI
-    #
-    # [datadir.paths]
-    # logs_dir = $logs_prefix/ftest/avocado/job-results
-    # data_dir = $logs_prefix/ftest/avocado/data
-    if args.jenkinslog:
-        if os.getenv("TEST_RPMS", 'false') == 'true':
-            logs_prefix = os.path.join(os.path.sep, "var", "tmp")
-        else:
-            logs_prefix = os.path.abspath("..")
-        logs_dir = os.path.join(logs_prefix, "ftest", "avocado", "job-results")
-        data_dir = os.path.join(logs_prefix, "ftest", "avocado", "data")
-        add_avocado_setting("datadir.paths", "logs_dir", logs_dir)
-        add_avocado_setting("datadir.paths", "data_dir", data_dir)
-
-    # Limit the avocado job.log to INFO messages for clarity
-    #
-    # [job.output]
-    # loglevel = INFO
-    add_avocado_setting("job.output", "loglevel", "INFO")
-
-    # Give the avocado test tearDown method a minimum of 120 seconds to complete when the test
-    # process has timed out.  The test harness will increment this timeout based upon the number
-    # of pools created in the test to account for pool destroy command timeouts.
-    #
-    # [runner.timeout]
-    # after_interrupted = 120
-    # process_alive = 120
-    # process_died = 120
-    add_avocado_setting("runner.timeout", "after_interrupted", 120)
-    add_avocado_setting("runner.timeout", "process_alive", 120)
-    add_avocado_setting("runner.timeout", "process_died", 120)
-
-    # Define additional information to collect from the launch node after completing the test
-    #
-    # [sysinfo.collectibles]
-    # files = \$HOME/.config/avocado/sysinfo/files
-    # commands = \$HOME/.config/avocado/sysinfo/commands
-    sysinfo_files = os.path.expanduser(os.path.join("~", ".config", "avocado", "sysinfo", "files"))
-    sysinfo_cmds = os.path.expanduser(os.path.join("~", ".config", "avocado", "sysinfo", "command"))
-    add_avocado_setting("sysinfo.collectibles", "files", sysinfo_files)
-    add_avocado_setting("sysinfo.collectibles", "commands", sysinfo_cmds)
+    config_user_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+    config_sysinfo_dir = os.path.join(config_user_dir, "sysinfo")
+    config_user_file = os.path.join(config_user_dir, "avocado.conf")
+    config_sysinfo_files = os.path.join(config_sysinfo_dir, "files")
+    config_sysinfo_cmds = os.path.join(config_sysinfo_dir, "command")
+    
+    # Create any missing paths
+    for config_dir in (config_user_dir, config_sysinfo_dir):
+        if not os.path.isdir(config_dir):
+            os.makedirs(config_dir)
+    
+    # Remove any existing files
+    for config_file in (config_user_file, config_sysinfo_files, config_sysinfo_cmds):
+        if os.path.exists(config_file):
+            os.remove(config_file)
+    
+    # Create the user avocado config file
+    with open(config_user_file, "w") as config_fh:
+        if args.jenkinslog:
+            if os.getenv("TEST_RPMS", 'false') == 'true':
+                logs_prefix = os.path.join(os.path.sep, "var", "tmp")
+            else:
+                logs_prefix = os.path.abspath("..")
+            logs_dir = os.path.join(logs_prefix, "ftest", "avocado", "job-results")
+            data_dir = os.path.join(logs_prefix, "ftest", "avocado", "data")
+            config_fh.write("[datadir.paths]\n")
+            config_fh.write("logs_dir = {}\n".format(logs_dir))
+            config_fh.write("data_dir = {}\n".format(data_dir))
+            config_fh.write("\n")
+        config_fh.write("[job.output]\n")
+        config_fh.write("loglevel = INFO\n")
+        config_fh.write("\n")
+        config_fh.write("[runner.timeout]\n")
+        config_fh.write("after_interrupted = 120\n")
+        config_fh.write("process_alive = 120\n")
+        config_fh.write("process_died = 120\n")
+        config_fh.write("\n")
+        config_fh.write("[sysinfo.collect]\n")
+        config_fh.write("enabled = True\n")
+        config_fh.write("per_test = True\n")
+        config_fh.write("\n")
+        config_fh.write("[sysinfo.collectibles]\n")
+        config_fh.write("files = {}\n".format(config_sysinfo_files))
+        config_fh.write("commands = {}\n".format(config_sysinfo_cmds))
 
     # Create the ~/.config/avocado/sysinfo/files file
-    with open(sysinfo_files, "w") as sysinfo_fd:
-        sysinfo_fd.write("{}\n".format(os.path.join(os.path.sep, "proc", "mounts")))
+    with open(config_sysinfo_files, "w") as config_fh:
+        config_fh.write("{}\n".format(os.path.join(os.path.sep, "proc", "mounts")))
 
     # Create the ~/.config/avocado/sysinfo/commands file
-    with open(sysinfo_cmds, "w") as sysinfo_fd:
-        sysinfo_fd.write("ps axf\n")
-        sysinfo_fd.write("dmesg\n")
-        sysinfo_fd.write("df -h\n")
-
-
-def add_avocado_setting(section, key, value):
-    """Add the key assigned with value to the avocado configuration section.
-
-    Args:
-        section (str): section name
-        key (str): key name
-        value (object): key assignment
-    """
-    from avocado.core.settings import settings  # pylint: disable=import-outside-toplevel
-    from avocado.core.version import MAJOR      # pylint: disable=import-outside-toplevel
-
-    if not settings.config.has_section(section):
-        settings.config.add_section(section)
-    if int(MAJOR) >= 82:
-        settings.register_option(section, key, value, "")
-    else:
-        settings.config.set(section, key, str(value))
+    all_hosts = NodeSet()
+    all_hosts.update(args.test_servers)
+    all_hosts.update(args.test_clients)
+    all_hosts.update(NodeSet(socket.gethostname().split(".")[0]))
+    with open(config_sysinfo_cmds, "w") as config_fh:
+        config_fh.write("clush -w {} -B -S 'ps axf'\n".format(all_hosts))
+        config_fh.write("clush -w {} -B -S 'dmesg'\n".format(all_hosts))
+        config_fh.write("clush -w {} -B -S 'df -h'\n".format(all_hosts))
 
 
 def set_interface_environment(args):
@@ -1332,6 +1319,7 @@ def run_tests(test_files, tag_filter, args):
         command_list.extend(tag_filter)
     if args.failfast:
         command_list.extend(["--failfast", "on"])
+    command_list.extend(["--store-logging-stream", "test:DEBUG"])
 
     # Run each test
     skip_reason = None
