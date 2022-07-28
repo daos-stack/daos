@@ -1722,8 +1722,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
 	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
-				&resp.upgrade_layout_ver);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;
