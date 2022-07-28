@@ -494,7 +494,7 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 	return nil
 }
 
-func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestroyReq) (bool, int32, error) {
+func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestroyReq) (bool, error) {
 	lcReq := &mgmtpb.ListContReq{}
 	lcReq.Sys = req.Sys
 	lcReq.Id = req.Id
@@ -510,10 +510,15 @@ func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestr
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodListContainers, resp:%+v\n", lcResp)
 
-	return len(lcResp.GetContainers()) > 0, lcResp.GetStatus(), nil
+	dStatus := daos.Status(lcResp.GetStatus())
+	if dStatus != daos.Success {
+		return false, dStatus // daos.Status implements error
+	}
+
+	return len(lcResp.GetContainers()) > 0, nil
 }
 
-func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDestroyReq) (int32, error) {
+func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDestroyReq) (daosStatus, error) {
 	evReq := &mgmtpb.PoolEvictReq{}
 	evReq.Sys = req.Sys
 	evReq.Id = req.Id
@@ -531,7 +536,7 @@ func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDe
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, resp:%+v\n", evResp)
 
-	return evResp.Status, nil
+	return daos.Status(evResp.GetStatus()), nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
@@ -557,17 +562,15 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	// If recursive flag is unset, refuse to destroy pool if resident containers exist.
 	if !req.Recursive {
-		hasContainers, lcRespStatus, err := svc.poolHasContainers(ctx, req)
+		hasContainers, err := svc.poolHasContainers(ctx, req)
 		if err != nil {
+			// Check if error is related to response status code.
+			if dStatus, ok := err.(daos.Status); ok {
+				svc.log.Errorf("ListContainers during pool destroy failed: %s", dStatus)
+				resp.Status = dStatus
+				return resp, nil
+			}
 			return nil, err
-		}
-		lcStatus := daos.Status(lcRespStatus)
-
-		if lcStatus != daos.Success {
-			svc.log.Errorf("ListContainers during pool destroy failed: %s", lcStatus)
-			resp.Status = lcRespStatus
-
-			return resp, nil
 		}
 
 		if hasContainers {
@@ -584,11 +587,10 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		inCleanupMode = true
 	} else {
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
-		evRespStatus, err := svc.poolEvictConnections(ctx, req)
+		evStatus, err := svc.poolEvictConnections(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		evStatus := daos.Status(evRespStatus)
 
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
@@ -603,7 +605,6 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		if evStatus != daos.Success {
 			svc.log.Errorf("PoolEvict during pool destroy failed: %s", evStatus)
 			resp.Status = int32(evStatus)
-
 			return resp, nil
 		}
 	}
