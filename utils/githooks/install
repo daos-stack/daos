@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+githook_root="$(dirname $0)"
+repo_root="${githook_root}/../../"
+
+for d in ${githook_root}/*.d; do
+    h=${d%.d}
+    h=${h##*/}
+    link_name="${repo_root}/.git/hooks/$h"
+    if [ -f "$link_name" ]; then
+        rm "$link_name"
+    fi
+    ln -s "../../utils/githooks/$h" "$link_name"
+done
