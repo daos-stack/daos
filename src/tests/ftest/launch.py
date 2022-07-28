@@ -233,17 +233,17 @@ def set_avocado_environment(args):
     config_user_file = os.path.join(config_user_dir, "avocado.conf")
     config_sysinfo_files = os.path.join(config_sysinfo_dir, "files")
     config_sysinfo_cmds = os.path.join(config_sysinfo_dir, "command")
-    
+
     # Create any missing paths
     for config_dir in (config_user_dir, config_sysinfo_dir):
         if not os.path.isdir(config_dir):
             os.makedirs(config_dir)
-    
+
     # Remove any existing files
     for config_file in (config_user_file, config_sysinfo_files, config_sysinfo_cmds):
         if os.path.exists(config_file):
             os.remove(config_file)
-    
+
     # Create the user avocado config file
     with open(config_user_file, "w") as config_fh:
         if args.jenkinslog:
