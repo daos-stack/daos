@@ -141,7 +141,15 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 int
 ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	return 0;
+	if (ds3b == NULL || info == NULL)
+		return -EINVAL;
+
+	char const *const names[]  = {RGW_BUCKET_INFO};
+	void *const       values[] = {info->encoded};
+	size_t            sizes[]  = {info->encoded_length};
+	int               rc       = daos_cont_get_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc                         = -daos_der2errno(rc);
+	return rc;
 }
 
 int
@@ -153,7 +161,9 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void const *const values[] = {info->encoded};
 	size_t const      sizes[]  = {info->encoded_length};
-	return -daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
+	int               rc       = daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc                         = -daos_der2errno(rc);
+	return rc;
 }
 
 int
