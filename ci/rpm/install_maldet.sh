@@ -17,7 +17,7 @@ source "$mydir/distro_info.sh"
 # compatibility.
 if command -v dnf; then
   dnf install clamav clamav-devel \
-              coreutils git gzip hostnanme sudo
+              coreutils git gzip hostname sudo
 elif command -v apt-get; then
   apt-get --assume-yes install clamav libclamav-dev \
                        coreutils git gzip hostname sudo
