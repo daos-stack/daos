@@ -4,7 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+
 from os.path import join
+import uuid
+
 from data_mover_test_base import DataMoverTestBase
 
 
@@ -61,10 +64,11 @@ class DmvrNegativeTest(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Create a test container
-        cont1 = self.create_cont(pool1, True, pool1, uns_cont)
+        cont1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
         self.run_ior_with_params("POSIX", self.posix_test_file)
@@ -123,7 +127,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         # (3) Bad parameter: UUID, UNS, or POSIX path does not exist.
-        fake_uuid = str(self.gen_uuid())
+        fake_uuid = str(uuid.UUID(int=0))
         self.run_datamover(
             self.test_id + " (invalid source pool)",
             "DAOS_UUID", "/", fake_uuid, cont1,
@@ -131,7 +135,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output="DER_NONEXIST")
 
-        fake_uuid = str(self.gen_uuid())
         self.run_datamover(
             self.test_id + " (invalid source cont)",
             "DAOS_UUID", "/", pool1, fake_uuid,
@@ -139,7 +142,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output="DER_NONEXIST")
 
-        fake_uuid = str(self.gen_uuid())
         self.run_datamover(
             self.test_id + " (invalid dest pool)",
             "POSIX", self.posix_local_test_paths[0], None, None,
@@ -203,11 +205,10 @@ class DmvrNegativeTest(DataMoverTestBase):
 
         # Create pool and containers
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create source file
-        self.run_ior_with_params("DAOS_UUID", self.daos_test_file,
-                                 pool1, cont1)
+        self.run_ior_with_params("DAOS_UUID", self.daos_test_file, pool1, cont1)
 
         # Use a really long filename
         dst_path = join(self.posix_local_test_paths[0], "d" * 300)
