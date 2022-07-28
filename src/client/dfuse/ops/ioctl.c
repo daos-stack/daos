@@ -14,6 +14,17 @@
 #define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 
 static void
+handle_user_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
+{
+	struct dfuse_user_reply dur;
+
+	dur.uid = getuid();
+	dur.gid = getgid();
+
+	DFUSE_REPLY_IOCTL(oh, req, dur);
+}
+
+static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
@@ -308,6 +319,11 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
+	if (cmd == TIOCGWINSZ) {
+		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGWINSZ ioctl");
+		D_GOTO(out_err, rc = ENOTTY);
+	}
+
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
 		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
@@ -321,6 +337,13 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 			D_GOTO(out_err, rc = EIO);
 
 		handle_il_ioctl(oh, req);
+		return;
+	}
+
+	if (cmd == DFUSE_IOCTL_DFUSE_USER) {
+		if (out_bufsz < sizeof(struct dfuse_user_reply))
+			D_GOTO(out_err, rc = EIO);
+		handle_user_ioctl(oh, req);
 		return;
 	}
 

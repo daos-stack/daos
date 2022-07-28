@@ -296,19 +296,18 @@ To build the Docker image directly from GitHub, run the following command:
 
 ```bash
 $ docker build https://github.com/daos-stack/daos.git#master \
-        -f utils/docker/Dockerfile.centos.7 -t daos
+        -f utils/docker/Dockerfile.el.8 -t daos
 ```
 
 or from a local tree:
 
 ```bash
-$ docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
+$ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
 ```
-
-This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
+This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
-For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
-Dockerfile.ubuntu.20.04 and the appropriate version of interest.
+For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
+Dockerfile.ubuntu or the appropriate version of interest.
 
 ### Simple Docker Setup
 

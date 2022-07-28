@@ -403,6 +403,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	daos_pool_info_t        p_info = {};
 	d_list_t		*rlink;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
@@ -449,7 +450,9 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	*_dfp = dfp;
 	return rc;
 err_disconnect:
-	daos_pool_disconnect(dfp->dfp_poh, NULL);
+	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
@@ -744,6 +747,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	daos_cont_info_t	c_info = {};
 	int			dfs_flags = O_RDWR;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
@@ -799,7 +803,9 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	return 0;
 
 err_close:
-	daos_cont_close(dfc->dfs_coh, NULL);
+	ret = daos_cont_close(dfc->dfs_coh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfc, "daos_cont_close() failed: " DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfc);
 	return rc;
@@ -957,6 +963,41 @@ err:
 	return rc;
 }
 
+/* Set a timer to mark cache entry as valid */
+void
+dfuse_cache_set_time(struct dfuse_inode_entry *ie)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	ie->ie_cache_last_update = now;
+}
+
+bool
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          timeout;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	left.tv_sec  = now.tv_sec - ie->ie_cache_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_cache_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	timeout = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (timeout > 0) {
+		DFUSE_TRA_INFO(ie, "Allowing cache use, time remaining: %lf", timeout);
+		use = true;
+	}
+
+	return use;
+}
+
 int
 dfuse_fs_init(struct dfuse_info *dfuse_info,
 	      struct dfuse_projection_info **_fsh)
@@ -1007,6 +1048,13 @@ err_pt:
 err:
 	D_FREE(fs_handle);
 	return rc;
+}
+
+void
+dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
+{
+	oh->doh_dfs = ie->ie_dfs->dfs_ns;
+	oh->doh_ie  = ie;
 }
 
 void

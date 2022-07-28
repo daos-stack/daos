@@ -1,27 +1,12 @@
 hosts:
   servers: !mux
     6_server:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
+      test_servers: server-[1-3]
     8_server:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
+      test_servers: server-[1-4]
     12_server:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-        - server-E
-        - server-F
-  test_clients:
-    - client-A
-    - client-B
+      test_servers: server-[1-6]
+  test_clients: 2
 timeout: 1200
 server_config:
   engines_per_host: 2

@@ -1123,20 +1123,20 @@ void
 d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		char *path, int format, int opt_fields, FILE *stream)
 {
-	struct d_tm_stats_t	stats = {0};
-	struct timespec		tms;
-	uint64_t		val;
-	time_t			clk;
-	char			time_buff[D_TM_TIME_BUFF_LEN];
-	char			*timestamp;
-	char			*name = NULL;
-	char			*desc = NULL;
-	char			*units = NULL;
-	bool			stats_printed = false;
-	bool			show_timestamp = false;
-	bool			show_meta = false;
-	int			i = 0;
-	int			rc;
+	struct d_tm_stats_t stats = {0};
+	struct timespec     tms;
+	uint64_t            val;
+	time_t              clk;
+	char                time_buff[D_TM_TIME_BUFF_LEN];
+	char               *timestamp      = NULL;
+	char               *name           = NULL;
+	char               *desc           = NULL;
+	char               *units          = NULL;
+	bool                stats_printed  = false;
+	bool                show_timestamp = false;
+	bool                show_meta      = false;
+	int                 i              = 0;
+	int                 rc;
 
 	if (node == NULL)
 		return;
@@ -1632,6 +1632,8 @@ d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id)
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
 		return;
 	}
+
+	metric->dtn_type = D_TM_DURATION | clk_id;
 
 	d_tm_node_lock(metric);
 	clock_gettime(d_tm_clock_id(metric->dtn_type & ~D_TM_DURATION),
