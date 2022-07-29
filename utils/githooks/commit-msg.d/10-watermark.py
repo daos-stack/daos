@@ -41,7 +41,7 @@ def run_check():
             elif line.strip() == "":
                 continue
             elif line.startswith("#"):
-                break
+                continue
             empty_commit = False
     if empty_commit:
         sys.exit(0)
@@ -64,4 +64,5 @@ def run_check():
 
 
 if __name__ == "__main__":
+    print("Checking that required hooks ran")
     run_check()
