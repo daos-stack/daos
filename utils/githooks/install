@@ -11,7 +11,7 @@ for d in "${githook_root}"/*.d; do
     link_name=".git/hooks/$h"
     link_target="../../utils/githooks/$h"
     if [ -e "$link_name" ]; then
-        if [ "$(readlink ""$link_name"")" != "$link_target" ]; then
+        if [ "$(readlink "$link_name")" != "$link_target" ]; then
             echo "Link exists: $link_name"
             echo "Either delete or move to utils/githooks/${h}.d/*-user-*"
             exit 1
