@@ -27,6 +27,7 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 	struct ds_pool_svc_clue	clue;
 	struct rdb_tx		tx;
 	rdb_path_t		root;
+	uint32_t		global_version;
 	struct pool_buf	       *map_buf;
 	d_iov_t			value;
 	int			rc;
@@ -83,7 +84,7 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 		goto out_root;
 	}
 
-	rc = ds_pool_svc_load(&tx, uuid, &root, &map_buf, &clue.psc_map_version);
+	rc = ds_pool_svc_load(&tx, uuid, &root, &global_version, &map_buf, &clue.psc_map_version);
 	if (rc == DER_UNINIT) {
 		clue.psc_map_version = 0;
 		rc = 0;

@@ -1,10 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-D
+  test_servers: 3
+  test_clients: 1
 timeout: 1300
 timeouts:
   test_osa_offline_reintegrate_with_less_pool_space: 1800

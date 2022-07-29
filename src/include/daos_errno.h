@@ -281,8 +281,11 @@ extern "C" {
 	/** The TX ID may be reused. */					\
 	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
 	       TX ID may be reused)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
+	       update again)						\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 41),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 42),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

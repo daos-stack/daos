@@ -69,7 +69,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 			oh->doh_kreaddir_finished);
 
 	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
-		DFUSE_TRA_INFO(oh, "Directory handle may have populated cache, saving");
+		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
 		dfuse_cache_set_time(oh->doh_ie);
 	}
 

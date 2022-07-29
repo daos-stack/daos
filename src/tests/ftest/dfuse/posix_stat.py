@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,9 +32,9 @@ class POSIXStatTest(IorTestBase):
         time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
+        :avocado: tags=vm
         :avocado: tags=dfuse
-        :avocado: tags=stat_parameters
+        :avocado: tags=stat_parameters,test_stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         error_list = []
