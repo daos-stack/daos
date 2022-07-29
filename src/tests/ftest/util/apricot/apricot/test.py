@@ -16,7 +16,6 @@ from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
 from ClusterShell.NodeSet import NodeSet
-from traitlets import default
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
