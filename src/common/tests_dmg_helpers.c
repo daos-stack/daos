@@ -716,8 +716,12 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 	int			rc = 0;
 
 	uuid_unparse_lower(uuid, uuid_str);
-	// Perform recursive destroy by default.
-	args = cmd_push_arg(args, &argcount, "%s --recursive", uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Always perform recursive destroy. */
+	args = cmd_push_arg(args, &argcount, " --recursive ");
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
