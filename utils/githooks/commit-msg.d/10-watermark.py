@@ -47,11 +47,7 @@ def run_check():
         sys.exit(0)
 
     hooks = find_hooks()
-    missing = False
-    for hook in hooks:
-        if not check_if_run(hook):
-            missing = True
-    if missing:
+    if not all(list(map(check_if_run, hooks))):
         sys.exit(0)
 
     with open(sys.argv[1], "w") as commit_msg:
