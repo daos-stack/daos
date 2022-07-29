@@ -45,7 +45,6 @@ dnf --nodocs install \
     Lmod \
     lz4-devel \
     make \
-    meson \
     ndctl \
     ninja-build \
     numactl \
@@ -54,27 +53,14 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
-    python3-defusedxml \
     python3-devel \
-    python3-distro \
-    python3-junit_xml \
     python3-pip \
-    python3-pyxattr \
-    python3-pyyaml \
-    python3-scons \
-    python3-tabulate \
     sg3_utils \
     sudo \
     systemd \
     valgrind-devel \
     which \
     yasm
-
-: "${REPO_FILE_URL:=}"
-if [ -n "$REPO_FILE_URL" ]; then
-    dnf --nodocs install \
-        python3-pyelftools
-fi
 
 # For fedora, java-11 is installed along with maven if we install maven from
 # repo. But we need java-8 (1.8). The 'devel' package also needs to be
