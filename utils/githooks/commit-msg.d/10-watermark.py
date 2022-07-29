@@ -47,6 +47,7 @@ def run_check():
         sys.exit(0)
 
     hooks = find_hooks()
+    print(f"hooks = {hooks}")
     if not all(list(map(check_if_run, hooks))):
         sys.exit(0)
 
