@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       17%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -88,7 +88,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.14
+BuildRequires: go >= 1.16
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -562,6 +562,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Jul 26 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.100-18
+- Bump min supported go version to 1.16
+
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
 - Remove now unused openpa dependency
 

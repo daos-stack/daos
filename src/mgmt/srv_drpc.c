@@ -281,16 +281,32 @@ out:
 }
 
 static int
-create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
+create_pool_props(daos_prop_t **out_prop, uint32_t numsvcreps, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
 {
+	uint64_t	out_svc_rf = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
-	uint32_t	entries = 0;
+	uint32_t	entries = 1;
 	uint32_t	idx = 0;
 	int		rc = 0;
+
+	if (numsvcreps > 0) {
+#ifndef DRPC_TEST
+		out_svc_rf = ds_pool_svc_rf_from_nreplicas(numsvcreps);
+#else
+		if (numsvcreps % 2 == 0)
+			numsvcreps--;
+		out_svc_rf = numsvcreps / 2;
+#endif
+		if (!daos_svc_rf_is_valid(out_svc_rf)) {
+			D_ERROR("invalid numsvcreps %u\n", numsvcreps);
+			rc = -DER_INVAL;
+			goto err_out;
+		}
+	}
 
 	if (ace_list != NULL && ace_nr > 0) {
 		rc = daos_acl_from_strs(ace_list, ace_nr, &out_acl);
@@ -316,14 +332,13 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
-	if (entries == 0) {
-		D_ERROR("No prop entries provided, aborting!\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
 	new_prop = daos_prop_alloc(entries);
 	if (new_prop == NULL)
 		D_GOTO(err_out, rc = -DER_NOMEM);
+
+	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
+	new_prop->dpp_entries[idx].dpe_val = out_svc_rf;
+	idx++;
 
 	if (out_owner != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
@@ -458,7 +473,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&base_props, req->user, req->usergroup,
+	rc = create_pool_props(&base_props, req->numsvcreps, req->user, req->usergroup,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -476,10 +491,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tierbytes[DAOS_MEDIA_SCM],
-				 req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, req->numsvcreps, &svc,
-				 req->n_faultdomains, req->faultdomains);
+				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
+				 prop, &svc, req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;

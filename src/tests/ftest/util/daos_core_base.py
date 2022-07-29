@@ -143,7 +143,7 @@ class DaosCoreBase(TestWithServers):
         env = EnvironmentVariables({
             "D_LOG_FILE": get_log_file(self.client_log),
             "D_LOG_MASK": "DEBUG",
-            "DD_MASK": "mgmt,io,md,epc,rebuild",
+            "DD_MASK": "mgmt,io,md,epc,rebuild,test",
             "COVFILE": "/tmp/test.cov",
             "CMOCKA_XML_FILE": os.path.join(cmocka_dir, "%g_cmocka_results.xml"),
             "CMOCKA_MESSAGE_OUTPUT": "xml",
