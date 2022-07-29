@@ -144,8 +144,10 @@ class Snapshot(TestWithServers):
                 (6)Verify snap_list bad parameter behavior.
 
         Use Cases: Combinations with minimum 1 client and 1 server.
-        :avocado: tags=all,small,smoke,daily_regression,snap,snapshot_negative,
-        :avocado: tags=snapshotcreate_negative
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=container,smoke,snap,snapshot
+        :avocado: tags=snapshot_negative,snapshotcreate_negative,test_snapshot_negativecases
         """
 
         # DAOS-1322 Create a new container, verify snapshot state as expected
@@ -320,7 +322,11 @@ class Snapshot(TestWithServers):
         Use Cases: Require 1 client and 1 server to run snapshot test.
                    1 pool and 1 container is used, num_of_snapshot defined
                    in the snapshot.yaml will be performed and verified.
-        :avocado: tags=all,small,smoke,snap,snapshots,full_regression
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,smoke,snap,snapshot
+        :avocado: tags=snapshots,test_snapshots
         """
 
         test_data = []

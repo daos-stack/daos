@@ -32,7 +32,7 @@ class AutoOCSelectionTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=oc_selection
+        :avocado: tags=oc_selection,test_oc_selection
         """
         self.add_pool()
 
