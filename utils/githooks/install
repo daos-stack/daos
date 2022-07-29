@@ -1,15 +1,22 @@
 #!/bin/bash
 set -eu
 
-githook_root="$(dirname $0)"
+githook_root="${0%/*}"
 repo_root="${githook_root}/../../"
 
+pushd $repo_root > /dev/null
 for d in ${githook_root}/*.d; do
     h=${d%.d}
     h=${h##*/}
-    link_name="${repo_root}/.git/hooks/$h"
-    if [ -f "$link_name" ]; then
-        rm "$link_name"
+    link_name=".git/hooks/$h"
+    link_target="../../utils/githooks/$h"
+    if [ -e "$link_name" ]; then
+        if [ "$(readlink $link_name)" != "$link_target" ]; then
+            echo "Link exists: $link_name"
+            echo "Either delete or move to utils/githooks/${h}.d/"
+            exit 1
+        fi
+        continue
     fi
-    ln -s "../../utils/githooks/$h" "$link_name"
+    ln -s "$link_target" "$link_name"
 done
