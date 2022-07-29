@@ -1,9 +1,10 @@
 # PMFS Overview
 
-PMFS is designed for single node VOS without replica, and it can be combined with other DB (i.e.: RocksDB).
+PMFS is designed for single node over VOS without replica,
+and it can be combined with other DB (i.e.: RocksDB).
 
-PMFS stands for Persistent Memory VOS File System. The PMFS API provides an encapsulated namespace
-with a POSIX-like API directly on top of the VOS API. The namespace is
+PMFS stands for Persistent Memory VOS File System. The PMFS API provides an encapsulated
+namespace with a POSIX-like API directly on top of the VOS API. The namespace is
 encapsulated under a single VOS container, where directories and files are
 objects in that container.
 
@@ -18,6 +19,33 @@ in spdk tasks' rings.
 
 we can process different tasks in a ring that enqueued by the inputting commands.
 PMFS target will drain the rings and process them one by one.
+
+### PMFS skeleton
++---------------------------------------------------------------------------------------+
+| Target 										|
+| +-------------+    configure NVME/SCM		 ((-----------------))  task dequeue	|
+| | PMFS env	|------------------------------->|| SPDK ring queue ||>---------->-+	|
+| |   init	|				 ||<- MKFS RING <-- ||		   |	|
+| |		|------------------------------->||	   or	    ||		   |	|
+| +-------------+    start a process		 ||-> TASK RING ->--||		   |	|
+| vos self init   	thread			 ((-----^-------^---))		   |	|
+|							|	| 	           |	|
+|	 +----------+					-<----------------<--+	   |	|
+|	 | Union    |				fs commands tasks enqueue    |	   |	|
+|	 | RW args  |							     |	   |	|
+|	 | List args|<---------------------------<---------------------------)-----+	|
+|	 +----------+							     |		|
+|		|			+-------------------+		+----^--+	|
+|		|---------------------->| vos_obj_update    |		+-------+	|
+|		|	ABT ULT thread	| vos_obj_fetch     |		| mkfs  |	|
+|		|			| vos_obj_punch     |		| mount	|	|
+|		|			+-------------------+		| mkdir	|Client	|
+|		|	ABT ULT thread	+-----------------------+	| ls	|without|
+|		|---------------------->| vos_obj_get_num_dkeys	|	| cf    |RPC	|
+|					| vos_obj_list_dkeys	|	| RW	|	|
+|					|			|	| ...   |	|
+|					+-----------------------+	+-------+	|
++---------------------------------------------------------------------------------------+
 
 ## PMFS Namespace
 
@@ -44,10 +72,12 @@ A-key: "PMFS_MAGIC"
 single-value (uint64_t): SB_MAGIC (0xda05df50da05df50)
 
 A-key: "PMFS_SB_VERSION"
-single-value (uint16_t): Version number of the SB. This is used to determine the layout of the SB (the DKEYs and value sizes).
+single-value (uint16_t): Version number of the SB. This is used to determine the layout of the SB
+			 (the DKEYs and value sizes).
 
 A-key: "PMFS_LAYOUT_VERSION"
-single-value (uint16_t): This is used to determine the format of the entries in the PMFS namespace (PMFS to VOS mapping).
+single-value (uint16_t): This is used to determine the format of the entries in the PMFS namespace
+			(PMFS to VOS mapping).
 
 A-key: "PMFS_SB_FEAT_COMPAT"
 single-value (uint64_t): flags to indicate feature set like extended attribute support, indexing

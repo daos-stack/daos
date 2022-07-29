@@ -287,9 +287,6 @@ vos_task_ult(void *args, enum task_op opc, double *duration)
 	vfua.duration = duration;
 	vfua.opc = opc;
 
-	/* Performance comparing through changing thread mode
-	 * here use abt thread for update/fetch
-	 */
 	rc = pmfs_thread_create(vos_fs_execute_command_ult, (void *)&vfua);
 	if (rc)
 		return rc;

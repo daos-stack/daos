@@ -213,7 +213,7 @@ int pmfs_init_pool(void *arg, struct scan_context ctx);
 /* PMFS_MKFS or PMFS_TASKS*/
 void pmfs_set_cmd_type(const char *type);
 
-/* The following APIs encapsulate with thread (argobots or regular thread) */
+/* The following APIs encapsulate with thread (ABT thread) */
 /* Launching pmfs command using callbacks */
 /* They are the same with pmfs.h just add thread launching */
 /*  API + pmfs_thread_create , please read pmfs.h */
