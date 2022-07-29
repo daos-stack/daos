@@ -40,6 +40,8 @@ def run_check():
                 continue
             elif line.strip() == "":
                 continue
+            elif line.startswith("# ------------------------ >8 ------------------------"):
+                break
             elif line.startswith("#"):
                 continue
             empty_commit = False
