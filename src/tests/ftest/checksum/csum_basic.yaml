@@ -5,7 +5,11 @@ hosts:
  test_clients: 1
 timeout: 100
 server_config:
- name: daos_server
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
     createmode:
         mode_RW:
