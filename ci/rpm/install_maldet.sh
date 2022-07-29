@@ -17,7 +17,13 @@ source "$mydir/distro_info.sh"
 # compatibility.
 if command -v dnf; then
   dnf install clamav clamav-devel \
-              coreutils git gzip hostname sudo
+              git gzip hostname sudo
+  # Some Dockerfiles missing the md5sum command by not having
+  # coreutils installed.   Rocky 8 pre-installs coreutils-single which
+  # blocks coreutils from being installed.
+  if ! command -v md5sum; then
+      dnf install coreutils
+  fi
 elif command -v apt-get; then
   apt-get --assume-yes install clamav libclamav-dev \
                        coreutils git gzip hostname sudo
