@@ -21,6 +21,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common'])
     prereqs.require(tenv, 'mercury', 'protobufc')
     tenv.AppendUnique(FLAGS='-pthread')
+    tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
     self_test = daos_build.program(tenv, [SELF_TEST, cart_utils_objs])
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)

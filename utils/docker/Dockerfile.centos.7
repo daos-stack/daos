@@ -6,10 +6,11 @@
 #
 
 # Pull base image
-FROM centos:centos7
+ARG BASE_DISTRO=centos:centos7
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 # Use local repo server if present
@@ -100,16 +101,19 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
+USER daos_server:daos_server
 
-# Do not setup a python venv on CentOS 7 as Jenkins builds do not honor PATH, so install as root
-# instead.  Install latest versions of python tools.
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir --disable-pip-version-check install --requirement requirements.txt
-
-USER daos_server:daos_server
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -142,9 +146,9 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
     }
 USER root:root
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                           \
+# force an upgrade to get any newly built RPMs, but only if CB1 is set.
+ARG CB1
+RUN [ -z "$CB1" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
@@ -195,4 +199,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

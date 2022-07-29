@@ -64,9 +64,11 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,object,full_regression,small,objbadhandle
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objbadhandle,test_bad_handle
         """
-
         try:
             # trash the handle and read again
             saved_oh = self.obj.obj_handle
@@ -93,7 +95,10 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass null pointers for various fetch parameters.
 
-        :avocado: tags=all,object,full_regression,small,objfetchnull
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objfetchnull,test_null_ptrs
         """
         try:
             # now try it with a bad dkey, expecting this to fail with -1003

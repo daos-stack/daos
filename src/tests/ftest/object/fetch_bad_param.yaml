@@ -1,11 +1,13 @@
 hosts:
-   test_servers:
-      - server-A
-      - server-B
+   test_servers: 2
 timeouts:
    test_null_ptrs: 240
 server_config:
    name: daos_server
+   servers:
+      targets: 4
+      nr_xs_helpers: 0
+      scm_size: 4
 pool:
    mode: 511
    name: daos_server
