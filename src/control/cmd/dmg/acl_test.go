@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -64,9 +65,9 @@ func TestReadACLFile_FileOpenFailed(t *testing.T) {
 }
 
 func TestReadACLFile_Success(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
-	path := common.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
+	path := test.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 
 	expectedNumACEs := 3
 
@@ -87,9 +88,9 @@ func TestReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
-	path := common.CreateTestFile(t, dir, "")
+	path := test.CreateTestFile(t, dir, "")
 
 	result, err := readACLFile(path)
 
@@ -97,7 +98,7 @@ func TestReadACLFile_Empty(t *testing.T) {
 		t.Errorf("expected no result, got: %+v", result)
 	}
 
-	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
+	test.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
 func TestParseACL_EmptyFile(t *testing.T) {
@@ -329,7 +330,7 @@ func TestFormatACL(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
+			test.AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
 		})
 	}
 }
@@ -348,7 +349,7 @@ func TestFormatACLDefault(t *testing.T) {
 	// Just need to make sure it doesn't use verbose mode
 	expStr := formatACL(acl, false)
 
-	common.AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
+	test.AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
 }
 
 func TestGetVerboseACE(t *testing.T) {
@@ -429,7 +430,7 @@ func TestGetVerboseACE(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
+			test.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
 		})
 	}
 }

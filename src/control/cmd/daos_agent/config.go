@@ -33,6 +33,8 @@ type Config struct {
 	LogFile          string                    `yaml:"log_file"`
 	LogLevel         common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
 	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
+	DisableCache     bool                      `yaml:"disable_caching,omitempty"`
+	DisableAutoEvict bool                      `yaml:"disable_auto_evict,omitempty"`
 	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 

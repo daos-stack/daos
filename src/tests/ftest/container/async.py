@@ -39,7 +39,10 @@ class ContainerAsync(TestWithServers):
         The negative case is more like a test of the API implementation rather
         than DAOS itself.
 
-        :avocado: tags=all,full_regression,container,cont_create_async
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_create_async,test_create_async
         """
         self.add_pool()
         ph = self.pool.pool.handle
@@ -64,8 +67,7 @@ class ContainerAsync(TestWithServers):
             # calls wait, but we're using DaosContainer, so we need to manually
             # call it.
             self.pool.destroy(1)
-            self.container[1].container.create(
-                poh=ph, con_uuid=None, cb_func=cbh2.callback)
+            self.container[1].container.create(poh=ph, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,

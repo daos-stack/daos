@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,7 +13,8 @@
 #define MAX_POOL_OBJ_SIZE 256
 
 typedef struct {
-	char data[128];
+	/** 124 + 8 bytes pad for pthread_mutex_t size difference on __aarch64__ */
+	char data[132];
 } obj_da_t;
 
 /* Initialize an object obj_da

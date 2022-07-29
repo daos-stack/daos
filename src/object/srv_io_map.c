@@ -5,7 +5,7 @@
  */
 
 #include <daos_srv/bio.h>
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static void
 map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)

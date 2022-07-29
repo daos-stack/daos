@@ -48,10 +48,10 @@ extern "C" {
 #endif
 
 #ifndef likely
-#define likely(x)	__builtin_expect((x), 1)
+#define likely(x)	__builtin_expect((uintptr_t)(x), 1)
 #endif
 #ifndef unlikely
-#define unlikely(x)	__builtin_expect((x), 0)
+#define unlikely(x)	__builtin_expect((uintptr_t)(x), 0)
 #endif
 
 /* Check if bit is set in passed val */
@@ -249,14 +249,6 @@ char *d_realpath(const char *path, char *resolved_path);
 			 (oldcount) * sizeof(*(oldptr)),		\
 					     sizeof(*(oldptr)), count)
 
-#define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
-
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
-			 (count) * sizeof(*(oldptr)),			\
-			 sizeof(*(oldptr)), count)
-
 /** realloc macros that do not clear the new memory */
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
 	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
@@ -286,7 +278,6 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
 #define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
-#define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
 	do {					\
@@ -390,6 +381,7 @@ int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
+int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
@@ -406,6 +398,7 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+char *d_rank_list_to_str(d_rank_list_t *rank_list);
 
 d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
 d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);

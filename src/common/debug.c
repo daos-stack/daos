@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,16 @@ DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
 static d_log_id_cb_t	log_id_cb;
 /* debug bit groups */
+/* default debug group */
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
+#define DB_GRP1_NAME "group_default"
+/* metadata debug group (default plus metadata-specific) */
+#define DB_GRP_MD (DB_GRP1 | DB_MGMT)
+#define DB_GRP_MD_NAME "group_metadata"
+/* metadata-only debug group */
+#define DB_GRP_MD_ONLY (DB_MD | DB_MGMT)
+#define DB_GRP_MD_ONLY_NAME "group_metadata_only"
+
 
 static void
 debug_fini_locked(void)
@@ -35,9 +44,17 @@ debug_fini_locked(void)
 
 	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
-	rc = d_log_dbg_grp_dealloc("daos_default");
+	rc = d_log_dbg_grp_dealloc(DB_GRP_MD_ONLY_NAME);
 	if (rc < 0)
-		D_PRINT_ERR("Error deallocating daos debug group\n");
+		D_PRINT_ERR("Error deallocating daos debug group: %s\n", DB_GRP_MD_ONLY_NAME);
+
+	rc = d_log_dbg_grp_dealloc(DB_GRP_MD_NAME);
+	if (rc < 0)
+		D_PRINT_ERR("Error deallocating daos debug group: %s\n", DB_GRP_MD_NAME);
+
+	rc = d_log_dbg_grp_dealloc(DB_GRP1_NAME);
+	if (rc < 0)
+		D_PRINT_ERR("Error deallocating daos debug group: %s\n", DB_GRP1_NAME);
 
 	d_log_fini();
 }
@@ -127,7 +144,7 @@ daos_debug_set_id_cb(d_log_id_cb_t cb)
 
 /** Initialize debug system */
 int
-daos_debug_init(char *logfile)
+daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
 	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
 	int	rc;
@@ -146,7 +163,7 @@ daos_debug_init(char *logfile)
 		logfile = NULL;
 	}
 
-	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT,
+	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
@@ -165,10 +182,26 @@ daos_debug_init(char *logfile)
 			DP_RC(rc));
 
 	/* Register DAOS debug bit groups */
-	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default", D_LOG_SET_AS_DEFAULT);
+	rc = d_log_dbg_grp_alloc(DB_GRP1, DB_GRP1_NAME, D_LOG_SET_AS_DEFAULT);
 	if (rc < 0) {
 		D_PRINT_ERR("Error allocating daos debug group: "DF_RC"\n",
 			DP_RC(rc));
+		rc = -DER_UNINIT;
+		goto failed_unlock;
+	}
+
+	rc = d_log_dbg_grp_alloc(DB_GRP_MD, DB_GRP_MD_NAME, 0);
+	if (rc < 0) {
+		D_PRINT_ERR("Error allocating debug group '%s': "DF_RC"\n",
+			    DB_GRP_MD_NAME, DP_RC(rc));
+		rc = -DER_UNINIT;
+		goto failed_unlock;
+	}
+
+	rc = d_log_dbg_grp_alloc(DB_GRP_MD_ONLY, DB_GRP_MD_ONLY_NAME, 0);
+	if (rc < 0) {
+		D_PRINT_ERR("Error allocating debug group '%s': "DF_RC"\n",
+			    DB_GRP_MD_ONLY_NAME, DP_RC(rc));
 		rc = -DER_UNINIT;
 		goto failed_unlock;
 	}
@@ -192,6 +225,12 @@ daos_debug_init(char *logfile)
 failed_unlock:
 	D_MUTEX_UNLOCK(&dd_lock);
 	return rc;
+}
+
+int daos_debug_init(char *logfile)
+{
+	/* for client side, by default use ERR level */
+	return daos_debug_init_ex(logfile, DLOG_ERR);
 }
 
 static __thread char thread_uuid_str_buf[DF_UUID_MAX][DAOS_UUID_STR_SIZE];

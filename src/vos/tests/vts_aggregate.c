@@ -2726,6 +2726,7 @@ aggregate_34(void **state)
 	struct agg_tst_dataset	 ds = { 0 };
 	daos_recx_t		*recx_arr;
 	int			 rc, i, rec_cnt = vos_agg_nvme_thresh - 1;
+	unsigned int		 agg_flags = VOS_AGG_FL_FORCE_SCAN;
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
 	assert_rc_equal(rc, 0);
@@ -2757,19 +2758,19 @@ aggregate_34(void **state)
 	ds.td_discard = false;
 
 	VERBOSE_MSG("Aggregate NVMe records w/o 'force_merge' flag\n");
-	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, 0);
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, agg_flags);
 
 	VERBOSE_MSG("Aggregate NVMe records with 'force_merge' flag\n");
 	ds.td_expected_recs = 1;
-	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, VOS_AGG_FL_FORCE_MERGE);
+	agg_flags |= VOS_AGG_FL_FORCE_MERGE;
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, agg_flags);
 
 	D_FREE(recx_arr);
 	cleanup();
 }
 
-#define INIT_FEATS 0x8000000010f93f43ULL
-
-D_CASSERT((INIT_FEATS & VOS_TF_AGG_TIME_MASK) == 0);
+#define INIT_FEATS 0x8000000000073f43ULL
+D_CASSERT((INIT_FEATS & VOS_AGG_TIME_MASK) == 0);
 
 static void
 aggregate_35(void **state)
@@ -2792,18 +2793,69 @@ aggregate_35(void **state)
 	assert_int_equal(epoch, 252);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
-	vos_feats_agg_time_update(252, &feats);
+	/** Set lower time, same answer */
+	vos_feats_agg_time_update(242, &feats);
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_true(result);
 	assert_int_equal(epoch, 252);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
-	/** If upper 32-bits is set, we assume HLC */
-	vos_feats_agg_time_update(0x53abcdef00ULL, &feats);
+	/** Set higher time, new answer */
+	vos_feats_agg_time_update(342, &feats);
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_true(result);
-	/** Since the lower 32 are masked, we always set them to ffffffff */
-	assert_int_equal(epoch, 0x53ffffffffULL);
+	assert_int_equal(epoch, 342);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 24-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x463abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** When we set the timestamp, we round up */
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a lower time, should get same result */
+	vos_feats_agg_time_update(0x463a00def00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a higher time, should get updated */
+	vos_feats_agg_time_update(0x463adcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ae000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test maximum epoch (not HLC) */
+	feats = INIT_FEATS;
+	epoch = (1ULL << VOS_AGG_NR_BITS) - 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) - 1);
+	assert_false(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test minimum HLC */
+	epoch = 1ULL << VOS_AGG_NR_BITS;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** Already rounded to nearest 1/4 ms */
+	assert_int_equal(epoch, 1ULL << VOS_AGG_NR_BITS);
+	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test rounding */
+	epoch = (1ULL << VOS_AGG_NR_BITS) + 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) + (1ULL << VOS_AGG_NR_HLC_BITS));
+	assert_true(feats & VOS_TF_AGG_HLC);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 }
 

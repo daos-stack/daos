@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,7 +75,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
+	D_DEBUG(DB_MD, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
 	dc_pool_hdl_link(pool); /* +1 ref */

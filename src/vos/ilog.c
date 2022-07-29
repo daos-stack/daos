@@ -770,7 +770,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	if (id_out->id_epoch <= epr->epr_hi &&
 	    id_out->id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, id_out, DAOS_INTENT_UPDATE, true);
-		if (visibility < 0)
+		if (visibility < 0 && visibility != -DER_TX_UNCERTAIN)
 			return visibility;
 	}
 
@@ -897,7 +897,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, &root->lr_id, DAOS_INTENT_UPDATE, true);
-		if (visibility < 0) {
+		if (visibility < 0 && visibility != -DER_TX_UNCERTAIN) {
 			rc = visibility;
 			goto done;
 		}

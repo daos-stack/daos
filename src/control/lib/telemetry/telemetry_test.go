@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestTelemetry_Init(t *testing.T) {
@@ -43,7 +44,7 @@ func TestTelemetry_Init(t *testing.T) {
 				defer Detach(newCtx)
 			}
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expErr == nil { // success
 				// Verify the initialized context
@@ -52,11 +53,11 @@ func TestTelemetry_Init(t *testing.T) {
 					t.Fatalf("can't get handle from result ctx: %v", err)
 				}
 
-				common.AssertEqual(t, uint32(producerID), hdl.idx, "handle.idx doesn't match shmem ID")
+				test.AssertEqual(t, uint32(producerID), hdl.idx, "handle.idx doesn't match shmem ID")
 
 				hdl.RLock()
 				defer hdl.RUnlock()
-				common.AssertTrue(t, hdl.isValid(), "handle is not valid")
+				test.AssertTrue(t, hdl.isValid(), "handle is not valid")
 			}
 		})
 	}
@@ -86,20 +87,20 @@ func TestTelemetry_Detach(t *testing.T) {
 	}
 
 	hdl.RLock()
-	common.AssertFalse(t, hdl.isValid(), "handle should be invalidated")
+	test.AssertFalse(t, hdl.isValid(), "handle should be invalidated")
 	hdl.RUnlock()
 
 	// previously invalidated handle/context
 	Detach(newCtx)
 	hdl.RLock()
-	common.AssertFalse(t, hdl.isValid(), "handle should still be invalid")
+	test.AssertFalse(t, hdl.isValid(), "handle should still be invalid")
 	hdl.RUnlock()
 }
 
 func TestTelemetry_GetAPIVersion(t *testing.T) {
 	ver := GetAPIVersion()
 
-	common.AssertEqual(t, ver, 1, "wrong API version")
+	test.AssertEqual(t, ver, 1, "wrong API version")
 }
 
 func initCtxReal(t *testing.T, id uint32) context.Context {
@@ -178,8 +179,8 @@ func TestTelemetry_GetRank(t *testing.T) {
 
 			result, err := GetRank(ctx)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "rank result")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "rank result")
 		})
 	}
 }
@@ -288,10 +289,10 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 			s := NewSchema()
 			err := CollectMetrics(ctx, s, ch)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			wg.Wait()
-			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "got wrong number of metrics")
+			test.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "got wrong number of metrics")
 
 			for _, exp := range tc.expMetrics {
 				expPath := fmt.Sprintf("ID: %d/%s", producerID, exp.Name)

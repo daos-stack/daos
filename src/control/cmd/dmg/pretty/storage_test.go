@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -386,7 +386,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, tc.mic)
 
@@ -839,7 +839,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := control.NewMockInvoker(log, tc.mic)
@@ -963,7 +963,7 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := control.NewMockInvoker(log, tc.mic)
@@ -1293,15 +1293,15 @@ func TestPretty_PrintSmdInfoMap(t *testing.T) {
 					&control.HostStorage{
 						SmdInfo: &control.SmdInfo{
 							Pools: control.SmdPoolMap{
-								common.MockUUID(0): {
+								test.MockUUID(0): {
 									{
-										UUID:      common.MockUUID(0),
+										UUID:      test.MockUUID(0),
 										Rank:      0,
 										TargetIDs: []int32{0, 1, 2, 3},
 										Blobs:     []uint64{11, 12, 13, 14},
 									},
 									{
-										UUID:      common.MockUUID(0),
+										UUID:      test.MockUUID(0),
 										Rank:      1,
 										TargetIDs: []int32{0, 1, 2, 3},
 										Blobs:     []uint64{11, 12, 13, 14},
@@ -1334,15 +1334,15 @@ host1
 					&control.HostStorage{
 						SmdInfo: &control.SmdInfo{
 							Pools: control.SmdPoolMap{
-								common.MockUUID(0): {
+								test.MockUUID(0): {
 									{
-										UUID:      common.MockUUID(0),
+										UUID:      test.MockUUID(0),
 										Rank:      0,
 										TargetIDs: []int32{0, 1, 2, 3},
 										Blobs:     []uint64{11, 12, 13, 14},
 									},
 									{
-										UUID:      common.MockUUID(0),
+										UUID:      test.MockUUID(0),
 										Rank:      1,
 										TargetIDs: []int32{0, 1, 2, 3},
 										Blobs:     []uint64{11, 12, 13, 14},
@@ -1395,28 +1395,28 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:      common.MockUUID(0),
+									UUID:      test.MockUUID(0),
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateNormal,
 								},
 								{
-									UUID:      common.MockUUID(1),
+									UUID:      test.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateEvicted,
 								},
 								{
-									UUID:      common.MockUUID(2),
+									UUID:      test.MockUUID(2),
 									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
 									NvmeState: storage.NvmeDevState(0),
 								},
 								{
-									UUID:      common.MockUUID(3),
+									UUID:      test.MockUUID(3),
 									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
@@ -1472,7 +1472,7 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:      common.MockUUID(0),
+									UUID:      test.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateNormal,

@@ -80,6 +80,7 @@ class CartSelfTest(TestWithServers):
         self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
 
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
+        self.server_managers[0].detect_start_via_dmg = True
 
         # Start the daos server
         self.start_server_managers()
@@ -87,7 +88,10 @@ class CartSelfTest(TestWithServers):
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=network,smoke
+        :avocado: tags=unittest,cartselftest,test_self_test
         """
         # Setup the orterun command
         orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")

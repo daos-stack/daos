@@ -40,16 +40,6 @@ class ParallelIo(FioBase, IorTestBase):
         """Create a TestPool object to use with ior."""
         self.pool.append(self.get_pool(connect=False))
 
-    # pylint: disable=arguments-differ
-    def create_cont(self, pool):
-        """Create a TestContainer object to be used to create container.
-
-        Args:
-            pool (TestPool): TestPool object type for which container
-                             needs to be created
-        """
-        self.container.append(self.get_container(pool))
-
     def stat_bfree(self, path):
         """Get stat bfree.
 
@@ -147,8 +137,7 @@ class ParallelIo(FioBase, IorTestBase):
         self.create_pool()
         self.start_dfuse(self.hostlist_clients, self.pool[0], None)
         # create multiple containers
-        for _ in range(self.cont_count):
-            self.create_cont(self.pool[0])
+        self.add_container_qty(self.cont_count, self.pool[0])
 
         # check if all the created containers can be accessed and perform
         # io on each container using fio in parallel
@@ -259,8 +248,7 @@ class ParallelIo(FioBase, IorTestBase):
         # different times and get appended in the self.container variable in
         # unorderly manner, causing problems during the write process.
         for _, pool in enumerate(self.pool):
-            for _ in range(self.cont_count):
-                self.create_cont(pool)
+            self.add_container_qty(self.cont_count, pool)
 
         # Try to access each dfuse mounted container using ls. Once it is
         # accessed successfully, go ahead and perform io on that location

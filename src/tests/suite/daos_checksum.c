@@ -14,7 +14,7 @@
 #include <daos/task.h>
 #include <daos/event.h>
 #include <daos/container.h>
-#include <daos_srv/daos_engine.h>
+#include <daos/object.h>
 
 #define EC_CSUM_OC	OC_EC_2P2G1
 
@@ -2193,7 +2193,7 @@ tst_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 }
 
 static int
-test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
+test_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct daos_csummer	*csummer = NULL;
 	int			 rc;
@@ -2369,8 +2369,8 @@ test_enumerate_object(void **state)
 
 
 	unit_oid.id_pub = ctx.oid;
-	rc = dss_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
-			     test_enum_unpack_cb, NULL);
+	rc = dc_obj_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
+				test_enum_unpack_cb, NULL);
 	assert_success(rc);
 
 	/** Clean up */
@@ -2566,6 +2566,64 @@ ec_two_chunk_plus_one(void **state)
 	});
 }
 
+static void
+basic_scrubbing_test(void **state, char *scrub_freq)
+{
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	int			 rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
+
+	/**
+	 * Setup
+	 */
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	/* Make scrubbing is running a lot */
+	dmg_pool_set_prop(dmg_config_file, "scrub", "continuous",
+			  ctx.test_arg->pool.pool_uuid);
+	dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+			  ctx.test_arg->pool.pool_uuid);
+
+	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC32, false, 1024, oc);
+
+	/**
+	 * Act
+	 */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_success(rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_success(rc);
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
+
+	/**
+	 * Clean up
+	 */
+
+	sleep(5); /* Make sure scrubber has had time to start running */
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+}
+
+static void
+scrubbing_a_lot(void **state)
+{
+	basic_scrubbing_test(state, "1");
+}
+
+static void
+scrubbing_with_large_sleep(void **state)
+{
+	basic_scrubbing_test(state, "100000");
+}
+
 static int
 setup(void **state)
 {
@@ -2665,6 +2723,12 @@ static const struct CMUnitTest csum_tests[] = {
 		  "EC chunk", ec_chunk_plus_one),
 	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
 		  "2 EC chunks", ec_two_chunk_plus_one),
+	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
+		  "running very frequently",
+		  scrubbing_a_lot),
+	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
+		  "in between. Should still be able to destroy cont and pool",
+		  scrubbing_with_large_sleep)
 };
 
 static int
@@ -2683,7 +2747,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int i;
 
 	if (rank != 0) {
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -2709,6 +2773,6 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 					test_teardown);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

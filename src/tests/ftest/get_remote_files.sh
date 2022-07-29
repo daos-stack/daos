@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# (C) Copyright 2020-2021 Intel Corporation.
+# (C) Copyright 2020-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -119,7 +119,7 @@ scp_files() {
     do
         file_name=${file##*/}
         archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
-        if scp -r "${file}" "${2}"/"${archive_name}"; then
+        if scp -pr "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
             if [[ ! "${file}" =~ /etc/daos/ ]] && \
                [[ ! "${file}" =~ daos_dump ]] && \

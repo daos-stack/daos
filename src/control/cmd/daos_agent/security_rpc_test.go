@@ -14,8 +14,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -23,11 +24,11 @@ import (
 
 func TestAgentSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
 
-	common.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
+	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
 }
 
 func newTestSession(t *testing.T, log logging.Logger, conn net.Conn) *drpc.Session {
@@ -41,7 +42,7 @@ func defaultTestTransportConfig() *security.TransportConfig {
 
 func TestAgentSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
 	method, err := mod.ID().GetMethod(-1)
@@ -49,7 +50,7 @@ func TestAgentSecurityModule_BadMethod(t *testing.T) {
 		t.Errorf("Expected no method, got %+v", method)
 	}
 
-	common.CmpErr(t, errors.New("invalid method -1 for module Agent Security"), err)
+	test.CmpErr(t, errors.New("invalid method -1 for module Agent Security"), err)
 }
 
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
@@ -58,7 +59,7 @@ func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, con
 
 func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
 	conn := make(chan *net.UnixConn)
-	path, lisCleanup := common.SetupTestListener(t, conn)
+	path, lisCleanup := test.SetupTestListener(t, conn)
 
 	client := getClientConn(t, path)
 
@@ -91,14 +92,14 @@ func expectCredResp(t *testing.T, respBytes []byte, expStatus int32, expCred boo
 		t.Fatalf("Couldn't unmarshal result: %v", err)
 	}
 
-	common.AssertEqual(t, resp.Status, expStatus, "status didn't match")
+	test.AssertEqual(t, resp.Status, expStatus, "status didn't match")
 
-	common.AssertEqual(t, resp.Cred != nil, expCred, "credential expectation not met")
+	test.AssertEqual(t, resp.Cred != nil, expCred, "credential expectation not met")
 }
 
 func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	// Set up a real unix socket so we can make a real connection
 	conn, cleanup := setupTestUnixConn(t)
@@ -116,12 +117,12 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 
 func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, defaultTestTransportConfig())
 	respBytes, err := callRequestCreds(mod, t, log, &net.TCPConn{})
 
-	common.CmpErr(t, drpc.NewFailureWithMessage("connection is not a unix socket"), err)
+	test.CmpErr(t, drpc.NewFailureWithMessage("connection is not a unix socket"), err)
 
 	if respBytes != nil {
 		t.Errorf("Expected no response, got: %v", respBytes)
@@ -130,7 +131,7 @@ func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
 
 func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	// Set up a real unix socket so we can make a real connection
 	conn, cleanup := setupTestUnixConn(t)
@@ -144,12 +145,12 @@ func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosMiscError), false)
+	expectCredResp(t, respBytes, int32(daos.MiscError), false)
 }
 
 func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	// Set up a real unix socket so we can make a real connection
 	conn, cleanup := setupTestUnixConn(t)
@@ -163,12 +164,12 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosInvalidInput), false)
+	expectCredResp(t, respBytes, int32(daos.InvalidInput), false)
 }
 
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	// Set up a real unix socket so we can make a real connection
 	conn, cleanup := setupTestUnixConn(t)
@@ -185,5 +186,5 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosMiscError), false)
+	expectCredResp(t, respBytes, int32(daos.MiscError), false)
 }

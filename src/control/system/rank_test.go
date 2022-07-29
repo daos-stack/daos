@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,9 +11,10 @@ import (
 	"math"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestSystem_RankYaml(t *testing.T) {
@@ -54,7 +55,7 @@ func TestSystem_RankYaml(t *testing.T) {
 			}
 			gotErr := r.UnmarshalYAML(unmarshal)
 
-			common.CmpErr(t, tc.wantErr, gotErr)
+			test.CmpErr(t, tc.wantErr, gotErr)
 			if tc.wantErr != nil {
 				return
 			}
@@ -257,7 +258,7 @@ func TestSystem_RankRemoveFromList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotList := tc.r.RemoveFromList(tc.rl)
-			common.AssertEqual(t, tc.expRanks, gotList, name)
+			test.AssertEqual(t, tc.expRanks, gotList, name)
 		})
 	}
 }
@@ -286,7 +287,7 @@ func TestSystem_RankInList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotBool := tc.r.InList(tc.rl)
-			common.AssertEqual(t, tc.expBool, gotBool, name)
+			test.AssertEqual(t, tc.expBool, gotBool, name)
 		})
 	}
 }
@@ -315,7 +316,7 @@ func TestSystem_RanksToUint32(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotList := RanksToUint32(tc.rl)
-			common.AssertEqual(t, tc.expRanks, gotList, name)
+			test.AssertEqual(t, tc.expRanks, gotList, name)
 		})
 	}
 }
@@ -344,7 +345,7 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotList := RanksFromUint32(tc.rl)
-			common.AssertEqual(t, tc.expRanks, gotList, name)
+			test.AssertEqual(t, tc.expRanks, gotList, name)
 		})
 	}
 }

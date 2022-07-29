@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-  test_clients:
-    - client-H
+  test_servers: 7
+  test_clients: 1
 timeouts:
   test_create_pool_quantity: 690
 server_config:
@@ -23,7 +15,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG
       env_vars:
-        - DD_MASK=mgmt,md,dsms,any
+        - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
 pool:
   name: daos_server

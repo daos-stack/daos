@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -65,7 +65,7 @@ func setDirs(t *testing.T, newHome, newSys string) func(t *testing.T) {
 }
 
 func TestControl_LoadSystemConfig(t *testing.T) {
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	restore := setDirs(t, "NONE", tmpDir)
@@ -84,7 +84,7 @@ func TestControl_LoadSystemConfig(t *testing.T) {
 }
 
 func TestControl_LoadUserConfig(t *testing.T) {
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	restore := setDirs(t, tmpDir, "NONE")
@@ -103,7 +103,7 @@ func TestControl_LoadUserConfig(t *testing.T) {
 }
 
 func TestControl_LoadSpecifiedConfig(t *testing.T) {
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	restore := setDirs(t, "NONE", "NONE")
@@ -127,7 +127,7 @@ func TestControl_LoadConfig_NoneFound(t *testing.T) {
 	defer restore(t)
 
 	gotCfg, err := LoadConfig("")
-	common.CmpErr(t, err, ErrNoConfigFile)
+	test.CmpErr(t, err, ErrNoConfigFile)
 	if gotCfg != nil {
 		t.Fatalf("got non-nil cfg, want nil")
 	}
@@ -148,7 +148,7 @@ func TestControl_LoadConfig_BadInputs(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tmpDir, cleanup := common.CreateTestDir(t)
+			tmpDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 			tmpPath := path.Join(tmpDir, defaultConfigFile)
 			f, err := os.Create(tmpPath)
@@ -162,7 +162,7 @@ func TestControl_LoadConfig_BadInputs(t *testing.T) {
 			f.Close()
 
 			cfg, err := LoadConfig(tmpPath)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if cfg != nil {
 				t.Fatalf("got non-nil cfg, want nil")
 			}

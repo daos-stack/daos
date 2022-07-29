@@ -263,7 +263,7 @@ rebuild is the primary user of these APIs with checksums.
 - obj_enum.c is relied on for enumerating the objects to be rebuilt. Because the
   fetch_update functions will unpack the csums from fetch, it will also unpack
   the csums for enum, so the unpacking process in obj_enum.c will simply copy
-  the csum_iov to the io (dss_enum_unpack_io) structure in
+  the csum_iov to the io (dc_obj_enum_unpack_io) structure in
   **enum_unpack_recxs()** and then deep copy to the mrone (migrate_one)
   structure in **migrate_one_insert()**.
 

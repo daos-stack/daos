@@ -45,7 +45,8 @@ class ZeroConfigTest(TestWithServers):
         try:
             # Find any ib* device in the listing and initially use default numa and domain values
             for index, interface in enumerate(re.findall(r"ib\d", "\n".join(results[0]["stdout"]))):
-                self.interfaces[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
+                self.interfaces[interface] = {
+                    "numa": index, "domain": "hfi1_{}".format(index), "port": "1"}
         except (IndexError, KeyError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
@@ -62,6 +63,7 @@ class ZeroConfigTest(TestWithServers):
                 for match in re.findall(regex, "\n".join(results[0]["stdout"])):
                     self.interfaces[match[1]]["numa"] = int(match[2])
                     self.interfaces[match[1]]["domain"] = match[0]
+                    self.interfaces[match[1]]["port"] = "1"
         except (IndexError, KeyError, ValueError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
@@ -85,7 +87,7 @@ class ZeroConfigTest(TestWithServers):
             # Check the port counter for each interface on all of the hosts
             counter_file = os.path.join(
                 os.sep, "sys", "class", "infiniband", self.interfaces[interface]["domain"], "ports",
-                "1", "counters", port_counter)
+                self.interfaces[interface]["port"], "counters", port_counter)
             check_result = check_file_exists(hosts, counter_file)
             if not check_result[0]:
                 self.fail("{}: {} not found".format(check_result[1], counter_file))
@@ -168,7 +170,13 @@ class ZeroConfigTest(TestWithServers):
         racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
-        racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
+        if "ucx" in self.server_managers[0].get_config_value("provider"):
+            port_domains = [
+                ":".join([iface["domain"], iface["port"]]) for iface in self.interfaces.values()]
+            racer_env["OFI_DOMAIN"] = ",".join(port_domains)
+        else:
+            racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
+
         daos_racer.set_environment(racer_env)
 
         # Run client

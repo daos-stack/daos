@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,23 +286,24 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERT(e)							\
 	do {								\
-		if (!(e)) {						\
-			D_FATAL("Assertion '%s' failed\n", #e);		\
-			d_log_sync();					\
-		}							\
+		if (likely(e))						\
+			break;						\
+		D_FATAL("Assertion '%s' failed\n", #e);			\
+		d_log_sync();						\
 		if (d_alt_assert != NULL)				\
-			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
-		assert(e);						\
+			d_alt_assert(0, #e, __FILE__, __LINE__);	\
+		assert(0);						\
 	} while (0)
 
-#define D_ASSERTF(cond, fmt, ...)					\
-do {									\
-	if (!(cond))							\
-		D_FATAL("Assertion '%s' failed: " fmt, #cond, ## __VA_ARGS__); \
-	if (d_alt_assert != NULL)					\
-		d_alt_assert((int64_t)(cond), #cond, __FILE__, __LINE__);\
-	assert(cond);							\
-} while (0)
+#define D_ASSERTF(cond, fmt, ...)						\
+	do {									\
+		if (likely(cond))						\
+			break;							\
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ## __VA_ARGS__);	\
+		if (d_alt_assert != NULL)					\
+			d_alt_assert(0, #cond, __FILE__, __LINE__);		\
+		assert(0);							\
+	} while (0)
 
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)

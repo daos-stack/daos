@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -46,7 +46,7 @@ class ListContainerTest(TestWithServers):
         data = self.daos_cmd.container_list(pool=pool_uuid)
         actual_uuids = []
         for uuid_label in data["response"]:
-            actual_uuids.append(uuid_label["UUID"])
+            actual_uuids.append(uuid_label["uuid"])
         actual_uuids.sort()
 
         self.assertEqual(expected_uuids, actual_uuids)
@@ -61,8 +61,9 @@ class ListContainerTest(TestWithServers):
             See test cases in the class description.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,list_containers
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=list_containers,test_list_containers
         """
         expected_uuids1 = []
         self.pool = []

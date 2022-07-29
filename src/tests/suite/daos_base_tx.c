@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,11 +23,11 @@ static const char *dts_dtx_akey	= "dtx_io akey";
 static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -636,7 +636,7 @@ dtx_17(void **state)
 		      DAOS_TX_NONE, &req);
 	punch_akey(dkey, akey1, DAOS_TX_NONE, &req);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
 	lookup_single(dkey, akey1, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
@@ -687,7 +687,7 @@ dtx_resend_delay(test_arg_t *arg, daos_oclass_id_t oclass)
 	assert_int_equal(req.iod[0].iod_size, size);
 	assert_memory_equal(update_buf, fetch_buf, size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	daos_fail_loc_set(0);
 	dtx_set_fail_loc(arg, 0);
 
@@ -721,6 +721,151 @@ dtx_19(void **state)
 		return;
 
 	dtx_resend_delay(arg, OC_RP_2G1);
+}
+
+static void
+dtx_20(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*update_buf;
+	char		*fetch_buf;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	d_rank_t	 rank;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("race between DTX refresh and DTX resync\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	D_ALLOC(update_buf, dts_dtx_iosize);
+	assert_non_null(update_buf);
+	D_ALLOC(fetch_buf, dts_dtx_iosize);
+	assert_non_null(fetch_buf);
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* The DTX that create the object will trigger synchronous commit. */
+	dts_buf_render(update_buf, dts_dtx_iosize);
+	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		/* Elect the shard_0 as the leader with DAOS_DTX_SPEC_LEADER set. */
+		daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
+		/*
+		 * Some shard may be skipped on server because of the side-effect of
+		 * DAOS_DTX_SPEC_LEADER. Set it as 4 to avoid such case since we only
+		 * have 3 replicas in the test.
+		 */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 4, 0, NULL);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	/* Reset the data and write again. */
+	dts_buf_render(update_buf, dts_dtx_iosize);
+	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+
+	if (arg->myrank == 0)
+		print_message("Rewrite object "DF_OID" with specified leader %u\n",
+			      DP_OID(oid), rank);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+		/* Delay DTX resync (5 seconds) when change pool map. */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_RESYNC_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
+		/* Set client RPC timeout as 3 seconds if set DAOS_DTX_RESYNC_DELAY. */
+		daos_fail_loc_set(DAOS_DTX_RESYNC_DELAY | DAOS_FAIL_ALWAYS);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("Exclude rank %u with DTX resync delayed\n", rank);
+
+	/* Do not wait the rebuild to complete. */
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, rank, false);
+
+	/*
+	 * After excluding the old leader, the 2nd shard becomes the new leader.
+	 * At that time, the DTX resync on the new leader is delayed because of
+	 * DAOS_DTX_RESYNC_DELAY. Under such case, if we read related data from
+	 * the 3rd shard (non-leader), it will trigger DTX refresh to new leader.
+	 */
+
+	if (arg->myrank == 0)
+		print_message("Read "DF_OID" from the 3rd shard before or during DTX resync\n",
+			      DP_OID(oid));
+
+	lookup_single(dkey, akey, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+	assert_int_equal(req.iod[0].iod_size, dts_dtx_iosize);
+	assert_memory_equal(update_buf, fetch_buf, dts_dtx_iosize);
+
+	par_barrier(PAR_COMM_WORLD);
+	arg->no_rebuild = 0;
+	if (arg->myrank == 0) {
+		daos_fail_loc_set(0);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+		print_message("Waiting for rebuild to be done\n");
+		/* Wait for rebuild to complete. */
+		test_rebuild_wait(&arg, 1);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	reintegrate_single_pool_rank(arg, rank);
+
+	D_FREE(fetch_buf);
+	D_FREE(update_buf);
+	ioreq_fini(&req);
+}
+
+static void
+dtx_21(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*update_buf;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("do not abort partially committed DTX\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	D_ALLOC(update_buf, dts_dtx_iosize);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, dts_dtx_iosize);
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	dtx_set_fail_loc(arg, DAOS_DTX_FAIL_COMMIT);
+	/*
+	 * The DTX that create the object will trigger synchronous commit. One of
+	 * the replicas will fail commit locally because of DAOS_DTX_FAIL_COMMIT.
+	 * But the other replicas will commit successfully, then related data can
+	 * be accessed.
+	 */
+	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+	dtx_set_fail_loc(arg, 0);
+
+	dtx_check_replicas(dkey, akey, "update_succ", update_buf, dts_dtx_iosize, &req);
+
+	D_FREE(update_buf);
+	ioreq_fini(&req);
 }
 
 static const struct CMUnitTest dtx_tests[] = {
@@ -762,6 +907,10 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_18, NULL, test_case_teardown},
 	{"DTX19: DTX resend during bulk data transfer - multiple reps",
 	 dtx_19, NULL, test_case_teardown},
+	{"DTX20: race between DTX refresh and DTX resync",
+	 dtx_20, NULL, test_case_teardown},
+	{"DTX21: do not abort partially committed DTX",
+	 dtx_21, NULL, test_case_teardown},
 };
 
 static int
@@ -780,7 +929,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(dtx_tests);
 		sub_tests = NULL;
@@ -790,7 +939,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

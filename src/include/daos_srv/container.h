@@ -58,18 +58,21 @@ struct ds_cont_child {
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
+	ABT_cond		 sc_scrub_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
-				 sc_ec_agg_active:1;
+				 sc_ec_agg_active:1,
+				 sc_scrubbing:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -162,6 +165,8 @@ int agg_rate_ctl(void *arg);
  */
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
+	/* link to ds_cont_child::sc_open_hdls if sch_cont is not NULL. */
+	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */

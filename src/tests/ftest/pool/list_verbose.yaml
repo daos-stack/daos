@@ -1,9 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 
 timeout: 300
 
@@ -50,6 +47,5 @@ ior:
   test_file: test_file_1
   transfer_size: 1M
   dfs_chunk: 1048576
-  dfs_dir_oclass: S1
   dfs_oclass: S1
   dfs_group: daos_server

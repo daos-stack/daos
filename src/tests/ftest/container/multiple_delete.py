@@ -1,17 +1,16 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
+from general_utils import DaosTestError
 
 
 class MultipleContainerDelete(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description:
-       Test that multiple container create/delete reclaims
-       the pool space without leak.
+       Test that multiple container create/delete reclaims the pool space without leak.
 
     :avocado: recursive
     """
@@ -27,7 +26,7 @@ class MultipleContainerDelete(IorTestBase):
             Capture the pool space.
             Create a POSIX container and fill it with IOR DFS Api
             Delete the container and repeat the above steps 50 times.
-            Verify both the SCM and SSD pool spaces are recovered
+            Verify both the SCM and NVMe pool spaces are recovered
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -46,26 +45,28 @@ class MultipleContainerDelete(IorTestBase):
                 self.server_group, self.pool, self.container.uuid)
             # If the transfer size is less than 4K, the objects are
             # inserted into SCM and anything greater goes to SSD
-            self.run_ior_with_pool()
+            self.run_ior_with_pool(create_cont=False)
             self.container.destroy()
             scm_fs, ssd_fs = self.get_pool_space()
-            out.append("iter = {}, scm = {}, ssd = {}".format(
-                i+1, scm_fs, ssd_fs))
+            out.append("iter = {}, scm = {}, ssd = {}".format(i+1, scm_fs, ssd_fs))
 
         self.log.info("Initial Free Space")
-        self.log.info("SCM = %d, SSD = %d", initial_scm_fs, initial_ssd_fs)
+        self.log.info("SCM = %d, NVMe = %d", initial_scm_fs, initial_ssd_fs)
         self.log.info("Free space after each cont create/del iteration")
         self.log.info("\n".join(out))
         final_scm_fs, final_ssd_fs = self.get_pool_space()
         self.log.info("Final free Space after all iters")
-        self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
+        self.log.info("SCM = %d, NVMe = %d", final_scm_fs, final_ssd_fs)
 
-        self.log.info("Verifying SSD space is recovered")
-        self.log.info("%d == %d", final_ssd_fs, initial_ssd_fs)
-        self.assertTrue(final_ssd_fs == initial_ssd_fs)
+        self.log.info("Verifying NVMe space is recovered")
+        try:
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
+        except DaosTestError as error:
+            self.fail("NVMe space is not recovered after 50 "
+                      "create-write-destroy iterations {}".format(error))
 
         self.log.info("Verifying SCM space is recovered")
-        self.log.info("%d == %d", final_scm_fs, initial_scm_fs)
+        self.log.info("%d (Final) == %d (Initial)", final_scm_fs, initial_scm_fs)
         # Uncomment the below verification once DAOS-8643 is fixed
         # self.assertTrue(final_scm_fs == initial_scm_fs)
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,10 +13,14 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
 func TestFaults(t *testing.T) {
+	var nilFault *fault.Fault
+
 	for _, tc := range []struct {
 		name        string
 		testErr     error
@@ -27,6 +31,12 @@ func TestFaults(t *testing.T) {
 		{
 			name:        "nil error",
 			testErr:     nil,
+			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
+		},
+		{
+			name:        "nil Fault",
+			testErr:     nilFault,
+			expFaultStr: "(nil)",
 			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
 		},
 		{
@@ -153,6 +163,36 @@ func TestFaultComparison(t *testing.T) {
 			if actual != tc.expComparison {
 				t.Fatalf("expected %t, but got %t", tc.expComparison, actual)
 			}
+		})
+	}
+}
+
+func TestFault_IsFaultCode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		code      code.Code
+		expResult bool
+	}{
+		"nil": {},
+		"not a fault": {
+			err: errors.New("something"),
+		},
+		"code matches": {
+			err: &fault.Fault{
+				Code: code.MissingSoftwareDependency,
+			},
+			code:      code.MissingSoftwareDependency,
+			expResult: true,
+		},
+		"code doesn't match": {
+			err: &fault.Fault{
+				Code: code.PrivilegedHelperNotPrivileged,
+			},
+			code: code.MissingSoftwareDependency,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, fault.IsFaultCode(tc.err, tc.code), "")
 		})
 	}
 }

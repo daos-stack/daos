@@ -4208,7 +4208,7 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 }
 
 int
-dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
+dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t otype,
 		    int tree_order, struct daos_tree_overhead *ovhd)
 {
 	btr_ops_t		*ops;
@@ -4237,7 +4237,7 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 		return -DER_INVAL;
 	}
 
-	hkey_size = btr_hkey_size_const(ops, ofeat);
+	hkey_size = btr_hkey_size_const(ops, otype);
 	btr_size = sizeof(struct btr_record) + hkey_size;
 
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);

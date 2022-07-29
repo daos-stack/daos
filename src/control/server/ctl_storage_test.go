@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -177,7 +177,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var engineCfgs []*engine.Config
 			for _, sc := range tc.storageCfgs {
@@ -189,7 +189,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			cs.harness.started.SetTrue()
 
 			outResp, err := cs.getScmUsage(tc.inResp)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
 			}

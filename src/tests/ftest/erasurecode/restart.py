@@ -57,7 +57,7 @@ class EcodServerRestart(ErasureCodeIor):
             size_after_restart = self.pool.pool_percentage_used()
             self.log.info("Size after Restarti: %s ", self.pool.pool_percentage_used())
             # Verify if Aggregation is getting started
-            if not size_after_restart['scm'] > size_before_restart['scm']:
+            if not any(check_aggregation_status(self.pool, attempt=50).values()):
                 self.fail("Aggregation failed to start After server restart..")
 
         # Read all EC object data from NVMe

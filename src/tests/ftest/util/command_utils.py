@@ -18,13 +18,12 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    BasicParameter, CommandWithParameters, \
-    EnvironmentVariables, LogParameter
+    BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
 from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
+    get_subprocess_stdout, get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -923,7 +922,7 @@ class YamlCommand(SubProcessCommand):
         specified by the YamlParameters.filename.
 
         Args:
-            hosts (list): hosts to which to copy the configuration file.
+            hosts (NodeSet): hosts to which to copy the configuration file.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file
@@ -966,7 +965,7 @@ class YamlCommand(SubProcessCommand):
                     self.command, directory, user, nodes)
                 try:
                     create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, user, sudo=True)
+                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
@@ -984,10 +983,10 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager():
+class SubprocessManager(ObjectWithParameters):
     """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, command, manager="Orterun"):
+    def __init__(self, command, manager="Orterun", namespace=None):
         """Create a SubprocessManager object.
 
         Args:
@@ -995,15 +994,17 @@ class SubprocessManager():
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "OpenMpi"
+            namespace (str): yaml namespace (path to parameters)
         """
+        super().__init__(namespace)
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
         self.manager = get_job_manager_class(manager, command, True)
         self._id = self.manager.job.command.replace("daos_", "")
 
-        # Define the list of hosts that will execute the daos command
-        self._hosts = []
+        # Define the hosts that will execute the daos command
+        self._hosts = NodeSet()
 
         # The socket directory verification is not required with systemctl
         self._verify_socket_dir = manager != "Systemctl"
@@ -1048,7 +1049,7 @@ class SubprocessManager():
         """Set the hosts used to execute the daos command.
 
         Args:
-            value (tuple): a tuple of a list of hosts, a path in which to create
+            value (tuple): a tuple of a NodeSet of hosts, a path in which to create
                 the hostfile, and a number of slots to specify per host in the
                 hostfile (can be None)
         """
@@ -1060,11 +1061,11 @@ class SubprocessManager():
         Defined as a private method to enable overriding the setter method.
 
         Args:
-            hosts (list): list of hosts on which to run the command
+            hosts (NodeSet): list of hosts on which to run the command
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = list(hosts)
+        self._hosts = hosts.copy()
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -1077,6 +1078,8 @@ class SubprocessManager():
         Args:
             test (Test): avocado Test object
         """
+        super().get_params(test)
+
         # Get the parameters for the JobManager command parameters
         self.manager.get_params(test)
 
@@ -1091,7 +1094,7 @@ class SubprocessManager():
 
         """
         # Create the yaml file for the daos command
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Start the daos command
@@ -1239,7 +1242,7 @@ class SubprocessManager():
 
         """
         status = {"expected": True, "restart": False}
-        show_log_hosts = []
+        show_log_hosts = NodeSet()
 
         # Get the current state of each job process
         current_states = self.get_current_state()
@@ -1254,7 +1257,7 @@ class SubprocessManager():
         self.log.info(
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
-            NodeSet.fromlist(self._hosts))
+            self._hosts)
         if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
@@ -1290,10 +1293,8 @@ class SubprocessManager():
 
                 # Keep track of any server in the errored state or in an
                 # unexpected state in order to display its log
-                if (current in self._states["errored"] or
-                        current not in expected):
-                    if current_host not in show_log_hosts:
-                        show_log_hosts.append(current_host)
+                if (current in self._states["errored"] or current not in expected):
+                    show_log_hosts.add(current_host)
 
                 self.log.info(
                     log_format, rank, current_host,

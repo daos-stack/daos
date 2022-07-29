@@ -320,11 +320,20 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
 	D_ASSERT(dae_old != dae_new);
-	D_ASSERTF(dae_old->dae_aborted,
-		  "NOT allow to update act DTX entry for "DF_DTI
-		  " from epoch "DF_X64" to "DF_X64"\n",
-		  DP_DTI(&DAE_XID(dae_old)),
-		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+
+	if (unlikely(!dae_old->dae_aborted)) {
+		/*
+		 * XXX: There are two possible reasons for that:
+		 *
+		 *	1. Client resent the RPC but without set 'RESEND' flag.
+		 *	2. Client reused the DTX ID for different modifications.
+		 *
+		 *	Currently, the 1st case is more suspected.
+		 */
+		D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
+			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+		return -DER_TX_ID_REUSED;
+	}
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae_new);
 	dtx_evict_lid(cont, dae_old);
@@ -363,7 +372,7 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 	D_ASSERT(dce != NULL);
 
 	rec->rec_off = UMOFF_NULL;
-	D_FREE_PTR(dce);
+	D_FREE(dce);
 
 	return 0;
 }
@@ -548,6 +557,11 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		rc = ilog_persist(loh, &id);
 
 	ilog_close(loh);
+
+	if (rc != 0)
+		D_ERROR("Failed to release ilog rec for "DF_DTI", abort %s: "DF_RC"\n",
+			DP_DTI(&DAE_XID(dae)), abort ? "yes" : "no", DP_RC(rc));
+
 	return rc;
 }
 
@@ -745,10 +759,9 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 }
 
 static int
-vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
-		   daos_epoch_t epoch, struct vos_dtx_cmt_ent **dce_p,
-		   struct vos_dtx_act_ent **dae_p,
-		   bool *rm_cos, bool *fatal)
+vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t epoch,
+		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
+		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
@@ -811,10 +824,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	DCE_CMT_TIME(dce) = cmt_time;
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = DAE_EPOCH(dae);
-		DCE_HANDLE_TIME(dce) = dae->dae_start_time;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
 
@@ -822,7 +835,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = dth->dth_epoch;
-		DCE_HANDLE_TIME(dce) = crt_hlc_get();
 	}
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -1725,7 +1737,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1791,8 +1804,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared)
+		if (dae->dae_prepared) {
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
+
 			return DTX_ST_PREPARED;
+		}
 
 		return DTX_ST_INITED;
 	}
@@ -1829,6 +1852,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
+	daos_epoch_t			 cmt_time = crt_hlc_get();
 	int				 committed = 0;
 	int				 cur = 0;
 	int				 rc = 0;
@@ -1857,7 +1881,7 @@ again:
 	     i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
+		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, cmt_time, &dce,
 					daes != NULL ? &daes[cur] : NULL,
 					rm_cos != NULL ? &rm_cos[cur] : NULL, &fatal);
 		if (dces != NULL)
@@ -2028,26 +2052,19 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_dtx_act_ent	 *dae = NULL;
-	struct vos_dtx_cmt_ent	 *dce = NULL;
 	struct vos_container	 *cont;
 	int			  committed = 0;
 	int			  rc = 0;
 
 	D_ASSERT(count > 0);
 
-	if (count > 1) {
-		D_ALLOC_ARRAY(daes, count);
-		if (daes == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(daes, count);
+	if (daes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, count);
-		if (dces == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		daes = &dae;
-		dces = &dce;
-	}
+	D_ALLOC_ARRAY(dces, count);
+	if (dces == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -2067,10 +2084,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	}
 
 out:
-	if (daes != &dae)
-		D_FREE(daes);
-	if (dces != &dce)
-		D_FREE(dces);
+	D_FREE(daes);
+	D_FREE(dces);
 
 	return rc < 0 ? rc : committed;
 }
@@ -2172,16 +2187,23 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
-		if (rc == 0)
+		if (rc == 0) {
+			D_ERROR("Not allow to set flag on committed/aborted DTX entry "DF_DTI"\n",
+				DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
+		}
 	}
 
 	if (rc != 0)
 		goto out;
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
+	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
+		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
+			dae->dae_committable ? "committable" :
+			dae->dae_committed ? "committed" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
+	}
 
 	umm = vos_cont2umm(cont);
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
@@ -2382,9 +2404,8 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_handle_time != 0) {
-				stat->dtx_first_cmt_blob_time_up =
-							dce->dce_handle_time;
+			    dce->dce_cmt_time != 0) {
+				stat->dtx_first_cmt_blob_time_up = dce->dce_cmt_time;
 				break;
 			}
 		}
@@ -2393,9 +2414,8 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_handle_time != 0) {
-				stat->dtx_first_cmt_blob_time_lo =
-							dce->dce_handle_time;
+			    dce->dce_cmt_time != 0) {
+				stat->dtx_first_cmt_blob_time_lo = dce->dce_cmt_time;
 				break;
 			}
 		}

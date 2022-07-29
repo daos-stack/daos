@@ -33,17 +33,16 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
-	/*
-	 * On read only: return the number of records that are short fetched
-	 * from the largest dkey(s). This helps for checking for short reads. If
-	 * this values is not zero, then a short read is possible and should be
-	 * checked with daos_array_get_size() compared with the indexes being
-	 * read.
+	/** (on read only) the number of records that are short fetched from the largest dkey(s).
+	 * Helps for checking short reads. If nonzero, a short read is possible and should be
+	 * checked with daos_array_get_size() compared with the indexes being read.
 	 */
 	daos_size_t		arr_nr_short_read;
+	/** (on read only) the number of records that were actually read from the array */
 	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
 
+/** DAOS array stat (size, modification time) information */
 typedef struct {
 	/** Array size (in records) */
 	daos_size_t	st_size;
@@ -95,7 +94,7 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  * The metadata of the array is stored under a special AKEY in DKEY 0. This means that this is a
  * generic array object with it's metadata tracked in the DAOS object. The feat bits in the oid must
  * set DAOS_OT_ARRAY,DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE. If the feat bits does not set
- * DAOS_OF_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
+ * DAOS_OT_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
  * not store those, and should not call this API since nothing will be written to the array
  * object. daos_array_open_with_attrs() can be used to get an array OH in that case to access with
  * the Array APIs.
@@ -132,8 +131,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
- *			DAOS_OF_ARRAY.
+ *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	cell_size

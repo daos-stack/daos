@@ -189,18 +189,9 @@ func ParseNumberList(stringList string, output interface{}) error {
 // DedupeStringSlice is responsible for returning a slice based on
 // the input with any duplicates removed.
 func DedupeStringSlice(in []string) []string {
-	keys := make(map[string]struct{})
+	set := NewStringSet(in...)
 
-	for _, el := range in {
-		keys[el] = struct{}{}
-	}
-
-	out := make([]string, 0, len(keys))
-	for key := range keys {
-		out = append(out, key)
-	}
-
-	return out
+	return set.ToSlice()
 }
 
 // StringSliceHasDuplicates checks whether there are duplicate strings in the

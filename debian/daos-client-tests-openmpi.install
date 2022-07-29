@@ -1,7 +1,1 @@
-usr/bin/crt_launch
-usr/bin/daos_perf
-usr/bin/daos_racer
-usr/bin/daos_test
-usr/bin/dfs_test
-usr/bin/jobtest
-usr/lib64/libdts.so
+usr/lib64/libdpar_mpi.so

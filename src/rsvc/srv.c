@@ -167,7 +167,8 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		rdb_stop(svc->s_db);
+		if (svc->s_db != NULL) /* "nodb" */
+			rdb_stop_and_close(svc->s_db);
 		fini_free(svc);
 	}
 }
@@ -214,7 +215,8 @@ rsvc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
-	rdb_stop(svc->s_db);
+	if (svc->s_db != NULL) /* "nodb" */
+		rdb_stop_and_close(svc->s_db);
 	fini_free(svc);
 }
 
@@ -686,8 +688,9 @@ static int
 start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
-	struct ds_rsvc *svc = NULL;
-	int		rc;
+	struct rdb_storage     *storage;
+	struct ds_rsvc	       *svc = NULL;
+	int			rc;
 
 	rc = alloc_init(class, id, db_uuid, &svc);
 	if (rc != 0)
@@ -695,13 +698,16 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	svc->s_ref++;
 
 	if (create)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
-				&rsvc_rdb_cbs, svc, &svc->s_db);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas, &rsvc_rdb_cbs, svc,
+				&storage);
 	else
-		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
-			       svc, &svc->s_db);
+		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
 		goto err_svc;
+
+	rc = rdb_start(storage, &svc->s_db);
+	if (rc != 0)
+		goto err_storage;
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -728,7 +734,9 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	return 0;
 
 err_db:
-	rdb_stop(svc->s_db);
+	rdb_stop(svc->s_db, &storage);
+err_storage:
+	rdb_close(storage);
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
@@ -1070,7 +1078,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 		return rc;
 	rc = ds_rsvc_add_replicas_s(svc, ranks, size);
 	ds_rsvc_set_hint(svc, hint);
-	put_leader(svc);
+	ds_rsvc_put_leader(svc);
 	return rc;
 }
 
@@ -1106,7 +1114,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 		return rc;
 	rc = ds_rsvc_remove_replicas_s(svc, ranks, stop);
 	ds_rsvc_set_hint(svc, hint);
-	put_leader(svc);
+	ds_rsvc_put_leader(svc);
 	return rc;
 }
 

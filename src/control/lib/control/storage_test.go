@@ -15,9 +15,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -127,13 +127,13 @@ func TestControl_StorageMap(t *testing.T) {
 
 			for i, hs := range tc.hss {
 				gotErr := hsm.Add(fmt.Sprintf("h%d", i), hs)
-				common.CmpErr(t, tc.expErr, gotErr)
+				test.CmpErr(t, tc.expErr, gotErr)
 				if tc.expErr != nil {
 					return
 				}
 			}
 
-			common.AssertEqual(t, tc.expHsmLen, len(hsm), "unexpected number of keys in map")
+			test.AssertEqual(t, tc.expHsmLen, len(hsm), "unexpected number of keys in map")
 		})
 	}
 }
@@ -409,13 +409,13 @@ func TestControl_StorageScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageScan(ctx, mi, &StorageScanReq{})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -715,13 +715,13 @@ func TestControl_StorageFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageFormat(ctx, mi, &StorageFormatReq{Reformat: tc.reformat})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -792,7 +792,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{
 				UnaryError:       tc.invokerErr,
@@ -802,7 +802,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 			req := &StorageFormatReq{}
 			req.SetHostList(tc.reqHosts)
 			err := checkFormatReq(context.Background(), mi, req)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 		})
 	}
@@ -838,14 +838,14 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 					{},
 				},
 			},
-			pciAddr:     common.MockPCIAddr(),
+			pciAddr:     test.MockPCIAddr(),
 			expResponse: new(NvmeRebindResp),
 		},
 		"invoke fails": {
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("failed"),
 			},
-			pciAddr: common.MockPCIAddr(),
+			pciAddr: test.MockPCIAddr(),
 			expErr:  errors.New("failed"),
 		},
 		"server error": {
@@ -861,7 +861,7 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 					},
 				},
 			},
-			pciAddr: common.MockPCIAddr(),
+			pciAddr: test.MockPCIAddr(),
 			expResponse: &NvmeRebindResp{
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
 			},
@@ -879,13 +879,13 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 					},
 				},
 			},
-			pciAddr:     common.MockPCIAddr(),
+			pciAddr:     test.MockPCIAddr(),
 			expResponse: &NvmeRebindResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, tc.mic)
@@ -893,7 +893,7 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 			gotResponse, gotErr := StorageNvmeRebind(ctx, mi, &NvmeRebindReq{
 				PCIAddr: tc.pciAddr,
 			})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -935,14 +935,14 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 					{},
 				},
 			},
-			pciAddr:     common.MockPCIAddr(),
+			pciAddr:     test.MockPCIAddr(),
 			expResponse: new(NvmeAddDeviceResp),
 		},
 		"invoke fails": {
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("failed"),
 			},
-			pciAddr: common.MockPCIAddr(),
+			pciAddr: test.MockPCIAddr(),
 			expErr:  errors.New("failed"),
 		},
 		"server error": {
@@ -958,7 +958,7 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 					},
 				},
 			},
-			pciAddr: common.MockPCIAddr(),
+			pciAddr: test.MockPCIAddr(),
 			expResponse: &NvmeAddDeviceResp{
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
 			},
@@ -976,13 +976,13 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 					},
 				},
 			},
-			pciAddr:     common.MockPCIAddr(),
+			pciAddr:     test.MockPCIAddr(),
 			expResponse: &NvmeAddDeviceResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, tc.mic)
@@ -992,7 +992,7 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 				EngineIndex:      0,
 				StorageTierIndex: -1,
 			})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

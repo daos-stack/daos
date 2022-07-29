@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+run-parts() {
+    local dir="$1"
+    shift
+
+    for i in $(LC_ALL=C; echo "${dir%/}"/*[^~,]); do
+        # don't run vim .swp files
+        [ "${i%.sw?}" != "${i}" ] && continue
+        $i "$@"
+    done
+}
+
+run-parts utils/githooks/"${0##*/}".d "$@" 1>&2

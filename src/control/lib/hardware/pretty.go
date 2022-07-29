@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,7 +23,7 @@ func PrintTopology(t *Topology, output io.Writer) error {
 		return nil
 	}
 
-	for _, numaNode := range t.NUMANodes {
+	for _, numaNode := range t.NUMANodes.AsSlice() {
 		coreSet := &system.RankSet{}
 		for _, core := range numaNode.Cores {
 			coreSet.Add(system.Rank(core.ID))
@@ -31,16 +31,45 @@ func PrintTopology(t *Topology, output io.Writer) error {
 
 		fmt.Fprintf(ew, "NUMA Node %d\n", numaNode.ID)
 		fmt.Fprintf(ew, "  CPU cores: %s\n", coreSet)
-		fmt.Fprintf(ew, "  PCI devices:\n")
-		for addr, devs := range numaNode.PCIDevices {
-			fmt.Fprintf(ew, "    %s\n", &addr)
-			for _, dev := range devs {
-				fmt.Fprintf(ew, "      %s\n", dev)
-			}
-		}
 		fmt.Fprintf(ew, "  PCI buses:\n")
 		for _, bus := range numaNode.PCIBuses {
 			fmt.Fprintf(ew, "    %s\n", bus)
+			for _, addr := range numaNode.PCIDevices.Keys() {
+				if !bus.Contains(addr) {
+					continue
+				}
+
+				fmt.Fprintf(ew, "      %s\n", addr)
+				for _, dev := range numaNode.PCIDevices.Get(addr) {
+					fmt.Fprintf(ew, "        %s\n", dev)
+				}
+			}
+		}
+
+		if len(numaNode.BlockDevices) > 0 {
+			var sectionPrinted bool
+			for _, blockDev := range numaNode.BlockDevices {
+				// Skip PCI-backed devices; they were already printed.
+				if blockDev.BackingDevice != nil {
+					continue
+				}
+				if !sectionPrinted {
+					fmt.Fprintln(ew, "  Non-PCI block devices:")
+					sectionPrinted = true
+				}
+				fmt.Fprintf(ew, "    %s\n", blockDev)
+			}
+		}
+	}
+
+	if len(t.VirtualDevices) > 0 {
+		fmt.Fprintln(ew, "Virtual Devices")
+
+		for _, dev := range t.VirtualDevices {
+			fmt.Fprintf(ew, "  %s (%s)\n", dev.Name, dev.Type)
+			if dev.BackingDevice != nil {
+				fmt.Fprintf(ew, "    backed by: %s\n", dev.BackingDevice)
+			}
 		}
 	}
 

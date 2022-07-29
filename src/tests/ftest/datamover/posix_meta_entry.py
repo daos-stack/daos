@@ -1,11 +1,11 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrPosixMetaEntry(DataMoverTestBase):
@@ -26,6 +26,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
+        :avocado: tags=test_dm_posix_meta_entry_dcp
         """
         self.run_dm_posix_meta_entry("DCP")
 
@@ -64,7 +65,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # Create 1 source container with test data
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
         daos_src_path = self.new_daos_test_path(False)
         dfuse_src_path = "{}/{}/{}{}".format(
             self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)
@@ -148,7 +149,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         Args:
             path1 (str): The left-hand side to compare.
             path2 (str): The right-hand side to compare.
-            cmp_filetype (bool, optional): Whether to compare the filetype.
+            cmp_filetype (bool, optional): Whether to compare the file-type.
                 Default is True.
             cmp_perms (bool, optional): Whether to compare the permissions.
                 Default is True.

@@ -81,6 +81,10 @@ enum vos_pool_open_flags {
 	VOS_POF_SMALL	= (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
 	VOS_POF_EXCL	= (1 << 1),
+	/** Ignore the pool uuid passed into vos_pool_open */
+	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
+	/** Caller does VEA flush periodically */
+	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 };
 
 enum vos_oi_attr {
@@ -212,6 +216,12 @@ typedef enum {
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 
+typedef enum {
+	VOS_ITER_PROC_OP_UNKNOWN = 0,
+	VOS_ITER_PROC_OP_DELETE = 1,
+	VOS_ITER_PROC_OP_MARK_CORRUPT = 2,
+} vos_iter_proc_op_t;
+
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
 	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
@@ -255,6 +265,11 @@ enum {
 	VOS_OF_SKIP_FETCH		= (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
 	VOS_OF_EC			= (1 << 19),
+};
+
+enum {
+	/** Aggregation optimization is enabled for this pool */
+	VOS_POOL_FEAT_AGG_OPT	= (1 << 0),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -339,6 +354,11 @@ typedef struct {
 		/** The key for the entry */
 		d_iov_t		 id_key;
 	};
+	/** Conservative approximation of last aggregatable write for object or key. */
+	daos_epoch_t		 id_agg_write;
+	/** Timestamp of latest parent punch, if applicable.  Zero if there is no punch */
+	daos_epoch_t		 id_parent_punch;
+	/** Type of entry */
 	vos_iter_type_t		 id_type;
 } vos_iter_desc_t;
 

@@ -5,9 +5,9 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['daos_common_pmem', 'daos', 'daos_tests', 'gurt', 'cart']
+    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid']
-    libraries += ['cmocka', 'json-c']
+    libraries += ['cmocka', 'json-c', 'dpar']
 
     Import('daos_test_tgt')
     Import('daos_epoch_io')
@@ -15,17 +15,18 @@ def scons():
 
     iogen = denv.SharedObject('daos_generate_io_conf.c')
     daos_gen_io_conf = daos_build.test(denv, 'daos_gen_io_conf',
-                                       daos_test_tgt + daos_epoch_io +
-                                       daos_test_obj + iogen,
+                                       daos_test_tgt + daos_epoch_io
+                                       + daos_test_obj + iogen,
                                        LIBS=libraries)
 
     ioconf = denv.SharedObject('daos_run_io_conf.c')
     daos_run_io_conf = daos_build.test(denv, 'daos_run_io_conf',
-                                       daos_test_tgt + daos_epoch_io +
-                                       daos_test_obj + ioconf,
+                                       daos_test_tgt + daos_epoch_io
+                                       + daos_test_obj + ioconf,
                                        LIBS=libraries)
     denv.Install('$PREFIX/bin/', daos_gen_io_conf)
     denv.Install('$PREFIX/bin/', daos_run_io_conf)
+
 
 if __name__ == "SCons.Script":
     scons()

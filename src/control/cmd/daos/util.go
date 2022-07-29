@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,7 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -65,7 +65,7 @@ func daosError(rc C.int) error {
 	if rc == 0 {
 		return nil
 	}
-	return drpc.DaosStatus(rc)
+	return daos.Status(rc)
 }
 
 func goBool2int(in bool) (out C.int) {
@@ -190,10 +190,13 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
 	}
+
+	C.free(unsafe.Pointer(ap))
 }
 
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
-	ap = &C.struct_cmd_args_s{}
+	// allocate the struct using C memory to avoid any issues with Go GC
+	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
 	ap.sysname = C.CString(build.DefaultSystemName)
 
@@ -226,7 +229,7 @@ type daosCaller interface {
 type daosCmd struct {
 	cmdutil.NoArgsCmd
 	jsonOutputCmd
-	logCmd
+	cmdutil.LogCmd
 }
 
 func (dc *daosCmd) initDAOS() (func(), error) {
@@ -238,7 +241,7 @@ func (dc *daosCmd) initDAOS() (func(), error) {
 
 	return func() {
 		if rc := C.daos_fini(); rc != 0 {
-			dc.log.Errorf("daos_fini() failed: %s", daosError(rc))
+			dc.Errorf("daos_fini() failed: %s", daosError(rc))
 		}
 	}, nil
 }

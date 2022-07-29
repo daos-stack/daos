@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -65,4 +65,12 @@ func ScrubProxyVariables() {
 	if !proxyScrubIsDisabled() {
 		ScrubEnvironment(proxyVars)
 	}
+}
+
+// BoolAsInt converts a bool to an int.
+func BoolAsInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

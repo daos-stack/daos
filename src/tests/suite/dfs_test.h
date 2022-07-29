@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,8 +33,8 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -47,8 +47,8 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
 		/** unpack global handle */
@@ -58,7 +58,7 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 
 	D_FREE(ghdl.iov_buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static inline void
@@ -75,8 +75,8 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -89,8 +89,8 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
 		/** unpack global handle */
@@ -100,7 +100,7 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 
 	D_FREE(ghdl.iov_buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static inline void
@@ -116,8 +116,8 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -130,8 +130,8 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
 		/** unpack global handle */
@@ -140,7 +140,7 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	D_FREE(ghdl.iov_buf);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #endif

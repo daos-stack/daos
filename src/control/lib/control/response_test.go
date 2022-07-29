@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
@@ -91,7 +91,7 @@ func TestControl_HostErrorsMap(t *testing.T) {
 			hem := make(HostErrorsMap)
 			for i, host := range tc.hosts {
 				gotErr := hem.Add(host, tc.errors[i])
-				common.CmpErr(t, tc.expErr, gotErr)
+				test.CmpErr(t, tc.expErr, gotErr)
 				if tc.expErr != nil {
 					return
 				}
@@ -130,7 +130,7 @@ func TestControl_getMSResponse(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotResp, gotErr := tc.resp.getMSResponse()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +14,6 @@
 #include <daos/task.h>
 #include <daos_task.h>
 #include <daos_types.h>
-#include <daos_srv/vos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -633,15 +632,15 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 }
 
 static int
-dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
+dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct dc_obj_verify_args	*dova = arg;
 	struct dc_object		*obj = obj_hdl2ptr(dova->oh);
-	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t				iovs[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	d_sg_list_t			sgls_verify[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t				iovs_verify[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t			sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t			sgls_verify[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs_verify[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
+	daos_iod_t			iods[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
 	tse_task_t			*task;
 	tse_task_t			*verify_task;
 	uint64_t			shard = dova->current_shard;
@@ -651,9 +650,13 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 	int				rc;
 
 	D_ASSERT(obj != NULL);
-	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64"\n", DP_KEY(&io->ui_dkey),
-		nr, shard);
-	if (nr == 0)
+	if (!dova->ec_parity_rotate)
+		io->ui_dkey_hash = 0;
+
+	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
+		"start EC "DF_U64"\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash,
+		obj_ec_shard_off(io->ui_dkey_hash, obj_get_oca(obj), io->ui_oid.id_shard));
+	if (nr == 0 || is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj)))
 		return 0;
 
 	for (i = 0; i < nr; i++) {
@@ -686,8 +689,9 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 		sgls_verify[idx].sg_nr_out = 1;
 		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_oid.id_shard,
-					       &iod->iod_recxs, NULL, &iod->iod_nr, true);
+			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_dkey_hash,
+					       io->ui_oid.id_shard, &iod->iod_recxs,
+					       NULL, &iod->iod_nr, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -765,15 +769,15 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 {
 	struct daos_oclass_attr *oca;
 	uint32_t		start;
-	int			data_nr;
+	int			tgt_nr;
 	int			i;
 	int			rc = 0;
 
 	oca = obj_get_oca(obj);
 	D_ASSERT(oca->ca_resil == DAOS_RES_EC);
-	data_nr = obj_ec_data_tgt_nr(oca);
+	tgt_nr = obj_ec_tgt_nr(oca);
 	start = rdg_idx * obj_ec_tgt_nr(oca);
-	for (i = 0; i < data_nr; i++) {
+	for (i = 0; i < tgt_nr; i++) {
 		struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 		daos_unit_oid_t			oid;
 
@@ -801,8 +805,8 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 				D_GOTO(out, rc);
 			}
 
-			rc = dss_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
-					     NULL, dc_obj_verify_ec_cb, dova);
+			rc = dc_obj_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
+						NULL, dc_obj_verify_ec_cb, dova);
 			if (rc) {
 				D_ERROR("Failed to verify ec object: "DF_RC"\n",
 					DP_RC(rc));

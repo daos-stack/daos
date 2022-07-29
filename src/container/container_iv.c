@@ -369,6 +369,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 						  &iv_prop->cip_co_status);
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -584,13 +587,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	if (src == NULL) {
 		/* If src == NULL, it is invalidate */
-		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
-		    !uuid_is_null(civ_key->cont_uuid)) {
-			rc = ds_cont_tgt_close(civ_key->cont_uuid);
-			if (rc)
-				D_GOTO(out, rc);
-		}
-
 		if (uuid_is_null(civ_key->cont_uuid)) {
 			rc = dbtree_empty(root_hdl);
 			if (rc)
@@ -600,6 +596,12 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 					   NULL);
 			if (rc == -DER_NONEXIST)
 				rc = 0;
+		}
+		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
+		    !uuid_is_null(civ_key->cont_uuid)) {
+			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			if (rc)
+				D_GOTO(out, rc);
 		}
 	} else {
 		struct cont_iv_entry *iv_entry;
@@ -1277,6 +1279,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = daos_prop_co_status_2_val(
 					&iv_prop->cip_co_status);
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	}
 out:
 	if (rc)

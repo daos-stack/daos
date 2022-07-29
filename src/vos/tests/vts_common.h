@@ -122,7 +122,7 @@ int run_aggregate_tests(bool slow, const char *cfg);
 int run_dtx_tests(const char *cfg);
 int run_gc_tests(const char *cfg);
 int run_pm_tests(const char *cfg);
-int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
+int run_io_test(enum daos_otype_t type, int keys, bool nest_iterators,
 		const char *cfg);
 int run_ts_tests(const char *cfg);
 

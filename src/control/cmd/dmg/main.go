@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,10 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -82,10 +82,10 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	if cmdErr != nil {
 		errStr = new(string)
 		*errStr = cmdErr.Error()
-		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
-			status = int(drpc.DaosMiscError)
+			status = int(daos.MiscError)
 		}
 	}
 
@@ -127,15 +127,9 @@ type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
 }
 
-type logCmd struct {
-	cmdutil.NoArgsCmd // Hack: Since everything embeds this type,
-	// just embed the args handler in here. We should probably
-	// create a new baseCmd type to cut down on boilerplate.
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
+type baseCmd struct {
+	cmdutil.NoArgsCmd
+	cmdutil.LogCmd
 }
 
 // cmdConfigSetter is an interface for setting the control config on a command
@@ -234,8 +228,8 @@ and access control settings, along with system wide operations.`
 			}
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)

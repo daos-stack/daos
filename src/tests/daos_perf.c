@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,11 +17,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/dpar.h>
 #include "perf_internal.h"
 
 enum {
@@ -328,9 +328,9 @@ main(int argc, char **argv)
 
 	ts_dkey_prefix = PF_DKEY_PREF;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_daos_opts, ARRAY_SIZE(perf_daos_opts),
 			     perf_daos_optstr, &ts_opts, &ts_optstr);
@@ -497,7 +497,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_commands(cmds, pf_tests);
 
@@ -506,7 +506,7 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
-	MPI_Finalize();
+	par_fini();
 
 	perf_free_keys();
 	return 0;

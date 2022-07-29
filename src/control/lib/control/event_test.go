@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -68,7 +69,7 @@ func TestControl_eventNotify(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			rpcClient := NewMockInvoker(log, &MockInvokerConfig{
 				UnaryError:    tc.uErr,
@@ -76,7 +77,7 @@ func TestControl_eventNotify(t *testing.T) {
 			})
 
 			gotErr := eventNotify(context.TODO(), rpcClient, tc.seq, tc.evt, tc.aps)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -112,7 +113,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			expNextSeq := uint64(tc.expInvokeCount + 1)
 
@@ -131,9 +132,9 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 				ef.OnEvent(context.TODO(), tc.event)
 			}
 
-			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
+			test.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
 				"unexpected number of rpc calls")
-			common.AssertEqual(t, expNextSeq, <-ef.seq,
+			test.AssertEqual(t, expNextSeq, <-ef.seq,
 				"unexpected next forwarding sequence")
 		})
 	}
@@ -200,7 +201,7 @@ prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] 
 	} {
 		t.Run(name, func(t *testing.T) {
 			logBasic, bufBasic := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, bufBasic)
+			defer test.ShowBufferOnFailure(t, bufBasic)
 
 			mockSyslogBuf = &strings.Builder{}
 
@@ -212,25 +213,25 @@ prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] 
 			el.OnEvent(context.TODO(), tc.event)
 
 			// check event logged to control plane
-			common.AssertEqual(t, tc.expShouldLog,
+			test.AssertEqual(t, tc.expShouldLog,
 				strings.Contains(bufBasic.String(), evtIDMarker),
 				"unexpected log output")
 
 			slStr := mockSyslogBuf.String()
 			t.Logf("syslog out: %s", slStr)
 			if !tc.expShouldLogSyslog {
-				common.AssertTrue(t, slStr == "", "expected syslog to be empty")
+				test.AssertTrue(t, slStr == "", "expected syslog to be empty")
 				return
 			}
 			prioStr := fmt.Sprintf("prio%d ", tc.event.Severity.SyslogPriority())
 			sevOut := "sev: [" + tc.event.Severity.String() + "]"
 
 			// check event logged to correct mock syslogger
-			common.AssertEqual(t, 1, strings.Count(slStr, evtIDMarker),
+			test.AssertEqual(t, 1, strings.Count(slStr, evtIDMarker),
 				"unexpected number of events in syslog")
-			common.AssertTrue(t, strings.Contains(slStr, sevOut),
+			test.AssertTrue(t, strings.Contains(slStr, sevOut),
 				"syslog output missing severity")
-			common.AssertTrue(t, strings.HasPrefix(slStr, prioStr),
+			test.AssertTrue(t, strings.HasPrefix(slStr, prioStr),
 				"syslog output missing syslog priority")
 
 			if tc.expSyslogOut == "" {

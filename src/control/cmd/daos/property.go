@@ -19,7 +19,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -55,6 +55,23 @@ type propHdlr struct {
 	readOnly bool
 }
 
+// newTestPropEntry returns an initialized property entry for testing.
+// NB: The entry is initialized with Go-managed memory, so it is not
+// suitable for use when calling real C functions.
+func newTestPropEntry() *C.struct_daos_prop_entry {
+	return new(C.struct_daos_prop_entry)
+}
+
+// getDpeVal returns the value of the given property entry.
+func getDpeVal(e *C.struct_daos_prop_entry) (uint64, error) {
+	if e == nil {
+		return 0, errors.New("nil property entry")
+	}
+
+	v := C.get_dpe_val(e)
+	return uint64(v), nil
+}
+
 // propHdlrs defines a map of property names to handlers that
 // take care of parsing the value and setting it. This odd construction
 // allows us to maintain a type-safe set of valid property names and
@@ -80,7 +97,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			if !drpc.LabelIsValid(v) {
+			if !daos.LabelIsValid(v) {
 				return errors.Errorf("invalid label %q", v)
 			}
 			e.dpe_type = C.DAOS_PROP_CO_LABEL
@@ -512,7 +529,18 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
-		nil, nil,
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("rf_lvl", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"1": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"2": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
 				return propNotFound(name)
@@ -522,11 +550,13 @@ var propHdlrs = propHdlrMap{
 			switch lvl {
 			case C.DAOS_PROP_CO_REDUN_RANK:
 				return fmt.Sprintf("rank (%d)", lvl)
+			case C.DAOS_PROP_CO_REDUN_NODE:
+				return fmt.Sprintf("node (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
-		true,
+		false,
 	},
 	C.DAOS_PROP_ENTRY_SNAPSHOT_MAX: {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
@@ -758,7 +788,7 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
 	props = C.daos_prop_alloc(C.uint(numProps))
 	if props == nil {
-		return nil, nil, errors.Wrap(drpc.DaosNoMemory, "failed to allocate properties list")
+		return nil, nil, errors.Wrap(daos.NoMemory, "failed to allocate properties list")
 	}
 
 	props.dpp_nr = 0

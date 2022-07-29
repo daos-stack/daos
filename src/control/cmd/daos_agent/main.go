@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -65,20 +66,6 @@ type (
 
 func (cmd *configCmd) setConfig(cfg *Config) {
 	cmd.cfg = cfg
-}
-
-type (
-	logSetter interface {
-		setLog(logging.Logger)
-	}
-
-	logCmd struct {
-		log logging.Logger
-	}
-)
-
-func (cmd *logCmd) setLog(log logging.Logger) {
-	cmd.log = log
 }
 
 type (
@@ -141,8 +128,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			cmd = &startCmd{}
 		}
 
-		if logCmd, ok := cmd.(logSetter); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {

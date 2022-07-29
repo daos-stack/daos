@@ -599,9 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
-	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
@@ -615,6 +613,7 @@ daos_quiet_error(int err)
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
+#define daos_rank_list_merge		d_rank_list_merge
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_shuffle		d_rank_list_shuffle
@@ -774,6 +773,8 @@ enum {
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 #define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
+#define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
+#define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -813,6 +814,7 @@ enum {
 #define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
+#define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

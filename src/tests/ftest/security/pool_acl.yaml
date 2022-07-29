@@ -1,12 +1,14 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - server-B   #server client different host
+  test_servers: 1
+  test_clients: 1
 timeout: 600
 server_config:
   name: daos_server
   port: 10001
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
   control_method: dmg
 # Uncomment following to force the use of certificates
@@ -61,4 +63,3 @@ pool_acl:
          - rw
          - pass
          - pass
-

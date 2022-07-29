@@ -34,6 +34,18 @@ struct rdb_raft_event {
 
 /* rdb.c **********************************************************************/
 
+static inline struct rdb *
+rdb_from_storage(struct rdb_storage *storage)
+{
+	return (struct rdb *)storage;
+}
+
+static inline struct rdb_storage *
+rdb_to_storage(struct rdb *db)
+{
+	return (struct rdb_storage *)db;
+}
+
 /* multi-ULT locking in struct rdb:
  *  d_mutex: for RPC mgmt and ref count:
  *    d_requests, d_replies/cv, d_ref/cv
@@ -140,8 +152,10 @@ struct rdb_raft_node {
 
 int rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 		  const d_rank_list_t *replicas);
+int rdb_raft_open(struct rdb *db);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
+void rdb_raft_close(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
 int rdb_raft_verify_leadership(struct rdb *db);

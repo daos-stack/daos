@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -47,7 +47,7 @@ func addEngineInstances(mod *srvModule, numInstances int, log logging.Logger) {
 
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedErr := drpc.UnmarshalingPayloadFailure()
 	mod := &srvModule{}
@@ -73,7 +73,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedErr := "check NotifyReady request socket path"
 	mod := &srvModule{}
@@ -95,17 +95,17 @@ func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	addEngineInstances(mod, 1, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath, 0)
@@ -121,7 +121,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	numInstances := 5
@@ -130,11 +130,11 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	addEngineInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath, idx)
@@ -158,7 +158,7 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedError := "out of range"
 	mod := &srvModule{}
@@ -167,11 +167,11 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	addEngineInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath,
@@ -202,7 +202,7 @@ func getTestBioErrorReqBytes(t *testing.T, sockPath string, idx uint32, tgt int3
 
 func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedErr := errors.New("unmarshal BioError request")
 	mod := &srvModule{}
@@ -220,12 +220,12 @@ func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedErr, err)
+	test.CmpErr(t, expectedErr, err)
 }
 
 func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedErr := errors.New("check BioErr request socket path")
 	mod := &srvModule{}
@@ -240,22 +240,22 @@ func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedErr, err)
+	test.CmpErr(t, expectedErr, err)
 }
 
 func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	addEngineInstances(mod, 1, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, 0, 0, false, false,
@@ -270,7 +270,7 @@ func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
 
 func TestSrvModule_HandleBioError_Success_Multi(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	numInstances := 5
@@ -279,11 +279,11 @@ func TestSrvModule_HandleBioError_Success_Multi(t *testing.T) {
 	addEngineInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, idx, 0, false, false,
@@ -298,7 +298,7 @@ func TestSrvModule_HandleBioError_Success_Multi(t *testing.T) {
 
 func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedError := errors.New("out of range")
 	mod := &srvModule{}
@@ -307,11 +307,11 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	addEngineInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	_, cleanup := common.CreateTestSocket(t, sockPath)
+	_, cleanup := test.CreateTestSocket(t, sockPath)
 	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, uint32(numInstances),
@@ -323,12 +323,12 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedError, err)
+	test.CmpErr(t, expectedError, err)
 }
 
 func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedErr := errors.New("unmarshal method-specific payload")
 	mod := &srvModule{}
@@ -346,5 +346,5 @@ func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedErr, err)
+	test.CmpErr(t, expectedErr, err)
 }

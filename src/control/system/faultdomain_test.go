@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestSystem_NewFaultDomain(t *testing.T) {
@@ -69,7 +69,7 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := NewFaultDomain(tc.input...)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -148,7 +148,7 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := NewFaultDomainFromString(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -183,7 +183,7 @@ func TestSystem_FaultDomain_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expStr, tc.domain.String(), "unexpected result")
+			test.AssertEqual(t, tc.expStr, tc.domain.String(), "unexpected result")
 		})
 	}
 }
@@ -248,8 +248,8 @@ func TestSystem_FaultDomain_Equals(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.domain1.Equals(tc.domain2), tc.expResult, "domain1.Equals failed")
-			common.AssertEqual(t, tc.domain2.Equals(tc.domain1), tc.expResult, "domain2.Equals failed")
+			test.AssertEqual(t, tc.domain1.Equals(tc.domain2), tc.expResult, "domain1.Equals failed")
+			test.AssertEqual(t, tc.domain2.Equals(tc.domain1), tc.expResult, "domain2.Equals failed")
 		})
 	}
 }
@@ -280,7 +280,7 @@ func TestSystem_FaultDomain_Empty(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.domain.Empty(), "unexpected result")
+			test.AssertEqual(t, tc.expResult, tc.domain.Empty(), "unexpected result")
 		})
 	}
 }
@@ -311,7 +311,7 @@ func TestSystem_FaultDomain_BottomLevel(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.domain.BottomLevel(), "unexpected result")
+			test.AssertEqual(t, tc.expResult, tc.domain.BottomLevel(), "unexpected result")
 		})
 	}
 }
@@ -342,7 +342,7 @@ func TestSystem_FaultDomain_TopLevel(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.domain.TopLevel(), "unexpected result")
+			test.AssertEqual(t, tc.expResult, tc.domain.TopLevel(), "unexpected result")
 		})
 	}
 }
@@ -373,7 +373,7 @@ func TestSystem_FaultDomain_NumLevels(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.domain.NumLevels(), "unexpected result")
+			test.AssertEqual(t, tc.expResult, tc.domain.NumLevels(), "unexpected result")
 		})
 	}
 }
@@ -440,8 +440,8 @@ func TestSystem_FaultDomain_Level(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			lev, err := tc.domain.Level(tc.level)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, lev, "unexpected result")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, lev, "unexpected result")
 		})
 	}
 }
@@ -508,7 +508,7 @@ func TestSystem_FaultDomain_IsAncestorOf(t *testing.T) {
 			fd1 := MustCreateFaultDomainFromString(tc.fd1)
 			fd2 := MustCreateFaultDomainFromString(tc.fd2)
 
-			common.AssertEqual(t, tc.expResult, fd1.IsAncestorOf(fd2), "")
+			test.AssertEqual(t, tc.expResult, fd1.IsAncestorOf(fd2), "")
 		})
 	}
 }
@@ -566,7 +566,7 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.orig.NewChild(tc.childLevel)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(result, tc.expResult); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -980,7 +980,7 @@ func TestSystem_FaultDomainTree_nextID(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.tree.nextID(), "")
+			test.AssertEqual(t, tc.expResult, tc.tree.nextID(), "")
 		})
 	}
 }
@@ -1112,7 +1112,7 @@ func TestSystem_FaultDomainTree_AddDomain(t *testing.T) {
 
 			err := tc.tree.AddDomain(tc.toAdd)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, tc.tree); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -1274,7 +1274,7 @@ func TestSystem_FaultDomainTree_Merge(t *testing.T) {
 
 			err := tc.tree.Merge(tc.toMerge)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.tree, tc.expResult, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -1347,7 +1347,7 @@ func TestSystem_FaultDomainTree_RemoveDomain(t *testing.T) {
 
 			err := tc.tree.RemoveDomain(tc.toRemove)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			// ignoring IDs because we don't expect the originals to
 			// change on removal
@@ -1378,7 +1378,7 @@ func TestSystem_FaultDomainTree_IsRoot(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.tree.IsRoot(), tc.expResult, "")
+			test.AssertEqual(t, tc.tree.IsRoot(), tc.expResult, "")
 		})
 	}
 }
@@ -1409,7 +1409,7 @@ func TestSystem_FaultDomainTree_IsLeaf(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.tree.IsLeaf(), tc.expResult, "")
+			test.AssertEqual(t, tc.tree.IsLeaf(), tc.expResult, "")
 		})
 	}
 }
@@ -1481,7 +1481,7 @@ func TestSystem_FaultDomainTree_IsBalanced(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.tree.IsBalanced(), tc.expResult, "")
+			test.AssertEqual(t, tc.tree.IsBalanced(), tc.expResult, "")
 		})
 	}
 }
@@ -1549,14 +1549,14 @@ func TestSystem_FaultDomainTree_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.tree.String(), tc.expResult, "")
+			test.AssertEqual(t, tc.tree.String(), tc.expResult, "")
 		})
 	}
 }
 
 func testVerifyTreeStructure(t *testing.T, tree *FaultDomainTree, level int, expNumChildrenByLevel []int) {
 	// Walk the tree to verify results
-	common.AssertEqual(t, len(tree.Children), expNumChildrenByLevel[level],
+	test.AssertEqual(t, len(tree.Children), expNumChildrenByLevel[level],
 		fmt.Sprintf("mismatch at level %d, %q", level, tree.Domain))
 	for _, c := range tree.Children {
 		testVerifyTreeStructure(t, c, level+1, expNumChildrenByLevel)
@@ -1638,7 +1638,7 @@ func TestSystem_FaultDomain_Depth(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.tree.Depth(), tc.expDepth, "")
+			test.AssertEqual(t, tc.tree.Depth(), tc.expDepth, "")
 		})
 	}
 }
@@ -1847,7 +1847,7 @@ func TestSystem_FaultDomain_Subtree(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.tree.Subtree(tc.domains...)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)

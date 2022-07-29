@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,9 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestScanMountInfo(t *testing.T) {
@@ -103,7 +102,7 @@ func TestIsMounted(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotMounted, gotErr := provider.IsMounted(tc.target)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotMounted != tc.expMounted {
 				t.Fatalf("expected %q mounted result to be %t, got %t",
 					tc.target, tc.expMounted, gotMounted)

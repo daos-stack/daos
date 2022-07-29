@@ -1,11 +1,8 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-C
+  test_servers: 2
+  test_clients: 1
 timeout: 360
 server_config:
   engines_per_host: 2
@@ -51,14 +48,14 @@ container:
   control_method: daos
   oclass: RP_2GX
 ior:
-    client_processes:
-        np_8:
-            np: 8
-    repetitions: 1
-    api: DFS
-    dfs_oclass: "RP_2GX"
-    flags: "-w -W -k -G 1"
-    transfersize_blocksize:
-      1M:
-        transfer_size: '1M'
-        block_size: '1G'
+  client_processes:
+    np_8:
+      np: 8
+  repetitions: 1
+  api: DFS
+  dfs_oclass: "RP_2GX"
+  flags: "-w -W -k -G 1"
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '1G'

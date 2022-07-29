@@ -32,6 +32,14 @@ struct pf_param {
 	int		pa_iteration;
 	/* output parameter */
 	double		pa_duration;
+	/** Subset of objects to write */
+	int		pa_obj_nr;
+	/** Subset of dkeys to write */
+	int		pa_dkey_nr;
+	/** Subset of akeys to write */
+	int		pa_akey_nr;
+	/** Subset of recx to write */
+	int		pa_recx_nr;
 	union {
 		/* private parameter for iteration */
 		struct {

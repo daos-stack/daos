@@ -17,7 +17,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>

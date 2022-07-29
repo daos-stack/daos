@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -84,6 +84,9 @@ func sanitizeDescription(inDescription string) (outDescription string) {
 }
 
 func (f *Fault) Error() string {
+	if f == nil {
+		return "(nil)"
+	}
 	return fmt.Sprintf("%s: code = %d description = %q",
 		sanitizeDomain(f.Domain), f.Code, sanitizeDescription(f.Description))
 }
@@ -129,4 +132,13 @@ func HasResolution(raw error) bool {
 func IsFault(raw error) bool {
 	_, ok := errors.Cause(raw).(*Fault)
 	return ok
+}
+
+// IsFaultCode indicates whether or not the error is a Fault with the given code.
+func IsFaultCode(raw error, faultCode code.Code) bool {
+	errFault, ok := errors.Cause(raw).(*Fault)
+	if !ok {
+		return false
+	}
+	return errFault.Code == faultCode
 }

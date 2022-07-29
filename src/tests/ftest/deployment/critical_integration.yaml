@@ -1,13 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-  test_clients:
-    - client-G
+  test_servers: 6
+  test_clients: 1
 timeout: 300
 server_config:
     name: daos_server
@@ -36,3 +29,6 @@ server_config:
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
 check_remote_root_access: False
+# this is needed as on aurora cluster we use libfabric provided
+# by HPE, which does not reside in regular location.
+libfabric_path: "/usr/bin/"

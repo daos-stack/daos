@@ -1,41 +1,41 @@
 """Build pydaos client"""
-import daos_build
 import sys
+import daos_build
 import compiler_setup
 
-def build_shim_module(env, lib_prefix):
+
+def build_shim_module():
     """Build PyDAOS shim module for the specified python version"""
 
     if GetOption('help'):
         return
 
-    new_env = env.Clone()
-    version = "{}.{}".format(
-        sys.version_info.major, sys.version_info.minor)
-    if sys.version_info.major == 3:
-        tgt_name = 'pydaos_shim'
-        new_env.ParseConfig("pkg-config --cflags --libs python3")
-    else:
-        raise Exception("Unsupported python version %s" % version)
+    version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
+
+    Import('base_env')
+
+    new_env = base_env.Clone()
+    new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
 
     new_env.Replace(LIBS=['daos', 'duns'])
-    new_env.AppendUnique(LIBPATH=["../dfs"])
+    new_env.AppendUnique(LIBPATH=[Dir('../dfs')])
+    new_env.AppendUnique(LIBPATH=[Dir('../api')])
 
     new_env['CC'] = 'gcc'
     new_env.AppendUnique(CCFLAGS='-pthread')
 
     compiler_setup.base_setup(new_env)
 
-    obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
+    obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="")
-    base = daos_build.library(new_env, target=tgt_name, source=[obj],
+    base = daos_build.library(new_env, target='pydaos_shim', source=[obj],
                               install_off="../../../..",
                               SHLINK='gcc -pthread -shared',
                               SHLINKFLAGS=[],
                               SHLIBPREFIX="",
                               SHLIBSUFFIX='.so')
-    install_path = lib_prefix + "/python" + version + "/site-packages/pydaos"
+    install_path = f'$PREFIX/lib64/python{version}/site-packages/pydaos'
     new_env.Install(install_path, base)
     # install new wrappers too
     new_env.Install(install_path, "__init__.py")
@@ -44,15 +44,9 @@ def build_shim_module(env, lib_prefix):
     install_path += "/raw"
     new_env.Install(install_path, "raw/__init__.py")
     new_env.Install(install_path, "raw/daos_api.py")
-    new_env.Install(install_path, "raw/daos_io.py")
     new_env.Install(install_path, "raw/conversion.py")
     new_env.Install(install_path, "raw/daos_cref.py")
 
-def scons():
-    """Execute build"""
-    Import('base_env')
-
-    build_shim_module(base_env, '$PREFIX/lib64/')
 
 if __name__ == "SCons.Script":
-    scons()
+    build_shim_module()

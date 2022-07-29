@@ -17,8 +17,10 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
@@ -28,16 +30,17 @@ type mgmtSvc struct {
 	log               logging.Logger
 	harness           *EngineHarness
 	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *system.Database
+	sysdb             *raft.Database
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
+	systemProps       daos.SystemPropertyMap
 	clientNetworkHint *mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
 }
 
-func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:               h.log,
 		harness:           h,
@@ -45,6 +48,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c co
 		sysdb:             s,
 		rpcClient:         c,
 		events:            p,
+		systemProps:       daos.SystemProperties(),
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
 		joinReqs:          make(joinReqChan),
 		groupUpdateReqs:   make(chan bool),

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,9 +19,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -56,10 +56,10 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	if cmdErr != nil {
 		errStr = new(string)
 		*errStr = cmdErr.Error()
-		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
-			status = int(drpc.DaosMiscError)
+			status = int(daos.MiscError)
 		}
 	}
 
@@ -99,14 +99,6 @@ var _ jsonOutputter = (*jsonOutputCmd)(nil)
 
 type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
-}
-
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
 }
 
 type cliOptions struct {
@@ -174,8 +166,8 @@ or query/manage an object inside a container.`
 			}
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if daosCmd, ok := cmd.(daosCaller); ok {

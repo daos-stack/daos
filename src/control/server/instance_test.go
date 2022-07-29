@@ -18,10 +18,10 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -60,7 +60,7 @@ func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, un
 
 func TestServer_Instance_BioError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	instance := getTestEngineInstance(log)
 
@@ -88,7 +88,7 @@ func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
 		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
 	}
 	// updatedInstance is the same ptr as instance
-	common.AssertEqual(t, updatedInstance, instance, "not the same structure")
+	test.AssertEqual(t, updatedInstance, instance, "not the same structure")
 }
 
 func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
@@ -135,9 +135,9 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupDir := common.CreateTestDir(t)
+			testDir, cleanupDir := test.CreateTestDir(t)
 			defer cleanupDir()
 
 			inst := getTestEngineInstance(log).WithHostFaultDomain(tc.newDomain)
@@ -151,7 +151,7 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 
 			err := inst.updateFaultDomainInSuperblock()
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			// Ensure the newer value in the instance was written to the superblock
 			newSB, err := ReadSuperblock(sbPath)
@@ -168,11 +168,11 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 				if tc.newDomain != nil {
 					expDomainStr = tc.newDomain.String()
 				}
-				common.AssertEqual(t, expDomainStr, newSB.HostFaultDomain, "")
+				test.AssertEqual(t, expDomainStr, newSB.HostFaultDomain, "")
 			} else if err == nil {
 				t.Fatal("expected no superblock written")
 			} else {
-				common.CmpErr(t, syscall.ENOENT, err)
+				test.CmpErr(t, syscall.ENOENT, err)
 			}
 		})
 	}

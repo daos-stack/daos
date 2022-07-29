@@ -67,14 +67,16 @@ func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.Fabri
 			continue
 		}
 
-		for _, prov := range fi.Providers.ToSlice() {
-			if provider == "" || provider == prov {
-				resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
-					Provider:    prov,
-					Device:      fi.NetInterface,
-					Numanode:    uint32(fi.NUMANode),
-					Netdevclass: uint32(fi.DeviceClass),
-				})
+		for _, hwFI := range fi.NetInterfaces.ToSlice() {
+			for _, prov := range fi.Providers.ToSlice() {
+				if provider == "" || provider == prov {
+					resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
+						Provider:    prov,
+						Device:      hwFI,
+						Numanode:    uint32(fi.NUMANode),
+						Netdevclass: uint32(fi.DeviceClass),
+					})
+				}
 			}
 		}
 	}

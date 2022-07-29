@@ -156,6 +156,10 @@ pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
 void
 pool_target_addr_list_free(struct pool_target_addr_list *list);
 
+bool
+pool_target_addr_found(struct pool_target_addr_list *addr_list,
+		       struct pool_target_addr *tgt);
+
 struct pool_target_id {
 	uint32_t	pti_id;
 };
@@ -366,7 +370,7 @@ pool_target_down(struct pool_target *tgt)
 	return (status == PO_COMP_ST_DOWN);
 }
 
-int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf);
+int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf);
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -26,7 +26,7 @@ func assertFaultDomainEqualStr(t *testing.T, expResultStr string, result *system
 			t.Fatalf("expected nil result, got %q", result.String())
 		}
 	} else {
-		common.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
+		test.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
 	}
 }
 
@@ -58,7 +58,7 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getDefaultFaultDomain(tc.getHostname)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
@@ -70,7 +70,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 		t.Fatalf("couldn't get hostname: %s", err)
 	}
 
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	validFaultDomain := "/host0"
@@ -142,7 +142,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getFaultDomain(tc.cfg)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
@@ -183,7 +183,7 @@ func createScriptFile(t *testing.T, path string, mode os.FileMode, content strin
 }
 
 func TestServer_getFaultDomainFromCallback(t *testing.T) {
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	workingDir, err := os.Getwd()
@@ -337,7 +337,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 
 			result, err := getFaultDomainFromCallback(tc.scriptPath, cbDir)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}

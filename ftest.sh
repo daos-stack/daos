@@ -60,7 +60,7 @@ LAUNCH_OPT_ARGS="${3:-}"
 
 # Add the missing '--nvme' argument identifier for backwards compatibility with
 # the 'auto:Optane' optional argument specified without the identifier.
-if [[ "${LAUNCH_OPT_ARGS}" == "auto:Optane" ]]; then
+if [[ "${LAUNCH_OPT_ARGS}" == "auto:-3DNAND" ]]; then
     LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
 fi
 
@@ -153,6 +153,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
+     STAGE_NAME=\"$STAGE_NAME\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then

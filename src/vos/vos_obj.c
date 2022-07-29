@@ -315,7 +315,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	if (rc != 1) {
 		/** key_tree_punch will handle dkey flags if punch is propagated */
 		if (rc == 0)
-			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec, epoch);
+			rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 		goto out;
 	}
 	/** else propagate the punch */
@@ -426,7 +426,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
 	if (dtx_is_valid_handle(dth)) {
@@ -505,7 +504,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 
 			if (rc == 0)
-				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
 						  &cont->vc_cont_df->cd_obj_root, epoch);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
@@ -551,7 +550,6 @@ reset:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
-	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -644,17 +642,18 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		toh = obj->obj_toh;
 	}
 
-	key_tree_delete(obj, toh, key);
+	rc = key_tree_delete(obj, toh, key);
 	if (rc) {
 		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
-		goto out_tx;
+		goto out_tree;
 	}
+	/* fall through */
+out_tree:
+	if (akey)
+		key_tree_release(toh, false);
 out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
-	if (akey)
-		key_tree_release(toh, false);
-
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
@@ -790,6 +789,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	uint64_t		 start_seq;
 	vos_iter_desc_t		 desc;
 	struct vos_rec_bundle	 rbund;
+	struct vos_krec_df	*krec;
+	struct dtx_handle	*dth;
+	uint64_t		 feats;
+	uint32_t		 ts_type;
 	unsigned int		 acts;
 	int			 rc;
 
@@ -799,15 +802,36 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(rbund.rb_krec);
+	krec = rbund.rb_krec;
+
 	if (check_existence && oiter->it_iter.it_filter_cb != NULL &&
 	    (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 		desc.id_type = oiter->it_iter.it_type;
 		desc.id_key = ent->ie_key;
+		desc.id_parent_punch = oiter->it_punched.pr_epc;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			feats = dbtree_feats_get(&krec->kr_btr);
+		else
+			feats = evt_feats_get(&krec->kr_evt);
+		if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+			if (desc.id_type == VOS_ITER_DKEY)
+				ts_type = VOS_TS_TYPE_DKEY;
+			else
+				ts_type = VOS_TS_TYPE_AKEY;
+			vos_ilog_last_update(&krec->kr_ilog, ts_type, &desc.id_agg_write);
+		}
+
 		acts = 0;
 		start_seq = vos_sched_seq();
+		dth = vos_dth_get();
+		if (dth != NULL)
+			vos_dth_set(NULL);
 		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
 						 oiter->it_iter.it_filter_arg,
 						 &acts);
+		if (dth != NULL)
+			vos_dth_set(dth);
 		if (rc != 0)
 			return rc;
 		if (start_seq != vos_sched_seq())
@@ -819,8 +843,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 			return VOS_ITER_CB_SKIP;
 	}
 
-	D_ASSERT(rbund.rb_krec);
-	return key_iter_fill(rbund.rb_krec, oiter, check_existence, ent);
+	return key_iter_fill(krec, oiter, check_existence, ent);
 }
 
 static int
@@ -1946,68 +1969,58 @@ exit:
 	return rc;
 }
 
-int
-vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
+/*
+ * For a single value btree, grab the value of the current iter cursor, and use
+ * the offset to get the durable format (pmem) structure with the bio_addr. Then
+ * set it to corrupt.
+ */
+static int
+sv_iter_corrupt(struct vos_obj_iter *oiter)
 {
-	vos_iter_entry_t	 ent;
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
-	struct vos_container	*cont = oiter->it_obj->obj_cont;
-	struct vos_krec_df	*krec;
-	daos_key_t		 key;
-	struct vos_rec_bundle	 rbund;
-	int			 rc;
-	uint64_t		 feats;
-	daos_epoch_t		 agg_write;
-	daos_epoch_t		 hae;
-	bool			 agg_has_write;
+	struct umem_instance	*umm;
+	struct vos_svt_key	 skey = {0};
+	struct vos_rec_bundle	 rbund = {0};
+	struct bio_iov		 biov = {0};
+	daos_anchor_t		 anchor = {0};
+	d_iov_t			 key, val;
+	size_t			 addr_offset;
+	struct vos_irec_df	*irec;
+	int			 rc = 0;
 
-	D_ASSERTF(oiter->it_iter.it_for_purge,
-		  "Function should only be called by aggregation\n");
-	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
-		  iter->it_type == VOS_ITER_DKEY,
-		  "Aggregation only supported on keys\n");
+	umm = vos_obj2umm(oiter->it_obj);
 
-	if (full_scan)
-		return 1;
-
-	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
-	D_ASSERTF(rc != -DER_NONEXIST,
-		  "Iterator should probe before aggregation\n");
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		return rc;
 
-	krec = rbund.rb_krec;
+	/* Bundle the key and value structures into appropriate iovs */
+	tree_rec_bundle2iov(&rbund, &val);
+	rbund.rb_biov = &biov;
+	d_iov_set(&key, &skey, sizeof(skey));
 
-	if (krec->kr_bmap & KREC_BF_BTR)
-		feats = dbtree_feats_get(&krec->kr_btr);
-	else
-		feats = evt_feats_get(&krec->kr_evt);
-
-	agg_has_write = vos_feats_agg_time_get(feats, &agg_write);
-	hae = cont->vc_cont_df->cd_hae;
-	if (agg_has_write) {
-		if (agg_write <= hae && oiter->it_punched.pr_epc <= hae)
-			return 0;
-		return 1;
+	/* Fetch the key/value for the current iter cursor */
+	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
+	if (rc != 0) {
+		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
 	}
 
-	/** Fall through to check other filters for legacy case */
-	rc = key_iter_fill(krec, oiter, true, &ent);
-	if (rc == VOS_ITER_CB_SKIP)
-		return 0;
-	if (rc < 0)
-		return rc; /** Likely the entry isn't in the range or we hit some other error.
-			    *  Let the iterator sort this out later.
-			    */
-	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
-		return 1; /* Punched entries can likely be aggregated */
+	addr_offset = offsetof(struct vos_irec_df, ir_ex_addr);
+	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
+			 sizeof(*irec) - addr_offset);
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
+	}
 
-	D_ASSERT(ent.ie_last_update != 0);
-	if (ent.ie_last_update <= hae)
-		return 0; /* No new updates since last time we ran */
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	irec = umem_off2ptr(umm, rbund.rb_off);
+	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
 
-	return 1;
+	rc = umem_tx_end(umm, rc);
+	return rc;
 }
 
 int
@@ -2122,23 +2135,33 @@ exit:
 }
 
 static int
-vos_obj_iter_delete(struct vos_iterator *iter, void *args)
+vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
+		     void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
+	switch (op) {
+	case VOS_ITER_PROC_OP_DELETE:
+		switch (iter->it_type) {
+		default:
+			D_ASSERT(0);
+			return -DER_INVAL;
+		case VOS_ITER_DKEY:
+		case VOS_ITER_AKEY:
+		case VOS_ITER_SINGLE:
+			return obj_iter_delete(oiter, args);
+		case VOS_ITER_RECX:
+			return evt_iter_delete(oiter->it_hdl, NULL);
+		}
+	case VOS_ITER_PROC_OP_MARK_CORRUPT:
+		if (iter->it_type == VOS_ITER_SINGLE)
+			return sv_iter_corrupt(oiter);
+		if (iter->it_type == VOS_ITER_RECX)
+			return evt_iter_corrupt(oiter->it_hdl);
 	default:
 		D_ASSERT(0);
-		return -DER_INVAL;
-
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-	case VOS_ITER_SINGLE:
-		return obj_iter_delete(oiter, args);
-
-	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
+	return 0;
 }
 
 static int
@@ -2171,7 +2194,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next		= vos_obj_iter_next,
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
-	.iop_delete		= vos_obj_iter_delete,
+	.iop_process		= vos_obj_iter_process,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**

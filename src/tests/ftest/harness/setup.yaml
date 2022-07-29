@@ -1,15 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-    - server-H
-  test_clients:
-    - client-B
+  test_servers: 7
+  test_clients: 1
 timeout: 120
 server_config:
   name: daos_server
@@ -17,3 +8,6 @@ server_config:
     scm_size: 20
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a"]
+server_manager:
+  storage_prepare_timeout: 60
+  storage_format_timeout: 60

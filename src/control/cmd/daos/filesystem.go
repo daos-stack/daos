@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,7 +44,7 @@ type fsCopyCmd struct {
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ type fsAttrCmd struct {
 }
 
 func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,8 +225,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		return cmd.outputJSON(jsonAttrs, nil)
 	}
 
-	cmd.log.Infof("Object Class = %s", C.GoString(&oclassName[0]))
-	cmd.log.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
+	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
+	cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
 
 	return nil
 }

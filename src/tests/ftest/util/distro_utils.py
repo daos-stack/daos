@@ -4,8 +4,9 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.utils.distro import *      # noqa: F403    # pylint: disable=wildcard-import
 import re
+# pylint: disable-next=wildcard-import, unused-wildcard-import
+from avocado.utils.distro import *  # noqa: F403
 
 
 class RockyProbe(Probe):                # noqa: F405

@@ -84,24 +84,37 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 
 	topo := &hardware.Topology{}
 
-	// For now we only fetch network devices from sysfs.
-	for _, subsystem := range netSubsystems {
-		if err := s.addDevices(topo, subsystem); err != nil {
+	for _, subsystem := range s.topologySubsystems() {
+		if err := s.addPCIDevices(topo, subsystem); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := s.addVirtualNetDevices(topo); err != nil {
+		return nil, err
 	}
 
 	return topo, nil
 }
 
-func (s *Provider) addDevices(topo *hardware.Topology, subsystem string) error {
-	err := filepath.Walk(s.sysPath("class", subsystem), func(path string, fi os.FileInfo, err error) error {
+func (s *Provider) topologySubsystems() []string {
+	// For now we only fetch network devices from sysfs.
+	return netSubsystems
+}
+
+func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) error {
+	subsysRoot := s.sysPath("class", subsystem)
+	err := filepath.Walk(subsysRoot, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
 			return nil
 		}
 
 		if err != nil {
 			return err
+		}
+
+		if path == subsysRoot {
+			return nil
 		}
 
 		var dev *hardware.PCIDevice
@@ -202,6 +215,63 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }
 
+func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
+	virtualDevices := make([]*hardware.VirtualDevice, 0)
+	addedDevices := topo.AllDevices()
+
+	netPath := s.sysPath("devices", "virtual", "net")
+	netIfaces, err := ioutil.ReadDir(netPath)
+	if err != nil {
+		s.log.Debugf("unable to read any virtual net interfaces: %s", err.Error())
+		return nil
+	}
+
+	for _, iface := range netIfaces {
+		ifacePath := filepath.Join(netPath, iface.Name())
+
+		ifaceFiles, err := ioutil.ReadDir(ifacePath)
+		if err != nil {
+			s.log.Debugf("unable to read contents of %s", ifacePath)
+			continue
+		}
+
+		virt := &hardware.VirtualDevice{
+			Name: iface.Name(),
+			Type: hardware.DeviceTypeNetInterface,
+		}
+
+		for _, f := range ifaceFiles {
+			// NB: For now we only look one level below for a link to a physical device.
+			// In theory a virtual interface could be backed by another virtual
+			// interface, which is backed by another, and so on until we reach a
+			// physical one. For now we would consider such devices not to be hardware
+			// backed.
+			if strings.HasPrefix(f.Name(), "lower_") {
+				path, err := filepath.EvalSymlinks(filepath.Join(ifacePath, f.Name()))
+				if err != nil {
+					s.log.Error(err.Error())
+					continue
+				}
+
+				pciDev, found := addedDevices[filepath.Base(path)]
+				if found {
+					s.log.Debugf("virtual device %q has physical backing device %q", iface.Name(), pciDev.DeviceName())
+					virt.BackingDevice = pciDev.PCIDevice()
+				}
+			}
+		}
+
+		s.log.Debugf("adding virtual device at %q", ifacePath)
+		virtualDevices = append(virtualDevices, virt)
+	}
+
+	if len(virtualDevices) > 0 {
+		topo.VirtualDevices = virtualDevices
+	}
+
+	return nil
+}
+
 // GetFabricInterfaces harvests fabric interfaces from sysfs.
 func (s *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
 	if s == nil {
@@ -240,4 +310,185 @@ func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error)
 	}
 
 	return cxiFIs, nil
+}
+
+// GetNetDevState fetches the state of a network interface.
+func (s *Provider) GetNetDevState(iface string) (hardware.NetDevState, error) {
+	if s == nil {
+		return hardware.NetDevStateUnknown, errors.New("sysfs provider is nil")
+	}
+
+	if iface == "" {
+		return hardware.NetDevStateUnknown, errors.New("fabric interface name is required")
+	}
+
+	devClass, err := s.GetNetDevClass(iface)
+	if err != nil {
+		return hardware.NetDevStateUnknown, errors.Wrapf(err, "can't determine device class for %q", iface)
+	}
+
+	switch devClass {
+	case hardware.Infiniband:
+		return s.getInfinibandDevState(iface)
+	case hardware.Loopback:
+		return s.getLoopbackDevState(iface)
+	default:
+		return s.getNetOperState(iface)
+	}
+}
+
+func (s *Provider) getLoopbackDevState(iface string) (hardware.NetDevState, error) {
+	state, err := s.getNetOperState(iface)
+	if err != nil {
+		return hardware.NetDevStateUnknown, err
+	}
+
+	// Loopback devices with state unknown are up
+	if state == hardware.NetDevStateUnknown {
+		return hardware.NetDevStateReady, nil
+	}
+	return state, nil
+}
+
+func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
+	statePath := s.sysPath("class", "net", iface, "operstate")
+	stateBytes, err := ioutil.ReadFile(statePath)
+	if err != nil {
+		return hardware.NetDevStateUnknown, errors.Wrapf(err, "failed to get %q operational state", iface)
+	}
+
+	stateStr := strings.ToLower(strings.TrimSpace(string(stateBytes)))
+
+	// Operational states as described in kernel docs:
+	// https://www.kernel.org/doc/html/latest/networking/operstates.html#tlv-ifla-operstate
+	state := hardware.NetDevStateUnknown
+	switch stateStr {
+	case "up":
+		state = hardware.NetDevStateReady
+	case "down", "lowerlayerdown", "notpresent":
+		// down: Interface is unable to transfer data on L1, f.e. ethernet is not plugged or
+		//       interface is ADMIN down.
+		// lowerlayerdown: Interfaces stacked on an interface that is down (f.e. VLAN).
+		// notpresent: Interface is physically not present. Typically the kernel hides them
+		//             but the status is included in code.
+		state = hardware.NetDevStateDown
+	case "testing", "dormant":
+		// testing: Interface is in testing mode, for example executing driver self-tests or
+		//          media (cable) test. It can’t be used for normal traffic until tests complete.
+		// dormant: Interface is L1 up, but waiting for an external event, f.e. for a protocol
+		//          to establish. (802.1X)
+		state = hardware.NetDevStateNotReady
+	default:
+		state = hardware.NetDevStateUnknown
+	}
+	return state, nil
+}
+
+func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, error) {
+	// The best way to determine that an Infiniband interface is ready is to check the state
+	// of its ports. Ports in the "ACTIVE" state are either fully ready or will be very soon.
+	ibPath := s.sysPath("class", "net", iface, "device", "infiniband")
+	ibDevs, err := ioutil.ReadDir(ibPath)
+	if err != nil {
+		return hardware.NetDevStateUnknown, errors.Wrapf(err, "can't access Infiniband details for %q", iface)
+	}
+
+	ibDevState := make([]hardware.NetDevState, 0)
+	for _, dev := range ibDevs {
+		portPath := filepath.Join(ibPath, dev.Name(), "ports")
+		ports, err := ioutil.ReadDir(portPath)
+		if err != nil {
+			return hardware.NetDevStateUnknown, errors.Wrapf(err, "unable to get ports for %s/%s", iface, dev.Name())
+		}
+
+		portState := make([]hardware.NetDevState, 0)
+		for _, port := range ports {
+			statePath := filepath.Join(portPath, port.Name(), "state")
+			stateBytes, err := ioutil.ReadFile(statePath)
+			if err != nil {
+				return hardware.NetDevStateUnknown, errors.Wrapf(err, "unable to get state for %s/%s port %s",
+					iface, dev.Name(), port.Name())
+			}
+
+			portState = append(portState, s.ibStateToNetDevState(string(stateBytes)))
+		}
+
+		ibDevState = append(ibDevState, condenseNetDevState(portState))
+	}
+
+	return condenseNetDevState(ibDevState), nil
+}
+
+// Infiniband state enum is derived from ibstat:
+// https://github.com/linux-rdma/rdma-core/blob/master/infiniband-diags/ibstat.c
+const (
+	ibStateUnknown = 0
+	ibStateDown    = 1
+	ibStateInit    = 2
+	ibStateArmed   = 3
+	ibStateActive  = 4
+)
+
+func (s *Provider) ibStateToNetDevState(stateStr string) hardware.NetDevState {
+	stateSubstrs := strings.Split(string(stateStr), ": ")
+	stateNum, err := strconv.Atoi(stateSubstrs[0])
+	if err != nil {
+		s.log.Debugf("unable to parse IB state %q: %s", stateStr, err.Error())
+		return hardware.NetDevStateUnknown
+	}
+
+	switch stateNum {
+	case ibStateDown:
+		return hardware.NetDevStateDown
+	case ibStateActive:
+		return hardware.NetDevStateReady
+	case ibStateArmed, ibStateInit:
+		return hardware.NetDevStateNotReady
+	default:
+		return hardware.NetDevStateUnknown
+	}
+}
+
+// condenseNetDevState uses a set of states to determine an overall state.
+func condenseNetDevState(states []hardware.NetDevState) hardware.NetDevState {
+	condensed := hardware.NetDevStateUnknown
+	for _, state := range states {
+		switch state {
+		case hardware.NetDevStateReady:
+			// Device is overall ready if:
+			// - at least one port is ready
+			// - no ports are not ready
+			if condensed != hardware.NetDevStateNotReady {
+				condensed = hardware.NetDevStateReady
+			}
+		case hardware.NetDevStateDown:
+			// Device is overall down if all ports are down. If any port is in any other
+			// state, the device cannot be considered down.
+			if condensed == hardware.NetDevStateUnknown {
+				condensed = hardware.NetDevStateDown
+			}
+		case hardware.NetDevStateNotReady:
+			// Device is not ready if any port is not ready.
+			condensed = hardware.NetDevStateNotReady
+		}
+	}
+
+	return condensed
+}
+
+// IsIOMMUEnabled checks whether IOMMU is enabled by interrogating files in sysfs and implements
+// the IOMMUDetector interface on sysfs provider.
+func (s *Provider) IsIOMMUEnabled() (bool, error) {
+	if s == nil {
+		return false, errors.New("sysfs provider is nil")
+	}
+
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(s.sysPath("class", "iommu"))
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+
+	return err == nil && len(dmars) > 0, nil
 }

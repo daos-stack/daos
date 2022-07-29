@@ -16,6 +16,11 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const (
+	compInfiniband = "ib"
+	compTCP        = "tcp"
+)
+
 // NewProvider creates a new UCX data provider.
 func NewProvider(log logging.Logger) *Provider {
 	return &Provider{
@@ -46,9 +51,14 @@ func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInt
 		}
 	}()
 
+	supportedComps := common.NewStringSet(compInfiniband, compTCP)
 	fis := hardware.NewFabricInterfaceSet()
 
 	for _, comp := range components {
+		if !supportedComps.Has(comp.name) {
+			continue
+		}
+
 		mdResources, err := getMDResourceNames(uctHdl, comp)
 		if err != nil {
 			p.log.Error(err.Error())
@@ -72,7 +82,7 @@ func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInt
 			continue
 		}
 
-		if err := p.addFabricDevices(netDevs, fis); err != nil {
+		if err := p.addFabricDevices(comp.name, netDevs, fis); err != nil {
 			p.log.Error(err.Error())
 		}
 	}
@@ -111,7 +121,7 @@ func (p *Provider) getCompNetworkDevices(uctHdl *dlopen.LibHandle, comp *uctComp
 	return netDevs, nil
 }
 
-func (p *Provider) addFabricDevices(netDevs []*transportDev, fis *hardware.FabricInterfaceSet) error {
+func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, fis *hardware.FabricInterfaceSet) error {
 	allDevs := common.NewStringSet()
 	for _, dev := range netDevs {
 		allDevs.AddUnique(dev.device)
@@ -122,7 +132,7 @@ func (p *Provider) addFabricDevices(netDevs []*transportDev, fis *hardware.Fabri
 		osDev := strings.Split(dev.device, ":")[0]
 
 		fis.Update(&hardware.FabricInterface{
-			Name:      getExternalName(dev.device, allDevs.ToSlice()),
+			Name:      getExternalName(comp, dev.device, allDevs.ToSlice()),
 			OSName:    osDev,
 			Providers: p.getProviderSet(dev.transport),
 		})
@@ -131,9 +141,13 @@ func (p *Provider) addFabricDevices(netDevs []*transportDev, fis *hardware.Fabri
 	return nil
 }
 
-// getExternalName constructs the name that must be used by DAOS to specify the fabric device. For
-// UCX, this is a comma-separated list of all device names.
-func getExternalName(dev string, allDevs []string) string {
+// getExternalName constructs the name that must be used by DAOS to specify the fabric device.
+func getExternalName(comp, dev string, allDevs []string) string {
+	if comp != compInfiniband {
+		return dev
+	}
+
+	// Infiniband device names need to include the full list of devices for the component.
 	// To ensure unique names, each list has the main device string first.
 	ordered := []string{dev}
 	for _, d := range allDevs {
@@ -154,11 +168,13 @@ func (p *Provider) getProviderSet(transport string) common.StringSet {
 			p.log.Error(err.Error())
 		}
 	}
+	// Any interface with at least one provider should allow ucx+all
+	providers.Add("ucx+all")
 	return providers
 }
 
 func shouldAddGeneric(transport string) bool {
-	genericTransportAliases := []string{"rc", "ud"}
+	genericTransportAliases := []string{"rc", "ud", "dc"}
 	for _, alias := range genericTransportAliases {
 		if strings.HasPrefix(transport, alias+"_") {
 			return true
@@ -178,9 +194,6 @@ func transportToDAOSProvider(transport string) string {
 	// UCX transport aliases:
 	// https://openucx.readthedocs.io/en/master/faq.html#list-of-main-transports-and-aliases
 	switch {
-	case transportPieces[0] == "dc":
-		// trim suffix from dc
-		transportPieces = transportPieces[:1]
 	case transportPieces[1] == "verbs":
 		transportPieces[1] = "v"
 	case strings.HasPrefix(transportPieces[1], "mlx"):

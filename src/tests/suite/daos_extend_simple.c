@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -258,7 +258,7 @@ run_daos_extend_simple_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(extend_tests);
 		sub_tests = NULL;
@@ -268,7 +268,7 @@ run_daos_extend_simple_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(extend_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

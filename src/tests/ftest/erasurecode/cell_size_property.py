@@ -27,15 +27,11 @@ class EcodCellSizeProperty(IorTestBase):
             expected_size (int): expected container cell size
         """
         daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid, self.container.uuid)
+        cont_prop = daos_cmd.container_get_prop(
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell_sz"])
+        actual_size = cont_prop["response"][0]["value"]
 
-        cont_cell_size = None
-        for prop in cont_prop["response"]:
-            if prop["name"] == "ec_cell":
-                cont_cell_size = prop["value"]
-                break
-
-        self.assertEqual(expected_size, cont_cell_size)
+        self.assertEqual(expected_size, actual_size)
 
     def test_ec_pool_property(self):
         """Jira ID: DAOS-7321.
@@ -78,7 +74,7 @@ class EcodCellSizeProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_cell != pool_prop_expected:
-                self.container.properties.update("ec_cell:{}"
+                self.container.properties.update("ec_cell_sz:{}"
                                                  .format(cont_cell))
 
             # Create the container and open handle

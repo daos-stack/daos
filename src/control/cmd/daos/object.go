@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -56,7 +56,7 @@ func (cmd *objQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}

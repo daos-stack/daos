@@ -152,6 +152,7 @@ func (m MgmtMethod) String() string {
 		MethodReplaceStorage:       "ReplaceStorage",
 		MethodListContainers:       "ListContainers",
 		MethodPoolQuery:            "PoolQuery",
+		MethodPoolQueryTarget:      "PoolQueryTarget",
 		MethodPoolSetProp:          "PoolSetProp",
 		MethodContSetOwner:         "ContSetOwner",
 		MethodGroupUpdate:          "GroupUpdate",
@@ -238,6 +239,8 @@ const (
 	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
 	MethodPoolQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY
+	// MethodPoolQueryTarget defines a method for querying a pool engine's targets
+	MethodPoolQueryTarget MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY_TARGETS
 	// MethodPoolSetProp defines a method for setting a pool property
 	MethodPoolSetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner

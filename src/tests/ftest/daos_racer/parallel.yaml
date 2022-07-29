@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-E
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 4
+  test_clients: 4
 timeout: 1800
 server_config:
   engines_per_host: 2
@@ -39,9 +31,9 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 job_manager:
-    class_name: Orterun
-    mpi_type: openmpi
-    manager_timeout: 630
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 630
 daos_racer:
   runtime: 600
   clush_timeout: 900

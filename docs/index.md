@@ -16,5 +16,7 @@ and may also describe features that are currently under development for the
 next DAOS release.
 
 !!! warning
-    DAOS v2.2 is under active development. Use at your own risk. Please consider
-    a stable DAOS release (i.e., 2.0.x) for production deployments.
+    DAOS v2.3 is the (unstable) master branch for DAOS v2.4 development.
+    Use at your own risk. Please consider the [latest](../latest/)
+    stable DAOS release for production deployments.
+

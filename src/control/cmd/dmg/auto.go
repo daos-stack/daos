@@ -24,7 +24,7 @@ type configCmd struct {
 }
 
 type configGenCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
@@ -43,14 +43,14 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	cmd.log.Debugf("configGenCmd input control config: %+v", cmd.config)
+	cmd.Debugf("configGenCmd input control config: %+v", cmd.config)
 
 	req := control.ConfigGenerateReq{
 		NrEngines: cmd.NrEngines,
 		MinNrSSDs: cmd.MinNrSSDs,
 		HostList:  cmd.config.HostList,
 		Client:    cmd.ctlInvoker,
-		Log:       cmd.log,
+		Log:       cmd.Logger,
 	}
 	switch cmd.NetClass {
 	case "ethernet":
@@ -82,7 +82,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
 			return err
 		}
-		cmd.log.Error(bld.String())
+		cmd.Error(bld.String())
 		return err
 	}
 
@@ -92,6 +92,6 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 
 	// output recommended server config yaml file
-	cmd.log.Info(string(bytes))
+	cmd.Info(string(bytes))
 	return nil
 }

@@ -32,8 +32,9 @@ class DmgPoolEvictTest(TestWithServers):
         Test Description: Test dmg pool evict.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=control,dmg_pool_evict
+        :avocado: tags=vm
+        :avocado: tags=control
+        :avocado: tags=dmg_pool_evict,test_dmg_pool_evict
         """
         # Create 2 pools and create a container in each pool.
         self.pool = []
@@ -79,7 +80,7 @@ class DmgPoolEvictTest(TestWithServers):
         # upper case since we use upper case in object.
         uuids_cmd = []
         for uuid_label in data["response"]:
-            uuids_cmd.append(uuid_label["UUID"].upper())
+            uuids_cmd.append(uuid_label["uuid"].upper())
         uuids_obj = []
         for cont in self.container[1:]:
             uuids_obj.append(cont.uuid)

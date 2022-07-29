@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -231,8 +231,8 @@ void test_d_errdesc(void **state)
 	assert_string_equal(value, "Not a directory");
 	value = d_errdesc(-2028);
 	assert_string_equal(value, "TX is not committed");
-	value = d_errdesc(-2039);
-	assert_string_equal(value, "Unknown error code -2039");
+	value = d_errdesc(-2100);
+	assert_string_equal(value, "Unknown error code -2100");
 	value = d_errdesc(-DER_UNKNOWN);
 	assert_string_equal(value, "Unknown error");
 	value = d_errdesc(-501001);

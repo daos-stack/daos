@@ -3,8 +3,9 @@
 //
 // SPDX-License-Identifier: BSD-1-Clause-Patent
 //
-//go:build linux && amd64
-// +build linux,amd64
+//go:build linux && (amd64 || arm64)
+// +build linux
+// +build amd64 arm64
 
 //
 
@@ -18,7 +19,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestTelemetry_GetDuration(t *testing.T) {
@@ -61,7 +62,7 @@ func TestTelemetry_GetDuration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := GetDuration(tc.ctx, tc.metricName)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expResult != nil {
 				if result == nil {
@@ -69,24 +70,24 @@ func TestTelemetry_GetDuration(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeDuration, "bad type")
+				test.AssertEqual(t, result.Type(), MetricTypeDuration, "bad type")
 
-				common.AssertTrue(t, result.Value() > time.Duration(tc.expResult.Cur), "value smaller than actual")
-				common.AssertTrue(t, result.FloatValue() > tc.expResult.Cur, "float value smaller than actual")
+				test.AssertTrue(t, result.Value() > time.Duration(tc.expResult.Cur), "value smaller than actual")
+				test.AssertTrue(t, result.FloatValue() > tc.expResult.Cur, "float value smaller than actual")
 
 				diff := result.Value() - time.Duration(tc.expResult.Cur)
 				maxDiff := time.Second // very generous, in the case of slow running systems
-				common.AssertTrue(t, diff < maxDiff,
+				test.AssertTrue(t, diff < maxDiff,
 					fmt.Sprintf("difference %d too big (expected less than %d)", diff, maxDiff))
 
 				// Just make sure the stats were set to something
-				common.AssertTrue(t, result.FloatMin() > 0, "FloatMin() failed")
-				common.AssertTrue(t, result.FloatMax() > 0, "FloatMax() failed")
-				common.AssertTrue(t, result.FloatSum() > 0, "FloatSum() failed")
-				common.AssertTrue(t, result.Mean() > 0, "Mean() failed")
+				test.AssertTrue(t, result.FloatMin() > 0, "FloatMin() failed")
+				test.AssertTrue(t, result.FloatMax() > 0, "FloatMax() failed")
+				test.AssertTrue(t, result.FloatSum() > 0, "FloatSum() failed")
+				test.AssertTrue(t, result.Mean() > 0, "Mean() failed")
 
-				common.AssertEqual(t, 0.0, result.StdDev(), "StdDev() failed")
-				common.AssertEqual(t, uint64(1), result.SampleSize(), "SampleSize() failed")
+				test.AssertEqual(t, 0.0, result.StdDev(), "StdDev() failed")
+				test.AssertEqual(t, uint64(1), result.SampleSize(), "SampleSize() failed")
 			} else {
 				if result != nil {
 					t.Fatalf("expected nil result, got %+v", result)

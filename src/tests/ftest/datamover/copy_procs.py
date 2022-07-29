@@ -1,11 +1,11 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrCopyProcs(DataMoverTestBase):
@@ -45,8 +45,8 @@ class DmvrCopyProcs(DataMoverTestBase):
         """
         # Create pool and containers
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
-        cont2 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
+        cont2 = self.get_container(pool1)
 
         # Get the varying number of processes
         procs_list = self.params.get("processes", "/run/dcp/copy_procs/*")

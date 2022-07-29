@@ -268,7 +268,7 @@ vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_size_t record_size,
 	struct vts_metadata	 meta;
 	int			 rc = 0;
 
-	*oid = dts_unit_oid_gen(DAOS_OF_DKEY_UINT64, 0);
+	*oid = dts_unit_oid_gen(DAOS_OT_DKEY_UINT64, 0);
 	rc = array_init(&array, coh, *oid, NULL);
 	if (rc != 0)
 		return rc;

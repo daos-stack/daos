@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import ast
 
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
@@ -108,6 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
         self.provider = BasicParameter(None, default_provider)
+        self.crt_timeout = BasicParameter(None, 10)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         # Auto-calculate if unset or set to zero
@@ -116,9 +116,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
-        default_enable_vmd_val = os.environ.get("DAOS_ENABLE_VMD", "False")
-        default_enable_vmd = ast.literal_eval(default_enable_vmd_val)
-        self.enable_vmd = BasicParameter(None, default_enable_vmd)
+        self.disable_vmd = BasicParameter(None)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -330,7 +328,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"],
             "ofi+tcp": [
-                "CRT_SWIM_RPC_TIMEOUT=10"],
+                "SWIM_PING_TIMEOUT=10"],
             "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
             "ofi+cxi": [
@@ -389,6 +387,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
+                "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
@@ -399,9 +398,6 @@ class DaosServerYamlParameters(YamlParameters):
 
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
-
-            # global CRT_TIMEOUT shared with client
-            self.crt_timeout = BasicParameter(None, 30)
 
             # Storage definition parameters:
             #

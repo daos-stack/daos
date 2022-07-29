@@ -127,6 +127,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
+
+	vos_pool_features_set(tcx->tc_po_hdl, VOS_POOL_FEAT_AGG_OPT);
 	tcx->tc_step = TCX_READY;
 	return 0;
 
@@ -309,6 +311,7 @@ cont_init(struct credit_context *tsc)
 	if (rc)
 		goto out;
 
+	vos_pool_features_set(tsc->tsc_poh, VOS_POOL_FEAT_AGG_OPT);
 	tsc->tsc_coh = coh;
  out:
 	return rc;
@@ -333,7 +336,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init(vos_path);
+	rc = vos_self_init(vos_path, false, -1);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

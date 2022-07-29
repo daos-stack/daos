@@ -62,20 +62,25 @@ class ContRedundancyFactor(RebuildTestBase):
             expected_rf (str): expected container redundancy factor.
             expect_cont_status (str): expected container health status.
         """
-        result = self.daos_cmd.container_get_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid)
-        rf = re.search(r"Redundancy Factor\s*([A-Za-z0-9-]+)",
-                       str(result.stdout)).group(1)
-        health = re.search(r"Health\s*([A-Z]+)", str(result.stdout)).group(1)
+        actual_rf = None
+        actual_health = None
+
+        cont_props = self.daos_cmd.container_get_prop(
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["rf", "status"])
+        for cont_prop in cont_props["response"]:
+            if cont_prop["name"] == "rf":
+                actual_rf = cont_prop["value"]
+            elif cont_prop["name"] == "status":
+                actual_health = cont_prop["value"]
+
         self.assertEqual(
-            rf, expected_rf,
+            actual_rf, expected_rf,
             "#Container redundancy factor mismatch, actual: {},"
-            " expected: {}.".format(rf, expected_rf))
+            " expected: {}.".format(actual_rf, expected_rf))
         self.assertEqual(
-            health, expected_health,
+            actual_health, expected_health,
             "#Container health-status mismatch, actual: {},"
-            " expected: {}.".format(health, expected_health))
+            " expected: {}.".format(actual_health, expected_health))
 
     def start_rebuild_cont_rf(self, rf):
         """Start the rebuild process and check for container properties.

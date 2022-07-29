@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,7 @@ void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 daos_obj_id_t dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(daos_ofeat_t ofeats, uint32_t shard);
+daos_unit_oid_t dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard);
 
 /** Set rank into the oid */
 #define dts_oid_set_rank(oid, rank)	daos_oclass_sr_set_rank(oid, rank)
@@ -129,6 +129,9 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 				 uint32_t count, char *d, ...);
+
+void
+dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size);
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))

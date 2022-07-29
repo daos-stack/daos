@@ -13,13 +13,14 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // DumpTopologyCmd implements a go-flags Commander that dumps
 // the system topology to stdout or to a file.
 type DumpTopologyCmd struct {
+	cmdutil.LogCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
 	JSON   bool   `short:"j" long:"json" description:"Enable JSON output"`
 }
@@ -35,8 +36,7 @@ func (cmd *DumpTopologyCmd) Execute(_ []string) error {
 		out = f
 	}
 
-	log := logging.NewCommandLineLogger()
-	hwProv := DefaultTopologyProvider(log)
+	hwProv := DefaultTopologyProvider(cmd.Logger)
 	topo, err := hwProv.GetTopology(context.Background())
 	if err != nil {
 		return err

@@ -198,8 +198,7 @@ $ docker exec daos-admin dmg -i storage format
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
-can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/v2.2/QSG/tour/).
+can be created using the daos admin tool.
 
 
 ### Via docker-compose

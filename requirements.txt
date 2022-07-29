@@ -1,0 +1,13 @@
+# Requirements which are not versioned.
+defusedxml
+distro
+jira
+junit_xml
+meson
+ninja
+pyelftools
+pyxattr
+pyyaml
+scons        # Works around a bug in scons on EL 8.
+tabulate
+wheel

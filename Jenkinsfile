@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -13,6 +14,40 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+
+job_status_internal = [:]
+
+void job_status_write() {
+    if (!env.DAOS_STACK_JOB_STATUS_DIR) {
+        return
+    }
+    String jobName = env.JOB_NAME.replace('/', '_')
+    jobName += '_' + env.BUILD_NUMBER
+    String fileName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName
+
+    String job_status_text = writeYaml data: job_status_internal,
+                                       returnText: true
+
+    // Need to use shell script for creating files that are not
+    // in the workspace.
+    sh label: "Write jenkins_job_status ${fileName}",
+       script: "echo \"${job_status_text}\" >> ${fileName}"
+}
+
+// groovylint-disable-next-line MethodParameterTypeRequired
+void job_status_update(String name=env.STAGE_NAME,
+                       // groovylint-disable-next-line NoDef
+                       def value=currentBuild.currentResult) {
+    String key = name.replace(' ', '_')
+    key = key.replaceAll('[ .]', '_')
+    job_status_internal[key] = value
+}
+
+// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
+void job_step_update(def value) {
+    // Wrapper around a pipeline step to obtain a status.
+    job_status_update(env.STAGE_NAME, value)
+}
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -40,11 +75,12 @@ def getuid() {
                         returnStdout: true).trim()
     return cached_uid
 }
+
 pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
     }
 
@@ -55,6 +91,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+        REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
     }
 
@@ -70,18 +107,24 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BuildType',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
+        string(name: 'TestProvider',
+               defaultValue: '',
+               description: 'Test-provider to use for this run.  Specifies the default provider ' +
+                            'to use the daos_server config file when running functional tests' +
+                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
+                            '"ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -103,9 +146,6 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_RPM_el7_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for CentOS 7')
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
@@ -121,19 +161,18 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit CI tests')
+        booleanParam(name: 'CI_FI_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the Fault Injection on EL 8 CI tests')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the functional CentOS 7 CI tests')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional EL 8 CI tests' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the functional EL 8 CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the functional OpenSUSE Leap 15 CI tests' +
@@ -142,12 +181,6 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the functional Ubuntu 20 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_RPMS_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the CentOS 7 RPM CI tests')
-        booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the Small Cluster CI tests')
@@ -165,7 +198,7 @@ pipeline {
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
-               description: "Label to use for NLT tests")
+               description: 'Label to use for NLT tests')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
                description: 'Label to use for 3 node NVMe tests')
@@ -178,6 +211,13 @@ pipeline {
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
+        string(name: 'CI_PROVISIONING_POOL',
+               defaultValue: '',
+               description: 'The pool of images to provision test nodes from')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repos to add to the build and test ndoes')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
     }
 
     stages {
@@ -186,9 +226,61 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            parallel {
+                stage('Used Required Git Hooks') {
+                    steps {
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                                   message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                                   echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                                   exit 1
+                                fi'''
+                        }
+                    }
+                    post {
+                        unsuccessful {
+                            echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                        }
+                    }
+                } // stage('Used Required Git Hooks')
+                stage('Branch name check') {
+                    when { changeRequest() }
+                    steps {
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
+                        }
+                    }
+                }
+            } // parallel
+        } // stage('Check PR')
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
@@ -218,16 +310,10 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:" +
-                                                  "src/include/daos/*.pb-c.h:" +
-                                                  "src/common/*.pb-c.[ch]:" +
-                                                  "src/mgmt/*.pb-c.[ch]:" +
-                                                  "src/engine/*.pb-c.[ch]:" +
-                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.pb-c.[ch]:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
                                                   "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
-                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
@@ -237,6 +323,7 @@ pipeline {
                     }
                     post {
                         always {
+                            job_status_update()
                             archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
@@ -245,7 +332,13 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                             */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
+                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'pre-build/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
                         success {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -257,14 +350,7 @@ pipeline {
                                          description: env.STAGE_NAME,
                                          context: 'pre-build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
+                        } */
                     }
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
@@ -289,6 +375,7 @@ pipeline {
                             // find any issues.
                             junit testResults: 'bandit.xml',
                                   allowEmptyResults: true
+                            job_status_update()
                         }
                     }
                 } // stage('Python Bandit check')
@@ -305,41 +392,6 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Build RPM on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                        }
-                    }
-                }
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
@@ -351,7 +403,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -372,6 +424,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -386,7 +439,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -407,6 +460,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -421,7 +475,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -442,6 +496,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
+                            job_status_update()
                         }
                     }
                 }
@@ -465,7 +520,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -475,6 +529,9 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
                         }
                     }
                 }
@@ -499,7 +556,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -509,6 +565,9 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
+                        }
+                        cleanup {
+                            job_status_update()
                         }
                     }
                 }
@@ -541,6 +600,9 @@ pipeline {
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
                         }
+                        cleanup {
+                            job_status_update()
+                        }
                     }
                 }
             }
@@ -567,6 +629,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['unit_test_logs/*']
+                            job_status_update()
                         }
                     }
                 }
@@ -599,6 +662,7 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
+                            job_status_update()
                         }
                     }
                 }
@@ -625,6 +689,7 @@ pipeline {
                             unitTestPost ignore_failure: true,
                                          artifacts: ['covc_test_logs/*',
                                                      'covc_vm_test/**']
+                            job_status_update()
                         }
                     }
                 } // stage('Unit test Bullseye')
@@ -637,7 +702,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 35,
+                        unitTest timeout_time: 45,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -647,6 +712,7 @@ pipeline {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
                                          valgrind_stash: 'centos7-gcc-unit-memcheck'
+                            job_status_update()
                         }
                     }
                 } // stage('Unit Test with memcheck')
@@ -677,8 +743,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
+                                   parallel_build: parallelBuild()
                     }
                     post {
                         success {
@@ -687,27 +752,11 @@ pipeline {
                         unsuccessful {
                             coverityPost condition: 'unsuccessful'
                         }
-                    }
-                } // stage('Coverity on CentOS 7')
-                stage('Functional on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
+                        cleanup {
+                            job_status_update()
                         }
                     }
-                } // stage('Functional on CentOS 7')
+                } // stage('Coverity on CentOS 7')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
@@ -718,12 +767,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional on EL 8 with Valgrind')
@@ -737,12 +787,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional on EL 8')
@@ -756,12 +807,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
@@ -775,46 +827,16 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
@@ -830,6 +852,7 @@ pipeline {
                     post {
                         always {
                             junit 'maldetect.xml'
+                            job_status_update()
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
@@ -848,6 +871,7 @@ pipeline {
                     post {
                         always {
                             junit 'maldetect.xml'
+                            job_status_update()
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
@@ -868,7 +892,6 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
@@ -894,12 +917,13 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            job_status_update()
                         }
                     }
                 } // stage('Fault inection testing')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep') {
+        stage('Test Storage Prep on EL 8') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -909,7 +933,13 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
+            }
+            post {
+                cleanup {
+                    job_status_update()
+                }
+
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -929,12 +959,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Small')
@@ -949,12 +980,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -969,12 +1001,13 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
                             functionalTestPostV2()
+                            job_status_update()
                         }
                     }
                 } // stage('Functional_Hardware_Large')
@@ -1009,17 +1042,21 @@ pipeline {
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
+                    post {
+                        cleanup {
+                            job_status_update()
+                        }
+                    }
                 } // stage('Bullseye Report')
             } // parallel
         } // stage ('Test Report')
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
-        }
-        unsuccessful {
-            notifyBrokenBranch branches: target_branch
+          job_status_update('final_status')
+          job_status_write()
+          valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
+                                                   'centos7-gcc-unit-memcheck']
         }
     } // post
 }

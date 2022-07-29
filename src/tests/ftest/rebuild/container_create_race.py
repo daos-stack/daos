@@ -162,7 +162,7 @@ class RbldContainerCreate(IorTestBase):
         info_checks["pi_ndisabled"] += targets
         rebuild_checks["rs_obj_nr"] = ">0"
         rebuild_checks["rs_rec_nr"] = ">0"
-        rebuild_checks["rs_state"] = "2"
+        rebuild_checks["rs_state"] = 2
         self.assertTrue(
             self.pool.check_pool_info(**info_checks),
             "Invalid pool information detected before rebuild")

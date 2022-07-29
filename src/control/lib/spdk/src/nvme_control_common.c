@@ -518,14 +518,15 @@ collect(void)
 void
 cleanup(bool detach)
 {
-	struct ns_entry		*nentry;
-	struct ctrlr_entry	*centry, *cnext;
+	struct ns_entry			*nentry;
+	struct ctrlr_entry		*centry, *cnext;
+	struct spdk_nvme_detach_ctx	*detach_ctx = NULL;
 
 	centry = g_controllers;
 
 	while (centry) {
 		if ((centry->ctrlr) && (detach))
-			spdk_nvme_detach(centry->ctrlr);
+			spdk_nvme_detach_async(centry->ctrlr, &detach_ctx);
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
@@ -538,6 +539,9 @@ cleanup(bool detach)
 		free(centry);
 		centry = cnext;
 	}
+
+	if (detach_ctx)
+		spdk_nvme_detach_poll(detach_ctx);
 
 	g_controllers = NULL;
 }

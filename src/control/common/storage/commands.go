@@ -11,23 +11,24 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
-	"namespaces modified, this will be a destructive operation. Please ensure " +
-	"namespaces are unmounted and locally attached SCM & NVMe devices " +
-	"are not in use. Please be patient as it may take several minutes " +
-	"and subsequent reboot maybe required.\n"
+const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed and namespaces " +
+	"modified, this may be a destructive operation. Please ensure namespaces are unmounted " +
+	"and locally attached PMem modules are not in use. Please be patient as it may take " +
+	"several minutes and subsequent reboot maybe required.\n"
 
 type StoragePrepareNvmeCmd struct {
 	PCIAllowList string `long:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
 }
 
-type StoragePrepareScmCmd struct{}
+type StoragePrepareScmCmd struct {
+	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of SCM namespaces to create per socket" default:"1"`
+}
 
 type StoragePrepareCmd struct {
 	StoragePrepareNvmeCmd
@@ -52,26 +53,7 @@ func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
 	return prepNvme, prepScm, nil
 }
 
-func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state storage.ScmState) error {
-	switch state {
-	case storage.ScmStateNoRegions:
-		if cmd.Reset {
-			return nil
-		}
-	case storage.ScmStateFreeCapacity, storage.ScmStateNoCapacity:
-		if !cmd.Reset {
-			return nil
-		}
-	case storage.ScmStateUnknown:
-		return errors.New("unknown scm state")
-	default:
-		return errors.Errorf("unhandled scm state %q", state)
-	}
-
-	return cmd.Warn(log)
-}
-
-func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
+func (cmd *StoragePrepareCmd) Warn(log logging.Logger) error {
 	log.Info(MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent(log) {
@@ -79,4 +61,14 @@ func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
 	}
 
 	return nil
+}
+
+func (cmd *StoragePrepareCmd) WithDisableVFIO(b bool) *StoragePrepareCmd {
+	cmd.DisableVFIO = b
+	return cmd
+}
+
+func (cmd *StoragePrepareCmd) WithTargetUser(u string) *StoragePrepareCmd {
+	cmd.TargetUser = u
+	return cmd
 }

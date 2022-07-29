@@ -16,13 +16,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestNewSession(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	socket := newMockConn()
 	svc := NewModuleService(log)
@@ -32,13 +32,13 @@ func TestNewSession(t *testing.T) {
 		t.Fatal("session was nil!")
 	}
 
-	common.AssertEqual(t, s.Conn, socket, "UnixSocket wasn't set correctly")
-	common.AssertEqual(t, s.mod, svc, "ModuleService wasn't set correctly")
+	test.AssertEqual(t, s.Conn, socket, "UnixSocket wasn't set correctly")
+	test.AssertEqual(t, s.mod, svc, "ModuleService wasn't set correctly")
 }
 
 func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	socket := newMockConn()
 	socket.ReadOutputError = errors.New("mock read error")
@@ -46,12 +46,12 @@ func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
 
 	err := s.ProcessIncomingMessage(context.Background())
 
-	common.CmpErr(t, socket.ReadOutputError, err)
+	test.CmpErr(t, socket.ReadOutputError, err)
 }
 
 func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	socket := newMockConn()
 	socket.WriteOutputError = errors.New("mock write error")
@@ -59,12 +59,12 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 
 	err := s.ProcessIncomingMessage(context.Background())
 
-	common.CmpErr(t, socket.WriteOutputError, err)
+	test.CmpErr(t, socket.WriteOutputError, err)
 }
 
 func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	socket := newMockConn()
 	call := &Call{
@@ -97,7 +97,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	expectedResp := &Response{
 		Sequence: call.Sequence,
 	}
-	cmpOpts := common.DefaultCmpOpts()
+	cmpOpts := test.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
@@ -105,17 +105,17 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 
 func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	dss, err := NewDomainSocketServer(log, "")
 
-	common.CmpErr(t, errors.New("Missing Argument"), err)
-	common.AssertTrue(t, dss == nil, "expected no server created")
+	test.CmpErr(t, errors.New("Missing Argument"), err)
+	test.AssertTrue(t, dss == nil, "expected no server created")
 }
 
 func TestNewDomainSocketServer(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expectedSock := "test.sock"
 
@@ -129,14 +129,14 @@ func TestNewDomainSocketServer(t *testing.T) {
 		t.Fatal("expected server created, got nil")
 	}
 
-	common.AssertEqual(t, dss.sockFile, expectedSock, "wrong sockfile")
+	test.AssertEqual(t, dss.sockFile, expectedSock, "wrong sockfile")
 }
 
 func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "test.sock")
@@ -153,14 +153,14 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 
 	err := dss.Start(context.Background())
 
-	common.CmpErr(t, errors.New("unlink"), err)
+	test.CmpErr(t, errors.New("unlink"), err)
 }
 
 func TestServer_Start_CantListen(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "test.sock")
@@ -177,12 +177,12 @@ func TestServer_Start_CantListen(t *testing.T) {
 
 	err := dss.Start(context.Background())
 
-	common.CmpErr(t, errors.New("listen"), err)
+	test.CmpErr(t, errors.New("listen"), err)
 }
 
 func TestServer_RegisterModule(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := newTestModule(1234)
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
@@ -202,7 +202,7 @@ func TestServer_RegisterModule(t *testing.T) {
 
 func TestServer_Listen_AcceptError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	lis := newMockListener()
 	lis.acceptErr = errors.New("mock accept error")
@@ -211,12 +211,12 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 
 	dss.Listen(context.Background()) // should return instantly
 
-	common.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
+	test.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
 }
 
 func TestServer_Listen_AcceptConnection(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	lis := newMockListener()
 	lis.setNumConnsToAccept(3)
@@ -225,15 +225,15 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 
 	dss.Listen(context.Background()) // will return when error is sent
 
-	common.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
+	test.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
 		"should have returned after listener errored")
-	common.AssertEqual(t, len(dss.sessions), lis.acceptNumConns,
+	test.AssertEqual(t, len(dss.sessions), lis.acceptNumConns,
 		"server should have made connections into sessions")
 }
 
 func TestServer_ListenSession_Error(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
 	conn := newMockConn()
@@ -243,9 +243,9 @@ func TestServer_ListenSession_Error(t *testing.T) {
 
 	dss.listenSession(context.Background(), session) // will return when error is sent
 
-	common.AssertEqual(t, conn.ReadCallCount, 1,
+	test.AssertEqual(t, conn.ReadCallCount, 1,
 		"should have only hit the error once")
-	common.AssertEqual(t, conn.CloseCallCount, 1, "should have closed connection")
+	test.AssertEqual(t, conn.CloseCallCount, 1, "should have closed connection")
 	if _, ok := dss.sessions[conn]; ok {
 		t.Fatal("session should have been removed but wasn't")
 	}
@@ -253,7 +253,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 
 func TestServer_Shutdown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx, shutdown := context.WithCancel(context.Background())
 
@@ -267,7 +267,7 @@ func TestServer_Shutdown(t *testing.T) {
 	shutdown()
 
 	_, ok := <-ctx.Done()
-	common.AssertFalse(t, ok, "expected context was canceled")
+	test.AssertFalse(t, ok, "expected context was canceled")
 
 	// Wait for the mock listener to be closed
 	<-lis.closed
@@ -277,9 +277,9 @@ func TestServer_Shutdown(t *testing.T) {
 // module without specifying a method.
 func TestServer_IntegrationNoMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 	path := filepath.Join(tmpDir, "test.sock")
 
@@ -319,7 +319,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 		Sequence: call.Sequence,
 		Status:   Status_UNKNOWN_METHOD,
 	}
-	cmpOpts := common.DefaultCmpOpts()
+	cmpOpts := test.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <mpi.h>
+#include <daos/dpar.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -273,10 +273,10 @@ int main(int argc, char **argv)
 	 * Using MPI negotiate ranks between each process and retrieve
 	 * URI.
 	 */
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	par_rank(PAR_COMM_WORLD, &my_rank);
+	par_size(PAR_COMM_WORLD, &world_size);
 
 	hostbuf = calloc(sizeof(*hostbuf), 1);
 	if (!hostbuf) {
@@ -298,9 +298,7 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	MPI_Allgather(hostbuf, sizeof(struct host), MPI_CHAR,
-		recv_buf, sizeof(struct host), MPI_CHAR,
-		   MPI_COMM_WORLD);
+	par_allgather(PAR_COMM_WORLD, hostbuf, recv_buf, sizeof(struct host), PAR_CHAR);
 
 	/* Generate group configuration file */
 	rc = generate_group_file(world_size, recv_buf);
@@ -309,7 +307,7 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
@@ -323,7 +321,7 @@ exit:
 	if (recv_buf)
 		free(recv_buf);
 
-	MPI_Finalize();
+	par_fini();
 
 	if (rc == 0) {
 		rc = execvp(g_opt.app_to_exec, &argv[g_opt.app_args_indx]);

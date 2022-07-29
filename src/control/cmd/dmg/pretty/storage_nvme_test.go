@@ -16,7 +16,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -299,13 +299,13 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 	controllerB.SmdDevices = nil
 	controllerE.SmdDevices = []*storage.SmdDevice{
 		{
-			UUID:      common.MockUUID(0),
+			UUID:      test.MockUUID(0),
 			TargetIDs: []int32{0, 1, 2},
 			Rank:      0,
 			NvmeState: storage.MockNvmeStateNormal,
 		},
 		{
-			UUID:      common.MockUUID(1),
+			UUID:      test.MockUUID(1),
 			TargetIDs: []int32{3, 4, 5},
 			Rank:      0,
 			NvmeState: storage.MockNvmeStateEvicted,
@@ -313,13 +313,13 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 	}
 	controllerF.SmdDevices = []*storage.SmdDevice{
 		{
-			UUID:      common.MockUUID(2),
+			UUID:      test.MockUUID(2),
 			TargetIDs: []int32{6, 7, 8},
 			Rank:      1,
 			NvmeState: storage.MockNvmeStateNormal,
 		},
 		{
-			UUID:      common.MockUUID(3),
+			UUID:      test.MockUUID(3),
 			TargetIDs: []int32{9, 10, 11},
 			Rank:      1,
 			NvmeState: storage.MockNvmeStateEvicted,

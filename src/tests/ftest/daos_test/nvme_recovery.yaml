@@ -1,9 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 timeout: 600
 #Remove this once DAOS-5134 is resolved
 setup:
@@ -74,4 +72,3 @@ daos_tests:
     test_daos_nvme_recovery_4: -u subtests="3"
     test_daos_nvme_recovery_5: -u subtests="4"
     test_daos_nvme_recovery_6: -u subtests="5"
-

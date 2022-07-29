@@ -1,13 +1,12 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 
 import traceback
-import uuid
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
@@ -26,9 +25,11 @@ class CreateContainerTest(TestWithServers):
 
         Test Description: valid and invalid container creation and close.
 
-        :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,smoke
+        :avocado: tags=container_create,test_container_create
         """
-        contuuid = None
         expected_results = []
 
         # setup the pool
@@ -42,14 +43,6 @@ class CreateContainerTest(TestWithServers):
             poh = handleparam
             expected_results.append('FAIL')
 
-        # maybe use a good UUID, maybe not
-        uuidparam = self.params.get("uuid", "/uuids/*")
-        expected_results.append(uuidparam[1])
-        if uuidparam[0] == 'NULLPTR':
-            contuuid = 'NULLPTR'
-        else:
-            contuuid = uuid.UUID(uuidparam[0])
-
         should_fail = False
         for result in expected_results:
             if result == 'FAIL':
@@ -58,16 +51,10 @@ class CreateContainerTest(TestWithServers):
 
         try:
             self.container = DaosContainer(self.context)
-            self.container.create(poh, contuuid)
+            self.container.create(poh)
 
-            # check UUID is the specified one
-            if (uuidparam[0]).upper() != self.container.get_uuid_str().upper():
-                print("uuidparam[0] is {}, uuid_str is {}".format(
-                    uuidparam[0], self.container.get_uuid_str()))
-                self.fail("Container UUID differs from specified at create\n")
-
-            if should_fail:
-                self.fail("Test was expected to fail but it passed.\n")
+            if self.container.uuid is None:
+                self.fail("Container uuid is None.")
 
         except DaosApiError as excep:
             print(excep)

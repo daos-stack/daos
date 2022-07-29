@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -30,7 +31,7 @@ func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	// error on the normal happy path.
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -93,13 +94,13 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 
 			result, err := p.infoToFabricInterface(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
@@ -164,8 +165,8 @@ func TestLibfabric_libFabricProviderListToExt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			out, err := libFabricProviderListToExt(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expOut, out, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expOut, out, "")
 		})
 	}
 }

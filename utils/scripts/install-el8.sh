@@ -45,25 +45,18 @@ dnf --nodocs install \
     Lmod \
     lz4-devel \
     make \
-    meson \
     ndctl \
-    ninja-build \
     numactl \
     numactl-devel \
     openmpi-devel \
     openssl-devel \
     patch \
     patchelf \
-    python3-defusedxml \
     python3-devel \
-    python3-distro \
-    python3-junit_xml \
     python3-pip \
-    python3-pyelftools \
-    python3-pyxattr \
-    python3-tabulate \
-    python3-yaml \
     sg3_utils \
+    sudo \
+    systemd \
     valgrind-devel \
     which \
     yasm

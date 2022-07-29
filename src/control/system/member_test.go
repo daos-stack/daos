@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package system_test
 
 import (
 	"testing"
@@ -12,9 +12,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/system"
 )
 
 func TestSystem_Member_Stringify(t *testing.T) {
@@ -47,7 +47,7 @@ func TestSystem_Member_Stringify(t *testing.T) {
 	}
 
 	for i, state := range states {
-		AssertEqual(t, state.String(), strs[i], strs[i])
+		test.AssertEqual(t, state.String(), strs[i], strs[i])
 	}
 }
 
@@ -77,14 +77,14 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			marshaled, err := tc.member.MarshalJSON()
-			common.CmpErr(t, tc.expMarshalErr, err)
+			test.CmpErr(t, tc.expMarshalErr, err)
 			if err != nil {
 				return
 			}
 
 			unmarshaled := new(Member)
 			err = unmarshaled.UnmarshalJSON(marshaled)
-			common.CmpErr(t, tc.expUnmarshalErr, err)
+			test.CmpErr(t, tc.expUnmarshalErr, err)
 			if err != nil {
 				return
 			}
@@ -116,11 +116,11 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	}
 	mrsOut := MemberResults{}
 
-	CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
-	CmpErr(t, nil, mrsOut.Errors())
+	test.CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
+	test.CmpErr(t, nil, mrsOut.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)
 	}
-	AssertEqual(t, mrsIn, mrsOut, "")
+	test.AssertEqual(t, mrsIn, mrsOut, "")
 }

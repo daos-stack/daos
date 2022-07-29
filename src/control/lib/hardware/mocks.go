@@ -87,6 +87,17 @@ func (n *NUMANode) WithCPUCores(cores []CPUCore) *NUMANode {
 	return n
 }
 
+// WithBlockDevices is a convenience function to add a set of block devices to a node.
+// NB: If AddBlockDevice fails, a panic will ensue.
+func (n *NUMANode) WithBlockDevices(devices []*BlockDevice) *NUMANode {
+	for _, dev := range devices {
+		if err := n.AddBlockDevice(dev); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{
@@ -152,4 +163,30 @@ type mockFabricInterfaceSetBuilder struct {
 func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricInterfaceSet) error {
 	m.buildPartCalled++
 	return m.buildPartReturn
+}
+
+// MockNetDevStateResult is a structure for injecting results into MockNetDevStateProvider.
+type MockNetDevStateResult struct {
+	State NetDevState
+	Err   error
+}
+
+// MockNetDevStateProvider is a fake NetDevStateProvider for testing.
+type MockNetDevStateProvider struct {
+	GetStateReturn []MockNetDevStateResult
+	GetStateCalled []string
+}
+
+func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, error) {
+	m.GetStateCalled = append(m.GetStateCalled, iface)
+
+	if len(m.GetStateReturn) == 0 {
+		return NetDevStateReady, nil
+	}
+
+	idx := len(m.GetStateCalled) - 1
+	if idx >= len(m.GetStateReturn) {
+		idx = len(m.GetStateReturn) - 1
+	}
+	return m.GetStateReturn[idx].State, m.GetStateReturn[idx].Err
 }

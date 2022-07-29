@@ -92,7 +92,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, VOS_TF_AGG_OPT, VOS_OBJ_ORDER,
+	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
 				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {
@@ -768,7 +768,7 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags
 }
 
 static int
-cont_iter_delete(struct vos_iterator *iter, void *args)
+cont_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
@@ -781,5 +781,5 @@ struct vos_iter_ops vos_cont_iter_ops = {
 	.iop_probe   = cont_iter_probe,
 	.iop_next    = cont_iter_next,
 	.iop_fetch   = cont_iter_fetch,
-	.iop_delete  = cont_iter_delete,
+	.iop_process  = cont_iter_process,
 };

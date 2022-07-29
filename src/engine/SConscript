@@ -17,6 +17,7 @@ def scons():
 
     prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal')
 
+    # pylint: disable-next=wrong-spelling-in-comment
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_engine such as dss_tls_key etc.
     denv.AppendUnique(LINKFLAGS=['-rdynamic'])

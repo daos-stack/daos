@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,7 @@ package main
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 )
 
@@ -55,8 +55,8 @@ func TestTelemetry_getMetricsHost(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getMetricsHost(tc.list)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
