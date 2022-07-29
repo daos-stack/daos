@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-E
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 4
+  test_clients: 4
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 3600

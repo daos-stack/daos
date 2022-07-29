@@ -1,14 +1,16 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 60
 pool:
   scm_size: 1G
   control_method: dmg
 server_config:
   name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 container:
   type: POSIX
   control_method: daos

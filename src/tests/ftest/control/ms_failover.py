@@ -81,7 +81,7 @@ class ManagementServiceFailover(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", replica_count)
-        replicas = random.sample(self.hostlist_servers, replica_count)
+        replicas = random.sample(list(self.hostlist_servers), replica_count)
         server_groups = {
             self.server_group:
                 {
@@ -123,7 +123,9 @@ class ManagementServiceFailover(TestWithServers):
             Test that the MS leader resigns on dRPC failure and that a new
             leader is elected.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_failover
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control
         :avocado: tags=ms_failover
         """
         replicas = self.launch_servers()

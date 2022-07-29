@@ -979,6 +979,31 @@ func TestServerConfig_Parsing(t *testing.T) {
 			},
 			expValidateErr: FaultConfigHugepagesDisabled,
 		},
+		"legacy vmd enable": {
+			inTxt:  "disable_vmd: true",
+			outTxt: "enable_vmd: true",
+			expCheck: func(c *Server) error {
+				if *c.DisableVMD != false {
+					return errors.Errorf("expected vmd to be not disabled")
+				}
+				return nil
+			},
+		},
+		"legacy vmd disable": {
+			inTxt:  "disable_vmd: true",
+			outTxt: "enable_vmd: false",
+			expCheck: func(c *Server) error {
+				if *c.DisableVMD != true {
+					return errors.Errorf("expected vmd to be disabled")
+				}
+				return nil
+			},
+		},
+		"legacy vmd disable; current vmd enable": {
+			inTxt:       "disable_vfio: true",
+			outTxt:      "enable_vmd: true",
+			expParseErr: FaultConfigVMDSettingDuplicate,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

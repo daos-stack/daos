@@ -66,7 +66,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
 
 
 def add_build_rpath(env, pathin="."):
-    """Add a build directory with -Wl,-rpath-link"""
+    """Add a build directory to rpath"""
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
     env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
