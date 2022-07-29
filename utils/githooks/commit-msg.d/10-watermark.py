@@ -32,7 +32,8 @@ def run_check():
     empty_commit = True
     msg = []
     with open(sys.argv[1], "r") as commit_msg:
-        for line in commit_msg.readlines():
+        msg = commit_msg.readlines()
+        for line in msg:
             if line.startswith("Required-githooks: true"):
                 sys.exit(0)
             elif line.startswith("Signed-off-by"):
@@ -53,20 +54,16 @@ def run_check():
     if missing:
         sys.exit(0)
 
-    msg = []
-    with open(sys.argv[1], "r") as commit_msg:
+    with open(sys.argv[1], "w") as commit_msg:
         hook_emitted = False
-        for line in commit_msg.readlines():
+        for line in msg:
             if not hook_emitted:
                 if line.startswith("Signed-off-by"):
-                    msg.append("Required-githooks: true\n\n")
+                    commit_msg.write("Required-githooks: true\n\n")
                     hook_emitted = True
                 elif line.startswith("#"):
-                    msg.append("Required-githooks: true\n\n")
+                    commit_msg.write("Required-githooks: true\n\n")
                     hook_emitted = True
-            msg.append(line)
-    with open(sys.argv[1], "w") as commit_msg:
-        for line in msg:
             commit_msg.write(line)
 
 
