@@ -131,7 +131,7 @@ pool_destroy(void)
 	int	rc;
 
 	/** destroy the pool created in pool_create */
-	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */, 1 /* recursive */);
+	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
 	D_FREE(svcl.rl_ranks);
 }

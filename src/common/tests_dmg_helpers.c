@@ -562,8 +562,7 @@ out:
 }
 
 int
-dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force,
-		 int recursive)
+dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force)
 {
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -572,18 +571,13 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 	int			rc = 0;
 
 	uuid_unparse_lower(uuid, uuid_str);
-	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	// Perform recursive destroy by default.
+	args = cmd_push_arg(args, &argcount, "%s --recursive", uuid_str);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (force != 0) {
 		args = cmd_push_arg(args, &argcount, " --force ");
-		if (args == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	if (recursive != 0) {
-		args = cmd_push_arg(args, &argcount, " --recursive ");
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}

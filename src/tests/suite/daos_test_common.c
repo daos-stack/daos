@@ -460,7 +460,8 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
 	}
 
-	rc = dmg_pool_destroy(dmg_config_file, pool->pool_uuid, arg->group, 1, 1);
+	rc = dmg_pool_destroy(dmg_config_file,
+			      pool->pool_uuid, arg->group, 1);
 	if (rc && rc != -DER_TIMEDOUT)
 		print_message("dmg_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)

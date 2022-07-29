@@ -47,7 +47,7 @@ pool_create_all(void **state)
 
 	/** destroy container */
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1, 1);
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
@@ -390,7 +390,7 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success\n");
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1, 1);
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
