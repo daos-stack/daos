@@ -72,6 +72,7 @@ struct pool_svc {
 	rdb_path_t		ps_user;	/* pool user attributes KVS */
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
+	uint32_t		ps_global_version;
 };
 
 /* Pool service failed to start */
@@ -96,6 +97,17 @@ static int ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint
 static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine);
+
+static size_t
+pool_hdl_size(struct pool_svc *svc)
+{
+	/* return old size if pool is from version <= 2.0 */
+	if (svc->ps_global_version != 0)
+		return sizeof(struct pool_hdl);
+	else
+		return sizeof(((struct pool_hdl *)0)->ph_flags) +
+		       sizeof(((struct pool_hdl *)0)->ph_sec_capas);
+}
 
 static struct pool_svc *
 pool_svc_obj(struct ds_rsvc *rsvc)
@@ -1186,7 +1198,6 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx	tx;
 	d_iov_t		value;
-	uint32_t	global_version;
 	bool		version_exists = false;
 	int		rc;
 
@@ -1196,7 +1207,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	ABT_rwlock_rdlock(svc->ps_lock);
 
 	/* Check the layout version. */
-	d_iov_set(&value, &global_version, sizeof(global_version));
+	d_iov_set(&value, &svc->ps_global_version, sizeof(svc->ps_global_version));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
 	if (rc == -DER_NONEXIST) {
 		/*
@@ -1218,7 +1229,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	 * downgrading the DAOS software of an upgraded pool report
 	 * a proper RAS error.
 	 */
-	if (global_version > DS_POOL_GLOBAL_VERSION) {
+	if (svc->ps_global_version > DS_POOL_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1227,7 +1238,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     "incompatible layout version: %u larger than "
-				     "%u", global_version,
+				     "%u", svc->ps_global_version,
 				     DS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
@@ -2454,7 +2465,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&value, &hdl, pool_hdl_size(svc));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
@@ -2621,7 +2632,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	d_iov_set(&key, pdi->pdi_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&value, &hdl, pool_hdl_size(svc));
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -2931,7 +2942,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		if (!is_pool_from_srv(in->plci_op.pi_uuid,
 				      in->plci_op.pi_hdl)) {
 			d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
-			d_iov_set(&value, &hdl, sizeof(hdl));
+			d_iov_set(&value, &hdl, pool_hdl_size(svc));
 			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 			if (rc == -DER_NONEXIST)
 				rc = -DER_NO_HDL;
@@ -3030,7 +3041,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 	if (daos_rpc_from_client(rpc) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
-		d_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&value, &hdl, pool_hdl_size(svc));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
@@ -4071,6 +4082,11 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	rc1 = rdb_tx_commit(&tx);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
+
+	if (rc == 0) {
+		/* also bump cached version */
+		svc->ps_global_version = DS_POOL_GLOBAL_VERSION;
+	}
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
@@ -5330,6 +5346,7 @@ struct evict_iter_arg {
 	size_t	eia_hdl_uuids_size;
 	int	eia_n_hdl_uuids;
 	char	*eia_machine;
+	struct pool_svc *eia_pool_svc;
 };
 
 static int
@@ -5340,11 +5357,23 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	D_ASSERT(arg->eia_hdl_uuids != NULL);
 	D_ASSERT(arg->eia_hdl_uuids_size > sizeof(uuid_t));
 
-	if (key->iov_len != sizeof(uuid_t) ||
-	    val->iov_len != sizeof(struct pool_hdl)) {
-		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
-			key->iov_len, val->iov_len);
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
+	}
+	if (val->iov_len != sizeof(struct pool_hdl)) {
+		/* old/2.0 pool handle format ? */
+		if (val->iov_len == sizeof(((struct pool_hdl *)0)->ph_flags) +
+		    sizeof(((struct pool_hdl *)0)->ph_sec_capas) &&
+		    arg->eia_pool_svc->ps_global_version < 1) {
+			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
+			/* if looking for a specific machine, do not select this handle */
+			if (arg->eia_machine)
+				return 0;
+		} else {
+			D_ERROR("invalid value size: "DF_U64"\n", val->iov_len);
+			return -DER_IO;
+		}
 	}
 
 	/* If we specified a machine name as a filter check before we do the realloc */
@@ -5398,6 +5427,7 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	arg.eia_n_hdl_uuids = 0;
 	if (machine)
 		arg.eia_machine = machine;
+	arg.eia_pool_svc = svc;
 
 	rc = rdb_tx_iterate(tx, &svc->ps_handles, false /* backward */,
 			    evict_iter_cb, &arg);
@@ -5438,7 +5468,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
 
 	for (i = 0; i < n_hdl_list; i++) {
 		d_iov_set(&key, hdl_list[i], sizeof(uuid_t));
-		d_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&value, &hdl, pool_hdl_size(svc));
 		rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
 
 		if (rc == 0) {
