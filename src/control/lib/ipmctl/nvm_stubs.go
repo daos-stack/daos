@@ -25,13 +25,13 @@ func (n *NvmMgmt) Init(log logging.Logger) error {
 // GetModules queries number of PMem modules and retrieves device_discovery structs for each before
 // converting to Go DeviceDiscovery structs.
 func (n *NvmMgmt) GetModules(log logging.Logger) ([]DeviceDiscovery, error) {
-	return nil, nil
+	return []DeviceDiscovery{}, nil
 }
 
 // GetRegions queries number of PMem regions and retrieves region structs for each before
 // converting to Go PMemRegion structs.
 func (n *NvmMgmt) GetRegions(log logging.Logger) ([]PMemRegion, error) {
-	return nil, nil
+	return []PMemRegion{}, nil
 }
 
 // DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
@@ -41,7 +41,7 @@ func (n *NvmMgmt) DeleteConfigGoals(log logging.Logger) error {
 
 // GetFirmwareInfo fetches the firmware revision and other information from the device
 func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error) {
-	return nil, nil
+	return DeviceFirmwareInfo{}, nil
 }
 
 // UpdateFirmware updates the firmware on the device
