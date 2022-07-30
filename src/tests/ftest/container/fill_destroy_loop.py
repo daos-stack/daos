@@ -7,7 +7,7 @@
 import time
 import random
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from general_utils import get_random_bytes, DaosTestError
 from test_utils_container import TestContainerData
 
@@ -31,7 +31,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         akey_size = self.params.get("akey_size", "/run/container/*")
         dkey_size = self.params.get("dkey_size", "/run/container/*")
         # select a random data size based on block_size
-        data_size = random.randint(block_size*0.5, block_size*1.5)
+        data_size = random.randint(block_size*0.5, block_size*1.5) # nosec
 
         container = self.get_container(self.pool)
         container.open()
@@ -56,7 +56,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                                   "unable for an additional {2} byte object".format(
                                       written_byte, self.DER_NOSPACE, data_size))
                     free_space = self.pool.get_pool_free_space()
-                    self.log.info("--(4)free_space when pool is fullfill= {}".format(free_space))
+                    self.log.info("--(4)free_space when pool is fulfill= {}".format(free_space))
                     break
                 else:
                     self.fail("#Exception while writing object: {}".format(repr(excep)))
@@ -67,7 +67,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         Test Description:
             Purpose of the test is to stress pool and container space usage
-            boundary, test by looping of fullfill container and destroy
+            boundary, test by looping of fulfill container and destroy
 
         Use Case:
             repeat following steps:
