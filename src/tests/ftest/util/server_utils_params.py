@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
         self.provider = BasicParameter(None, default_provider)
-        self.crt_timeout = BasicParameter(None, 10)
+        self.crt_timeout = BasicParameter(None, 60)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         # Auto-calculate if unset or set to zero
@@ -389,6 +389,8 @@ class DaosServerYamlParameters(YamlParameters):
                 "DAOS_MD_CAP=1024",
                 "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
+                "UCX_LOG_LEVEL=error",
+                "UCX_MEM_LOG_LEVEL=error",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
             for name in self._provider.split(";"):
