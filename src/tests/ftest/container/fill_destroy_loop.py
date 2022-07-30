@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
 
 from apricot import TestWithServers
@@ -38,12 +37,13 @@ class BoundaryPoolContainerSpace(TestWithServers):
         written_byte = 0
         write_count = 1
         data_str = get_random_bytes(data_size)
-        while True:
+        space_avail_to_write = True
+        while space_avail_to_write:
             dkey = get_random_bytes(dkey_size)
             akey = get_random_bytes(akey_size)
             try:
                 written_byte += data_size
-                self.d_log.debug("--{0}writing cont-obj {1} byte data, total {2}..".format(
+                self.d_log.debug("--{0} writing cont-obj {1}  byte data, total {2}..".format(
                     write_count, data_size, written_byte))
                 container.written_data.append(TestContainerData(False))
                 container.written_data[-1].write_record(
@@ -51,13 +51,13 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 self.d_log.debug("--{0}wrote cont-obj, sz {1}".format(write_count, data_size))
                 write_count += 1
             except DaosTestError as excep:
+                space_avail_to_write = False
                 if self.DER_NOSPACE in repr(excep):
-                    self.log.info("--(3)written_byte={0}, Der_no_space {1} detected, pool is "
-                                  "unable for an additional {2} byte object".format(
-                                      written_byte, self.DER_NOSPACE, data_size))
+                    self.log.info("--(3)written_byte= %s, Der_no_space %s detected, pool is "
+                                  "unable for an additional %s byte object", written_byte,
+                                  self.DER_NOSPACE, data_size)
                     free_space = self.pool.get_pool_free_space()
-                    self.log.info("--(4)free_space when pool is fulfill= {}".format(free_space))
-                    break
+                    self.log.info("--(4)free_space when pool is fulfill= %s", free_space)
                 else:
                     self.fail("#Exception while writing object: {}".format(repr(excep)))
         container.destroy()
@@ -89,16 +89,16 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         for test_loop in range(1, testloop+1):
             # query the pool and get free space before write
-            self.log.info("==>Starting test loop: {} ...".format(test_loop))
+            self.log.info("==>Starting test loop: %s ...", test_loop)
             self.pool.set_query_data()
             self.log.info("--(1)Pool Query before write:\n"
-                "--Pool {0} query data: {1}\n".format(self.pool.uuid, self.pool.query_data))
+                "--Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
-            self.log.info("--(2)Pool free space before write: {}".format(free_space))
+            self.log.info("--(2)Pool free space before write: %s", free_space)
 
             # write container until DER_NOSPACE
             self.write_pool_until_nospace()
 
         self.pool.set_query_data()
         self.log.info("--(5)Pool Query before exit:\n"
-            "--Pool {0} query data: {1}\n".format(self.pool.uuid, self.pool.query_data))
+            "--Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
