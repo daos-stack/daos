@@ -390,6 +390,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
                 "UCX_LOG_LEVEL=error",
+                "UCX_MEM_LOG_LEVEL=error",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
             for name in self._provider.split(";"):
