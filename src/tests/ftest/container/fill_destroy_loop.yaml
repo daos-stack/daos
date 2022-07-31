@@ -1,7 +1,7 @@
 hosts:
   test_servers: 3
 server_config:
-   name: daos_server
+  name: daos_server
 timeout: 500
 pool:
   name: daos_server
