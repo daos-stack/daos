@@ -117,9 +117,9 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
-	/* setenv("UCX_LOG_LEVEL", "error", 1); */
+	/* setenv("UCX_LOG_LEVEL", "error", 1); 
 	setenv("UCX_IB_FORK_INIT", "n", 1);
-	/* setenv("D_LOG_MASK", "DEBUG", 1);
+	setenv("D_LOG_MASK", "DEBUG", 1);
 	setenv("HG_LOG_LEVEL", "debug", 1);
 	setenv("HG_LOG_SUBSYS", "na", 1);
 */
