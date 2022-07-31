@@ -3185,7 +3185,7 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 
 	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task);
 	obj = NULL;
-	if (rc != 0) {
+	if (rc < 0) {
 		D_ERROR("Fail to attach TX for opc %u: "DF_RC"\n",
 			opc, DP_RC(rc));
 		goto out;

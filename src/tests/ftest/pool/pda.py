@@ -47,7 +47,7 @@ class PoolPDAProperty(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=pool_pda_property
+        :avocado: tags=pool_pda_property,test_pda_pool_property
         """
 
         # Create the pool with default
