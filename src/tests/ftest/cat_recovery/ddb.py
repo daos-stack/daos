@@ -96,7 +96,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
         :avocado: tags=cat_rec
-        :avocado: tags=ddb_ls
+        :avocado: tags=ddb,ddb_ls
         """
         # Create a pool and a container.
         self.add_pool()
@@ -297,7 +297,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
         :avocado: tags=cat_rec
-        :avocado: tags=ddb_rm
+        :avocado: tags=ddb,ddb_rm
         """
         # 1. Create a pool and a container. Insert objects, dkeys, and akeys.
         self.add_pool(connect=True)
@@ -428,7 +428,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
         :avocado: tags=cat_rec
-        :avocado: tags=ddb_load
+        :avocado: tags=ddb,ddb_load
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
@@ -504,7 +504,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
         :avocado: tags=cat_rec
-        :avocado: tags=ddb_dump_value
+        :avocado: tags=ddb,ddb_dump_value
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
