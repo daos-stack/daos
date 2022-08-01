@@ -57,6 +57,11 @@
 	 DAOS_PO_QUERY_PROP_UPGRADE_STATUS | DAOS_PO_QUERY_PROP_SCRUB_MODE | \
 	 DAOS_PO_QUERY_PROP_SCRUB_FREQ | DAOS_PO_QUERY_PROP_SCRUB_THRESH)
 
+/*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DAOS_POOL_GLOBAL_VERSION		1
+
 int dc_pool_init(void);
 void dc_pool_fini(void);
 

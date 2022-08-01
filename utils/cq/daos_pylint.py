@@ -393,6 +393,10 @@ sys.path.append('site_scons')"""
             if scons and msg.symbol != 'consider-using-f-string':
                 vals['category'] = 'error'
 
+            # Flag some serious warnings as errors
+            if msg.symbol in ('condition-evals-to-constant'):
+                vals['category'] = 'error'
+
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -97,8 +97,10 @@ class RbldCascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,large,full_regression,rebuild
-        :avocado: tags=multitarget,simultaneous
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=multitarget,simultaneous,test_simultaneous_failures
         """
         self.mode = "simultaneous"
         self.execute_rebuild_test()
@@ -117,8 +119,10 @@ class RbldCascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,large,full_regression,rebuild
-        :avocado: tags=multitarget,sequential
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=multitarget,sequential,test_sequential_failures
         """
         self.mode = "sequential"
         self.execute_rebuild_test()
@@ -137,8 +141,10 @@ class RbldCascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,large,full_regression,rebuild
-        :avocado: tags=multitarget,cascading
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=multitarget,cascading,test_cascading_failures
         """
         self.mode = "cascading"
         self.execute_rebuild_test()

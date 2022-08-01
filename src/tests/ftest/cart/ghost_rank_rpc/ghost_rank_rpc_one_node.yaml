@@ -18,8 +18,7 @@ env_CRT_CTX_SHARE_ADDR: !mux
 hosts: !mux
   hosts_1:
     config: one_node
-    test_servers:
-      - boro-A
+    test_servers: 1
 timeout: 600
 tests: !mux
   ghost_rank:

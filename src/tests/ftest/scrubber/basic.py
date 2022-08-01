@@ -16,7 +16,7 @@ class TestWithScrubberBasic(TestWithScrubber):
     :avocado: recursive
     """
 
-    def test_scrubber_basic(self, pool_prop=None, cont_prop=None):
+    def run_scrubber_basic(self, pool_prop=None, cont_prop=None):
         """JIRA ID: DAOS-7371
         Scrubber basic main method which runs the basic testing.
 
@@ -61,7 +61,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=test_scrubber_disabled_during_pool_creation
 
         """
-        self.test_scrubber_basic(None, None)
+        self.run_scrubber_basic(None, None)
 
     def test_scrubber_enabled_during_pool_creation(self):
         """JIRA ID: DAOS-7371
@@ -80,4 +80,4 @@ class TestWithScrubberBasic(TestWithScrubber):
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')
-        self.test_scrubber_basic(pool_prop, cont_prop)
+        self.run_scrubber_basic(pool_prop, cont_prop)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,8 @@ const (
 	LogLevelDisabled LogLevel = iota
 	// LogLevelError emits messages at ERROR or higher
 	LogLevelError
+	// LogLevelNotice emits messages at NOTICE or higher
+	LogLevelNotice
 	// LogLevelInfo emits messages at INFO or higher
 	LogLevelInfo
 	// LogLevelDebug emits messages at DEBUG or higher
@@ -23,6 +25,7 @@ const (
 
 	strDisabled = "DISABLED"
 	strError    = "ERROR"
+	strNotice   = "NOTICE"
 	strInfo     = "INFO"
 	strDebug    = "DEBUG"
 )
@@ -49,6 +52,8 @@ func (ll *LogLevel) SetString(in string) error {
 		level = LogLevelDisabled
 	case strings.EqualFold(in, strError):
 		level = LogLevelError
+	case strings.EqualFold(in, strNotice):
+		level = LogLevelNotice
 	case strings.EqualFold(in, strInfo):
 		level = LogLevelInfo
 	case strings.EqualFold(in, strDebug):
@@ -67,6 +72,8 @@ func (ll LogLevel) String() string {
 		return strDisabled
 	case LogLevelError:
 		return strError
+	case LogLevelNotice:
+		return strNotice
 	case LogLevelInfo:
 		return strInfo
 	case LogLevelDebug:
