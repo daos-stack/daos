@@ -155,11 +155,9 @@ entry_array_close(void *arg) {
 		/* In this case there will have been a D_ERROR call on the entry so loudly mark
 		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
 		 */
-		DFUSE_TRA_ERROR(entry->fd_dfsoh, "entry %p closing array fd_count %d", entry,
-				entry->fd_cont->ioc_open_count);
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "closing array");
 	} else {
-		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "entry %p closing array fd_count %d", entry,
-				entry->fd_cont->ioc_open_count);
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "closing array");
 	}
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
@@ -2148,12 +2146,15 @@ do_real_clearerr:
 	do {                                                                                       \
 		off_t _offset;                                                                     \
 		int   _rc;                                                                         \
+		int   _err          = 0;                                                           \
 		(_entry)->fd_status = DFUSE_IO_DIS_STREAM;                                         \
 		_offset             = __real_ftello(_stream);                                      \
 		_rc                 = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);          \
+		if (_rc == -1)                                                                     \
+			_err = errno;                                                              \
 		DFUSE_TRA_ERROR((_entry)->fd_dfsoh,                                                \
-				"Unsupported function, disabling streaming %ld %ld rc=%d, %p\n",   \
-				_offset, (_entry)->fd_pos, _rc, (_stream));                        \
+				"Unsupported function, disabling streaming %ld %ld rc=%d %d, %p",  \
+				_offset, (_entry)->fd_pos, _rc, _err, (_stream));                  \
 	} while (0)
 
 DFUSE_PUBLIC int
