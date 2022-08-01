@@ -149,10 +149,18 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
-	int rc;
+	int              rc;
 
-	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
-			entry, entry->fd_cont->ioc_open_count);
+	if (entry->fd_status == DFUSE_IO_DIS_STREAM) {
+		/* In this case there will have been a D_ERROR call on the entry so loudly mark
+		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
+		 */
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "entry %p closing array fd_count %d", entry,
+				entry->fd_cont->ioc_open_count);
+	} else {
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "entry %p closing array fd_count %d", entry,
+				entry->fd_cont->ioc_open_count);
+	}
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	rc = dfs_release(entry->fd_dfsoh);
@@ -2130,6 +2138,18 @@ do_real_clearerr:
 	__real_clearerr(stream);
 }
 
+#define DISABLE_STREAM(_entry, _stream)                                                            \
+	do {                                                                                       \
+		off_t _offset;                                                                     \
+		int   _rc;                                                                         \
+		(_entry)->fd_status = DFUSE_IO_DIS_STREAM;                                         \
+		_offset             = __real_ftello(_stream);                                      \
+		_rc                 = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);          \
+		DFUSE_TRA_ERROR((_entry)->fd_dfsoh,                                                \
+				"Unsupported function, disabling streaming %ld %ld rc=%d, %p\n",   \
+				_offset, (_entry)->fd_pos, _rc, (_stream));                        \
+	} while (0)
+
 DFUSE_PUBLIC int
 dfuse___uflow(FILE *stream)
 {
@@ -2148,8 +2168,7 @@ dfuse___uflow(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_uflow;
 
-	D_ERROR("uflow called, something missing %d %p\n", fd, stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 	vector_decref(&fd_table, entry);
 
 do_real_uflow:
@@ -2186,7 +2205,9 @@ dfuse_ftell(FILE *stream)
 	if (off == 0) {
 		off = __real_ftell(stream);
 		if (off != 0) {
-			D_ERROR("Missing interception, patching up %d %p\n", fd, stream);
+			DFUSE_TRA_ERROR(entry->fd_dfsoh,
+					"Missing interception, disabling fd %d off %ld %p", fd, off,
+					entry);
 			entry->fd_status = DFUSE_IO_DIS_STREAM;
 		}
 	}
@@ -2246,8 +2267,7 @@ dfuse_fputc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2335,7 +2355,7 @@ dfuse_fgetc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2361,8 +2381,7 @@ dfuse_getc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2389,8 +2408,7 @@ dfuse_fgets(char *str, int n, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_INFO("Unsupported function, disabling streaming %p\n", stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2447,8 +2465,7 @@ dfuse_ungetc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2477,7 +2494,7 @@ dfuse_fscanf(FILE *stream, const char *format, ...)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2508,7 +2525,7 @@ dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 do_real_fn:
@@ -2534,7 +2551,7 @@ dfuse_fprintf(FILE *stream, const char *format, ...)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 
@@ -2565,7 +2582,7 @@ dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DISABLE_STREAM(entry, stream);
 
 	vector_decref(&fd_table, entry);
 do_real_fn:
