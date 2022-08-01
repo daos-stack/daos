@@ -151,7 +151,7 @@ entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
 	int              rc;
 
-	if (entry->fd_status == DFUSE_IO_DIS_STREAM) {
+	if (entry->fd_status == DFUSE_IO_DIS_STREAM || entry->fd_status == DFUSE_IO_DIS_IOERR) {
 		/* In this case there will have been a D_ERROR call on the entry so loudly mark
 		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
 		 */
@@ -1165,7 +1165,7 @@ disable_file:
 			errno = EIO;
 		return -1;
 	}
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on I/O error");
+	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Disabling interception on I/O error");
 	entry->fd_status = DFUSE_IO_DIS_IOERR;
 	vector_decref(&fd_table, entry);
 	/* Fall through and do the read */
@@ -2138,6 +2138,12 @@ do_real_clearerr:
 	__real_clearerr(stream);
 }
 
+/* If we intercept a streaming function that cannot be handled then log this and back-off to the
+ * libc functions.  Ensure that the file position is updated correctly.
+ * If fd_pos and offset are both non-zero then it means the intereption library has been partially
+ * working so there is a conflict on where data has been served from which we need to identify.
+ * TODO: Add assert to check for this.
+ */
 #define DISABLE_STREAM(_entry, _stream)                                                            \
 	do {                                                                                       \
 		off_t _offset;                                                                     \
