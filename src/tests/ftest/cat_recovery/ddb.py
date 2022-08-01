@@ -116,8 +116,7 @@ class DdbTest(TestWithServers):
             object_count=object_count, dkey_count=dkey_count, akey_count=akey_count)
 
         # Need to stop the server to use ddb.
-        dmg_command = self.get_dmg_command()
-        dmg_command.system_stop()
+        self.get_dmg_command().system_stop()
 
         # 1. Verify container UUID.
         cmd_result = ddb_command.list_component()
@@ -260,7 +259,7 @@ class DdbTest(TestWithServers):
                     errors.append(msg)
 
         # 6. Restart the server for the cleanup.
-        dmg_command.system_start()
+        self.get_dmg_command().system_start()
 
         # 7. Reset the container and the pool to prepare for the cleanup.
         self.container.close()
@@ -406,7 +405,7 @@ class DdbTest(TestWithServers):
         expected_len = len(self.ioreqs) - 1
         actual_len = len(obj_list)
         if actual_len != expected_len:
-            msg = ("Unexpected number of objecs after ddb rm! "
+            msg = ("Unexpected number of objects after ddb rm! "
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
             errors.append(msg)
 
