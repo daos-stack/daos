@@ -1,0 +1,20 @@
+hosts:
+  test_servers: 1
+
+timeout: 1800
+
+server_config:
+  name: daos_server
+  servers:
+    targets: 1
+
+pool:
+  control_method: dmg
+  scm_size: 1G
+
+container:
+  control_method: API
+
+object_count: 5
+dkey_count: 2
+akey_count: 1
