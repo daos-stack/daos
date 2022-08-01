@@ -211,8 +211,8 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 					svc.log.Errorf("sync GroupUpdate failed: %s", err)
 					continue
 				}
+				groupUpdateNeeded = false
 			}
-			groupUpdateNeeded = false
 		case <-groupUpdateTimer.C:
 			if !groupUpdateNeeded {
 				continue
@@ -384,6 +384,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 			Uri:  uris.Primary,
 		})
 		rankSet.Add(rank)
+	}
+
+	// Final check to make sure we're still leader.
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)

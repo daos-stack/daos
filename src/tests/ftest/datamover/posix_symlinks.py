@@ -24,7 +24,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs
-        :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp
+        :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp,test_dm_posix_symlinks
         """
         self.run_dm_posix_symlinks("DCP")
 
@@ -61,20 +61,23 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Test links that point forward
-        container1 = self.create_cont(pool1, True, pool1, uns_cont)
+        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1 = self.get_container(pool1, path=container1_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container1, self.create_links_forward, "forward")
 
         # Test links that point backward
-        container2 = self.create_cont(pool1, True, pool1, uns_cont)
+        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2 = self.get_container(pool1, path=container2_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container2, self.create_links_backward, "backward")
 
         # Test a mix of forward and backward links
-        container3 = self.create_cont(pool1, True, pool1, uns_cont)
+        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3 = self.get_container(pool1, path=container3_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container3, self.create_links_mixed, "mixed")
 
