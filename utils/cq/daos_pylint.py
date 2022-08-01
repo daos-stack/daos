@@ -218,6 +218,8 @@ class FileTypeList():
 
         if 'src/control/vendor' in file:
             return
+        if 'src/vos/storage_estimator' in file:
+            return
 
         self.files.append(file)
 
