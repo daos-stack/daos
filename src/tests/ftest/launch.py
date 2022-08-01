@@ -1,17 +1,15 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-# this needs to be disabled as list_tests.py is still using python2
-# pylint: disable=raise-missing-from
-
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from datetime import datetime
+from tempfile import TemporaryDirectory
 import errno
 import json
 import os
@@ -33,31 +31,6 @@ from ClusterShell.Task import task_self
 ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
-
-try:
-    # For python versions >= 3.2
-    from tempfile import TemporaryDirectory
-
-except ImportError:
-    # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from tempfile import mkdtemp
-    from shutil import rmtree
-
-    class TemporaryDirectory(object):
-        # pylint: disable=too-few-public-methods
-        """Create a temporary directory.
-
-        When the last reference of this object goes out of scope the directory
-        and its contents are removed.
-        """
-
-        def __init__(self):
-            """Initialize a TemporaryDirectory object."""
-            self.name = mkdtemp()
-
-        def __del__(self):
-            """Destroy a TemporaryDirectory object."""
-            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
@@ -117,9 +90,8 @@ def get_build_environment(args):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    build_vars_file = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "../../.build_vars.json")
+    build_vars_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   "../../.build_vars.json")
     try:
         with open(build_vars_file) as vars_file:
             return json.load(vars_file)
@@ -132,6 +104,8 @@ def get_build_environment(args):
             if not args.list:
                 raise
             return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    # Pylint warns about possible return types if we take this path, so ensure we do not.
+    assert False
 
 
 def get_temporary_directory(args, base_dir=None):
@@ -448,14 +422,12 @@ def run_command(cmd):
     print("Running {}".format(" ".join(cmd)))
 
     try:
-        # pylint: disable=consider-using-with
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        stdout, _ = process.communicate()
-        retcode = process.poll()
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True) as process:
+            stdout, _ = process.communicate()
+            retcode = process.poll()
     except Exception as error:
-        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error)) from error
     if retcode:
         raise RuntimeError(
             "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
@@ -522,7 +494,7 @@ def get_remote_output(hosts, command, timeout=120):
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    print("Running on {}: {}".format(hosts, command))
+    print("Running on {} with a {} second timeout: {}".format(hosts, timeout, command))
     task.run(command=command, nodes=hosts, timeout=timeout)
     return task
 
@@ -542,8 +514,11 @@ def check_remote_output(task, command):
     # Create a dictionary of hosts for each unique return code
     results = dict(task.iter_retcodes())
 
+    # Create a list of any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+
     # Determine if the command completed successfully across all the hosts
-    status = len(results) == 1 and 0 in results
+    status = len(results) == 1 and 0 in results and len(timed_out) == 0
     if not status:
         print("  Errors detected running \"{}\":".format(command))
 
@@ -580,7 +555,6 @@ def check_remote_output(task, command):
                     print("      {}".format(line))
 
     # List any hosts that timed out
-    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
     if timed_out:
         print("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
 
@@ -1348,7 +1322,7 @@ def run_tests(test_files, tag_filter, args):
                         os.path.join(os.sep, "etc", "daos")),
                     args)
 
-                # Archive remote daos log files
+                # Archive remote daos log files - use an extended timeout for potentially large logs
                 return_code |= archive_files(
                     "daos log files",
                     os.path.join(avocado_logs_dir, "latest", "daos_logs"),
@@ -1356,7 +1330,8 @@ def run_tests(test_files, tag_filter, args):
                     "{}/*.log*".format(test_log_dir),
                     args,
                     avocado_logs_dir,
-                    get_test_category(test_file["py"]))
+                    get_test_category(test_file["py"]),
+                    1800)
 
                 # Archive remote ULTs stacks dump files
                 return_code |= archive_files(
@@ -1590,7 +1565,7 @@ def compress_log_files(avocado_logs_dir, args):
 
 
 def archive_files(description, destination, hosts, source_files, args,
-                  avocado_logs_dir=None, test_name=None):
+                  avocado_logs_dir=None, test_name=None, timeout=900):
     """Archive all of the remote files to a local directory.
 
     Args:
@@ -1606,6 +1581,8 @@ def archive_files(description, destination, hosts, source_files, args,
             cart_logtest.py will be run against each log file and the size of
             each log file will be checked against the threshold (if enabled).
             Defaults to None.
+        timeout (int, optional): number of seconds to wait for the archiving
+            operation to complete. Defaults to 900 seconds.
 
     Returns:
         int: status of archiving the files
@@ -1639,7 +1616,7 @@ def archive_files(description, destination, hosts, source_files, args,
             command.append("-t \"{}\"".format(args.logs_threshold))
         if args.verbose > 1:
             command.append("-v")
-        task = get_remote_output(hosts, " ".join(command), 900)
+        task = get_remote_output(hosts, " ".join(command), timeout)
 
         # Determine if the command completed successfully across all the hosts
         cmd_description = "archive_files command for {}".format(description)

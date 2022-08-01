@@ -19,6 +19,7 @@ class ObjUpdateBadParam(TestWithServers):
     Pass an assortment of bad parameters to the daos_obj_update function.
     :avocado: recursive
     """
+
     def setUp(self):
         super().setUp()
         self.plog = logging.getLogger("progress")
@@ -41,11 +42,11 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,full_regression,small
-        :avocado: tags=object,objupdatebadparam
-        :avocado: tags=objbadhand
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objbadhand,objupdatebadparam,test_bad_handle
         """
-
         try:
             # create an object and write some data into it
             thedata = b"a string that I want to stuff into an object"
@@ -77,11 +78,11 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a dkey and an akey that is null.
 
-        :avocado: tags=all,full_regression,small
-        :avocado: tags=object,objupdatebadparam
-        :avocado: tags=objupdatenull
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objupdatenull,objupdatebadparam,test_null_values
         """
-
         # data used in the test
         thedata = b"a string that I want to stuff into an object"
         thedatasize = len(thedata) + 1

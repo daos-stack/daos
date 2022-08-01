@@ -182,7 +182,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	for _, ec := range engineCfgs {
 		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
 		if nodeMap[nn] {
-			log.Infof("Multiple engines assigned to NUMA node %s, "+
+			log.Noticef("Multiple engines assigned to NUMA node %s, "+
 				"allocating all hugepages on this node.", nn)
 			nodes = []string{nn}
 			break
