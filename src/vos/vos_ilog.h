@@ -317,7 +317,7 @@ vos_ilog_ts_ignore(struct umem_instance *umm, struct ilog_df *ilog)
 		return;
 
 	umem_tx_xadd_ptr(umm, ilog_ts_idx_get(ilog), sizeof(int),
-			 POBJ_XADD_NO_SNAPSHOT);
+			 UMEM_XADD_NO_SNAPSHOT);
 }
 
 

@@ -54,7 +54,7 @@ dtx_memcpy_nodrain(struct umem_instance *umm, void *dest, const void *src,
 		   size_t size)
 {
 	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, dest, size, POBJ_XADD_NO_SNAPSHOT);
+		umem_tx_xadd_ptr(umm, dest, size, UMEM_XADD_NO_SNAPSHOT);
 
 	pmem_memcpy_nodrain(dest, src, size);
 }
@@ -2460,7 +2460,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		       obj->obj_sync_epoch, epoch, DP_UOID(oid));
 
 		obj->obj_sync_epoch = epoch;
-		pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
+		umem_atomic_copy(vos_cont2umm(cont),
 				       &obj->obj_df->vo_sync, &epoch,
 				       sizeof(obj->obj_df->vo_sync));
 	}

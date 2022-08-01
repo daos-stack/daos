@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <setjmp.h>
 #include <cmocka.h>
 #include <daos/common.h>
 #include <daos/object.h>

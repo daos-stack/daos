@@ -38,57 +38,46 @@ pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 int
 vos_pool_settings_init(void)
 {
-	int					rc;
-	enum pobj_arenas_assignment_type	atype;
-
-	atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
-
-	rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
-	if (rc != 0)
-		D_ERROR("Could not configure PMDK for global arena: %s\n",
-			strerror(errno));
-
-	return rc;
+	return umempobj_settings_init();
 }
 
-static inline PMEMobjpool *
+static inline struct umem_pool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
 		   mode_t mode)
 {
-	PMEMobjpool *pop;
+	struct umem_pool *pop;
 
 	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pop = pmemobj_create(path, layout, poolsize, mode);
+	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS,
+			      poolsize, mode);
 	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 	return pop;
 }
 
-static inline PMEMobjpool *
-vos_pmemobj_open(const char *path, const char *layout)
+static inline struct umem_pool *
+vos_pmemobj_open(const char *path, const char *layout, int flags)
 {
-	PMEMobjpool *pop;
+	struct umem_pool *pop;
 
 	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pop = pmemobj_open(path, layout);
+	pop = umempobj_open(path, layout, flags);
 	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 	return pop;
 }
 
 static inline void
-vos_pmemobj_close(PMEMobjpool *pop)
+vos_pmemobj_close(struct umem_pool *pop)
 {
 	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pmemobj_close(pop);
+	umempobj_close(pop);
 	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 }
 
 static inline struct vos_pool_df *
-vos_pool_pop2df(PMEMobjpool *pop)
+vos_pool_pop2df(struct umem_pool *pop)
 {
-	TOID(struct vos_pool_df) pool_df;
-
-	pool_df = POBJ_ROOT(pop, struct vos_pool_df);
-	return D_RW(pool_df);
+	return (struct vos_pool_df *)
+		umempobj_get_rootptr(pop, sizeof(struct vos_pool_df));
 }
 
 static struct vos_pool *
@@ -266,14 +255,14 @@ vos_blob_unmap_cb(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data)
 	return rc;
 }
 
-static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df,
+static int pool_open(void *ph, struct vos_pool_df *pool_df,
 		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
 {
-	PMEMobjpool		*ph;
+	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
 	struct vos_pool_df	*pool_df;
@@ -282,7 +271,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
-	int			 rc = 0, enabled = 1;
+	int			 rc = 0;
 
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
@@ -309,21 +298,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		return daos_errno2der(errno);
 	}
 
-	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
+	ph = vos_pmemobj_create(path, VOS_POOL_LAYOUT, scm_sz,
 				0600);
 	if (!ph) {
 		rc = errno;
-		D_ERROR("Failed to create pool %s, size="DF_U64": %s\n", path,
-			scm_sz, pmemobj_errormsg());
+		D_ERROR("Failed to create pool %s, size="DF_U64"\n", path,
+			scm_sz);
 		return daos_errno2der(rc);
-	}
-
-	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
-	if (rc) {
-		D_ERROR("Enable SCM usage statistics failed. "DF_RC"\n",
-			DP_RC(rc));
-		rc = umem_tx_errno(rc);
-		goto close;
 	}
 
 	pool_df = vos_pool_pop2df(ph);
@@ -519,7 +500,7 @@ exit:
 }
 
 static int
-set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
+set_slab_prop(int id, struct umem_slab_desc *slab)
 {
 	struct daos_tree_overhead	ovhd = { 0 };
 	int				tclass, *size, rc;
@@ -566,17 +547,13 @@ done:
 	D_ASSERT(slab->unit_size > 0);
 	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
 
-	slab->alignment = 0;
-	slab->units_per_block = 1000;
-	slab->header_type = POBJ_HEADER_NONE;
-
 	return 0;
 }
 
 static int
 vos_register_slabs(struct umem_attr *uma)
 {
-	struct pobj_alloc_class_desc	*slab;
+	struct umem_slab_desc		*slab;
 	int				 i, rc, j;
 	bool				 skip_set;
 
@@ -607,8 +584,7 @@ vos_register_slabs(struct umem_attr *uma)
 		if (skip_set)
 			continue;
 
-		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
-				     slab);
+		rc = umempobj_set_slab_desc(uma->uma_pool, slab);
 		if (rc) {
 			D_ERROR("Failed to register VOS slab %d. rc:%d\n",
 				i, rc);
@@ -676,7 +652,7 @@ lock_pool_memory(struct vos_pool *pool)
  * So the caller shall not close ph in any case.
  */
 static int
-pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metrics,
+pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metrics,
 	  daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
@@ -790,8 +766,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
 	struct d_uuid		 ukey;
-	PMEMobjpool		*ph;
-	int			 rc, enabled = 1;
+	struct umem_pool	*ph;
+	int			 rc;
 	bool			 skip_uuid_check = flags & VOS_POF_SKIP_UUID_CHECK;
 
 	if (path == NULL || poh == NULL) {
@@ -827,19 +803,13 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	ph = vos_pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
+	ph = vos_pmemobj_open(path, VOS_POOL_LAYOUT,
+			      UMEMPOBJ_ENABLE_STATS);
 	if (ph == NULL) {
 		rc = errno;
-		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
-			DP_UUID(uuid), pmemobj_errormsg());
+		D_ERROR("Error in opening the pool "DF_UUID"\n",
+			DP_UUID(uuid));
 		return daos_errno2der(rc);
-	}
-
-	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
-	if (rc) {
-		D_ERROR("Enable SCM usage statistics failed. rc:%d\n",
-			umem_tx_errno(rc));
-		goto out;
 	}
 
 	pool_df = vos_pool_pop2df(ph);

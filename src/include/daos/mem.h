@@ -24,22 +24,50 @@
  * umem		Unified memory abstraction
  * umoff	Unified Memory offset
  */
-#ifdef DAOS_PMEM_BUILD
-#include <libpmemobj.h>
-#endif
+
+int umempobj_settings_init(void);
+
+/* umem persistent object property flags */
+#define	UMEMPOBJ_ENABLE_STATS	0x1
+
+struct umem_pool;
+
+/* umem persistent object functions */
+struct umem_pool *umempobj_create(const char *path, const char *layout_name,
+				  int prop_flags, size_t poolsize,
+				  mode_t mode);
+struct umem_pool *umempobj_open(const char *path, const char *layout_name,
+				int prop_flags);
+void  umempobj_close(struct umem_pool *pool);
+void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
+int   umempobj_get_heapusage(struct umem_pool *pool,
+			     daos_size_t *cur_allocated);
+void  umempobj_log_fraginfo(struct umem_pool *pool);
+
+/* persistent object slab descriptions */
+#define UMM_SLABS_CNT  7
+
+struct umem_slab_desc {
+	size_t		unit_size;
+	unsigned	class_id;
+};
+
+/** Set the slab description with specific size for the pmem obj pool */
+int umempobj_set_slab_desc(struct umem_pool *pool, struct umem_slab_desc *slab);
+
 
 /** The offset of an object from the base address of the pool */
 typedef uint64_t		umem_off_t;
 /** Number of flag bits to reserve for encoding extra information in
  *  a umem_off_t entry.
  */
-#define UMOFF_NUM_FLAG_BITS		(8)
+#define UMOFF_NUM_FLAG_BITS	(8)
 /** The absolute value of a flag mask must be <= this value */
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAG_BITS)
 /** Number of bits to shift the flag bits */
-#define UMOFF_FLAG_SHIFT (63 - UMOFF_NUM_FLAG_BITS)
+#define UMOFF_FLAG_SHIFT	(63 - UMOFF_NUM_FLAG_BITS)
 /** Mask for flag bits */
-#define UMOFF_FLAG_MASK ((UMOFF_MAX_FLAG - 1) << UMOFF_FLAG_SHIFT)
+#define UMOFF_FLAG_MASK		((UMOFF_MAX_FLAG - 1) << UMOFF_FLAG_SHIFT)
 /** In theory and offset can be NULL but in practice, pmemobj_root
  *  is not at offset 0 as pmdk reserves some space for its internal
  *  use.   So, use 0 for NULL.   Invalid bits are also considered
@@ -48,20 +76,6 @@ typedef uint64_t		umem_off_t;
 #define UMOFF_NULL		(0ULL)
 /** Check for a NULL value including possible invalid flag bits */
 #define UMOFF_IS_NULL(umoff)	(umem_off2offset(umoff) == 0)
-
-enum _vmem_pobj_tx_stage {
-	VT_STAGE_NONE,		/* no transaction in this thread */
-	VT_STAGE_WORK,		/* transaction in progress */
-	VT_STAGE_ONCOMMIT,	/* successfully committed */
-	VT_STAGE_ONABORT,	/* tx_begin failed or transaction aborted */
-	VT_STAGE_FINALLY,	/* always called */
-
-	MAX_VT_TX_STAGE
-};
-
-#define VMEM_FLAG_ZERO		(((uint64_t)1) << 0)
-#define VMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
-
 
 /** Retrieves any flags that are set.
  *
@@ -111,11 +125,26 @@ umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)
 	*offset = flags << UMOFF_FLAG_SHIFT;
 }
 
-int umem_tx_errno(int err);
-
 /* print format of umoff */
 #define UMOFF_PF		DF_X64
 #define UMOFF_P(umoff)		umem_off2offset(umoff)
+
+enum umem_pobj_tx_stage {
+	UMEM_STAGE_NONE,	/* no transaction in this thread */
+	UMEM_STAGE_WORK,	/* transaction in progress */
+	UMEM_STAGE_ONCOMMIT,	/* successfully committed */
+	UMEM_STAGE_ONABORT,	/* tx_begin failed or transaction aborted */
+	UMEM_STAGE_FINALLY,	/* always called */
+
+	MAX_UMEM_TX_STAGE
+};
+
+#ifdef DAOS_PMEM_BUILD
+bool umem_tx_inprogress(void);
+bool umem_tx_none(void);
+
+int umem_tx_errno(int err);
+#endif
 
 typedef enum {
 	/** volatile memory */
@@ -127,8 +156,6 @@ typedef enum {
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
-
-struct umem_instance;
 
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
@@ -160,6 +187,19 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 /** Finalize the txd initialized by \a umem_init_txd */
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
+struct umem_instance;
+struct pobj_action;
+
+/* Flags associated with various umem ops */
+#define UMEM_FLAG_ZERO		(((uint64_t)1) << 0)
+#define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
+#define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
+
+/* type num used by umem ops */
+enum {
+	UMEM_TYPE_ANY,
+};
+
 typedef struct {
 	/** free umoff */
 	int		 (*mo_tx_free)(struct umem_instance *umm,
@@ -167,13 +207,15 @@ typedef struct {
 	/**
 	 * allocate umoff with the specified size & flags
 	 *
-	 * \param umm	[IN]	umem class instance.
-	 * \param size	[IN]	size to allocate.
-	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
+	 * \param umm	   [IN]	umem class instance.
+	 * \param size	   [IN]	size to allocate.
+	 * \param slab_id  [IN]	hint about the slab to pick (for PMDK)
+	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	struct type (for PMDK)
 	 */
 	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
-					uint64_t flags, unsigned int type_num);
+					int slab_id, uint64_t flags,
+					unsigned int type_num);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -251,7 +293,7 @@ typedef struct {
 	 * \param actv_cnt [IN]	size of action array.
 	 */
 	void		 (*mo_cancel)(struct umem_instance *umm,
-				      struct pobj_action *actv, int actv_cnt);
+				      struct pobj_action *act, int actv_cnt);
 
 	/**
 	 * Publish the reservation (make it persistent).
@@ -261,9 +303,45 @@ typedef struct {
 	 * \param actv_cnt [IN]	size of action array.
 	 */
 	int		 (*mo_tx_publish)(struct umem_instance *umm,
-					  struct pobj_action *actv,
+					  struct pobj_action *act,
 					  int actv_cnt);
 
+	/**
+	 * Atomically copy the contents from src to the destination address.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param dest	[IN]	destination address
+	 * \param src	[IN]	source address
+	 * \param len	[IN]	length of data to be copied.
+	 */
+	 void *		(*mo_atomic_copy)(struct umem_instance *umem,
+					  void *dest, const void *src,
+					  size_t len);
+
+	/** free umoff atomically */
+	int		 (*mo_atomic_free)(struct umem_instance *umm,
+					   umem_off_t umoff);
+
+	/**
+	 * allocate umoff with the specified size & flags atomically
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param size	[IN]	size to allocate.
+	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
+	 * \param type_num [IN]	struct type (for PMDK)
+	 */
+	umem_off_t	 (*mo_atomic_alloc)(struct umem_instance *umm, size_t size,
+					    unsigned int type_num);
+
+	/**
+	 * flush data at specific offset to persistent store.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param addr	[IN]	starting address
+	 * \param size	[IN]	total bytes to be flushed.
+	 */
+	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
+					   size_t size);
 #endif
 	/**
 	 * Add one commit or abort callback to current transaction.
@@ -282,18 +360,15 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-
 #define UMM_SLABS_CNT	7
 
 /** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
+	struct umem_pool		*uma_pool;
 #ifdef DAOS_PMEM_BUILD
-	PMEMobjpool			*uma_pool;
 	/** Slabs of the umem pool */
-	struct pobj_alloc_class_desc	 uma_slabs[UMM_SLABS_CNT];
-#else
-	void				*uma_pool;
+	struct umem_slab_desc	 uma_slabs[UMM_SLABS_CNT];
 #endif
 };
 
@@ -302,11 +377,7 @@ struct umem_instance {
 	umem_class_id_t		 umm_id;
 	int			 umm_nospc_rc;
 	const char		*umm_name;
-#ifdef DAOS_PMEM_BUILD
-	PMEMobjpool		*umm_pool;
-#else
-	void			*umm_pool;
-#endif
+	struct umem_pool	*umm_pool;
 	/** Cache the pool id field for umem addresses */
 	uint64_t		 umm_pool_uuid_lo;
 	/** Cache the base address of the pool */
@@ -315,7 +386,7 @@ struct umem_instance {
 	umem_ops_t		*umm_ops;
 #ifdef DAOS_PMEM_BUILD
 	/** Slabs of the umem pool */
-	struct pobj_alloc_class_desc	 umm_slabs[UMM_SLABS_CNT];
+	struct umem_slab_desc	 umm_slabs[UMM_SLABS_CNT];
 #endif
 };
 
@@ -325,13 +396,6 @@ umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
 {
 	D_ASSERT(slab_id < UMM_SLABS_CNT);
 	return umm->umm_slabs[slab_id].class_id != 0;
-}
-
-static inline uint64_t
-umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id);
 }
 
 static inline size_t
@@ -388,21 +452,17 @@ umem_get_uuid(const struct umem_instance *umm)
 	return umm->umm_pool_uuid_lo;
 }
 
-enum {
-	UMEM_TYPE_ANY,
-};
-
 static inline bool
 umem_has_tx(struct umem_instance *umm)
 {
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size)                                                          \
+#define umem_alloc_verb(umm, slab_id, flags, size)                                                 \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);            \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, slab_id, flags, UMEM_TYPE_ANY);   \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -413,24 +473,16 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
+#define	SLAB_ID_ANY	(-1)
+
 #define umem_alloc(umm, size)						\
-	umem_alloc_verb(umm, 0, size)
+	umem_alloc_verb(umm, SLAB_ID_ANY, 0, size)
 
-#ifdef DAOS_PMEM_BUILD
 #define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, POBJ_FLAG_ZERO, size)
-#else
-#define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, VMEM_FLAG_ZERO, size)
-#endif
+	umem_alloc_verb(umm, SLAB_ID_ANY, UMEM_FLAG_ZERO, size)
 
-#ifdef DAOS_PMEM_BUILD
 #define umem_alloc_noflush(umm, size)					\
-	umem_alloc_verb(umm, POBJ_FLAG_NO_FLUSH, size)
-#else
-#define umem_alloc_noflush(umm, size)					\
-	umem_alloc_noflush(umm, VMEM_FLAG_NO_FLUSH, size)
-#endif
+	umem_alloc_verb(umm, SLAB_ID_ANY, UMEM_FLAG_NO_FLUSH, size)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -524,50 +576,52 @@ umem_tx_end(struct umem_instance *umm, int err)
 }
 
 #ifdef DAOS_PMEM_BUILD
-#define umem_reserve(umm, act, size)                                                               \
-	({                                                                                         \
-		umem_off_t __umoff = UMOFF_NULL;                                                   \
-		if (umm->umm_ops->mo_reserve)                                                      \
-			__umoff = (umm)->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);       \
-		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
-			  "Invalid assumption about allocnot using flag bits");                    \
-		D_DEBUG(DB_MEM,                                                                    \
-			"reserve %s umoff=" UMOFF_PF " size=%zu base=" DF_X64                      \
-			" pool_uuid_lo=" DF_X64 "\n",                                              \
-			(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size), (umm)->umm_base,        \
-			(umm)->umm_pool_uuid_lo);                                                  \
-		__umoff;                                                                           \
-	})
+struct umem_rsrvd_act;
 
-#define umem_defer_free(umm, off, act)                                                             \
-	do {                                                                                       \
-		D_DEBUG(DB_MEM,                                                                    \
-			"Defer free %s umoff=" UMOFF_PF "base=" DF_X64 " pool_uuid_lo=" DF_X64     \
-			"\n",                                                                      \
-			(umm)->umm_name, UMOFF_P(off), (umm)->umm_base, (umm)->umm_pool_uuid_lo);  \
-		if ((umm)->umm_ops->mo_defer_free)                                                 \
-			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
-		else                                                                               \
-			/** Go ahead and free immediately.  The purpose of this function           \
-			 *  is to allow reserve/publish pair to execute on commit                  \
-			 */                                                                        \
-			umem_free(umm, off);                                                       \
-	} while (0)
+/* Get the active reserved actions cnt pending for publications */
+int umem_rsrvd_act_cnt(struct umem_rsrvd_act *act);
+/* Allocate array of structures for reserved actions */
+int umem_rsrvd_act_alloc(struct umem_rsrvd_act **act, int cnt);
+/* Extend the array of structures for reserved actions to max_cnt */
+int umem_rsrvd_act_realloc(struct umem_rsrvd_act **act, int max_cnt);
+/* Free up the array of reserved actions */
+int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
-static inline void
-umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+umem_off_t umem_reserve(struct umem_instance *umm,
+			struct umem_rsrvd_act *rsrvd_act, size_t size);
+void umem_defer_free(struct umem_instance *umm, umem_off_t off,
+		     struct umem_rsrvd_act *rsrvd_act);
+void umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
+int umem_tx_publish(struct umem_instance *umm,
+		    struct umem_rsrvd_act *rsrvd_act);
+
+static inline void *
+umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len)
 {
-	if (umm->umm_ops->mo_cancel)
-		return umm->umm_ops->mo_cancel(umm, actv, actv_cnt);
+	D_ASSERT(umm->umm_ops->mo_atomic_copy != NULL);
+	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len);
+}
+
+static inline umem_off_t
+umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num);
 }
 
 static inline int
-umem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
-		int actv_cnt)
+umem_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	if (umm->umm_ops->mo_tx_publish)
-		return umm->umm_ops->mo_tx_publish(umm, actv, actv_cnt);
-	return 0;
+	D_ASSERT(umm->umm_ops->mo_atomic_free != NULL);
+	return umm->umm_ops->mo_atomic_free(umm, umoff);
+}
+
+static inline void
+umem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
+{
+	if (umm->umm_ops->mo_atomic_flush)
+		umm->umm_ops->mo_atomic_flush(umm, addr, len);
+	return;
 }
 #endif
 
@@ -578,5 +632,4 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
 	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
-
 #endif /* __DAOS_MEM_H__ */

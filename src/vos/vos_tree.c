@@ -510,7 +510,7 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
 	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
-			  POBJ_XADD_NO_SNAPSHOT);
+			  UMEM_XADD_NO_SNAPSHOT);
 	if (rc != 0)
 		return rc;
 
@@ -582,8 +582,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
 	struct dtx_handle	*dth = NULL;
-	struct vos_rsrvd_scm	*rsrvd_scm;
-	struct pobj_action	*act;
+	struct umem_rsrvd_act	*rsrvd_scm;
 	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
@@ -619,11 +618,8 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	i = dth->dth_op_seq - 1;
 	rsrvd_scm = dth->dth_deferred[i];
 	D_ASSERT(rsrvd_scm != NULL);
-	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
 
-	act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
-	umem_defer_free(&tins->ti_umm, rec->rec_off, act);
-	rsrvd_scm->rs_actv_at++;
+	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);
 
 	cancel_nvme_exts(addr, dth);
 
