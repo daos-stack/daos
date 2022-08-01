@@ -15,6 +15,7 @@ class SameKeyDifferentValue(TestWithServers):
     passed to same akey and dkey.
     :avocado: recursive
     """
+
     def setUp(self):
         super().setUp()
         self.pool = self.get_pool()

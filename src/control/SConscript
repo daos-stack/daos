@@ -12,7 +12,7 @@ import daos_build
 Import('env', 'prereqs', 'daos_version', 'conf_dir')
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.12.0'
+MIN_GO_VERSION = '1.16.0'
 GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
 

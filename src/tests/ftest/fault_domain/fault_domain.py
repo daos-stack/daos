@@ -34,7 +34,8 @@ class FaultDomain(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=fault_domain,fault_domain_different_domains
+        :avocado: tags=fault_domain
+        :avocado: tags=fault_domain_different_domains,test_pools_in_different_domains
         """
         test_passed = True
         rank = None
