@@ -424,7 +424,10 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 		// signal some callers to retry the operation on the
 		// new leader.
 		if IsRaftLeadershipError(err) {
-			return system.ErrRaftUnavail
+			return &system.ErrNotLeader{
+				LeaderHint: db.leaderHint(),
+				Replicas:   db.cfg.stringReplicas(db.getReplica()),
+			}
 		}
 
 		return err
