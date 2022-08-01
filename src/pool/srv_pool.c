@@ -5648,17 +5648,28 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ERROR("invalid key size: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
 	}
-	if (val->iov_len != sizeof(struct pool_hdl)) {
+	if (val->iov_len == sizeof(struct pool_hdl_v20)) {
 		/* old/2.0 pool handle format ? */
-		if (val->iov_len == sizeof(((struct pool_hdl *)0)->ph_flags) +
-		    sizeof(((struct pool_hdl *)0)->ph_sec_capas) &&
-		    arg->eia_pool_svc->ps_global_version < 1) {
+		if (arg->eia_pool_svc->ps_global_version < 1) {
 			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
 			/* if looking for a specific machine, do not select this handle */
 			if (arg->eia_machine)
 				return 0;
 		} else {
-			D_ERROR("invalid value size: "DF_U64"\n", val->iov_len);
+			D_ERROR("invalid value size: "DF_U64" for pool version %u\n", val->iov_len,
+				arg->eia_pool_svc->ps_global_version);
+			return -DER_IO;
+		}
+	} else {
+		struct pool_hdl *hdl = val->iov_buf;
+
+		if (val->iov_len != sizeof(struct pool_hdl) + hdl->ph_cred_len ||
+		    arg->eia_pool_svc->ps_global_version < 1) {
+			D_ERROR("invalid value size: "DF_U64" for pool version %u, expected %zu\n",
+				val->iov_len, arg->eia_pool_svc->ps_global_version,
+				arg->eia_pool_svc->ps_global_version < 1 ?
+				sizeof(struct pool_hdl_v20) :
+				sizeof(struct pool_hdl) + hdl->ph_cred_len);
 			return -DER_IO;
 		}
 	}
