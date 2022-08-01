@@ -108,20 +108,20 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BuildType',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
         string(name: 'TestProvider',
-               defaultValue: "",
+               defaultValue: '',
                description: 'Test-provider to use for this run.  Specifies the default provider ' +
                             'to use the daos_server config file when running functional tests' +
                             '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
@@ -162,6 +162,9 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit CI tests')
+        booleanParam(name: 'CI_FI_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the Fault Injection on EL 8 CI tests')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
@@ -170,8 +173,7 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional EL 8 CI tests' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the functional EL 8 CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the functional OpenSUSE Leap 15 CI tests' +
@@ -197,7 +199,7 @@ pipeline {
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
-               description: "Label to use for NLT tests")
+               description: 'Label to use for NLT tests')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
                description: 'Label to use for 3 node NVMe tests')
@@ -210,6 +212,13 @@ pipeline {
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
+        string(name: 'CI_PROVISIONING_POOL',
+               defaultValue: '',
+               description: 'The pool of images to provision test nodes from')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repos to add to the build and test ndoes')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
     }
 
     stages {
@@ -915,7 +924,7 @@ pipeline {
                 } // stage('Fault inection testing')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep') {
+        stage('Test Storage Prep on EL 8') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
