@@ -543,14 +543,14 @@ class DdbTest(TestWithServers):
             str_data_list.append(data.value.decode("utf-8"))
         # Verify that we were able to obtain the data and akey1 and akey2 aren't the same.
         if actual_akey1_data is None or actual_akey2_data is None or \
-            actual_akey1_data == actual_akey2_data:
+                actual_akey1_data == actual_akey2_data:
             msg = ("Invalid dumped value! Dumped akey1 data = {}; "
                    "Dumped akey2 data = {}").format(actual_akey1_data, actual_akey2_data)
             errors.append(msg)
         # Verify that the data we obtained with ddb are the ones we wrote. The order isn't
         # deterministic, so check with "in".
         if actual_akey1_data not in str_data_list or \
-            actual_akey2_data not in str_data_list:
+                actual_akey2_data not in str_data_list:
             msg = ("Unexpected dumped value! Dumped akey data 1 = {}; "
                    "Dumped akey data 2 = {}; Expected data list = {}").format(
                        actual_akey1_data, actual_akey2_data, str_data_list)
