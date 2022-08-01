@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -56,6 +56,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,container_acl,cont_user_sec,cont_group_sec,cont_sec
+        :avocado: tags=test_container_user_acl
         """
 
         #(1)Setup
