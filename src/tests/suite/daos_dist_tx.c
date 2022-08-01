@@ -25,6 +25,41 @@ static const char *dts_dtx_dkey	= "dtx_dkey";
 static const char *dts_dtx_akey	= "dtx_akey";
 
 static void
+dtx_0(void **state)
+{
+	test_arg_t		*arg = *state;
+	const char		*dkey = dts_dtx_dkey;
+	const char		*akey = dts_dtx_akey;
+	const daos_size_t	 fetch_size = 2 << 20 /* 2 MB */;
+	char			 fetch_buf[fetch_size];
+	daos_handle_t		 th = { 0 };
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+
+	/*
+	 * Trigger a fan-out at the beginning of a TX to test the wait in
+	 * dc_tx_get_epoch.
+	 */
+	print_message("DTX0: EV fetch against EC obj\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	arg->async = 0;
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	lookup_single(dkey, akey, 0, fetch_buf, fetch_size, th, &req);
+
+	MUST(daos_tx_commit(th, NULL));
+
+	ioreq_fini(&req);
+	MUST(daos_tx_close(th, NULL));
+}
+
+static void
 dtx_1(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -3035,6 +3070,8 @@ dtx_sub_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
+	{"DTX0: EV fetch against EC obj",
+	 dtx_0, NULL, test_case_teardown},
 	{"DTX1: multiple SV update against the same obj",
 	 dtx_1, NULL, test_case_teardown},
 	{"DTX2: multiple EV update against the same obj",
