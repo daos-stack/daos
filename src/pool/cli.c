@@ -1925,10 +1925,15 @@ map_refresh(tse_task_t *task)
 		goto out;
 	}
 
-	/* No active pool map refresh task; become one. */
-	D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
-	tse_task_addref(task);
-	pool->dp_map_task = task;
+	if (1 || pool->dp_map_task == NULL) {
+		/* No active pool map refresh task; become one */
+		D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
+		tse_task_addref(task);
+		pool->dp_map_task = task;
+	} else {
+		/* retry case */
+		D_ASSERT(pool->dp_map_task == task);
+	}
 
 	rank = choose_map_refresh_rank(arg);
 
@@ -1967,9 +1972,11 @@ out_cb_arg:
 	crt_req_decref(cb_arg.mrc_rpc);
 	destroy_map_refresh_rpc(rpc, cb_arg.mrc_map_buf);
 out_map_task:
+	/* D_RWLOCK_WRLOCK(&pool->dp_map_lock); */
 	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
 	tse_task_decref(pool->dp_map_task);
 	pool->dp_map_task = NULL;
+	/* D_RWLOCK_UNLOCK(&pool->dp_map_lock); */
 out_task:
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
