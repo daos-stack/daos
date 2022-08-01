@@ -16,8 +16,7 @@ source "$mydir/distro_info.sh"
 # We need sudo for running the scan and git for backward
 # compatibility.
 if command -v dnf; then
-  dnf install clamav clamav-devel \
-              git gzip hostname sudo
+  dnf install clamav clamav-devel git gzip hostname sudo
   # Some Dockerfiles missing the md5sum command by not having
   # coreutils installed.   Rocky 8 pre-installs coreutils-single which
   # blocks coreutils from being installed.

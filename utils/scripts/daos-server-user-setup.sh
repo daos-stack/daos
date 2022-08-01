@@ -1,8 +1,10 @@
 #!/bin/bash -uex
 
-# This script is used mainly by dockerfiles to setup a daos_server.
+# This script is used mainly by dockerfiles to setup a daos_server user
+# that matches the UID used for the Docker image.
 # If the sudo package is installed that user will be given sudo access
 # for testing.
+# Docker containers use this user for some testing and for malware scanning.
 
 : "${UID=1000}"
 

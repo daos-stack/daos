@@ -92,6 +92,7 @@ if [ -e /etc/profile.d/lmod.sh ]; then
     fi
 fi
 
-# this should not be needed, but docker containers have for leap 15
-# have failed in the past if it is not present.
+# This command should not be needed, but docker containers for leap 15 have
+# in the past failed to validate HTTPS certificates if this command is not
+# run here.  Running this command just makes sure things work.
 update-ca-certificates

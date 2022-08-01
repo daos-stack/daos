@@ -28,10 +28,10 @@ RUN set -e;                                         \
 
 # Add DAOS users
 ARG UID=1000
-COPY ./utils/scripts/daos-sudo-setup.sh /tmp/daos-sudo-setup.sh
-RUN set -e; \
-    chmod +x /tmp/daos-sudo-setup.sh && \
-    /tmp/daos-sudo-setup.sh
+COPY ./utils/scripts/daos-server-user-setup.sh /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 

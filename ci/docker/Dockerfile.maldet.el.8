@@ -11,7 +11,7 @@ LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 ARG REPO_FILE_URL
@@ -29,15 +29,16 @@ RUN set -e;                                         \
 
 # Add DAOS users
 ARG UID=1000
-COPY ./utils/scripts/daos-sudo-setup.sh /tmp/daos-sudo-setup.sh
-RUN set -e;                             \
-    chmod +x /tmp/daos-sudo-setup.sh && \
-    /tmp/daos-sudo-setup.sh
+COPY ./utils/scripts/daos-server-user-setup.sh /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
-RUN [ -z "$CB1" ] || {                                   \
-        dnf upgrade && dnf clean all;                    \
+RUN [ -z "$CB1" ] || {                                  \
+        dnf upgrade &&                                  \
+        dnf clean all;                                  \
     }
 
 ARG BUILD_URL
