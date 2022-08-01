@@ -175,13 +175,6 @@ pr_repos() {
     return 0
 }
 
-rpm_test_version() {
-    echo "$COMMIT_MESSAGE" |
-             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip' 
-    return 0
-
-}
-
 set_local_repo() {
     local repo_server="$1"
 
@@ -192,7 +185,7 @@ set_local_repo() {
     version="$(lsb_release -sr)"
     version=${version%%.*}
     if [ "$repo_server" = "artifactory" ] &&
-       [ -z "$(rpm_test_version)" ] &&
+       [ -z "$DAOS_RPM_TEST_VERSION" ] &&
        [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]] &&
        [[ ${CHANGE_TARGET:-$BRANCH_NAME} != provider-testing* ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is

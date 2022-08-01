@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -17,6 +17,7 @@ class PunchTest(TestWithServers):
     Simple test to verify the 3 different punch calls.
     :avocado: recursive
     """
+
     def setUp(self):
         super().setUp()
         self.prepare_pool()
@@ -37,9 +38,11 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the dkey punch function.
 
-        :avocado: tags=all,object,daily_regression,small,dkeypunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=dkeypunch,test_dkey_punch
         """
-
         try:
             # create an object and write some data into it
             thedata = b"a string that I want to stuff into an object"
@@ -92,9 +95,11 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the akey punch function.
 
-        :avocado: tags=all,object,daily_regression,small,akeypunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=akeypunch,test_akey_punch
         """
-
         try:
             # create an object and write some data into it
             dkey = b"this is the dkey"
@@ -146,9 +151,11 @@ class PunchTest(TestWithServers):
         The most basic test of the object punch function.  Really similar
         to above except the whole object is deleted.
 
-        :avocado: tags=all,object,daily_regression,small,objpunch
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objpunch,test_obj_punch
         """
-
         try:
 
             # create an object and write some data into it

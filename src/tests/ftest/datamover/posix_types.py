@@ -70,12 +70,15 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         pool2 = self.create_pool()
 
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Create all other containers
-        container1 = self.create_cont(pool1, True, pool1, uns_cont)
-        container2 = self.create_cont(pool1, True, pool1, uns_cont)
-        container3 = self.create_cont(pool2, True, pool1, uns_cont)
+        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1 = self.get_container(pool1, path=container1_path)
+        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2 = self.get_container(pool1, path=container2_path)
+        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3 = self.get_container(pool2, path=container3_path)
 
         # Create each source location
         p1_c1 = ["/", pool1, container1]
@@ -229,7 +232,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dcp
+        :avocado: tags=dm_posix_types,dm_posix_types_dcp,test_dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
 
@@ -241,7 +244,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dsync,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dsync
+        :avocado: tags=dm_posix_types,dm_posix_types_dsync,test_dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
 
@@ -254,6 +257,6 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
+        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

@@ -383,9 +383,28 @@ def display_task(task):
 
     Args:
         task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
     """
     log = getLogger()
     return check_task(task, log)
+
+
+def log_task(hosts, command, timeout=None):
+    """Display the output of the command executed on each host in parallel.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    return display_task(run_task(hosts, command, timeout, True))
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
@@ -500,6 +519,7 @@ def colate_results(command, results):
                         containing output, exit status, and interrupted
                         status common to each group of hosts (see run_pcmd()'s
                         return for details)
+
     Returns:
         str: a string colating run_pcmd()'s results
 
@@ -784,7 +804,6 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
         added_filter (str, optional): negative filter to better identify
             engines.
 
-
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
@@ -834,7 +853,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
         added_filter (str, optional): negative filter to better identify
             processes.
 
-
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
             values indicating which hosts yielded the return code.
@@ -881,6 +899,7 @@ def get_partition_hosts(partition, reservation=None):
     Args:
         partition (str): name of the partition
         reservation (str): name of reservation
+
     Returns:
         list: list of hosts in the specified partition
 
