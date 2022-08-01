@@ -266,6 +266,9 @@ class FileTypeList():
 
             # pylint: disable=too-many-return-statements
 
+            # Skip short words for now to cut down on noise whilst we resolve existing issues.
+            if len(word) < 5:
+                return True
             # Skip the "Fake" annotations from fake scons.
             if code.startswith(f'Fake {word}'):
                 return True

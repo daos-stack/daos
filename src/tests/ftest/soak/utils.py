@@ -133,7 +133,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     Args:
         self (obj): soak obj
         source_dir (str): Source directory to archive
-        dest_dir (str): Destinaton directory
+        dest_dir (str): Destination directory
         host_list (list): list of hosts
 
     Raises:
