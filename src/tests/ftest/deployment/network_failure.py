@@ -123,7 +123,7 @@ class NetworkFailureTest(IorTestBase):
         Aurora.
         3. Run IOR with given object class.
         4. Bring up the network interface.
-        5. Restart DAOS with dmg.
+        5. Restart DAOS with dmg system stop and start.
         6. Call dmg pool query -b to find the disabled ranks.
         7. Call dmg pool reintegrate --rank=<rank> one rank at a time to enable all
         ranks. Wait for rebuild after calling the command.
