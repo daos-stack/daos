@@ -1458,7 +1458,6 @@ DFUSE_PUBLIC void
 dfuse_rewind(FILE *stream)
 {
 	struct fd_entry *entry;
-	off_t            new_offset = -1;
 	int              rc;
 	int              fd;
 
@@ -1470,14 +1469,14 @@ dfuse_rewind(FILE *stream)
 	if (rc != 0)
 		goto do_real_rewind;
 
-	DFUSE_LOG_DEBUG("rewind(fd=%d) intercepted, bypass=%s", fd,
-			bypass_status[entry->fd_status]);
-
 	if (drop_reference_if_disabled(entry))
 		goto do_real_rewind;
 
-	entry->fd_pos = new_offset;
+	/* TODO: Should be debug to need to see if this is cause of other error */
+	DFUSE_TRA_WARNING(entry->fd_dfsoh, "rewind(fd=%d) intercepted, bypass=%s", fd,
+			  bypass_status[entry->fd_status]);
 
+	entry->fd_pos = 0;
 	entry->fd_err = 0;
 
 	vector_decref(&fd_table, entry);
@@ -2140,21 +2139,26 @@ do_real_clearerr:
  * libc functions.  Ensure that the file position is updated correctly.
  * If fd_pos and offset are both non-zero then it means the intereption library has been partially
  * working so there is a conflict on where data has been served from which we need to identify.
+ * fd_pos can either be 0 for files with no I/O or -1 on some error paths, do not do the seek
+ * in either of these cases.
  * TODO: Add assert to check for this.
  */
 #define DISABLE_STREAM(_entry, _stream)                                                            \
 	do {                                                                                       \
 		off_t _offset;                                                                     \
-		int   _rc;                                                                         \
+		int   _rc           = 0;                                                           \
 		int   _err          = 0;                                                           \
 		(_entry)->fd_status = DFUSE_IO_DIS_STREAM;                                         \
 		_offset             = __real_ftello(_stream);                                      \
-		_rc                 = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);          \
-		if (_rc == -1)                                                                     \
-			_err = errno;                                                              \
-		DFUSE_TRA_ERROR((_entry)->fd_dfsoh,                                                \
-				"Unsupported function, disabling streaming %ld %ld rc=%d %d, %p",  \
-				_offset, (_entry)->fd_pos, _rc, _err, (_stream));                  \
+		if ((_entry)->fd_pos > 0) {                                                        \
+			_rc = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);                  \
+			if (_rc == -1)                                                             \
+				_err = errno;                                                      \
+		}                                                                                  \
+		DFUSE_TRA_ERROR(                                                                   \
+		    (_entry)->fd_dfsoh,                                                            \
+		    "Unsupported function, disabling streaming %ld %ld rc=%d %d %s, %p", _offset,  \
+		    (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));                       \
 	} while (0)
 
 DFUSE_PUBLIC int
@@ -2472,7 +2476,13 @@ dfuse_ungetc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+#if 1
+	/* TODO: Remove this */
+	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Unsupported function, disabling streaming %p", stream);
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+#else
 	DISABLE_STREAM(entry, stream);
+#endif
 
 	vector_decref(&fd_table, entry);
 
