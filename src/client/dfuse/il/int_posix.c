@@ -1291,19 +1291,15 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 	} else if (whence == SEEK_END) {
-		D_ERROR("Unsupported function, disabling %d\n", fd);
-		entry->fd_status = DFUSE_IO_DIS_MMAP;
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling SEEK_END");
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
 		vector_decref(&fd_table, entry);
 		return __real_lseek(fd, offset, whence);
 	} else {
-		/* Let the system handle SEEK_END as well as non-standard
-		 * values such as SEEK_DATA and SEEK_HOLE
-		 */
-		assert(0);
-		new_offset = __real_lseek(fd, offset, whence);
-		if (new_offset >= 0)
-			entry->fd_pos = new_offset;
-		goto cleanup;
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling %d", whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_lseek(fd, offset, whence);
 	}
 
 	if (new_offset < 0) {
@@ -1312,8 +1308,6 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else {
 		entry->fd_pos = new_offset;
 	}
-
-cleanup:
 
 	SAVE_ERRNO(new_offset < 0);
 
@@ -1356,19 +1350,17 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
 	} else if (whence == SEEK_END) {
-		D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+		DFUSE_TRA_INFO(entry->fd_dfsoh,
+			       "Unsupported function, disabling streaming SEEK_END");
 		entry->fd_status = DFUSE_IO_DIS_STREAM;
 		vector_decref(&fd_table, entry);
 		return __real_fseek(stream, offset, whence);
 	} else {
-		/* Let the system handle SEEK_END as well as non-standard
-		 * values such as SEEK_DATA and SEEK_HOLE
-		 */
-		assert(0);
-		new_offset = __real_fseek(stream, offset, whence);
-		if (new_offset >= 0)
-			entry->fd_pos = new_offset;
-		goto cleanup;
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling streaming %d",
+			       whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseek(stream, offset, whence);
 	}
 
 	if (new_offset < 0) {
@@ -1377,8 +1369,6 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 	} else {
 		entry->fd_pos = new_offset;
 	}
-
-cleanup:
 
 	SAVE_ERRNO(new_offset < 0);
 
@@ -1429,19 +1419,17 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
 	} else if (whence == SEEK_END) {
-		D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+		DFUSE_TRA_INFO(entry->fd_dfsoh,
+			       "Unsupported function, disabling streaming SEEK_END");
 		entry->fd_status = DFUSE_IO_DIS_STREAM;
 		vector_decref(&fd_table, entry);
 		return __real_fseeko(stream, offset, whence);
 	} else {
-		/* Let the system handle SEEK_END as well as non-standard
-		 * values such as SEEK_DATA and SEEK_HOLE
-		 */
-		assert(0);
-		new_offset = __real_fseeko(stream, offset, whence);
-		if (new_offset >= 0)
-			entry->fd_pos = new_offset;
-		goto cleanup;
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling streaming %d",
+			       whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseeko(stream, offset, whence);
 	}
 
 	if (new_offset < 0) {
@@ -1450,8 +1438,6 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	} else {
 		entry->fd_pos = new_offset;
 	}
-
-cleanup:
 
 	SAVE_ERRNO(new_offset < 0);
 
@@ -1944,8 +1930,6 @@ dfuse_fclose(FILE *stream)
 	if (!ioil_iog.iog_initialized)
 		goto do_real_fclose;
 
-	DFUSE_LOG_DEBUG("fclose(stream=%p() intercepted", stream);
-
 	fd = fileno(stream);
 
 	if (fd == -1)
@@ -2170,10 +2154,8 @@ do_real_clearerr:
 			if (_rc == -1)                                                             \
 				_err = errno;                                                      \
 		}                                                                                  \
-		DFUSE_TRA_WARNING(                                                                 \
-		    (_entry)->fd_dfsoh,                                                            \
-		    "Unsupported function, disabling streaming %ld %ld rc=%d %d %s, %p", _offset,  \
-		    (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));                       \
+		DFUSE_TRA_INFO((_entry)->fd_dfsoh, "disabling streaming %ld %ld rc=%d %d %s, %p",  \
+			       _offset, (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));   \
 	} while (0)
 
 DFUSE_PUBLIC int
@@ -2556,7 +2538,7 @@ dfuse_ungetc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-#if 1
+#if 0
 	/* TODO: Remove this */
 	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Unsupported function, disabling streaming %p", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
@@ -2577,8 +2559,6 @@ dfuse_fscanf(FILE *stream, const char *format, ...)
 	va_list          ap;
 	int              fd;
 	int              rc;
-
-	D_ERROR("Unsupported function\n");
 
 	fd = fileno(stream);
 	if (fd == -1)

@@ -79,6 +79,14 @@ def scons():
 
     dfuse_env = base_env.Clone()
     compiler_setup.base_setup(dfuse_env)
+    # Turn on fortify source to get more challenging streaming behavior, but this needs -O and
+    # debug builds set -O0 so overwrite that if set.
+    dfuse_env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
+    if '-O0' in dfuse_env['CCFLAGS']:
+        dfuse_env['CCFLAGS'].remove('-O0')
+        dfuse_env.AppendUnique(CFLAGS=['-O2'])
+    # dfuse_env.AppendUnique(CFLAGS=['--std=gnu2x'])
+
     dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 

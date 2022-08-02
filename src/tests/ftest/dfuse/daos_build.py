@@ -156,7 +156,7 @@ class DaosBuild(DfuseTestBase):
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'WARN,IL=INFO'
+            remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
