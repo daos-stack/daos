@@ -1,3 +1,9 @@
+daos (2.1.104-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.104
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 02 Aug 2022 08:00:00 -0100
+
 daos (2.1.103-4) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Remove now unused openpa dependency
