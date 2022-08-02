@@ -113,6 +113,12 @@ struct ds3_object_info {
 	size_t encoded_length;
 };
 
+/** S3 Common Prefix information */
+struct ds3_common_prefix_info {
+	/** Common Prefix */
+	char prefix[DS3_MAX_KEY];
+};
+
 // General S3
 
 /**
@@ -240,18 +246,19 @@ ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, dao
  *		nbuck	[in] \a buf length in items.
  *			[out] Number of buckets returned.
  * \param[out]	buf	Array of bucket info structures.
- * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in,out]
  *		marker	[in] Start listing from marker key
  *			[out] Returned marker key for next call
+ * \param[out]	is_truncated	Are the results truncated
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, ds3_t *ds3,
-		daos_event_t *ev);
+ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, bool *is_truncated,
+		ds3_t *ds3, daos_event_t *ev);
 
 /**
  * Create a bucket in the DAOS pool identified by \a ds3.
@@ -340,15 +347,20 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * List S3 objects stored in the S3 bucket identified by \a ds3b.
  *
  * \param[in,out]
- *		nobj	[in] \a buf length in items.
+ *		nobj	[in] \a objs length in items.
  *			[out] Number of objects returned.
- * \param[out]	buf	Array of object info structures.
+ * \param[out]	objs	Array of object info structures.
+ * \param[in,out]
+ *		ncp	[in] \a cps length in items.
+ *			[out] Number of objects returned.
+ * \param[out]	cps	Array of object info structures.
  * \param[in]	prefix	List objects that start with this prefix.
  * \param[in]	delim	Divide results by delim.
  * \param[in,out]
  *		marker	[in] Start listing from marker key.
  *			[out] Next marker to be used by subsequent calls.
  * \param[in]	list_versions	Also include versions
+ * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -356,8 +368,9 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *prefix,
-		    const char *delim, char *marker, bool list_versions, ds3_bucket_t *ds3b,
+ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
+		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
+		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b,
 		    daos_event_t *ev);
 
 // TODO multipart api

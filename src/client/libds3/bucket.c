@@ -7,8 +7,8 @@
 #include "ds3_internal.h"
 
 int
-ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, ds3_t *ds3,
-		daos_event_t *ev)
+ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, bool *is_truncated,
+		ds3_t *ds3, daos_event_t *ev)
 {
 	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
 		return -EINVAL;
@@ -22,9 +22,13 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, d
 	}
 
 	// TODO: Handle markers and other bucket info
-	// TODO handle DER_TRUNC
 	rc = daos_pool_list_cont(ds3->poh, &ncont, conts, ev);
-	if (rc != 0 && rc != -DER_TRUNC) {
+	if (rc == 0) {
+		*is_truncated = false;
+	} else if (rc == -DER_TRUNC) {
+		rc            = 0;
+		*is_truncated = true;
+	} else {
 		D_ERROR("Failed to list containers in pool, rc = %d\n", rc);
 		rc = daos_der2errno(rc);
 		goto err;
@@ -167,9 +171,144 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 }
 
 int
-ds3_bucket_list_obj(daos_size_t *nobj, struct ds3_object_info *buf, const char *prefix,
-		    const char *delim, char *marker, bool list_versions, ds3_bucket_t *ds3b,
+ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
+		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
+		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b,
 		    daos_event_t *ev)
 {
-	return 0;
+	if (ds3b == NULL || nobj == NULL)
+		return -EINVAL;
+
+	// End
+	if (*nobj == 0)
+		return 0;
+
+	// TODO: support the case when delim is not /
+	if (strcmp(delim, "/") != 0) {
+		return -EINVAL;
+	}
+
+	int   rc          = 0;
+	char *file_start  = strrchr(prefix, delim[0]);
+	const char *path        = "";
+	const char *prefix_rest = prefix;
+
+	if (file_start != NULL) {
+		*file_start = '\0';
+		path        = prefix;
+		prefix_rest = file_start + 1;
+	}
+
+	dfs_obj_t *dir_obj;
+
+	char      *lookup_path;
+	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+	if (lookup_path == NULL)
+		return -ENOMEM;
+
+	strcpy(lookup_path, "/");
+	strcat(lookup_path, path);
+	rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &dir_obj, NULL, NULL);
+
+	if (rc != 0) {
+		goto err_path;
+	}
+
+	struct dirent *dirents;
+	D_ALLOC_ARRAY(dirents, *nobj);
+	if (dirents == NULL) {
+		rc = ENOMEM;
+		goto err_dir_obj;
+	}
+
+	// TODO handle bigger directories
+	// TODO handle ordering
+	// TODO handle marker
+	daos_anchor_t anchor;
+	daos_anchor_init(&anchor, 0);
+
+	rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, nobj, dirents);
+	if (rc != 0) {
+		goto err_dirents;
+	}
+
+	*is_truncated = !daos_anchor_is_eof(&anchor);
+
+	uint32_t cpi = 0;
+	uint32_t obji = 0;
+	for (uint32_t i = 0; i < *nobj; i++) {
+		const char *name = dirents[i].d_name;
+
+		// Skip entries that do not start with prefix_rest
+		// TODO handle how this affects max
+		if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0) {
+			continue;
+		}
+
+		dfs_obj_t *entry_obj;
+		mode_t     mode;
+		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
+				    &mode, NULL);
+		if (rc != 0) {
+			goto err_dirents;
+		}
+
+		if (S_ISDIR(mode)) {
+			// The entry is a directory
+			
+			// Out of bounds
+			if (cpi >= *ncp) {
+				rc = EINVAL;
+				goto err_dirents;
+			}
+
+			// Add to cps
+			char * cpp = cps[cpi].prefix;
+			if (strlen(path) == 0) {
+				strcpy(cpp, path);
+				strcat(cpp, delim);
+			} else {
+				strcpy(cpp, "");
+			}
+			strcat(cpp, name);
+			strcat(cpp, delim);
+			
+			cpi++;
+		} else if (S_ISREG(mode)) {
+			// The entry is a regular file
+			
+			// Out of bounds
+			if (obji >= *ncp) {
+				rc = EINVAL;
+				goto err_dirents;
+			}
+
+			// Read the xattr and add to objs
+			// TODO make more efficient
+			rc = dfs_getxattr(ds3b->dfs, entry_obj, RGW_DIR_ENTRY_XATTR, objs[obji].encoded,
+					  &objs[obji].encoded_length);
+			// Skip if file has no dirent
+			if (rc != 0) {
+				D_WARN("No dirent, skipping entry= %s\n", name);
+				dfs_release(entry_obj);
+				continue;
+			}
+
+			obji++;
+		} else {
+			// Skip other types
+			D_INFO("Skipping entry = %s\n",  name );
+		}
+
+		// Close handles
+		dfs_release(entry_obj);
+	}
+
+err_dirents:
+	D_FREE(dirents);
+err_dir_obj:
+	dfs_release(dir_obj);
+err_path:
+	D_FREE(lookup_path);
+	return -rc;
 }
