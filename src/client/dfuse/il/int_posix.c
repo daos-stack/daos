@@ -1343,6 +1343,11 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
+	} else if (whence == SEEK_END) {
+		D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseek(stream, offset, whence);
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE
@@ -1411,6 +1416,11 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
+	} else if (whence == SEEK_END) {
+		D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseeko(stream, offset, whence);
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE

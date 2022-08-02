@@ -211,6 +211,23 @@ do_openat(void **state)
 	rc = fclose(stream);
 	assert_int_equal(rc, 0);
 
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	/* now see to two before the end of file, this needs the filesize so will back-off */
+	offset = fseeko(stream, -2, SEEK_END);
+	assert_int_equal(offset, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 8);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
 	rc = unlinkat(root, "stream_file", 0);
 	assert_return_code(rc, errno);
 
