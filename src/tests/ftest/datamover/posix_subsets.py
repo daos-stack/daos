@@ -55,18 +55,19 @@ class DmvrPosixSubsets(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # create dfuse containers to test copying to dfuse subdirectories
-        dfuse_cont1 = self.create_cont(pool1)
-        dfuse_cont2 = self.create_cont(pool1)
+        dfuse_cont1 = self.get_container(pool1)
+        dfuse_cont2 = self.get_container(pool1)
         dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
         # destination directory should be created by program
         dfuse_cont2_dir = self.new_posix_test_path(
             create=False,
             parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Create a testing container
-        container1 = self.create_cont(pool1, True, pool1, uns_cont)
+        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1 = self.get_container(pool1, path=container1_path)
 
         # Create some source directories in the container
         sub_dir = self.new_daos_test_path(False)
@@ -158,6 +159,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
+        :avocado: tags=test_dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
 
@@ -170,5 +172,6 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
+        :avocado: tags=test_dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")

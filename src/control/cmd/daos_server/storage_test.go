@@ -46,7 +46,9 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 	}{
 		"no modules": {
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNoModules,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoModules,
+				},
 			},
 			expScanErr: storage.FaultScmNoModules,
 		},
@@ -61,13 +63,17 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 		},
 		"create regions; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNoRegions,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
 			},
 			expScanErr: errors.New("failed to create regions"),
 		},
 		"create regions; reboot required": {
 			prepResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateNoRegions,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
 				RebootRequired: true,
 			},
 			expLogMsg: storage.ScmMsgRebootRequired,
@@ -76,7 +82,9 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			// If non-interleaved regions are detected, prep will return an
 			// error. So returning the state is unexpected.
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNotInterleaved,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNotInterleaved,
+				},
 			},
 			expScanErr: errors.New("unexpected state"),
 		},
@@ -86,19 +94,25 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 		},
 		"create namespaces; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
 			},
 			expScanErr: errors.New("failed to create namespaces"),
 		},
 		"create namespaces; no namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNoFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
 			},
 			expScanErr: errors.New("failed to find namespaces"),
 		},
 		"create namespaces; namespaces reported": {
 			prepResp: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateNoFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
 				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expLogMsg: printNamespace.String(),
@@ -112,7 +126,9 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 		"reset; remove regions; reboot required": {
 			reset: true,
 			prepResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateNoRegions,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
 				RebootRequired: true,
 			},
 			expLogMsg: storage.ScmMsgRebootRequired,
@@ -120,28 +136,36 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 		"reset; no regions": {
 			reset: true,
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNoRegions,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoRegions,
+				},
 			},
 			expLogMsg: "reset successful",
 		},
 		"reset; regions not interleaved": {
 			reset: true,
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNotInterleaved,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNotInterleaved,
+				},
 			},
 			expScanErr: errors.New("unexpected state"),
 		},
 		"reset; free capacity": {
 			reset: true,
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
 			},
 			expScanErr: errors.New("unexpected state"),
 		},
 		"reset; no free capacity": {
 			reset: true,
 			prepResp: &storage.ScmPrepareResponse{
-				State: storage.ScmStateNoFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
 			},
 			expScanErr: errors.New("unexpected state"),
 		},
