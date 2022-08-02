@@ -2586,8 +2586,6 @@ dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
 	int              fd;
 	int              rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
