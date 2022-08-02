@@ -77,7 +77,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
-        cmd = [self.daos_test, '--test-dir', mount_dir]
+        cmd = [self.daos_test, '--test-dir', mount_dir, '--io']
 
         # Metadata tests don't work with caching enabled
         if intercept or cache_mode == 'nocache':

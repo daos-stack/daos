@@ -30,12 +30,24 @@
 
 #include "dfuse_ioctl.h"
 
+/**
+ * Tests can be run by specifying the appropriate argument for a test or
+ * all will be run if no test is specified.
+ */
+#define TESTS "im"
+static const char *all_tests = TESTS;
+
 static void
 print_usage()
 {
-	printf("DFuse tests\n");
-	printf("dfuse_test --test-dir <path to test>\n");
-	printf("dfuse_test -m|--metadata\n");
+	print_message("\n\nDFuse tests\n=============================\n");
+	print_message("dfuse_test -M|--test-dir <path to test>\n");
+	print_message("Tests: Use one of these arg(s) for specific test\n");
+	print_message("dfuse_test -a|--all\n");
+	print_message("dfuse_test -i|--io\n");
+	print_message("dfuse_test -m|--metadata\n");
+	print_message("Default <dfuse_test> runs all tests\n=============\n");
+	print_message("\n=============================\n");
 }
 
 char *test_dir;
@@ -223,10 +235,6 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	printf("prev_ts.tv_sec        = %ld\n", prev_ts.tv_sec);
-	printf("prev_ts.tv_nsec       = %ld\n", prev_ts.tv_nsec);
-	printf("stbuf.st_mtim.tv_sec  = %ld\n", stbuf.st_mtim.tv_sec);
-	printf("stbuf.st_mtim.tv_nsec = %ld\n", stbuf.st_mtim.tv_nsec);
 	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
@@ -236,10 +244,6 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	printf("prev_ts.tv_sec        = %ld\n", prev_ts.tv_sec);
-	printf("prev_ts.tv_nsec       = %ld\n", prev_ts.tv_nsec);
-	printf("stbuf.st_mtim.tv_sec  = %ld\n", stbuf.st_mtim.tv_sec);
-	printf("stbuf.st_mtim.tv_nsec = %ld\n", stbuf.st_mtim.tv_nsec);
 	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
@@ -267,36 +271,77 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+static int
+run_specified_tests(const char *tests, int size, int *sub_tests, int sub_tests_size)
+{
+	int nr_failed = 0;
+
+	if (strlen(tests) == 0)
+		tests = all_tests;
+
+	while (*tests != '\0') {
+		switch (*tests) {
+		case 'i':
+			printf("\n\n=================");
+			printf("dfuse IO tests");
+			printf("=====================");
+			const struct CMUnitTest io_tests[] = {
+				cmocka_unit_test(do_openat),
+				cmocka_unit_test(do_ioctl),
+			};
+			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
+			break;
+		case 'm':
+			printf("\n\n=================");
+			printf("dfuse metadata tests");
+			printf("=====================");
+			const struct CMUnitTest metadata_tests[] = {
+				cmocka_unit_test(do_mtime),
+			};
+			nr_failed = cmocka_run_group_tests(metadata_tests, NULL, NULL);
+			break;
+
+		default:
+			assert_true(0);
+		}
+
+		tests++;
+	}
+
+	return nr_failed;
+}
+
 int
 main(int argc, char **argv)
 {
-	int                     index = 0;
-	int                     opt;
-	bool			do_run_metadata = false;
-	int			nr_failed;
+	char		 tests[64];
+	int		 ntests = 0;
+	int		 nr_failed = 0;
+	int		 nr_total_failed = 0;
+	int		 opt = 0, index = 0;
+	int		 size;
 
-	struct option           long_options[] = {
+	static struct option long_options[] = {
 		{"test-dir",	required_argument,	NULL,	'M'},
+		{"all",		no_argument,		NULL,	'a'},
+		{"io",		no_argument,		NULL,	'i'},
 		{"metadata",	no_argument,		NULL,	'm'},
 		{NULL,		0,			NULL,	0}
 	};
 
-	const struct CMUnitTest basic_tests[] = {
-	    cmocka_unit_test(do_openat),
-	    cmocka_unit_test(do_ioctl),
-	};
+	memset(tests, 0, sizeof(tests));
 
-	const struct CMUnitTest metadata_tests[] = {
-	    cmocka_unit_test(do_mtime),
-	};
-
-	while ((opt = getopt_long(argc, argv, "M:m", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "a:M:im", long_options, &index)) != -1) {
+		if (strchr(all_tests, opt) != NULL) {
+			tests[ntests] = opt;
+			ntests++;
+			continue;
+		}
 		switch (opt) {
+		case 'a':
+			break;
 		case 'M':
 			test_dir = optarg;
-			break;
-		case 'm':
-			do_run_metadata = true;
 			break;
 		default:
 			printf("Unknown Option\n");
@@ -306,13 +351,17 @@ main(int argc, char **argv)
 	}
 
 	if (test_dir == NULL) {
-		printf("--test-dir option required\n");
+		printf("-M|--test-dir option required\n");
 		return 1;
 	}
 
-	nr_failed = cmocka_run_group_tests(basic_tests, NULL, NULL);
-	if (do_run_metadata)
-		nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
+	nr_failed = run_specified_tests(tests, size, NULL, 0);
+
+	print_message("\n============ Summary %s\n", __FILE__);
+	if (nr_total_failed == 0)
+		print_message("OK - NO TEST FAILURES\n");
+	else
+		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
 
 	return nr_failed;
 }
