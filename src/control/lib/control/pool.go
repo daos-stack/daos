@@ -183,7 +183,8 @@ func (r *poolRequest) getDeadline() time.Time {
 	if !r.deadline.IsZero() {
 		return r.deadline
 	}
-	return time.Now().Add(DefaultPoolTimeout)
+	r.SetTimeout(DefaultPoolTimeout)
+	return r.deadline
 }
 
 func (r *poolRequest) canRetry(reqErr error, try uint) bool {
@@ -1271,7 +1272,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
 				if !smdDevice.NvmeState.IsNormal() {
-					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+					log.Noticef("WARNING: SMD device %s (instance %d, ctrlr %s) "+
 						"not usable (device state %q)",
 						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
 						smdDevice.NvmeState.String())

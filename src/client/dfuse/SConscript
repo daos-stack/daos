@@ -3,11 +3,8 @@ import os
 import daos_build
 import compiler_setup
 
-HEADERS = ['ioil_io.h', 'ioil_defines.h',
-           'ioil_api.h', 'ioil_preload.h',
-           'ioil.h']
-COMMON_SRC = ['dfuse_obj_da.c',
-              'dfuse_vector.c']
+HEADERS = ['ioil_io.h', 'ioil_defines.h', 'ioil_api.h', 'ioil.h']
+COMMON_SRC = ['dfuse_obj_da.c', 'dfuse_vector.c']
 DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
