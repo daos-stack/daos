@@ -433,7 +433,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
-			if (entry->dpe_val > DS_POOL_GLOBAL_VERSION) {
+			if (entry->dpe_val > DAOS_POOL_GLOBAL_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -477,7 +477,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
-	uint32_t		upgrade_global_version = DS_POOL_GLOBAL_VERSION;
+	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
 	int			rc;
 
 	/* Generate the pool buffer. */
@@ -1229,7 +1229,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	 * downgrading the DAOS software of an upgraded pool report
 	 * a proper RAS error.
 	 */
-	if (svc->ps_global_version > DS_POOL_GLOBAL_VERSION) {
+	if (svc->ps_global_version > DAOS_POOL_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1239,7 +1239,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     NULL /* data */,
 				     "incompatible layout version: %u larger than "
 				     "%u", svc->ps_global_version,
-				     DS_POOL_GLOBAL_VERSION);
+				     DAOS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
@@ -2255,11 +2255,14 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-void
-ds_pool_connect_handler(crt_rpc_t *rpc)
+/* Currently we only maintain compatibility between 2 versions */
+#define NUM_POOL_VERSIONS	2
+
+static void
+ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
-	struct pool_connect_in	       *in = crt_req_get(rpc);
-	struct pool_connect_out	       *out = crt_reply_get(rpc);
+	struct pool_connect_v4_in       *in = crt_req_get(rpc);
+	struct pool_connect_v5_out      *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
@@ -2349,6 +2352,58 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 	D_ASSERT(prop != NULL);
 
+	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+	D_ASSERT(global_ver_entry != NULL);
+	global_ver = global_ver_entry->dpe_val;
+	/*
+	 * Reject pool connection if old clients try to connect new format pool.
+	 */
+	if (handler_version >= 5) {
+		struct pool_connect_v5_in *in1 = (struct pool_connect_v5_in *)in;
+		int diff = DAOS_POOL_GLOBAL_VERSION - in1->pci_pool_version;
+
+		if (in1->pci_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
+			if (diff >= NUM_POOL_VERSIONS) {
+				D_ERROR(DF_UUID": cannot connect, client supported pool "
+					"layout version (%u) is more than %u versions smaller "
+					"than server supported pool layout version(%u), "
+					"try to upgrade client firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), in1->pci_pool_version,
+					NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+
+			if (global_ver > in1->pci_pool_version) {
+				D_ERROR(DF_UUID": cannot connect, pool layout version(%u) > "
+					"max client supported pool layout version(%u), "
+					"try to upgrade client firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), global_ver,
+					in1->pci_pool_version);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+		} else {
+			diff = -diff;
+			if (diff >= NUM_POOL_VERSIONS) {
+				D_ERROR(DF_UUID": cannot connect, client supported pool "
+					"layout version (%u) is more than %u versions "
+					"larger than server supported pool layout version(%u), "
+					"try to upgrade server firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), in1->pci_pool_version,
+					NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+			/* New clients should be able to access old pools without problem */
+		}
+	} else {
+		/* Assuming 2.0 client */
+		if (global_ver > 1) {
+			D_ERROR(DF_UUID": cannot connect, 2.0 clients unable to access pool format "
+				"version > 1, try to upgrade client firstly.\n",
+				DP_UUID(in->pci_op.pi_uuid));
+			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+		}
+	}
+
 	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
@@ -2363,10 +2418,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	owner.user = owner_entry->dpe_str;
 	owner.group = owner_grp_entry->dpe_str;
-
-	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	D_ASSERT(global_ver_entry != NULL);
-	global_ver = global_ver_entry->dpe_val;
 
 	/*
 	 * Security capabilities determine the access control policy on this
@@ -2504,6 +2555,18 @@ out:
 	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+}
+
+void
+ds_pool_connect_handler_v4(crt_rpc_t *rpc)
+{
+	ds_pool_connect_handler(rpc, 4);
+}
+
+void
+ds_pool_connect_handler_v5(crt_rpc_t *rpc)
+{
+	ds_pool_connect_handler(rpc, 5);
 }
 
 static int
@@ -3058,7 +3121,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 		D_ASSERT(entry != NULL);
 		out->pqo_pool_layout_ver = entry->dpe_val;
-		out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
+		out->pqo_upgrade_layout_ver = DAOS_POOL_GLOBAL_VERSION;
 		daos_prop_free(prop);
 		prop = NULL;
 	}
@@ -3998,8 +4061,8 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 			   &value);
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
-	} else if (rc == -DER_NONEXIST || val32 != DS_POOL_GLOBAL_VERSION) {
-		val32 = DS_POOL_GLOBAL_VERSION;
+	} else if (rc == -DER_NONEXIST || val32 != DAOS_POOL_GLOBAL_VERSION) {
+		val32 = DAOS_POOL_GLOBAL_VERSION;
 		rc = rdb_tx_update(tx, &svc->ps_root,
 				   &ds_pool_prop_upgrade_global_version, &value);
 		if (rc != 0) {
@@ -4059,7 +4122,7 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DS_POOL_GLOBAL_VERSION;
+		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
@@ -4085,7 +4148,7 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 
 	if (rc == 0) {
 		/* also bump cached version */
-		svc->ps_global_version = DS_POOL_GLOBAL_VERSION;
+		svc->ps_global_version = DAOS_POOL_GLOBAL_VERSION;
 	}
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
@@ -4166,27 +4229,27 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		if (rc)
 			D_GOTO(out_tx, rc);
 
-		if (upgrade_global_ver > DS_POOL_GLOBAL_VERSION) {
+		if (upgrade_global_ver > DAOS_POOL_GLOBAL_VERSION) {
 			D_ERROR(DF_UUID": downgrading pool is unsupported: %u -> %u\n",
 				DP_UUID(svc->ps_uuid), upgrade_global_ver,
-				DS_POOL_GLOBAL_VERSION);
+				DAOS_POOL_GLOBAL_VERSION);
 			D_GOTO(out_tx, rc = -DER_INVAL);
 		}
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION &&
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
 			    need_put_leader)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
 				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
 					" because pool upgraded to %u last time failed\n",
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
-					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
@@ -4196,11 +4259,11 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 				D_GOTO(out_tx, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_IN_PROGRESS:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
 				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
 					" because pool upgraded to %u not finished yet\n",
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
-					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			} else if (need_put_leader) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
