@@ -2380,8 +2380,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc == 0) {
 		/* found it */
-		hdl = value.iov_buf;
-		if (hdl->ph_flags == in->pci_flags) {
+		if (((struct pool_hdl *)value.iov_buf)->ph_flags == in->pci_flags) {
 			/*
 			 * The handle already exists; only do the pool map
 			 * transfer.
@@ -2584,7 +2583,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, hdl, svc->ps_global_version != 0 ?
 				sizeof(struct pool_hdl) + hdl->ph_cred_len :
-				sizeof(struct pool_hdl_v20));
+				sizeof(struct pool_hdl_v0));
 	D_DEBUG(DB_MD, "writing a pool connect handle in db, size %zu, pool version %u\n",
 		value.iov_len, svc->ps_global_version);
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
@@ -5648,7 +5647,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ERROR("invalid key size: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
 	}
-	if (val->iov_len == sizeof(struct pool_hdl_v20)) {
+	if (val->iov_len == sizeof(struct pool_hdl_v0)) {
 		/* old/2.0 pool handle format ? */
 		if (arg->eia_pool_svc->ps_global_version < 1) {
 			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
@@ -5668,7 +5667,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			D_ERROR("invalid value size: "DF_U64" for pool version %u, expected %zu\n",
 				val->iov_len, arg->eia_pool_svc->ps_global_version,
 				arg->eia_pool_svc->ps_global_version < 1 ?
-				sizeof(struct pool_hdl_v20) :
+				sizeof(struct pool_hdl_v0) :
 				sizeof(struct pool_hdl) + hdl->ph_cred_len);
 			return -DER_IO;
 		}

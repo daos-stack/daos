@@ -88,7 +88,7 @@ struct pool_hdl {
 };
 
 /* old format (<= version 2.0) */
-struct pool_hdl_v20 {
+struct pool_hdl_v0 {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
 };
