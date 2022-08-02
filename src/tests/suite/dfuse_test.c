@@ -207,6 +207,10 @@ do_openat(void **state)
 	offset = ftello(stream);
 	assert_int_equal(offset, 1);
 
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
 	rc = unlinkat(root, "stream_file", 0);
 	assert_return_code(rc, errno);
 
