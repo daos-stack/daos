@@ -157,7 +157,7 @@ entry_array_close(void *arg) {
 		 */
 		DFUSE_TRA_INFO(entry->fd_dfsoh, "closing array %p", entry);
 	} else {
-		DFUSE_TRA_INFO(entry->fd_dfsoh, "closing array %p", entry);
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "closing array %p", entry);
 	}
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
@@ -2202,6 +2202,32 @@ do_real_uflow:
 	return __real___uflow(stream);
 }
 
+DFUSE_PUBLIC int
+dfuse___overflow(FILE *stream, int i)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real___overflow(stream, i);
+}
+
 DFUSE_PUBLIC long
 dfuse_ftell(FILE *stream)
 {
@@ -2426,6 +2452,32 @@ dfuse_getc(FILE *stream)
 
 do_real_fn:
 	return __real_getc(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_getc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getc_unlocked(stream);
 }
 
 DFUSE_PUBLIC char *
