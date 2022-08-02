@@ -155,9 +155,9 @@ entry_array_close(void *arg) {
 		/* In this case there will have been a D_ERROR call on the entry so loudly mark
 		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
 		 */
-		DFUSE_TRA_ERROR(entry->fd_dfsoh, "closing array");
+		DFUSE_TRA_WARNING(entry->fd_dfsoh, "closing array %p", entry);
 	} else {
-		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "closing array");
+		DFUSE_TRA_WARNING(entry->fd_dfsoh, "closing array %p", entry);
 	}
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
@@ -1472,9 +1472,8 @@ dfuse_rewind(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_rewind;
 
-	/* TODO: Should be debug to need to see if this is cause of other error */
-	DFUSE_TRA_WARNING(entry->fd_dfsoh, "rewind(fd=%d) intercepted, bypass=%s", fd,
-			  bypass_status[entry->fd_status]);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "rewind(fd=%d) intercepted, bypass=%s", fd,
+			bypass_status[entry->fd_status]);
 
 	entry->fd_pos = 0;
 	entry->fd_err = 0;
@@ -1751,8 +1750,7 @@ dfuse_fdopen(int fd, const char *mode)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted, disabling kernel bypass",
-				fd, mode);
+		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted", fd, mode);
 
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
@@ -2155,7 +2153,7 @@ do_real_clearerr:
 			if (_rc == -1)                                                             \
 				_err = errno;                                                      \
 		}                                                                                  \
-		DFUSE_TRA_ERROR(                                                                   \
+		DFUSE_TRA_WARNING(                                                                 \
 		    (_entry)->fd_dfsoh,                                                            \
 		    "Unsupported function, disabling streaming %ld %ld rc=%d %d %s, %p", _offset,  \
 		    (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));                       \
@@ -2220,6 +2218,7 @@ dfuse_ftell(FILE *stream)
 					"Missing interception, disabling fd %d off %ld %p", fd, off,
 					entry);
 			entry->fd_status = DFUSE_IO_DIS_STREAM;
+			assert(0);
 		}
 	}
 
@@ -2252,6 +2251,17 @@ dfuse_ftello(FILE *stream)
 		goto do_real_ftello;
 
 	off = entry->fd_pos;
+
+	if (off == 0) {
+		off = __real_ftell(stream);
+		if (off != 0) {
+			DFUSE_TRA_ERROR(entry->fd_dfsoh,
+					"Missing interception, disabling fd %d off %ld %p", fd, off,
+					entry);
+			entry->fd_status = DFUSE_IO_DIS_STREAM;
+			assert(0);
+		}
+	}
 
 	vector_decref(&fd_table, entry);
 
