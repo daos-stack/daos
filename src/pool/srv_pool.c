@@ -98,6 +98,18 @@ static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine);
 
+static inline struct pool_svc *
+pool_ds2svc(struct ds_pool_svc *ds_svc)
+{
+	return (struct pool_svc *)ds_svc;
+}
+
+static inline struct ds_pool_svc *
+pool_svc2ds(struct pool_svc *svc)
+{
+	return (struct ds_pool_svc *)svc;
+}
+
 static size_t
 pool_hdl_size(struct pool_svc *svc)
 {
@@ -1711,6 +1723,28 @@ static void
 pool_svc_put_leader(struct pool_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ps_rsvc);
+}
+
+int
+ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint)
+{
+	struct pool_svc	*svc = NULL;
+	int		 rc;
+
+	rc = pool_svc_lookup_leader(uuid, &svc, hint);
+	if (rc == 0)
+		*ds_svcp = pool_svc2ds(svc);
+
+	return rc;
+}
+
+void
+ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc)
+{
+	struct pool_svc	*svc = pool_ds2svc(ds_svc);
+
+	if (svc != NULL)
+		ds_rsvc_put_leader(&svc->ps_rsvc);
 }
 
 /** Look up container service \a pool_uuid. */
@@ -6937,4 +6971,101 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 		*p_tgt = target;
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
+}
+
+int
+ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map)
+{
+	struct pool_svc		*svc = pool_ds2svc(ds_svc);
+	struct rdb_tx		 tx = { 0 };
+	int			 rc;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc == 0) {
+		ABT_rwlock_rdlock(svc->ps_lock);
+		rc = read_map(&tx, &svc->ps_root, map);
+		ABT_rwlock_unlock(svc->ps_lock);
+		rdb_tx_end(&tx);
+	}
+
+	if (rc != 0)
+		D_ERROR("Failed to load pool map for pool "DF_UUIDF": "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
+{
+	struct pool_svc		*svc = pool_ds2svc(ds_svc);
+	struct pool_buf		*buf = NULL;
+	struct rdb_tx		 tx = { 0 };
+	uint64_t		 svc_rf;
+	uint32_t		 version;
+	int			 rc = 0;
+
+	version = pool_map_get_version(map);
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0) {
+		D_ERROR("Failed to begin TX for flush pool "DF_UUIDF" map with version %u: "
+			DF_RC"\n", DP_UUID(svc->ps_uuid), version, DP_RC(rc));
+		goto out;
+	}
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = get_svc_rf(&tx, svc);
+	if (rc == -DER_NONEXIST)
+		svc_rf = -1;
+	else if (rc >= 0)
+		svc_rf = rc;
+	else
+		goto out_lock;
+
+	rc = pool_buf_extract(map, &buf);
+	if (rc != 0) {
+		D_ERROR("Failed to extract buf for flush pool "DF_UUIDF" map with version %u: "
+			DF_RC"\n", DP_UUID(svc->ps_uuid), version, DP_RC(rc));
+		goto out_lock;
+	}
+
+	rc = write_map_buf(&tx, &svc->ps_root, buf, version);
+	if (rc != 0) {
+		D_ERROR("Failed to write buf for flush pool "DF_UUIDF" map with version %u: "
+			DF_RC"\n", DP_UUID(svc->ps_uuid), version, DP_RC(rc));
+		goto out_buf;
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0) {
+		D_ERROR("Failed to commit TX for flush pool "DF_UUIDF" map with version %u: "
+			DF_RC"\n", DP_UUID(svc->ps_uuid), version, DP_RC(rc));
+		goto out_buf;
+	}
+
+	/* Update svc->ps_pool to match the new pool map. */
+	rc = ds_pool_tgt_map_update(svc->ps_pool, buf, version);
+	if (rc != 0) {
+		D_ERROR("Failed to refresh local pool "DF_UUIDF" map with version %u: "
+			DF_RC"\n", DP_UUID(svc->ps_uuid), version, DP_RC(rc));
+		/*
+		 * Have to resign to avoid handling future requests with stale pool map cache.
+		 * Continue to distribute the new pool map to other pool shards since the RDB
+		 * has already been updated.
+		 */
+		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
+	}
+
+	ds_rsvc_request_map_dist(&svc->ps_rsvc);
+
+	pool_svc_reconfigure_replicas(svc, svc_rf, map);
+
+out_buf:
+	pool_buf_free(buf);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
 }

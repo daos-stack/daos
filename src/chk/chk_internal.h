@@ -43,6 +43,8 @@
 		0,	&CQF_chk_mark,		ds_chk_mark_hdlr,	&chk_mark_co_ops),	\
 	X(CHK_ACT,										\
 		0,	&CQF_chk_act,		ds_chk_act_hdlr,	&chk_act_co_ops),	\
+	X(CHK_POOL_MBS,										\
+		0,	&CQF_chk_pool_mbs,	ds_chk_pool_mbs_hdlr,	NULL),			\
 	X(CHK_REPORT,										\
 		0,	&CQF_chk_report,	ds_chk_report_hdlr,	NULL),			\
 	X(CHK_REJOIN,										\
@@ -57,6 +59,12 @@ enum chk_rpc_opc {
 };
 
 #undef X
+
+struct chk_pool_mbs {
+	d_rank_t	 cpm_rank;
+	uint32_t	 cpm_tgt_nr;
+	uint32_t	*cpm_tgt_status;
+};
 
 /*
  * CHK_START:
@@ -148,6 +156,25 @@ CRT_RPC_DECLARE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
 
 /*
+ * CHK_POOL_MBS:
+ * From check leader to check engine to notify the pool members.
+ */
+#define DAOS_ISEQ_CHK_POOL_MBS							\
+	((uint64_t)		(cpmi_gen)		CRT_VAR)		\
+	((uuid_t)		(cpmi_pool)		CRT_VAR)		\
+	((uint32_t)		(cpmi_flags)		CRT_VAR)		\
+	((uint32_t)		(cpmi_padding)		CRT_VAR)		\
+	((d_string_t)		(cpmi_label)		CRT_VAR)		\
+	((struct chk_pool_mbs)	(cpmi_targets)		CRT_ARRAY)		\
+
+#define DAOS_OSEQ_CHK_POOL_MBS							\
+	((int32_t)		(cpmo_status)		CRT_VAR)		\
+	((uint32_t)		(cpmo_padding)		CRT_VAR)		\
+	((struct rsvc_hint)	(cpmo_hint)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
+
+/*
  * CHK_REPORT:
  * From check engine to check leader to report the inconsistency and related repair action
  * and result. It can require to interact with the admin to make decision for how to handle
@@ -232,6 +259,10 @@ typedef void (*chk_pool_free_data_t)(void *data);
 enum chk_act_flags {
 	/* The action is applicable to the same kind of inconssitency. */
 	CAF_FOR_ALL	= 1,
+};
+
+enum chk_mbs_flags {
+	CMF_REPAIR_LABEL	= 1,
 };
 
 /*
@@ -379,7 +410,8 @@ struct chk_pool_rec {
 				 cpr_skip:1,
 				 cpr_healthy:1,
 				 cpr_delay_label:1,
-				 cpr_exist_on_ms:1;
+				 cpr_exist_on_ms:1,
+				 cpr_dirty:1;
 	int			 cpr_advice;
 	uint32_t		 cpr_phase;
 	uuid_t			 cpr_uuid;
@@ -387,7 +419,10 @@ struct chk_pool_rec {
 	struct ds_pool_clues	 cpr_clues;
 	struct chk_bookmark	 cpr_bk;
 	struct chk_instance	*cpr_ins;
+	struct chk_pool_mbs	*cpr_mbs;
 	char			*cpr_label;
+	ABT_mutex		 cpr_mutex;
+	ABT_cond		 cpr_cond;
 	int			 cpr_refs;
 };
 
@@ -494,6 +529,9 @@ int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
 int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
 
+int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, const char *label, uint32_t flags,
+			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
+
 int chk_engine_report(struct chk_report_unit *cru, int *decision);
 
 int chk_engine_notify(uint64_t gen, uuid_t uuid, d_rank_t rank, uint32_t phase,
@@ -550,6 +588,9 @@ int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint3
 
 int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
 		   uint32_t act, d_rank_t rank, bool for_all);
+
+int chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint32_t flags,
+			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
@@ -722,7 +763,13 @@ chk_pool_put(struct chk_pool_rec *cpr)
 	if (--(cpr->cpr_refs) == 0) {
 		d_list_del(&cpr->cpr_link);
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
-		D_ASSERT(cpr->cpr_started == 0);
+
+		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
+			ABT_mutex_free(&cpr->cpr_mutex);
+		if (cpr->cpr_cond != ABT_COND_NULL)
+			ABT_cond_free(&cpr->cpr_cond);
+
+		D_FREE(cpr->cpr_mbs);
 		D_FREE(cpr->cpr_label);
 		D_FREE(cpr);
 	}
@@ -749,7 +796,10 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 	D_ASSERT(cpr->cpr_refs > 0);
 
 	if (cpr->cpr_thread != ABT_THREAD_NULL) {
+		ABT_mutex_lock(cpr->cpr_mutex);
 		cpr->cpr_stop = 1;
+		ABT_cond_broadcast(cpr->cpr_cond);
+		ABT_mutex_unlock(cpr->cpr_mutex);
 		ABT_thread_free(&cpr->cpr_thread);
 	}
 }
