@@ -272,7 +272,7 @@ do_mtime(void **state)
 }
 
 static int
-run_specified_tests(const char *tests, int size, int *sub_tests, int sub_tests_size)
+run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
 	int nr_failed = 0;
 
@@ -319,7 +319,6 @@ main(int argc, char **argv)
 	int		 nr_failed = 0;
 	int		 nr_total_failed = 0;
 	int		 opt = 0, index = 0;
-	int		 size;
 
 	static struct option long_options[] = {
 		{"test-dir",	required_argument,	NULL,	'M'},
@@ -355,7 +354,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	nr_failed = run_specified_tests(tests, size, NULL, 0);
+	nr_failed = run_specified_tests(tests, NULL, 0);
 
 	print_message("\n============ Summary %s\n", __FILE__);
 	if (nr_total_failed == 0)
