@@ -155,9 +155,9 @@ entry_array_close(void *arg) {
 		/* In this case there will have been a D_ERROR call on the entry so loudly mark
 		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
 		 */
-		DFUSE_TRA_WARNING(entry->fd_dfsoh, "closing array %p", entry);
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "closing array %p", entry);
 	} else {
-		DFUSE_TRA_WARNING(entry->fd_dfsoh, "closing array %p", entry);
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "closing array %p", entry);
 	}
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
@@ -1290,10 +1290,16 @@ dfuse_lseek(int fd, off_t offset, int whence)
 		new_offset = offset;
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
+	} else if (whence == SEEK_END) {
+		D_ERROR("Unsupported function, disabling %d\n", fd);
+		entry->fd_status = DFUSE_IO_DIS_MMAP;
+		vector_decref(&fd_table, entry);
+		return __real_lseek(fd, offset, whence);
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE
 		 */
+		assert(0);
 		new_offset = __real_lseek(fd, offset, whence);
 		if (new_offset >= 0)
 			entry->fd_pos = new_offset;
@@ -1358,6 +1364,7 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE
 		 */
+		assert(0);
 		new_offset = __real_fseek(stream, offset, whence);
 		if (new_offset >= 0)
 			entry->fd_pos = new_offset;
@@ -1418,7 +1425,6 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (whence == SEEK_SET) {
 		new_offset    = offset;
 		entry->fd_eof = false;
-
 	} else if (whence == SEEK_CUR) {
 		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
@@ -1431,6 +1437,7 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE
 		 */
+		assert(0);
 		new_offset = __real_fseeko(stream, offset, whence);
 		if (new_offset >= 0)
 			entry->fd_pos = new_offset;
@@ -2188,6 +2195,7 @@ dfuse___uflow(FILE *stream)
 		goto do_real_uflow;
 
 	DISABLE_STREAM(entry, stream);
+
 	vector_decref(&fd_table, entry);
 
 do_real_uflow:
