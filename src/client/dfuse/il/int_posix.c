@@ -1452,7 +1452,6 @@ DFUSE_PUBLIC void
 dfuse_rewind(FILE *stream)
 {
 	struct fd_entry *entry;
-	off_t            new_offset = -1;
 	int              rc;
 	int              fd;
 
@@ -1470,7 +1469,7 @@ dfuse_rewind(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_rewind;
 
-	entry->fd_pos = new_offset;
+	entry->fd_pos = 0;
 
 	entry->fd_err = 0;
 
@@ -1746,8 +1745,7 @@ dfuse_fdopen(int fd, const char *mode)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted, disabling kernel bypass",
-				fd, mode);
+		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted", fd, mode);
 
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
