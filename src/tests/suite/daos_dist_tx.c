@@ -40,7 +40,7 @@ dtx_0(void **state)
 	 * Trigger a fan-out at the beginning of a TX to test the wait in
 	 * dc_tx_get_epoch.
 	 */
-	print_message("DTX0: EV fetch against EC obj\n");
+	print_message("DTX0: SV fetch against EC obj\n");
 
 	if (!test_runable(arg, 3))
 		skip();
@@ -3070,7 +3070,7 @@ dtx_sub_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{"DTX0: EV fetch against EC obj",
+	{"DTX0: SV fetch against EC obj",
 	 dtx_0, NULL, test_case_teardown},
 	{"DTX1: multiple SV update against the same obj",
 	 dtx_1, NULL, test_case_teardown},
