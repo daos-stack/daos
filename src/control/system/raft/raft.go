@@ -426,7 +426,7 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 		if IsRaftLeadershipError(err) {
 			return &system.ErrNotLeader{
 				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.getReplica()),
+				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
 			}
 		}
 
