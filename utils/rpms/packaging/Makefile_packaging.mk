@@ -20,7 +20,7 @@ endif
 CALLING_MAKEFILE := $(word 1, $(MAKEFILE_LIST))
 
 # this Makefile should always be executed from it's own dir
-TOPDIR := $(abspath $(dir $(firstword $(MAKEFILE_LIST)))/../..)
+TOPDIR ?= $(abspath $(dir $(firstword $(MAKEFILE_LIST))))
 
 BUILD_PREFIX ?= .
 
@@ -98,27 +98,29 @@ define distro_map
 endef
 
 define install_repos
-	IFS='|' read -ra BASES <<< "$($(DISTRO_BASE)_LOCAL_REPOS)";         \
-	for baseurl in "$${BASES[@]}"; do                                   \
-	    baseurl="$${baseurl# *}";                                       \
-	    $(call install_repo,$$baseurl);                                 \
-	done
-	for repo in $($(DISTRO_BASE)_PR_REPOS)                              \
-	            $(PR_REPOS) $(1); do                                    \
-	    branch="master";                                                \
-	    build_number="lastSuccessfulBuild";                             \
-	    if [[ $$repo = *@* ]]; then                                     \
-	        branch="$${repo#*@}";                                       \
-	        repo="$${repo%@*}";                                         \
-	        if [[ $$branch = *:* ]]; then                               \
-	            build_number="$${branch#*:}";                           \
-	            branch="$${branch%:*}";                                 \
-	        fi;                                                         \
-	    fi;                                                             \
-	    $(call distro_map)                                              \
+	if [ "$(ID_LIKE)" = "debian" ]; then                            \
+	    IFS='|' read -ra BASES <<< "$($(DISTRO_BASE)_LOCAL_REPOS)"; \
+	    for baseurl in "$${BASES[@]}"; do                           \
+	        baseurl="$${baseurl# *}";                               \
+	        $(call install_repo,$$baseurl)                          \
+	    done;                                                       \
+	fi
+	for repo in $($(DISTRO_BASE)_PR_REPOS)                                                             \
+	            $(PR_REPOS) $(1); do                                                                   \
+	    branch="master";                                                                               \
+	    build_number="lastSuccessfulBuild";                                                            \
+	    if [[ $$repo = *@* ]]; then                                                                    \
+	        branch="$${repo#*@}";                                                                      \
+	        repo="$${repo%@*}";                                                                        \
+	        if [[ $$branch = *:* ]]; then                                                              \
+	            build_number="$${branch#*:}";                                                          \
+	            branch="$${branch%:*}";                                                                \
+	        fi;                                                                                        \
+	    fi;                                                                                            \
+	    $(call distro_map)                                                                             \
 	    baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/; \
-	    baseurl+=$$build_number/artifact/artifacts/$$distro/;           \
-	    $(call install_repo,$$baseurl);                                 \
+	    baseurl+=$$build_number/artifact/artifacts/$$distro/;                                          \
+	    $(call install_repo,$$baseurl)                                                                 \
         done
 endef
 
@@ -152,28 +154,8 @@ ifeq ($(DL_NAME),)
 DL_NAME = $(NAME)
 endif
 
-$(DL_NAME)$(DL_VERSION).linux-amd64.tar.$(SRC_EXT): $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./$(DL_NAME)*.tar{gz,bz*,xz}
-	$(SPECTOOL) -g $(SPEC)
-
-$(DL_NAME)-$(DL_VERSION).tar.$(SRC_EXT).asc: $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./$(DL_NAME)-*.tar.{gz,bz*,xz}.asc
-	$(SPECTOOL) -g $(SPEC)
-
-$(DL_NAME)-$(DL_VERSION).tar.$(SRC_EXT).sig: $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./$(DL_NAME)-*.tar.{gz,bz*,xz}.sig
-	$(SPECTOOL) -g $(SPEC)
-
-$(DL_NAME)-$(DL_VERSION).tar.$(SRC_EXT): $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./$(DL_NAME)-*.tar.{gz,bz*,xz}
-	$(SPECTOOL) -g $(SPEC)
-
-v$(DL_VERSION).tar.$(SRC_EXT): $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./v*.tar.{gz,bz*,xz}
-	$(SPECTOOL) -g $(SPEC)
-
-$(DL_VERSION).tar.$(SRC_EXT): $(SPEC) $(CALLING_MAKEFILE)
-	rm -f ./*.tar.{gz,bz*,xz}
+$(notdir $(SOURCE)): $(SPEC) $(CALLING_MAKEFILE)
+	# TODO: need to clean up old ones
 	$(SPECTOOL) -g $(SPEC)
 
 $(DEB_TOP)/%: % | $(DEB_TOP)/
@@ -297,6 +279,10 @@ $(RPMS): $(SRPM) $(CALLING_MAKEFILE)
 
 rpms: $(RPMS)
 
+repo: rpms
+	rm -rf _topdir/RPMS/repodata/
+	createrepo _topdir/RPMS/
+
 $(DEBS): $(CALLING_MAKEFILE)
 
 debs: $(DEBS)
@@ -377,26 +363,32 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	DISTRO_REPOS='$(DISTRO_REPOS)'                          \
 	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
 	REPOSITORY_URL="$(REPOSITORY_URL)"                      \
+	DISTRO_VERSION="$(DISTRO_VERSION)"                      \
 	TARGET="$<"                                             \
 	packaging/rpm_chrootbuild
 endif
 
 podman_chrootbuild:
 	if ! podman build --build-arg REPO_FILE_URL=$(REPO_FILE_URL) \
-	                  -t chrootbuild                             \
+	                  -t $(subst +,-,$(CHROOT_NAME))-chrootbuild \
 	                  -f packaging/Dockerfile.mockbuild .; then  \
 		echo "Container build failed";                           \
 	    exit 1;                                                  \
 	fi
 	rm -f /var/lib/mock/$(CHROOT_NAME)/result/{root,build}.log
-	if ! podman run --rm --privileged -w $(TOPDIR) -v=$(TOPDIR)/..:$(TOPDIR)/..                              \
-	                -it chrootbuild bash -c "DISTRO_REPOS=false REPO_FILE_URL=$(REPO_FILE_URL)               \
-	                                         REPOSITORY_URL=$(REPOSITORY_URL)                                \
-	                                         make REPO_FILES_PR=$(REPO_FILES_PR)                             \
-											      CHROOT_NAME=$(CHROOT_NAME) -C $(CURDIR) chrootbuild"; then \
-	    cat /var/lib/mock/$(CHROOT_NAME)/result/{root,build}.log;                                            \
-	    exit 1;                                                                                              \
-	fi
+	if ! podman run --rm --privileged -w $(TOPDIR) -v=$(TOPDIR)/..:$(TOPDIR)/..                                                     \
+	                -it $(subst +,-,$(CHROOT_NAME))-chrootbuild                                                                     \
+	                bash -c 'if ! DISTRO_REPOS=false                                                                                \
+	                              REPO_FILE_URL=$(REPO_FILE_URL)                                                                    \
+	                              REPOSITORY_URL=$(REPOSITORY_URL)                                                                  \
+	                              make REPO_FILES_PR=$(REPO_FILES_PR)                                                               \
+	                                   MOCK_OPTIONS=$(MOCK_OPTIONS)                                                                 \
+	                                   CHROOT_NAME=$(CHROOT_NAME) -C $(CURDIR) chrootbuild; then                                    \
+	                                 cat /var/lib/mock/$(CHROOT_NAME)/{result/{root,build},root/builddir/build/BUILD/*/config}.log; \
+	                                 exit 1;                                                                                        \
+	                             fi;                                                                                                \
+	                             rpmlint $$(ls /var/lib/mock/$(CHROOT_NAME)/result/*.rpm |                                          \
+	                                 grep -v -e debuginfo -e debugsource -e src.rpm)'
 
 docker_chrootbuild:
 	if ! $(DOCKER) build --build-arg UID=$$(id -u) -t chrootbuild   \
@@ -415,7 +407,7 @@ docker_chrootbuild:
 	fi
 
 rpmlint: $(SPEC)
-	rpmlint $<
+	rpmlint --ignore-unused-rpmlintrc $<
 
 packaging_check:
 	if grep -e --repo $(CALLING_MAKEFILE); then                                    \
@@ -451,6 +443,9 @@ test:
 	# Test the rpmbuild by installing the built RPM
 	$(call install_repos,$(REPO_NAME)@$(BRANCH_NAME):$(BUILD_NUMBER))
 	dnf -y install $(TEST_PACKAGES)
+
+show_NAME:
+	@echo '$(NAME)'
 
 show_DISTRO_ID:
 	@echo '$(DISTRO_ID)'
