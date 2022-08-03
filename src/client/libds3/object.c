@@ -20,13 +20,11 @@ ends_with(const char *str, const char *suffix)
 }
 
 int
-ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev)
+ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 {
 	if (ds3b == NULL || key == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	// Disallow creating a file with the instance = latest, since it is supposed
-	// to be a link, not a writeable file
 	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
 		D_ERROR("Creating an object that ends with %s is not allowed.\n",
 			LATEST_INSTANCE_SUFFIX);
@@ -49,8 +47,8 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event
 
 	dfs_obj_t  *parent      = NULL;
 	char       *file_start  = strrchr(path, '/');
-	const char *file_name   = path;
-	const char *parent_path = NULL;
+	char *file_name   = path;
+	char *parent_path = NULL;
 	if (file_start != NULL) {
 		*file_start = '\0';
 		file_name   = file_start + 1;
@@ -88,11 +86,11 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event
 	}
 
 	// Finally create the file
-	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG,
-		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &ds3o_tmp->dfs_obj);
+	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG, O_RDWR | O_CREAT | O_TRUNC, 0,
+		      0, NULL, &ds3o_tmp->dfs_obj);
 
 	if (rc == 0 || rc == EEXIST) {
-		rc = 0;
+		rc    = 0;
 		*ds3o = ds3o_tmp;
 	}
 
@@ -193,4 +191,90 @@ int
 ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev)
 {
 	return 0;
+}
+
+int
+ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
+{
+	if (ds3b == NULL || key == NULL)
+		return -EINVAL;
+
+	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
+		D_ERROR("Creating an object that ends with %s is not allowed.\n",
+			LATEST_INSTANCE_SUFFIX);
+		return -EINVAL;
+	}
+
+	int   rc = 0;
+	char *path;
+	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
+	if (path == NULL) {
+		return -ENOMEM;
+	}
+
+	dfs_obj_t  *parent      = NULL;
+	char       *file_start  = strrchr(path, '/');
+	const char *file_name   = path;
+	const char *parent_path = NULL;
+	if (file_start != NULL) {
+		*file_start = '\0';
+		file_name   = file_start + 1;
+		parent_path = path;
+	}
+
+	char *lookup_path = NULL;
+	if (parent_path != NULL) {
+		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+		if (lookup_path == NULL) {
+			rc = ENOMEM;
+			goto err_path;
+		}
+
+		strcpy(lookup_path, "/");
+		strcat(lookup_path, path);
+		rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &parent, NULL, NULL);
+		if (rc != 0) {
+			goto err_parent;
+		}
+	}
+
+	// Build link name
+	char *link_name = NULL;
+	D_ALLOC_ARRAY(link_name, DS3_MAX_KEY);
+	if (link_name == NULL) {
+		rc = ENOMEM;
+		goto err_parent;
+	}
+
+	// Remove instance
+	char *suffix_start = strrchr(file_name, '[');
+	if (suffix_start != NULL) {
+		*suffix_start = '\0';
+	}
+
+	strcpy(link_name, file_name);
+	strcat(link_name, LATEST_INSTANCE_SUFFIX);
+
+	// Remove previous link
+	dfs_remove(ds3b->dfs, parent, link_name, false, NULL);
+
+	// Create the link
+	dfs_obj_t *link;
+	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK,
+		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, file_name, &link);
+
+	// TODO Update an xattr with a list to all the version ids, ordered by
+  	// creation to handle deletion
+
+	if (rc != 0)
+		dfs_release(link);
+	D_FREE(link_name);
+err_parent:
+	if (parent)
+		dfs_release(parent);
+	if (lookup_path)
+		D_FREE(lookup_path);
+err_path:
+	D_FREE(path);
+	return -rc;
 }

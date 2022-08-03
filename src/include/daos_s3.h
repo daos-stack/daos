@@ -382,7 +382,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 // S3 Objects
 
 /**
- * Create \s S3 Object in the S3 bucket identified by \a ds3b.
+ * Create an S3 Object in the S3 bucket identified by \a ds3b.
  *
  * \param[in]	key	Key of the S3 object to destroy.
  * \param[out]	ds3o	Returned S3 object handle.
@@ -393,10 +393,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev);
+ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b);
 
 /**
- * Open \a S3 object.
+ * Open an S3 object.
  *
  * \param[in]	key	Key of the object to open.
  * \param[out]	ds3o	Returned S3 object handle.
@@ -463,7 +463,7 @@ int
 ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev);
 
 /**
- * Destroy \a S3 object in the S3 bucket identified by \a ds3b.
+ * Destroy an S3 object in the S3 bucket identified by \a ds3b.
  *
  * \param[in]	key	Key of the S3 object to destroy.
  * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
@@ -492,6 +492,17 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b, daos_event_t *ev);
 int
 ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o,
 	      daos_event_t *ev);
+
+/**
+ * Mark an S3 object in the S3 bucket identified by \a ds3b as being the latest version.
+ *
+ * \param[in]	key	Key of the S3 object to mark as latest.
+ * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
+int
+ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
 
 #if defined(__cplusplus)
 }
