@@ -1085,6 +1085,8 @@ pipeline {
         always {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
                                                      'el8-gcc-unit-memcheck']
+            job_status_update('final_status')
+            job_status_write()
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
