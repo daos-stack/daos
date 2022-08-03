@@ -2570,7 +2570,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	/* XXX may be can check pool version to avoid allocating too much ? */
 	D_ALLOC(hdl, sizeof(*hdl) + in->pci_cred.iov_len);
 	if (hdl == NULL)
-		D_GOTO(out_map_version, rc = ENOMEM);
+		D_GOTO(out_map_version, rc = -DER_NOMEM);
 
 	hdl->ph_flags = in->pci_flags;
 	hdl->ph_sec_capas = sec_capas;
