@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.103
-Release:       4%{?relval}%{?dist}
+Version:       2.1.104
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -571,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Aug 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.104-1
+- Bump version to 2.1.104
+
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-4
 - Remove now unused openpa dependency
 

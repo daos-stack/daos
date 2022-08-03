@@ -1,10 +1,15 @@
 hosts:
   test_servers: 1
   test_clients: 1
-# Test typically takes around 15 minutes, set timeout for 30.
-timeout: 1800
+# Hard limit the test at six hours, however individual tests have lower timeouts.
+timeout: 21600
 server_config:
   name: daos_server
+  crt_timeout: 120
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 8
 pool:
   size: 5GiB
   control_method: dmg
