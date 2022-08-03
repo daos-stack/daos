@@ -1745,11 +1745,52 @@ dfuse_dup2(int oldfd, int newfd)
 	return realfd;
 }
 
+/* If we intercept a streaming function that cannot be handled then log this and back-off to the
+ * libc functions.  Ensure that the file position is updated correctly.
+ * If fd_pos and offset are both non-zero then it means the intereption library has been partially
+ * working so there is a conflict on where data has been served from which we need to identify.
+ * fd_pos can either be 0 for files with no I/O or -1 on some error paths, do not do the seek
+ * in either of these cases.
+ * TODO: Add assert to check for this.
+ */
+#define DISABLE_STREAM(_entry, _stream)                                                            \
+	do {                                                                                       \
+		off_t            _offset;                                                          \
+		int              _rc   = 0;                                                        \
+		int              _err  = 0;                                                        \
+		struct _IO_FILE *_file = (struct _IO_FILE *)(_stream);                             \
+		(_entry)->fd_status    = DFUSE_IO_DIS_STREAM;                                      \
+		_offset                = __real_ftello(_stream);                                   \
+		if ((_entry)->fd_pos > 0) {                                                        \
+			_rc = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);                  \
+			if (_rc == -1)                                                             \
+				_err = errno;                                                      \
+		}                                                                                  \
+		DFUSE_TRA_INFO((_entry)->fd_dfsoh, "disabling streaming %ld %ld rc=%d %d %s, %p",  \
+			       _offset, (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));   \
+		if (_file->_IO_read_base)                                                          \
+			DFUSE_TRA_INFO((_entry)->fd_dfsoh, "Private data %p %p %p",                \
+				       _file->_IO_read_base, _file->_IO_read_ptr,                  \
+				       _file->_IO_read_end);                                       \
+	} while (0)
+
+static inline bool
+_stream_macros_used(FILE *stream)
+{
+	struct _IO_FILE *file = (struct _IO_FILE *)(stream);
+
+	if (file->_IO_read_base)
+		return true;
+
+	return false;
+}
+
 DFUSE_PUBLIC FILE *
 dfuse_fdopen(int fd, const char *mode)
 {
 	struct fd_entry *entry;
-	int rc;
+	FILE            *file;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
@@ -1761,7 +1802,12 @@ dfuse_fdopen(int fd, const char *mode)
 		vector_decref(&fd_table, entry);
 	}
 
-	return __real_fdopen(fd, mode);
+	file = __real_fdopen(fd, mode);
+
+	if (file && _stream_macros_used(file)) {
+		DISABLE_STREAM(entry, file);
+	}
+	return file;
 }
 
 DFUSE_PUBLIC int
@@ -1855,7 +1901,10 @@ dfuse_fopen(const char *path, const char *mode)
 		return fp;
 	}
 
-	offset = __real_ftello(fp);
+	if (_stream_macros_used(fp)) {
+		DFUSE_LOG_WARNING("fopen(pathname=%s) buffers pre-loaded, disabling", path);
+		return fp;
+	}
 
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC)) {
 		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible %d %p", path, fd, fp);
@@ -2030,6 +2079,12 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fwrite;
 
+	if (_stream_macros_used(stream)) {
+		DISABLE_STREAM(entry, stream);
+		vector_decref(&fd_table, entry);
+		goto do_real_fwrite;
+	}
+
 	len = nmemb * size;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
@@ -2133,30 +2188,6 @@ dfuse_clearerr(FILE *stream)
 do_real_clearerr:
 	__real_clearerr(stream);
 }
-
-/* If we intercept a streaming function that cannot be handled then log this and back-off to the
- * libc functions.  Ensure that the file position is updated correctly.
- * If fd_pos and offset are both non-zero then it means the intereption library has been partially
- * working so there is a conflict on where data has been served from which we need to identify.
- * fd_pos can either be 0 for files with no I/O or -1 on some error paths, do not do the seek
- * in either of these cases.
- * TODO: Add assert to check for this.
- */
-#define DISABLE_STREAM(_entry, _stream)                                                            \
-	do {                                                                                       \
-		off_t _offset;                                                                     \
-		int   _rc           = 0;                                                           \
-		int   _err          = 0;                                                           \
-		(_entry)->fd_status = DFUSE_IO_DIS_STREAM;                                         \
-		_offset             = __real_ftello(_stream);                                      \
-		if ((_entry)->fd_pos > 0) {                                                        \
-			_rc = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);                  \
-			if (_rc == -1)                                                             \
-				_err = errno;                                                      \
-		}                                                                                  \
-		DFUSE_TRA_INFO((_entry)->fd_dfsoh, "disabling streaming %ld %ld rc=%d %d %s, %p",  \
-			       _offset, (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));   \
-	} while (0)
 
 DFUSE_PUBLIC int
 dfuse___uflow(FILE *stream)
