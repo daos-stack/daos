@@ -9,6 +9,13 @@ server_config:
     targets: 2
     nr_xs_helpers: 0
     scm_size: 4
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+      - ABT_ENV_MAX_NUM_XSTREAMS=100
+      - ABT_MAX_NUM_XSTREAMS=100
+      - DAOS_MD_CAP=1024
+      - DAOS_SCHED_WATCHDOG_ALL=1
+      - DD_MASK=mgmt,io,md,epc,rebuild
 pool:
   mode: 511
   name: daos_server
