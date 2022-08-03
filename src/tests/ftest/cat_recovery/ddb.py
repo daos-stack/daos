@@ -463,7 +463,8 @@ class DdbTest(TestWithServers):
                 vos_file = file
                 break
         if not vos_file:
-            self.fail("vos file wasn't found in /mnt/daos/%s", self.pool.uuid.lower())
+            self.fail(
+                "vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
         else:
             self.log.debug("## vos_file: %s", vos_file)
         ddb_command = DdbCommand(
