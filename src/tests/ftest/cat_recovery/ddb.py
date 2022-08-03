@@ -6,10 +6,11 @@
 import os
 import ctypes
 import re
+from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
 from pydaos.raw import IORequest, DaosObjClass
-from general_utils import create_string_buffer, report_errors
+from general_utils import create_string_buffer, report_errors, run_pcmd
 from ddb_utils import DdbCommand
 
 SAMPLE_DKEY = "Sample dkey"
@@ -419,10 +420,11 @@ class DdbTest(TestWithServers):
         1. Create a pool and a container.
         2. Insert one object with one dkey with API.
         3. Stop the server to use ddb.
-        4. Load new data into [0]/[0]/[0]/[0]
-        5. Restart the server.
-        6. Reset the object, container, and pool to use the API.
-        7. Verify the data in the akey with single_fetch().
+        4. Find the vos file name. e.g., vos-0.
+        5. Load new data into [0]/[0]/[0]/[0]
+        6. Restart the server.
+        7. Reset the object, container, and pool to use the API.
+        8. Verify the data in the akey with single_fetch().
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
@@ -448,11 +450,27 @@ class DdbTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
+        # 4. Find the vos file name.
+        hosts = NodeSet(self.hostlist_servers[0])
+        vos_path = os.path.join("/mnt/daos", self.pool.uuid.lower())
+        command = " ".join(["sudo", "ls", vos_path])
+        cmd_out = run_pcmd(hosts=hosts, command=command)
+        self.log.debug("## sudo ls /mnt/daos/<uuid> output = %s", cmd_out[0]["stdout"])
+
+        vos_file = None
+        for file in cmd_out[0]["stdout"]:
+            if "vos" in file:
+                vos_file = file
+                break
+        if not vos_file:
+            self.fail("vos file wasn't found in /mnt/daos/%s", self.pool.uuid.lower())
+        else:
+            self.log.debug("## vos_file: %s", vos_file)
         ddb_command = DdbCommand(
             path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file="vos-0")
+            vos_file=vos_file)
 
-        # 4. Load new data into [0]/[0]/[0]/[0]
+        # 5. Load new data into [0]/[0]/[0]/[0]
         load_file_path = os.path.join(self.test_dir, "new_data.txt")
         new_data = "New akey data 0123456789"
         with open(load_file_path, "w") as file:
@@ -460,10 +478,10 @@ class DdbTest(TestWithServers):
 
         ddb_command.load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
 
-        # 5. Restart the server.
+        # 6. Restart the server.
         dmg_command.system_start()
 
-        # 6. Reset the object, container, and pool to use the API after server restart.
+        # 7. Reset the object, container, and pool to use the API after server restart.
         self.ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
@@ -471,7 +489,7 @@ class DdbTest(TestWithServers):
         self.container.open()
         self.ioreqs[0].obj.open()
 
-        # 7. Verify the data in the akey with single_fetch().
+        # 8. Verify the data in the akey with single_fetch().
         data_size = len(new_data)
         data_size += 1
         data = self.ioreqs[0].single_fetch(
