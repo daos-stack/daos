@@ -6,6 +6,19 @@
 
 #include "ds3_internal.h"
 
+// helper
+static bool
+ends_with(const char *str, const char *suffix)
+{
+	if (!str || !suffix)
+		return 0;
+	size_t lenstr    = strlen(str);
+	size_t lensuffix = strlen(suffix);
+	if (lensuffix > lenstr)
+		return 0;
+	return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
 int
 ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
@@ -13,15 +26,62 @@ ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b
 }
 
 int
-ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev)
+ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 {
-	return 0;
+	if (ds3b == NULL || key == NULL || ds3o == NULL)
+		return -EINVAL;
+
+	int        rc = 0;
+	ds3_obj_t *ds3o_tmp;
+	D_ALLOC_PTR(ds3o_tmp);
+	if (ds3o_tmp == NULL)
+		return -ENOMEM;
+
+	// TODO: cache open file handles
+	char *path;
+	D_ALLOC_ARRAY(path, DS3_MAX_KEY);
+	if (path == NULL) {
+		rc = ENOMEM;
+		goto err_ds3o;
+	}
+
+	if (key[0] == '/') {
+		strcpy(path, "");
+	} else {
+		strcpy(path, "/");
+	}
+	strcat(path, key);
+
+	rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
+
+	if (rc == ENOENT) {
+		if (ends_with(path, LATEST_INSTANCE_SUFFIX)) {
+			// If we are trying to access the latest version, try accessing key with
+			// null instance since it is possible that the bucket did not have
+			// versioning before
+			size_t suffix_location = strlen(path) - strlen(LATEST_INSTANCE_SUFFIX);
+			path[suffix_location]  = '\0';
+			rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
+		}
+	}
+
+	if (rc == 0) {
+		*ds3o = ds3o_tmp;
+	}
+
+	D_FREE(path);
+err_ds3o:
+	if (rc != 0)
+		D_FREE(ds3o_tmp);
+	return -rc;
 }
 
 int
-ds3_obj_close(ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_close(ds3_obj_t *ds3o)
 {
-	return 0;
+	int rc = dfs_release(ds3o->dfs_obj);
+	D_FREE(ds3o);
+	return -rc;
 }
 
 int

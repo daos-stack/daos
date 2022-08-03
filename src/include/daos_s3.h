@@ -66,6 +66,10 @@ typedef struct ds3_bucket {
 	dfs_t           *dfs;
 } ds3_bucket_t;
 
+typedef struct {
+    dfs_obj_t* dfs_obj;
+} ds3_obj_t;
+
 // TODO end of temporarily moved here
 
 /** DAOS S3 Pool handle */
@@ -75,7 +79,7 @@ typedef struct ds3_bucket {
 // typedef struct ds3_bucket ds3_bucket_t;
 
 /** DAOS S3 Object handle */
-typedef struct ds3_obj    ds3_obj_t;
+// typedef struct ds3_obj    ds3_obj_t;
 
 /** S3 User information */
 struct ds3_user_info {
@@ -397,25 +401,21 @@ ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b
  * \param[in]	key	Key of the object to open.
  * \param[out]	ds3o	Returned S3 object handle.
  * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev);
+ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b);
 
 /**
  * Close an object handle.
  *
  * \param[in]	ds3o	S3 object handle to close.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_close(ds3_obj_t *ds3o, daos_event_t *ev);
+ds3_obj_close(ds3_obj_t *ds3o);
 
 /**
  * Get S3 object info.
