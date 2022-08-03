@@ -1028,8 +1028,7 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 static void
 print_backtrace(int signo, siginfo_t *info, void *p)
 {
-	void	*bt[128];
-	int	 bt_size, i, rc;
+	int	rc;
 
 	/* since we mainly handle fatal signals here, flush the log to not
 	 * risk losing any debug traces
@@ -1064,13 +1063,7 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 			"unavailable\n");
 	}
 
-	bt_size = backtrace(bt, 128);
-	if (bt_size >= 128)
-		fprintf(stderr, "backtrace may have been truncated\n");
-
-	/* start at 1 to forget about me! */
-	for (i = 1; i < bt_size; i++)
-		backtrace_symbols_fd(&bt[i], 1, fileno(stderr));
+	D_WARN("print of stack has been disabled for DAOS-11149/DAOS-11176 debugging purpose\n");
 
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
