@@ -81,6 +81,36 @@ class DdbTest(TestWithServers):
                         dkey=self.dkeys[-1], akey=self.akeys[-1],
                         value=self.data_list[-1], size=c_size)
 
+    def get_vos_file_path(self):
+        """Get the VOS file path.
+
+        Returns:
+            str: VOS file path such as /mnt/daos/<pool_uuid>/vos-0
+
+        """
+        hosts = NodeSet(self.hostlist_servers[0])
+        vos_path = os.path.join("/mnt/daos", self.pool.uuid.lower())
+        command = " ".join(["sudo", "ls", vos_path])
+        cmd_out = run_pcmd(hosts=hosts, command=command)
+        self.log.debug(
+            "## sudo ls /mnt/daos/%s output = %s", self.pool.uuid.lower(),
+            cmd_out[0]["stdout"])
+
+        vos_file = None
+        for file in cmd_out[0]["stdout"]:
+            # Assume the VOS file has "vos" in the file name.
+            if "vos" in file:
+                vos_file = file
+                break
+
+        if not vos_file:
+            self.fail(
+                "vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
+        else:
+            self.log.debug("## vos_file: %s", vos_file)
+
+        return vos_file
+
     def test_ls(self):
         """Test ddb ls.
 
@@ -103,9 +133,10 @@ class DdbTest(TestWithServers):
         self.add_pool()
         self.add_container(pool=self.pool)
 
+        vos_file = self.get_vos_file_path()
         ddb_command = DdbCommand(
             path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file="vos-0")
+            vos_file=vos_file)
 
         errors = []
 
@@ -451,22 +482,7 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        hosts = NodeSet(self.hostlist_servers[0])
-        vos_path = os.path.join("/mnt/daos", self.pool.uuid.lower())
-        command = " ".join(["sudo", "ls", vos_path])
-        cmd_out = run_pcmd(hosts=hosts, command=command)
-        self.log.debug("## sudo ls /mnt/daos/<uuid> output = %s", cmd_out[0]["stdout"])
-
-        vos_file = None
-        for file in cmd_out[0]["stdout"]:
-            if "vos" in file:
-                vos_file = file
-                break
-        if not vos_file:
-            self.fail(
-                "vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
-        else:
-            self.log.debug("## vos_file: %s", vos_file)
+        vos_file = self.get_vos_file_path()
         ddb_command = DdbCommand(
             path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
             vos_file=vos_file)
