@@ -385,7 +385,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
  * Create \s S3 Object in the S3 bucket identified by \a ds3b.
  *
  * \param[in]	key	Key of the S3 object to destroy.
- * \param[in]	info	S3 object info.
+ * \param[out]	ds3o	Returned S3 object handle.
  * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -393,7 +393,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_create(const char *key, struct ds3_object_info *info, ds3_bucket_t *ds3b, daos_event_t *ev);
+ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b, daos_event_t *ev);
 
 /**
  * Open \a S3 object.
