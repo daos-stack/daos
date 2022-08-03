@@ -195,7 +195,7 @@ run_cmd(const char *command, int *outputfd)
 		close(stderrfd[1]);
 
 		if (system(command) == -1) {
-			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", command, errno, 
+			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", command, errno,
 				strerror(errno));
 			_exit(daos_errno2der(errno));
 		}
