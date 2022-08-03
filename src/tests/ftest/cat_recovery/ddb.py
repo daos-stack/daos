@@ -420,7 +420,7 @@ class DdbTest(TestWithServers):
         1. Create a pool and a container.
         2. Insert one object with one dkey with the API.
         3. Stop the server to use ddb.
-        4. Find the vos file name. e.g., vos-0.
+        4. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
         5. Load new data into [0]/[0]/[0]/[0]
         6. Restart the server.
         7. Reset the object, container, and pool to use the API.
