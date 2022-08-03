@@ -418,7 +418,7 @@ class DdbTest(TestWithServers):
         """Test ddb load.
 
         1. Create a pool and a container.
-        2. Insert one object with one dkey with API.
+        2. Insert one object with one dkey with the API.
         3. Stop the server to use ddb.
         4. Find the vos file name. e.g., vos-0.
         5. Load new data into [0]/[0]/[0]/[0]
