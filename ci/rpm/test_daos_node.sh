@@ -33,7 +33,7 @@ fi
 sudo "${YUM[@]}" erase $OPENMPI_RPM
 sudo "${YUM[@]}" install daos-client-tests-"${DAOS_PKG_VERSION}"
 if rpm -q $OPENMPI_RPM; then
-  echo "$OPENMPI_RPM RPM should be installed as a dependency of daos-client-tests"
+  echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
 fi
 if ! sudo "${YUM[@]}" history undo last; then
@@ -43,7 +43,7 @@ if ! sudo "${YUM[@]}" history undo last; then
 fi
 sudo "${YUM[@]}" install daos-server-tests-"${DAOS_PKG_VERSION}"
 if rpm -q $OPENMPI_RPM; then
-  echo "$OPENMPI_RPM RPM should be installed as a dependency of daos-server-tests"
+  echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
 fi
 if ! sudo "${YUM[@]}" history undo last; then

@@ -8,6 +8,10 @@
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 
+# This script use used by docker but can be invoked from elsewhere, in order to run it
+# interactively then these two commands can be used to set dnf into automatic mode.
+# dnf --assumeyes install dnf-plugins-core
+# dnf config-manager --save --setopt=assumeyes=True
 set -e
 
 dnf -y upgrade && \
