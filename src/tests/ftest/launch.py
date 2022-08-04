@@ -1357,7 +1357,7 @@ def run_tests(test_files, tag_filter, args):
                     args,
                     avocado_logs_dir,
                     get_test_category(test_file["py"]),
-                    60 * 60 * 2)
+                    1800)
 
                 # Archive remote ULTs stacks dump files
                 return_code |= archive_files(

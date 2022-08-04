@@ -151,15 +151,6 @@ entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
 	int              rc;
 
-	if (entry->fd_status == DFUSE_IO_DIS_STREAM || entry->fd_status == DFUSE_IO_DIS_IOERR) {
-		/* In this case there will have been a D_ERROR call on the entry so loudly mark
-		 * it as completed so that it's easier to tell when the fd is recycled in the logs.
-		 */
-		DFUSE_TRA_INFO(entry->fd_dfsoh, "closing array %p", entry);
-	} else {
-		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "closing array %p", entry);
-	}
-
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	rc = dfs_release(entry->fd_dfsoh);
 	if (rc == ENOMEM)
@@ -1163,7 +1154,7 @@ disable_file:
 			errno = EIO;
 		return -1;
 	}
-	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Disabling interception on I/O error");
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on I/O error");
 	entry->fd_status = DFUSE_IO_DIS_IOERR;
 	vector_decref(&fd_table, entry);
 	/* Fall through and do the read */
@@ -1769,11 +1760,12 @@ dfuse_dup2(int oldfd, int newfd)
 		DFUSE_TRA_INFO((_entry)->fd_dfsoh, "disabling streaming %ld %ld rc=%d %d %s, %p",  \
 			       _offset, (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));   \
 		if (_file->_IO_read_base)                                                          \
-			DFUSE_TRA_INFO((_entry)->fd_dfsoh, "Private data %p %p %p",                \
-				       _file->_IO_read_base, _file->_IO_read_ptr,                  \
-				       _file->_IO_read_end);                                       \
+			DFUSE_TRA_DEBUG((_entry)->fd_dfsoh, "Private data %p %p %p",               \
+					_file->_IO_read_base, _file->_IO_read_ptr,                 \
+					_file->_IO_read_end);                                      \
 	} while (0)
 
+/* Check if file data is being cached in memory, if it is then disable interception */
 static inline bool
 _stream_macros_used(FILE *stream)
 {
@@ -1793,21 +1785,28 @@ dfuse_fdopen(int fd, const char *mode)
 	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
-	if (rc == 0) {
-		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted", fd, mode);
+	if (rc != 0)
+		goto do_real_fn;
 
-		if (entry->fd_pos != 0)
-			__real_lseek(fd, entry->fd_pos, SEEK_SET);
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
-		vector_decref(&fd_table, entry);
-	}
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "fdopen(fd=%d, mode=%s) intercepted", fd, mode);
 
 	file = __real_fdopen(fd, mode);
 
 	if (file && _stream_macros_used(file)) {
+		DFUSE_TRA_WARNING(entry->fd_dfsoh,
+				  "fdopen(fd=%d, mode=%s) buffers pre-loaded, disabling", fd, mode);
 		DISABLE_STREAM(entry, file);
 	}
+
+	vector_decref(&fd_table, entry);
+
 	return file;
+
+do_real_fn:
+	return __real_fdopen(fd, mode);
 }
 
 DFUSE_PUBLIC int
@@ -2263,22 +2262,6 @@ dfuse_ftell(FILE *stream)
 	/* Load the position from the interception library */
 	off = entry->fd_pos;
 
-	/* If the interception library hasn't seen any I/O then double check with libc, there
-	 * can be cases where previous interception calls have been missed which will result in
-	 * libc reporting a non-zero value.  If this is the case then we have to identify and
-	 * intercept whatever functions are missing.
-	 */
-	if (off == 0) {
-		off = __real_ftell(stream);
-		if (off != 0) {
-			DFUSE_TRA_ERROR(entry->fd_dfsoh,
-					"Missing interception, disabling fd %d off %ld %p", fd, off,
-					entry);
-			entry->fd_status = DFUSE_IO_DIS_STREAM;
-			assert(0);
-		}
-	}
-
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
 
 	vector_decref(&fd_table, entry);
@@ -2308,17 +2291,6 @@ dfuse_ftello(FILE *stream)
 		goto do_real_ftello;
 
 	off = entry->fd_pos;
-
-	if (off == 0) {
-		off = __real_ftell(stream);
-		if (off != 0) {
-			DFUSE_TRA_ERROR(entry->fd_dfsoh,
-					"Missing interception, disabling fd %d off %ld %p", fd, off,
-					entry);
-			entry->fd_status = DFUSE_IO_DIS_STREAM;
-			assert(0);
-		}
-	}
 
 	vector_decref(&fd_table, entry);
 
@@ -2569,13 +2541,7 @@ dfuse_ungetc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-#if 0
-	/* TODO: Remove this */
-	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Unsupported function, disabling streaming %p", stream);
-	entry->fd_status = DFUSE_IO_DIS_STREAM;
-#else
 	DISABLE_STREAM(entry, stream);
-#endif
 
 	vector_decref(&fd_table, entry);
 
@@ -2619,8 +2585,6 @@ dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 	struct fd_entry *entry = NULL;
 	int              fd;
 	int              rc;
-
-	D_ERROR("Unsupported function\n");
 
 	fd = fileno(stream);
 	if (fd == -1)

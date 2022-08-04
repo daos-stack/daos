@@ -104,7 +104,7 @@ class DaosBuild(DfuseTestBase):
         cache_time = '60m'
         # Timeout.  This is per command so up to double this or more as there are two scons
         # commands which can both take a long time.
-        build_time = 30
+        build_time = 10
 
         self.load_dfuse(self.hostlist_clients)
 
@@ -126,9 +126,11 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            if intercept:
+                build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time = 180
+            build_time = 60
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
