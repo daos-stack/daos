@@ -2706,8 +2706,8 @@ shard_io_task(tse_task_t *task)
 	/*
 	 * If this task belongs to a TX, and if the epoch we got earlier
 	 * doesn't contain a "chosen" TX epoch, then we may need to reinit the
-	 * task. (See dc_tx_get_epoch.) Because tse_task_reinit is less
-	 * practical in the middle of a task, we do it here at the beginning of
+	 * task via dc_tx_get_epoch. Because tse_task_reinit is less practical
+	 * in the middle of a task, we do it here at the beginning of
 	 * shard_io_task.
 	 */
 	th = shard_auxi->obj_auxi->th;
@@ -2716,9 +2716,9 @@ shard_io_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	return shard_io(task, shard_auxi);
@@ -6203,9 +6203,9 @@ shard_query_key_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
