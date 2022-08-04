@@ -208,14 +208,14 @@ timespec_gt(struct timespec t1, struct timespec t2)
 void
 do_mtime(void **state)
 {
-	struct stat	stbuf;
-	struct timespec	prev_ts;
-	struct timespec	now;
-	struct timespec	times[2];
-	int		fd;
-	int		rc;
-	char		input_buf[] = "hello";
-	int		root = open(test_dir, O_PATH | O_DIRECTORY);
+	struct stat     stbuf;
+	struct timespec prev_ts;
+	struct timespec now;
+	struct timespec times[2];
+	int             fd;
+	int             rc;
+	char            input_buf[] = "hello";
+	int             root        = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
 
@@ -226,7 +226,7 @@ do_mtime(void **state)
 	assert_return_code(fd, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
 
@@ -236,7 +236,7 @@ do_mtime(void **state)
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
 	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
-	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Truncate the file and verify mtime is newer */
@@ -245,20 +245,20 @@ do_mtime(void **state)
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
 	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
-	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/* Set and verify mtime set in the past */
-	times[0] = now;
-	times[1].tv_sec = now.tv_sec - 10;
+	times[0]         = now;
+	times[1].tv_sec  = now.tv_sec - 10;
 	times[1].tv_nsec = 20;
-	rc = futimens(fd, times);
+	rc               = futimens(fd, times);
 	assert_return_code(fd, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);
 	assert_int_equal(stbuf.st_mtim.tv_nsec, times[1].tv_nsec);
-	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	rc = close(fd);
@@ -286,8 +286,8 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("dfuse IO tests");
 			printf("=====================");
 			const struct CMUnitTest io_tests[] = {
-				cmocka_unit_test(do_openat),
-				cmocka_unit_test(do_ioctl),
+			    cmocka_unit_test(do_openat),
+			    cmocka_unit_test(do_ioctl),
 			};
 			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
@@ -296,7 +296,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("dfuse metadata tests");
 			printf("=====================");
 			const struct CMUnitTest metadata_tests[] = {
-				cmocka_unit_test(do_mtime),
+			    cmocka_unit_test(do_mtime),
 			};
 			nr_failed = cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
@@ -314,19 +314,17 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 int
 main(int argc, char **argv)
 {
-	char		 tests[64];
-	int		 ntests = 0;
-	int		 nr_failed = 0;
-	int		 nr_total_failed = 0;
-	int		 opt = 0, index = 0;
+	char                 tests[64];
+	int                  ntests          = 0;
+	int                  nr_failed       = 0;
+	int                  nr_total_failed = 0;
+	int                  opt = 0, index = 0;
 
-	static struct option long_options[] = {
-		{"test-dir",	required_argument,	NULL,	'M'},
-		{"all",		no_argument,		NULL,	'a'},
-		{"io",		no_argument,		NULL,	'i'},
-		{"metadata",	no_argument,		NULL,	'm'},
-		{NULL,		0,			NULL,	0}
-	};
+	static struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
+					       {"all", no_argument, NULL, 'a'},
+					       {"io", no_argument, NULL, 'i'},
+					       {"metadata", no_argument, NULL, 'm'},
+					       {NULL, 0, NULL, 0}};
 
 	memset(tests, 0, sizeof(tests));
 
