@@ -8,9 +8,9 @@ import random
 import socket
 import time
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
+from apricot import TestWithServers
 from general_utils import stop_processes
 
 
@@ -176,7 +176,7 @@ class ManagementServiceResilience(TestWithServers):
             self.server_group:
                 {
                     "hosts": self.hostlist_servers,
-                    "access_points": list(replicas),
+                    "access_points": replicas,
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,
@@ -303,6 +303,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_retained_quorum_N_1
+        :avocado: tags=test_ms_resilience_1
         """
         # Run test cases
         self.verify_retained_quorum(1)
@@ -317,6 +318,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_retained_quorum_N_2
+        :avocado: tags=test_ms_resilience_2
         """
         # Run test cases
         self.verify_retained_quorum(2)
@@ -333,6 +335,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_regained_quorum_N_1
+        :avocado: tags=test_ms_resilience_3
         """
         # Run test case
         self.verify_regained_quorum(1)
@@ -349,6 +352,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_regained_quorum_N_2
+        :avocado: tags=test_ms_resilience_4
         """
         # Run test case
         self.verify_regained_quorum(2)

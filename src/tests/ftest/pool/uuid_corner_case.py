@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,8 +30,9 @@ class UUIDCornerCase(TestWithServers):
         Test Description: Create with a label, destroy with UUID.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,uuid_corner_case,create_label_destroy_uuid
+        :avocado: tags=vm
+        :avocado: tags=pool,uuid,label
+        :avocado: tags=uuid_corner_case,create_label_destroy_uuid,test_create_label_destroy_uuid
         """
         # Create with a label - Default.
         self.add_pool(connect=False)
