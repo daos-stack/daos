@@ -11,7 +11,7 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
-      - utils/run_in_ga.sh
+      - ci/docker-scripts
       - requirements.txt
 
 jobs:
@@ -121,7 +121,8 @@ jobs:
                             --tag build-image
       - name: Build and Test
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image ./daos/utils/run_in_ga.sh
+              --env COMPILER --env DEPS_JOBS --user root:root build-image
+              ./daos/ci/docker-scripts/run_in_gha.sh
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
