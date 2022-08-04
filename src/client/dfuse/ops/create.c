@@ -129,8 +129,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
-		(fi->flags & O_ACCMODE) == O_WRONLY) {
+	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
+	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
@@ -176,9 +176,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	oh->doh_writeable = true;
 
-	if (dfs->dfc_data_caching) {
+	if (dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
+
+		/* keep_cache cannot be set here as ie is new, we need to search the hash table
+		 * for any existing inode before we can set it's value.
+		 */
 	} else {
 		fi_out.direct_io = 1;
 	}
