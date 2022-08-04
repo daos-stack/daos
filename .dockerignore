@@ -5,7 +5,10 @@
 # just generate noise and extra work for docker.
 *
 !src
-!utils
+!utils/scripts
+!utils/build.config
+!utils/config
+!utils/ci
 !SConstruct
 !VERSION
 !LICENSE
@@ -13,7 +16,6 @@
 !site_scons
 !.clang-format
 !requirements.txt
-!ci/docker-scripts
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
@@ -31,16 +33,10 @@ config.log
 .sconsign.dblite
 .daos_server.active.yml
 autodocs
-utils/rpms/_topdir
 venv
 
 # Doc isn't required for building.
 doc
-
-# Deny dockerfiles themselves.  Avoid rebuilding deps if only the instructions
-# have changed.
-utils/docker
-utils/sl/fake_scons
 
 # Test log files.
 dnt*
