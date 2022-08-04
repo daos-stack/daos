@@ -148,14 +148,6 @@ def build_misc(build_prefix):
     path = os.path.join(build_prefix, common)
     SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
-    # install man pages
-    try:
-        common = os.path.join('doc', 'man')
-        path = os.path.join(build_prefix, common)
-        SConscript(os.path.join(common, 'SConscript'), variant_dir=path, must_exist=0, duplicate=0)
-    except SCons.Warnings.MissingSConscriptWarning as _warn:
-        print("Missing doc/man/SConscript...")
-
 
 def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
@@ -166,8 +158,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             import github
             import yaml
         except ImportError:
-            print("You need yaml, pygit2 and pygithub python modules to "
-                  "create releases")
+            print("You need yaml, pygit2 and pygithub python modules to create releases")
             Exit(1)
 
         variables = Variables()

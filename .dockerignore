@@ -5,11 +5,12 @@
 # just generate noise and extra work for docker.
 *
 !src
-!utils/scripts
 !utils/build.config
-!utils/config
+!utils/certs
 !utils/ci
 !utils/completion
+!utils/config
+!utils/scripts
 !SConstruct
 !VERSION
 !LICENSE
@@ -35,9 +36,6 @@ config.log
 .daos_server.active.yml
 autodocs
 venv
-
-# Doc isn't required for building.
-doc
 
 # Test log files.
 dnt*
