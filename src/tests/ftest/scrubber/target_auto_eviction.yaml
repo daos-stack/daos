@@ -7,6 +7,7 @@ setup:
 server_config:
   name: daos_server
   engines_per_host: 2
+  targets: 8
   servers:
     0:
       pinned_numa_node: 0
@@ -69,7 +70,7 @@ ior:
   flags: "-v -W -w -r -R"
   api: DFS
   transfer_size: 1M
-  block_size: 512M
+  block_size: 2G
   dfs_oclass: RP_2GX
   dfs_dir_oclass: RP_2GX
 faults:
