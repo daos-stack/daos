@@ -20,6 +20,7 @@
 #include "../../object/obj_ec.h"
 
 unsigned int ec_obj_class = OC_EC_4P2G1;
+unsigned int ec_cell_size = 32768;
 
 static int
 get_dkey_cnt(struct ioreq *req)
@@ -1537,14 +1538,162 @@ ec_singv_diff_size_fetch(void **state)
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 12 * 1024, 4000);
 }
 
+static void
+ec_cond_fetch(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_iov_t		 non_exist_dkey;
+	d_sg_list_t	 sgl[2];
+	d_iov_t		 sg_iov[2];
+	daos_iod_t	 iod[2];
+	daos_recx_t	 recx[2];
+	char		*buf[2];
+	char		*akey[2];
+	const char	*akey_fmt = "akey%d";
+	int		 i, rc;
+	daos_size_t	 size = 8192;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&non_exist_dkey, "non_dkey", strlen("non_dkey"));
+
+	for (i = 0; i < 2; i++) {
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
+
+		D_ALLOC(buf[i], size);
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size);
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		iod[i].iod_nr		= 1;
+		iod[i].iod_size		= 1;
+		iod[i].iod_recxs	= &recx[i];
+		iod[i].iod_type		= DAOS_IOD_ARRAY;
+		if (i == 0) {
+			recx[i].rx_idx		= 0;
+			recx[i].rx_nr		= size;
+		} else {
+			recx[i].rx_idx		= ec_cell_size;
+			recx[i].rx_nr		= size;
+		}
+	}
+
+	/** update record */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/** normal fetch */
+	for (i = 0; i < 2; i++)
+		iod[i].iod_size	= DAOS_REC_ANY;
+
+	print_message("normal fetch\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < 2; i++)
+		assert_int_equal(iod[i].iod_size, 1);
+
+	for (i = 0; i < 2; i++)
+		d_iov_set(&sg_iov[i], buf[i], size);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("cond_deky, fetch non-exist dkey\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_DKEY_FETCH, &non_exist_dkey, 2, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	print_message("cond_dkey, dkey exist, akey non-exist...\n");
+	recx[0].rx_idx	= ec_cell_size;
+	recx[0].rx_nr	= size;
+	d_iov_set(&iod[0].iod_name, "non-akey", strlen("non-akey"));
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_DKEY_FETCH, &dkey, 1, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("cond_akey fetch, akey exist on another data shard...\n");
+	d_iov_set(&iod[0].iod_name, akey[0], strlen(akey[0]));
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	recx[1].rx_idx	= 0;
+	recx[1].rx_nr	= size;
+	print_message("cond_akey fetch, check exist from parity shard\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod[1], sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("cond_akey fetch, check exist from all data shards\n");
+	daos_fail_loc_set(DAOS_OBJ_SKIP_PARITY | DAOS_FAIL_ALWAYS);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod[1], sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	daos_fail_loc_set(0);
+
+	print_message("cond_akey fetch, one akey exist and another akey non-exist\n");
+	d_iov_set(&iod[1].iod_name, "non-akey", strlen("non-akey"));
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 2, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	print_message("cond fetch per akey, one akey exist and another akey non-exist\n");
+	iod[0].iod_flags = DAOS_COND_AKEY_FETCH;
+	iod[1].iod_flags = DAOS_COND_AKEY_FETCH;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_PER_AKEY, &dkey, 2, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	print_message("cond fetch per akey, two akeys both exist\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= size;
+	recx[1].rx_idx	= ec_cell_size;
+	recx[1].rx_nr	= size;
+	d_iov_set(&iod[0].iod_name, akey[0], strlen(akey[0]));
+	d_iov_set(&iod[1].iod_name, akey[1], strlen(akey[1]));
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_PER_AKEY, &dkey, 2, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		D_FREE(akey[i]);
+		D_FREE(buf[i]);
+	}
+}
+
 static int
 ec_setup(void  **state)
 {
-	int rc;
+	int		rc;
+	unsigned int	orig_dt_cell_size;
 
+	orig_dt_cell_size = dt_cell_size;
+	dt_cell_size = ec_cell_size;
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			DEFAULT_POOL_SIZE, 6, NULL);
+	dt_cell_size = orig_dt_cell_size;
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
 		 * is not enough ranks here.
@@ -1597,6 +1746,7 @@ static const struct CMUnitTest ec_tests[] = {
 	 test_case_teardown},
 	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
 	 test_case_teardown},
+	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
 };
 
 int

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -547,8 +547,8 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
-func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
-	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+func testMemberWithFaultDomain(t *testing.T, rank Rank, fd *FaultDomain) *Member {
+	return MockMemberFullSpec(t, rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
 		MemberStateJoined).WithFaultDomain(fd)
 }
 
@@ -573,8 +573,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
-
+			m := testMemberWithFaultDomain(t, tc.rank, tc.faultDomain)
 			result := memberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -848,7 +847,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, test.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+				MockMemberFullSpec(t, 2, test.MockUUID(2), "", mockControlAddr(t, 2),
+					MemberStateJoined),
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,

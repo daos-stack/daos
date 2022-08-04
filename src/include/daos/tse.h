@@ -405,4 +405,10 @@ tse_task_depend_list(tse_task_t *task, d_list_t *head);
 int
 tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg);
 
+/**
+ * Set the task don't propagate err-code from dependent tasks.
+ */
+void
+tse_disable_propagate(tse_task_t *task);
+
 #endif /* __TSE_SCHEDULE_H__ */

@@ -2726,6 +2726,7 @@ aggregate_34(void **state)
 	struct agg_tst_dataset	 ds = { 0 };
 	daos_recx_t		*recx_arr;
 	int			 rc, i, rec_cnt = vos_agg_nvme_thresh - 1;
+	unsigned int		 agg_flags = VOS_AGG_FL_FORCE_SCAN;
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
 	assert_rc_equal(rc, 0);
@@ -2757,11 +2758,12 @@ aggregate_34(void **state)
 	ds.td_discard = false;
 
 	VERBOSE_MSG("Aggregate NVMe records w/o 'force_merge' flag\n");
-	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, 0);
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, agg_flags);
 
 	VERBOSE_MSG("Aggregate NVMe records with 'force_merge' flag\n");
 	ds.td_expected_recs = 1;
-	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, VOS_AGG_FL_FORCE_MERGE);
+	agg_flags |= VOS_AGG_FL_FORCE_MERGE;
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, agg_flags);
 
 	D_FREE(recx_arr);
 	cleanup();

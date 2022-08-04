@@ -64,6 +64,7 @@ type (
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
 		Stat(string) (os.FileInfo, error)
+		Chmod(string, os.FileMode) error
 	}
 
 	defaultSystemProvider struct {
@@ -240,6 +241,11 @@ func (dsp *defaultSystemProvider) Getfs(device string) (string, error) {
 // Stat probes the specified path and returns os level file info.
 func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
 	return os.Stat(path)
+}
+
+// Chmod changes the mode of the specified path.
+func (dsp *defaultSystemProvider) Chmod(path string, mode os.FileMode) error {
+	return os.Chmod(path, mode)
 }
 
 func parseFsType(input string) string {
@@ -693,6 +699,11 @@ func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string)
 	p.log.Debugf("mount %s->%s (%s) (%s)", src, target, fsType, opts)
 	if err := p.sys.Mount(src, target, fsType, flags, opts); err != nil {
 		return nil, errors.Wrapf(err, "mount %s->%s failed", src, target)
+	}
+
+	// Adjust permissions on the mounted filesystem.
+	if err := p.sys.Chmod(target, defaultMountPointPerms); err != nil {
+		return nil, errors.Wrapf(err, "failed to set permissions on %s", target)
 	}
 
 	return &storage.ScmMountResponse{

@@ -1,3 +1,45 @@
+daos (2.1.104-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.104
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 02 Aug 2022 08:00:00 -0100
+
+daos (2.1.103-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Remove now unused openpa dependency
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
+
+daos (2.1.103-3) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 15 Jul 2022 12:43:00 -0400
+
+daos (2.1.103-2) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0rc6
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 27 Jun 2022 18:26:02 -0600
+
+daos (2.1.103-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.103
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 13 Jun 2022 08:00:00 -0100
+
+daos (2.1.102-6) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 08 Jun 2022 13:58:03 -0000
+
+daos (2.1.102-5) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
 daos (2.1.102-4) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.1-1 to include critical performance patches

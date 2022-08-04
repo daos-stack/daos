@@ -3893,7 +3893,7 @@ evt_drain(daos_handle_t toh, int *credits, bool *destroyed)
 	if (rc)
 		goto out;
 
-	if (tcx->tc_creds_on)
+	if (credits)
 		*credits = tcx->tc_creds;
 out:
 	rc = evt_tx_end(tcx, rc);

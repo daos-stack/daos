@@ -432,10 +432,50 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 		$ dmg pool destroy --pool=$DAOS_POOL --force
 		Pool-destroy command succeeded
 
+## Syslog
+
+[`RAS events`](https://docs.daos.io/v2.2/admin/administration/#ras-events) are printed to the Syslog
+by 'daos_server' processes via the Go standard library API.
+If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
+
+```
+ERROR: failed to create syslogger with priority 30 (severity=ERROR, facility=DAEMON): Unix syslog delivery error
+```
+
+These errors will not prevent DAOS from running as expected but indicate that no Syslog messages
+will be delivered.
+
+'rsyslog' is the Syslog daemon shipped with most operating systems and to check if the service is
+running under systemd run the following command:
+
+```
+# sudo systemctl status rsyslog
+● rsyslog.service - System Logging Service
+   Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)
+   Active: active (running) since Mon 2022-05-23 16:12:31 UTC; 1 weeks 1 days ago
+     Docs: man:rsyslogd(8)
+           https://www.rsyslog.com/doc/
+ Main PID: 1962 (rsyslogd)
+    Tasks: 3 (limit: 1648282)
+   Memory: 5.0M
+   CGroup: /system.slice/rsyslog.service
+           └─1962 /usr/sbin/rsyslogd -n
+
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Starting System Logging Service...
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Started System Logging Service.
+May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: imjournal: journal files changed, reloading>
+May 29 03:18:01 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+```
+
+To configure a Syslog daemon to resolve the delivery errors and receive messages from 'daos_server'
+consult the relevant operating system specific documentation for installing and/or enabling a syslog
+server package e.g. 'rsyslog'.
+
 ## Bug Report
 
-Bugs should be reported through our issue tracker[^1] with a test case
-to reproduce the issue (when applicable) and debug logs.
+Bugs should be reported through our [issue tracker](https://jira.daos.io/)
+with a test case to reproduce the issue (when applicable) and debug logs.
 
 After creating a ticket, logs should be gathered from the locations
 described in the [Log Files](#log-files) section of this document and
@@ -444,4 +484,3 @@ attached to the ticket.
 To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
 
-[^1]: http://jira.daos.io

@@ -43,10 +43,8 @@ class DmvrDstCreate(DataMoverTestBase):
             Create pool1.
             Create POSIX cont1 in pool1.
             Create small dataset in cont1.
-            Copy cont1 to a new cont in pool1, with a supplied UUID.
             Copy cont1 to a new cont in pool1, without a supplied UUID.
             Create pool2.
-            Copy cont1 to a new cont in pool2, with a supplied UUID.
             Copy cont1 to a new cont in pool2, without a supplied UUID.
             For each copy, very container properties and user attributes.
             Repeat, but with container type Unknown.
@@ -67,15 +65,6 @@ class DmvrDstCreate(DataMoverTestBase):
         # Create source data
         src_props = self.write_cont(cont1)
 
-        cont2_uuid = self.gen_uuid()
-        self.run_datamover(
-            self.test_id + " cont1 to cont2 (same pool) (supplied cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool1, cont2_uuid)
-        cont2 = self.get_cont(pool1, cont2_uuid)
-        cont2.type.update(cont1.type.value, "type")
-        self.verify_cont(cont2, api, check_props, src_props)
-
         result = self.run_datamover(
             self.test_id + " cont1 to cont3 (same pool) (empty cont)",
             "DAOS", "/", pool1, cont1,
@@ -88,15 +77,6 @@ class DmvrDstCreate(DataMoverTestBase):
         # Create another pool
         pool2 = self.create_pool()
         pool2.connect(2)
-
-        cont4_uuid = self.gen_uuid()
-        self.run_datamover(
-            self.test_id + " cont1 to cont4 (different pool) (supplied cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool2, cont4_uuid)
-        cont4 = self.get_cont(pool2, cont4_uuid)
-        cont4.type.update(cont1.type.value, "type")
-        self.verify_cont(cont4, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont5 (different pool) (empty cont)",
@@ -113,15 +93,6 @@ class DmvrDstCreate(DataMoverTestBase):
             posix_path = join(self.new_posix_test_path(), self.test_file)
             self.run_ior_with_params(
                 "POSIX", posix_path, flags=self.ior_flags[0])
-
-            cont6_uuid = self.gen_uuid()
-            self.run_datamover(
-                self.test_id + " posix to cont6 (supplied cont)",
-                "POSIX", posix_path, None, None,
-                "DAOS", "/", pool1, cont6_uuid)
-            cont6 = self.get_cont(pool1, cont6_uuid)
-            cont6.type.update(cont1.type.value, "type")
-            self.verify_cont(cont6, api, False)
 
             result = self.run_datamover(
                 self.test_id + " posix to cont7 (empty cont)",
@@ -281,6 +252,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
+        :avocado: tags=test_dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
 
@@ -296,6 +268,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
+        :avocado: tags=test_dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
 
@@ -311,6 +284,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
+        :avocado: tags=test_dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
 
@@ -326,5 +300,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
+        :avocado: tags=test_dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

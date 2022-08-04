@@ -200,11 +200,15 @@
 #
 ## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
 #
-## Hugepages are mandatory with NVME SSDs configured and optional without.
-## To disabled the use of hugepages when no NVMe SSDs are configured, set
-## nr_hugepages to -1.
+## default: 0
+#nr_hugepages: 0
 #
-##nr_hugepages: -1
+## Hugepages are mandatory with NVME SSDs configured and optional without.
+## To disable the use of hugepages when no NVMe SSDs are configured, set
+## disable_hugepages to true.
+#
+## default: false
+#disable_hugepages: false
 #
 #
 ## Set specific debug mask for daos_server (control plane).
@@ -223,13 +227,13 @@
 #
 ## Enable daos_admin (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #helper_log_file: /tmp/daos_admin.log
 #
 #
 ## Enable daos_firmware (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
@@ -325,7 +329,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.0.log
 #
 #  # Pass specific environment variables to the engine process.
@@ -465,7 +469,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.1.log
 #
 #  # Pass specific environment variables to the engine process.

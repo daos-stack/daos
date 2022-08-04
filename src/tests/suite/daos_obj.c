@@ -581,9 +581,8 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 /**
  * get the Pool storage info.
  */
-int pool_storage_info(void **state, daos_pool_info_t *pinfo)
+int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 {
-	test_arg_t *arg = *state;
 	int rc;
 
 	/*get only pool space info*/
@@ -608,16 +607,22 @@ int pool_storage_info(void **state, daos_pool_info_t *pinfo)
  * Enabled/Disabled Aggrgation strategy for Pool.
  */
 static int
-set_pool_reclaim_strategy(void **state, void const *const strategy[])
+set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	test_arg_t *arg = *state;
-	int rc;
-	char const *const names[] = {"reclaim"};
-	size_t const in_sizes[] = {strlen(strategy[0])};
-	int			 n = (int) ARRAY_SIZE(names);
+	char	uuid_str[37] = {0};
+	char	dmg_cmd[DTS_CFG_MAX];
+	int	rc;
 
-	rc = daos_pool_set_attr(arg->pool.poh, n, names, strategy,
-		in_sizes, NULL);
+	/* build and invoke dmg cmd to set DAOS_PROP_PO_RECLAIM property */
+	uuid_unparse(arg->pool.pool_uuid, uuid_str);
+	dts_create_config(dmg_cmd, "dmg pool set-prop %s --name=reclaim --value=%s",
+			  uuid_str, (char *)strategy);
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
+
 	return rc;
 }
 
@@ -686,7 +691,8 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 static void
 io_overwrite_large(void **state, daos_obj_id_t oid)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
 	struct ioreq	 req;
 	char		*ow_buf;
 	char		*fbuf;
@@ -702,11 +708,15 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	char		*aggr_disabled = "disabled";
+	char		*aggr_set_time = "time";
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/* Disabled Pool Aggrgation */
-	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 	/**
 	 * set_pool_reclaim_strategy() to disable aggregation
@@ -739,7 +749,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/*Get the initial pool size after writing first transaction*/
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -780,7 +790,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		rx_nr++;
 
 		/*Verify the SCM/NVMe Pool Free size based on transfer size*/
-		rc = pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(arg, &pinfo);
 		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		if (overwrite_sz < 4096) {
@@ -805,12 +815,13 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	}
 
 	/* Enabled Pool Aggrgation */
-	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 /**
@@ -899,7 +910,8 @@ io_overwrite(void **state)
 static void
 io_rewritten_array_with_mixed_size(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
 	struct ioreq		req;
 	daos_obj_id_t		oid;
 	daos_pool_info_t	pinfo;
@@ -916,8 +928,12 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	char			*aggr_disabled = "disabled";
+	char			*aggr_set_time = "time";
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/* choose random object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -933,11 +949,11 @@ io_rewritten_array_with_mixed_size(void **state)
 	memset(fbuf, 0, size);
 
 	/* Disabled Pool Aggregation */
-	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 
 	/* Get the pool info at the beginning */
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -955,7 +971,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	/**
 	*Get the pool storage information
 	*/
-	rc = pool_storage_info(state, &pinfo);
+	rc = pool_storage_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
 	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -987,7 +1003,7 @@ io_rewritten_array_with_mixed_size(void **state)
 		assert_memory_equal(ow_buf, fbuf, size);
 
 		/*Verify the pool size*/
-		rc = pool_storage_info(state, &pinfo);
+		rc = pool_storage_info(arg, &pinfo);
 		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
@@ -1022,12 +1038,13 @@ io_rewritten_array_with_mixed_size(void **state)
 	}
 
 	/* Enabled Pool Aggregation */
-	rc = set_pool_reclaim_strategy(state, aggr_set_time);
+	rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 /** i/o to variable idx offset */
@@ -4660,15 +4677,15 @@ enum_recxs_with_aggregation_internal(void **state, bool incr)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	char		data_buf[10];
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	char		*aggr_disabled = "disabled";
+	char		*aggr_set_time = "time";
 	daos_anchor_t	anchor;
 	bool		enable_agg = false;
 	int		total_size = 0;
 	int		i;
 	int		rc;
 
-	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 	sleep(10);
 
@@ -4695,7 +4712,7 @@ enum_recxs_with_aggregation_internal(void **state, bool incr)
 		if (!enable_agg) {
 			/* Enabled Pool Aggrgation */
 			print_message("enable aggregation\n");
-			rc = set_pool_reclaim_strategy(state, aggr_set_time);
+			rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 			assert_rc_equal(rc, 0);
 			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 					      DAOS_FORCE_EC_AGG, 0, NULL);

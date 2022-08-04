@@ -107,3 +107,8 @@ func Init(log logging.Logger) (func(), error) {
 		}
 	}, nil
 }
+
+// DefaultIOMMUDetector gets the default provider for the IOMMU detector.
+func DefaultIOMMUDetector(log logging.Logger) hardware.IOMMUDetector {
+	return sysfs.NewProvider(log)
+}

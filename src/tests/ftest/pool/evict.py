@@ -5,6 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
+from ClusterShell.NodeSet import NodeSet
+
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 
@@ -26,7 +28,7 @@ class EvictTests(TestWithServers):
         """Create a pool, check the pool file in /mnt/daos, and connect.
 
         Args:
-            hostlist (list): Hosts where pool is created.
+            hostlist (NodeSet): Hosts where pool is created.
             targets (list): List of server ranks to create the pool. Defaults to None.
 
         Returns:
@@ -64,10 +66,10 @@ class EvictTests(TestWithServers):
             ranks (list): List of server ranks.
 
         Returns:
-            list: Hostnames.
+            NodeSet: hosts running the specified ranks.
 
         """
-        return [self.server_managers[0].get_host(rank=rank) for rank in ranks]
+        return NodeSet.fromlist([self.server_managers[0].get_host(rank=rank) for rank in ranks])
 
     def verify_pool_evict(self, pool):
         """Evict and verify that it succeeded. If not, fail the test.
@@ -107,7 +109,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_evict
-        :avocado: tags=pool_evict_basic
+        :avocado: tags=pool_evict_basic,test_evict
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []
@@ -215,6 +217,7 @@ class EvictTests(TestWithServers):
 
             # 10. Check that we were able to obtain the UUID of the non-evicted pools.
             if pool_info:
+                pool.connected = False
                 if c_uuid_to_str(pool_info.pi_uuid) == pool.uuid:
                     self.log.info(
                         "Pool # %d UUID matches pool_info.pi_uuid %s", index, pool.uuid)

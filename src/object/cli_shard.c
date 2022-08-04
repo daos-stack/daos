@@ -855,8 +855,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	int			 rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
-	D_DEBUG(DB_IO, "rpc %p opc:%d completed, dt_result %d.\n",
-		rw_args->rpc, opc, ret);
+	D_DEBUG(DB_IO, "rpc %p opc:%d completed, task %p dt_result %d.\n",
+		rw_args->rpc, opc, task, ret);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
 		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
@@ -886,7 +886,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
+		D_ERROR("RPC %d, task %p failed, "DF_RC"\n", opc, task, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
@@ -1249,9 +1249,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
-	if (obj_op_is_ec_fetch(auxi->obj_auxi) &&
-	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx)))
+	if (obj_op_is_ec_fetch(auxi->obj_auxi) && obj_shard_redirected(auxi)) {
 		orw->orw_flags |= ORF_EC_DEGRADED;
+		obj_auxi_set_degfetch(auxi->obj_auxi);
+	}
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 

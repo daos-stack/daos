@@ -39,19 +39,12 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
-def is_ucx_build(benv):
-    "Check whether this build has UCX enabled."
-    return prereqs.check_component('ucx')
-
 def get_build_tags(benv):
     "Get custom go build tags."
     tags = []
     if is_firmware_mgmt_build(benv):
         tags.append("firmware")
-    if is_ucx_build(benv):
-        tags.append("ucx")
-    if len(tags) == 0:
-        return ""
+    tags.append("ucx")
     return "-tags {}".format(','.join(tags))
 
 def is_release_build(benv):
@@ -206,6 +199,7 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
 
     prereqs.require(denv, 'ofi', 'hwloc')
+    prereqs.require(denv, 'ucx')
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
@@ -243,7 +237,6 @@ def scons():
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    prereqs.require(senv, 'ofi', 'hwloc')
     daos_build.add_rpaths(denv, "..", True, True)
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.

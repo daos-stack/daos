@@ -178,7 +178,7 @@ func TestHostSet_MergeSet(t *testing.T) {
 	}
 	expCount := a.Count() + b.Count() - 1
 
-	if err := a.MergeSet(b); err != nil {
+	if err := a.Merge(b); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestHostSet_MergeSet(t *testing.T) {
 	}
 }
 
-func TestHostSet_ReplaceSet(t *testing.T) {
+func TestHostSet_Replace(t *testing.T) {
 	a, err := hostlist.CreateSet("host[1-8]")
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestHostSet_ReplaceSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	a.ReplaceSet(b)
+	a.Replace(b)
 	if a.String() != b.String() {
 		t.Fatalf("%s != %s", a, b)
 	}

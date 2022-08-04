@@ -279,6 +279,41 @@ fully supported yet:
 
 Please refer to the next sections for more details on each property.
 
+### Container Type
+
+A DAOS container type denotes a specific storage middleware, which implements
+its own data layout on top of the main DAOS API that is provided through `libdaos`.
+Container types are specified through the immutable `layout_type` container property.
+Within each container type, the `layout_version` property provides a mechanism for
+versioning - usage of this version number is determined by the respective middleware.
+
+Some container layouts are defined as part of the main DAOS project.
+The best-known example is the `POSIX` container type that is used to implement the
+[DAOS File System (DFS)](filesystem.md) layout with files and directories.
+Other container layouts are created by various user communities that are
+implementing their own domain-specific storage middleware on top of DAOS.
+
+The known DAOS container types are maintained as an enumerated list in the
+[`daos_prop.h`](https://github.com/daos-stack/daos/blob/release/2.2/src/include/daos_prop.h#L284)
+header file. The following container types are currently defined,
+and can be used with the `daos cont create --type` command option:
+
+| **Container Type** | **Description** |
+| ------------------ | --------------- |
+| UNKNOWN            | No container type was specified at container create time, or the specified container type is unknown. |
+| POSIX              | [DAOS Filesystem (DFS)](filesystem.md), also used with dfuse and by the [MPI-IO DAOS backend](mpi-io.md). |
+| HDF5               | [HDF5 DAOS VOL connector](hdf5.md), maintained by [The HDF Group](https://www.hdfgroup.org/?s=DAOS). |
+| PYTHON             | [PyDAOS](python.md) container format. |
+| SPARK              | A specific layout for [Apache Spark](spark.md) shuffle. |
+| DATABASE           | SQL Database, used by an experimental DAOS interface to MariaDB. |
+| ROOT               | ROOT/RNTuple format, maintained by [CERN](https://root.cern.ch/). |
+| SEISMIC            | DAOS Seismic Graph, aka SEG-Y, maintained by the [segy-daos](https://github.com/daos-stack/segy-daos) project. |
+| METEO              | Meteorology, aka Fields Database (FDB), maintained by [ECMWF](https://www.ecmwf.int/search/site/FDB). |
+
+To register a new DAOS container type (represented as an integer number and a
+corresponding `DAOS_PROP_CO_LAYOUT_*` mnemonic name for that integer in the
+`daos_prop.h` header), please get in touch with the DAOS engineering team.
+
 ### Redundancy Factor
 
 Objects in a DAOS container may belong to different object classes and

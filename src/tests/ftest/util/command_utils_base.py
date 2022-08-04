@@ -46,6 +46,15 @@ class BasicParameter():
         """
         return str(self.value) if self.value is not None else ""
 
+    def __repr__(self):
+        """Convert this BasicParameter into a string representation.
+
+        Returns:
+            str: raw string representation of the parameter's value
+
+        """
+        return str(self._value) if self._value is not None else ""
+
     @property
     def value(self):
         """Get the value of this setting.
@@ -245,6 +254,39 @@ class LogParameter(FormattedParameter):
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
 
+class MappedParameter(BasicParameter):
+    """A class for parameters whose values are read from a yaml file."""
+
+    def __init__(self, value, default=None, yaml_key=None, mapping=None):
+        """Create a MappedParameter object.
+
+        In addition to BasicParameter usage, a mapping can be supplied to replace
+        values from the yaml. This is useful, for example, when the value is a python reference.
+
+        Args:
+            value (object): initial value for the parameter
+            default (object, optional): default value. Defaults to None.
+            yaml_key (str, optional): the yaml key name to use when finding the
+                value to assign from the test yaml file. Default is None which
+                will use the object's variable name as the yaml key.
+            mapping (dict, optional): dict of values to replace. Default is None,
+                which replaces nothing.
+        """
+        super().__init__(value, default, yaml_key)
+        self._mapping = mapping or {}
+
+    @BasicParameter.value.getter
+    def value(self):
+        # pylint: disable=invalid-overridden-method
+        """Get the value of this parameter.
+
+        Returns:
+            object: mapped value currently assigned to the parameter
+
+        """
+        return self._mapping.get(self._value, super().value)
+
+
 class ObjectWithParameters():
     """A class for an object with parameters."""
 
@@ -301,6 +343,14 @@ class ObjectWithParameters():
         """
         for name in self.get_param_names():
             getattr(self, name).get_yaml_value(name, test, self.namespace)
+
+    def update_params(self, **params):
+        """Update each of provided parameter name and value pairs."""
+        for name, value in params.items():
+            try:
+                getattr(self, name).update(value, name)
+            except AttributeError as error:
+                raise CommandFailure("Unknown parameter: {}".format(name)) from error
 
 
 class CommandWithParameters(ObjectWithParameters):
@@ -661,6 +711,7 @@ class EnvironmentVariables(dict):
             export_str = "".join([export_str, separator])
         return export_str
 
+
 class PositionalParameter(BasicParameter):
     """Parameter that defines position.
 
@@ -681,9 +732,7 @@ class PositionalParameter(BasicParameter):
 
     @property
     def position(self):
-        """Position property that defines the position of the parameter.
-
-        """
+        """Position property that defines the position of the parameter."""
         return self._position
 
     def __lt__(self, other):
@@ -703,6 +752,7 @@ class PositionalParameter(BasicParameter):
 
         """
         return self.position
+
 
 class CommandWithPositionalParameters(CommandWithParameters):
     """Command that uses positional parameters.

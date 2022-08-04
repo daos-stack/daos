@@ -140,7 +140,6 @@ struct dfuse_event {
 	fuse_req_t                   de_req; /**< The fuse request handle */
 	daos_event_t                 de_ev;
 	size_t                       de_len;          /**< The size returned by daos */
-	size_t                       de_req_len;      /**< The size requested by fuse */
 	off_t                        de_req_position; /**< The file position requested by fuse */
 	d_iov_t                      de_iov;
 	d_sg_list_t                  de_sgl;
@@ -215,7 +214,6 @@ struct dfuse_cont {
 	double			dfc_ndentry_timeout;
 	bool			dfc_data_caching;
 	bool			dfc_direct_io_disable;
-	pthread_mutex_t		dfs_read_mutex;
 };
 
 void

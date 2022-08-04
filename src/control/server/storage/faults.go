@@ -14,6 +14,12 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
+// FaultBdevConfigTypeMismatch represents an error where an incompatible mix of emulated and
+// non-emulated NVMe devices are present in the storage config.
+var FaultBdevConfigTypeMismatch = storageFault(code.BdevConfigTypeMismatch,
+	"A mix of emulated and non-emulated NVMe devices are specified in config",
+	"Change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
+
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {

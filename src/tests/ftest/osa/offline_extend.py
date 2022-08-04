@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_base import LabelGenerator
+from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
 from apricot import skipForTicket
 
@@ -28,8 +27,8 @@ class OSAOfflineExtend(OSAUtils):
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
@@ -45,7 +44,6 @@ class OSAOfflineExtend(OSAUtils):
             oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         if oclass is None:
             oclass = []
@@ -59,11 +57,7 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
             test_seq = self.ior_test_sequence[0]
             self.pool.set_property("reclaim", "disabled")

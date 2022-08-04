@@ -474,10 +474,23 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1, -1);
 	if (rgt == NULL) {
 		rs_inlist = rebuild_status_completed_lookup(pool_uuid);
-		if (rs_inlist != NULL)
+		if (rs_inlist != NULL) {
 			memcpy(status, rs_inlist, sizeof(*status));
-		else
-			status->rs_state = DRS_NOT_STARTED;
+		} else {
+			struct ds_pool *pool;
+
+			/* XXX sigh, no easy way check if pool has been through
+			 * rebuild/exclude process, so let's check pool_map_version
+			 * for now.
+			 */
+			pool = ds_pool_lookup(pool_uuid);
+			if (pool == NULL || pool->sp_map_version < 2)
+				status->rs_state = DRS_NOT_STARTED;
+			else
+				status->rs_state = DRS_COMPLETED;
+			if (pool != NULL)
+				ds_pool_put(pool);
+		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
 		status->rs_version = rgt->rgt_rebuild_ver;
@@ -2098,19 +2111,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_BUSY);
 	}
 
-	if (pool->sp_group == NULL) {
-		char id[DAOS_UUID_STR_SIZE];
-
-		uuid_unparse_lower(pool->sp_uuid, id);
-		pool->sp_group = crt_group_lookup(id);
-		if (pool->sp_group == NULL) {
-			D_ERROR(DF_UUID": pool group not found\n",
-				DP_UUID(pool->sp_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
-
+	D_ASSERT(pool->sp_group != NULL);
 	D_ASSERT(pool->sp_iv_ns != NULL);
+
 	/* Let's invalidate local snapshot cache before
 	 * rebuild, so to make sure rebuild will use the updated
 	 * snapshot during rebuild fetch, otherwise it may cause
