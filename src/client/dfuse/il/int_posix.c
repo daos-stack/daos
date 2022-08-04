@@ -2583,7 +2583,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	if (rc != 0)
 		goto do_real_fstat;
 
-	/* Turn off this feature if the kernel is doing metadata caching, in this case it's btter
+	/* Turn off this feature if the kernel is doing metadata caching, in this case it's better
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 	if (!entry->fd_fstat) {
