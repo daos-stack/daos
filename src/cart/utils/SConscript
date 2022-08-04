@@ -30,7 +30,7 @@ def scons():
     # Generate cart utility shared objects
     build_utility_shared_obj(env)
 
-    env.Install(conf_dir, ['utils/memcheck-cart.supp', 'utils/fault-inject-cart.yaml'])
+    env.Install(conf_dir, ['memcheck-cart.supp', 'fault-inject-cart.yaml'])
 
 
 if __name__ == "SCons.Script":

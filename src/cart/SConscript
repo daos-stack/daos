@@ -36,9 +36,7 @@ def consolidate_pp(env, parsed_targets):
     """Consolidate parsed headers"""
     sed_d = r"-e 's/\([{;]\) /\1\t/g' -e 's/\([{;]\)/\1\n/g'"
     grepv = r"'struct sockaddr_in {'"
-    year = date.today().year
-    sd = {'@YEAR@': year}
-    preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT=sd)
+    preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT={'@YEAR@': date.today().year})
     parsed_sources = [x.abspath for x in parsed_targets]
     cmd = (f"cat {preamble[0].abspath} > $TARGET; cat {' '.join(parsed_sources)}"
            + f" | grep -v {grepv} | sort -u | sed {sed_d} >> $TARGET")

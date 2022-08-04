@@ -9,6 +9,7 @@
 !utils/build.config
 !utils/config
 !utils/ci
+!utils/completion
 !SConstruct
 !VERSION
 !LICENSE
