@@ -70,10 +70,12 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
-CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v4, DAOS_ISEQ_POOL_CONNECT_V4, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_connect_v5, DAOS_ISEQ_POOL_CONNECT_V5, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
-CRT_RPC_DEFINE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+CRT_RPC_DEFINE(pool_query_v4, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V4)
+CRT_RPC_DEFINE(pool_query_v5, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V5)
 CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
@@ -118,6 +120,8 @@ CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
 		DAOS_OSEQ_POOL_QUERY_INFO)
 CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
+	       DAOS_OSEQ_POOL_TGT_DISCARD)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -130,18 +134,31 @@ CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 	.prf_co_ops  = NULL,	\
 }
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt[] = {
-	POOL_PROTO_CLI_RPC_LIST,
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
+	POOL_PROTO_CLI_RPC_LIST(4),
+	POOL_PROTO_SRV_RPC_LIST,
+};
+
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
+	POOL_PROTO_CLI_RPC_LIST(5),
 	POOL_PROTO_SRV_RPC_LIST,
 };
 
 #undef X
 
-struct crt_proto_format pool_proto_fmt = {
+struct crt_proto_format pool_proto_fmt_v4 = {
 	.cpf_name  = "pool",
-	.cpf_ver   = DAOS_POOL_VERSION,
-	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt),
-	.cpf_prf   = pool_proto_rpc_fmt,
+	.cpf_ver   = 4,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v4),
+	.cpf_prf   = pool_proto_rpc_fmt_v4,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
+};
+
+struct crt_proto_format pool_proto_fmt_v5 = {
+	.cpf_name  = "pool",
+	.cpf_ver   = 5,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v5),
+	.cpf_prf   = pool_proto_rpc_fmt_v5,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
@@ -210,6 +227,15 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			bits |= DAOS_PO_QUERY_PROP_UPGRADE_STATUS;
 			break;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_MODE;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_FREQ;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_THRESH;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -243,10 +269,10 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 	D_ASSERT(rs != NULL);
 
 	uuid_copy(info->pi_uuid, pool_uuid);
-	info->pi_ntargets	= map_buf->pb_target_nr;
-	info->pi_nnodes		= map_buf->pb_node_nr;
-	info->pi_map_ver	= map_version;
-	info->pi_leader		= leader_rank;
+	info->pi_ntargets		= map_buf->pb_target_nr;
+	info->pi_nnodes			= map_buf->pb_node_nr;
+	info->pi_map_ver		= map_version;
+	info->pi_leader			= leader_rank;
 	if (info->pi_bits & DPI_SPACE)
 		info->pi_space		= *ps;
 	if (info->pi_bits & DPI_REBUILD_STATUS)
