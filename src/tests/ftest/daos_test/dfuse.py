@@ -9,6 +9,7 @@ from collections import OrderedDict
 import general_utils
 from dfuse_test_base import DfuseTestBase
 
+
 class DaosCoreTestDfuse(DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
@@ -79,9 +80,11 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         cmd = [self.daos_test, '--test-dir', mount_dir, '--io']
 
+        cmd.append('--metadata')
+
         # Metadata tests don't work with caching enabled
-        if intercept or cache_mode == 'nocache':
-            cmd.append('--metadata')
+        # if intercept or cache_mode == 'nocache':
+        #     cmd.append('--metadata')
 
         if intercept:
             remote_env = OrderedDict()
