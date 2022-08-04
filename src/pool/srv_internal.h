@@ -125,7 +125,8 @@ int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler_v4(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
@@ -164,6 +165,7 @@ void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c

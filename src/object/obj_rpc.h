@@ -31,7 +31,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 8
+#define DAOS_OBJ_VERSION 9
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -180,6 +180,8 @@ enum obj_rpc_flags {
 	ORF_CONTAIN_LEADER	= (1 << 20),
 	/*Ascending Order - 0, descending order - 1*/
 	ORF_DESCENDING_ORDER	= (1 << 21),
+	/* send to reintegrating target */
+	ORF_REINTEGRATING_IO	= (1 << 22),
 };
 
 /* common for update/fetch */

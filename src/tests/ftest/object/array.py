@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2017-2021 Intel Corporation.
+  (C) Copyright 2017-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -31,7 +31,10 @@ class ArrayObjTest(TestWithServers):
         Test Description: Writes an array to an object and then reads it
         back and verifies it.
 
-        :avocado: tags=all,smoke,daily_regression,object,tiny,basicobject
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=object,smoke
+        :avocado: tags=basicobject,test_array_obj
         """
         self.prepare_pool()
 

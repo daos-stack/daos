@@ -20,5 +20,11 @@ jobs:
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Install enchant
         run: sudo apt-get update && sudo apt-get -y install enchant
+      - name: Pull via git
+        run: git fetch origin ${{ github.event.pull_request.base.sha }}
+      - name: See git diff
+        run: git diff ${{ github.event.pull_request.base.sha }} -U10
       - name: Run pylint check.
-        run: ./utils/cq/daos_pylint.py --git --format github
+        run: >
+          git diff ${{ github.event.pull_request.base.sha }} -U10 |
+            ./utils/cq/daos_pylint.py --git --format github --diff

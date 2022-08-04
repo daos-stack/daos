@@ -4,8 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import agent_utils as agu
-from ClusterShell.NodeSet import NodeSet
+from agent_utils import include_local_host
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
@@ -24,11 +23,11 @@ class DfuseTestBase(TestWithServers):
         self.dfuse = None
 
     def setUp(self):
-        """Setup Test Case"""
+        """Set up the test case."""
         super().setUp()
         # using localhost as client if client list is empty
-        if self.hostlist_clients is None:
-            self.hostlist_clients = agu.include_local_host(None)
+        if not self.hostlist_clients:
+            self.hostlist_clients = include_local_host(None)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.
@@ -44,17 +43,27 @@ class DfuseTestBase(TestWithServers):
             error_list.append("Error stopping dfuse: {}".format(error))
         return error_list
 
+    def load_dfuse(self, hosts):
+        """Create a DfuseCommand object
+
+        Args:
+            hosts (list): list of hosts on which to start Dfuse
+        """
+
+        self.dfuse = Dfuse(hosts, self.tmp)
+        self.dfuse.get_params(self)
+
     def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
-            hosts (list): list of hosts on which to start Dfuse
+            hosts (NodeSet): hosts on which to start Dfuse
             pool (TestPool, optional): pool to use with Dfuse
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
         """
-        self.dfuse = Dfuse(hosts, self.tmp)
-        self.dfuse.get_params(self)
+        if self.dfuse is None:
+            self.load_dfuse(hosts)
 
         dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
 
@@ -73,7 +82,7 @@ class DfuseTestBase(TestWithServers):
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),
-                str(NodeSet.fromlist(self.dfuse.hosts)), exc_info=error)
+                self.dfuse.hosts, exc_info=error)
             self.fail("Test was expected to pass but it failed.")
 
     def stop_dfuse(self):

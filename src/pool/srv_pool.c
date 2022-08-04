@@ -72,6 +72,7 @@ struct pool_svc {
 	rdb_path_t		ps_user;	/* pool user attributes KVS */
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
+	uint32_t		ps_global_version;
 };
 
 /* Pool service failed to start */
@@ -96,6 +97,17 @@ static int ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint
 static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine);
+
+static size_t
+pool_hdl_size(struct pool_svc *svc)
+{
+	/* return old size if pool is from version <= 2.0 */
+	if (svc->ps_global_version != 0)
+		return sizeof(struct pool_hdl);
+	else
+		return sizeof(((struct pool_hdl *)0)->ph_flags) +
+		       sizeof(((struct pool_hdl *)0)->ph_sec_capas);
+}
 
 static struct pool_svc *
 pool_svc_obj(struct ds_rsvc *rsvc)
@@ -454,7 +466,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 				return rc;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
-			if (entry->dpe_val > DS_POOL_GLOBAL_VERSION) {
+			if (entry->dpe_val > DAOS_POOL_GLOBAL_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -498,7 +510,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
-	uint32_t		upgrade_global_version = DS_POOL_GLOBAL_VERSION;
+	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
 	int			rc;
 
 	/* Generate the pool buffer. */
@@ -1218,7 +1230,6 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx	tx;
 	d_iov_t		value;
-	uint32_t	global_version;
 	bool		version_exists = false;
 	int		rc;
 
@@ -1228,7 +1239,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	ABT_rwlock_rdlock(svc->ps_lock);
 
 	/* Check the layout version. */
-	d_iov_set(&value, &global_version, sizeof(global_version));
+	d_iov_set(&value, &svc->ps_global_version, sizeof(svc->ps_global_version));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
 	if (rc == -DER_NONEXIST) {
 		/*
@@ -1250,7 +1261,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	 * downgrading the DAOS software of an upgraded pool report
 	 * a proper RAS error.
 	 */
-	if (global_version > DS_POOL_GLOBAL_VERSION) {
+	if (svc->ps_global_version > DAOS_POOL_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1259,8 +1270,8 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     "incompatible layout version: %u larger than "
-				     "%u", global_version,
-				     DS_POOL_GLOBAL_VERSION);
+				     "%u", svc->ps_global_version,
+				     DAOS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
@@ -2237,7 +2248,7 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_mutex, rc);
 
 	if (svc->ps_rsvc.s_state == DS_RSVC_UP_EMPTY) {
 		/*
@@ -2253,7 +2264,7 @@ out_tx:
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-			D_GOTO(out_svc, rc);
+			D_GOTO(out_mutex, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
 		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
@@ -2261,7 +2272,6 @@ out_tx:
 
 out_mutex:
 	ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
-out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pro_op.po_hint);
 	pool_svc_put(svc);
 out:
@@ -2311,11 +2321,14 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-void
-ds_pool_connect_handler(crt_rpc_t *rpc)
+/* Currently we only maintain compatibility between 2 versions */
+#define NUM_POOL_VERSIONS	2
+
+static void
+ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
-	struct pool_connect_in	       *in = crt_req_get(rpc);
-	struct pool_connect_out	       *out = crt_reply_get(rpc);
+	struct pool_connect_v4_in       *in = crt_req_get(rpc);
+	struct pool_connect_v5_out      *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
@@ -2405,6 +2418,58 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 	D_ASSERT(prop != NULL);
 
+	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+	D_ASSERT(global_ver_entry != NULL);
+	global_ver = global_ver_entry->dpe_val;
+	/*
+	 * Reject pool connection if old clients try to connect new format pool.
+	 */
+	if (handler_version >= 5) {
+		struct pool_connect_v5_in *in1 = (struct pool_connect_v5_in *)in;
+		int diff = DAOS_POOL_GLOBAL_VERSION - in1->pci_pool_version;
+
+		if (in1->pci_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
+			if (diff >= NUM_POOL_VERSIONS) {
+				D_ERROR(DF_UUID": cannot connect, client supported pool "
+					"layout version (%u) is more than %u versions smaller "
+					"than server supported pool layout version(%u), "
+					"try to upgrade client firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), in1->pci_pool_version,
+					NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+
+			if (global_ver > in1->pci_pool_version) {
+				D_ERROR(DF_UUID": cannot connect, pool layout version(%u) > "
+					"max client supported pool layout version(%u), "
+					"try to upgrade client firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), global_ver,
+					in1->pci_pool_version);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+		} else {
+			diff = -diff;
+			if (diff >= NUM_POOL_VERSIONS) {
+				D_ERROR(DF_UUID": cannot connect, client supported pool "
+					"layout version (%u) is more than %u versions "
+					"larger than server supported pool layout version(%u), "
+					"try to upgrade server firstly.\n",
+					DP_UUID(in->pci_op.pi_uuid), in1->pci_pool_version,
+					NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+				D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			}
+			/* New clients should be able to access old pools without problem */
+		}
+	} else {
+		/* Assuming 2.0 client */
+		if (global_ver > 1) {
+			D_ERROR(DF_UUID": cannot connect, 2.0 clients unable to access pool format "
+				"version > 1, try to upgrade client firstly.\n",
+				DP_UUID(in->pci_op.pi_uuid));
+			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+		}
+	}
+
 	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
@@ -2419,10 +2484,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	owner.user = owner_entry->dpe_str;
 	owner.group = owner_grp_entry->dpe_str;
-
-	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	D_ASSERT(global_ver_entry != NULL);
-	global_ver = global_ver_entry->dpe_val;
 
 	/*
 	 * Security capabilities determine the access control policy on this
@@ -2521,7 +2582,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&value, &hdl, pool_hdl_size(svc));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
@@ -2560,6 +2621,18 @@ out:
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pci_op.pi_uuid), rpc,
 		DP_RC(rc));
 	crt_reply_send(rpc);
+}
+
+void
+ds_pool_connect_handler_v4(crt_rpc_t *rpc)
+{
+	ds_pool_connect_handler(rpc, 4);
+}
+
+void
+ds_pool_connect_handler_v5(crt_rpc_t *rpc)
+{
+	ds_pool_connect_handler(rpc, 5);
 }
 
 static int
@@ -2688,7 +2761,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	d_iov_set(&key, pdi->pdi_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&value, &hdl, pool_hdl_size(svc));
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -2998,7 +3071,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		if (!is_pool_from_srv(in->plci_op.pi_uuid,
 				      in->plci_op.pi_hdl)) {
 			d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
-			d_iov_set(&value, &hdl, sizeof(hdl));
+			d_iov_set(&value, &hdl, pool_hdl_size(svc));
 			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 			if (rc == -DER_NONEXIST)
 				rc = -DER_NO_HDL;
@@ -3096,7 +3169,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 	if (daos_rpc_from_client(rpc) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
-		d_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&value, &hdl, pool_hdl_size(svc));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
@@ -3113,7 +3186,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 		D_ASSERT(entry != NULL);
 		out->pqo_pool_layout_ver = entry->dpe_val;
-		out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
+		out->pqo_upgrade_layout_ver = DAOS_POOL_GLOBAL_VERSION;
 		daos_prop_free(prop);
 		prop = NULL;
 	}
@@ -4147,8 +4220,8 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 			   &value);
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
-	} else if (rc == -DER_NONEXIST || val32 != DS_POOL_GLOBAL_VERSION) {
-		val32 = DS_POOL_GLOBAL_VERSION;
+	} else if (rc == -DER_NONEXIST || val32 != DAOS_POOL_GLOBAL_VERSION) {
+		val32 = DAOS_POOL_GLOBAL_VERSION;
 		rc = rdb_tx_update(tx, &svc->ps_root,
 				   &ds_pool_prop_upgrade_global_version, &value);
 		if (rc != 0) {
@@ -4208,7 +4281,7 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	 * if upgrade succeed.
 	 */
 	if (rc == 0) {
-		global_version = DS_POOL_GLOBAL_VERSION;
+		global_version = DAOS_POOL_GLOBAL_VERSION;
 		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
@@ -4231,6 +4304,10 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	rc1 = rdb_tx_commit(&tx);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
+
+	if (rc == 0)
+		/* also bump cached version */
+		svc->ps_global_version = DAOS_POOL_GLOBAL_VERSION;
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
@@ -4310,27 +4387,27 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		if (rc)
 			D_GOTO(out_tx, rc);
 
-		if (upgrade_global_ver > DS_POOL_GLOBAL_VERSION) {
+		if (upgrade_global_ver > DAOS_POOL_GLOBAL_VERSION) {
 			D_ERROR(DF_UUID": downgrading pool is unsupported: %u -> %u\n",
 				DP_UUID(svc->ps_uuid), upgrade_global_ver,
-				DS_POOL_GLOBAL_VERSION);
+				DAOS_POOL_GLOBAL_VERSION);
 			D_GOTO(out_tx, rc = -DER_INVAL);
 		}
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION &&
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION &&
 			    need_put_leader)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
 				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
 					" because pool upgraded to %u last time failed\n",
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
-					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
@@ -4340,11 +4417,11 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 				D_GOTO(out_tx, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_IN_PROGRESS:
-			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
+			if (upgrade_global_ver < DAOS_POOL_GLOBAL_VERSION) {
 				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
 					" because pool upgraded to %u not finished yet\n",
 					DP_UUID(svc->ps_uuid), upgrade_global_ver,
-					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+					DAOS_POOL_GLOBAL_VERSION, upgrade_global_ver);
 				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			} else if (need_put_leader) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
@@ -5412,6 +5489,65 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
+static int
+pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list)
+{
+	struct pool_tgt_discard_in	*ptdi_in;
+	struct pool_tgt_discard_out	*ptdi_out;
+	crt_rpc_t			*rpc;
+	d_rank_list_t			*rank_list = NULL;
+	crt_opcode_t			opc;
+	int				i;
+	int				rc;
+
+	rank_list = d_rank_list_alloc(list->pta_number);
+	if (rank_list == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rank_list->rl_nr = 0;
+	/* remove the duplicate ranks from list, see reintegrate target case */
+	for (i = 0; i < list->pta_number; i++) {
+		if (daos_rank_in_rank_list(rank_list, list->pta_addrs[i].pta_rank))
+			continue;
+
+		rank_list->rl_ranks[rank_list->rl_nr++] = list->pta_addrs[i].pta_rank;
+		D_DEBUG(DB_MD, DF_UUID": discard rank %u\n",
+			DP_UUID(svc->ps_pool->sp_uuid), list->pta_addrs[i].pta_rank);
+	}
+
+	if (rank_list->rl_nr == 0) {
+		D_DEBUG(DB_MD, DF_UUID" discard 0 rank.\n", DP_UUID(svc->ps_pool->sp_uuid));
+		D_GOTO(out, rc = 0);
+	}
+
+	opc = DAOS_RPC_OPCODE(POOL_TGT_DISCARD, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
+	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
+				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+	if (rc)
+		D_GOTO(out, rc);
+
+	ptdi_in = crt_req_get(rpc);
+	ptdi_in->ptdi_addrs.ca_arrays = list->pta_addrs;
+	ptdi_in->ptdi_addrs.ca_count = list->pta_number;
+	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
+	rc = dss_rpc_send(rpc);
+
+	ptdi_out = crt_reply_get(rpc);
+	D_ASSERT(ptdi_out != NULL);
+	rc = ptdi_out->ptdo_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
+			DP_UUID(svc->ps_pool->sp_uuid), rc);
+
+	crt_req_decref(rpc);
+
+out:
+	if (rank_list)
+		d_rank_list_free(rank_list);
+	return rc;
+}
+
 void
 ds_pool_update_handler(crt_rpc_t *rpc)
 {
@@ -5436,6 +5572,13 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 
 	list.pta_number = in->pti_addr_list.ca_count;
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
+
+	if (opc_get(rpc->cr_opc) == POOL_REINT) {
+		rc = pool_discard(rpc->cr_ctx, svc, &list);
+		if (rc)
+			goto out_svc;
+	}
+
 	rc = pool_svc_update_map(svc, opc_get(rpc->cr_opc),
 				 false /* exclude_rank */, &list,
 				 &inval_list_out, &out->pto_op.po_map_version,
@@ -5487,6 +5630,7 @@ struct evict_iter_arg {
 	size_t	eia_hdl_uuids_size;
 	int	eia_n_hdl_uuids;
 	char	*eia_machine;
+	struct pool_svc *eia_pool_svc;
 };
 
 static int
@@ -5497,11 +5641,23 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	D_ASSERT(arg->eia_hdl_uuids != NULL);
 	D_ASSERT(arg->eia_hdl_uuids_size > sizeof(uuid_t));
 
-	if (key->iov_len != sizeof(uuid_t) ||
-	    val->iov_len != sizeof(struct pool_hdl)) {
-		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
-			key->iov_len, val->iov_len);
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
+	}
+	if (val->iov_len != sizeof(struct pool_hdl)) {
+		/* old/2.0 pool handle format ? */
+		if (val->iov_len == sizeof(((struct pool_hdl *)0)->ph_flags) +
+		    sizeof(((struct pool_hdl *)0)->ph_sec_capas) &&
+		    arg->eia_pool_svc->ps_global_version < 1) {
+			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
+			/* if looking for a specific machine, do not select this handle */
+			if (arg->eia_machine)
+				return 0;
+		} else {
+			D_ERROR("invalid value size: "DF_U64"\n", val->iov_len);
+			return -DER_IO;
+		}
 	}
 
 	/* If we specified a machine name as a filter check before we do the realloc */
@@ -5555,6 +5711,7 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	arg.eia_n_hdl_uuids = 0;
 	if (machine)
 		arg.eia_machine = machine;
+	arg.eia_pool_svc = svc;
 
 	rc = rdb_tx_iterate(tx, &svc->ps_handles, false /* backward */,
 			    evict_iter_cb, &arg);
@@ -5595,7 +5752,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
 
 	for (i = 0; i < n_hdl_list; i++) {
 		d_iov_set(&key, hdl_list[i], sizeof(uuid_t));
-		d_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&value, &hdl, pool_hdl_size(svc));
 		rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
 
 		if (rc == 0) {

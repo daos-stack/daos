@@ -1,15 +1,13 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 timeout: 150
 setup:
   start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
+  targets: 8
   servers:
     0:
       pinned_numa_node: 0
@@ -50,8 +48,8 @@ dmg:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 6000000000
-  nvme_size: 54000000000
+  scm_size: 6G
+  nvme_size: 54G
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -77,7 +75,7 @@ ior:
       - DFS
     transfer_block_size:
       - [256B, 2M]
-      - [1M, 512M]
+      - [1M, 2G]
     obj_class:
       - RP_2GX
 faults:
