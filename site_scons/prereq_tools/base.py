@@ -425,13 +425,11 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
 
         if hexdigest != self.md5:
-            print("Removing existing file %s: md5 %s != %s" % (filename,
-                                                               self.md5,
-                                                               hexdigest))
+            print(f'Removing existing file {filename}: md5 {self.md5} != {hexdigest}')
             os.remove(filename)
             return False
 
-        print("File %s matches md5 %s" % (filename, self.md5))
+        print(f'File {filename} matches md5 {self.md5}')
         return True
 
     def download(self, basename):
@@ -449,12 +447,12 @@ class WebRetriever():
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
                 if self.check_md5(basename):
-                    print("Successfully downloaded %s" % self.url)
+                    print(f'Successfully downloaded {self.url}')
                     return True
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (idx + 1, self.url, failure_reason))
+            print(f'Try #{idx + 1} to get {self.url} failed: {failure_reason}')
 
             if idx != retries:
                 time.sleep(initial_sleep)
@@ -570,7 +568,7 @@ def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
     if not os.path.exists(dirname):
         if dry_run:
-            print("Would create %s" % dry_run)
+            print(f'Would create {dry_run}')
             return
         try:
             os.makedirs(dirname)

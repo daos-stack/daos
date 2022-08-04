@@ -129,19 +129,19 @@ class WrapScript():
                     f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
             elif "ENV" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = DefaultEnvironment()\n')
             elif "OPTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = Variables()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = Variables()\n')
             elif "PREFIX" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ''\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ""\n')
             elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ["fake"]\n')
             else:
                 newlines += 1
-                outfile.write("%s%s = None\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = None\n')
 
         return newlines
 

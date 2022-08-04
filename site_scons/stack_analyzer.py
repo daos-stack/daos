@@ -79,12 +79,12 @@ class Analyzer():
         """Run the analysis"""
         function_map = {}
 
-        print("Analyzing %s" % self.base_dir)
-        print("Options:")
-        print("\texcluded directory strings: %s" % self.get_value(self.dir_exclusions, "none"))
-        print("\tincluded directory strings: %s" % self.get_value(self.dir_inclusions, "all"))
-        print("\tincluded file strings     : %s" % self.get_value(self.file_inclusions, "all"))
-        print("\tcutoff                    : %d" % self.cutoff)
+        print(f'"Analyzing {self.base_dir}')
+        print('Options:')
+        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
+        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
+        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
+        print('\tcutoff                    : {self.cutoff}')
 
         if not os.path.exists(self.base_dir):
             print('No files in {self.build_dir}')
