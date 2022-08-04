@@ -10,7 +10,7 @@ ARG BASE_DISTRO=ubuntu:20.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,8 +19,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
-RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
-  /tmp/install.sh && apt-get clean all
+RUN apt-get update && \
+    apt-get install apt-utils software-properties-common gpg gpg-agent && \
+    add-apt-repository ppa:longsleep/golang-backports && \
+    apt-get upgrade && \
+    chmod +x /tmp/install.sh && \
+    /tmp/install.sh && \
+    apt-get clean all
 
 RUN locale-gen en_US.UTF-8
 
@@ -54,7 +59,7 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -84,8 +89,8 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
+ARG CB1
+RUN [ -z "$CB1" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -128,4 +133,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

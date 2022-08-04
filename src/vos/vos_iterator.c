@@ -423,20 +423,19 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
 }
 
 int
-vos_iter_delete(daos_handle_t ih, void *args)
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op_t op, void *args)
 {
-	struct vos_iterator *iter = vos_hdl2iter(ih);
-	int rc;
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	int			 rc = 0;
+
+	if (iter->it_ops->iop_process == NULL)
+		return -DER_NOSYS;
 
 	rc = iter_verify_state(iter);
 	if (rc)
 		return rc;
 
-	D_ASSERT(iter->it_ops != NULL);
-	if (iter->it_ops->iop_delete == NULL)
-		return -DER_NOSYS;
-
-	return iter->it_ops->iop_delete(iter, args);
+	return iter->it_ops->iop_process(iter, op, args);
 }
 
 int
@@ -851,17 +850,16 @@ next:
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "
 					  DF_RC"\n", type, DP_RC(rc));
+			if (rc == -DER_NONEXIST) {
+				daos_anchor_set_eof(anchor);
+				rc = 0;
+			}
 			break;
 		} else {
 			rc = advance_stage(type, rc, param, anchors, anchor,
 					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
 		}
-	}
-
-	if (rc == -DER_NONEXIST) {
-		daos_anchor_set_eof(anchor);
-		rc = 0;
 	}
 out:
 	if (rc >= 0)

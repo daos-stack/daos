@@ -249,14 +249,6 @@ char *d_realpath(const char *path, char *resolved_path);
 			 (oldcount) * sizeof(*(oldptr)),		\
 					     sizeof(*(oldptr)), count)
 
-#define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
-
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
-			 (count) * sizeof(*(oldptr)),			\
-			 sizeof(*(oldptr)), count)
-
 /** realloc macros that do not clear the new memory */
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
 	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
@@ -286,7 +278,6 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
 #define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
-#define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
 	do {					\
