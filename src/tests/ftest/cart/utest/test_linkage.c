@@ -8,8 +8,6 @@
  * and invoked from C++ applications
  */
 
-#include <iostream>
-
 #include <stdlib.h>
 #include <gurt/debug.h>
 #include <gurt/hash.h>
@@ -18,8 +16,6 @@
 #include <cart/api.h>
 #include <cart/types.h>
 #include "wrap_cmocka.h"
-
-using namespace std;
 
 #define TEST_LINKAGE_BASE 0x010000000
 #define TEST_LINKAGE_VER  0
@@ -151,7 +147,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_log_linkage),
 	};
 
-	cout << "[==========] test linkage ...\n" ;
+	fprintf(stdout, "[==========] test linkage ...\n");
 
 	return cmocka_run_group_tests_name("test_linkage", tests, NULL, NULL);
 }
