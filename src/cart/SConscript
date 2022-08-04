@@ -52,9 +52,11 @@ def scons():
 
     # Generate the common libraries used by everyone
     SConscript('swim/SConscript')
+    SConscript('utils/SConscript')
+
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION', 'conf_dir')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
 
     daos_build.add_build_rpath(env)
 
@@ -93,9 +95,6 @@ def scons():
     Default(cart_lib)
     Export('cart_targets')
     Export('env', 'prereqs')
-
-    env.Install(conf_dir, ['utils/memcheck-cart.supp',
-                           'utils/fault-inject-cart.yaml'])
 
 
 if __name__ == "SCons.Script":

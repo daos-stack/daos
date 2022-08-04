@@ -109,9 +109,6 @@ def scons():
     # Build DAOS client libraries
     SConscript('client/SConscript')
 
-    # Build cart utilities library
-    SConscript('cart/utils/SConscript')
-
     # rdb unit test rdbt depends on libdaos
     SConscript('rdb/SConscript')
 
