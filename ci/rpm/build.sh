@@ -24,16 +24,15 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='centos+epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
+: "${REPO_SPEC:='el7'}"
 
 : "${COVFN_DISABLED:=true}"
-if $COVFN_DISABLED; then
-  JOB_REPOS=""
-  EXTERNAL_COMPILER_OPT=""
-else
-  COV_REPO="${REPOSITORY_URL}repository/bullseye-el-7-x86_64/"
-  JOB_REPOS="JOB_REPOS=${COV_REPO}"
-  COMPILER_ARGS="COMPILER=covc"
-  EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${COMPILER_ARGS}\""
+: "${JOB_REPOS:=}"
+EXTERNAL_COMPILER_OPT=""
+
+if ! $COVFN_DISABLED && [[ $REPO_SPEC == el-* ]]; then
+    compiler_args="COMPILER=covc"
+    EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${compiler_args}\""
 fi
 
 EXTERNAL_SCONS_OPT=" --define \"scons_args ${SCONS_ARGS}\""
