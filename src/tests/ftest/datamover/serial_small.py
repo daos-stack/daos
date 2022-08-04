@@ -6,6 +6,7 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
+from duns_utils import format_path
 import avocado
 
 
@@ -75,8 +76,7 @@ class DmvrSerialSmall(DataMoverTestBase):
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(
             self.test_id + " (cont1->HDF5->cont2)",
-            "DAOS_UUID", None, pool1, cont1,
-            "DAOS_UUID", None, pool2, None)
+            src_path=format_path(pool1, cont1), dst_pool=pool2)
 
         # Get the destination cont2 uuid
         cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
@@ -105,3 +105,14 @@ class DmvrSerialSmall(DataMoverTestBase):
         :avocado: tags=dm_serial_small,dm_serial_small_dserialize,test_dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_serial_small_cont_serialize(self):
+        """
+        Test Description:
+            DAOS-6875: Verify serializing a small container.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover,cont_serialize
+        :avocado: tags=dm_serial_small,dm_serial_small_cont_serialize
+        """
+        self.run_dm_serial_small("CONT_SERIALIZE")

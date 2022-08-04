@@ -9,6 +9,14 @@
 
 #include <daos_fs.h>
 
+/* Report an error with a system error number using a standard output format */
+#define DH_PERROR_SYS(AP, RC, STR, ...)					\
+	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+
+/* Report an error with a daos error number using a standard output format */
+#define DH_PERROR_DER(AP, RC, STR, ...)					\
+	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+
 enum fs_op {
 	FS_COPY,
 	FS_SET_ATTR,
@@ -20,6 +28,8 @@ enum fs_op {
 
 enum cont_op {
 	CONT_CREATE,
+	CONT_SERIALIZE,
+	CONT_DESERIALIZE,
 	CONT_DESTROY,
 	CONT_CLONE,
 	CONT_LIST_OBJS,
@@ -91,6 +101,7 @@ struct cmd_args_s {
 	char			*path;		/* --path cont namespace */
 	char			*src;		/* --src path for fs copy */
 	char			*dst;		/* --dst path for fs copy */
+	char			*output_path;	/* --output-path to serialize HDF5 file */
 	char			*preserve_props; /* --path to metadata file */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
@@ -142,14 +153,6 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
-
-/* general datamover operations */
-void dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes);
-int dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
-			  void ***_buffers, size_t **_sizes);
-int dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
-			  bool get_oid, bool get_label, bool get_roots);
-int dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh);
 
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);

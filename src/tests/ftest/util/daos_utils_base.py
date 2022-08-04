@@ -156,6 +156,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.CheckSubCommand()
             elif self.sub_command.value == "clone":
                 self.sub_command_class = self.CloneSubCommand()
+            elif self.sub_command.value == "serialize":
+                self.sub_command_class = self.SerializeSubCommand()
+            elif self.sub_command.value == "deserialize":
+                self.sub_command_class = self.DeserializeSubCommand()
             elif self.sub_command.value == "create":
                 self.sub_command_class = self.CreateSubCommand()
             elif self.sub_command.value == "create-snap":
@@ -232,6 +236,25 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("/run/daos/container/clone/*", "clone")
                 self.src = FormattedParameter("--src={}")
                 self.dst = FormattedParameter("--dst={}")
+
+        class SerializeSubCommand(CommandWithParameters):
+            """Defines an object for the daos container serialize command."""
+
+            def __init__(self):
+                """Create a daos container serialize command object."""
+                super().__init__("/run/daos/container/serialize/*", "serialize")
+                self.src = PositionalParameter(1)
+                self.output_path = FormattedParameter("--output-path={}")
+
+        class DeserializeSubCommand(CommandWithParameters):
+            """Defines an object for the daos container deserialize command."""
+
+            def __init__(self):
+                """Create a daos container deserialize command object."""
+                super().__init__("/run/daos/container/deserialize/*", "deserialize")
+                self.deser_pool = PositionalParameter(1)
+                self.file_path = PositionalParameter(2)
+                self.cont_label = FormattedParameter("--label={}")
 
         class CreateSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create command."""
