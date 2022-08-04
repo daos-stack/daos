@@ -397,7 +397,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     args = GetOption('analyze_stack')
     if args is not None:
-        analyzer = stack_analyzer.analyzer(env, build_prefix, args)
+        analyzer = stack_analyzer.Analyzer(env, build_prefix, args)
         analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.

@@ -208,12 +208,12 @@ def _configure_mpi_pkg(env):
         return True
     try:
         env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
-    except OSError as e:
+    except OSError as error:
         print("\n**********************************")
         print("Could not find package MPI_PKG=%s\n" % env.subst("$MPI_PKG"))
         print("Unset it or update PKG_CONFIG_PATH")
         print("**********************************")
-        raise e
+        raise error
 
     return True
 

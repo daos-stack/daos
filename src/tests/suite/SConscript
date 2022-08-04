@@ -4,7 +4,7 @@ import subprocess
 import daos_build
 import compiler_setup
 
-test_cmocka_skip = """
+TEST_CMOCKA_SKIP = """
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -24,15 +24,16 @@ int main(int argc, char **argv)
 """
 
 
+# pylint: disable-next=invalid-name
 def CheckCmockaSkip(context):
     """Configure check for cmocka bug"""
     context.Message('Checking if cmocka skip() bug is present ... ')
-    rc = context.TryCompile(test_cmocka_skip, '.c')
+    rc = context.TryCompile(TEST_CMOCKA_SKIP, '.c')
     if rc == 0:
         sys.stdout.write(" (Compile failed) assuming ")
         context.Result(not rc)
         return rc
-    rc = context.TryLink(test_cmocka_skip, '.c')
+    rc = context.TryLink(TEST_CMOCKA_SKIP, '.c')
     if rc == 0:
         sys.stdout.write(" (Link failed) assuming ")
         context.Result(not rc)

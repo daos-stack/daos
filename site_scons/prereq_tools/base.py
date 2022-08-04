@@ -439,7 +439,7 @@ class WebRetriever():
         initial_sleep = 1
         retries = 3
         # Retry download a few times if it fails
-        for i in range(0, retries + 1):
+        for idx in range(0, retries + 1):
             command = ['curl',
                        '-sSf',
                        '--location',
@@ -454,9 +454,9 @@ class WebRetriever():
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (i + 1, self.url, failure_reason))
+            print("Try #%d to get %s failed: %s" % (idx + 1, self.url, failure_reason))
 
-            if i != retries:
+            if idx != retries:
                 time.sleep(initial_sleep)
                 initial_sleep *= 2
 
@@ -574,9 +574,9 @@ def ensure_dir_exists(dirname, dry_run):
             return
         try:
             os.makedirs(dirname)
-        except Exception as e:
+        except Exception as error:
             if not os.path.isdir(dirname):
-                raise e
+                raise error
 
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)

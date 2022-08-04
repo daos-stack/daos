@@ -5,12 +5,12 @@ import atexit
 from SCons.Script import Exit
 
 
-def exit_handler(sa):
+def exit_handler(handle):
     """run analysis on exit"""
-    sa.analyze()
+    handle.analyze()
 
 
-class analyzer():
+class Analyzer():
     """Class to parse .su files"""
 
     def __init__(self, env, basedir, arg=""):
@@ -87,7 +87,7 @@ class analyzer():
         print("\tcutoff                    : %d" % self.cutoff)
 
         if not os.path.exists(self.base_dir):
-            print("No files in %s" % self.base_dir)
+            print('No files in {self.build_dir}')
             return
 
         for root, _dirs, files in os.walk(self.base_dir):
@@ -99,8 +99,8 @@ class analyzer():
                 if not self.included(fname, self.file_inclusions):
                     continue
                 if fname.endswith(".su"):
-                    with open(os.path.join(root, fname), "r") as sf:
-                        for line in sf.readlines():
+                    with open(os.path.join(root, fname), "r") as frame:
+                        for line in frame.readlines():
                             split = line.split()
                             if len(split) < 3:
                                 continue

@@ -121,13 +121,13 @@ class WrapScript():
         newlines = 0
 
         for variable in variables:
+            outfile.write(f'{prefix}# pylint: disable-next=invalid-name\n')
+            newlines += 1
             if variable.upper() == 'PREREQS':
                 newlines += 1
                 outfile.write(
                     f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
-                variables.remove(variable)
-        for variable in variables:
-            if "ENV" in variable.upper():
+            elif "ENV" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
             elif "OPTS" in variable.upper():
@@ -304,8 +304,7 @@ def parse_file(args, target_file, ftest=False, scons=False, fake_scons=False):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])
     elif scons:
-        # Do not warn on module name for SConstruct files, we don't get to pick their name.
-        ignore = ['invalid-name', 'ungrouped-imports']
+        ignore = ['ungrouped-imports']
         if target_file.endswith('__init__.py'):
             ignore.append('relative-beyond-top-level')
         wrapper = WrapScript(target_file)
