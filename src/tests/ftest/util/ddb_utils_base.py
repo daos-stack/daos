@@ -4,22 +4,25 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import PositionalParameter
-from command_utils import ExecutableCommand
+from command_utils import TargetedExecutableCommand
 
 
-class DdbCommandBase(ExecutableCommand):
+class DdbCommandBase(TargetedExecutableCommand):
     """Defines the basic structures of ddb command."""
 
-    def __init__(self, path):
+    def __init__(self, server_host, path):
         """Defines the parameters for ddb.
 
         Args:
+            server_host (NodeSet): Server host to run the command
             path (str): path to the ddb command
         """
-        super().__init__("/run/ddb/*", "ddb", path)
+        super().__init__("/run/ddb/*", "ddb", server_host, path)
 
         # We need to run with sudo.
         self.sudo = True
+
+        self.host = server_host
 
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = PositionalParameter(position=1, default=False, str_format="-w")
