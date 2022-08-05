@@ -547,6 +547,7 @@ def main():
         else:
             all_files = FileTypeList()
         regions = None
+        file = None
         for line in sys.stdin.readlines():
             if line.startswith('diff --git a/'):
                 parts = line.split(' ')
@@ -561,7 +562,8 @@ def main():
                 (post_start, post_len) = parts[2][1:].split(',')
                 regions.add_region(int(post_start), int(post_len))
                 continue
-        all_files.add_regions(file, regions)
+        if file and regions:
+            all_files.add_regions(file, regions)
         failed = all_files.run(args)
         if failed:
             sys.exit(1)
