@@ -237,7 +237,8 @@ tse_task_decref(tse_task_t *task)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
 	struct tse_sched_private *dsp = dtp->dtp_sched;
-	bool			   zombie;
+	struct tse_task_cb	 *dtc;
+	bool			  zombie;
 
 	D_ASSERT(dsp != NULL);
 	D_MUTEX_LOCK(&dsp->dsp_lock);
@@ -247,6 +248,11 @@ tse_task_decref(tse_task_t *task)
 		return;
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+
+	/* If want to trigger completion callback, please use tse_task_complete(). */
+	while ((dtc = d_list_pop_entry(&dtp->dtp_comp_cb_list,
+				       struct tse_task_cb, dtc_list)) != NULL)
+		D_FREE(dtc);
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
