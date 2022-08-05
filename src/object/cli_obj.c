@@ -1263,7 +1263,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc_pool_create_map_refresh_task(pool, map_ver, sched, &task);
+	rc = dc_pool_create_map_refresh_task(ph, map_ver, sched, &task);
 	if (rc != 0) {
 		dc_pool_put(pool);
 		return rc;
