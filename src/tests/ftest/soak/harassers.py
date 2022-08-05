@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from test_base import SoakTestBase
+from soak_test_base import SoakTestBase
 
 
 class SoakHarassers(SoakTestBase):

@@ -1,11 +1,11 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from test_base import SoakTestBase
+from soak_test_base import SoakTestBase
 
 
 class SoakStress(SoakTestBase):

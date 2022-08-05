@@ -1,11 +1,11 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from test_base import SoakTestBase
+from soak_test_base import SoakTestBase
 
 
 class SoakStress(SoakTestBase):
@@ -15,16 +15,17 @@ class SoakStress(SoakTestBase):
     :avocado: recursive
     """
 
-    def test_soak_stress(self):
+    def test_soak_stress_48h(self):
         """Run soak test for 48hours on performance cluster.
 
         Test Description: This will create a slurm batch jobs that run
         various jobs defined in the soak yaml
         This test will run soak_stress for 48 hours.
 
-        :avocado: tags=hw,large
-        :avocado: tags=soak
-        :avocado: tags=soak_stress_48h
+        :avocado: tags=full_regression
+        :avocado: tags=hw,xlarge
+        :avocado: tags=soak,soak_stress
+        :avocado: tags=soak_stress_48h,test_soak_stress_48h
         """
         test_param = "/run/soak_stress/"
-        self.run_soak(test_param)
+        # self.run_soak(test_param)
