@@ -92,6 +92,9 @@ pipeline {
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large test stage')
+        string(name: 'CI_RPM_TEST_VERSION',
+               defaultValue: '',
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
