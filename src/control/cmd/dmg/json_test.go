@@ -99,9 +99,9 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool get-prop":
 				testArgs = append(testArgs, test.MockUUID(), "label")
 			case "pool extend":
-				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
+				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0", "--async")
 			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
+				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--async")
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":

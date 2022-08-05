@@ -230,9 +230,18 @@ func TestControl_PoolDrain(t *testing.T) {
 				Targetidx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolDrainResp{},
-				),
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil,
+						&mgmtpb.PoolDrainResp{},
+					),
+					MockMSResponse("host1", nil,
+						&mgmtpb.PoolQueryResp{
+							Rebuild: &mgmtpb.PoolRebuildStatus{
+								State: mgmtpb.PoolRebuildStatus_DONE,
+							},
+						},
+					),
+				},
 			},
 		},
 	} {

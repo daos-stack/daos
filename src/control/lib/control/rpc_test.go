@@ -33,12 +33,17 @@ var defaultMessage = &MockMessage{}
 
 type testRequest struct {
 	retryableRequest
-	rpcFn    unaryRPC
-	toMS     bool
-	HostList []string
-	Deadline time.Time
-	Timeout  time.Duration
-	Sys      string
+	rpcFn     unaryRPC
+	toMS      bool
+	HostList  []string
+	Deadline  time.Time
+	Timeout   time.Duration
+	Sys       string
+	UserAsync bool
+}
+
+func (r *testRequest) isUserAsync() bool {
+	return r.UserAsync
 }
 
 func (tr *testRequest) isMSRequest() bool {

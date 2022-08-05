@@ -73,6 +73,7 @@ type (
 		deadliner
 		retryer
 		unaryRPCGetter
+		isUserAsync() bool
 	}
 )
 
@@ -83,15 +84,24 @@ var (
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
-	timeout  time.Duration
-	deadline time.Time
-	Sys      string // DAOS system name
-	HostList []string
+	timeout   time.Duration
+	deadline  time.Time
+	Sys       string // DAOS system name
+	HostList  []string
+	UserAsync bool `json:"-"`
 }
 
 // SetSystem sets the request's system name.
 func (r *request) SetSystem(name string) {
 	r.Sys = name
+}
+
+// isUserAsync returns true if the request is asynchronous
+// from the user perspective, i.e. returns immediately
+// regardless of whether or not the request is considered
+// complete.
+func (r *request) isUserAsync() bool {
+	return r.UserAsync
 }
 
 // getSystem returns the system name set on the request or that returned by the
