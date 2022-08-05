@@ -269,7 +269,7 @@ fi
 # for publishing in Jenkins
 dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
 if [[ "${LAUNCH_OPT_ARGS}" == *"--repeat="* ]]; then
-    FILES=("${dt_xml_path}"/*/test-results/*/*/data/*.xml)
+    FILES=("${dt_xml_path}"/*/*/test-results/*/data/*.xml)
 else
     FILES=("${dt_xml_path}"/*/test-results/*/data/*.xml)
 fi
