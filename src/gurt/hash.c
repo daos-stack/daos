@@ -1030,8 +1030,6 @@ rl_op_decref(struct d_rlink *rlink)
 {
 	uint32_t oldref;
 
-	D_ASSERT(atomic_load_relaxed(&rlink->rl_ref) > 0);
-
 	oldref = atomic_fetch_sub_relaxed(&rlink->rl_ref, 1);
 	D_ASSERT(oldref > 0);
 
