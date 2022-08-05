@@ -73,6 +73,7 @@ type (
 		deadliner
 		retryer
 		unaryRPCGetter
+		isAsync() bool
 	}
 )
 
@@ -87,11 +88,20 @@ type request struct {
 	deadline time.Time
 	Sys      string // DAOS system name
 	HostList []string
+	Async    bool `json:"-"`
 }
 
 // SetSystem sets the request's system name.
 func (r *request) SetSystem(name string) {
 	r.Sys = name
+}
+
+// isAsync returns true if the request is asynchronous
+// from the user perspective, i.e. returns immediately
+// regardless of whether or not the request is considered
+// complete.
+func (r *request) isAsync() bool {
+	return r.Async
 }
 
 // getSystem returns the system name set on the request or that returned by the
