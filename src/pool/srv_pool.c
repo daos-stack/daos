@@ -527,7 +527,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
 			D_ERROR("ndomains(%u) could not meet redunc factor(%lu)\n",
 				map_buf->pb_domain_nr, entry->dpe_val);
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out_map_buf, rc = -DER_INVAL);
 		}
 	}
 
