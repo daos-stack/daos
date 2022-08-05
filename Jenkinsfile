@@ -86,6 +86,9 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_HARDWARE_DISTRO',
+               defaultValue: '',
+               description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_NVME_24_LABEL',
                defaultValue: 'ci_soak24',
                description: 'Label to use for 24 node Functional Hardware Xlarge stage')
