@@ -291,7 +291,9 @@ chk_traverse_pools(sys_db_trav_cb_t cb, void *args)
 	int	rc;
 
 	rc = chk_db_traverse(cb, args);
-	if (rc < 0)
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+	else if (rc < 0)
 		D_ERROR("Failed to traverse pools on rank %u for pause: "DF_RC"\n",
 			dss_self_rank(), DP_RC(rc));
 

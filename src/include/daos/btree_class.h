@@ -113,4 +113,9 @@ extern btr_ops_t dbtree_recx_ops;
  */
 #define DBTREE_CLASS_CHK_PA (DBTREE_DSM_BEGIN + 10)
 
+/**
+ * DAOS check container tree, the key is container uuid
+ */
+#define DBTREE_CLASS_CHK_CONT (DBTREE_DSM_BEGIN + 11)
+
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

@@ -38,7 +38,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
 	/*
-	 * XXX: If the check engine and the check are on the same rank, we will not go through
+	 * XXX: If the check engine and the leader are on the same rank, we will not go through
 	 *	CRT proc function that will copy the clues into related RPC reply buffer. Then
 	 *	has to keep the clues for a while until the check leader completed aggregating
 	 *	the result for this engine. And then the check leader will release the clues.
@@ -90,7 +90,7 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
 	/*
-	 * XXX: If the check engine and the check are on the same rank, we will not go through
+	 * XXX: If the check engine and the leader are on the same rank, we will not go through
 	 *	CRT proc function that will copy the shards into related RPC reply buffer. Then
 	 *	has to keep the shards for a while until the check leader completed aggregating
 	 *	the result for this engine. And then the check leader will release the shards.
@@ -127,6 +127,37 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check act: "DF_RC"\n", DP_RC(rc));
+}
+
+static void
+ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_cont_list_in		*ccli = crt_req_get(rpc);
+	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
+	uuid_t				*conts = NULL;
+	uint32_t			 count = 0;
+	int				 rc = 0;
+
+	rc = chk_engine_cont_list(ccli->ccli_gen, ccli->ccli_pool, &conts, &count);
+
+	cclo->cclo_status = rc;
+	cclo->cclo_rank = dss_self_rank();
+	cclo->cclo_conts.ca_arrays = conts;
+	cclo->cclo_conts.ca_count = count;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
+
+	/*
+	 * XXX: If the check engine and the PS leader are on the same rank, we will not go
+	 *	through CRT proc function that will copy the containers' uuids into related
+	 *	RPC reply buffer. Then has to keep the containers' uuids for a while until
+	 *	the PS leader completed aggregating the result for this shard. And then the
+	 *	PS leader will release the buffer.
+	 */
+	if (cclo->cclo_status < 0 || !chk_is_on_leader(ccli->ccli_gen, -1, false))
+		D_FREE(conts);
 }
 
 static void
@@ -208,6 +239,10 @@ ds_chk_init(void)
 		goto out;
 
 	rc = dbtree_class_register(DBTREE_CLASS_CHK_PA, 0, &chk_pending_ops);
+	if (rc != 0)
+		goto out;
+
+	rc = dbtree_class_register(DBTREE_CLASS_CHK_CONT, 0, &chk_cont_ops);
 	if (rc != 0)
 		goto out;
 
