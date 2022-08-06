@@ -76,6 +76,12 @@ struct chk_cont_bundle {
 	uuid_t				 ccb_uuid;
 };
 
+struct chk_cont_label_cb_args {
+	struct chk_cont_list_aggregator	*cclca_aggregator;
+	struct cont_svc			*cclca_svc;
+	struct chk_pool_rec		*cclca_cpr;
+};
+
 static int
 chk_cont_hkey_size(void)
 {
@@ -1105,6 +1111,271 @@ out:
 	return result;
 }
 
+static daos_prop_t *
+chk_engine_build_label_prop(d_iov_t *label)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	if (prop != NULL) {
+		prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+		D_STRNDUP(prop->dpp_entries[0].dpe_str, label->iov_buf, label->iov_len);
+		if (prop->dpp_entries[0].dpe_str == NULL) {
+			daos_prop_free(prop);
+			prop = NULL;
+		}
+	}
+
+	return prop;
+}
+
+static int
+chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
+			  struct cont_svc *svc, d_iov_t *label)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	daos_prop_t			*prop_in = NULL;
+	struct chk_report_unit		 cru = { 0 };
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	char				 msg[320] = { 0 };
+	uint32_t			 options[2];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_BAD_LABEL;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+
+	if (label != NULL) {
+		switch (act) {
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+			/*
+			 * If the container label in the container service (cont_svc::cs_uuids)
+			 * exists but does not match the label in the container property, then
+			 * trust the container service and reset the one in container property
+			 * by default.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+				cbk->cb_statistics.cs_repaired++;
+			} else {
+				prop_in = chk_engine_build_label_prop(label);
+				if (prop_in == NULL)
+					D_GOTO(out, result = -DER_NOMEM);
+
+				result = ds_cont_set_label(svc, ccr->ccr_uuid, prop_in, false);
+				if (result != 0)
+					cbk->cb_statistics.cs_failed++;
+				else
+					cbk->cb_statistics.cs_repaired++;
+			}
+			break;
+		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+			/* Report the inconsistency without repair. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		default:
+			/*
+			 * If the specified action is not applicable to the inconsistency,
+			 * then switch to interaction mode for the decision from admin.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
+			break;
+		}
+	} else {
+		switch (act) {
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+			/*
+			 * If the container label in the container service (cont_svc::cs_uuids)
+			 * does not exists, but the one in the container property is there, then
+			 * trust the label in container property and add it to container service
+			 * by default.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+				cbk->cb_statistics.cs_repaired++;
+			} else {
+				result = ds_cont_set_label(svc, ccr->ccr_uuid,
+							   ccr->ccr_label_prop, true);
+				if (result != 0)
+					cbk->cb_statistics.cs_failed++;
+				else
+					cbk->cb_statistics.cs_repaired++;
+			}
+			break;
+		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+			/* Report the inconsistency without repair. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		default:
+			/*
+			 * If the specified action is not applicable to the inconsistency,
+			 * then switch to interaction mode for the decision from admin.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
+			break;
+		}
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+	snprintf(msg, 319,
+		 "Check engine detects inconsistent container label: SVC %s vs property %s",
+		 label != NULL ? (char *)label->iov_buf : "(null)", ccr->ccr_label_prop != NULL ?
+		 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)");
+	cru.cru_msg = msg;
+	cru.cru_options = options;
+	cru.cru_result = result;
+
+	rc = chk_engine_report(&cru, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects inconsistent container label for "DF_UUIDF"/"DF_UUIDF
+		 ": %s vs %s, action %u (%s), handle_rc %d, report_rc %d, decision %d\n",
+		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
+		 label != NULL ? (char *)label->iov_buf : "(null)", ccr->ccr_label_prop != NULL ?
+		 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)", act,
+		 option_nr ? "need interact" : "no interact", result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+
+ignore:
+	default:
+		D_ERROR(DF_ENGINE" got invalid decision %d for inconsistent container label for "
+			DF_UUIDF"/"DF_UUIDF". Ignore the inconsistency.\n",
+			DP_ENGINE(ins), decision, DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		if (label == NULL)
+			goto ignore;
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		if (!(prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)) {
+			prop_in = chk_engine_build_label_prop(label);
+			if (prop_in == NULL)
+				D_GOTO(out, result = -DER_NOMEM);
+		}
+
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+		act = decision;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_cont_set_label(svc, ccr->ccr_uuid,
+						   prop_in != NULL ? prop_in : ccr->ccr_label_prop,
+						   prop_in != NULL ? false : true);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+#if 0
+	/*
+	 * It is not fatal even if failed to repair inconsistent container label,
+	 * then do not skip current container for subsequent DAOS check.
+	 */
+	ccr->ccr_skip = 0;
+#endif
+
+	if (prop_in != NULL)
+		daos_prop_free(prop_in);
+
+	chk_engine_post_repair(ins, &result);
+
+	return result;
+}
+
+static int
+chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+{
+	struct chk_cont_label_cb_args	*cclca = arg;
+	struct chk_cont_rec		*ccr;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
+	int				 rc = 0;
+	bool				 failout;
+
+	if (cclca->cclca_cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
+		failout = true;
+	else
+		failout = false;
+
+	d_iov_set(&kiov, val->iov_buf, val->iov_len);
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cclca->cclca_aggregator->ccla_toh, &kiov, &riov);
+	if (rc == -DER_NONEXIST)
+		/*
+		 * The container only exists in the container service RDB, but not on
+		 * any pool shard yet. It will be created on related pool shards when
+		 * be opened next time.
+		 */
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0)
+		D_GOTO(out, rc = (failout ? rc : 0));
+
+	ccr = riov.iov_buf;
+	ccr->ccr_label_checked = 1;
+
+	if (ccr->ccr_label_prop == NULL ||
+	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN) != 0)
+		rc = chk_engine_cont_set_label(cclca->cclca_cpr, ccr, cclca->cclca_svc, key);
+
+out:
+	return rc;
+}
+
 static int
 chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			struct chk_cont_list_aggregator *aggregator)
@@ -1112,6 +1383,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct cont_svc			*svc;
 	struct chk_cont_rec		*ccr;
+	struct chk_cont_label_cb_args	 cclca = { 0 };
 	int				 rc = 0;
 	bool				 failout;
 
@@ -1143,6 +1415,21 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		rc = chk_engine_cont_orphan(cpr, ccr, svc);
 		if (rc != 0)
 			goto out;
+	}
+
+	cclca.cclca_aggregator = aggregator;
+	cclca.cclca_svc = svc;
+	cclca.cclca_cpr = cpr;
+	rc = ds_cont_iterate_labels(svc, chk_engine_cont_label_cb, &cclca);
+	if (rc != 0)
+		goto out;
+
+	d_list_for_each_entry(ccr, &aggregator->ccla_list, ccr_link) {
+		if (!ccr->ccr_label_checked && ccr->ccr_label_prop != NULL) {
+			rc = chk_engine_cont_set_label(cpr, ccr, svc, NULL);
+			if (rc != 0)
+				goto out;
+		}
 	}
 
 out:

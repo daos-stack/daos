@@ -4278,3 +4278,116 @@ out:
 
 	return rc;
 }
+
+int
+ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg)
+{
+	struct rdb_tx	tx;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc == 0) {
+		rc = rdb_tx_iterate(&tx, &svc->cs_uuids, false /* !backward */, cb, arg);
+		rdb_tx_end(&tx);
+	}
+
+	return rc;
+}
+
+int
+ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in, bool for_svc)
+{
+	struct ds_pool		*pool = svc->cs_pool;
+	daos_prop_t		*prop_old = NULL;
+	daos_prop_t		*prop_iv = NULL;
+	struct cont		*cont = NULL;
+	struct daos_prop_entry	*entry;
+	struct rdb_tx		 tx;
+	d_iov_t			 key;
+	d_iov_t			 val;
+	uuid_t			 tmp;
+	int			 rc = 0;
+
+	D_ASSERT(prop_in != NULL);
+
+	if (!daos_prop_valid(prop_in, false, true))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	rc = cont_lookup(&tx, svc, uuid, &cont);
+	if (rc != 0)
+		goto out_tx;
+
+	if (!for_svc) {
+		/* Read all props for prop IV update */
+		rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old, true);
+		if (rc != 0)
+			D_GOTO(out_cont, rc);
+
+		D_ASSERT(prop_old != NULL);
+
+		entry = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
+		D_ASSERT(entry != NULL);
+
+		/* If specified label matches existing label, do nothing. */
+		if (strncmp(entry->dpe_str, prop_in->dpp_entries[0].dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) == 0)
+			D_GOTO(out_cont, rc = 0);
+
+		prop_iv = daos_prop_merge(prop_old, prop_in);
+		if (prop_iv == NULL)
+			D_GOTO(out_cont, rc = -DER_NOMEM);
+
+		rc = cont_prop_write(&tx, &cont->c_prop, prop_in, false);
+		if (rc != 0)
+			D_GOTO(out_cont, rc);
+
+		/* Update prop IV with merged prop */
+		rc = cont_iv_prop_update(pool->sp_iv_ns, uuid, prop_iv);
+		if (rc != 0) {
+			D_ERROR(DF_UUIDF" failed to update prop IV for cont: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			goto out_cont;
+		}
+	} else {
+		d_iov_set(&key, prop_in->dpp_entries[0].dpe_str,
+			  strnlen(prop_in->dpp_entries[0].dpe_str, DAOS_PROP_MAX_LABEL_BUF_LEN));
+		d_iov_set(&val, tmp, sizeof(uuid_t));
+		rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_uuids, &key, &val);
+		if (rc == 0) {
+			/* If specified label matches existing label in svc, do nothing. */
+			if (uuid_compare(uuid, tmp) == 0)
+				D_GOTO(out_cont, rc = 0);
+
+			D_ERROR("Forbid non-unique label (%s) for different containers: "
+				DF_UUIDF"/"DF_UUIDF"\n", prop_in->dpp_entries[0].dpe_str,
+				DP_UUID(uuid), DP_UUID(tmp));
+			D_GOTO(out_cont, rc = -DER_EXIST);
+		} else if (rc == -DER_NONEXIST) {
+			d_iov_set(&val, uuid, sizeof(uuid_t));
+			rc = rdb_tx_update(&tx, &cont->c_svc->cs_uuids, &key, &val);
+			if (rc != 0) {
+				D_ERROR(DF_UUIDF" failed to set container label %s: "DF_RC"\n",
+					DP_UUID(uuid), prop_in->dpp_entries[0].dpe_str, DP_RC(rc));
+				goto out_cont;
+			}
+		} else {
+			D_ERROR(DF_UUIDF" failed to lookup container label %s in svc: "DF_RC"\n",
+				DP_UUID(uuid), prop_in->dpp_entries[0].dpe_str, DP_RC(rc));
+			goto out_cont;
+		}
+	}
+
+out_cont:
+	cont_put(cont);
+out_tx:
+	rdb_tx_end(&tx);
+out:
+	daos_prop_free(prop_iv);
+	daos_prop_free(prop_old);
+
+	return rc;
+}
