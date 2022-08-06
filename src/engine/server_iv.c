@@ -1023,6 +1023,7 @@ struct iv_op_ult_arg {
 	crt_iv_sync_t	iv_sync;
 	int		opc;
 	bool		retry;
+	ABT_eventual	eventual;
 };
 
 static int
@@ -1033,7 +1034,7 @@ _iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
-retry:
+
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
@@ -1055,9 +1056,8 @@ retry:
 		 */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
-		/* sleep 1sec and retry */
-		dss_sleep(1000);
-		goto retry;
+		/* Create extra ULT to retry to avoid stack overflow */
+		rc = -DER_AGAIN;
 	}
 
 	return rc;
@@ -1066,26 +1066,38 @@ retry:
 static void
 iv_op_ult(void *arg)
 {
-	struct iv_op_ult_arg *ult_arg = arg;
+	struct iv_op_ult_arg	*ult_arg = arg;
+	int			rc;
 
-	D_ASSERT(ult_arg->iv_sync.ivs_mode == CRT_IV_SYNC_LAZY);
 	/* Since it will put LAZY sync in a separate and asynchronous ULT, so
 	 * let's use EAGER mode in CRT to make it simipler.
 	 */
 	ult_arg->iv_sync.ivs_mode = CRT_IV_SYNC_EAGER;
-	_iv_op(ult_arg->ns, &ult_arg->iv_key,
-	       ult_arg->iv_value.sg_nr == 0 ? NULL : &ult_arg->iv_value,
-	       &ult_arg->iv_sync, ult_arg->shortcut, ult_arg->retry, ult_arg->opc);
+	rc = _iv_op(ult_arg->ns, &ult_arg->iv_key,
+		    ult_arg->iv_value.sg_nr == 0 ? NULL : &ult_arg->iv_value,
+		    &ult_arg->iv_sync, ult_arg->shortcut, ult_arg->retry,
+		    ult_arg->opc);
+	if (rc == -DER_AGAIN) {
+		/* sleep 1sec and retry */
+		dss_sleep(1000);
+		rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
+		if (rc == 0)
+			return;
+	}
+
 	ds_iv_ns_put(ult_arg->ns);
 	d_sgl_fini(&ult_arg->iv_value, true);
+	ABT_eventual_set(ult_arg->eventual, NULL, rc);
 	D_FREE(ult_arg);
 }
 
 static int
-iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-	    crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+iv_op_by_ult(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+	     crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
 	struct iv_op_ult_arg	*ult_arg;
+	ABT_eventual		done_eventual;
+	int			*status;
 	int			rc;
 
 	D_ALLOC_PTR(ult_arg);
@@ -1105,16 +1117,35 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 	memcpy(&ult_arg->iv_key, key, sizeof(*key));
 	ult_arg->shortcut = shortcut;
-	ult_arg->iv_sync = *sync;
+	if (sync != NULL)
+		ult_arg->iv_sync = *sync;
 	ult_arg->retry = retry;
 	ds_iv_ns_get(ns);
 	ult_arg->ns = ns;
 	ult_arg->opc = opc;
+
+	/* Synchronous mode, let's create the eventual to wait */
+	if (sync == NULL || sync->ivs_mode != CRT_IV_SYNC_LAZY) {
+		rc = ABT_eventual_create(sizeof(*status), &done_eventual);
+		if (rc)
+			return rc;
+		ult_arg->eventual = done_eventual;
+	}
+
 	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
 	if (rc != 0) {
 		ds_iv_ns_put(ult_arg->ns);
 		d_sgl_fini(&ult_arg->iv_value, true);
 		D_FREE(ult_arg);
+		if (done_eventual != NULL)
+			ABT_eventual_free(&done_eventual);
+		return rc;
+	}
+
+	if (sync == NULL || sync->ivs_mode != CRT_IV_SYNC_LAZY) {
+		ABT_eventual_wait(done_eventual, (void **)&status);
+		rc = *status;
+		ABT_eventual_free(&done_eventual);
 	}
 
 	return rc;
@@ -1124,13 +1155,24 @@ static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
+	int rc;
+
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 
-	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
-		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
+	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
+		rc = iv_op_by_ult(ns, key, value, sync, shortcut, retry, opc);
+	} else {
+		/* Let's try direct call first (without creating ULT), if it
+		 * needs to retry, then let's create ULT to retry to avoid
+		 * stack overflow during endless retry.
+		 */
+		rc = _iv_op(ns, key, value, sync, shortcut, retry, opc);
+		if (rc == -DER_AGAIN)
+			rc = iv_op_by_ult(ns, key, value, sync, shortcut, retry, opc);
+	}
 
-	return _iv_op(ns, key, value, sync, shortcut, retry, opc);
+	return rc;
 }
 
 /**
