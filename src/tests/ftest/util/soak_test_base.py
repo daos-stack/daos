@@ -12,13 +12,13 @@ import multiprocessing
 import threading
 import random
 from filecmp import cmp
+from getpass import getuser
+import socket
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError
 from exception_utils import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
-from getpass import getuser
-import socket
 from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \

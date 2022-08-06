@@ -27,5 +27,5 @@ class SoakStress(SoakTestBase):
         :avocado: tags=soak,soak_stress
         :avocado: tags=soak_stress_48h,test_soak_stress_48h
         """
-        test_param = "/run/soak_stress/"
+        # test_param = "/run/soak_stress/"
         # self.run_soak(test_param)
