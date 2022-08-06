@@ -287,10 +287,13 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 			} else {
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
-			if (result != 0)
+
+			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
-			else
+				cpr->cpr_skip = 1;
+			} else {
 				cbk->cb_statistics.cs_repaired++;
+			}
 		}
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
@@ -336,6 +339,7 @@ report:
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
+		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -371,10 +375,13 @@ report:
 			} else {
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
-			if (result != 0)
+
+			if (result != 0) {
 				cbk->cb_statistics.cs_failed++;
-			else
+				cpr->cpr_skip = 1;
+			} else {
 				cbk->cb_statistics.cs_repaired++;
+			}
 		}
 		break;
 	}
@@ -471,6 +478,7 @@ report:
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
+		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -733,6 +741,55 @@ out:
 	return rc;
 }
 
+static int
+chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_report_unit		 cru = { 0 };
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_BAD_LABEL;
+	act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
+	cbk->cb_statistics.cs_total++;
+	cpr->cpr_dirty = 1;
+
+	if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+		cbk->cb_statistics.cs_repaired++;
+	} else {
+		result = ds_pool_svc_update_label(svc, cpr->cpr_label);
+		if (result != 0) {
+			cbk->cb_statistics.cs_failed++;
+			cpr->cpr_skip = 1;
+		} else {
+			cbk->cb_statistics.cs_repaired++;
+		}
+	}
+
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = act;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_msg = "Check engine detects corrupted pool label";
+	cru.cru_result = result;
+
+	rc = chk_engine_report(&cru, NULL);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects corrupted label for pool "
+		 DF_UUIDF", action %u (no interact), MS label %s, handle_rc %d, report_rc %d\n",
+		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), act,
+		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)", result, rc);
+
+	chk_engine_post_repair(ins, &result);
+
+	return result;
+}
+
 static void
 chk_engine_pool_ult(void *args)
 {
@@ -782,6 +839,9 @@ again:
 	if (rc == 0)
 		rc = chk_engine_find_dangling_pm(cpr, map);
 
+	if (rc == 0 && cpr->cpr_delay_label)
+		rc = chk_engine_bad_pool_label(cpr, svc);
+
 	if (cpr->cpr_dirty) {
 		cpr->cpr_dirty = 0;
 
@@ -793,6 +853,12 @@ again:
 		 */
 		rc1 = ds_pool_svc_flush_map(svc, map);
 	}
+
+	/*
+	 * Cleanup all old connections. It is no matter even if we cannot evict some
+	 * old connections. That is also independent from former check phases result.
+	 */
+	ds_pool_svc_evict_all(svc);
 
 out:
 	if (map != NULL)
