@@ -259,7 +259,7 @@ pipeline {
                             if (key.contains(' ')) {
                                 return
                             }
-                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                            pragmas[key.toLowerCase()] = value
                         /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
                         } catch (ArrayIndexOutOfBoundsException ignored) {
                             // ignore and move on to the next line
