@@ -341,7 +341,6 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: 'src/control/vendor/*:' +
-                                                  'src/chk/chk_internal.h:' +
                                                   '*.pb-c.[ch]:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +

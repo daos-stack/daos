@@ -257,4 +257,8 @@ int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
+int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop);
+
+int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

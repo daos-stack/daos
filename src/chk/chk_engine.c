@@ -399,17 +399,17 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
 
-			if (result != 0) {
+			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
-				cpr->cpr_skip = 1;
-			} else {
+			else
 				cbk->cb_statistics.cs_repaired++;
-			}
 		}
+		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
+		cpr->cpr_skip = 1;
 		break;
 	default:
 		/*
@@ -473,6 +473,7 @@ report:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		cbk->cb_statistics.cs_ignored++;
+		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -487,13 +488,12 @@ report:
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
 
-			if (result != 0) {
+			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
-				cpr->cpr_skip = 1;
-			} else {
+			else
 				cbk->cb_statistics.cs_repaired++;
-			}
 		}
+		cpr->cpr_skip = 1;
 		break;
 	}
 
@@ -589,7 +589,6 @@ report:
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
-		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -626,6 +625,9 @@ report:
 	goto report;
 
 out:
+	/* For dangling PM entry, mark it as 'skip' in spite of which repair action to take. */
+	cpr->cpr_skip = 1;
+
 	chk_engine_post_repair(ins, &result);
 
 	return result;
@@ -872,12 +874,10 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 		cbk->cb_statistics.cs_repaired++;
 	} else {
 		result = ds_pool_svc_update_label(svc, cpr->cpr_label);
-		if (result != 0) {
+		if (result != 0)
 			cbk->cb_statistics.cs_failed++;
-			cpr->cpr_skip = 1;
-		} else {
+		else
 			cbk->cb_statistics.cs_repaired++;
-		}
 	}
 
 	cru.cru_gen = cbk->cb_gen;
@@ -895,6 +895,14 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 		 DF_UUIDF", action %u (no interact), MS label %s, handle_rc %d, report_rc %d\n",
 		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), act,
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)", result, rc);
+
+#if 0
+	/*
+	 * It is not fatal even if failed to repair inconsistent pool label,
+	 * then do not skip current pool for subsequent DAOS check.
+	 */
+	cpr->cpr_skip = 0;
+#endif
 
 	chk_engine_post_repair(ins, &result);
 
@@ -960,6 +968,184 @@ chk_engine_cont_list_remote_cb(void *args, uint32_t rank, uint32_t phase,
 	rc = chk_engine_cont_list_reduce_internal(args, data, nr);
 	chk_fini_conts(data, rank);
 
+	return rc;
+}
+
+static int
+chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct chk_report_unit		 cru = { 0 };
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	char				 msg[160] = { 0 };
+	uint32_t			 options[2];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_NONEXIST_ON_PS;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * If the container is not registered to the container service, then destroy the
+		 * orphan container to release space by default.
+		 *
+		 * XXX: Currently, we do not support to add the orphan container back to the CS,
+		 *	that may be implemented in the future when we have enough information to
+		 *	recover necessary prop/attr for the orphan container.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_cont_destroy_orphan(svc, ccr->ccr_uuid);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 2;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+	snprintf(msg, 159, "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF,
+		 DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
+	cru.cru_msg = msg;
+	cru.cru_options = options;
+	cru.cru_result = result;
+
+	rc = chk_engine_report(&cru, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" detects orphan container "
+		 DF_UUIDF"/"DF_UUIDF", action %u (%s), handle_rc %d, report_rc %d, decision %d\n",
+		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid), act,
+		 option_nr ? "need interact" : "no interact", result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+		D_ERROR(DF_ENGINE" got invalid decision %d for orphan container "
+			DF_UUIDF"/"DF_UUIDF". Ignore the inconsistency.\n",
+			DP_ENGINE(ins), decision, DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_cont_destroy_orphan(svc, ccr->ccr_uuid);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	/* XXX: For orphan container, mark it as 'skip' since we do not support to add it back. */
+	ccr->ccr_skip = 1;
+
+	chk_engine_post_repair(ins, &result);
+
+	return result;
+}
+
+static int
+chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
+			struct chk_cont_list_aggregator *aggregator)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct cont_svc			*svc;
+	struct chk_cont_rec		*ccr;
+	int				 rc = 0;
+	bool				 failout;
+
+	if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
+		failout = true;
+	else
+		failout = false;
+	svc = ds_pool_ps2cs(ds_svc);
+
+	d_list_for_each_entry(ccr, &aggregator->ccla_list, ccr_link) {
+		rc = ds_cont_existence_check(svc, ccr->ccr_uuid, &ccr->ccr_label_prop);
+		if (rc == 0)
+			continue;
+
+		if (rc != -DER_NONEXIST) {
+			D_CDEBUG(failout, DLOG_ERR, DLOG_DBG,
+				 DF_ENGINE" on rank %u failed to check container "
+				 DF_UUIDF"/"DF_UUIDF": "DF_RC"\n", DP_ENGINE(ins),
+				 dss_self_rank(), DP_UUID(cpr->cpr_uuid),
+				 DP_UUID(ccr->ccr_uuid), DP_RC(rc));
+
+			if (failout)
+				goto out;
+
+			ccr->ccr_skip = 1;
+			continue;
+		}
+
+		rc = chk_engine_cont_orphan(cpr, ccr, svc);
+		if (rc != 0)
+			goto out;
+	}
+
+out:
 	return rc;
 }
 
@@ -1073,7 +1259,7 @@ cont:
 	cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
 	chk_bk_update_pool(cbk, cpr->cpr_uuid);
 
-	/* TBD: verify the containers from pool shards with PS known ones. */
+	rc = chk_engine_cont_cleanup(cpr, svc, &aggregator);
 
 out:
 	chk_engine_cont_list_fini(&aggregator);
@@ -1947,7 +2133,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
-		 DF_ENGINE" on rank %u query pool "DF_UUIDF":"DF_RC"\n",
+		 DF_ENGINE" on rank %u query pool "DF_UUIDF": "DF_RC"\n",
 		 DP_ENGINE(cqpa->cqpa_ins), dss_self_rank(), DP_UUID(uuid), DP_RC(rc));
 	return rc;
 }
@@ -1991,7 +2177,7 @@ log:
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
-		 DF_ENGINE" on rank %u handle query for %d pools :"DF_RC"\n",
+		 DF_ENGINE" on rank %u handle query for %d pools: "DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), pool_nr, DP_RC(rc));
 
 out:

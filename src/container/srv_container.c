@@ -4200,3 +4200,81 @@ out_put:
 	cont_svc_put_leader(svc);
 	return rc;
 }
+
+/*
+ * Check whether the specified container exists in the container service or not.
+ * If yes, return the container label via the @prop.
+ */
+int
+ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop)
+{
+	struct cont	*cont = NULL;
+	daos_prop_t	*tmp = NULL;
+	struct rdb_tx	 tx;
+	int		 rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	rc = cont_lookup(&tx, svc, uuid, &cont);
+	if (rc != 0)
+		goto out_tx;
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_LABEL, &tmp, true);
+	if (rc != 0)
+		D_GOTO(out_cont, rc = (rc == -DER_NONEXIST ? 0 : rc));
+
+	if (strncmp(DAOS_PROP_NO_CO_LABEL, tmp->dpp_entries[0].dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN) == 0) {
+		daos_prop_free(tmp);
+		goto out_cont;
+	}
+
+	*prop = tmp;
+
+out_cont:
+	cont_put(cont);
+out_tx:
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+/*
+ * Destroy the orphan container that is not registered
+ * to the container service (then without open handle).
+ */
+int
+ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
+{
+	struct rdb_tx	tx;
+	d_iov_t		key;
+	d_iov_t		tmp;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	d_iov_set(&key, uuid, sizeof(uuid_t));
+	d_iov_set(&tmp, NULL, 0);
+	rc = rdb_tx_lookup(&tx, &svc->cs_conts, &key, &tmp);
+	rdb_tx_end(&tx);
+	if (rc == 0)
+		/* Forbid to destroy non-orphan container. */
+		D_GOTO(out, rc = -DER_BUSY);
+
+	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
+	if (rc != 0)
+		goto out;
+
+	cont_ec_agg_delete(svc, uuid);
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_CONT" destroy orphan container: "DF_RC"\n",
+		 DP_CONT(svc->cs_pool->sp_uuid, uuid), DP_RC(rc));
+
+	return rc;
+}
