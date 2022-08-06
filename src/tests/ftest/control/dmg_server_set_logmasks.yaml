@@ -1,0 +1,5 @@
+hosts:
+  test_servers: 3
+timeout: 120
+server_config:
+  name: daos_server

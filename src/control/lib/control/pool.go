@@ -183,7 +183,8 @@ func (r *poolRequest) getDeadline() time.Time {
 	if !r.deadline.IsZero() {
 		return r.deadline
 	}
-	return time.Now().Add(DefaultPoolTimeout)
+	r.SetTimeout(DefaultPoolTimeout)
+	return r.deadline
 }
 
 func (r *poolRequest) canRetry(reqErr error, try uint) bool {
@@ -401,16 +402,18 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32               `json:"total_targets"`
-		ActiveTargets   uint32               `json:"active_targets"`
-		TotalEngines    uint32               `json:"total_engines"`
-		DisabledTargets uint32               `json:"disabled_targets"`
-		Version         uint32               `json:"version"`
-		Leader          uint32               `json:"leader"`
-		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
-		TierStats       []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks    *system.RankSet      `json:"-"`
-		DisabledRanks   *system.RankSet      `json:"-"`
+		TotalTargets     uint32               `json:"total_targets"`
+		ActiveTargets    uint32               `json:"active_targets"`
+		TotalEngines     uint32               `json:"total_engines"`
+		DisabledTargets  uint32               `json:"disabled_targets"`
+		Version          uint32               `json:"version"`
+		Leader           uint32               `json:"leader"`
+		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
+		TierStats        []*StorageUsageStats `json:"tier_stats"`
+		EnabledRanks     *system.RankSet      `json:"-"`
+		DisabledRanks    *system.RankSet      `json:"-"`
+		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
+		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -1047,6 +1050,11 @@ type (
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
 
+		// UpgradeLayoutVer is latest pool layout version to be upgraded.
+		UpgradeLayoutVer uint32 `json:"upgrade_layout_ver"`
+		// PoolLayoutVer is current pool layout version.
+		PoolLayoutVer uint32 `json:"pool_layout_ver"`
+
 		// QueryErrorMsg reports an RPC error returned from a query.
 		QueryErrorMsg string `json:"query_error_msg"`
 		// QueryStatusMsg reports any DAOS error returned from a query
@@ -1206,6 +1214,8 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
+		p.PoolLayoutVer = resp.PoolLayoutVer
+		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
 	}
 
@@ -1262,7 +1272,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
 				if !smdDevice.NvmeState.IsNormal() {
-					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+					log.Noticef("SMD device %s (instance %d, ctrlr %s) "+
 						"not usable (device state %q)",
 						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
 						smdDevice.NvmeState.String())

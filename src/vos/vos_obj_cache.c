@@ -408,6 +408,13 @@ check_object:
 		goto failed;
 	}
 
+	if (obj->obj_discard && intent == DAOS_INTENT_UPDATE) {
+		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
+		vos_obj_release(occ, obj, false);
+		rc = -DER_UPDATE_AGAIN;
+		goto failed;
+	}
+
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 

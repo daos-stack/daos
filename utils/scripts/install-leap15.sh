@@ -24,8 +24,8 @@ dnf --nodocs install \
     gcc \
     gcc-c++ \
     git \
-    go1.14 \
-    go1.14-race \
+    go1.18 \
+    go1.18-race \
     graphviz \
     gzip \
     hwloc-devel \

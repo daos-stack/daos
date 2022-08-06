@@ -53,7 +53,8 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (basic).
 
-        :avocado: tags=all
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_basic
         """
 

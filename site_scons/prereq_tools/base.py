@@ -705,6 +705,8 @@ class PreReqComponent():
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
+        self.add_opts(BoolVariable('STACK_MMAP',
+                                   'Allocate ABT ULTs stacks with mmap()', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -873,7 +875,19 @@ class PreReqComponent():
                         ['$CVS', '--add', '!**/src/vea/tests/'],
                         ['$CVS', '--add', '!**/src/vos/tests/'],
                         ['$CVS', '--add', '!**/src/engine/tests/'],
-                        ['$CVS', '--add', '!**/src/tests/']]
+                        ['$CVS', '--add', '!**/src/tests/'],
+                        ['$CVS', '--add', '!**/src/bio/smd/tests/'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test.h'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_client.c'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_service.c'],
+                        ['$CVS', '--add', '!**/src/client/api/tests/'],
+                        ['$CVS', '--add', '!**/src/client/dfuse/test/'],
+                        ['$CVS', '--add', '!**/src/gurt/examples/'],
+                        ['$CVS', '--add', '!**/src/utils/crt_launch/'],
+                        ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
+                        ['$CVS', '--add', '!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_dmg_helpers.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_lib.c']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 

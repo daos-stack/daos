@@ -6,7 +6,9 @@
 
 package ipmctl
 
-import "bytes"
+import (
+	"bytes"
+)
 
 // DeviceUID represents the Go equivalent of an NVM_UID string buffer
 type DeviceUID [22]byte
@@ -49,12 +51,27 @@ const (
 )
 
 func (pmrt PMemRegionType) String() string {
-	return map[PMemRegionType]string{
+	if val, exists := map[PMemRegionType]string{
 		RegionTypeUnknown:        "Unknown",
 		RegionTypeAppDirect:      "AppDirect",
 		RegionTypeNotInterleaved: "AppDirectNotInterleaved",
 		RegionTypeVolatile:       "Volatile",
-	}[pmrt]
+	}[pmrt]; exists {
+		return val
+	}
+	return "Unknown"
+}
+
+func PMemRegionTypeFromString(in string) PMemRegionType {
+	if val, exists := map[string]PMemRegionType{
+		"Unknown":                 RegionTypeUnknown,
+		"AppDirect":               RegionTypeAppDirect,
+		"AppDirectNotInterleaved": RegionTypeNotInterleaved,
+		"Volatile":                RegionTypeVolatile,
+	}[in]; exists {
+		return val
+	}
+	return RegionTypeUnknown
 }
 
 // PMemRegionHealth represents PMem region health.
@@ -72,13 +89,29 @@ const (
 )
 
 func (pmrh PMemRegionHealth) String() string {
-	return map[PMemRegionHealth]string{
-		RegionHealthNormal:  "Normal",
+	if val, exists := map[PMemRegionHealth]string{
+		RegionHealthNormal:  "Healthy",
 		RegionHealthError:   "Error",
 		RegionHealthUnknown: "Unknown",
 		RegionHealthPending: "Pending",
 		RegionHealthLocked:  "Locked",
-	}[pmrh]
+	}[pmrh]; exists {
+		return val
+	}
+	return "Unknown"
+}
+
+func PMemRegionHealthFromString(in string) PMemRegionHealth {
+	if val, exists := map[string]PMemRegionHealth{
+		"Healthy": RegionHealthNormal,
+		"Error":   RegionHealthError,
+		"Unknown": RegionHealthUnknown,
+		"Pending": RegionHealthPending,
+		"Locked":  RegionHealthLocked,
+	}[in]; exists {
+		return val
+	}
+	return RegionHealthUnknown
 }
 
 // PMemRegion represents Go equivalent of C.struct_region from nvm_management.h (NVM API) as

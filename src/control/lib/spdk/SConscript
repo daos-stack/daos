@@ -28,10 +28,7 @@ def scons():
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
-    nvmecontrol = daos_build.static_library(senv, "nvme_control",
-                                            [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
-
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
+    daos_build.static_library(senv, "nvme_control", [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
 
     if prereqs.test_requested():
         SConscript('ctests/SConscript', exports='senv')

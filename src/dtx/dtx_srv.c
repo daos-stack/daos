@@ -166,6 +166,9 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 			break;
 
+		if (unlikely(din->di_epoch == 1))
+			D_GOTO(out, rc = -DER_IO);
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -215,10 +218,8 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL);
-		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
-			rc = -DER_INPROGRESS;
-		else if (rc == DTX_ST_INITED)
+				   NULL, NULL, NULL, NULL, false);
+		if (rc == DTX_ST_INITED)
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
 			 * request is from old server.
@@ -252,12 +253,8 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i]);
-			/* The DTX status may be changes by DTX resync soon. */
-			if ((*ptr == DTX_ST_PREPARED && cont->sc_dtx_resyncing) ||
-			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
-				*ptr = -DER_INPROGRESS;
-
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i],
+					     true);
 			if (*ptr == -DER_NONEXIST) {
 				struct dtx_stat		stat = { 0 };
 

@@ -342,7 +342,7 @@ int dc_mgmt_net_cfg(const char *name)
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, true/* all_ranks */, &info, &resp);
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
 	if (rc != 0)
 		return rc;
 

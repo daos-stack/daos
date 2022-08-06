@@ -4,8 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 import os
+from data_mover_test_base import DataMoverTestBase
+
 
 # pylint: disable=too-many-ancestors
 class DmvrLargeDir(DataMoverTestBase):
@@ -37,9 +38,9 @@ class DmvrLargeDir(DataMoverTestBase):
         self.set_tool(tool)
 
         # Get the number of mdtest processes
-        self.mdtest_processes = self.params.get(
-            self.tool.lower(), "/run/mdtest/client_processes/*")
-        if not self.mdtest_processes:
+        self.mdtest_np = self.params.get(self.tool.lower(), "/run/mdtest/client_processes/*")
+        self.mdtest_ppn = self.params.get(self.tool.lower(), "/run/mdtest/client_ppn/*")
+        if self.mdtest_np is None and self.mdtest_ppn is None:
             self.fail("Failed to get mdtest processes for {}".format(tool))
 
         # test params
@@ -48,7 +49,7 @@ class DmvrLargeDir(DataMoverTestBase):
 
         # create pool and cont1
         pool = self.create_pool()
-        cont1 = self.create_cont(pool)
+        cont1 = self.get_container(pool)
 
         # run mdtest to create data in cont1
         self.mdtest_cmd.write_bytes.update(file_size)
@@ -57,7 +58,7 @@ class DmvrLargeDir(DataMoverTestBase):
             flags=mdtest_flags[0])
 
         # create cont2
-        cont2 = self.create_cont(pool)
+        cont2 = self.get_container(pool)
 
         # copy from daos cont1 to cont2
         self.run_datamover(
@@ -65,7 +66,7 @@ class DmvrLargeDir(DataMoverTestBase):
             "DAOS", "/", pool, cont1,
             "DAOS", "/", pool, cont2)
 
-        posix_path = self.new_posix_test_path(parent=self.workdir)
+        posix_path = self.new_posix_test_path()
 
         # copy from daos cont2 to posix file system
         self.run_datamover(
@@ -74,7 +75,7 @@ class DmvrLargeDir(DataMoverTestBase):
             "POSIX", posix_path)
 
         # create cont3
-        cont3 = self.create_cont(pool)
+        cont3 = self.get_container(pool)
 
         # copy from posix file system to daos cont3
         self.run_datamover(
@@ -97,7 +98,7 @@ class DmvrLargeDir(DataMoverTestBase):
             Copy a very large directory between daos POSIX containers and
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,mdtest
         :avocado: tags=dm_large_dir,dm_large_dir_dcp
         """

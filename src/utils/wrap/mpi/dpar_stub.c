@@ -139,7 +139,7 @@ par_init(int *argc, char ***argv)
 int
 par_fini(void)
 {
-	int	rc;
+	int	rc = 0;
 
 	if (stubs.ps_fini)
 		rc = stubs.ps_fini();
