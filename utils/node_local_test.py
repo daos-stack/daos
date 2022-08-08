@@ -663,7 +663,7 @@ class DaosServer():
         scyaml['socket_dir'] = self.agent_dir
 
         for (key, value) in server_env.items():
-            scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
+            scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
         ref_engine['storage'][0]['scm_size'] = int(
@@ -921,12 +921,7 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool',
-                           'create',
-                           '--label',
-                           'NLT',
-                           '--scm-size',
-                           '{}M'.format(size)])
+        rc = self.run_dmg(['pool', 'create', '--label', 'NLT', '--scm-size', f'{size}M'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
