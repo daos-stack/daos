@@ -48,4 +48,4 @@ fi
 cd "$DAOS_BASE"
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" \
-    DAOS_BASE="$DAOS_BASE" ci/unit/run_test.sh
+    DAOS_BASE="$DAOS_BASE" utils/run_test.sh
