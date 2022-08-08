@@ -60,6 +60,7 @@ enum daos_obj_redun {
 	OR_RS_16P2,
 };
 
+#define MAX_OBJ_CLASS_NAME_LEN		24
 
 #define MAX_NUM_GROUPS			((1 << 16UL) - 1)
 #define OC_REDUN_SHIFT			24

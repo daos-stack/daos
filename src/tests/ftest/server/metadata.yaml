@@ -66,4 +66,4 @@ ior:
   objectclass:
     dfs_oclass: "SX"
 metadata:
-  mean_percent: 0.5
+  mean_percent: 1

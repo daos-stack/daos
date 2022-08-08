@@ -62,7 +62,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         pool1.connect(2)
 
         # Create cont1
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create dataset in cont1
         obj_list = self.dataset_gen(
@@ -116,7 +116,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_obj_small,dm_obj_small_dcp
+        :avocado: tags=dm_obj_small,dm_obj_small_dcp,test_dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
 
@@ -128,6 +128,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_cont_clone
-        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone
+        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

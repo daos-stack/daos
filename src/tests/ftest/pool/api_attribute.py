@@ -109,7 +109,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=large_pool_attribute
+        :avocado: tags=large_pool_attribute,test_pool_large_attributes
         """
         self.add_pool()
         attr_dict = self.create_data_set()
@@ -138,7 +138,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=sync_pool_attribute
+        :avocado: tags=sync_pool_attribute,test_pool_attributes
         """
         self.add_pool()
         expected_for_param = []
@@ -214,7 +214,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_attribute
-        :avocado: tags=async_pool_attribute
+        :avocado: tags=async_pool_attribute,test_pool_attribute_async
         """
         self.add_pool()
 

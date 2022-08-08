@@ -40,8 +40,6 @@
 
 #include "daos_hdlr.h"
 
-#define OID_ARR_SIZE 8
-
 struct file_dfs {
 	enum {POSIX, DAOS} type;
 	int fd;
@@ -3132,52 +3130,6 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 
 	fprintf(ap->outstream, "successfully rollback container\n");
-	return rc;
-}
-
-int
-cont_list_objs_hdlr(struct cmd_args_s *ap)
-{
-	daos_obj_id_t		oids[OID_ARR_SIZE];
-	daos_handle_t		oit;
-	daos_anchor_t		anchor = {0};
-	uint32_t		oids_nr;
-	int			rc, i;
-
-	/* create a snapshot with OIT */
-	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
-				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
-				       NULL);
-	if (rc != 0)
-		goto out;
-
-	/* open OIT */
-	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"open of container's OIT failed: "DF_RC"\n", DP_RC(rc));
-		goto out_snap;
-	}
-
-	while (!daos_anchor_is_eof(&anchor)) {
-		oids_nr = OID_ARR_SIZE;
-		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"object IDs enumeration failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out_close, rc);
-		}
-
-		for (i = 0; i < oids_nr; i++)
-			D_PRINT(DF_OID"\n", DP_OID(oids[i]));
-	}
-
-out_close:
-	daos_oit_close(oit, NULL);
-out_snap:
-	cont_destroy_snap_hdlr(ap);
-out:
 	return rc;
 }
 
