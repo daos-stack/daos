@@ -136,11 +136,11 @@ a supported EL8 operating system in order to deploy DAOS Version 2.2.
 
 ### Red Hat Enterprise Linux 8
 
-DAOS Version 2.2 is supported on RHEL 8.4 and RHEL 8.6. RHEL 8.5 is no longer supported by RedHat.
+DAOS Version 2.2 is supported on RHEL 8.4 EUS and RHEL 8.6. RHEL 8.5 is no longer supported by RedHat.
 
 !!! note
     Most validation of DAOS 2.2 has been done on the Rocky Linux 8.6 release.
-    DAOS 2.2 should work on RHEL 8.4 and RHEL 8.5, but fixing DAOS issues that are
+    DAOS 2.2 should work on RHEL 8.4 EUS and RHEL 8.5, but fixing DAOS issues that are
     discovered on RHEL 8.5 may require an OS upgrade to a supported release.
 
 Links to RHEL 8 Release Notes:
