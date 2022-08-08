@@ -443,7 +443,7 @@ sys.path.append('site_scons')"""
             parse_msg(vals, msg)
             print(args.msg_template.format(**vals))
             if args.format == 'github':
-                # Report all messages in modified files to github, but do it at the notice level.
+                # Report all messages in modified files, but do it at the notice level.
                 vals['category'] = 'notice'
                 # pylint: disable-next=consider-using-f-string
                 print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
