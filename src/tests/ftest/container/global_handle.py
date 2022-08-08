@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -62,20 +62,19 @@ class GlobalHandle(TestWithServers):
             ctypes.POINTER(ctypes.c_byte * cont_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        dummy_cont_handle = container.global2local(
+        _ = container.global2local(
             self.context, cont_glob_handle.iov_len,
             cont_glob_handle.iov_buf_len, buf2)
         # just try one thing to make sure handle is good
         container.query()
 
     def test_global_handle(self):
-        """Test ID: Jira-XXXX.
-
-        Test Description: Use a pool handle in another process.
+        """Test Description: Use a pool handle in another process.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=tiny
-        :avocado: tags=container,global_handle,container_global_handle
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=global_handle,container_global_handle,test_global_handle
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to it

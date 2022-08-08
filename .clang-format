@@ -1,13 +1,18 @@
 # clang-format script for daos that most closely matches our coding style.
 # Tested on EL 8, and uses version 12 so check for that in
 # site_scons/site_tools/extra/extra.py
+# Versions up to 14.0.4 had a bug where generated code could be wrongly indented
+# so this should only be used for formatting code with 14.0.5 or above.  Versions prior to that
+# will have whitespace errors.
+# https://github.com/llvm/llvm-project/issues/55407
 BasedOnStyle: LLVM
 IndentWidth: 8
 UseTab: ForContinuationAndIndentation
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
-ForEachMacros: ['d_list_for_each_entry', 'd_list_for_each_entry_safe',
+ForEachMacros: ['d_list_for_each_entry',
+                'd_list_for_each_entry_safe',
                 'evt_ent_array_for_each']
 PointerAlignment: Right
 AlignTrailingComments: true
@@ -17,7 +22,7 @@ AlwaysBreakAfterReturnType: All
 IndentGotoLabels: false
 AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments: Consecutive
 AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false

@@ -5,7 +5,7 @@ persistent=no
 py-version=3.6
 
 [BASIC]
-good-names=rc,ret,fd
+good-names=rc,ret,fd,kv
 
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,

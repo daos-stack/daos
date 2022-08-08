@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from vol_test_base import VolTestBase
 from job_manager_utils import get_job_manager
-from apricot import skipForTicket
 
 
 class DaosVol(VolTestBase):
@@ -16,7 +15,6 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6654")
     def test_daos_vol_bigio(self):
         """Jira ID: DAOS-3656.
 

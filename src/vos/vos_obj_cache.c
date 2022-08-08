@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +405,13 @@ check_object:
 		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, false);
 		D_ASSERTF(0, "Simultaneous object hold and discard detected\n");
+		goto failed;
+	}
+
+	if (obj->obj_discard && intent == DAOS_INTENT_UPDATE) {
+		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
+		vos_obj_release(occ, obj, false);
+		rc = -DER_UPDATE_AGAIN;
 		goto failed;
 	}
 

@@ -552,7 +552,6 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
 	}
 	wantReq.Tierratio = []float64{0, 0}
-	wantReq.Numsvcreps = DefaultPoolServiceReps
 
 	_, err = mgmtSvc.PoolCreate(ctx, req)
 	if err != nil {
@@ -585,12 +584,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 		Storage: &system.PoolServiceStorage{
 			CreationRankStr: system.MustCreateRankSet("0-7").String(),
 		},
-	}
-	svcWithLabel := func(in *system.PoolService, label string) (out *system.PoolService) {
-		out = new(system.PoolService)
-		*out = *in
-		out.PoolLabel = label
-		return
 	}
 	svcWithState := func(in *system.PoolService, state system.PoolServiceState) (out *system.PoolService) {
 		out = new(system.PoolService)
@@ -703,7 +696,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			expResp: &mgmtpb.PoolDestroyResp{
 				Status: int32(daos.MiscError),
 			},
-			expSvc: svcWithLabel(svcWithState(testPoolService, system.PoolServiceStateDestroying), ""),
+			expSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
 		},
 		"already destroying, destroy dRPC fails due to engine error": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},

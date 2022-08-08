@@ -8,6 +8,7 @@
 
 import os
 
+
 def get_hosts_from_file(hostfile):
     """
     Return the list of hosts from a given host file.
@@ -18,6 +19,7 @@ def get_hosts_from_file(hostfile):
             hosts.append(line.split(' ', 1)[0])
 
     return hosts
+
 
 def main():
     """

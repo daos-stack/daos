@@ -6,10 +6,11 @@
 """
 from __future__ import print_function
 
+import time
+
 from apricot import TestWithServers
 from general_utils import pcmd, dump_engines_stacks
 
-import time
 
 class DaosServerDumpTest(TestWithServers):
     """Daos server dump tests.
@@ -44,9 +45,7 @@ class DaosServerDumpTest(TestWithServers):
                 "{}: rc={}".format(val, key)
                 for key, val in ret_codes.items() if key != 0
             ]
-            print(
-                "no ULT stacks dump found on following hosts: {}".format(
-                ", ".join(failed)))
+            print("no ULT stacks dump found on following hosts: {}".format(", ".join(failed)))
             self._Test__status = 'FAIL'
 
     def test_daos_server_dump_basic(self):
@@ -54,12 +53,13 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (basic).
 
-        :avocado: tags=all
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_basic
         """
 
         ret_codes = dump_engines_stacks(self.hostlist_servers,
-                           added_filter=r"'\<(grep|defunct)\>'")
+                                        added_filter=r"'\<(grep|defunct)\>'")
         # at this time there is no way to know when Argobots ULTs stacks
         # has completed, see DAOS-1452/DAOS-9942.
         if 1 in ret_codes:

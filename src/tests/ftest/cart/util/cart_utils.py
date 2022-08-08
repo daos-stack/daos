@@ -7,15 +7,17 @@
 import time
 import os
 import shlex
-import subprocess #nosec
+import subprocess  # nosec
 import logging
-import cart_logparse
-import cart_logtest
 import socket
 import re
 import glob
+import cart_logparse
+import cart_logtest
 
 from apricot import TestWithoutServers
+from ClusterShell.NodeSet import NodeSet
+
 from general_utils import stop_processes
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
@@ -33,9 +35,8 @@ class CartTest(TestWithoutServers):
         self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
-        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.abspath(__file__))))))))
+        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
 
     def setUp(self):
@@ -147,7 +148,7 @@ class CartTest(TestWithoutServers):
             self.log.info("Expected %d completion files, ", count)
             self.log.info("but only found %d.\n", len(file_list))
 
-        # Clean up completion file(s) for next test for next runrun
+        # Clean up completion file(s) for next test for next run
         for _file in file_list:
             os.unlink(_file)
 
@@ -156,7 +157,7 @@ class CartTest(TestWithoutServers):
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
-        localhost = socket.gethostname().split(".")[0:1]
+        localhost = NodeSet(socket.gethostname().split(".")[0])
         processes = r"'\<(crt_launch|orterun)\>'"
         retry_count = 0
         while retry_count < 2:
@@ -251,10 +252,8 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + \
-                       env_CCSA + "_" + \
-                       env_PHY_ADDR_STR + "_" + \
-                       "output.orterun_log"
+        log_filename = test_name + "_" + env_CCSA + "_" + env_PHY_ADDR_STR + "_" + \
+            "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
@@ -354,7 +353,7 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
-        # Return 0 on memory leaks while suppresion file is completed
+        # Return 0 on memory leaks while suppression file is completed
         # (CART-975 and CART-977)
         memcheck_error_code = 0
 
@@ -383,19 +382,15 @@ class CartTest(TestWithoutServers):
         tst_slt = self.get_yaml_list_elem(_tst_slt, index)
         tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
 
-        tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
+        tst_host = NodeSet(self.params.get("{}".format(host), "/run/hosts/*/"))
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_slt)
+            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_slt)
         else:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_ppn)
+            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
@@ -465,7 +460,7 @@ class CartTest(TestWithoutServers):
 
         xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(daos_test_shared_dir)))
+                                     os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
             self.convert_xml(daos_test_shared_dir + "/" + filename)
@@ -567,6 +562,6 @@ class CartTest(TestWithoutServers):
                     self.log.info("Adding %s=%s to environment.", key, value)
                     os.environ[key] = value
 
-            # For compatibility with cart tests, which set env vars in oretrun
+            # For compatibility with cart tests, which set env vars in orterun
             # command via -x options
             self.env = os.environ

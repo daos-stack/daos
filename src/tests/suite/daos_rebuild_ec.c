@@ -992,6 +992,61 @@ rebuild_ec_parity_overwrite(void **state)
 	free(data);
 }
 
+static void
+rebuild_ec_then_aggregation(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	char		*data;
+	char		*verify_data;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	data = (char *)malloc(CELL_SIZE);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(CELL_SIZE);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 11; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = CELL_SIZE;
+		recx.rx_idx = i * CELL_SIZE;
+		memset(data, 'a' + i, CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, CELL_SIZE, &req);
+	}
+
+	/* rebuild one data shard */
+	rank = get_rank_by_oid_shard(arg, oid, 2);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+	print_message("sleep 30 seconds");
+	sleep(30);
+
+	/* Trigger EC aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
+				       DAOS_FORCE_EC_AGG);
+
+	for (i = 0; i < 11; i++) {
+		daos_off_t offset = i * CELL_SIZE;
+
+		memset(verify_data, 'a' + i, CELL_SIZE);
+		ec_verify_parity_data(&req, "d_key", "a_key", offset,
+				      (daos_size_t)CELL_SIZE, verify_data,
+				      DAOS_TX_NONE, true);
+	}
+	free(data);
+	free(verify_data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1114,6 +1169,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD42: rebuild parity over write",
 	 rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD43: EC rebuild then aggregation",
+	 rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

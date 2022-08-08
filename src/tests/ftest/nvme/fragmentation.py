@@ -5,18 +5,16 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-import os
-import threading
-import uuid
+from threading import Thread
 from itertools import product
 import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
 from ior_utils import IorCommand
-from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from test_utils_base import LabelGenerator
 
 
 class NvmeFragmentation(TestWithServers):
@@ -37,15 +35,13 @@ class NvmeFragmentation(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_transfer_size = self.params.get(
-            "transfer_block_size", '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
+        self.ior_transfer_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
+        self.cont_label_generator = LabelGenerator('cont')
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
@@ -55,15 +51,10 @@ class NvmeFragmentation(TestWithServers):
         Args:
             results (queue): queue for returning thread results
 
-        Returns:
-            None
-
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
-        cmd = DaosCommand(os.path.join(self.prefix, "bin"))
-        cmd.set_sub_command("container")
-        cmd.sub_command_class.set_sub_command("destroy")
+        cont_list = []
+        daos_cmd = self.get_daos_command()
 
         # Iterate through IOR different value and run in sequence
         for oclass, api, test, flags in product(self.ior_dfs_oclass,
@@ -82,37 +73,26 @@ class NvmeFragmentation(TestWithServers):
 
             # Define the job manager for the IOR command
             job_manager = get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich")
-            cont_uuid = str(uuid.uuid4())
-            job_manager.job.dfs_cont.update(cont_uuid)
+            cont_label = self.cont_label_generator.get_label()
+            job_manager.job.dfs_cont.update(cont_label)
             env = ior_cmd.get_default_env(str(job_manager))
-            job_manager.assign_hosts(
-                self.hostlist_clients, self.workdir, None)
+            job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
             job_manager.assign_processes(processes)
             job_manager.assign_environment(env, True)
 
             # run IOR Command
             try:
                 job_manager.run()
-                container_info["{}{}{}"
-                               .format(oclass,
-                                       api,
-                                       test[0])] = cont_uuid
-            except CommandFailure as _error:
-                results.put("FAIL")
+                cont_list.append(cont_label)
+            except CommandFailure as error:
+                results.put("FAIL - {}".format(error))
 
         # Destroy the container created by thread
-        for key in container_info:
-            cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
-            #cmd.sub_command_class.sub_command_class.svc.value = \
-            #    self.pool.svc_ranks
-            cmd.sub_command_class.sub_command_class.cont.value = \
-                container_info[key]
-
+        for cont_label in cont_list:
             try:
-                # pylint: disable=protected-access
-                cmd._get_result()
-            except CommandFailure as _error:
-                results.put("FAIL")
+                daos_cmd.container_destroy(pool=self.pool.uuid, cont=cont_label)
+            except CommandFailure as error:
+                results.put("FAIL - {}".format(error))
 
     def test_nvme_fragmentation(self):
         """Jira ID: DAOS-2332.
@@ -129,23 +109,24 @@ class NvmeFragmentation(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,nvme_fragmentation
+        :avocado: tags=nvme
+        :avocado: tags=nvme_fragmentation,test_nvme_fragmentation
         """
-        no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
+        num_repeat = self.params.get("num_repeat", '/run/ior/*')
+        num_parallel_job = self.params.get("num_parallel_job", '/run/ior/*')
         # Create a pool
         self.add_pool(connect=False)
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
-        # Repeat the test for 30 times which will take ~1 hour
-        for test_loop in range(30):
+        # Repeat the test many times
+        for test_loop in range(num_repeat):
             self.log.info("--Test Repeat for loop %s---", test_loop)
             # Create the IOR threads
             threads = []
-            for thrd in range(no_of_jobs):
+            for _ in range(num_parallel_job):
                 # Add a thread for these IOR arguments
-                threads.append(threading.Thread(target=self.ior_runner_thread,
-                                                kwargs={"results":
-                                                        self.out_queue}))
+                threads.append(
+                    Thread(target=self.ior_runner_thread, kwargs={"results": self.out_queue}))
             # Launch the IOR threads
             for thrd in threads:
                 thrd.start()
@@ -156,7 +137,8 @@ class NvmeFragmentation(TestWithServers):
 
             # Verify the queue and make sure no FAIL for any IOR run
             while not self.out_queue.empty():
-                if self.out_queue.get() == "FAIL":
-                    self.fail("FAIL")
+                msg = self.out_queue.get()
+                if 'FAIL' in msg:
+                    self.fail(msg)
 
         self.pool.display_pool_daos_space("Pool space at the End")

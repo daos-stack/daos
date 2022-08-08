@@ -282,6 +282,22 @@ obj_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create bytes update counter: "DF_RC"\n",
 		       DP_RC(rc));
 
+	/** Total number of EC full-stripe update operations, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_ec_full, D_TM_COUNTER,
+			     "total number of EC sull-stripe updates", "updates",
+			     "%s/EC_update/full_stripe/tgt_%u", path, tgt_id);
+	if (rc)
+		D_WARN("Failed to create EC full stripe update counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of EC partial update operations, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_ec_partial, D_TM_COUNTER,
+			     "total number of EC sull-partial updates", "updates",
+			     "%s/EC_update/partial/tgt_%u", path, tgt_id);
+	if (rc)
+		D_WARN("Failed to create EC partial update counter: "DF_RC"\n",
+		       DP_RC(rc));
+
 	return metrics;
 }
 
