@@ -10,7 +10,11 @@ import subprocess  # nosec
 import argparse
 from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
-from pylint.lint import pylinter
+
+try:
+    from pylint.lint import pylinter
+except ImportError:
+    import pylint.lint as pylinter
 
 # Pylint checking for the DAOS project.
 
