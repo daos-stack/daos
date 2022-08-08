@@ -151,7 +151,7 @@ decref:
 
 static int
 ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_rank_list_t *ranks,
-			daos_prop_t *prop, d_rank_list_t *svc_list, size_t domains_nr,
+			daos_prop_t *prop, d_rank_list_t **svc_list, size_t domains_nr,
 			uint32_t *domains)
 {
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
@@ -164,7 +164,7 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_ran
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
-		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
+		    daos_prop_t *prop, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
 	d_rank_list_t			*pg_ranks = NULL;
@@ -218,32 +218,17 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		D_GOTO(out, rc);
 	}
 
-	/** allocate service rank list */
-	*svcp = d_rank_list_alloc(svc_nr);
-	if (*svcp == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
-	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, group, targets, prop, *svcp,
+	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, group, targets, prop, svcp,
 				     domains_nr, domains);
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_svcp;
-	}
-
-out_svcp:
-	if (rc) {
-		d_rank_list_free(*svcp);
-		*svcp = NULL;
-
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    targets, true);
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets, true);
 		if (rc_cleanup)
-			D_ERROR(DF_UUID": failed to clean up failed pool: "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(rc));
 	}
+
 out:
 	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
@@ -430,21 +415,22 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool.
- * \param[in]		svc_ranks	Ranks of pool svc replicas.
- * \param[out]		ranks		Optional, returned storage ranks in this pool.
- *					If #pool_info is NULL, engines with disabled targets.
- *					If #pool_info is passed, engines with enabled or disabled
- *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					The caller must free the list with d_rank_list_free().
- * \param[in][out]	pool_info	Query results
- * \param[in][out]	pool_layout_ver	Pool global version
+ * \param[in]		pool_uuid	   UUID of the pool.
+ * \param[in]		svc_ranks	   Ranks of pool svc replicas.
+ * \param[out]		ranks		   Optional, returned storage ranks in this pool.
+ *					   If #pool_info is NULL, engines with disabled targets.
+ *					   If #pool_info is passed, engines with enabled or
+ *					   disabled targets according to
+ *					   #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					   The caller must free the list with d_rank_list_free().
+ * \param[in][out]	pool_info	   Query results
+ * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
  *
- * \return		0		Success
- *			-DER_INVAL	Invalid inputs
- *			Negative value	Other error
+ * \return		0		   Success
+ *			-DER_INVAL	   Invalid inputs
+ *			Negative value	   Other error
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
