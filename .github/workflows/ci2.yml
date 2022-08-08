@@ -68,7 +68,7 @@ jobs:
           fail_on: nothing
 
   Build:
-    name: Build DAOS (x86_64)
+    name: Build DAOS
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -109,61 +109,6 @@ jobs:
             ${{ steps.commit-hash.outputs.restore }}
             ${{ steps.commit-hash.outputs.restore_prev }}
           skip-save: true
-      - name: Build in docker.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-                            --build-arg DAOS_JAVA_BUILD=no
-                            --build-arg COMPILER
-                            --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
-      - name: Build Java in docker.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-                            --build-arg DAOS_JAVA_BUILD=yes
-                            --build-arg COMPILER
-      - name: Build debug in docker.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-                            --build-arg DAOS_JAVA_BUILD=no
-                            --build-arg DAOS_BUILD_TYPE=debug
-                            --build-arg COMPILER
-      - name: Build devel in docker.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DEPS_JOBS
-                            --build-arg BASE_DISTRO
-                            --build-arg DAOS_JAVA_BUILD=no
-                            --build-arg DAOS_BUILD_TYPE=dev
-                            --build-arg COMPILER
-  BuildARM:
-    name: Build DAOS (ARM64)
-    runs-on: [self-hosted, ARM64]
-    strategy:
-      fail-fast: false
-      matrix:
-        distro: [ubuntu]
-        compiler: [clang]
-        include:
-          - distro: ubuntu
-            base: ubuntu
-            with: ubuntu:22.04
-    env:
-      DEPS_JOBS: 10
-      BASE_DISTRO: ${{ matrix.with }}
-      DOCKER_BASE: ${{ matrix.base }}
-      COMPILER: ${{ matrix.compiler }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          submodules: true
-          fetch-depth: 500
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Setup git hash
-        run: ./ci/gha_helper.py
-        id: commit-hash
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
