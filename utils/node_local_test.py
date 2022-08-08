@@ -1058,7 +1058,7 @@ class ValgrindHelper():
         if not self.use_valgrind:
             return
         with open(self._xml_file, 'r') as fd:
-            with open('{}.xml'.format(self._xml_file), 'w') as ofd:
+            with open(f'{self._xml_file}.xml', 'w') as ofd:
                 for line in fd:
                     if self.src_dir in line:
                         ofd.write(line.replace(self.src_dir, ''))
@@ -1241,7 +1241,7 @@ class DFuse():
         run_leak_test = True
         try:
             ret = self._sp.wait(timeout=20)
-            print('rc from dfuse {}'.format(ret))
+            print(f'rc from dfuse {ret}')
             if ret == 42:
                 self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
                 self.conf.valgrind_errors = True
@@ -1265,7 +1265,7 @@ class DFuse():
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
         ret = self._sp.wait()
-        print('rc from dfuse {}'.format(ret))
+        print(f'rc from dfuse {ret}')
         self._sp = None
         log_test(self.conf, self.log_file)
 
@@ -3419,16 +3419,17 @@ def run_in_fg(server, conf, args):
 
     t_dir = join(dfuse.dir, container)
 
-    print('Running at {}'.format(t_dir))
-    print('export PATH={}:$PATH'.format(join(conf['PREFIX'], 'bin')))
-    print('export LD_PRELOAD={}'.format(join(conf['PREFIX'], 'lib64', 'libioil.so')))
-    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
+    print(f'Running at {t_dir}')
+    print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
+    print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
+    print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
     if args.multi_user:
-        print('dmg pool --insecure update-acl -e A::root@:rw {}'.format(pool.id()))
-    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool.id(), t_dir))
-    print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos cont list {}'.format(pool.label))
+        print(f'dmg pool --insecure update-acl -e A::root@:rw {pool.id()}')
+    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    print(f'daos container destroy --path {t_dir}/uns-link')
+    print(f'daos cont list {pool.label}')
+
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -4405,8 +4406,8 @@ def run(wf, args):
 
     wf_server.close()
     conf.flush_bz2()
-    print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
-    print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
+    print(f'Total time in log analysis: {conf.lt.total:.2f} seconds')
+    print(f'Total time in log compression: {conf.lt_compress.total:.2f} seconds')
     return fatal_errors
 
 

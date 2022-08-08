@@ -347,9 +347,6 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		return;
 	}
 
-	if (!S_ISREG(oh->doh_ie->ie_stat.st_mode))
-		D_GOTO(out_err, rc = ENOTTY);
-
 	/* The dfs handles are OK to pass across security domains because you
 	 * need the correct container handle to be able to use them.
 	 */
