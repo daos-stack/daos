@@ -8,6 +8,10 @@ hosts:
       test_servers: server-[1-6]
   test_clients: 2
 timeout: 1200
+setup:
+  # Test variants use different server counts, so ensure servers are stopped after each run
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server

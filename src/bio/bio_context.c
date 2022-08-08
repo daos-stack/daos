@@ -725,8 +725,9 @@ skip_media_error:
 	return rc;
 }
 
-int
-bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz)
+static int
+blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz,
+	       unsigned int start_idx, unsigned int unmap_cnt)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct blob_msg_arg	 bma = { 0 };
@@ -736,7 +737,6 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 	uint64_t		 pg_off, pg_cnt;
 	int			 i, rc;
 
-	D_ASSERT(blk_sz >= ioctxt->bic_io_unit && (blk_sz & (ioctxt->bic_io_unit - 1)) == 0);
 	xs_ctxt = ioctxt->bic_xs_ctxt;
 	D_ASSERT(xs_ctxt != NULL);
 	channel = xs_ctxt->bxc_io_channel;
@@ -754,12 +754,14 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 	bma.bma_ioc = ioctxt;
 	ioctxt->bic_inflight_dmas++;
 	ba->bca_inflights = 1;
-	for (i = 0; i < unmap_sgl->sg_nr_out; i++) {
-		unmap_iov = &unmap_sgl->sg_iovs[i];
 
-		/* NVMe poll needs be scheduled */
-		if (bio_need_nvme_poll(xs_ctxt))
-			bio_yield();
+	i = start_idx;
+	while (unmap_cnt > 0) {
+		unmap_iov = &unmap_sgl->sg_iovs[i];
+		i++;
+		unmap_cnt--;
+
+		drain_inflight_ios(xs_ctxt);
 
 		ba->bca_inflights++;
 		xs_ctxt->bxc_blob_rw++;
@@ -777,7 +779,8 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 	}
 	ba->bca_inflights--;
 
-	blob_wait_completion(xs_ctxt, ba);
+	if (ba->bca_inflights > 0)
+		blob_wait_completion(xs_ctxt, ba);
 	rc = ba->bca_rc;
 	ioctxt->bic_inflight_dmas--;
 
@@ -798,6 +801,30 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 	}
 done:
 	blob_cp_arg_fini(ba);
+	return rc;
+}
+
+int
+bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz)
+{
+	unsigned int	start_idx, tot_unmap_cnt, unmap_cnt;
+	int		rc = 0;
+
+	D_ASSERT(blk_sz >= ioctxt->bic_io_unit && (blk_sz & (ioctxt->bic_io_unit - 1)) == 0);
+
+	tot_unmap_cnt = unmap_sgl->sg_nr_out;
+	start_idx = 0;
+	while (tot_unmap_cnt > 0) {
+		unmap_cnt = min(tot_unmap_cnt, bio_spdk_max_unmap_cnt);
+
+		rc = blob_unmap_sgl(ioctxt, unmap_sgl, blk_sz, start_idx, unmap_cnt);
+		if (rc)
+			break;
+
+		tot_unmap_cnt -= unmap_cnt;
+		start_idx += unmap_cnt;
+	}
+
 	return rc;
 }
 
