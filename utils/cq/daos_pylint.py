@@ -42,7 +42,7 @@ except ImportError:
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
 # that currently exist in the code-base we need to restrict this to modified code.  Spellings can
-# also be enabled shortly however we have a number to correct or whitelist before enabling.
+# also be enabled shortly however we have a number to correct or resolve before enabling.
 
 
 class WrapScript():
