@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 import os
 import time
+from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -21,6 +21,7 @@ class NetworkFailureTest(IorTestBase):
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Store the info used during the test and the tearDown."""
         super().__init__(*args, **kwargs)
@@ -28,15 +29,16 @@ class NetworkFailureTest(IorTestBase):
         self.interface = None
         self.test_env = self.params.get("test_environment", "/run/*")
 
-    def tearDown(self):
+    def pre_tear_down(self):
         """Bring ib0 back up in case the test crashed in the middle."""
+        error_list = []
         if self.test_env == "ci":
             self.log.debug("Call ip link set before tearDown.")
             if self.network_down_host:
                 update_network_interface(
-                    interface=self.interface, state="up", host=self.network_down_host)
-
-        super().tearDown()
+                    interface=self.interface, state="up", hosts=self.network_down_host,
+                    errors=error_list)
+        return error_list
 
     def run_ior_report_error(self, results, job_num, file_name, pool, container,
                              namespace, timeout=None):
@@ -99,12 +101,17 @@ class NetworkFailureTest(IorTestBase):
 
     def create_ip_to_host(self):
         """Create a dictionary of IP address to hostname of the server nodes.
+
+        Returns:
+            dict: Dictionary of IP address to hostname (NodeSet representation) of all
+                server nodes.
+
         """
         command = "hostname -i"
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        return {result["stdout"][0]: str(result["hosts"]) for result in results}
+        return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
@@ -142,7 +149,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 2. Take down network interface of one of the engines. Use the first host.
         errors = []
-        self.network_down_host = self.hostlist_servers[0]
+        self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
         self.interface = self.params.get(
             "fabric_iface", "/run/server_config/servers/0/*")
@@ -151,7 +158,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="down", host=self.network_down_host,
+                interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -173,7 +180,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="up", host=self.network_down_host,
+                interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -347,7 +354,7 @@ class NetworkFailureTest(IorTestBase):
         # wolf
         if self.test_env == "ci":
             update_network_interface(
-                interface=self.interface, state="down", host=self.network_down_host,
+                interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -386,7 +393,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="up", host=self.network_down_host,
+                interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.

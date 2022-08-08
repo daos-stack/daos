@@ -16,7 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2.3.4
         with:
-          fetch-depth: 100
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Install doxygen
         run: sudo apt-get install doxygen
