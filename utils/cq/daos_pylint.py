@@ -10,10 +10,10 @@ import subprocess  # nosec
 import argparse
 try:
     from pylint.lint import Run
+    from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
     print('install pylint to enable this check')
     sys.exit(0)
-from pylint.reporters.collecting_reporter import CollectingReporter
 
 try:
     from pylint.lint import pylinter
