@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 			goto exit;
 		default:
 			print_usage();
-			rc = -1;
+			rc1 = -1;
 			goto exit;
 		}
 	}
