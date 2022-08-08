@@ -528,20 +528,20 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -553,9 +553,9 @@ pipeline {
                     post {
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc
+                                      mv config.log config.log-el8-gcc
                                   fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-el8-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -641,7 +641,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -661,7 +661,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -680,7 +680,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
@@ -721,7 +721,7 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck') {
+                stage('Unit Test with memcheck on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -739,7 +739,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
-                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                                         valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
                     }
@@ -905,14 +905,14 @@ pipeline {
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -925,7 +925,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name centos7.fault-injection fi'
+                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {
@@ -946,7 +946,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                             job_status_update()
                         }
                     }
@@ -1083,10 +1083,13 @@ pipeline {
     } // stages
     post {
         always {
-          job_status_update('final_status')
-          job_status_write()
-          valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                   'centos7-gcc-unit-memcheck']
+            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
+                                                     'el8-gcc-unit-memcheck']
+            job_status_update('final_status')
+            job_status_write()
+        }
+        unsuccessful {
+            notifyBrokenBranch branches: target_branch
         }
     } // post
 }

@@ -76,7 +76,7 @@ def add_del_user(hosts, bash_cmd, user):
 
     Args:
         hosts (NodeSet): hosts on which to add/delete the user.
-        bash_cmd (str): linux bash command to create user or group.
+        bash_cmd (str): Linux bash command to create user or group.
         user (str): user or group name to be created or cleaned.
 
     """
