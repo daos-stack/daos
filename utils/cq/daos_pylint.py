@@ -424,7 +424,6 @@ sys.path.append('site_scons')"""
                 line_changed = self._regions[vals['path']].in_region(vals['line'])
                 if line_changed:
                     print('Warning is in modified code:')
-                    failed = True
                     vals['category'] = 'error'
                 elif vals['category'] != 'error':
                     file_warnings.append(msg)
