@@ -100,7 +100,7 @@ class UpgradeDowngradeTest(IorTestBase):
                                         decoded.get(attr.decode(), None)))
 
     def check_result(self, result):
-        """check for command result, raise failure when error cncountered
+        """check for command result, raise failure when error encountered
 
         Args:
              result (dict): dictionary of result to check.

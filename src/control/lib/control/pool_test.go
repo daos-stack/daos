@@ -1077,6 +1077,10 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("scrub-thresh", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{0},
 						},
+						{
+							Number: propWithVal("svc_rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{3},
+						},
 					},
 				}),
 			},
@@ -1097,6 +1101,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("svc_rf", "3"),
 				propWithVal("upgrade_status", "in progress"),
 			},
 		},

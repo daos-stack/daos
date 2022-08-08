@@ -1051,9 +1051,9 @@ type (
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
 
-		// Latest pool global version
+		// UpgradeLayoutVer is latest pool layout version to be upgraded.
 		UpgradeLayoutVer uint32 `json:"upgrade_layout_ver"`
-		// Current pool global version
+		// PoolLayoutVer is current pool layout version.
 		PoolLayoutVer uint32 `json:"pool_layout_ver"`
 
 		// QueryErrorMsg reports an RPC error returned from a query.
@@ -1283,7 +1283,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
 				if !smdDevice.NvmeState.IsNormal() {
-					log.Noticef("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+					log.Noticef("SMD device %s (instance %d, ctrlr %s) "+
 						"not usable (device state %q)",
 						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
 						smdDevice.NvmeState.String())

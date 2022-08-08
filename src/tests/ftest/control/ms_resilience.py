@@ -8,9 +8,9 @@ import random
 import socket
 import time
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
+from apricot import TestWithServers
 from general_utils import stop_processes
 
 
@@ -176,7 +176,7 @@ class ManagementServiceResilience(TestWithServers):
             self.server_group:
                 {
                     "hosts": self.hostlist_servers,
-                    "access_points": list(replicas),
+                    "access_points": replicas,
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,
