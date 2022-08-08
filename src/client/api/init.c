@@ -166,7 +166,7 @@ daos_init(void)
 
 	/**
 	 * Set up handle hash-table, use RW lock instead of spinlock
-	 * could improve multiple threads performance significantly.
+	 * improves multiple threads performance significantly.
 	 */
 	rc = daos_hhash_init_feats(D_HASH_FT_RWLOCK);
 	if (rc != 0)

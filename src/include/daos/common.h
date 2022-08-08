@@ -838,7 +838,8 @@ extern struct daos_hhash_table daos_ht;
 
 /* daos handle hash table helpers */
 int daos_hhash_init_feats(uint32_t feats);
-static inline int daos_hhash_init(void)
+static inline int
+daos_hhash_init(void)
 {
 	return daos_hhash_init_feats(D_HASH_FT_GLOCK | D_HASH_FT_LRU);
 }

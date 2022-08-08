@@ -1040,7 +1040,7 @@ static void
 rl_op_init(struct d_rlink *rlink)
 {
 	D_INIT_LIST_HEAD(&rlink->rl_link);
-	rlink->rl_initialized	= 1;
+	rlink->rl_initialized = 1;
 	atomic_store_relaxed(&rlink->rl_ref, 1); /* for caller */
 }
 
@@ -1052,8 +1052,10 @@ rl_op_empty(struct d_rlink *rlink)
 	if (!rlink->rl_initialized)
 		return true;
 
-	is_unlinked = d_hash_rec_unlinked(&rlink->rl_link);
-	D_ASSERT(atomic_load_relaxed(&rlink->rl_ref) != 0 || is_unlinked);
+	is_unlinked = (atomic_load_relaxed(&rlink->rl_ref) == 0);
+	if (is_unlinked)
+		D_ASSERT(d_hash_rec_unlinked(&rlink->rl_link));
+
 	return is_unlinked;
 }
 

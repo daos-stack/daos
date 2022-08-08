@@ -555,8 +555,7 @@ daos_hhash_init_feats(uint32_t feats)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(feats, D_HHASH_BITS,
-			    &daos_ht.dht_hhash);
+	rc = d_hhash_create(feats, D_HHASH_BITS, &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
