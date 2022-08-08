@@ -8,16 +8,11 @@ on:
       - 'release/*'
   pull_request:
     paths:
-      - site_scons
-      - utils/build.config
-      - SConstruct
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
-      - .dockerignore
       - utils/run_in_ga.sh
       - requirements.txt
-      - ci/gha_helper.py
 
 jobs:
 
