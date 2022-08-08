@@ -44,6 +44,7 @@ struct oit_scan_args {
 	daos_key_t		oa_dkey;
 	daos_epoch_t		oa_epoch;
 	daos_obj_id_t		oa_oit_id;
+	daos_obj_id_t		oa_pre_id;
 	d_iov_t			oa_iov;
 	int			oa_hash;
 	/** sgl for OID each bucket */
@@ -107,6 +108,17 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	oid = ent->ie_oid.id_pub;
 	if (daos_oid_is_oit(oid))
 		return 0; /* ignore IOT object */
+
+	/* There might be some objects, which has same oid.id_pub, but different
+	 * id_shard, so let's compare with the previous oid to avoid duplicate
+	 * oid. Because these same oid will be put together in OI table, so only
+	 * check the previous OID should be safe here.
+	 */
+	if (daos_oid_cmp(oa->oa_pre_id, oid) == 0) {
+		D_DEBUG(DB_TRACE, "skip duplicate OID="DF_UOID"\n", DP_UOID(ent->ie_oid));
+		return 0;
+	}
+	oa->oa_pre_id = oid;
 
 	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
 
