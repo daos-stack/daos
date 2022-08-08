@@ -7,6 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
+#include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
 
 /**
@@ -79,6 +80,10 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with primary cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+#ifdef ULT_MMAP_STACK
+	/* per-xstream pool/list of free stacks */
+	struct stack_pool	*dx_sp;
+#endif
 	bool			dx_progress_started;	/* Network poll started */
 };
 
@@ -241,6 +246,23 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
+#ifdef ULT_MMAP_STACK
+/* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
+static inline void
+dss_free_stack_cb(void *arg)
+{
+	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
+	struct dss_xstream *dx = dss_current_xstream();
+
+	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
+	if (dx != NULL)
+		desc->sp = dx->dx_sp;
+
+}
+#else
+#define dss_free_stack_cb NULL
+#endif
+
 static inline int
 sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		    ABT_thread_attr t_attr, ABT_thread *thread,
@@ -249,6 +271,13 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
+#ifdef ULT_MMAP_STACK
+	struct dss_xstream *cur_dx = dss_current_xstream();
+
+	/* if possible,stack should be allocated from launching XStream pool */
+	if (cur_dx == NULL)
+		cur_dx = dx;
+#endif
 
 	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
@@ -258,7 +287,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
