@@ -308,29 +308,23 @@ class FileTypeList():
                 return True
             return False
 
-        def parse_msg(vals, msg):
+        def parse_msg(msg):
+            # Convert from a pylint message into a dict that can be using for printing.
+            vals = {'category': msg.category,
+                    'column': msg.column,
+                    'message-id': msg.msg_id,
+                    'message': msg.msg,
+                    'symbol': msg.symbol,
+                    'msg': msg.msg,
+                    'msg_id': msg.msg_id}
+
             if wrapper:
                 vals['path'] = target_file
                 vals['line'] = wrapper.convert_line(msg.line)
             else:
                 vals['path'] = msg.path
                 vals['line'] = msg.line
-            vals['column'] = msg.column
-            vals['message-id'] = msg.msg_id
-            vals['message'] = msg.msg
-            vals['symbol'] = msg.symbol
-
-            # Duplicates, needed for message_template.
-            vals['msg'] = msg.msg
-            vals['msg_id'] = msg.msg_id
-
-            # The build/scons code is mostly clean, so only allow f-string warnings.
-            if scons and msg.symbol != 'consider-using-f-string':
-                vals['category'] = 'error'
-
-            # Flag some serious warnings as errors
-            if msg.symbol in ('condition-evals-to-constant'):
-                vals['category'] = 'error'
+            return vals
 
         failed = False
         rep = CollectingReporter()
@@ -383,9 +377,7 @@ sys.path.append('site_scons')"""
         file_warnings = []
 
         for msg in results.linter.reporter.messages:
-            vals = {}
-            vals['category'] = msg.category
-
+            promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
             # in comments.  Be strict for everything but ftest code currently.
             if not scons and msg.msg_id in ('C0401', 'C0402'):
@@ -402,13 +394,24 @@ sys.path.append('site_scons')"""
 
                 # Finally, promote any spelling mistakes not silenced above or in ftest to error.
                 if not ftest:
-                    vals['category'] = 'error'
+                    promote_to_error = True
 
             # Inserting code can cause wrong-module-order.
             if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
 
-            parse_msg(vals, msg)
+            vals = parse_msg(msg)
+
+            if promote_to_error:
+                vals['category'] = 'error'
+
+            # The build/scons code is mostly clean, so only allow f-string warnings.
+            if scons and msg.symbol != 'consider-using-f-string':
+                vals['category'] = 'error'
+
+            # Flag some serious warnings as errors
+            if msg.symbol in ('condition-evals-to-constant'):
+                vals['category'] = 'error'
 
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
@@ -419,7 +422,7 @@ sys.path.append('site_scons')"""
                     print('Warning is in modified code:')
                     failed = True
                     vals['category'] = 'error'
-                else:
+                elif vals['category'] != 'error':
                     file_warnings.append(msg)
                     continue
 
@@ -438,9 +441,7 @@ sys.path.append('site_scons')"""
         if file_warnings:
             print('Warnings from modified files:')
         for msg in file_warnings:
-            vals = {}
-            vals['category'] = msg.category
-            parse_msg(vals, msg)
+            vals = parse_msg(msg)
             print(args.msg_template.format(**vals))
             if args.format == 'github':
                 # Report all messages in modified files, but do it at the notice level.
