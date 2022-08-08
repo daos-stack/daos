@@ -214,7 +214,7 @@ dc_tx_free(struct d_hlink *hlink)
 	d_backoff_seq_fini(&tx->tx_backoff_seq);
 
 	if (tx->tx_epoch_task != NULL)
-		tse_task_complete(tx->tx_epoch_task, -DER_CANCELED);
+		tse_task_decref(tx->tx_epoch_task);
 
 	D_FREE(tx->tx_req_cache);
 	dc_pool_put(tx->tx_pool);
@@ -2084,7 +2084,7 @@ dc_tx_restart_begin(struct dc_tx *tx, uint32_t *backoff)
 		dc_tx_cleanup(tx);
 
 		if (tx->tx_epoch_task != NULL) {
-			tse_task_complete(tx->tx_epoch_task, -DER_CANCELED);
+			tse_task_decref(tx->tx_epoch_task);
 			tx->tx_epoch_task = NULL;
 		}
 
