@@ -260,7 +260,7 @@ start_flush_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, 0);
+	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_flush_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create flush ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
