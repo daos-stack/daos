@@ -3443,6 +3443,7 @@ def check_readdir_perf(server, conf):
     def make_dirs(parent, count):
         """Populate the test directory"""
         print('Populating to {}'.format(count))
+
         dir_dir = join(parent, 'dirs.{}.in'.format(count))
         t_dir = join(parent, 'dirs.{}'.format(count))
         file_dir = join(parent, 'files.{}.in'.format(count))

@@ -308,6 +308,30 @@ class FileTypeList():
                 return True
             return False
 
+        def parse_msg(vals, msg):
+            if wrapper:
+                vals['path'] = target_file
+                vals['line'] = wrapper.convert_line(msg.line)
+            else:
+                vals['path'] = msg.path
+                vals['line'] = msg.line
+            vals['column'] = msg.column
+            vals['message-id'] = msg.msg_id
+            vals['message'] = msg.msg
+            vals['symbol'] = msg.symbol
+
+            # Duplicates, needed for message_template.
+            vals['msg'] = msg.msg
+            vals['msg_id'] = msg.msg_id
+
+            # The build/scons code is mostly clean, so only allow f-string warnings.
+            if scons and msg.symbol != 'consider-using-f-string':
+                vals['category'] = 'error'
+
+            # Flag some serious warnings as errors
+            if msg.symbol in ('condition-evals-to-constant'):
+                vals['category'] = 'error'
+
         failed = False
         rep = CollectingReporter()
         wrapper = None
@@ -355,6 +379,9 @@ sys.path.append('site_scons')"""
         types = Counter()
         symbols = Counter()
 
+        # List of errors that are in modified files but not modified code.
+        file_warnings = []
+
         for msg in results.linter.reporter.messages:
             vals = {}
             vals['category'] = msg.category
@@ -381,28 +408,7 @@ sys.path.append('site_scons')"""
             if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
 
-            if wrapper:
-                vals['path'] = target_file
-                vals['line'] = wrapper.convert_line(msg.line)
-            else:
-                vals['path'] = msg.path
-                vals['line'] = msg.line
-            vals['column'] = msg.column
-            vals['message-id'] = msg.msg_id
-            vals['message'] = msg.msg
-            vals['symbol'] = msg.symbol
-
-            # Duplicates, needed for message_template.
-            vals['msg'] = msg.msg
-            vals['msg_id'] = msg.msg_id
-
-            # The build/scons code is mostly clean, so only allow f-string warnings.
-            if scons and msg.symbol != 'consider-using-f-string':
-                vals['category'] = 'error'
-
-            # Flag some serious warnings as errors
-            if msg.symbol in ('condition-evals-to-constant'):
-                vals['category'] = 'error'
+            parse_msg(vals, msg)
 
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
@@ -410,11 +416,12 @@ sys.path.append('site_scons')"""
             if vals['path'] in self._regions:
                 line_changed = self._regions[vals['path']].in_region(vals['line'])
                 if line_changed:
-                    print('Warning is in modified code')
+                    print('Warning is in modified code:')
                     failed = True
                     vals['category'] = 'error'
                 else:
-                    print('Warning is in modified file')
+                    file_warnings.append(msg)
+                    continue
 
             print(args.msg_template.format(**vals))
 
@@ -424,6 +431,20 @@ sys.path.append('site_scons')"""
                 if vals['category'] == 'warning':
                     continue
                 failed = True
+                # pylint: disable-next=consider-using-f-string
+                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                    **vals))
+
+        if file_warnings:
+            print('Warnings from modified files:')
+        for msg in file_warnings:
+            vals = {}
+            vals['category'] = msg.category
+            parse_msg(vals, msg)
+            print(args.msg_template.format(**vals))
+            if args.format == 'github':
+                # Report all messages in modified files to github, but do it at the notice level.
+                vals['category'] = 'notice'
                 # pylint: disable-next=consider-using-f-string
                 print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
                     **vals))
