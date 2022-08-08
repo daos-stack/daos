@@ -91,8 +91,8 @@ struct ec_agg_stripe {
 	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
 	d_list_t	as_dextents;    /* list of stripe's data extents     */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
+	uint64_t	as_offset;      /* start offset in stripe            */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
-	unsigned int	as_offset;      /* start offset in stripe            */
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
@@ -440,23 +440,23 @@ out:
 /* Determines if an extent overlaps a cell.
  */
 static bool
-agg_overlap(unsigned int estart, unsigned int elen, unsigned int cell,
-	    unsigned int k, unsigned int len, daos_off_t stripenum)
+agg_overlap(uint64_t estart, uint64_t elen, unsigned int cell_idx,
+	    unsigned int k, unsigned int len, uint64_t stripenum)
 {
-	daos_off_t cell_start = k * len * stripenum + len * cell;
+	daos_recx_t	recx, cell_recx;
 
-	estart += k * len * stripenum;
-	if (cell_start <= estart && estart < cell_start + len)
-		return true;
-	if (estart <= cell_start && cell_start < estart + elen)
-		return true;
-	return false;
+	recx.rx_idx		= estart + k * len * stripenum;
+	recx.rx_nr		= elen;
+	cell_recx.rx_idx	= k * len * stripenum + len * cell_idx;
+	cell_recx.rx_nr		= len;
+
+	return DAOS_RECX_PTR_OVERLAP(&recx, &cell_recx);
 }
 
 static unsigned int
-agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, unsigned int estart,
-		unsigned int elen, unsigned int k, unsigned int len,
-		unsigned int stripenum, unsigned int *full_cell_cnt)
+agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
+		uint64_t elen, unsigned int k, unsigned int len,
+		uint64_t stripenum, unsigned int *full_cell_cnt)
 {
 	unsigned int i, cell_cnt = 0;
 
@@ -1142,11 +1142,11 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	uint8_t			 tbit_map[OBJ_TGT_BITMAP_LEN] = {0};
 	unsigned int		 len = ec_age2cs(entry);
 	unsigned int		 k = ec_age2k(entry);
-	unsigned long            ss;
 	unsigned int		 i, full_cell_cnt = 0;
 	unsigned int		 cell_cnt = 0;
-	unsigned int		 estart, elen = 0;
-	unsigned int		 eend = 0;
+	uint64_t		 ss;
+	uint64_t		 estart, elen = 0;
+	uint64_t		 eend = 0;
 	bool			 has_old_replicas = false;
 	int			 tid, rc = 0;
 
@@ -1170,8 +1170,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 		}
 		if (extent->ae_recx.rx_idx - ss > eend) {
 			cell_cnt += agg_count_cells(fcbit_map, tbit_map, estart,
-						    elen, k, len, entry->
-						    ae_cur_stripe.as_stripenum,
+						    elen, k, len, entry->ae_cur_stripe.as_stripenum,
 						    &full_cell_cnt);
 			estart = extent->ae_recx.rx_idx - ss;
 			elen = 0;
@@ -1243,7 +1242,7 @@ out:
 
 /* Sends the generated parity and the stripe number to the peer
  * parity target. Handler writes the parity and deletes the replicas
- * for the stripe.  Has to be extended to support p > 2.
+ * for the stripe.
  */
 static void
 agg_peer_update_ult(void *arg)
@@ -1636,12 +1635,11 @@ agg_process_holes_ult(void *arg)
 		ec_rep_in->er_dkey = entry->ae_dkey;
 		ec_rep_in->er_iod = *iod;
 		ec_rep_in->er_iod_csums.ca_arrays = stripe_ud->asu_iod_csums;
-		ec_rep_in->er_iod_csums.ca_count =
-			stripe_ud->asu_iod_csums == NULL ? 0 : 1;
+		ec_rep_in->er_iod_csums.ca_count = stripe_ud->asu_iod_csums == NULL ? 0 : 1;
 		ec_rep_in->er_stripenum = entry->ae_cur_stripe.as_stripenum;
-		ec_rep_in->er_epoch = entry->ae_cur_stripe.as_hi_epoch;
-		ec_rep_in->er_map_ver =
-			agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_rep_in->er_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
+		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 		ec_rep_in->er_bulk = bulk_hdl;
 		rc = dss_rpc_send(rpc);
 		if (rc) {

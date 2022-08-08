@@ -23,8 +23,9 @@ class OSADmgNegativeTest(OSAUtils):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
+
         # Dmg command test sequence
         self.test_seq = self.params.get("dmg_cmd_test",
                                         "/run/test_sequence/*")

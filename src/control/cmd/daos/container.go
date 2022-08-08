@@ -638,11 +638,62 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		ap.epc = C.uint64_t(cmd.Epoch)
 	}
 
-	// TODO: Build a Go slice so that we can JSON-format the list.
-	rc := C.cont_list_objs_hdlr(ap)
+	snapOpts := uint32(C.DAOS_SNAP_OPT_CR | C.DAOS_SNAP_OPT_OIT)
+	rc := C.daos_cont_create_snap_opt(ap.cont, &ap.epc, nil, snapOpts, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to list objects in container %s", cmd.ContainerID())
+		return errors.Wrapf(err, "failed to create snapshot for container %s", cmd.ContainerID())
+	}
+	defer func() {
+		rc = C.cont_destroy_snap_hdlr(ap)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to destroy snapshot in cleanup: %v", err)
+		}
+	}()
+
+	oit := C.daos_handle_t{}
+	rc = C.daos_oit_open(ap.cont, ap.epc, &oit, nil)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to open OIT for container %s", cmd.ContainerID())
+	}
+	defer func() {
+		rc = C.daos_oit_close(oit, nil)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to close OIT in cleanup: %v", err)
+		}
+	}()
+
+	// NB: It is somewhat inefficient to build up a slice of OID strings for
+	// the JSON output format, but it is simple. If it turns out to be a problem,
+	// we can implement a custom JSON output handler that streams the OID
+	// strings directly to output.
+	var oids []string
+	var readOids C.uint32_t
+	oidArr := [C.OID_ARR_SIZE]C.daos_obj_id_t{}
+	anchor := C.daos_anchor_t{}
+	for {
+		if C.daos_anchor_is_eof(&anchor) {
+			break
+		}
+
+		readOids = C.OID_ARR_SIZE
+		rc = C.daos_oit_list(oit, &oidArr[0], &readOids, &anchor, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to list objects for container %s", cmd.ContainerID())
+		}
+
+		for i := C.uint32_t(0); i < readOids; i++ {
+			oid := fmt.Sprintf("%d.%d", oidArr[i].hi, oidArr[i].lo)
+
+			if !cmd.jsonOutputEnabled() {
+				cmd.Infof("%s", oid)
+				continue
+			}
+			oids = append(oids, oid)
+		}
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(oids, nil)
 	}
 
 	return nil

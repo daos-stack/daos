@@ -176,6 +176,12 @@ dtx_cont_opened(struct ds_cont_child *cont)
 	return cont->sc_open > 0;
 }
 
+static inline uint32_t
+dtx_cont2ver(struct ds_cont_child *cont)
+{
+	return cont->sc_pool->spc_pool->sp_map_version;
+}
+
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
@@ -184,6 +190,8 @@ extern btr_ops_t dtx_btr_cos_ops;
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
+int start_dtx_reindex_ult(struct ds_cont_child *cont);
+void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,

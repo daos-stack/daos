@@ -1,6 +1,9 @@
 #!/bin/bash
 set -eu
 
+hook=${0##*/}
+rm -f ".${hook}"
+
 run-parts() {
     local dir="$1"
     shift
@@ -12,4 +15,6 @@ run-parts() {
     done
 }
 
-run-parts utils/githooks/"${0##*/}".d "$@" 1>&2
+run-parts utils/githooks/"${hook}".d "$@" 1>&2
+
+touch ".${hook}"
