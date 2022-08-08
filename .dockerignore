@@ -11,7 +11,7 @@
 !utils/completion
 !utils/config
 !utils/node_local_test.py
-!utils/nlt_*.yaml
+!utils/nlt_server.yaml
 !utils/setup_daos_admin.sh
 !utils/sl/setup_local.sh
 !utils/scripts
