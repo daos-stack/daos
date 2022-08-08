@@ -8,7 +8,11 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
-from pylint.lint import Run
+try:
+    from pylint.lint import Run
+except ImportError:
+    print('install pylint to enable this check')
+    sys.exit(0)
 from pylint.reporters.collecting_reporter import CollectingReporter
 
 try:
