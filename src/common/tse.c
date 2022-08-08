@@ -247,6 +247,7 @@ tse_task_decref(tse_task_t *task)
 		return;
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
