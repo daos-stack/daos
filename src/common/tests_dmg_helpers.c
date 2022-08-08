@@ -9,6 +9,7 @@
 #include <linux/limits.h>
 #include <json-c/json.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -94,6 +95,136 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	return cmd_str;
 }
 
+static void
+log_stderr_pipe(int fd)
+{
+	char	buf[512];
+	char	*full_msg = NULL;
+	ssize_t	len = 0;
+
+	D_DEBUG(DB_TEST, "reading from stderr pipe\n");
+	while (1) {
+		ssize_t n;
+		ssize_t old_len = len;
+		char	*tmp;
+
+		n = read(fd, buf, sizeof(buf));
+		if (n == 0)
+			break;
+		if (n < 0) {
+			D_ERROR("read from stderr pipe failed: %s\n", strerror(errno));
+			break;
+		}
+
+		len = len + n;
+		D_REALLOC(tmp, full_msg, old_len, len);
+		if (tmp == NULL) {
+			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld\n",
+				len);
+			break;
+		}
+
+		full_msg = tmp;
+		strncpy(&full_msg[old_len], buf, n);
+	}
+
+
+	D_DEBUG(DB_TEST, "done reading stderr pipe\n");
+	close(fd);
+
+	if (full_msg == NULL) {
+		D_INFO("no stderr output\n");
+		return;
+	}
+
+	D_DEBUG(DB_TEST, "stderr: %s\n", full_msg);
+	D_FREE(full_msg);
+}
+
+static int
+run_cmd(const char *command, int *outputfd)
+{
+	int rc = 0;
+	int child_rc = 0;
+	int child_pid;
+	int stdoutfd[2];
+	int stderrfd[2];
+
+	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
+
+	/* Create pipes */
+	if (pipe(stdoutfd) == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to create stdout pipe: %s\n", strerror(errno));
+		return rc;
+	}
+
+	if (pipe(stderrfd) == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to create stderr pipe: %s\n", strerror(errno));
+		close(stdoutfd[0]);
+		close(stdoutfd[1]);
+		return rc;
+	}
+
+	child_pid = fork();
+	if (child_pid == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to fork: %s\n", strerror(errno));
+		return rc;
+	}
+
+	if (child_pid == 0) {
+		/* child doesn't need the read end of the pipes */
+		close(stdoutfd[0]);
+		close(stderrfd[0]);
+
+		D_DEBUG(DB_TEST, "running dmg command\n");
+
+		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1) {
+			D_ERROR("failed to dup stdout pipe: %s\n", strerror(errno));
+			_exit(daos_errno2der(errno));
+		}
+
+		if (dup2(stderrfd[1], STDERR_FILENO) == -1) {
+			D_ERROR("failed to dup stderr pipe: %s\n", strerror(errno));
+			_exit(daos_errno2der(errno));
+		}
+
+		close(stdoutfd[1]);
+		close(stderrfd[1]);
+
+		if (system(command) == -1) {
+			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", command, errno,
+				strerror(errno));
+			_exit(daos_errno2der(errno));
+		}
+		_exit(0);
+	}
+
+	/* parent doesn't need the write end of the pipes */
+	close(stdoutfd[1]);
+	close(stderrfd[1]);
+
+	D_DEBUG(DB_TEST, "waiting for dmg to finish executing\n");
+	if (wait(&child_rc) == -1) {
+		D_ERROR("wait failed: %s\n", strerror(errno));
+		return daos_errno2der(errno);
+	}
+	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
+
+	if (child_rc != 0) {
+		D_ERROR("child process failed, "DF_RC"\n", DP_RC(child_rc));
+		close(stdoutfd[0]);
+		log_stderr_pipe(stderrfd[0]);
+		return child_rc;
+	}
+
+	close(stderrfd[0]);
+	*outputfd = stdoutfd[0];
+	return 0;
+}
+
 #ifndef HAVE_JSON_TOKENER_GET_PARSE_END
 #define json_tokener_get_parse_end(tok) ((tok)->char_offset)
 #endif
@@ -113,12 +244,14 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			parse_depth = JSON_TOKENER_DEFAULT_DEPTH;
 	json_tokener		*tok = NULL;
 	FILE			*fp = NULL;
-	int			pc_rc, rc = 0;
+	int			stdoutfd = 0;
+	int			rc = 0;
+	const char		*debug_flags = "-d --log-file=/tmp/suite_dmg.log";
 
 	if (dmg_config_file == NULL)
-		D_ASPRINTF(cmd_base, "dmg -j -i %s ", dmg_cmd);
+		D_ASPRINTF(cmd_base, "dmg -j -i %s %s ", debug_flags, dmg_cmd);
 	else
-		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ",
+		D_ASPRINTF(cmd_base, "dmg -j %s -o %s %s ", debug_flags,
 			   dmg_config_file, dmg_cmd);
 	if (cmd_base == NULL)
 		return -DER_NOMEM;
@@ -127,28 +260,32 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
-	fp = popen(cmd_str, "r");
-	if (!fp) {
-		D_ERROR("failed to invoke %s\n", cmd_str);
-		D_GOTO(out, rc = -DER_IO);
-	}
+	rc = run_cmd(cmd_str, &stdoutfd);
+	if (rc != 0)
+		goto out;
 
 	/* If the caller doesn't care about output, don't bother parsing it. */
 	if (json_out == NULL)
-		goto out_pclose;
+		goto out_close;
+
+	fp = fdopen(stdoutfd, "r");
+	if (fp == NULL) {
+		D_ERROR("fdopen failed: %s\n", strerror(errno));
+		D_GOTO(out_close, rc = daos_errno2der(errno));
+	}
 
 	char	*jbuf = NULL, *temp;
 	size_t	size = 0;
 	size_t	total = 0;
 	size_t	n;
 
+	D_DEBUG(DB_TEST, "reading json from stdout\n");
 	while (1) {
 		if (total + JSON_CHUNK_SIZE + 1 > size) {
 			size = total + JSON_CHUNK_SIZE + 1;
 
 			if (size >= JSON_MAX_INPUT) {
-				D_ERROR("JSON input too large\n");
+				D_ERROR("JSON input too large (size=%lu)\n", size);
 				D_GOTO(out_jbuf, rc = -DER_REC2BIG);
 			}
 
@@ -164,12 +301,19 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
+	D_DEBUG(DB_TEST, "read %lu bytes\n", total);
+
+	if (total == 0) {
+		D_ERROR("dmg output is empty\n");
+		D_GOTO(out_jbuf, rc = -DER_INVAL);
+	}
 
 	D_REALLOC(temp, jbuf, total, total + 1);
 	if (temp == NULL)
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
 	jbuf[total] = '\0';
+	D_DEBUG(DB_TEST, "dmg output=\"%s\"\n", jbuf);
 
 	tok = json_tokener_new_ex(parse_depth);
 	if (tok == NULL)
@@ -181,7 +325,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		int fail_off = json_tokener_get_parse_end(tok);
 		char *aterr = &jbuf[fail_off];
 
-		D_ERROR("failed to parse JSON at offset %d: %s %c\n",
+		D_ERROR("failed to parse JSON at offset %d: %s (failed character: %c)\n",
 			fail_off, json_tokener_error_desc(jerr), aterr[0]);
 		D_GOTO(out_tokener, rc = -DER_INVAL);
 	}
@@ -190,13 +334,14 @@ out_tokener:
 	json_tokener_free(tok);
 out_jbuf:
 	D_FREE(jbuf);
-out_pclose:
-	pc_rc = pclose(fp);
-	if (pc_rc != 0) {
-		D_ERROR("%s exited with %d\n", cmd_str, pc_rc % 0xFF);
+
+	if (fclose(fp) == -1) {
+		D_ERROR("failed to close fp: %s\n", strerror(errno));
 		if (rc == 0)
-			rc = -DER_MISC;
+			rc = daos_errno2der(errno);
 	}
+out_close:
+	close(stdoutfd);
 out:
 	D_FREE(cmd_str);
 
