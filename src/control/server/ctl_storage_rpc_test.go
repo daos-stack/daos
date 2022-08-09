@@ -190,30 +190,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scm get state failure": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{ctrlr},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
-				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-				GetStateErr:      errors.New("scm get state failed"),
-			},
-			expResp: &ctlpb.StorageScanResp{
-				Nvme: &ctlpb.ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrPB},
-					State:  new(ctlpb.ResponseState),
-				},
-				Scm: &ctlpb.ScanScmResp{
-					State: &ctlpb.ResponseState{
-						Error:  "scm get state failed",
-						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-					},
-				},
-			},
-		},
 		"all discover fail": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk scan failed"),
@@ -2778,7 +2754,7 @@ func TestServer_adjustScmSize(t *testing.T) {
 			},
 			output: ExpectedOutput{
 				availableBytes: []uint64{0},
-				message:        "WARNING: Adjusting available size to 0 Bytes of SCM device",
+				message:        "Adjusting available size to 0 Bytes of SCM device",
 			},
 		},
 	} {
