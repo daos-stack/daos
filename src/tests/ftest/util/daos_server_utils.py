@@ -7,7 +7,7 @@ from server_utils_base import DaosServerCommand
 
 
 class DaosServerCommandRunner(DaosServerCommand):
-    """"""
+    """Defines a object representing a daos_server command."""
 
     def __init__(self, path):
         """Create a daos_server Command object.
