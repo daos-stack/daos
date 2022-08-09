@@ -519,10 +519,7 @@ class DestroyTests(TestWithServers):
         self.validate_pool_creation(hostlist_servers)
 
         # Create pool container
-        self.container = DaosContainer(self.context)
-        self.container.create(self.pool.pool.handle)
-        if self.container.uuid is None:
-            self.fail("Container uuid is None.")
+        self.add_container(pool=self.pool)
 
         # Destroy pool with recursive unset
         self.log.info("Attempting to destroy a pool with containers")
@@ -571,10 +568,7 @@ class DestroyTests(TestWithServers):
         self.validate_pool_creation(hostlist_servers)
 
         # Create pool container
-        self.container = DaosContainer(self.context)
-        self.container.create(self.pool.pool.handle)
-        if self.container.uuid is None:
-            self.fail("Container uuid is None.")
+        self.add_container(pool=self.pool)
 
         # Destroy pool with recursive set
         self.log.info("Attempting to recursively destroy a pool with containers")
