@@ -85,6 +85,13 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hs_reply.fsr_pool_size = iov.iov_buf_len;
 
+#if 1
+	/* Tell the caller that the pool size is large to force it into the back-off code of using
+	 * a file to communicate this data
+	 */
+	hs_reply.fsr_pool_size = (16 * 1024);
+#endif
+
 	rc = daos_cont_local2global(oh->doh_ie->ie_dfs->dfs_coh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
