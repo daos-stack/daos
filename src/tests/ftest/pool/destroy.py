@@ -498,3 +498,96 @@ class DestroyTests(TestWithServers):
             self.pool.pool = None
             if exception_detected:
                 self.fail("Force destroying connected pool failed")
+
+    def test_destroy_with_containers(self):
+        """Destroy pool with existing containers.
+
+        Test destroying a pool that has existing containers with recursive == false.
+        Should fail.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_with_containers,test_destroy_with_containers
+        """
+        hostlist_servers = self.hostlist_servers[0:1]
+
+        # Start servers
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
+
+        # Create the pool
+        self.validate_pool_creation(hostlist_servers)
+
+        # Create pool container
+        self.container = DaosContainer(self.context)
+        self.container.create(self.pool.pool.handle)
+        if self.container.uuid is None:
+            self.fail("Container uuid is None.")
+
+        # Destroy pool with recursive unset
+        self.log.info("Attempting to destroy a pool with containers")
+        exception_detected = False
+        try:
+            self.pool.destroy(recursive=0, disconnect=0)
+        except TestFail as result:
+            exception_detected = True
+            self.log.info(
+                "Expected exception - destroying pool with containers: %s",
+                str(result))
+
+        if not exception_detected:
+            # The pool-destroy did not raise an exception as expected
+            self.log.error(
+                "Exception did not occur - destroying pool with containers")
+
+            # Prevent attempting to delete the pool in tearDown()
+            self.pool.pool = None
+
+        self.log.info("Check if files still exist")
+        self.assertTrue(
+            self.pool.check_files(hostlist_servers),
+            "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
+
+        self.assertTrue(
+            exception_detected, "No exception when deleting a pool with containers")
+
+    def test_recursivedestroy_with_containers(self):
+        """Recursively destroy pool with existing containers.
+
+        Test destroying a pool that has existing containers with recursive == true.
+        Should pass.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_recursive_destroy_with_containers,test_recursivedestroy_with_containers
+        """
+        hostlist_servers = self.hostlist_servers[0:1]
+
+        # Start servers
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
+
+        # Create the pool
+        self.validate_pool_creation(hostlist_servers)
+
+        # Create pool container
+        self.container = DaosContainer(self.context)
+        self.container.create(self.pool.pool.handle)
+        if self.container.uuid is None:
+            self.fail("Container uuid is None.")
+
+        # Destroy pool with recursive set
+        self.log.info("Attempting to recursively destroy a pool with containers")
+        exception_detected = False
+        try:
+            self.pool.destroy(recursive=1, disconnect=0)
+        except TestFail as result:
+            exception_detected = True
+            self.log.info(
+                "Unexpected exception - destroying pool with containers: %s",
+                str(result))
+        finally:
+            # Prevent attempting to delete the pool in tearDown()
+            self.pool.pool = None
+            if exception_detected:
+                self.fail("recursive destroying pool with containers failed")
