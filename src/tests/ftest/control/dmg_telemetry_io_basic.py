@@ -89,7 +89,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             DAOS engine IO telemetry basic metrics infrastructure.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=control,telemetry
         :avocado: tags=test_with_telemetry_basic,test_io_telemetry
         :avocado: tags=test_io_telemetry_basic,test_io_telmetry_metrics_basic
