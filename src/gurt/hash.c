@@ -13,8 +13,6 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#define HT_LOCKS_NR	64
-
 enum d_hash_lru {
 	D_HASH_LRU_TAIL = -1,
 	D_HASH_LRU_NONE =  0,
@@ -236,7 +234,7 @@ ch_bucket_lock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 		return;
 
 	lock = (htable->ht_feats & D_HASH_FT_GLOCK)
-		? &htable->ht_lock : &htable->ht_locks[idx % HT_LOCKS_NR];
+		? &htable->ht_lock : &htable->ht_locks[idx];
 	if (htable->ht_feats & D_HASH_FT_MUTEX) {
 		D_MUTEX_LOCK(&lock->mutex);
 	} else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
@@ -259,7 +257,7 @@ ch_bucket_unlock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 		return;
 
 	lock = (htable->ht_feats & D_HASH_FT_GLOCK)
-		? &htable->ht_lock : &htable->ht_locks[idx % HT_LOCKS_NR];
+		? &htable->ht_lock : &htable->ht_locks[idx];
 	if (htable->ht_feats & D_HASH_FT_MUTEX)
 		D_MUTEX_UNLOCK(&lock->mutex);
 	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
@@ -522,6 +520,7 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 {
 	struct d_hash_bucket	*bucket;
 	uint32_t	 idx;
+	uint32_t	 nr = 1U << htable->ht_bits;
 	bool		 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
 	if (htable->ht_ops->hop_key_init == NULL)
@@ -529,7 +528,7 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 
 	if (need_lock) {
 		/* Lock all buckets because of unknown key yet */
-		for (idx = 0; idx < HT_LOCKS_NR; idx++) {
+		for (idx = 0; idx < nr; idx++) {
 			ch_bucket_lock(htable, idx, false);
 			if (htable->ht_feats & D_HASH_FT_GLOCK)
 				break;
@@ -544,7 +543,7 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 	ch_rec_insert_addref(htable, bucket, link);
 
 	if (need_lock) {
-		for (idx = 0; idx < HT_LOCKS_NR; idx++) {
+		for (idx = 0; idx < nr; idx++) {
 			ch_bucket_unlock(htable, idx, false);
 			if (htable->ht_feats & D_HASH_FT_GLOCK)
 				break;
@@ -816,11 +815,11 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 		if (rc)
 			D_GOTO(free_buckets, rc);
 	} else {
-		D_ALLOC_ARRAY(htable->ht_locks, HT_LOCKS_NR);
+		D_ALLOC_ARRAY(htable->ht_locks, nr);
 		if (htable->ht_locks == NULL)
 			D_GOTO(free_buckets, rc = -DER_NOMEM);
 
-		for (i = 0; i < HT_LOCKS_NR; i++) {
+		for (i = 0; i < nr; i++) {
 			if (htable->ht_feats & D_HASH_FT_MUTEX)
 				rc = D_MUTEX_INIT(&htable->ht_locks[i].mutex,
 						  NULL);
@@ -961,7 +960,7 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 		else
 			D_SPIN_DESTROY(&htable->ht_lock.spin);
 	} else {
-		for (i = 0; i < HT_LOCKS_NR; i++) {
+		for (i = 0; i < nr; i++) {
 			if (htable->ht_feats & D_HASH_FT_MUTEX)
 				D_MUTEX_DESTROY(&htable->ht_locks[i].mutex);
 			else if (htable->ht_feats & D_HASH_FT_RWLOCK)
@@ -1217,6 +1216,7 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 
 	if (d_hhash_is_ptrtype(hhash)) {
 		uint64_t ptr_key = (uintptr_t)hlink;
+		uint32_t nr = 1U << hhash->ch_htable.ht_bits;
 		uint32_t idx = 0;
 
 		D_ASSERTF(type == D_HTYPE_PTR, "direct/ptr-based htable can "
@@ -1226,7 +1226,7 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 
 		if (need_lock) {
 			/* Lock all buckets to emulate proper hlink lock */
-			for (idx = 0; idx < HT_LOCKS_NR; idx++) {
+			for (idx = 0; idx < nr; idx++) {
 				ch_bucket_lock(&hhash->ch_htable, idx, false);
 				if (hhash->ch_htable.ht_feats & D_HASH_FT_GLOCK)
 					break;
@@ -1237,7 +1237,7 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 		hlink->hl_key = ptr_key;
 
 		if (need_lock) {
-			for (idx = 0; idx < HT_LOCKS_NR; idx++) {
+			for (idx = 0; idx < nr; idx++) {
 				ch_bucket_unlock(&hhash->ch_htable, idx, false);
 				if (hhash->ch_htable.ht_feats & D_HASH_FT_GLOCK)
 					break;
