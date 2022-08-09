@@ -26,5 +26,5 @@ jobs:
         run: git diff ${{ github.event.pull_request.base.sha }} -U10
       - name: Run pylint check.
         run: >
-          git diff ${{ github.event.pull_request.base.sha }} -U10 |
+          git diff ${{ github.event.pull_request.base.sha }} -U5 |
             ./utils/cq/daos_pylint.py --git --format github --diff
