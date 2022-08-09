@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -7,7 +6,8 @@
 import re
 
 from apricot import TestWithServers
-from general_utils import run_pcmd
+from general_utils import run_pcmd, report_errors
+from daos_server_utils import DaosServerCommandRunner
 
 
 class DAOSVersion(TestWithServers):
@@ -87,9 +87,9 @@ class DAOSVersion(TestWithServers):
             self.log.info("daos_agent version = %s", daos_agent_version)
 
         # Get daos_server version
-        daos_server_cmd = "daos_server version"
-        output = run_pcmd(hosts=self.hostlist_servers, command=daos_server_cmd)
-        stdout = output[0]["stdout"][0]
+        daos_server_cmd = DaosServerCommandRunner(path=self.bin)
+        output = daos_server_cmd.version()
+        stdout = output.stdout.decode("utf-8")
 
         # Verify that "DAOS Control Server" is in the output.
         if "DAOS Control Server" not in stdout:
@@ -118,5 +118,6 @@ class DAOSVersion(TestWithServers):
                     tool, version, rpm_version)
                 errors.append(msg)
 
-        if errors:
-            self.fail("\n---- Errors detected! ----\n{}".format("\n".join(errors)))
+        self.log.info("###### Errors ######")
+        report_errors(test=self, errors=errors)
+        self.log.info("####################")
