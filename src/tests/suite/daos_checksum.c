@@ -2580,11 +2580,12 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	 * Setup
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *)*state);
-	/* Make scrubbing is running a lot */
-	dmg_pool_set_prop(dmg_config_file, "scrub", "continuous",
-			  ctx.test_arg->pool.pool_uuid);
-	dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
-			  ctx.test_arg->pool.pool_uuid);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub", "timed",
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
 
 	setup_simple_data(&ctx);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC32, false, 1024, oc);

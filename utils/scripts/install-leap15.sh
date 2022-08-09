@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/usr/bin/env bash
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -7,6 +7,10 @@
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
+
+set -e
+
+arch=$(uname -i)
 
 dnf --nodocs install \
     boost-devel \
@@ -25,7 +29,6 @@ dnf --nodocs install \
     graphviz \
     gzip \
     hwloc-devel \
-    ipmctl-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
@@ -55,3 +58,9 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+# ipmctl is only available on x86_64
+if [ "$arch" = x86_64 ]; then
+    dnf --nodocs install \
+        ipmctl-devel
+fi

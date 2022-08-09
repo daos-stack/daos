@@ -665,7 +665,7 @@ class FileSystemExplorer(CommonBase):
         self._dfs.reset()
         self._enqueue_path(self._path)
 
-        while(self._queue):
+        while self._queue:
             file_path = self._queue.pop(0)
             self._oid = self._dfs.create_dir_obj()
             self._debug('entering {0}'.format(file_path))

@@ -102,7 +102,7 @@ class SparseFile(IorTestBase):
                                                        sparse_file)
         self.log.info("File size (in bytes) after writing 1024th byte: %s",
                       fsize_write_1024thwrite)
-        # verify file did not got overriten after dd write.
+        # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1024thwrite == self.space_before)
 
         # Obtain the value of 1st byte and 1024th byte in the file and

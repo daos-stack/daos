@@ -717,8 +717,12 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Access points to use by default when starting servers and agents
-        self.access_points = self.params.get(
-            "access_points", "/run/setup/*", list(self.hostlist_servers)[:1])
+        #  - for 1 or 2 servers use 1 access point
+        #  - for 3 or more servers use 3 access points
+        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points = self.hostlist_servers[:access_points_qty]
+        self.access_points = NodeSet(
+            self.params.get("access_points", "/run/setup/*", default_access_points))
 
         # Display host information
         self.log.info("-" * 100)
@@ -1118,8 +1122,7 @@ class TestWithServers(TestWithoutServers):
                 self.server_manager_class)
         )
 
-    def configure_manager(self, name, manager, hosts, slots,
-                          access_points=None):
+    def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.
 
         Defines the environment variables, host list, and hostfile settings used
@@ -1130,16 +1133,17 @@ class TestWithServers(TestWithoutServers):
             manager (SubprocessManager): the daos agent/server process manager
             hosts (NodeSet): hosts on which to start the daos agent/server
             slots (int): number of slots per engine to define in the hostfile
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
+
         """
         self.log.info("-" * 100)
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_points is None:
-            access_points = self.access_points
+            access_points = NodeSet(self.access_points)
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.set_config_value("access_points", access_points)
+        manager.set_config_value("access_points", list(access_points))
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
@@ -1810,8 +1814,7 @@ class TestWithServers(TestWithoutServers):
             self.container.append(
                 self.get_container(pool=pool, namespace=namespace, create=create))
 
-    def start_additional_servers(self, additional_servers, index=0,
-                                 access_points=None):
+    def start_additional_servers(self, additional_servers, index=0, access_points=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
@@ -1820,8 +1823,8 @@ class TestWithServers(TestWithoutServers):
             additional_servers (NodeSet): hosts on which to start daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
