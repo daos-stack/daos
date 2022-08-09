@@ -294,7 +294,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		})
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -304,7 +304,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	if err != nil {
 		return errors.Wrap(err, "pool destroy failed")
 	}
-	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
 
 	return nil
 }
