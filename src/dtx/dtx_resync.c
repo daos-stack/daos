@@ -504,7 +504,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_ORPHAN)
 		return 0;
 
-	/* The entry to be discarded, in spite of it is the (old) leader or not. */
 	if (ent->ie_dtx_ver < dra->discard_version) {
 		D_ALLOC_PTR(dre);
 		if (dre == NULL)

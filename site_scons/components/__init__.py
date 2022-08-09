@@ -276,7 +276,7 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
+                retriever=GitRepoRetriever('https://github.com/intel/isa-l.git'),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
