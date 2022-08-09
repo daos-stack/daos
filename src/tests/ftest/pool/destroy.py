@@ -536,9 +536,6 @@ class DestroyTests(TestWithServers):
             exception_detected = True
             self.log.info("Expected exception - destroying pool with containers")
 
-            # Prevent attempting to delete the pool in tearDown()
-            self.pool.pool = None
-
         self.log.info("Check if files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers),
@@ -580,7 +577,7 @@ class DestroyTests(TestWithServers):
                 "Unexpected exception - destroying pool with containers: %s",
                 str(result))
         finally:
-            # Prevent attempting to delete the pool in tearDown()
-            self.pool.pool = None
+            # Prevent attempting to delete container in tearDown() after pool has been destroyed.
+            self.container = None
             if exception_detected:
-                self.fail("recursive destroying pool with containers failed")
+                self.fail("recursive destroy on pool with containers failed")
