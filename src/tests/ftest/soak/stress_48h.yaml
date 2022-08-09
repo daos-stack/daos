@@ -183,11 +183,10 @@ vpic_stress:
 # Requires opeapi
     job_timeout: 20
     nodesperjob:
-        - 8
+        - 1
     taskspernode:
         - 32
     cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
-    module: mpi/latest
     posix: True
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
