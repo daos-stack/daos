@@ -2754,7 +2754,7 @@ func TestServer_adjustScmSize(t *testing.T) {
 			},
 			output: ExpectedOutput{
 				availableBytes: []uint64{0},
-				message:        "WARNING: Adjusting available size to 0 Bytes of SCM device",
+				message:        "Adjusting available size to 0 Bytes of SCM device",
 			},
 		},
 	} {
