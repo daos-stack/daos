@@ -4858,6 +4858,13 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
+	/* If the size was set then do a second stat to fetch the new mtime */
+	if (set_size) {
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
+		if (rc)
+			D_GOTO(out_obj, rc);
+	}
+
 out_stat:
 	*stbuf = rstat;
 out_obj:
