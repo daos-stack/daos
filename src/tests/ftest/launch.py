@@ -55,7 +55,7 @@ PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+ud_x"),
+        ("ucx", "ucx+rc_x"),
         ("tcp", "ofi+tcp"),
     ]
 )
