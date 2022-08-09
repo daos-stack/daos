@@ -1062,9 +1062,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	pg_cnt -= pg_idx;
 
 	while (pg_cnt > 0) {
-		/* NVMe poll needs be scheduled */
-		if (bio_need_nvme_poll(xs_ctxt))
-			bio_yield();
+		drain_inflight_ios(xs_ctxt);
 
 		biod->bd_inflights++;
 		xs_ctxt->bxc_blob_rw++;

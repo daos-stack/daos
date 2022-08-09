@@ -122,6 +122,10 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_resent;
 	/** Total number of retry update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_partial;
 };
 
 struct obj_tls {
@@ -280,4 +284,14 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 /* obj_enum.c */
 int
 fill_oid(daos_unit_oid_t oid, struct ds_obj_enum_arg *arg);
+
+/* srv_ec.c */
+struct obj_rw_in;
+int obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_array *iod_array,
+			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+			uint32_t leader_id, void *tgt_map, uint32_t map_size,
+			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+			struct obj_ec_split_req **split_req, struct obj_pool_metrics *opm);
+void obj_ec_split_req_fini(struct obj_ec_split_req *req);
+
 #endif /* __DAOS_OBJ_SRV_INTENRAL_H__ */

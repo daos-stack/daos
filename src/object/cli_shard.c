@@ -2036,13 +2036,12 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
 	daos_recx_t		*result_recx = cb_args->recx;
-	daos_recx_t		*tmp_recx;
-	daos_recx_t		 recx[2] = {0};
-	uint64_t		 end[2], tmp_end;
+	daos_recx_t		 tmp_recx = {0};
+	uint64_t		 tmp_end;
 	uint32_t		 tgt_off;
 	bool			 from_data_tgt;
 	struct daos_oclass_attr	*oca;
-	uint64_t		dkey_hash;
+	uint64_t		 dkey_hash;
 	uint64_t		 stripe_rec_nr, cell_rec_nr;
 
 	oca = obj_get_oca(cb_args->obj);
@@ -2056,53 +2055,34 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	tgt_off = obj_ec_shard_off(dkey_hash, oca, shard);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	tmp_recx = &recx[0];
 	D_ASSERT(!(reply_recx->rx_idx & PARITY_INDICATOR));
 	/* data ext from data shard needs to convert to daos ext,
 	 * replica ext from parity shard needs not to convert.
 	 */
-	*tmp_recx = *reply_recx;
-	tmp_end = DAOS_RECX_PTR_END(tmp_recx);
-	if (tmp_end > 0) {
-		if (from_data_tgt)
-			tmp_recx->rx_idx = obj_ec_idx_vos2daos(tmp_recx->rx_idx,
-							       stripe_rec_nr,
-							       cell_rec_nr,
-							       tgt_off);
-
+	tmp_recx = *reply_recx;
+	tmp_end = DAOS_RECX_END(tmp_recx);
+	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
+		shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
+	if (tmp_end > 0 && from_data_tgt) {
 		if (get_max) {
-			tmp_recx->rx_idx = max(tmp_recx->rx_idx,
-				rounddown(tmp_end - 1, cell_rec_nr));
-			tmp_recx->rx_nr = tmp_end - tmp_recx->rx_idx;
+			tmp_recx.rx_idx = max(tmp_recx.rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
+			tmp_recx.rx_nr = tmp_end - tmp_recx.rx_idx;
 		} else {
-			tmp_recx->rx_nr = min(tmp_end,
-				roundup(tmp_recx->rx_idx + 1,
-					cell_rec_nr)) -
-				tmp_recx->rx_idx;
+			tmp_recx.rx_nr = min(tmp_end, roundup(tmp_recx.rx_idx + 1, cell_rec_nr)) -
+					 tmp_recx.rx_idx;
 		}
 
-		D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
-			shard, tgt_off, tmp_recx->rx_idx, tmp_recx->rx_nr);
+		tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr,
+							      cell_rec_nr, tgt_off);
+		tmp_end = DAOS_RECX_END(tmp_recx);
 	}
 
-	end[0] = DAOS_RECX_END(recx[0]);
-	end[1] = DAOS_RECX_END(recx[1]);
 	if (get_max) {
-		if (end[0] > end[1]) {
-			if (DAOS_RECX_END(*result_recx) < end[0] || changed)
-				*result_recx = recx[0];
-		} else {
-			if (DAOS_RECX_END(*result_recx) < end[1] || changed)
-				*result_recx = recx[1];
-		}
+		if (DAOS_RECX_END(*result_recx) < tmp_end || changed)
+			*result_recx = tmp_recx;
 	} else {
-		if (end[0] < end[1]) {
-			if (DAOS_RECX_END(*result_recx) > end[0] || changed)
-				*result_recx = recx[0];
-		} else {
-			if (DAOS_RECX_END(*result_recx) > end[1] || changed)
-				*result_recx = recx[1];
-		}
+		if (DAOS_RECX_END(*result_recx) > tmp_end || changed)
+			*result_recx = tmp_recx;
 	}
 }
 
