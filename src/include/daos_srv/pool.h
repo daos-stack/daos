@@ -272,6 +272,7 @@ int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
 int ds_pool_svc_update_label(struct ds_pool_svc *ds_svc, const char *label);
 int ds_pool_svc_evict_all(struct ds_pool_svc *ds_svc);
 struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
+struct cont_svc *ds_pool_ps2cs(struct ds_pool_svc *ds_svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
