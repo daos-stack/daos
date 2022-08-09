@@ -1073,11 +1073,13 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	return 0;
 }
 
+/* This may run in context of a ULT with limited stack space so keep it reasonably small */
+#define MAX_BT_ENTRIES 32
 static void
 print_backtrace(int signo, siginfo_t *info, void *p)
 {
-	void	*bt[128];
-	int	 bt_size, i, rc;
+	void *bt[MAX_BT_ENTRIES];
+	int   bt_size, rc;
 
 	/* since we mainly handle fatal signals here, flush the log to not
 	 * risk losing any debug traces
@@ -1112,13 +1114,13 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 			"unavailable\n");
 	}
 
-	bt_size = backtrace(bt, 128);
-	if (bt_size >= 128)
+	bt_size = backtrace(bt, MAX_BT_ENTRIES);
+	if (bt_size == MAX_BT_ENTRIES)
 		fprintf(stderr, "backtrace may have been truncated\n");
-
-	/* start at 1 to forget about me! */
-	for (i = 1; i < bt_size; i++)
-		backtrace_symbols_fd(&bt[i], 1, fileno(stderr));
+	if (bt_size > 1) /* start at 1 to ignore this frame */
+		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
+	else
+		fprintf(stderr, "No useful backtrace available");
 
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);

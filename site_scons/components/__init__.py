@@ -214,6 +214,7 @@ def define_mercury(reqs):
                 pkgconfig='mercury',
                 requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
+                patch_rpath=['lib'],
                 package='mercury-devel' if inst(reqs, 'mercury') else None)
 
 
