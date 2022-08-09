@@ -1079,12 +1079,13 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 		D_ERROR(__VA_ARGS__);                                                              \
 	} while (0)
 
-/* This may run in context of a ULT with limited stack space so keep it reasonably small */
-#define MAX_BT_ENTRIES 32
+/** This should be safe on Linux since tls is allocated on thread creation */
+#define MAX_BT_ENTRIES 256
+static __thread void *bt[MAX_BT_ENTRIES];
+
 static void
 print_backtrace(int signo, siginfo_t *info, void *p)
 {
-	void *bt[MAX_BT_ENTRIES];
 	int   bt_size, rc;
 
 	PRINT_ERROR("*** Process %d received signal %d ***\n", getpid(), signo);
