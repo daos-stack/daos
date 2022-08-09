@@ -8,9 +8,17 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
-from pylint.lint import Run
-from pylint.reporters.collecting_reporter import CollectingReporter
-from pylint.lint import pylinter
+try:
+    from pylint.lint import Run
+    from pylint.reporters.collecting_reporter import CollectingReporter
+except ImportError:
+    print('install pylint to enable this check')
+    sys.exit(0)
+
+try:
+    from pylint.lint import pylinter
+except ImportError:
+    import pylint.lint as pylinter
 
 # Pylint checking for the DAOS project.
 
@@ -34,7 +42,7 @@ from pylint.lint import pylinter
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
 # that currently exist in the code-base we need to restrict this to modified code.  Spellings can
-# also be enabled shortly however we have a number to correct or whitelist before enabling.
+# also be enabled shortly however we have a number to correct or resolve before enabling.
 
 
 class WrapScript():
@@ -304,6 +312,24 @@ class FileTypeList():
                 return True
             return False
 
+        def parse_msg(msg):
+            # Convert from a pylint message into a dict that can be using for printing.
+            vals = {'category': msg.category,
+                    'column': msg.column,
+                    'message-id': msg.msg_id,
+                    'message': msg.msg,
+                    'symbol': msg.symbol,
+                    'msg': msg.msg,
+                    'msg_id': msg.msg_id}
+
+            if wrapper:
+                vals['path'] = target_file
+                vals['line'] = wrapper.convert_line(msg.line)
+            else:
+                vals['path'] = msg.path
+                vals['line'] = msg.line
+            return vals
+
         failed = False
         rep = CollectingReporter()
         wrapper = None
@@ -351,10 +377,11 @@ sys.path.append('site_scons')"""
         types = Counter()
         symbols = Counter()
 
-        for msg in results.linter.reporter.messages:
-            vals = {}
-            vals['category'] = msg.category
+        # List of errors that are in modified files but not modified code.
+        file_warnings = []
 
+        for msg in results.linter.reporter.messages:
+            promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
             # in comments.  Be strict for everything but ftest code currently.
             if not scons and msg.msg_id in ('C0401', 'C0402'):
@@ -371,26 +398,16 @@ sys.path.append('site_scons')"""
 
                 # Finally, promote any spelling mistakes not silenced above or in ftest to error.
                 if not ftest:
-                    vals['category'] = 'error'
+                    promote_to_error = True
 
             # Inserting code can cause wrong-module-order.
             if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
 
-            if wrapper:
-                vals['path'] = target_file
-                vals['line'] = wrapper.convert_line(msg.line)
-            else:
-                vals['path'] = msg.path
-                vals['line'] = msg.line
-            vals['column'] = msg.column
-            vals['message-id'] = msg.msg_id
-            vals['message'] = msg.msg
-            vals['symbol'] = msg.symbol
+            vals = parse_msg(msg)
 
-            # Duplicates, needed for message_template.
-            vals['msg'] = msg.msg
-            vals['msg_id'] = msg.msg_id
+            if promote_to_error:
+                vals['category'] = 'error'
 
             # The build/scons code is mostly clean, so only allow f-string warnings.
             if scons and msg.symbol != 'consider-using-f-string':
@@ -406,11 +423,11 @@ sys.path.append('site_scons')"""
             if vals['path'] in self._regions:
                 line_changed = self._regions[vals['path']].in_region(vals['line'])
                 if line_changed:
-                    print('Warning is in modified code')
-                    failed = True
+                    print('Warning is in modified code:')
                     vals['category'] = 'error'
-                else:
-                    print('Warning is in modified file')
+                elif vals['category'] != 'error':
+                    file_warnings.append(msg)
+                    continue
 
             print(args.msg_template.format(**vals))
 
@@ -420,6 +437,18 @@ sys.path.append('site_scons')"""
                 if vals['category'] == 'warning':
                     continue
                 failed = True
+                # pylint: disable-next=consider-using-f-string
+                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                    **vals))
+
+        if file_warnings:
+            print('Warnings from modified files:')
+        for msg in file_warnings:
+            vals = parse_msg(msg)
+            print(args.msg_template.format(**vals))
+            if args.format == 'github':
+                # Report all messages in modified files, but do it at the notice level.
+                vals['category'] = 'notice'
                 # pylint: disable-next=consider-using-f-string
                 print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
                     **vals))
@@ -543,6 +572,7 @@ def main():
         else:
             all_files = FileTypeList()
         regions = None
+        file = None
         for line in sys.stdin.readlines():
             if line.startswith('diff --git a/'):
                 parts = line.split(' ')
@@ -557,7 +587,8 @@ def main():
                 (post_start, post_len) = parts[2][1:].split(',')
                 regions.add_region(int(post_start), int(post_len))
                 continue
-        all_files.add_regions(file, regions)
+        if file and regions:
+            all_files.add_regions(file, regions)
         failed = all_files.run(args)
         if failed:
             sys.exit(1)
