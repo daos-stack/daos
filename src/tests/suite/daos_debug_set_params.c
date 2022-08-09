@@ -11,10 +11,7 @@
 
 #include <getopt.h>
 #include <sys/types.h>
-#include <fcntl.h>
 #include "daos_test.h"
-#include <daos_fs.h>
-#include <daos_fs_sys.h>
 
 static void
 print_usage()
@@ -40,8 +37,6 @@ int main(int argc, char **argv)
 	unsigned long extra_value = 0;
 	char *group = NULL;
 
-	d_register_alt_assert(mock_assert);
-
 	static struct option long_options[] = {
 		{"server_group", required_argument,	NULL,	's'},
 		{"rank",	required_argument,	NULL,	'r'},
@@ -54,8 +49,9 @@ int main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc) {
+		rc = daos_der2errno(rc);
 		print_message("daos_init() failed with %d\n", rc);
-		return -1;
+		goto exit;
 	}
 
 	while ((opt = getopt_long(argc, argv, "r:k:v:V:h",
@@ -73,7 +69,7 @@ int main(int argc, char **argv)
 			if (endp && *endp != '\0') {
 				print_message("invalid numeric key_id: %s\n",
 					      optarg);
-				rc1 = -1;
+				rc1 = -EINVAL;
 				goto exit;
 			}
 			break;
@@ -82,7 +78,7 @@ int main(int argc, char **argv)
 			if (endp && *endp != '\0') {
 				print_message("invalid numeric value: %s\n",
 					      optarg);
-				rc1 = -1;
+				rc1 = -EINVAL;
 				goto exit;
 			}
 			break;
@@ -91,7 +87,7 @@ int main(int argc, char **argv)
 			if (endp && *endp != '\0') {
 				print_message("invalid numeric extra value: %s\n",
 					      optarg);
-				rc1 = -1;
+				rc1 = -EINVAL;
 				goto exit;
 			}
 			break;
@@ -100,21 +96,25 @@ int main(int argc, char **argv)
 			goto exit;
 		default:
 			print_usage();
-			rc1 = -1;
+			rc1 = -EINVAL;
 			goto exit;
 		}
 	}
 
 	rc1 = daos_debug_set_params(group, rank, key_id, value,
 				    extra_value, NULL);
-	if (rc1)
+	if (rc1) {
+		rc1 = daos_der2errno(rc1);
 		print_message("fail to set params: %d\n", rc1);
+	}
 exit:
 	rc = daos_fini();
-	if (rc)
+	if (rc) {
+		rc = daos_der2errno(rc);
 		print_message("daos_fini() failed with %d\n", rc);
-	else if (rc1)
+	} else if (rc1) {
 		rc = rc1;
+	}
 
-	return rc;
+	return -rc;
 }

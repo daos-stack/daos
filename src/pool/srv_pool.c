@@ -4543,12 +4543,8 @@ out_tx:
 out_svc:
 	if (upgraded) {
 		if (rc == 0 && need_put_leader &&
-		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT)) {
-			D_DEBUG(DB_MD,
-				DF_UUID": fault injected: DAOS_POOL_UPGRADE_CONT_ABORT\n",
-				DP_UUID(svc->ps_uuid));
+		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
 			D_GOTO(out_put_leader, rc = -DER_AGAIN);
-		}
 		if (rc == 0)
 			rc = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
 		rc1 = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc);
