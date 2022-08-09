@@ -1227,105 +1227,139 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
+type rankFreeSpaceMap map[system.Rank]uint64
+
+type checkRankFn func(rank system.Rank) bool
+
+func newCheckRankFunc(ranks []system.Rank) checkRankFn {
+	return func(rank system.Rank) bool {
+		return len(ranks) == 0 || rank.InList(ranks)
+	}
+}
+
+// Add namespace ranks to rankNVMeFreeSpace map and return minimum free available SCM namespace bytes.
+func processSCMSpaceStats(log logging.Logger, checkRank checkRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
+	scmBytes := uint64(math.MaxUint64)
+
+	for _, scmNamespace := range scmNamespaces {
+		if scmNamespace.Mount == nil {
+			// FIXME: Under what circumstances is this valid, should this
+			// produce an error?
+			log.Debugf("Skipping SCM device %s (bdev %s, name %s), nil mount info",
+				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
+			continue
+		}
+
+		if !checkRank(scmNamespace.Mount.Rank) {
+			log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %s) not in ranklist",
+				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
+				scmNamespace.Mount.Rank)
+			continue
+		}
+
+		scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+		if scmBytes > scmNamespaceFreeBytes {
+			scmBytes = scmNamespaceFreeBytes
+		}
+
+		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
+			return 0, errors.Errorf("multiple scm devices found for rank %s",
+				scmNamespace.Mount.Rank.String())
+		}
+
+		// Initialize entry for rank in NVMe free space map.
+		rankNVMeFreeSpace[scmNamespace.Mount.Rank] = 0
+	}
+
+	return scmBytes, nil
+}
+
+// Add NVMe free bytes to rankNVMeFreeSpace map.
+func processNVMeSpaceStats(log logging.Logger, checkRank checkRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
+	for _, nvmeController := range nvmeControllers {
+		for _, smdDevice := range nvmeController.SmdDevices {
+			if !smdDevice.NvmeState.IsNormal() {
+				log.Noticef("SMD device %s (instance %d, ctrlr %s) not usable (device state %q)",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
+				continue
+			}
+
+			if !checkRank(smdDevice.Rank) {
+				log.Debugf("Skipping SMD device %s (instance %d, ctrlr %s, rank %s) not in ranklist",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
+			}
+
+			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
+				return errors.Errorf("smd device %s on ctrlr %s found for rank %d which has no scm",
+					smdDevice.UUID, smdDevice.TrAddr, smdDevice.Rank)
+			}
+
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.AvailBytes
+
+			log.Debugf("Added SMD device %s (instance %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
+				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
+				smdDevice.AvailBytes, rankNVMeFreeSpace[smdDevice.Rank])
+		}
+	}
+
+	return nil
+}
+
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks []system.Rank) (uint64, uint64, error) {
-	storageScanReq := &StorageScanReq{Usage: true}
-	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
+	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err
 	}
 
 	if len(resp.HostStorage) == 0 {
-		return 0, 0, errors.New("No DAOS server available")
+		return 0, 0, errors.New("empty host storage response from StorageScan")
 	}
 
-	hostStorageMap := resp.HostStorage
-	// DAOS-10885: The variable ranksWithoutSmd is used as a marking board for checking if there
-	// are any ranks with SCM storage but no NVMe.
-	ranksWithoutSmd := make(map[system.Rank]*storage.ScmNamespace)
-	var scmBytes uint64 = math.MaxUint64
-	var nvmeBytes uint64 = math.MaxUint64
-	for _, key := range hostStorageMap.Keys() {
-		hostStorageSet := hostStorageMap[key]
-		hostStorage := hostStorageSet.HostStorage
+	// Generate function to verify a rank is in the provided rank slice.
+	checkRank := newCheckRankFunc(ranks)
 
-		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+	rankNVMeFreeSpace := make(rankFreeSpaceMap)
+	scmBytes := uint64(math.MaxUint64)
+
+	for _, key := range resp.HostStorage.Keys() {
+		hostStorage := resp.HostStorage[key].HostStorage
+
+		if hostStorage.ScmNamespaces.Free() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
-				hostStorageSet.HostSet.String())
+				resp.HostStorage[key].HostSet.String())
 		}
 
-		for _, scmNamespace := range hostStorage.ScmNamespaces {
-			if scmNamespace.Mount == nil {
-				log.Debugf("Skipping SCM device %s (bdev %s, name %s)",
-					scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
-				continue
-			}
-
-			if len(ranks) != 0 && !scmNamespace.Mount.Rank.InList(ranks) {
-				log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %s) not in ranklist: %s",
-					scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
-					scmNamespace.Mount.Rank, ranks)
-				continue
-			}
-
-			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
-
-			if scmBytes > scmNamespaceFreeBytes {
-				scmBytes = scmNamespaceFreeBytes
-			}
-
-			if sn, ok := ranksWithoutSmd[scmNamespace.Mount.Rank]; ok {
-				return 0, 0, errors.Errorf("Rank %s with multiple SCM devices: scm1=%s, scm2=%s",
-					scmNamespace.Mount.Rank.String(), sn.UUID, scmNamespace.UUID)
-			}
-
-			// DAOS-10885: Initialize the marking board with all the usable ranks
-			ranksWithoutSmd[scmNamespace.Mount.Rank] = scmNamespace
+		sBytes, err := processSCMSpaceStats(log, checkRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
+		if err != nil {
+			return 0, 0, err
 		}
 
-		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
-		for _, nvmeController := range hostStorage.NvmeDevices {
-			for _, smdDevice := range nvmeController.SmdDevices {
-				if !smdDevice.NvmeState.IsNormal() {
-					log.Noticef("SMD device %s (instance %d, ctrlr %s) "+
-						"not usable (device state %q)",
-						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
-						smdDevice.NvmeState.String())
-					continue
-				}
-
-				if len(ranks) != 0 && !smdDevice.Rank.InList(ranks) {
-					log.Debugf("Skipping SMD device %s (instance %d, ctrlr %s, rank %s) not in ranklist: %s",
-						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank, ranks)
-					continue
-				}
-
-				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
-				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: device state=%q, size=%d total=%d",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
-					smdDevice.NvmeState.String(), smdDevice.AvailBytes,
-					nvmeRanksBytes[smdDevice.Rank])
-			}
+		if scmBytes > sBytes {
+			scmBytes = sBytes
 		}
-		for rank, nvmeRankBytes := range nvmeRanksBytes {
-			if nvmeBytes > nvmeRankBytes {
-				nvmeBytes = nvmeRankBytes
-			}
 
-			if _, ok := ranksWithoutSmd[rank]; ok {
-				// DAOS-10885: Remove the usable rank with NVME storage from the
-				// marking board
-				delete(ranksWithoutSmd, rank)
-			}
+		// FIXME: Should we fail here if any of the namespaces have no free space
+		//        (i.e. scmBytes == 0)?
+
+		if err := processNVMeSpaceStats(log, checkRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
+			return 0, 0, err
 		}
 	}
 
+	if scmBytes == math.MaxUint64 {
+		scmBytes = 0
+	}
+
+	nvmeBytes := uint64(math.MaxUint64)
+	for _, nvmeRankBytes := range rankNVMeFreeSpace {
+		if nvmeBytes > nvmeRankBytes {
+			nvmeBytes = nvmeRankBytes
+		}
+	}
 	if nvmeBytes == math.MaxUint64 {
-		nvmeBytes = 0
-	}
-
-	// DAOS-10885: Check if there are any ranks with SCM storage but no NVMe
-	if len(ranksWithoutSmd) != 0 {
 		nvmeBytes = 0
 	}
 

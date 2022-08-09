@@ -1980,10 +1980,10 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("unable to unpack message"),
 			},
 		},
-		"No DAOS server": {
+		"empty response": {
 			HostsConfigArray: []MockHostStorageConfig{},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("No DAOS server available"),
+				Error: errors.New("host storage response"),
 			},
 		},
 		"No SCM storage": {
@@ -2022,7 +2022,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New(" multiple SCM devices"),
+				Error: errors.New("multiple scm devices"),
 			},
 		},
 		"Unusable NVMe device": {
