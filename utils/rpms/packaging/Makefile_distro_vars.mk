@@ -40,6 +40,9 @@ DIST            := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 VERSION_ID      := 8
 DISTRO_ID       := el8
 DISTRO_BASE     := EL_8
+ifneq ($(DISTRO_VERSION_EL8),)
+override DISTRO_VERSION := $(DISTRO_VERSION_EL8)
+endif
 DISTRO_VERSION  ?= $(VERSION_ID)
 ORIG_TARGET_VER := 8
 SED_EXPR        := 1s/$(DIST)//p

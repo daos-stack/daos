@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -17,8 +16,7 @@ from apricot import TestWithServers
 from apricot import TestWithoutServers
 
 
-#TO-DO
-#Provision all daos nodes using provisioning tool provided by HPCM
+# TODO Provision all daos nodes using provisioning tool provided by HPCM
 
 
 class CriticalIntegrationWithoutServers(TestWithoutServers):
@@ -45,7 +43,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
         """
-        Test Description: Verify passwordless ssh amongst the server
+        Test Description: Verify password-less ssh amongst the server
                           server nodes available and verify all server
                           and client nodes have same daos versions.
         :avocado: tags=all,deployment,full_regression
@@ -100,7 +98,10 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
             all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
-        same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
+        if len(all_nodes) == 1:
+            same_libfab_nodes = 1
+        else:
+            same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
         libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
 
         result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
@@ -142,7 +143,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
-        half_num_ranks = len(rank_list)//2
+        half_num_ranks = len(rank_list) // 2
         # divide total ranks list into two halves to save time during system stop
         sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
         self.log.info("sub_rank_list: %s", sub_rank_list)
@@ -155,8 +156,8 @@ class CriticalIntegrationWithServers(TestWithServers):
             # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
-                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
-                        self.server_managers[0].check_rank_state(rank, "excluded", 5))):
+                if (not self.server_managers[0].check_rank_state(rank, "stopped", 5)
+                        or self.server_managers[0].check_rank_state(rank, "excluded", 5)):
                     self.fail("Rank {} failed to stop".format(rank))
             # restart stopped ranks and verify if they are joined
             dmg.system_start(ranks=ranks_to_stop)

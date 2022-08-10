@@ -1,16 +1,18 @@
 hosts:
-  test_servers:
-    - server-A
-timeout: 135 # 1.5 times of measured time.
-server_config:
-  name: daos_server
+  test_servers: server-1
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
 extra_servers:
-  test_servers:
-    - server-C
+  test_servers: server-2
+timeout: 135 # 1.5 times of measured time.
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
   scm_size: 1G
   control_method: dmg

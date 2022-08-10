@@ -104,8 +104,7 @@ Some special configuration is required for the `verbs` provider to use librdmacm
 with multiple interfaces, and the same configuration is required for the `tcp` provider.
 
 First, the accept_local feature must be enabled on the network interfaces
-to be used by DAOS. This can be done using the following command (<ifaces> must
-be replaced with the interface names):
+to be used by DAOS. This can be done using the following command:
 
 ```
 $ sudo sysctl -w net.ipv4.conf.all.accept_local=1
@@ -130,14 +129,15 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
 CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
-true even if the configuration uses a single logical subnet.
+true even if the configuration uses a single logical subnet. <ifaces> must be replaced with
+the interface names)
 
 ```
 $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
@@ -289,6 +289,31 @@ commandline (including source builds), limits should be adjusted in
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
 specific document but the instructions apply to most Linux distributions).
 
+### Memory mapped areas
+
+The DAOS engine heavily uses mmap(2) to access persistent memory and to
+allocate stacks for asynchronous request processing via Argobots.
+The Linux kernel imposes a maximum limit (i.e. vm.max_map_count) on the
+number of mmap regions that a process can create.
+
+Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
+stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
+allocation method.
+
+vm.max_map_count default value (65530) needs to be bumped to a much more higher
+value (1M) to better fit with the DAOS needs for the expected huge number of
+concurrent ULTs if we want all their stacks to be mmap()'ed.
+
+For RPM installations, vm.max_map_count is raised through installed
+`/etc/sysctl.d/10-daos_server.conf` file.
+
+For non-RPM installations, vm.max_map_count may need to be bumped (usual default
+of 65530 is too low for non-testing configurations), and the best way to do
+so is to copy `utils/rpms/10-daos_server.conf` into `/etc/sysctl.d/`
+to apply the setting automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /etc/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+
 ## Socket receive buffer size
 
 Low socket receive buffer size can cause SPDK to fail and emit the following
@@ -305,9 +330,9 @@ will be applied automatically on install).
 
 For non-RPM installations where `daos_server` has been built from source,
 `rmem_default` and `rmem_max` settings should be set to >= 1MB.
-Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/usr/lib/sysctl.d/`
+Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/etc/sysctl.d/`
 to apply the settings automatically on boot.
-Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+Running `/usr/lib/systemd/systemd-sysctl /etc/sysctl.d/10-daos_server.conf`
 will apply these settings immediately (avoiding the need for an immediate reboot).
 For further information see
 [this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)

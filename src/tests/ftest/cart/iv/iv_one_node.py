@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,7 +10,7 @@ import json
 import os
 import struct
 import codecs
-import subprocess #nosec
+import subprocess  # nosec
 import shlex
 import traceback
 
@@ -368,7 +368,7 @@ class CartIvOneNodeTest(CartTest):
             # Fetch from rank 0.
             # Change version on rank 0 while request in flight,
             # Not an error:
-            #   Used for testing to ensure we donot break something
+            #   Used for testing to ensure we do not break something
             #   that should work.
             #   Version change occurs in iv_test_fetch_iv
             # Need to invalidate on both nodes, stale data.

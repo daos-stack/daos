@@ -229,6 +229,7 @@ class ErasureCodeIor(ServerFillUp):
                 self.ior_read_single_dataset(oclass, sizes, storage, operation, percent)
                 self.cont_number += 1
 
+
 class ErasureCodeSingle(TestWithServers):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-instance-attributes

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -25,7 +25,10 @@ class CreateContainerTest(TestWithServers):
 
         Test Description: valid and invalid container creation and close.
 
-        :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,smoke
+        :avocado: tags=container_create,test_container_create
         """
         expected_results = []
 

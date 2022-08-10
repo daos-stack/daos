@@ -98,6 +98,29 @@ enum daos_pool_props {
 	 * Pool upgrade status.
 	 */
 	DAOS_PROP_PO_UPGRADE_STATUS,
+	/**
+	 * Schedule that the checksum scrubber will run. See
+	 * DAOS_SCRUBBER_SCHED_*
+	 *
+	 * default: DAOS_SCRUB_MODE_OFF
+	 */
+	DAOS_PROP_PO_SCRUB_MODE,
+	/**
+	 * How frequently the schedule will run. In seconds.
+	 *
+	 * default: 604800 seconds (1 week)
+	 */
+	DAOS_PROP_PO_SCRUB_FREQ,
+	/**
+	 * Number of checksum errors before auto eviction is engaged.
+	 *
+	 * default: 0 (disabled)
+	 */
+	DAOS_PROP_PO_SCRUB_THRESH,
+	/**
+	 * Pool service redundancy factor.
+	 */
+	DAOS_PROP_PO_SVC_REDUN_FAC,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -105,7 +128,7 @@ enum daos_pool_props {
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
 #define DAOS_PROP_PO_REDUN_FAC_MAX	4
-#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)
@@ -134,6 +157,15 @@ enum {
 	DAOS_UPGRADE_STATUS_FAILED = 3,
 };
 
+#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX		4
+#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT	2
+
+static inline bool
+daos_svc_rf_is_valid(uint64_t svc_rf)
+{
+	return svc_rf <= DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
+}
+
 /**
  * Number of pool property types
  */
@@ -148,7 +180,18 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
-/** self headling strategy bits */
+/**
+ * Pool checksum scrubbing schedule type
+ * It is expected that these stay contiguous.
+ */
+enum {
+	DAOS_SCRUB_MODE_OFF = 0,
+	DAOS_SCRUB_MODE_LAZY = 1,
+	DAOS_SCRUB_MODE_TIMED = 2,
+	DAOS_SCRUB_MODE_INVALID = 3,
+};
+
+/** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
 
@@ -265,6 +308,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_RP_PDA,
 	/** immutable container global version */
 	DAOS_PROP_CO_GLOBAL_VERSION,
+	/** Override the pool scrubbing property. */
+	DAOS_PROP_CO_SCRUBBER_DISABLED,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -359,7 +404,10 @@ enum {
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,
-	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	/* server rank (engine) level */
+	DAOS_PROP_CO_REDUN_RANK	= 1,
+	/* server node level */
+	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
@@ -555,7 +603,8 @@ daos_prop_free(daos_prop_t *prop);
  * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
  * \a prop must be freed with daos_prop_free() to release allocated space.
  * This supports properties that can be modified on container creation only:
- * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *   label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression,
+ *   encryption, rf, ec_cell_sz
  *
  * \param[in]	str	Serialized string of property entries and their values
  * \param[in]	len	Serialized string length

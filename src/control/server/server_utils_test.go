@@ -241,11 +241,18 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
 			WithBdevDeviceList(test.MockPCIAddr(int32(i)))
 	}
+	nonNvmeTier := func() *storage.TierConfig {
+		return storage.NewTierConfig().WithStorageClass(storage.ClassFile.String()).
+			WithBdevFileSize(10).WithBdevDeviceList("bdev1", "bdev2")
+	}
 	scmEngine := func(i int) *engine.Config {
 		return basicEngineCfg(i).WithStorage(scmTier(i)).WithTargetCount(8)
 	}
 	nvmeEngine := func(i int) *engine.Config {
 		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
+	}
+	nonNvmeEngine := func(i int) *engine.Config {
+		return basicEngineCfg(i).WithStorage(scmTier(i), nonNvmeTier()).WithTargetCount(16)
 	}
 
 	for name, tc := range map[string]struct {
@@ -284,6 +291,21 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
+		"non-nvme bdevs; vfio disabled": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(nonNvmeEngine(0))
+			},
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    username,
+				DisableVFIO:   true,
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
+		},
 		"iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -302,6 +324,20 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
+		},
+		"non-nvme bdevs; iommu disabled": {
+			iommuDisabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(nonNvmeEngine(0))
+			},
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    username,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -455,7 +491,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemChkErr: errors.New("could not find hugepage info"),
 		},
 		// prepare will continue even if reset fails
-		"reset fails; 2 engines": {
+		"reset fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -478,7 +514,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"2 engines; vmd disabled": {
+		// VMD not enabled in prepare request.
+		"vmd disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -488,6 +525,21 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
+				TargetUser:    username,
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
+		},
+		// VMD not enabled in prepare request.
+		"non-nvme bdevs; vmd enabled": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(8192).
+					WithEngines(nonNvmeEngine(0))
+			},
+			hugePagesFree: 8194,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
@@ -583,9 +635,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 }
 
-// TestServer_scanBdevStorage validates that an error it returned in the case that a SSD is not
-// found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
-// also be covered.
+// TestServer_scanBdevStorage validates that an error is returned in the case that a SSD is not
+// found and doesn't return an error if SPDK fails to init.
 func TestServer_scanBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		disableHugepages bool
@@ -755,6 +806,84 @@ func TestServer_getNetDevClass(t *testing.T) {
 
 			test.AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
 				"unexpected config network device class")
+		})
+	}
+}
+
+type mockReplicaAddrSrc struct {
+	replicaAddrResult *net.TCPAddr
+	replicaAddrErr    error
+}
+
+func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
+	return m.replicaAddrResult, m.replicaAddrErr
+}
+
+func TestServerUtils_getControlAddr(t *testing.T) {
+	testTCPAddr := &net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 1234,
+	}
+
+	for name, tc := range map[string]struct {
+		params  ctlAddrParams
+		expAddr *net.TCPAddr
+		expErr  error
+	}{
+		"success (not a replica)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
+				},
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"success (replica)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[127.0.0.1]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"resolve fails": {
+			params: ctlAddrParams{
+				resolveAddr: func(_, _ string) (*net.TCPAddr, error) {
+					return nil, errors.New("mock resolve")
+				},
+			},
+			expErr: errors.New("mock resolve"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.params.resolveAddr == nil {
+				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
+					return testTCPAddr, nil
+				}
+			}
+
+			if tc.params.replicaAddrSrc == nil {
+				tc.params.replicaAddrSrc = &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
+				}
+			}
+
+			addr, err := getControlAddr(tc.params)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expAddr.String(), addr.String(), "")
 		})
 	}
 }

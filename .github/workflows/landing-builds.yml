@@ -219,11 +219,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma]
+        distro: [alma.8, alma.9]
         include:
-          - distro: alma
+          - distro: alma.8
             base: el.8
             with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -286,6 +289,84 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
+        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
+
+  Build-branch-ARM:
+    name: Build DAOS (ARM64)
+    runs-on: [self-hosted, ARM64]
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu]
+        compiler: [clang]
+        include:
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
+    env:
+      DEPS_JOBS: 10
+      BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
+      COMPILER: ${{ matrix.compiler }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Build dependencies in image.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_BUILD=no
+      - name: Build in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER=clang
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build Java in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=yes
+                            --build-arg COMPILER=clang
+      - name: Build debug in docker with clang.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER=clang
+      - name: Build devel in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER=clang
+      #- name: Build in docker with gcc
+      #  run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+      #                      --build-arg DEPS_JOBS
+      #                      --build-arg BASE_DISTRO
+      #                      --build-arg DAOS_JAVA_BUILD=no
+      #                      --build-arg COMPILER=gcc
+      #- name: Build debug in docker with gcc
+      #  run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+      #                      --build-arg DEPS_JOBS
+      #                      --build-arg BASE_DISTRO
+      #                      --build-arg DAOS_JAVA_BUILD=no
+      #                      --build-arg DAOS_BUILD_TYPE=debug
+      #                      --build-arg COMPILER=gcc
+      #- name: Build devel in docker with gcc
+      #  run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+      #                      --build-arg DEPS_JOBS
+      #                      --build-arg BASE_DISTRO
+      #                      --build-arg DAOS_JAVA_BUILD=no
+      #                      --build-arg DAOS_BUILD_TYPE=dev
+      #                      --build-arg COMPILER=gcc
+      #                      --tag build-image

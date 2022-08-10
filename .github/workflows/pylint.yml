@@ -1,0 +1,30 @@
+name: Pylint
+
+# Always run on Pull Requests as then this check can be makred as required.  It takes less than
+# two minutes to run and we can probably decrease this over time.
+on:
+  pull_request:
+
+jobs:
+  pylint:
+    name: Run pylint
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install core python packages
+        run: python3 -m pip install --requirement requirements.txt
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Install enchant
+        run: sudo apt-get update && sudo apt-get -y install enchant
+      - name: Pull via git
+        run: git fetch origin ${{ github.event.pull_request.base.sha }}
+      - name: See git diff
+        run: git diff ${{ github.event.pull_request.base.sha }} -U10
+      - name: Run pylint check.
+        run: >
+          git diff ${{ github.event.pull_request.base.sha }} -U5 |
+            ./utils/cq/daos_pylint.py --git --format github --diff

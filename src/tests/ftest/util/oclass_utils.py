@@ -7,6 +7,7 @@
 
 import re
 
+
 def extract_redundancy_factor(oclass):
     """Extract the redundancy factor from an object class.
 
@@ -24,6 +25,7 @@ def extract_redundancy_factor(oclass):
     if match:
         return int(match.group(1)) - 1
     return 0
+
 
 def calculate_min_servers(oclass):
     """Calculate the minimum number of required servers for an object class.

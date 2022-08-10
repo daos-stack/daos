@@ -235,6 +235,10 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 	D_ASSERT(layout != NULL);
 
 	for (i = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_rebuilding ||
+		    layout->ol_shards[i].po_reintegrating ||
+		    layout->ol_shards[i].po_target == -1)
+			continue;
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
@@ -343,7 +347,11 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-/** XXX should be fetched from property */
+/**
+ * The default value for pl_map_init_attr when creating pool pl_map, later when placing object
+ * will based on container's DAOS_PROP_CO_REDUN_LVL property to set the fault domain level for
+ * that object's layout calculating.
+ */
 #define PL_DEFAULT_DOMAIN	PO_COMP_TP_RANK
 
 static void

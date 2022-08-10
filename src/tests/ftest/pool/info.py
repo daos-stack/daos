@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,8 +27,9 @@ class InfoTests(TestWithServers):
             Verify pool query.
 
         :avocado: tags=all,daily_regression,
-        :avocado: tags=tiny
-        :avocado: tags=pool,smoke,info_test
+        :avocado: tags=vm
+        :avocado: tags=pool,smoke
+        :avocado: tags=info_test,test_pool_info_query
         """
         # Get the test params
         permissions = self.params.get("permissions", "/run/test/*")

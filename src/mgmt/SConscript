@@ -1,9 +1,10 @@
 """Build management server module"""
 import daos_build
 
+
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -13,16 +14,14 @@ def scons():
 
     prereqs.require(denv, 'protobufc', 'hwloc')
 
-    #pylint: disable=invalid-name
+    # pylint: disable=invalid-name
     pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
                             'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
-    #pylint: enable=invalid-name
+    # pylint: enable=invalid-name
     common = denv.SharedObject(['rpc.c']) + pb
 
     # Management client library
-    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c',
-                                               'cli_debug.c'])
-    Export('dc_mgmt_tgts')
+    libdaos_tgts.extend(common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
 
     if not prereqs.server_requested():
         return
@@ -42,6 +41,7 @@ def scons():
 
     denv = senv
     SConscript('tests/SConscript', exports=['denv', 'pb'])
+
 
 if __name__ == "SCons.Script":
     scons()

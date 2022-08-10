@@ -16,7 +16,7 @@
 #include <daos/mgmt.h>
 #include <daos/event.h>
 
-#include "crt_internal.h"
+#include "../crt_internal.h"
 #include "crt_utils.h"
 
 /* Global structures */
@@ -115,7 +115,6 @@ write_completion_file(void)
 	fclose(fptr);
 	D_FREE(completion_file);
 }
-
 
 void *
 crtu_progress_fn(void *data)
@@ -317,6 +316,11 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 	int		rc = 0;
 
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+
+	if (grp_cfg_file == NULL) {
+		D_ERROR("No config filename was passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
@@ -818,4 +822,3 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 out:
 	return rc;
 }
-
