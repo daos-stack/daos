@@ -164,15 +164,17 @@ ds3_obj_close(ds3_obj_t *ds3o)
 }
 
 int
-ds3_obj_get_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
-	return 0;
+	return -dfs_getxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR,
+                     info->encoded, &info->encoded_length);
 }
 
 int
-ds3_obj_set_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
-	return 0;
+	return -dfs_setxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR,
+                     info->encoded, info->encoded_length, 0);
 }
 
 int

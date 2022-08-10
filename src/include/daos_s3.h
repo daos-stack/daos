@@ -428,7 +428,7 @@ ds3_obj_close(ds3_obj_t *ds3o);
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_get_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev);
+ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o);
 
 /**
  * Set S3 object info.
@@ -441,7 +441,7 @@ ds3_obj_get_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_set_info(struct ds3_object_info *info, ds3_obj_t *ds3o, daos_event_t *ev);
+ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o);
 
 /**
  * Read S3 object data.
