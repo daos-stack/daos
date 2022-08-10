@@ -29,7 +29,6 @@ func TestDaosServer_preparePMem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		noForce   bool
 		zeroNrNs  bool
-		reset     bool
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expErr    error

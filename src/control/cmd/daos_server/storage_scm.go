@@ -35,7 +35,7 @@ type pmemCmd struct {
 }
 
 type createNamespacesCmd struct {
-	cmdutil.LogCmd
+	cmdutil.LogCmd        `json:"-"`
 	NrNamespacesPerSocket uint   `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
 	Force                 bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 	HelperLogFile         string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
@@ -66,6 +66,9 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 
 	cmd.Debugf("scm prepare response: %+v", resp)
 
+	if resp == nil {
+		return errors.New("scm prepare returned nil response")
+	}
 	state := resp.Socket.State
 
 	if resp.RebootRequired {
@@ -118,13 +121,14 @@ func (cmd *createNamespacesCmd) Execute(args []string) error {
 
 	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
 
+	cmd.Debugf("executing create namespaces command: %+v", cmd)
 	return cmd.preparePMem(scs.ScmPrepare)
 }
 
 type removeNamespacesCmd struct {
-	cmdutil.LogCmd
-	Force         bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	cmdutil.LogCmd `json:"-"`
+	Force          bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
+	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
 }
 
 func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
@@ -191,12 +195,13 @@ func (cmd *removeNamespacesCmd) Execute(args []string) error {
 
 	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
 
+	cmd.Debugf("executing remove namespaces command: %+v", cmd)
 	return cmd.resetPMem(scs.ScmPrepare)
 }
 
 type scanPMemCmd struct {
-	cmdutil.LogCmd
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	cmdutil.LogCmd `json:"-"`
+	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
 func (cmd *scanPMemCmd) Execute(args []string) error {
