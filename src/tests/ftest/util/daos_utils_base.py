@@ -268,8 +268,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
-                #     -l, --label=<container label>
-                self.label = FormattedParameter("--label={}")
+                self.label = FormattedParameter("{}", None)
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -474,9 +473,9 @@ class DaosCommandBase(CommandWithSubCommand):
                     sub_command (str): sub-command name
                 """
                 super().__init__("/run/daos/object/{}/*".format(sub_command), sub_command)
-                self.pool = FormattedParameter("--pool={}")
+                self.pool = FormattedParameter("{}", None)
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.cont = FormattedParameter("--cont={}")
+                self.cont = FormattedParameter("{}", None)
                 self.oid = FormattedParameter("--oid={}")
 
         class QuerySubCommand(CommonObjectSubCommand):
