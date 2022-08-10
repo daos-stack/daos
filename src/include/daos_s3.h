@@ -67,7 +67,7 @@ typedef struct ds3_bucket {
 } ds3_bucket_t;
 
 typedef struct {
-    dfs_obj_t* dfs_obj;
+	dfs_obj_t *dfs_obj;
 } ds3_obj_t;
 
 // TODO end of temporarily moved here
@@ -451,6 +451,7 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
  * \param[in,out]
  *		size	[in]: Size of buffer passed in.
  * 				[out]: Actual size of data read.
+ * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	S3 object handle to read from.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -458,7 +459,8 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev);
+ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
+	     daos_event_t *ev);
 
 /**
  * Destroy an S3 object in the S3 bucket identified by \a ds3b.
@@ -479,6 +481,7 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b);
  * \param[in,out]
  *		size	[in]: Size of buffer passed in.
  * 				[out]: Actual size of data written.
+ * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	S3 object handle to read from.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -486,8 +489,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b);
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o,
-	      daos_event_t *ev);
+ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b,
+	      ds3_obj_t *ds3o, daos_event_t *ev);
 
 /**
  * Mark an S3 object in the S3 bucket identified by \a ds3b as being the latest version.

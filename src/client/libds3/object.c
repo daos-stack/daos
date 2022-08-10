@@ -158,6 +158,9 @@ err_ds3o:
 int
 ds3_obj_close(ds3_obj_t *ds3o)
 {
+	if (ds3o == NULL)
+		return -EINVAL;
+
 	int rc = dfs_release(ds3o->dfs_obj);
 	D_FREE(ds3o);
 	return -rc;
@@ -166,6 +169,9 @@ ds3_obj_close(ds3_obj_t *ds3o)
 int
 ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
+	if (ds3b == NULL || info == NULL || ds3o == NULL)
+		return -EINVAL;
+
 	return -dfs_getxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR, info->encoded,
 			     &info->encoded_length);
 }
@@ -173,14 +179,27 @@ ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
 int
 ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
+	if (ds3b == NULL || info == NULL || ds3o == NULL)
+		return -EINVAL;
 	return -dfs_setxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR, info->encoded,
 			     info->encoded_length, 0);
 }
 
 int
-ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
+	     daos_event_t *ev)
 {
-	return 0;
+	if (ds3b == NULL || buf == NULL || ds3o == NULL)
+		return -EINVAL;
+
+	d_iov_t iov;
+	d_iov_set(&iov, buf, *size);
+
+	d_sg_list_t rsgl;
+	rsgl.sg_nr     = 1;
+	rsgl.sg_iovs   = &iov;
+	rsgl.sg_nr_out = 1;
+	return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &rsgl, off, size, ev);
 }
 
 int
@@ -232,9 +251,18 @@ err_path:
 }
 
 int
-ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b,
+	      ds3_obj_t *ds3o, daos_event_t *ev)
 {
-	return 0;
+	if (ds3b == NULL || buf == NULL || ds3o == NULL)
+		return -EINVAL;
+
+	d_sg_list_t wsgl;
+	d_iov_t     iov;
+	d_iov_set(&iov, buf, *size);
+	wsgl.sg_nr   = 1;
+	wsgl.sg_iovs = &iov;
+	return -dfs_write(ds3b->dfs, ds3o->dfs_obj, &wsgl, off, ev);
 }
 
 int
