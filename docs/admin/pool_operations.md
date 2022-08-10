@@ -154,11 +154,9 @@ Pool created with 6.00% SCM/NVMe ratio
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
-with pool service redundancy enabled by default
-(pool service replicas on ranks 1-5).
-
-If no redundancy is desired, use --nsvc=1 in order to specify that only
-a single pool service replica should be created.
+with pool service redundancy enabled by default (pool service replicas on ranks
+1-5). If no redundancy is desired, use `--properties=svc_rf:0` to set the pool
+service redundancy property to 0 (or `--nsvc=1`).
 
 Note that it is difficult to determine the usable space by the user, and
 currently we cannot provide the precise value. The usable space depends not only
