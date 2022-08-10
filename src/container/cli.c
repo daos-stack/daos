@@ -31,7 +31,10 @@ dc_cont_init(void)
 {
 	int rc;
 
-	rc = daos_rpc_register(&cont_proto_fmt, CONT_PROTO_CLI_COUNT,
+	/* TODO: issue a cart protocol query to an engine, then register either the
+	 * latest, or latest-1 version of the container RPC protocol. See dc_pool_init().
+	 */
+	rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
 				NULL, DAOS_CONT_MODULE);
 	if (rc != 0)
 		D_ERROR("failed to register cont RPCs: "DF_RC"\n", DP_RC(rc));
@@ -47,7 +50,7 @@ dc_cont_fini(void)
 {
 	int rc;
 
-	rc = daos_rpc_unregister(&cont_proto_fmt);
+	rc = daos_rpc_unregister(&cont_proto_fmt_v7);
 	if (rc != 0)
 		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
@@ -688,7 +691,7 @@ static int
 cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_out	*out = crt_reply_get(arg->rpc);
+	struct cont_open_v7_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
 	uint32_t		 cli_pm_ver;
@@ -719,7 +722,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	/* If open by label, copy the returned UUID into dc_cont structure */
 	if (arg->coa_label) {
-		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
 
 		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
 	}
@@ -772,11 +775,21 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
-	arg->coa_info->ci_redun_lvl = cont->dc_props.dcp_redun_lvl;
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
+	if (arg->coa_label) {
+		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
+
+		arg->coa_info->ci_md_otime = lbl_out->coo_md_otime;
+		arg->coa_info->ci_md_mtime = lbl_out->coo_md_mtime;
+	} else {
+		arg->coa_info->ci_md_otime = out->coo_md_otime;
+		arg->coa_info->ci_md_mtime = out->coo_md_mtime;
+	}
+	D_DEBUG(DB_MD, DF_CONT": metadata times: open "DF_X64", modify "DF_X64"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), out->coo_md_otime, out->coo_md_mtime);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1126,11 +1139,11 @@ struct cont_query_args {
 static int
 cont_query_complete(tse_task_t *task, void *data)
 {
-	struct cont_query_args	*arg = (struct cont_query_args *)data;
-	struct cont_query_out	*out = crt_reply_get(arg->rpc);
-	struct dc_pool		*pool = arg->cqa_pool;
-	struct dc_cont		*cont = arg->cqa_cont;
-	int			 rc   = task->dt_result;
+	struct cont_query_args		*arg = (struct cont_query_args *)data;
+	struct cont_query_v7_out	*out = crt_reply_get(arg->rpc);
+	struct dc_pool			*pool = arg->cqa_pool;
+	struct dc_cont			*cont = arg->cqa_cont;
+	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cqo_op, task);
@@ -1164,11 +1177,14 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
-	arg->cqa_info->ci_redun_lvl = cont->dc_props.dcp_redun_lvl;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
 	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
+	arg->cqa_info->ci_md_otime = out->cqo_md_otime;
+	arg->cqa_info->ci_md_mtime = out->cqo_md_mtime;
+	D_DEBUG(DB_MD, DF_CONT": metadata times: open "DF_X64", modify "DF_X64"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), out->cqo_md_otime, out->cqo_md_mtime);
 
 out:
 	crt_req_decref(arg->rpc);
