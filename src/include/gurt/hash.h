@@ -197,13 +197,19 @@ enum d_hash_feats {
 	 * The found in bucket item is moved on top of the list.
 	 * So, next search for it will be much faster.
 	 */
-	D_HASH_FT_LRU		= (1 << 4),
+	D_HASH_FT_LRU			= (1 << 4),
+
+	/**
+	 * Need not take lock for ch_key_init.
+	 * Only valid when without D_HASH_FT_NOLOCK feat bit set.
+	 */
+	D_HASH_FT_NO_KEYINIT_LOCK	= (1 << 5),
 
 	/**
 	 * Use Global Table Lock instead of per bucket locking.
 	 * TODO: should be removed when all will use per bucket locking.
 	 */
-	D_HASH_FT_GLOCK		= (1 << 15),
+	D_HASH_FT_GLOCK			= (1 << 15),
 };
 
 union d_hash_lock {
