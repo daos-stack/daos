@@ -1,5 +1,7 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
+   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
+*/
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -433,7 +435,7 @@ pipeline {
                             dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -505,7 +507,7 @@ pipeline {
                             dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -1070,7 +1072,11 @@ pipeline {
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov'],
+                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
+                                                               'func-vm-cov',
+                                                               'func-hw-small-cov',
+                                                               'func-hw-medium-cov'
+                                                               'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
