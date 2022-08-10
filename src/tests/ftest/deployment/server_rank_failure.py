@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -13,10 +12,9 @@ from ior_utils import IorCommand
 from general_utils import report_errors, stop_processes
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
-from telemetry_test_base import TestWithTelemetry
 
 
-class ServerRankFailure(IorTestBase, TestWithTelemetry):
+class ServerRankFailure(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Verify server rank, or engine, failure is properly handled
     and recovered.
@@ -155,27 +153,19 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         14. Run IOR to the same container and verify that it works.
 
         Args:
-            ior_namespace (str): Yaml namespace that defines the object class used for
-                IOR.
-            container_namespace (str): Yaml namespace that defines the container
-                redundancy factor.
+            ior_namespace (str): Yaml namespace that defines the object class used for IOR.
+            container_namespace (str): Yaml namespace that defines the container redundancy factor.
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace=container_namespace)
 
-        # 2. Get the amount of IO inflow to each rank.
-        metric = "engine_pool_ops_update"
-        agg_metrics_before = self.get_aggregate_metrics(metrics=[metric])[metric]
-        self.log.info("agg_metrics_before = %s", agg_metrics_before)
-
-        # 3. Run IOR with given object class and let it run through step 7.
+        # 2. Run IOR with given object class and let it run through step 7.
         ior_results = {}
         errors = []
         job_num = 1
         mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
-        self.log.info(
-            "Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
+        self.log.info("Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
             args=[ior_results, job_num, "test_file_1", self.pool, self.container,
@@ -187,71 +177,62 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         self.log.info("Waiting 5 sec for IOR to start writing data...")
         time.sleep(5)
 
-        # 4. Get the amount of IO inflow again.
-        agg_metrics_after = self.get_aggregate_metrics(metrics=[metric])[metric]
-        self.log.info("agg_metrics_after = %s", agg_metrics_after)
-
-        # 5. Get the rank with the largest amount of inflow. Find out its hostname.
-        rank_to_host = {}
-        rank_to_agg_before = {}
-        rank_to_agg_after = {}
-        rank_to_agg_diff = {}
-        for host, rank_to_agg in agg_metrics_after.items():
-            for rank, agg in rank_to_agg.items():
-                rank_to_agg_after[rank] = agg
-                rank_to_agg_before[rank] = agg_metrics_before[host][rank]
-                rank_to_agg_diff[rank] =\
-                    rank_to_agg_after[rank] - rank_to_agg_before[rank]
-                rank_to_host[rank] = host
-
-        # Ascending order sorted by agg.
-        rank_agg_diffs = sorted(rank_to_agg_diff.items(), key=lambda x: x[1])
-        self.log.info("rank_agg_diffs = %s", rank_agg_diffs)
-        engine_kill_host = rank_to_host[rank_agg_diffs[-1][0]]
-        self.log.info("engine_kill_host = %s", engine_kill_host)
-
-        # 6. While IOR is running, kill daos_engine from two of the ranks in
-        # engine_kill_host.
+        # 3. While IOR is running, kill all daos_engine on a non-access-point node
+        engine_kill_host = self.hostlist_servers[1]
         self.kill_engine(engine_kill_host=engine_kill_host)
 
-        # 7. Wait for IOR to complete.
+        # 4. Wait for IOR to complete.
         ior_thread.join()
 
-        # 8. Verify that IOR failed.
+        # 5. Verify that IOR failed.
         self.log.info("----- IOR results %d -----", job_num)
         self.log.info(ior_results[job_num])
         if job_num not in ior_results or ior_results[job_num][0]:
             errors.append("First IOR didn't fail as expected!")
 
-        # 9. Restart daos_servers. It's not easy to restart only on the host where the
+        # 6. Wait for rebuild to finish
+        self.log.debug("## Wait for rebuild to start.")
+        self.pool.wait_for_rebuild(to_start=True, interval=10)
+        self.log.debug("## Wait for rebuild to finish.")
+        self.pool.wait_for_rebuild(to_start=False, interval=10)
+
+        # 7. Restart daos_servers. It's not easy to restart only on the host where the
         # engines were killed, so just restart all.
         self.restart_all_servers()
 
-        # 10. Verify the system status by calling dmg system query.
+        # 8. Verify the system status by calling dmg system query.
         output = self.get_dmg_command().system_query()
         for member in output["response"]["members"]:
             if member["state"] != "joined":
-                errors.append(
-                    "Server rank {} state isn't joined!".format(member["rank"]))
+                errors.append("Server rank {} state isn't joined!".format(member["rank"]))
 
-        # 11. Call dmg pool query -b to find the disabled ranks.
-        output = self.get_dmg_command().pool_query(
-            pool=self.pool.identifier, show_disabled=True)
+        # 9. Call dmg pool query -b to find the disabled ranks.
+        output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
         disabled_ranks = output["response"]["disabled_ranks"]
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
-        # 12. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # Limit retries???
         for disabled_rank in disabled_ranks:
-            self.pool.reintegrate(rank=disabled_rank)
-            self.pool.wait_for_rebuild(to_start=True, interval=5)
+            while True:
+                try:
+                    self.pool.reintegrate(rank=disabled_rank)
+                    break
+                except CommandFailure as error:
+                    self.log.debug("## pool reintegrate error: %s", error)
+
+            # Wait for rebuild to finish
+            self.log.debug("## Wait for rebuild to start.")
+            self.pool.wait_for_rebuild(to_start=True, interval=10)
+            self.log.debug("## Wait for rebuild to finish.")
             self.pool.wait_for_rebuild(to_start=False, interval=10)
 
-        # 13. Verify that the container Health is HEALTHY.
+        # 11. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
                 container=self.container, expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after server restart!")
 
-        # 14. Run IOR and verify that it works.
+        # 12. Run IOR and verify that it works.
         job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
@@ -264,7 +245,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         report_errors(test=self, errors=errors)
         self.log.info("############################")
 
-    def test_rank_failure_wo_rf(self):
+    def test_server_rank_failure_wo_rf(self):
         """Jira ID: DAOS-10002.
 
         Test rank failure without redundancy factor and SX object class. See
@@ -272,14 +253,14 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,rank_failure
-        :avocado: tags=rank_failure_wo_rf
+        :avocado: tags=deployment,server_rank_failure
+        :avocado: tags=test_server_rank_failure_wo_rf
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_wo_rf/*",
             container_namespace="/run/container_wo_rf/*")
 
-    def test_rank_failure_with_rp(self):
+    def test_server_rank_failure_with_rp(self):
         """Jira ID: DAOS-10002.
 
         Test rank failure with redundancy factor and RP_2G1 object class. See
@@ -287,27 +268,27 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,rank_failure
-        :avocado: tags=rank_failure_with_rp
+        :avocado: tags=deployment,server_rank_failure
+        :avocado: tags=test_server_rank_failure_with_rp
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_with_rp/*",
             container_namespace="/run/container_with_rf/*")
 
-    def test_rank_failure_with_ec(self):
+    def test_server_rank_failure_with_ec(self):
         """Jira ID: DAOS-10002.
         Test rank failure with redundancy factor and EC_2P1G1 object class. See
         verify_rank_failure() for test steps.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,rank_failure
-        :avocado: tags=rank_failure_with_ec
+        :avocado: tags=deployment,server_rank_failure
+        :avocado: tags=test_server_rank_failure_with_ec
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
-    def test_rank_failure_isolation(self):
+    def test_server_rank_failure_isolation(self):
         """Jira ID: DAOS-10002.
 
         Stop daos_engine where pool is not created.
@@ -330,8 +311,8 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,rank_failure
-        :avocado: tags=rank_failure_isolation
+        :avocado: tags=deployment,server_rank_failure
+        :avocado: tags=test_server_rank_failure_isolation
         """
         # 1. Determine the two ranks to create the pool and a node to kill the engines.
         # We'll create a pool on rank 0 and the other rank that's on the same node. Find
