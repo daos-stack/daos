@@ -574,7 +574,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Attempting to recursively destroy a pool with containers")
         exception_detected = False
         try:
-            self.pool.destroy(recursive=1, disconnect=0)
+            self.pool.destroy(disconnect=0, recursive=1)
         except TestFail as result:
             exception_detected = True
             self.log.info(
