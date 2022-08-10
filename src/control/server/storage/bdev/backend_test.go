@@ -972,13 +972,6 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 					Args: []string{"reset"},
 				},
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
-					},
-					Args: []string{"reset"},
-				},
 			},
 		},
 		"prepare setup; defaults": {
