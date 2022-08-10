@@ -1645,12 +1645,6 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 							},
 							Rank: 1,
 						},
-						{ // Check if not mounted SCM is well managed
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(0),
-								AvailBytes: uint64(0),
-							},
-						},
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
@@ -2022,7 +2016,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("multiple scm devices"),
+				Error: errors.New("Multiple SCM devices found for rank"),
 			},
 		},
 		"Unusable NVMe device": {
@@ -2054,6 +2048,153 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				ScmBytes:  uint64(100) * uint64(humanize.GByte),
 				NvmeBytes: 0,
 				Debug:     "not usable",
+			},
+		},
+		"Unmounted SCM device": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+				{
+					HostName: "bar[1,3]",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(0),
+								AvailBytes: uint64(0),
+							},
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(50) * uint64(humanize.GByte),
+							},
+							Rank: 3,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(400) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(300) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(2) * uint64(humanize.TByte),
+							},
+							Rank: 3,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("is not mounted"),
+			},
+		},
+		"SMD without SCM": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("without SCM device and at least one SMD device"),
+			},
+		},
+		"no SCM": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			TgtRanks: []system.Rank{1},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("No SCM storage space available"),
 			},
 		},
 	} {
@@ -2091,7 +2232,8 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				return
 			}
 
-			test.AssertTrue(t, err == nil, "Expected no error")
+			test.AssertTrue(t, err == nil,
+				fmt.Sprintf("Expected no error: err=%q", err))
 			test.AssertEqual(t,
 				tc.ExpectedOutput.ScmBytes,
 				scmBytes,

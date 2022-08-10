@@ -137,7 +137,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			context.Background(),
 			cmd.Logger,
 			cmd.ctlInvoker,
-			req.Ranks)
+			system.RankList(req.Ranks))
 		if err != nil {
 			return err
 		}

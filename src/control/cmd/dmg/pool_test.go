@@ -1103,12 +1103,6 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 							},
 							Rank: 1,
 						},
-						{ // Check if not mounted SCM is well managed
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes: uint64(0),
-								AvailBytes: uint64(0),
-							},
-						},
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
@@ -1411,7 +1405,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				test.AssertTrue(t, err != nil, "Expected an error")
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
-				test.AssertTrue(t, err == nil, "Expected no error")
+				test.AssertTrue(t, err == nil, fmt.Sprintf("Expected no error: err=%q\n", err))
 				test.AssertEqual(t, len(mockInvoker.Requests), 2, "Invalid number of request sent")
 				test.AssertTrue(t,
 					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
