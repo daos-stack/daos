@@ -47,22 +47,29 @@ int main(int argc, char **argv)
 		{NULL,		0,			NULL,	0}
 	};
 
-	rc = daos_init();
-	if (rc) {
-		rc = daos_der2errno(rc);
-		print_message("daos_init() failed with %d\n", rc);
+	rc1 = daos_init();
+	if (rc1) {
+		rc1 = daos_der2errno(rc1);
+		print_message("daos_init() failed with %d\n", rc1);
 		goto exit;
 	}
 
-	while ((opt = getopt_long(argc, argv, "r:k:v:V:h",
+	while ((opt = getopt_long(argc, argv, "s:r:k:v:V:h",
 				  long_options, &index)) != -1) {
 		char *endp;
 
 		switch (opt) {
 		case 's':
 			group = optarg;
+			break;
 		case 'r':
-			rank = atoi(optarg);
+			rank = strtol(optarg, &endp, 0);
+			if (endp && *endp != '\0') {
+				print_message("invalid numeric rank: %s\n",
+					      optarg);
+				rc1 = -EINVAL;
+				goto exit;
+			}
 			break;
 		case 'k':
 			key_id = strtoul(optarg, &endp, 0);
