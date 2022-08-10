@@ -52,7 +52,7 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
-		print_message("contained opened\n");
+		print_message("container opened\n");
 	}
 
 	if (arg->hdl_share)
@@ -2564,6 +2564,7 @@ co_redun_lvl(void **state)
 	daos_handle_t		 coh, oh, coh_g2l;
 	d_iov_t			 ghdl = { NULL, 0, 0 };
 	daos_prop_t		*prop = NULL;
+	daos_prop_t		*prop_out = NULL;
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
 	daos_cont_info_t	 info = { 0 };
@@ -2602,10 +2603,15 @@ co_redun_lvl(void **state)
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		prop_out = daos_prop_alloc(2);
+		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		prop_out->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+
+		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -2768,10 +2774,14 @@ out:
 	assert_rc_equal(rc, 0);
 
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(coh_g2l, &info, NULL, NULL);
+		prop_out->dpp_entries[0].dpe_val = 0;
+		prop_out->dpp_entries[1].dpe_val = 0;
+
+		rc = daos_cont_query(coh_g2l, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 
 	rc = daos_cont_close(coh_g2l, NULL);
@@ -2784,7 +2794,144 @@ out:
 	if (plmap != NULL)
 		pl_map_decref(plmap);
 	daos_prop_free(prop);
+	daos_prop_free(prop_out);
 	test_teardown((void **)&arg);
+}
+
+static void
+co_mdtimes(void **state)
+{
+	test_arg_t	       *arg = *state;
+	daos_event_t		ev;
+	char			str[37];
+	uint64_t		prev_otime;
+	uint64_t		prev_mtime;
+	daos_handle_t		coh;
+	daos_cont_info_t	cinfo;
+	daos_epoch_t		epc;
+	daos_epoch_range_t	epr;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	print_message("open container (RO_MDSTATS flag)\n");
+	uuid_unparse(arg->co_uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("initial container metadata otime (0x"DF_X64") mtime (0x"DF_X64")\n",
+		      cinfo.ci_md_otime, cinfo.ci_md_otime);
+	prev_otime = cinfo.ci_md_otime;
+	prev_mtime = cinfo.ci_md_mtime;
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("open container again (RO_MDSTATS), verify metadata times unchanged\n");
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	print_message("query container, verify metadata times unchanged\n");
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	/* open updates the otime, visible upon subsequent query */
+	print_message("open container again (no special flags), query to see updated otime\n");
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh, &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
+	print_message("query returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("open container again (RW), verify mtime updated (from close)\n");
+	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	/* NOTE: otime was updated by cont_open(), visible in next query */
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_otime);
+
+	print_message("create container snapshot, query and verify updated mtime\n");
+	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("created snapshot 0x"DF_X64", query returned updated otime (0x"DF_X64"), "
+		      "updated mtime (0x"DF_X64")\n", epc, cinfo.ci_md_otime, cinfo.ci_md_mtime);
+
+	print_message("destroy container snapshot, query and verify updated mtime\n");
+	epr.epr_lo = epr.epr_hi = epc;
+	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("destroyed snapshot 0x"DF_X64", query returned updated mtime (0x"DF_X64")\n",
+		      epc, cinfo.ci_md_mtime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	/* TODO: perform other metadata RO operations verify mtime unchanged.
+	 * (e.g., attr-list, attr-get, list-snap, get-acl)
+	 */
+
+	/* TODO: perform other metadata RW operations, verify mtime updated.
+	 * (attr-set/del, set-prop, update/overwrite/delete-acl)
+	 */
 }
 
 static int
@@ -2866,6 +3013,10 @@ static const struct CMUnitTest co_tests[] = {
 	  co_api_compat, NULL, test_case_teardown},
 	{ "CONT27: container REDUN_LVL and RF test",
 	  co_redun_lvl, NULL, test_case_teardown},
+	{ "CONT28: container metadata times test (sync)",
+	  co_mdtimes, co_setup_sync, test_case_teardown},
+	{ "CONT29: container metadata times test (async)",
+	  co_mdtimes, co_setup_async, test_case_teardown},
 };
 
 int
