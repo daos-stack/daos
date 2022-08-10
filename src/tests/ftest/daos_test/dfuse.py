@@ -45,6 +45,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
         # How long to cache things for, if caching is enabled.
         cache_time = '5m'
 
+        use_dfuse = True
+
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
             cont_attrs['dfuse-attr-time'] = cache_time
@@ -65,16 +67,23 @@ class DaosCoreTestDfuse(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
+        elif cache_mode == 'native':
+            use_dfuse = False
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
-        for key, value in cont_attrs.items():
-            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                        attr=key, val=value)
+        if use_dfuse:
+            for key, value in cont_attrs.items():
+                daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
+                                            attr=key, val=value)
 
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        mount_dir = self.dfuse.mount_dir.value
+            mount_dir = self.dfuse.mount_dir.value
+        else:
+            # Bypass, simply create a remote directory and use that.
+            mount_dir = '/tmp/dfuse-test'
+            general_utils.create_directory(self.hostlist_clients, mount_dir)
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 

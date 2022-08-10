@@ -67,6 +67,8 @@ do_openat(void **state)
 	char        input_buf[] = "hello";
 	off_t       offset;
 	int         root = open(test_dir, O_PATH | O_DIRECTORY);
+	FILE       *stream;
+	size_t      count;
 
 	assert_return_code(root, errno);
 
@@ -155,6 +157,93 @@ do_openat(void **state)
 	rc = unlinkat(root, "my_file", 0);
 	assert_return_code(rc, errno);
 
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	count = fwrite("abcdefghijkl", 1, 10, stream);
+	assert_int_equal(count, 10);
+
+	errno = 0;
+	rewind(stream);
+	assert_int_equal(errno, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 0);
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'a');
+
+	rc = ungetc('z', stream);
+	assert_int_equal(rc, 'z');
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'z');
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'b');
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'c');
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 3);
+
+	errno = 0;
+	rewind(stream);
+	assert_int_equal(errno, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 0);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'a');
+
+	rc = ungetc('z', stream);
+	assert_int_equal(rc, 'z');
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'z');
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 1);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	/* now see to two before the end of file, this needs the filesize so will back-off */
+	offset = fseeko(stream, -2, SEEK_END);
+	assert_int_equal(offset, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 8);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	rc = unlinkat(root, "stream_file", 0);
+	assert_return_code(rc, errno);
+
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
@@ -174,13 +263,13 @@ do_ioctl(void **state)
 	assert_return_code(fd, errno);
 
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+	if (rc == -1 && errno == ENOTTY) {
+		goto out;
+	}
 	assert_return_code(rc, errno);
 
 	assert_int_equal(dur.uid, geteuid());
 	assert_int_equal(dur.gid, getegid());
-
-	rc = close(fd);
-	assert_return_code(rc, errno);
 
 	/* Now do the same test but on the directory itself */
 	rc = ioctl(root, DFUSE_IOCTL_DFUSE_USER, &dur);
@@ -188,6 +277,11 @@ do_ioctl(void **state)
 
 	assert_int_equal(dur.uid, geteuid());
 	assert_int_equal(dur.gid, getegid());
+
+out:
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "ioctl_file", 0);
 	assert_return_code(rc, errno);
