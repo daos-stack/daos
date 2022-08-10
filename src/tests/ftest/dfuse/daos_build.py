@@ -165,9 +165,6 @@ class DaosBuild(DfuseTestBase):
         preload_cmd = ';'.join(envs)
 
         build_jobs = 6 * 5
-        intercept_jobs = build_jobs
-        if intercept:
-            intercept_jobs = 1
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work, so run this part in serial.  The VMs have 6 cores each.
@@ -178,7 +175,7 @@ class DaosBuild(DfuseTestBase):
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'scons -C {} --jobs {}'.format(build_dir, build_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
