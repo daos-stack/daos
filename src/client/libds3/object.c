@@ -45,10 +45,10 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		goto err_ds3o;
 	}
 
-	dfs_obj_t  *parent      = NULL;
-	char       *file_start  = strrchr(path, '/');
-	char *file_name   = path;
-	char *parent_path = NULL;
+	dfs_obj_t *parent      = NULL;
+	char      *file_start  = strrchr(path, '/');
+	char      *file_name   = path;
+	char      *parent_path = NULL;
 	if (file_start != NULL) {
 		*file_start = '\0';
 		file_name   = file_start + 1;
@@ -166,15 +166,15 @@ ds3_obj_close(ds3_obj_t *ds3o)
 int
 ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
-	return -dfs_getxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR,
-                     info->encoded, &info->encoded_length);
+	return -dfs_getxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR, info->encoded,
+			     &info->encoded_length);
 }
 
 int
 ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds3o)
 {
-	return -dfs_setxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR,
-                     info->encoded, info->encoded_length, 0);
+	return -dfs_setxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR, info->encoded,
+			     info->encoded_length, 0);
 }
 
 int
@@ -184,9 +184,51 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos
 }
 
 int
-ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b, daos_event_t *ev)
+ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 {
-	return 0;
+	int   rc = 0;
+	char *path;
+	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
+	if (path == NULL) {
+		return -ENOMEM;
+	}
+
+	dfs_obj_t  *parent      = NULL;
+	char       *file_start  = strrchr(path, '/');
+	const char *file_name   = path;
+	const char *parent_path = NULL;
+	if (file_start != NULL) {
+		*file_start = '\0';
+		file_name   = file_start + 1;
+		parent_path = path;
+	}
+
+	char *lookup_path = NULL;
+	if (parent_path != NULL) {
+		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+		if (lookup_path == NULL) {
+			rc = ENOMEM;
+			goto err_path;
+		}
+
+		strcpy(lookup_path, "/");
+		strcat(lookup_path, path);
+		rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &parent, NULL, NULL);
+		if (rc != 0) {
+			goto err_parent;
+		}
+	}
+
+	rc = dfs_remove(ds3b->dfs, parent, file_name, false, NULL);
+
+err_parent:
+	if (parent)
+		dfs_release(parent);
+	if (lookup_path)
+		D_FREE(lookup_path);
+err_path:
+	D_FREE(path);
+	return -rc;
 }
 
 int
@@ -266,7 +308,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, file_name, &link);
 
 	// TODO Update an xattr with a list to all the version ids, ordered by
-  	// creation to handle deletion
+	// creation to handle deletion
 
 	if (rc != 0)
 		dfs_release(link);

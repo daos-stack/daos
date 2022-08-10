@@ -421,9 +421,8 @@ ds3_obj_close(ds3_obj_t *ds3o);
  * Get S3 object info.
  *
  * \param[out]	info	Returned S3 object info.
+ * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	Pointer to the S3 object handle to use.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
@@ -434,9 +433,8 @@ ds3_obj_get_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
  * Set S3 object info.
  *
  * \param[in]	info	S3 object info.
+ * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	Pointer to the S3 object handle to use.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
@@ -467,13 +465,11 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_obj_t *ds3o, daos
  *
  * \param[in]	key	Key of the S3 object to destroy.
  * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b, daos_event_t *ev);
+ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b);
 
 /**
  * Write S3 object data.
