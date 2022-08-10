@@ -565,7 +565,7 @@ class DestroyTests(TestWithServers):
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         # Create the pool
-        self.validate_pool_creation(hostlist_servers)
+        self.add_pool()
 
         # Create pool container
         self.add_container(pool=self.pool)
