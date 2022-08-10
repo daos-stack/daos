@@ -1,3 +1,9 @@
+daos (2.3.100-19) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Fri, 5 Aug 2022 17:30:00 -0600
+
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Remove now unused openpa dependency
