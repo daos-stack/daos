@@ -1075,7 +1075,7 @@ pipeline {
                         cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
                                                                'func-vm-cov',
                                                                'func-hw-small-cov',
-                                                               'func-hw-medium-cov'
+                                                               'func-hw-medium-cov',
                                                                'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
