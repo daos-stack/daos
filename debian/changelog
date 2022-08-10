@@ -1,3 +1,9 @@
+daos (2.3.100-19) unstable; urgency=medium
+  [ Dong Yi ]
+  * Add a new module named pmfs
+
+ -- Dong Yi <dongx.yi@intel.com> Aug, 1 Jul 2022 14:11:00 -0400
+
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Remove now unused openpa dependency
@@ -5,7 +11,6 @@ daos (2.3.100-17) unstable; urgency=medium
  -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
 
 daos (2.3.100-16) unstable; urgency=medium
-
   [ Jeff Olivier ]
   * Add pool_scrubbing_tests to test package
 

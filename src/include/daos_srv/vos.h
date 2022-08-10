@@ -1218,7 +1218,7 @@ typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 typedef void(*sc_put_cont_fn_t)(void *cont);
 typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
 
-typedef bool (*sc_is_idle_fn_t)();
+typedef bool (*sc_is_idle_fn_t)(void);
 typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
 typedef int (*sc_yield_fn_t)(void *);
 typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);

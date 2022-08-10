@@ -1,0 +1,48 @@
+"""Build versioned object store"""
+import daos_build
+
+FILES = ["pmfs.c", "vos_client.c", "vos_target_engine.c", "vos_target_fs.c",
+         "vos_tasks.c"]
+
+def build_pmfs(env):
+    """ build persistent memory file system stack """
+    denv = env.Clone()
+
+    libs = ['vos', 'bio', 'abt', 'daos_common_pmem', 'gurt']
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    Import('prereqs')
+    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
+
+    # SPDK related libs
+    libs += ['spdk_env_dpdk','spdk_util', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
+
+
+    pmfs = daos_build.library(denv, 'pmfs', FILES,
+                                  LIBS=libs, install_off='../..')
+
+    denv.Install('$PREFIX/lib64/daos_srv', pmfs)
+
+def scons():
+    """Execute build"""
+    Import('env', 'base_env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+
+    if not prereqs.server_requested():
+        return
+
+    denv = env.Clone()
+
+    # Compiler options
+    denv.Append(CPPPATH=[Dir('.').srcnode()])
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    build_pmfs(denv)
+
+if __name__ == "SCons.Script":
+    scons()
