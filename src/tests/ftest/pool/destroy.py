@@ -524,18 +524,17 @@ class DestroyTests(TestWithServers):
         # Destroy pool with recursive unset
         self.log.info("Attempting to destroy a pool with containers")
         exception_detected = False
-        try:
-            self.pool.destroy(recursive=0, disconnect=0)
-        except TestFail as result:
-            exception_detected = True
-            self.log.info(
-                "Expected exception - destroying pool with containers: %s",
-                str(result))
+        self.pool.dmg.exit_status_exception = False
+        result = self.get_dmg_command().pool_destroy(
+            pool=self.pool.identifier, recursive=False)
+        self.pool.dmg.exit_status_exception = True
 
-        if not exception_detected:
+        if result.exit_status == 0:
             # The pool-destroy did not raise an exception as expected
-            self.log.error(
-                "Exception did not occur - destroying pool with containers")
+            self.log.error("Exception did not occur - destroying pool with containers")
+        else:
+            exception_detected = True
+            self.log.info("Expected exception - destroying pool with containers")
 
             # Prevent attempting to delete the pool in tearDown()
             self.pool.pool = None
