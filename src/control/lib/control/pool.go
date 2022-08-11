@@ -293,7 +293,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		})
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -303,7 +303,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	if err != nil {
 		return errors.Wrap(err, "pool destroy failed")
 	}
-	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
 
 	return nil
 }
@@ -1050,9 +1050,9 @@ type (
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
 
-		// Latest pool global version
+		// UpgradeLayoutVer is latest pool layout version to be upgraded.
 		UpgradeLayoutVer uint32 `json:"upgrade_layout_ver"`
-		// Current pool global version
+		// PoolLayoutVer is current pool layout version.
 		PoolLayoutVer uint32 `json:"pool_layout_ver"`
 
 		// QueryErrorMsg reports an RPC error returned from a query.
