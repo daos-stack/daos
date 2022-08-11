@@ -99,6 +99,17 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 				strncpy(cps[cpi].prefix, key, delim_pos - key);
 				cpi++;
 			} else {
+                // Read dirent
+                rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
+                       mps[mpi].encoded, &mps[mpi].encoded_length);
+                
+                // Skip if upload has no dirent
+                if (rc != 0) {
+                    D_WARN("No dirent, skipping upload_id= %s\n", upload_id);
+                    dfs_release(upload_dir);
+                    continue;
+                }
+
 				// Add to mps
 				strcpy(mps[mpi].upload_id, upload_id);
 				strcpy(mps[mpi].key, key);
