@@ -504,7 +504,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_ORPHAN)
 		return 0;
 
-	/* The entry to be discarded, in spite of it is the (old) leader or not. */
 	if (ent->ie_dtx_ver < dra->discard_version) {
 		D_ALLOC_PTR(dre);
 		if (dre == NULL)
@@ -651,12 +650,11 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
-	if (dra.discard_version != dra.resync_version) {
-		/*
-		 * For non-discard case, trigger DTX reindex. That will avoid DTX_CHECK from
-		 * others being blocked. It is harmless even if (committed) DTX entries have
-		 * already been re-indexed.
-		 */
+	/*
+	 * Trigger DTX reindex. That will avoid DTX_CHECK from others being blocked.
+	 * It is harmless even if (committed) DTX entries have already been re-indexed.
+	 */
+	if (!dtx_cont_opened(cont)) {
 		rc = start_dtx_reindex_ult(cont);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Failed to trigger DTX reindex, ver %u/%u: "DF_RC"\n",

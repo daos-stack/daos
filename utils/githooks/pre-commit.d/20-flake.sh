@@ -49,14 +49,14 @@ else
         if [ $TARGET = "HEAD" ]
         then
                 echo "Checking against branch HEAD"
-                git diff HEAD^ -U10 | flake8 --diff
+                git diff HEAD^ -U10 | flake8 --config .flake8 --diff
 
                 echo "Checking scons code against branch ${TARGET}"
                 git diff HEAD^ -U10 | flake8 --config .flake8-scons --diff
         else
 
                 echo "Checking against branch ${TARGET}"
-                git diff $TARGET... -U10 | flake8 --diff
+                git diff $TARGET... -U10 | flake8 --config .flake8 --diff
 
                 echo "Checking scons code against branch ${TARGET}"
                 git diff $TARGET... -U10 | flake8 --config .flake8-scons --diff
