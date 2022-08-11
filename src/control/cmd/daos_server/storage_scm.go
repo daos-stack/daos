@@ -7,7 +7,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -15,7 +14,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -35,10 +33,11 @@ type pmemCmd struct {
 }
 
 type createNamespacesCmd struct {
-	cmdutil.LogCmd        `json:"-"`
-	NrNamespacesPerSocket uint   `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
-	Force                 bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
-	HelperLogFile         string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	cmdutil.LogCmd `json:"-"`
+	helperLogCmd   `json:"-"`
+
+	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
+	Force                 bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
 func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error {
@@ -113,13 +112,11 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 }
 
 func (cmd *createNamespacesCmd) Execute(args []string) error {
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
-	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing create namespaces command: %+v", cmd)
 	return cmd.preparePMem(scs.ScmPrepare)
@@ -127,8 +124,9 @@ func (cmd *createNamespacesCmd) Execute(args []string) error {
 
 type removeNamespacesCmd struct {
 	cmdutil.LogCmd `json:"-"`
-	Force          bool   `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
-	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	helperLogCmd   `json:"-"`
+
+	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
 func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
@@ -187,13 +185,11 @@ func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
 }
 
 func (cmd *removeNamespacesCmd) Execute(args []string) error {
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
-	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing remove namespaces command: %+v", cmd)
 	return cmd.resetPMem(scs.ScmPrepare)
@@ -201,16 +197,14 @@ func (cmd *removeNamespacesCmd) Execute(args []string) error {
 
 type scanPMemCmd struct {
 	cmdutil.LogCmd `json:"-"`
-	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	helperLogCmd   `json:"-"`
 }
 
 func (cmd *scanPMemCmd) Execute(args []string) error {
 	var bld strings.Builder
 
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
 	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)

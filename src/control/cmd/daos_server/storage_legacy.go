@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
@@ -20,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/pkg/errors"
 )
 
 type legacyStorageCmd struct {
@@ -88,6 +89,8 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
 			rdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
+			// releaseDrivesCmd expects positional argument, so set it
+			rdc.Args.PCIAllowList = cmd.PCIAllowList
 			errNVMe = rdc.resetNVMe(scs.NvmePrepare, iommuEnabled)
 		}
 	} else {
@@ -105,6 +108,8 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
 			pdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
+			// prepareDrivesCmd expects positional argument, so set it
+			pdc.Args.PCIAllowList = cmd.PCIAllowList
 			errNVMe = pdc.prepareNVMe(scs.NvmePrepare, iommuEnabled)
 		}
 	}
@@ -147,7 +152,7 @@ type legacyScanCmd struct {
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
-	cmd.Info("storage scan subcommand is deprecated, use nvme or pmem subcommands instead")
+	cmd.Notice("storage scan subcommand is deprecated, use nvme or pmem subcommands instead")
 
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {

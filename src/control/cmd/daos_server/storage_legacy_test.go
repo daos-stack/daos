@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -17,23 +20,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
-	//	// bdev req parameters
-	//	testNrHugePages := 42
-	//	// bdev mock commands
-	//	newPrepCmd := func() *prepareDrivesCmd {
-	//		return &prepareDrivesCmd{
-	//			NrHugepages: testNrHugePages,
-	//			PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-	//				storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-	//			PCIBlockList: test.MockPCIAddr(1),
-	//		}
-	//	}
-
 	for name, tc := range map[string]struct {
 		legacyCmd        *legacyPrepCmd
 		smbc             *scm.MockBackendConfig

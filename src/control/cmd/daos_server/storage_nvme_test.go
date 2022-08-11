@@ -43,12 +43,13 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 	testNrHugePages := 42
 	// bdev mock commands
 	newPrepCmd := func() *prepareDrivesCmd {
-		return &prepareDrivesCmd{
-			NrHugepages: testNrHugePages,
-			PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-				storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+		pdc := &prepareDrivesCmd{
+			NrHugepages:  testNrHugePages,
 			PCIBlockList: test.MockPCIAddr(1),
 		}
+		pdc.Args.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+			storage.BdevPciAddrSep, test.MockPCIAddr(2))
+		return pdc
 	}
 
 	for name, tc := range map[string]struct {
@@ -105,7 +106,7 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 		},
 		"non-root; iommu not detected": {
 			iommuDisabled: true,
-			expErr:        errors.New("no IOMMU detected"),
+			expErr:        errors.New("no IOMMU capability detected"),
 		},
 		"root; vfio disabled; iommu not detected": {
 			prepCmd:       newPrepCmd().WithTargetUser("root").WithDisableVFIO(true),
@@ -170,11 +171,12 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 func TestDaosServer_resetNVMe(t *testing.T) {
 	// bdev mock commands
 	newRelCmd := func() *releaseDrivesCmd {
-		return &releaseDrivesCmd{
-			PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-				storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+		rdc := &releaseDrivesCmd{
 			PCIBlockList: test.MockPCIAddr(1),
 		}
+		rdc.Args.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
+			storage.BdevPciAddrSep, test.MockPCIAddr(2))
+		return rdc
 	}
 
 	for name, tc := range map[string]struct {
@@ -231,7 +233,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		},
 		"non-root; iommu not detected": {
 			iommuDisabled: true,
-			expErr:        errors.New("no IOMMU detected"),
+			expErr:        errors.New("no IOMMU capability detected"),
 		},
 		"root; vfio disabled; iommu not detected": {
 			relCmd:        newRelCmd().WithTargetUser("root").WithDisableVFIO(true),

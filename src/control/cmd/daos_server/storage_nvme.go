@@ -7,7 +7,6 @@
 package main
 
 import (
-	"os"
 	"os/user"
 	"strings"
 
@@ -15,9 +14,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -26,8 +23,8 @@ import (
 type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
 type nvmeCmd struct {
-	Prepare prepareDrivesCmd `command:"prepare-drives" description:"Prepare NVMe SSDs for use with DAOS"`
-	Release releaseDrivesCmd `command:"release-drives" description:"Release NVMe SSDs for use with OS"`
+	Prepare prepareDrivesCmd `command:"prepare-drives" description:"Prepare NVMe SSDs for use by DAOS"`
+	Release releaseDrivesCmd `command:"release-drives" description:"Release NVMe SSDs for use by OS"`
 	Scan    scanDrivesCmd    `command:"scan" description:"Scan NVMe SSDs"`
 }
 
@@ -37,6 +34,9 @@ func getTargetUser(reqUser string) (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "couldn't lookup running user")
 		}
+		if runningUser.Username == "" {
+			return "", errors.New("empty username returned from current user lookup")
+		}
 		return runningUser.Username, nil
 	}
 	return reqUser, nil
@@ -45,11 +45,10 @@ func getTargetUser(reqUser string) (string, error) {
 func validateVFIOSetting(targetUser string, reqDisableVFIO bool, iommuEnabled bool) error {
 	if targetUser != "root" {
 		if reqDisableVFIO {
-			return errors.New("VFIO can not be disabled if running as non-root user")
+			return storage.FaultBdevNonRootVFIODisable
 		}
 		if !iommuEnabled {
-			return errors.New("no IOMMU detected, to discover NVMe devices enable " +
-				"IOMMU per the DAOS Admin Guide")
+			return storage.FaultBdevNoIOMMU
 		}
 	}
 	return nil
@@ -81,13 +80,17 @@ func updatePrepReqParams(log logging.Logger, iommuEnabled bool, req *storage.Bde
 }
 
 type prepareDrivesCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	PCIAllowList   string `long:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
-	PCIBlockList   string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
-	NrHugepages    int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
-	TargetUser     string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	DisableVFIO    bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
-	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	cmdutil.LogCmd  `json:"-"`
+	helperLogCmd    `json:"-"`
+	iommuCheckerCmd `json:"-"`
+
+	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
+	Args         struct {
+		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *prepareDrivesCmd) WithDisableVFIO(b bool) *prepareDrivesCmd {
@@ -106,12 +109,12 @@ func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEn
 	req := storage.BdevPrepareRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
-		PCIAllowList:  cmd.PCIAllowList,
+		PCIAllowList:  cmd.Args.PCIAllowList,
 		PCIBlockList:  cmd.PCIBlockList,
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	if err := updatePrepReqParams(cmd, iommuEnabled, &req); err != nil {
+	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
 		return errors.Wrap(err, "evaluating vmd capability on platform")
 	}
 
@@ -124,30 +127,32 @@ func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEn
 }
 
 func (cmd *prepareDrivesCmd) Execute(args []string) error {
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
+	iommuEnabled, err := cmd.isIOMMUEnabled(cmd.Logger)
 	if err != nil {
 		return err
 	}
 
-	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 	return cmd.prepareNVMe(scs.NvmePrepare, iommuEnabled)
 }
 
 type releaseDrivesCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	PCIAllowList   string `long:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
-	PCIBlockList   string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
-	TargetUser     string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	DisableVFIO    bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
-	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	cmdutil.LogCmd  `json:"-"`
+	helperLogCmd    `json:"-"`
+	iommuCheckerCmd `json:"-"`
+
+	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
+	Args         struct {
+		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *releaseDrivesCmd) WithDisableVFIO(b bool) *releaseDrivesCmd {
@@ -165,13 +170,13 @@ func (cmd *releaseDrivesCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnab
 
 	req := storage.BdevPrepareRequest{
 		TargetUser:   cmd.TargetUser,
-		PCIAllowList: cmd.PCIAllowList,
+		PCIAllowList: cmd.Args.PCIAllowList,
 		PCIBlockList: cmd.PCIBlockList,
 		DisableVFIO:  cmd.DisableVFIO,
 		Reset_:       true,
 	}
 
-	if err := updatePrepReqParams(cmd, iommuEnabled, &req); err != nil {
+	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
 		return errors.Wrap(err, "evaluating vmd capability on platform")
 	}
 
@@ -184,18 +189,16 @@ func (cmd *releaseDrivesCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnab
 }
 
 func (cmd *releaseDrivesCmd) Execute(args []string) error {
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
+	iommuEnabled, err := cmd.isIOMMUEnabled(cmd.Logger)
 	if err != nil {
 		return err
 	}
 
-	scs := server.NewStorageControlService(cmd, config.DefaultServer().Engines)
+	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing release drives command: %+v", cmd)
 	return cmd.resetNVMe(scs.NvmePrepare, iommuEnabled)
@@ -203,17 +206,16 @@ func (cmd *releaseDrivesCmd) Execute(args []string) error {
 
 type scanDrivesCmd struct {
 	cmdutil.LogCmd `json:"-"`
-	DisableVMD     bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
-	HelperLogFile  string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	helperLogCmd   `jcon:"-"`
+
+	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *scanDrivesCmd) Execute(args []string) error {
 	var bld strings.Builder
 
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.Errorf("unable to configure privileged helper logging: %s", err)
-		}
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
 	}
 
 	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)

@@ -28,6 +28,37 @@ const (
 	defaultConfigFile = "daos_server.yml"
 )
 
+type (
+	// helperLogCmd is an embeddable type that extends a command with
+	// helper privileged binary logging capabilities.
+	helperLogCmd struct {
+		HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	}
+
+	// iommuCheckerCmd is an embeddable type that extends a command with
+	// ability to check IOMMU capability of the server host.
+	iommuCheckerCmd struct{}
+)
+
+func (hlc *helperLogCmd) setHelperLogFile() error {
+	filename := hlc.HelperLogFile
+	if filename == "" {
+		return nil
+	}
+
+	return errors.Wrap(os.Setenv(pbin.DaosAdminLogFileEnvVar, filename),
+		"unable to configure privileged helper logging")
+}
+
+func (cmd *iommuCheckerCmd) isIOMMUEnabled(log logging.Logger) (bool, error) {
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
+	if err != nil {
+		return false, errors.Wrap(err, "unable to verify if iommu is enabled")
+	}
+
+	return iommuEnabled, nil
+}
+
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
