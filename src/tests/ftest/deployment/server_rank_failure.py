@@ -125,7 +125,7 @@ class ServerRankFailure(IorTestBase):
             job_num (int): Job number used for the IOR run.
             errors (list): Error list used in the test.
         """
-        self.log.info(ior_results)
+        self.log.info(ior_results[job_num])
         if not ior_results[job_num][0]:
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
@@ -263,7 +263,7 @@ class ServerRankFailure(IorTestBase):
     def test_server_rank_failure_with_rp(self):
         """Jira ID: DAOS-10002.
 
-        Test rank failure with redundancy factor and RP_2G1 object class. See
+        Test rank failure with redundancy factor and RP_3GX object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
@@ -277,7 +277,7 @@ class ServerRankFailure(IorTestBase):
 
     def test_server_rank_failure_with_ec(self):
         """Jira ID: DAOS-10002.
-        Test rank failure with redundancy factor and EC_2P1G1 object class. See
+        Test rank failure with redundancy factor and EC_4P2GX object class. See
         verify_rank_failure() for test steps.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium

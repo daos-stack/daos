@@ -79,9 +79,12 @@ ior: &ior_base
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: SX
+  dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
   dfs_oclass: RP_3GX
+  dfs_dir_oclass: RP_3GX
 ior_with_ec:
   <<: *ior_base
   dfs_oclass: EC_4P2GX
+  dfs_dir_oclass: EC_4P2GX
