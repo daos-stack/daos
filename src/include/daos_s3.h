@@ -128,8 +128,10 @@ struct ds3_common_prefix_info {
 
 /** S3 Object information */
 struct ds3_multipart_upload_info {
-	/** Object key */
+	/** Upload id */
 	char   upload_id[DS3_MAX_UPLOAD_ID];
+	/** Object key */
+	char   key[DS3_MAX_KEY];
 	/** Opaque encoded upload info */
 	void  *encoded;
 	/** Length of encoded data */
@@ -369,8 +371,8 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \param[out]	objs	Array of object info structures.
  * \param[in,out]
  *		ncp	[in] \a cps length in items.
- *			[out] Number of objects returned.
- * \param[out]	cps	Array of object info structures.
+ *			[out] Number of common prefixes returned.
+ * \param[out]	cps	Array of common prefix info structures.
  * \param[in]	prefix	List objects that start with this prefix.
  * \param[in]	delim	Divide results by delim.
  * \param[in,out]
@@ -516,10 +518,15 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
 /**
  * List S3 multipart uploads pending in the S3 bucket identified by \a ds3b.
  *
+ * \param[in]	bucket_name	Name of the bucket.
  * \param[in,out]
  *		nobj	[in] \a nmp length in items.
  *			[out] Number of multipart uploads returned.
  * \param[out]	mps	Array of object info structures.
+ * \param[in,out]
+ *		ncp	[in] \a cps length in items.
+ *			[out] Number of common prefixes returned.
+ * \param[out]	cps	Array of common prefix info structures.
  * \param[in]	prefix	List multipart uploads that start with this prefix.
  * \param[in]	delim	Divide results by delim.
  * \param[in,out]
@@ -527,13 +534,15 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
  *			[out] Next marker to be used by subsequent calls.
  * \param[in]	list_versions	Also include versions
  * \param[out]	is_truncated	Are the results truncated
- * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_bucket_list_multipart(uint32_t *nmp, struct ds3_multipart_upload_info *mps, const char *prefix,
-			  const char *delim, char *marker, bool *is_truncated, ds3_bucket_t *ds3b);
+ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
+			  struct ds3_multipart_upload_info *mps, uint32_t *ncp,
+			  struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
+			  char *marker, bool *is_truncated, ds3_t *ds3);
 
 int
 ds3_upload_list_parts();

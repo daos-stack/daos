@@ -231,7 +231,9 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		goto err_dirents;
 	}
 
-	*is_truncated = !daos_anchor_is_eof(&anchor);
+	if (is_truncated != NULL) {
+		*is_truncated = !daos_anchor_is_eof(&anchor);
+	}
 
 	uint32_t cpi  = 0;
 	uint32_t obji = 0;
@@ -275,13 +277,6 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			cpi++;
 		} else if (S_ISREG(mode)) {
 			// The entry is a regular file
-
-			// Out of bounds
-			if (obji >= *ncp) {
-				rc = EINVAL;
-				goto err_dirents;
-			}
-
 			// Read the xattr and add to objs
 			// TODO make more efficient
 			rc = dfs_getxattr(ds3b->dfs, entry_obj, RGW_DIR_ENTRY_XATTR,
@@ -302,6 +297,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		// Close handles
 		dfs_release(entry_obj);
 	}
+
+	// Set the number of read objects
+	*nobj = obji;
+	*ncp = cpi;
 
 err_dirents:
 	D_FREE(dirents);

@@ -21,6 +21,7 @@
 #define LATEST_INSTANCE_SUFFIX "[latest]"
 #define RGW_BUCKET_INFO        "rgw_info"
 #define RGW_DIR_ENTRY_XATTR    "rgw_entry"
+#define RGW_KEY_XATTR          "rgw_key"
 #define RGW_PART_XATTR         "rgw_part"
 
 /* #define METADATA_DIR_LIST \
