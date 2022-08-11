@@ -251,8 +251,8 @@ err_path:
 }
 
 int
-ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b,
-	      ds3_obj_t *ds3o, daos_event_t *ev)
+ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
+	      daos_event_t *ev)
 {
 	if (ds3b == NULL || buf == NULL || ds3o == NULL)
 		return -EINVAL;

@@ -173,8 +173,7 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 int
 ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
-		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b,
-		    daos_event_t *ev)
+		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b)
 {
 	if (ds3b == NULL || nobj == NULL)
 		return -EINVAL;
@@ -188,8 +187,8 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		return -EINVAL;
 	}
 
-	int   rc          = 0;
-	char *file_start  = strrchr(prefix, delim[0]);
+	int         rc          = 0;
+	char       *file_start  = strrchr(prefix, delim[0]);
 	const char *path        = "";
 	const char *prefix_rest = prefix;
 
@@ -234,7 +233,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 	*is_truncated = !daos_anchor_is_eof(&anchor);
 
-	uint32_t cpi = 0;
+	uint32_t cpi  = 0;
 	uint32_t obji = 0;
 	for (uint32_t i = 0; i < *nobj; i++) {
 		const char *name = dirents[i].d_name;
@@ -255,7 +254,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 		if (S_ISDIR(mode)) {
 			// The entry is a directory
-			
+
 			// Out of bounds
 			if (cpi >= *ncp) {
 				rc = EINVAL;
@@ -263,7 +262,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			}
 
 			// Add to cps
-			char * cpp = cps[cpi].prefix;
+			char *cpp = cps[cpi].prefix;
 			if (strlen(path) == 0) {
 				strcpy(cpp, path);
 				strcat(cpp, delim);
@@ -272,11 +271,11 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			}
 			strcat(cpp, name);
 			strcat(cpp, delim);
-			
+
 			cpi++;
 		} else if (S_ISREG(mode)) {
 			// The entry is a regular file
-			
+
 			// Out of bounds
 			if (obji >= *ncp) {
 				rc = EINVAL;
@@ -285,8 +284,8 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 			// Read the xattr and add to objs
 			// TODO make more efficient
-			rc = dfs_getxattr(ds3b->dfs, entry_obj, RGW_DIR_ENTRY_XATTR, objs[obji].encoded,
-					  &objs[obji].encoded_length);
+			rc = dfs_getxattr(ds3b->dfs, entry_obj, RGW_DIR_ENTRY_XATTR,
+					  objs[obji].encoded, &objs[obji].encoded_length);
 			// Skip if file has no dirent
 			if (rc != 0) {
 				D_WARN("No dirent, skipping entry= %s\n", name);
@@ -297,7 +296,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			obji++;
 		} else {
 			// Skip other types
-			D_INFO("Skipping entry = %s\n",  name );
+			D_INFO("Skipping entry = %s\n", name);
 		}
 
 		// Close handles

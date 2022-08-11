@@ -30,6 +30,9 @@ extern "C" {
 /** Maximum user info length */
 #define DS3_MAX_USER_NAME   DFS_MAX_NAME
 
+/** Maximum upload_id length */
+#define DS3_MAX_UPLOAD_ID   33
+
 // TODO This is temporarily moved here
 #define METADATA_DIR_LIST                                                                          \
 	X(USERS_DIR, "users")                                                                      \
@@ -111,7 +114,7 @@ struct ds3_bucket_info {
 struct ds3_object_info {
 	/** Object key */
 	char   key[DS3_MAX_KEY];
-	/** Opaque encoded bucket info */
+	/** Opaque encoded object info */
 	void  *encoded;
 	/** Length of encoded data */
 	size_t encoded_length;
@@ -121,6 +124,16 @@ struct ds3_object_info {
 struct ds3_common_prefix_info {
 	/** Common Prefix */
 	char prefix[DS3_MAX_KEY];
+};
+
+/** S3 Object information */
+struct ds3_multipart_upload_info {
+	/** Object key */
+	char   upload_id[DS3_MAX_UPLOAD_ID];
+	/** Opaque encoded upload info */
+	void  *encoded;
+	/** Length of encoded data */
+	size_t encoded_length;
 };
 
 // General S3
@@ -366,18 +379,13 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * \param[in]	list_versions	Also include versions
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
 ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
-		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b,
-		    daos_event_t *ev);
-
-// TODO multipart api
+		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b);
 
 // S3 Objects
 
@@ -489,8 +497,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b);
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b,
-	      ds3_obj_t *ds3o, daos_event_t *ev);
+ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
+	      daos_event_t *ev);
 
 /**
  * Mark an S3 object in the S3 bucket identified by \a ds3b as being the latest version.
@@ -502,6 +510,54 @@ ds3_obj_write(const void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *
  */
 int
 ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
+
+// S3 Multipart api
+
+/**
+ * List S3 multipart uploads pending in the S3 bucket identified by \a ds3b.
+ *
+ * \param[in,out]
+ *		nobj	[in] \a nmp length in items.
+ *			[out] Number of multipart uploads returned.
+ * \param[out]	mps	Array of object info structures.
+ * \param[in]	prefix	List multipart uploads that start with this prefix.
+ * \param[in]	delim	Divide results by delim.
+ * \param[in,out]
+ *		marker	[in] Start listing from marker key.
+ *			[out] Next marker to be used by subsequent calls.
+ * \param[in]	list_versions	Also include versions
+ * \param[out]	is_truncated	Are the results truncated
+ * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
+int
+ds3_bucket_list_multipart(uint32_t *nmp, struct ds3_multipart_upload_info *mps, const char *prefix,
+			  const char *delim, char *marker, bool *is_truncated, ds3_bucket_t *ds3b);
+
+int
+ds3_upload_list_parts();
+
+int
+ds3_upload_init();
+
+int
+ds3_upload_abort();
+
+int
+ds3_upload_complete();
+
+int
+ds3_upload_get_info();
+
+int
+ds3_upload_open_part();
+
+int
+ds3_upload_close_part();
+
+int
+ds3_upload_write_part();
 
 #if defined(__cplusplus)
 }
