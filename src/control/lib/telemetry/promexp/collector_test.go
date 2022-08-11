@@ -519,87 +519,112 @@ func TestPromExp_extractLabels(t *testing.T) {
 		expName   string
 		expLabels labelMap
 	}{
-		"empty": {},
-		"nothing to change": {
-			input:   "goodname",
-			expName: "goodname",
+		"empty": {
+			expLabels: labelMap{},
 		},
-		"fix spaces": {
-			input:   "a fine name",
-			expName: "a_fine_name",
+		"ID stripped": {
+			input:     "ID: 123",
+			expLabels: labelMap{},
 		},
-		"ID": {
-			input:   "ID: 2_stat",
-			expName: "stat",
+		"net_uri_lookup_self": {
+			input:     "ID: 1/net/uri/lookup_self",
+			expName:   "net_uri_lookup_self",
+			expLabels: labelMap{},
 		},
-		"io latency B": {
-			input:   "io_latency_fetch_16B",
+		"net_provider_req_timeout": {
+			input:   "ID: 0/net/ofi+tcp;ofi_rxm/req_timeout/ctx_0",
+			expName: "net_req_timeout",
+			expLabels: labelMap{
+				"provider": "ofi+tcp;ofi_rxm",
+				"context":  "0",
+			},
+		},
+		"dmabuff_queued_reqs": {
+			input:   "ID: 0/dmabuff/queued_reqs/tgt_6",
+			expName: "dmabuff_queued_reqs",
+			expLabels: labelMap{
+				"target": "6",
+			},
+		},
+		"sched_total_time": {
+			input:   "ID: 0/sched/total_time/xs_3",
+			expName: "sched_total_time",
+			expLabels: labelMap{
+				"xstream": "3",
+			},
+		},
+		"io latency fetch": {
+			input:   "ID: 2/io/latency/fetch/16B",
 			expName: "io_latency_fetch",
 			expLabels: labelMap{
 				"size": "16B",
 			},
 		},
-		"io latency KB": {
-			input:   "io_latency_update_128KB",
+		"io latency update": {
+			input:   "ID: /io/latency/update/128KB",
 			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "128KB",
 			},
 		},
-		"io latency MB": {
-			input:   "io_latency_update_256MB",
-			expName: "io_latency_update",
-			expLabels: labelMap{
-				"size": "256MB",
-			},
-		},
 		"io latency >size": {
-			input:   "io_latency_update_GT4MB",
+			input:   "ID: 1/io/latency/update/GT4MB",
 			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "GT4MB",
 			},
 		},
-		"net rank": {
-			input:   "net_15_stat",
-			expName: "net_stat",
+		"io_dtx_committable": {
+			input:   "ID: 0/io/dtx/committable/tgt_5",
+			expName: "io_dtx_committable",
 			expLabels: labelMap{
-				"rank": "15",
+				"target": "5",
 			},
 		},
-		"pool UUID": {
-			input:   "pool_11111111_2222_3333_4444_555555555555_info",
-			expName: "pool_info",
+		"io_ops_update_active": {
+			input:   "ID: 0/io/ops/update_active/tgt_2",
+			expName: "io_ops_update_active",
+			expLabels: labelMap{
+				"target": "2",
+			},
+		},
+		"io_ops_tgt_punch_latency": {
+			input:   "ID: 0/io/ops/tgt_punch/latency/tgt_2",
+			expName: "io_ops_tgt_punch_latency",
+			expLabels: labelMap{
+				"target": "2",
+			},
+		},
+		"pool_started_at": {
+			input:   "ID: 0/pool/11111111-2222-3333-4444-555555555555/started_at",
+			expName: "pool_started_at",
 			expLabels: labelMap{
 				"pool": "11111111-2222-3333-4444-555555555555",
 			},
 		},
-		"target": {
-			input:   "io_update_latency_tgt_1",
-			expName: "io_update_latency",
+		"pool_ops_tgt_dkey_punch": {
+			input:   "ID: 0/pool/11111111-2222-3333-4444-555555555555/ops/tgt_dkey_punch/tgt_7",
+			expName: "pool_ops_tgt_dkey_punch",
 			expLabels: labelMap{
-				"target": "1",
+				"pool":   "11111111-2222-3333-4444-555555555555",
+				"target": "7",
 			},
 		},
-		"context": {
-			input:   "failed_addr_ctx_1",
-			expName: "failed_addr",
+		"pool_tgt_scrubber_corruption": {
+			input:   "ID: 1/pool/86eacd2c-eceb-4054-8621-017f4f661fe2/tgt_5/scrubber/corruption/total",
+			expName: "pool_scrubber_corruption_total",
 			expLabels: labelMap{
-				"context": "1",
+				"pool":   "86eacd2c-eceb-4054-8621-017f4f661fe2",
+				"target": "5",
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			labels, name := extractLabels(tc.input)
 
-			test.AssertEqual(t, tc.expName, name, "")
-			test.AssertEqual(t, len(tc.expLabels), len(labels), "wrong number of labels")
-			for key, val := range labels {
-				expVal, exists := tc.expLabels[key]
-				if !exists {
-					t.Fatalf("key %q was not expected", key)
-				}
-				test.AssertEqual(t, expVal, val, "incorrect value")
+			test.AssertEqual(t, name, tc.expName, "")
+			if diff := cmp.Diff(labels, tc.expLabels); diff != "" {
+				t.Errorf("labels mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

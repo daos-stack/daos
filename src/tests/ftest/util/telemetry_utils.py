@@ -66,9 +66,9 @@ class TelemetryUtils():
         'engine_pool_scrubber_csums_current',
         'engine_pool_scrubber_csums_prev',
         'engine_pool_scrubber_csums_total',
-        'engine_pool_scrubber_butes_scrubbed_current',
-        'engine_pool_scrubber_butes_scrubbed_prev',
-        'engine_pool_scrubber_butes_scrubbed_total',
+        'engine_pool_scrubber_bytes_scrubbed_current',
+        'engine_pool_scrubber_bytes_scrubbed_prev',
+        'engine_pool_scrubber_bytes_scrubbed_total',
         'engine_pool_scrubber_last_duration',
         'engine_pool_scrubber_last_duration_max',
         'engine_pool_scrubber_last_duration_mean',
@@ -386,9 +386,9 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_<provider>_failed_addr",
-        "engine_net_<provider>_req_timeout",
-        "engine_net_<provider>_uri_lookup_timeout",
+        "engine_net_failed_addr",
+        "engine_net_req_timeout",
+        "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
@@ -479,18 +479,6 @@ class TelemetryUtils():
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
-
-        # Add engine network metrics for the configured provider
-        try:
-            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
-            if provider == "ofi_tcp":
-                provider = "ofi_tcp_ofi_rxm"
-            elif provider == "ofi_verbs":
-                provider = "ofi_verbs_ofi_rxm"
-        except TypeError:
-            provider = "ofi_tcp_ofi_rxm"
-        net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
-        all_metrics_names.extend(net_metrics)
 
         # Add NVMe metrics for any NVMe devices configured for this server
         for nvme_list in server.manager.job.get_engine_values("bdev_list"):

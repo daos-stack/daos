@@ -171,73 +171,105 @@ func sanitizeMetricName(in string) string {
 	}, strings.TrimLeft(in, "/"))
 }
 
-func parseNameSubstr(labels labelMap, name string, matchRE string, replacement string, assignLabels func(labelMap, []string)) string {
-	re := regexp.MustCompile(matchRE)
-	matches := re.FindStringSubmatch(name)
-	if len(matches) > 0 {
-		assignLabels(labels, matches)
-
-		if strings.HasSuffix(matches[0], "_") {
-			replacement += "_"
-		}
-		name = re.ReplaceAllString(name, replacement)
+func matchLabel(labels labelMap, input, match, label string) bool {
+	if !strings.HasPrefix(input, match) {
+		return false
 	}
 
-	return name
+	splitStr := strings.SplitN(input, "_", 2)
+	if len(splitStr) == 2 {
+		labels[label] = splitStr[1]
+		return true
+	}
+	return false
+}
+
+func appendName(cur, name string) string {
+	if cur == "" {
+		return name
+	}
+	return cur + "_" + name
 }
 
 func extractLabels(in string) (labels labelMap, name string) {
-	name = sanitizeMetricName(in)
-
 	labels = make(labelMap)
-
-	// Clean up metric names and parse out useful labels
-
-	ID_re := regexp.MustCompile(`ID_+(\d+)_?`)
-	name = ID_re.ReplaceAllString(name, "")
-
-	name = extractLatencySize(labels, name, "fetch")
-	name = extractLatencySize(labels, name, "update")
-
-	name = parseNameSubstr(labels, name, `_?xs_(\d+)`, "",
-		func(labels labelMap, matches []string) {
-			labels["xstream"] = matches[1]
-		})
-
-	name = parseNameSubstr(labels, name, `_?tgt_(\d+)`, "",
-		func(labels labelMap, matches []string) {
-			labels["target"] = matches[1]
-		})
-
-	name = parseNameSubstr(labels, name, `_?ctx_(\d+)`, "",
-		func(labels labelMap, matches []string) {
-			labels["context"] = matches[1]
-		})
-
-	name = parseNameSubstr(labels, name, `net_+(\d+)`, "net",
-		func(labels labelMap, matches []string) {
-			labels["rank"] = matches[1]
-		})
-
-	getHexRE := func(numDigits int) string {
-		return strings.Repeat(`[[:xdigit:]]`, numDigits)
+	compsIdx := 0
+	comps := strings.Split(in, "/")
+	if len(comps) == 0 {
+		return labels, in
 	}
-	uuid_re := fmt.Sprintf("%s_%s_%s_%s_%s", getHexRE(8), getHexRE(4), getHexRE(4),
-		getHexRE(4), getHexRE(12))
 
-	name = parseNameSubstr(labels, name, `pool_+(`+uuid_re+`)`, "pool",
-		func(labels labelMap, matches []string) {
-			labels["pool"] = strings.Replace(matches[1], "_", "-", -1)
-		})
+	if strings.HasPrefix(comps[compsIdx], "ID") {
+		if len(comps) == 1 {
+			return labels, ""
+		}
+		compsIdx++
+	}
+
+	switch comps[compsIdx] {
+	case "pool":
+		name = "pool"
+		compsIdx++
+		labels["pool"] = comps[compsIdx]
+		compsIdx++
+		switch comps[compsIdx] {
+		case "ops":
+			compsIdx++
+			name += "_ops_" + comps[compsIdx]
+			compsIdx++
+		}
+	case "io":
+		name = "io"
+		compsIdx++
+		switch comps[compsIdx] {
+		case "latency":
+			compsIdx++
+			name += "_latency_" + comps[compsIdx]
+			compsIdx++
+			labels["size"] = comps[compsIdx]
+			compsIdx++
+		case "ops":
+			compsIdx++
+			name += "_ops_" + comps[compsIdx]
+			compsIdx++
+		default:
+			name += "_" + comps[compsIdx]
+			compsIdx++
+		}
+	case "net":
+		compsIdx++
+		if comps[compsIdx] == "uri" {
+			compsIdx++
+			name = "net_uri_" + comps[compsIdx]
+			compsIdx++
+			break
+		}
+
+		name = "net"
+		labels["provider"] = comps[compsIdx]
+		compsIdx++
+	}
+
+	for {
+		if len(comps) == compsIdx {
+			break
+		}
+
+		switch {
+		case matchLabel(labels, comps[compsIdx], "tgt_", "target"):
+			compsIdx++
+		case matchLabel(labels, comps[compsIdx], "xs_", "xstream"):
+			compsIdx++
+		case matchLabel(labels, comps[compsIdx], "ctx_", "context"):
+			compsIdx++
+		default:
+			name = appendName(name, comps[compsIdx])
+			compsIdx++
+		}
+	}
+
+	name = sanitizeMetricName(name)
 	return
-}
-
-func extractLatencySize(labels labelMap, name, latencyType string) string {
-	return parseNameSubstr(labels, name, `_+latency_+`+latencyType+`_+((?:GT)?[0-9]+[A-Z]?B)`,
-		"_latency_"+latencyType,
-		func(labels labelMap, matches []string) {
-			labels["size"] = matches[1]
-		})
 }
 
 func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
@@ -368,8 +400,8 @@ func newRankMetric(log logging.Logger, rank uint32, m telemetry.Metric) *rankMet
 	var name string
 	rm.labels, name = extractLabels(m.FullPath())
 	rm.labels["rank"] = fmt.Sprintf("%d", rm.rank)
+	rm.baseName = "engine_" + name
 
-	rm.baseName = strings.Join([]string{"engine", name}, "_")
 	desc := m.Desc()
 
 	switch rm.metric.Type() {
@@ -392,6 +424,9 @@ func newRankMetric(log logging.Logger, rank uint32, m telemetry.Metric) *rankMet
 
 func (c *Collector) isIgnored(name string) bool {
 	for _, re := range c.ignoredMetrics {
+		// TODO: We may want to look into removing the use of regexp here
+		// in favor of a less-flexible but more efficient approach.
+		// For the moment, use of ignored metrics should be avoided if possible.
 		if re.MatchString(name) {
 			return true
 		}
