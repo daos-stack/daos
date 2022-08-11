@@ -626,8 +626,11 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	if (grp_size == 1) {
 		pos = grp_idx * obj_get_grp_size(obj);
 		shard = obj_get_shard(obj, pos);
-		if (shard->po_target == -1)
+		if (shard->po_target == -1) {
+			D_ERROR(DF_OID" grp_size 1, obj_get_shard failed\n",
+				DP_OID(obj->cob_md.omd_id));
 			return -DER_IO;
+		}
 
 		/*
 		 * Note that even though there's only one replica here, this
@@ -673,6 +676,8 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 		rc = pos;
 	} else {
 		/* If all the replicas are failed or in-rebuilding, then EIO. */
+		D_ERROR(DF_OID" all the replicas are failed or in-rebuilding\n",
+			DP_OID(obj->cob_md.omd_id));
 		rc = -DER_IO;
 	}
 
@@ -6635,9 +6640,10 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
+	struct cont_props	props;
 	int			rc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -6651,6 +6657,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
@@ -6693,7 +6701,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    uint32_t args)
 {
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
@@ -6729,10 +6737,11 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	uint64_t		rf_factor;
 	int			rc;
 	enum daos_obj_redun	ord;
+	struct cont_props	props;
 	uint32_t		nr_grp;
 
 	/** select the oclass */
@@ -6743,6 +6752,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);

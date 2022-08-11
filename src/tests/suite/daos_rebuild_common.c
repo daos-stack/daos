@@ -827,10 +827,12 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 
 	dfs_attr_t attr = {};
 
-	attr.da_props = daos_prop_alloc(1);
+	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
