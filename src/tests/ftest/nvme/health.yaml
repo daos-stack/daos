@@ -42,6 +42,6 @@ pool:
     mode: 146
     name: daos_server
     control_method: dmg
-    max_num_pools: 40
+    max_num_pools: 500 # for debugging only
     total_pool_percentage: 95
     min_nvme_per_target: 1073741824 # 1 GiB
