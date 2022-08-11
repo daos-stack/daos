@@ -10,7 +10,7 @@ import daos_build
 import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
-# pylint: disable=reimported,ungrouped-imports
+# pylint: disable=reimported
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -364,7 +364,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs = PreReqComponent(env, opts, commits_file)
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
-    prereqs.load_defaults(platform_arm)
+    prereqs.load_defaults()
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
@@ -386,7 +386,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     base_env_mpi = env.Clone()
 
-    compiler_setup.base_setup(env, prereqs=prereqs)
+    compiler_setup.base_setup(env)
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(base_env_mpi)

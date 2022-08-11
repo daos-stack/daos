@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -36,9 +35,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         pool query command.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_basic
+        :avocado: tags=hw,small
+        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=pool_query_basic,test_pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         self.pool.set_query_data()
@@ -56,45 +55,35 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         del self.pool.query_data["response"]["tier_stats"][1]["max"]
         del self.pool.query_data["response"]["tier_stats"][1]["mean"]
 
-        # Get the expected pool query values from the test yaml.  This should be
-        # as simple as:
+        # Get the expected pool query values from the test yaml. This should be as simple as:
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
-        # but this yields an empty dictionary (the default), so it needs to be
-        # defined manually:
+        # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
-            "total_targets": self.params.get(
-                "total_targets", path="/run/exp_vals/*"),
-            "active_targets": self.params.get(
-                "active_targets", path="/run/exp_vals/*"),
-            "total_engines": self.params.get(
-                "total_engines", path="/run/exp_vals/*"),
-            "disabled_targets": self.params.get(
-                "disabled_targets", path="/run/exp_vals/*"),
+            "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
+            "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),
+            "total_engines": self.params.get("total_engines", path="/run/exp_vals/*"),
+            "disabled_targets": self.params.get("disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
             "leader": self.params.get("leader", path="/run/exp_vals/*"),
             "tier_stats": [
                 {
                     "media_type": "scm",
-                    "total": self.params.get(
-                        "total", path="/run/exp_vals/scm/*")
+                    "total": self.params.get("total", path="/run/exp_vals/scm/*")
                 },
                 {
                     "media_type": "nvme",
-                    "total": self.params.get(
-                        "total", path="/run/exp_vals/nvme/*")
+                    "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
+            "pool_layout_ver": 1,
+            "upgrade_layout_ver": 1,
             "rebuild": {
-                "status": self.params.get(
-                    "rebuild_status", path="/run/exp_vals/rebuild/*"),
-                "state": self.params.get(
-                    "state", path="/run/exp_vals/rebuild/*"),
-                "objects": self.params.get(
-                    "objects", path="/run/exp_vals/rebuild/*"),
-                "records": self.params.get(
-                    "records", path="/run/exp_vals/rebuild/*")
+                "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
+                "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
+                "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
+                "records": self.params.get("records", path="/run/exp_vals/rebuild/*")
             },
             "enabled_ranks": None,
             "disabled_ranks": None
@@ -115,9 +104,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         argument of the dmg pool subcommand.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_inputs
+        :avocado: tags=hw,small
+        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=pool_query_inputs,test_pool_query_inputs
         """
         # Get test UUIDs
         errors_list = []
@@ -162,9 +151,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         accurately show the size changes once there is content in the pool.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_write
+        :avocado: tags=hw,small
+        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=pool_query_write,test_pool_query_ior
         """
         # Store original pool info
         self.pool.set_query_data()

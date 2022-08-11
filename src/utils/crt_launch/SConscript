@@ -12,18 +12,11 @@ CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
     """scons function"""
-    Import('base_env_mpi', 'prereqs')
+    Import('env', 'prereqs')
 
-    if base_env_mpi is None:
-        return
-
-    tenv = base_env_mpi.Clone()
+    tenv = env.Clone()
 
     libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
-
-    tenv.AppendUnique(CPPPATH=[Dir('../../include').srcnode()])
-    tenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
-    tenv.AppendUnique(LIBPATH=[Dir('../../cart')])
 
     tenv.AppendUnique(LIBS=libs)
     prereqs.require(tenv, 'mercury')

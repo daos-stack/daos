@@ -353,6 +353,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
+	cmd.ctlInvoker.Debugf("Pool-destroy command %s", msg)
 	cmd.Infof("Pool-destroy command %s\n", msg)
 
 	return err

@@ -224,7 +224,7 @@ small_io(void **state)
 	int		rc;
 
 	par_barrier(PAR_COMM_WORLD);
-	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -254,6 +254,7 @@ small_io(void **state)
 
 	d_iov_set(&iov, rbuf, BUFLEN);
 	sgl.sg_iovs = &iov;
+	iod.arr_nr_short_read = 1;
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, 0);

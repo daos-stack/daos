@@ -200,7 +200,8 @@ rebuild_objects_send_ult(void *data)
 	unsigned int			*shards = NULL;
 	int				rc = 0;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
@@ -264,7 +265,8 @@ rebuild_scan_done(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls *tls;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	tls->rebuild_pool_scanning = 0;
@@ -285,7 +287,8 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 	d_iov_t			val_iov;
 	int			rc;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
@@ -308,7 +311,6 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
 		}
-
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -500,8 +502,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
-		D_ERROR(DF_UOID"Cannot find valid placement map"
-			DF_UUID"\n", DP_UOID(oid),
+		D_ERROR(DF_UOID ": Cannot find valid placement map" DF_UUID "\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -559,15 +560,18 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		pl_obj_layout_free(layout);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;
+			daos_epoch_range_t	discard_epr;
 
-			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
-						      rpt->rt_rebuild_ver);
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+						      rpt->rt_rebuild_gen);
 			D_ASSERT(tls != NULL);
 			tls->rebuild_pool_reclaim_obj_count++;
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
 
+			discard_epr.epr_hi = rpt->rt_stable_epoch;
+			discard_epr.epr_lo = 0;
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible
@@ -576,7 +580,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			do {
 				/* Inform the iterator and delete the object */
 				*acts |= VOS_ITER_CB_DELETE;
-				rc = vos_obj_delete(param->ip_hdl, oid);
+				rc = vos_discard(param->ip_hdl, &oid, &discard_epr, NULL, NULL);
 				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
 					D_DEBUG(DB_REBUILD,
 						"got "DF_RC
@@ -753,7 +757,8 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc = 0;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
 	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN |
@@ -779,12 +784,14 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc);
 	}
 
-	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
-			    0, 0, &ult_send);
-	if (rc != 0) {
-		rpt_put(rpt);
-		D_GOTO(out, rc);
+	if (rpt->rt_rebuild_op != RB_OP_RECLAIM) {
+		rpt_get(rpt);
+		rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
+				    0, 0, &ult_send);
+		if (rc != 0) {
+			rpt_put(rpt);
+			D_GOTO(out, rc);
+		}
 	}
 
 	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
@@ -859,7 +866,8 @@ rebuild_scan_leader(void *data)
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 out:
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
@@ -881,9 +889,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d gen %u\n",
+	D_DEBUG(DB_REBUILD, "%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
+		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
+		rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -900,14 +909,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	/* check if the rebuild is already started */
+	/* check if the rebuild with different leader is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild "DF_UUID"/%d"
-			       " is not cleanup yet\n",
-			       DP_UUID(rsi->rsi_pool_uuid),
-		               rsi->rsi_rebuild_ver);
+			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term, rpt);
 			D_GOTO(out, rc = -DER_BUSY);
 		}
 
@@ -916,8 +924,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
 			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
-		D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
-			DP_UUID(rsi->rsi_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" already started, req "DF_U64" master %u/"DF_U64"\n",
+			DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_leader_term, rsi->rsi_master_rank,
+			rpt->rt_leader_term);
 
 		/* Ignore the rebuild trigger request if it comes from
 		 * an old or same leader.
@@ -925,27 +934,20 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		if (rsi->rsi_leader_term <= rpt->rt_leader_term)
 			D_GOTO(out, rc = 0);
 
-		if (rpt->rt_pool->sp_iv_ns != NULL &&
-		    rpt->rt_pool->sp_iv_ns->iv_master_rank !=
-					rsi->rsi_master_rank) {
+		if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
 			D_DEBUG(DB_REBUILD, DF_UUID" master rank"
 				" %d -> %d term "DF_U64" -> "DF_U64"\n",
 				DP_UUID(rpt->rt_pool_uuid),
-				rpt->rt_pool->sp_iv_ns->iv_master_rank,
-				rsi->rsi_master_rank,
-				rpt->rt_leader_term,
-				rsi->rsi_leader_term);
+				rpt->rt_leader_rank, rsi->rsi_master_rank,
+				rpt->rt_leader_term, rsi->rsi_leader_term);
 			/* re-report the #rebuilt cnt next time */
 			rpt->rt_re_report = 1;
-			/* Update master rank */
-			ds_pool_iv_ns_update(rpt->rt_pool,
-					     rsi->rsi_master_rank);
 
-			/* If this is the old leader, then also stop the rebuild
-			 * tracking ULT.
-			 */
-			ds_rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					       rsi->rsi_rebuild_gen);
+			rpt->rt_leader_rank = rsi->rsi_master_rank;
+
+			/* If this is the old leader, then also stop the rebuild tracking ULT. */
+			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+					    rsi->rsi_rebuild_gen, rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
@@ -953,7 +955,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {
 		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
 		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
