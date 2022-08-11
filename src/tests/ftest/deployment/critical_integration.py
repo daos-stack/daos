@@ -157,7 +157,7 @@ class CriticalIntegrationWithServers(TestWithServers):
             # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
-                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                if (not (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
                         self.server_managers[0].check_rank_state(rank, "excluded", 5))):
                     self.fail("Rank {} failed to stop".format(rank))
             # restart stopped ranks and verify if they are joined
