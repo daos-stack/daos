@@ -60,10 +60,12 @@ test_cond_helper(test_arg_t *arg, int rf)
 	if (arg->myrank == 0) {
 		dfs_attr_t attr = {};
 
-		attr.da_props = daos_prop_alloc(1);
+		attr.da_props = daos_prop_alloc(2);
 		assert_non_null(attr.da_props);
 		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		attr.da_props->dpp_entries[0].dpe_val = rf;
+		attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 		rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, &coh, &dfs);
 		assert_int_equal(rc, 0);
@@ -887,11 +889,12 @@ dfs_setup(void **state)
 		else
 			print_message("Running DFS Parallel tests with DTX disabled\n");
 
-		attr.da_props = daos_prop_alloc(1);
+		attr.da_props = daos_prop_alloc(2);
 		assert_non_null(attr.da_props);
-		attr.da_props->dpp_entries[0].dpe_type =
-					DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 		attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+		attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
 		daos_prop_free(attr.da_props);
