@@ -604,8 +604,20 @@ ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3);
 int
 ds3_upload_complete();
 
+/**
+ * Gwt S3 multipart upload info identified by \a upload_id in the bucket identified by \a
+ * bucket_name
+ *
+ * \param[in]	info	S3 upload info.
+ * \param[in]	bucket_name	Name of the bucket.
+ * \param[in]	upload_id	ID of the upload.
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_get_info();
+ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_name,
+		    const char *upload_id, ds3_t *ds3);
 
 int
 ds3_upload_open_part();

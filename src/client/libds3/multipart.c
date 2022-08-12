@@ -90,7 +90,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		}
 
 		// Read the key xattr
-		size_t size;
+		daos_size_t size;
 		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, mps[i].key, &size);
 
 		// Skip if file has no saved key
@@ -356,9 +356,39 @@ ds3_upload_complete()
 }
 
 int
-ds3_upload_get_info()
+ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_name,
+		    const char *upload_id, ds3_t *ds3)
 {
-	return 0;
+	int        rc = 0;
+	dfs_obj_t *multipart_dir;
+	dfs_obj_t *upload_dir;
+	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
+			    &multipart_dir, NULL, NULL);
+
+	if (rc != 0)
+		return -rc;
+
+	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
+			    NULL);
+
+	if (rc != 0) {
+		goto err_multipart_dir;
+	}
+
+	rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR, info->encoded,
+			  &info->encoded_length);
+	if (rc != 0)
+		goto err_upload_dir;
+
+	// Set key
+	daos_size_t size;
+	rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, info->key, &size);
+
+err_upload_dir:
+	dfs_release(upload_dir);
+err_multipart_dir:
+	dfs_release(multipart_dir);
+	return -rc;
 }
 
 int
