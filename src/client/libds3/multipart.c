@@ -452,13 +452,33 @@ ds3_upload_close_part(ds3_part_t *ds3p)
 }
 
 int
-ds3_upload_write_part()
+ds3_upload_write_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+	      daos_event_t *ev)
 {
-	return 0;
+	if (ds3p == NULL || buf == NULL || ds3 == NULL)
+		return -EINVAL;
+
+	d_sg_list_t wsgl;
+	d_iov_t     iov;
+	d_iov_set(&iov, buf, *size);
+	wsgl.sg_nr   = 1;
+	wsgl.sg_iovs = &iov;
+	return -dfs_write(ds3->meta_dfs, ds3p->dfs_obj, &wsgl, off, ev);
 }
 
 int
-ds3_upload_read_part()
+ds3_upload_read_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+	      daos_event_t *ev)
 {
-	return 0;
+	if (ds3p == NULL || buf == NULL || ds3 == NULL)
+		return -EINVAL;
+
+	d_iov_t iov;
+	d_iov_set(&iov, buf, *size);
+
+	d_sg_list_t rsgl;
+	rsgl.sg_nr     = 1;
+	rsgl.sg_iovs   = &iov;
+	rsgl.sg_nr_out = 1;
+	return -dfs_read(ds3->meta_dfs, ds3p->dfs_obj, &rsgl, off, size, ev);
 }
