@@ -836,9 +836,9 @@ formatted again by running `dmg storage format`.
     The `/dev/pmemX` devices will remain mounted,
     and the PMem configuration will not be reset to Memory Mode.
     To completely unconfigure the SCM, it is advisable to run
-    `daos_server storage prep-scm --reset` which will completely
-    reset the PMem. A reboot will be required to finalize the change
-    of the PMem allocation goals.
+    `daos_server scm destroy` which will completely reset the PMem.
+    A reboot will be required to finalize the change of the PMem
+    allocation goals.
 
 
 ### System Extension

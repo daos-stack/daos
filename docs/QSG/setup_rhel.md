@@ -5,8 +5,7 @@ two or more nodes.
 This document includes instructions for RHEL8-compatible distributions. This includes
 RHEL8, Rocky Linux and AlmaLinux.
 
-For setup instructions on OpenSuse, refer to
-[OpenSuse setup](setup_suse.md).
+For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
 For more details reference the [DAOS administration guide](https://docs.daos.io/v2.4/admin/hardware/).
 
@@ -91,17 +90,17 @@ SSDs will be prepared and configured to be used by DAOS.
 !!! note
     PMem preparation is required once per DAOS installation.
 
-1. Prepare the pmem devices on Server nodes:
+1.  Prepare the pmem devices on Server nodes:
 
-		daos_server pmem create-namespaces
+		daos_server scm create
 
 	Sample Script:
 
-		Preparing locally-attached SCM...
+		Prepare locally-attached PMem\...
 
-		Memory allocation goals for SCM will be changed and namespaces
-		modified, this will be a destructive operation. Please ensure
-		namespaces are unmounted and locally attached SCM & NVMe devices are
+		Memory allocation goals for PMem will be changed and namespaces
+		modified, this may be a destructive operation. Please ensure
+		namespaces are unmounted and locally attached PMem modules are
 		not in use. Please be patient as it may take several minutes and
 		subsequent reboot maybe required.
 
@@ -109,17 +108,17 @@ SSDs will be prepared and configured to be used by DAOS.
 
 		yes
 
-		A reboot is required to process new SCM memory allocation goals.
+		A reboot is required to process new PMem memory allocation goals.
 
-2. Reboot the server node.
+2.  Reboot the server node.
 
-3. Run the prepare cmdline again:
+3.  Run the prepare cmdline again:
 
-		daos_server pmem create-namespaces
+		daos_server scm create
 
 	Sample Script:
 
-		Preparing locally-attached SCM...
+		Prepare locally-attached PMem\...
 		SCM namespaces:
 		SCM Namespace	Socket ID	Capacity
 		-------------	---------	--------
@@ -128,13 +127,13 @@ SSDs will be prepared and configured to be used by DAOS.
 
 4. Prepare the NVME devices on Server nodes:
 
-		daos_server nvme prepare-drives -u root
-		Preparing locally-attached NVMe storage...
+		daos_server nvme prepare -u root
+		Preparing locally-attached NVMe storage\...
 
 5. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
-		Scanning locally-attached storage...
+		Scanning locally-attached storage\...
 
 		NVMe PCI		Model				FW Revision	Socket ID	Capacity
 		--------		-----				-----------	---------	--------

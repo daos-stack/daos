@@ -42,10 +42,10 @@ type createSCMCmd struct {
 
 func (cmd *createSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	if cmd.NrNamespacesPerSocket == 0 {
-		return errors.New("(-S|--pmem-ns-per-socket) should be set to at least 1")
+		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
 	}
 
-	cmd.Info("Create locally-attached PMem namespaces...")
+	cmd.Info("Prepare locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
 	if !cmd.Force && !common.GetConsent(cmd) {
@@ -130,7 +130,7 @@ type destroySCMCmd struct {
 }
 
 func (cmd *destroySCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
-	cmd.Info("Destroy locally-attached PMem namespaces...")
+	cmd.Info("Reset locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
 	if !cmd.Force && !common.GetConsent(cmd) {
