@@ -2655,7 +2655,7 @@ class posix_tests():
         assert check_dfs_tool_output(output, 'S1', '1048576')
 
         # run same command using pool, container, dfs-path, and dfs-prefix
-        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', dir1,
+        cmd = ['fs', 'get-attr', pool, uns_container, '--dfs-path', dir1,
                '--dfs-prefix', uns_path]
         print('get-attr of d1')
         rc = run_daos_cmd(conf, cmd)
@@ -2665,7 +2665,7 @@ class posix_tests():
         assert check_dfs_tool_output(output, 'S1', '1048576')
 
         # run same command using pool, container, dfs-path
-        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', '/d1']
+        cmd = ['fs', 'get-attr', pool, uns_container, '--dfs-path', '/d1']
         print('get-attr of d1')
         rc = run_daos_cmd(conf, cmd)
         assert rc.returncode == 0
