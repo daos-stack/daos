@@ -1,5 +1,6 @@
 # pylint: disable=consider-using-f-string
-"""Build chk library"""
+# pylint: disable-next=wrong-spelling-in-comment
+"""Build check library"""
 import daos_build
 
 def scons():

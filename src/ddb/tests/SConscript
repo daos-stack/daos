@@ -1,6 +1,6 @@
+# pylint: disable-next=wrong-spelling-in-comment
 """Build tests"""
 import daos_build
-import os
 
 def scons():
     """Execute build"""
