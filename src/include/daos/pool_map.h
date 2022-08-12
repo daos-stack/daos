@@ -61,7 +61,11 @@ enum pool_component_flags {
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_DOWN2OUT	= (1 << 0),
+	/**
+	 * The component has been processed by DAOS check, only in DRAM.
+	 */
+	PO_COMPF_CHK_DONE	= (1 << 1),
 };
 
 #define co_in_ver	co_out_ver
@@ -240,6 +244,7 @@ void pool_map_print(struct pool_map *map);
 
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
+uint32_t pool_map_bump_version(struct pool_map *map);
 
 int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 
