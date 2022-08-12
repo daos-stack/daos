@@ -27,6 +27,7 @@ server_config:
         - SWIM_PROTOCOL_PERIOD_LEN=2000
         - SWIM_SUSPECT_TIMEOUT=19000
         - SWIM_PING_TIMEOUT=1900
+        - DD_MASK=io,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -43,6 +44,7 @@ server_config:
         - SWIM_PROTOCOL_PERIOD_LEN=2000
         - SWIM_SUSPECT_TIMEOUT=19000
         - SWIM_PING_TIMEOUT=1900
+        - DD_MASK=io,rebuild
 
 pool_size_ratio_80:
   size: 80%
