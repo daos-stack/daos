@@ -31,7 +31,7 @@ extern "C" {
 #define DS3_MAX_USER_NAME   DFS_MAX_NAME
 
 /** Maximum upload_id length */
-#define DS3_MAX_UPLOAD_ID   33
+#define DS3_MAX_UPLOAD_ID   35
 
 // TODO This is temporarily moved here
 #define METADATA_DIR_LIST                                                                          \
@@ -576,8 +576,17 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		      struct ds3_multipart_part_info *parts, uint32_t *marker, bool *is_truncated,
 		      ds3_t *ds3);
 
+/**
+ * Init an S3 upload in the S3 bucket identified by \a bucket_name
+ *
+ * \param[in]	info	S3 upload info.
+ * \param[in]	bucket_name	Name of the bucket.
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_init();
+ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name, ds3_t *ds3);
 
 int
 ds3_upload_abort();

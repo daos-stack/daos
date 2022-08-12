@@ -27,7 +27,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 			  struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
 			  char *marker, bool *is_truncated, ds3_t *ds3)
 {
-	if (ds3 == NULL || nmp == NULL)
+	if (bucket_name == NULL || ds3 == NULL || nmp == NULL || ncp == NULL)
 		return -EINVAL;
 
 	// End
@@ -158,7 +158,7 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		      struct ds3_multipart_part_info *parts, uint32_t *marker, bool *is_truncated,
 		      ds3_t *ds3)
 {
-	if (ds3 == NULL || npart == NULL)
+	if (bucket_name == NULL || upload_id == NULL || ds3 == NULL || npart == NULL)
 		return -EINVAL;
 
 	// End
@@ -289,9 +289,37 @@ err_multipart_dir:
 }
 
 int
-ds3_upload_init()
+ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name, ds3_t *ds3)
 {
-	return 0;
+	if (bucket_name == NULL || ds3 == NULL)
+		return -EINVAL;
+
+	int        rc;
+	dfs_obj_t *multipart_dir;
+	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
+			    &multipart_dir, NULL, NULL);
+	if (rc != 0)
+		return -rc;
+
+	rc = dfs_mkdir(ds3->meta_dfs, multipart_dir, info->upload_id, DEFFILEMODE, 0);
+
+	if (rc != 0)
+		goto err_multipart_dir;
+
+	// Insert an entry into bucket multipart index
+	dfs_obj_t *upload_dir;
+	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, info->upload_id, O_RDWR, &upload_dir,
+			    NULL, NULL);
+	if (rc != 0)
+		goto err_multipart_dir;
+
+	rc = dfs_setxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR, info->encoded,
+			  info->encoded_length, 0);
+
+	dfs_release(upload_dir);
+err_multipart_dir:
+	dfs_release(multipart_dir);
+	return -rc;
 }
 
 int
