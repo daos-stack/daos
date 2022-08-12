@@ -140,40 +140,31 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			}).WithPCIAllowList(multPCIAddrsCommaSep)),
 			nil,
 		},
-		//		{
-		//			"Prepare drives; bad opt",
-		//			[]string{
-		//				"nvme prepare --pxi-block-list", multPCIAddrsCommaSep,
-		//				"--target-user bob --disable-vfio -l /tmp/foo",
-		//				multPCIAddrsCommaSep,
-		//			},
-		//			"",
-		//			errors.New("unknown"),
-		//		},
-		//		{
-		//			"Release drives with all opts",
-		//			[]string{
-		//				"nvme release --pci-block-list", multPCIAddrsCommaSep,
-		//				"--target-user bob --disable-vfio -l /tmp/foo",
-		//				multPCIAddrsCommaSep,
-		//			},
-		//			printCommand(t, (&releaseNVMeCmd{
-		//				PCIBlockList: multPCIAddrsCommaSep,
-		//				TargetUser:   "bob",
-		//				DisableVFIO:  true,
-		//			}).WithPCIAllowList(multPCIAddrsCommaSep)),
-		//			nil,
-		//		},
-		//		{
-		//			"Release drives; bad opt",
-		//			[]string{
-		//				"nvme release --pci-block-list", multPCIAddrsCommaSep,
-		//				"--target-user bob --disble-vfio -l /tmp/foo",
-		//				multPCIAddrsCommaSep,
-		//			},
-		//			"",
-		//			errors.New("unknown"),
-		//		},
+		{
+			"Prepare drives; bad opt",
+			fmt.Sprintf("nvme prepare --pcx-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
+				"-l /tmp/foo "+multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Release drives with all opts",
+			fmt.Sprintf("nvme release --pci-block-list %s --target-user bob --disable-vfio -l /tmp/foo "+
+				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			printCommand(t, (&releaseNVMeCmd{
+				PCIBlockList: multPCIAddrsCommaSep,
+				TargetUser:   "bob",
+				DisableVFIO:  true,
+			}).WithPCIAllowList(multPCIAddrsCommaSep)),
+			nil,
+		},
+		{
+			"Release drives; bad opt",
+			fmt.Sprintf("nvme release --pci-block-list %s --target-user bob --disble-vfio -l /tmp/foo "+
+				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			"",
+			errors.New("unknown"),
+		},
 		{
 			"Create namespaces with all opts",
 			"scm create -S 2 -f",

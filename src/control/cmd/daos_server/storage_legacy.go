@@ -145,6 +145,7 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 
 type legacyScanCmd struct {
 	cmdutil.LogCmd
+
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
