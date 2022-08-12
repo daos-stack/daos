@@ -216,7 +216,7 @@ func (cmd *releaseDrivesCmd) Execute(args []string) error {
 
 type scanDrivesCmd struct {
 	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `jcon:"-"`
+	helperLogCmd   `json:"-"`
 
 	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
