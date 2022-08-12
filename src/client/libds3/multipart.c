@@ -395,8 +395,8 @@ err_multipart_dir:
 }
 
 int
-ds3_upload_create_part(const char *bucket_name, const char *upload_id, uint32_t part_num,
-		       ds3_part_t **ds3p, ds3_t *ds3)
+ds3_part_create(const char *bucket_name, const char *upload_id, uint32_t part_num,
+		ds3_part_t **ds3p, ds3_t *ds3)
 {
 	if (ds3p == NULL || bucket_name == NULL || upload_id == NULL || ds3 == NULL)
 		return -EINVAL;
@@ -441,7 +441,7 @@ err_ds3p:
 }
 
 int
-ds3_upload_close_part(ds3_part_t *ds3p)
+ds3_part_close(ds3_part_t *ds3p)
 {
 	if (ds3p == NULL)
 		return -EINVAL;
@@ -452,8 +452,8 @@ ds3_upload_close_part(ds3_part_t *ds3p)
 }
 
 int
-ds3_upload_write_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
-	      daos_event_t *ev)
+ds3_part_write(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+	       daos_event_t *ev)
 {
 	if (ds3p == NULL || buf == NULL || ds3 == NULL)
 		return -EINVAL;
@@ -467,7 +467,7 @@ ds3_upload_write_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *
 }
 
 int
-ds3_upload_read_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+ds3_part_read(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
 	      daos_event_t *ev)
 {
 	if (ds3p == NULL || buf == NULL || ds3 == NULL)
@@ -481,4 +481,14 @@ ds3_upload_read_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *d
 	rsgl.sg_iovs   = &iov;
 	rsgl.sg_nr_out = 1;
 	return -dfs_read(ds3->meta_dfs, ds3p->dfs_obj, &rsgl, off, size, ev);
+}
+
+int
+ds3_part_set_info(struct ds3_multipart_part_info *info, ds3_part_t *ds3p, ds3_t *ds3,
+		  daos_event_t *ev)
+{
+	if (ds3p == NULL || info == NULL || ds3 == NULL)
+		return -EINVAL;
+	return -dfs_setxattr(ds3->meta_dfs, ds3p->dfs_obj, RGW_PART_XATTR, info->encoded,
+			     info->encoded_length, 0);
 }

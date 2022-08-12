@@ -634,8 +634,8 @@ ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_n
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_upload_create_part(const char *bucket_name, const char *upload_id, uint32_t part_num,
-		       ds3_part_t **ds3p, ds3_t *ds3);
+ds3_part_create(const char *bucket_name, const char *upload_id, uint32_t part_num,
+		ds3_part_t **ds3p, ds3_t *ds3);
 
 /**
  * Close a part handle.
@@ -645,7 +645,7 @@ ds3_upload_create_part(const char *bucket_name, const char *upload_id, uint32_t 
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_upload_close_part(ds3_part_t *ds3p);
+ds3_part_close(ds3_part_t *ds3p);
 
 /**
  * Write S3 part data.
@@ -663,8 +663,8 @@ ds3_upload_close_part(ds3_part_t *ds3p);
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_upload_write_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
-		      daos_event_t *ev);
+ds3_part_write(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+	       daos_event_t *ev);
 
 /**
  * Read S3 part data.
@@ -682,8 +682,23 @@ ds3_upload_write_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_upload_read_part(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
-		     daos_event_t *ev);
+ds3_part_read(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, ds3_t *ds3,
+	      daos_event_t *ev);
+
+/**
+ * Set S3 part info.
+ *
+ * \param[in]	info	S3 multipart upload part info.
+ * \param[in]	ds3p	Pointer to the S3 part handle to use.
+ * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
+ * \param[in]	ev		Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
+int
+ds3_part_set_info(struct ds3_multipart_part_info *info, ds3_part_t *ds3p, ds3_t *ds3,
+		  daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
