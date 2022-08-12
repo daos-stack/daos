@@ -315,7 +315,14 @@ ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name,
 
 	rc = dfs_setxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR, info->encoded,
 			  info->encoded_length, 0);
+	if (rc != 0)
+		goto err_upload_dir;
 
+	// Set key
+	rc =
+	    dfs_setxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, info->key, strlen(info->key), 0);
+
+err_upload_dir:
 	dfs_release(upload_dir);
 err_multipart_dir:
 	dfs_release(multipart_dir);
@@ -323,9 +330,23 @@ err_multipart_dir:
 }
 
 int
-ds3_upload_abort()
+ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3)
 {
-	return 0;
+	if (bucket_name == NULL || upload_id == NULL || ds3 == NULL)
+		return -EINVAL;
+
+	// Remove upload from bucket multipart index
+	int        rc = 0;
+	dfs_obj_t *multipart_dir;
+	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
+			    &multipart_dir, NULL, NULL);
+
+	if (rc != 0)
+		return -rc;
+
+	rc = dfs_remove(ds3->meta_dfs, multipart_dir, upload_id, true, NULL);
+	dfs_release(multipart_dir);
+	return -rc;
 }
 
 int

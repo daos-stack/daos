@@ -588,8 +588,18 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 int
 ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name, ds3_t *ds3);
 
+/**
+ * Abort the S3 multipart upload identified by \a upload_id in the bucket identified by \a
+ * bucket_name
+ *
+ * \param[in]	bucket_name	Name of the bucket.
+ * \param[in]	upload_id	ID of the upload.
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_abort();
+ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3);
 
 int
 ds3_upload_complete();
