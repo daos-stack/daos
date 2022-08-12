@@ -26,21 +26,21 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 
 type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
 
-type pmemCmd struct {
-	Create createNamespacesCmd `command:"create-namespaces" description:"Configure PMem mode setting and create namespace block devices to be used by DAOS"`
-	Remove removeNamespacesCmd `command:"remove-namespaces" description:"Remove PMem namespace block devices and reset mode setting"`
-	Scan   scanPMemCmd         `command:"scan" description:"Scan PMem modules and namespaces"`
+type scmCmd struct {
+	Create  createSCMCmd  `command:"create" description:"Create SCM devices that can be used with DAOS"`
+	Destroy destroySCMCmd `command:"destroy" description:"Destroy SCM devices that have been used with DAOS"`
+	Scan    scanSCMCmd    `command:"scan" description:"Scan SCM devices"`
 }
 
-type createNamespacesCmd struct {
+type createSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
 	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
-	Force                 bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
+	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
-func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error {
+func (cmd *createSCMCmd) preparePMem(backendCall scmPrepareResetFn) error {
 	if cmd.NrNamespacesPerSocket == 0 {
 		return errors.New("(-S|--pmem-ns-per-socket) should be set to at least 1")
 	}
@@ -111,7 +111,7 @@ func (cmd *createNamespacesCmd) preparePMem(backendCall scmPrepareResetFn) error
 	return nil
 }
 
-func (cmd *createNamespacesCmd) Execute(args []string) error {
+func (cmd *createSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
@@ -122,15 +122,15 @@ func (cmd *createNamespacesCmd) Execute(args []string) error {
 	return cmd.preparePMem(scs.ScmPrepare)
 }
 
-type removeNamespacesCmd struct {
+type destroySCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
-func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
-	cmd.Info("Remove locally-attached PMem namespaces...")
+func (cmd *destroySCMCmd) resetPMem(backendCall scmPrepareResetFn) error {
+	cmd.Info("Destroy locally-attached PMem namespaces...")
 
 	cmd.Info(MsgStoragePrepareWarn)
 	if !cmd.Force && !common.GetConsent(cmd) {
@@ -184,7 +184,7 @@ func (cmd *removeNamespacesCmd) resetPMem(backendCall scmPrepareResetFn) error {
 	return nil
 }
 
-func (cmd *removeNamespacesCmd) Execute(args []string) error {
+func (cmd *destroySCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
@@ -195,12 +195,12 @@ func (cmd *removeNamespacesCmd) Execute(args []string) error {
 	return cmd.resetPMem(scs.ScmPrepare)
 }
 
-type scanPMemCmd struct {
+type scanSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 }
 
-func (cmd *scanPMemCmd) Execute(args []string) error {
+func (cmd *scanSCMCmd) Execute(args []string) error {
 	var bld strings.Builder
 
 	if err := cmd.setHelperLogFile(); err != nil {

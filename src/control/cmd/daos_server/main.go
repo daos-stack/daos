@@ -70,9 +70,9 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	PMem          pmemCmd                `command:"pmem" description:"Perform tasks related to locally-attached PMem storage"`
+	SCM           scmCmd                 `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
 	NVMe          nvmeCmd                `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
-	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use pmem or nvme instead)"`
+	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
 	Start         startCmd               `command:"start" description:"Start daos_server"`
 	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`

@@ -171,9 +171,9 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Create namespaces with all opts",
 			[]string{
-				"pmem", "create-namespaces", "-S", "2", "-f",
+				"scm", "create", "-S", "2", "-f",
 			},
-			printCommand(t, &createNamespacesCmd{
+			printCommand(t, &createSCMCmd{
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 			}),
@@ -182,7 +182,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Create namespaces; bad opt",
 			[]string{
-				"pmem", "remove-namespaces", "-X",
+				"scm", "create", "-X",
 			},
 			"",
 			errors.New("unknown"),
@@ -190,9 +190,9 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Remove namespaces with all opts",
 			[]string{
-				"pmem", "remove-namespaces", "-f",
+				"scm", "destroy", "-f",
 			},
-			printCommand(t, &removeNamespacesCmd{
+			printCommand(t, &destroySCMCmd{
 				Force: true,
 			}),
 			nil,
@@ -200,7 +200,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Remove namespaces; bad opt",
 			[]string{
-				"pmem", "remove-namespaces", "-S",
+				"scm", "destroy", "-S",
 			},
 			"",
 			errors.New("unknown"),

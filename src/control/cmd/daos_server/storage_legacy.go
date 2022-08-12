@@ -76,7 +76,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 
 	if cmd.Reset {
 		if doSCM {
-			var rnc removeNamespacesCmd
+			var rnc destroySCMCmd
 			if err := convert.Types(cmd, &rnc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
@@ -95,7 +95,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 		}
 	} else {
 		if doSCM {
-			var cnc createNamespacesCmd
+			var cnc createSCMCmd
 			if err := convert.Types(cmd, &cnc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
