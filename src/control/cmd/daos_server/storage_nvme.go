@@ -103,6 +103,11 @@ func (cmd *prepareDrivesCmd) WithTargetUser(u string) *prepareDrivesCmd {
 	return cmd
 }
 
+func (cmd *prepareDrivesCmd) WithPCIAllowList(al string) *prepareDrivesCmd {
+	cmd.Args.PCIAllowList = al
+	return cmd
+}
+
 func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
 	cmd.Info("Prepare locally-attached NVMe storage...")
 
@@ -162,6 +167,11 @@ func (cmd *releaseDrivesCmd) WithDisableVFIO(b bool) *releaseDrivesCmd {
 
 func (cmd *releaseDrivesCmd) WithTargetUser(u string) *releaseDrivesCmd {
 	cmd.TargetUser = u
+	return cmd
+}
+
+func (cmd *releaseDrivesCmd) WithPCIAllowList(al string) *releaseDrivesCmd {
+	cmd.Args.PCIAllowList = al
 	return cmd
 }
 

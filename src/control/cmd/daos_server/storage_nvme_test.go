@@ -38,7 +38,7 @@ func getCurrentUsername(t *testing.T) string {
 	return currentUsername
 }
 
-func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
+func TestDaosServer_prepareNVMe(t *testing.T) {
 	// bdev req parameters
 	testNrHugePages := 42
 	// bdev mock commands
