@@ -24,46 +24,45 @@
 #define RGW_KEY_XATTR          "rgw_key"
 #define RGW_PART_XATTR         "rgw_part"
 
-/* #define METADATA_DIR_LIST \
-// 	X(USERS_DIR, "users")                                                                      \
-// 	X(EMAILS_DIR, "emails")                                                                    \
-// 	X(ACCESS_KEYS_DIR, "access_keys")                                                          \
-// 	X(MULTIPART_DIR, "multipart")
-*/
+#define METADATA_DIR_LIST                                                                          \
+	X(USERS_DIR, "users")                                                                      \
+	X(EMAILS_DIR, "emails")                                                                    \
+	X(ACCESS_KEYS_DIR, "access_keys")                                                          \
+	X(MULTIPART_DIR, "multipart")
 
 /* Define for RPC enum population below */
-// #define X(a, b) a,
-// enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
-// #undef X
+#define X(a, b) a,
+enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
+#undef X
 
 /** DAOS S3 Pool handle */
-// struct ds3 {
-// 	/** Pool handle */
-// 	daos_handle_t    poh;
-// 	/** Pool information */
-// 	daos_pool_info_t pinfo;
-// 	/** Metadata container handle */
-// 	daos_handle_t    meta_coh;
-// 	/** Metadata dfs mount */
-// 	dfs_t           *meta_dfs;
-// 	/** Array of metadata dir handle */
-// 	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
-// };
+struct ds3 {
+	/** Pool handle */
+	daos_handle_t    poh;
+	/** Pool information */
+	daos_pool_info_t pinfo;
+	/** Metadata container handle */
+	daos_handle_t    meta_coh;
+	/** Metadata dfs mount */
+	dfs_t           *meta_dfs;
+	/** Array of metadata dir handle */
+	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
+};
 
-// /** DAOS S3 Bucket handle */
-// struct ds3_bucket {
-// 	/** DAOS container handle */
-// 	daos_handle_t    coh;
-// 	/** Container information */
-// 	daos_cont_info_t cont_info;
-// 	/** DFS handle */
-// 	dfs_t           *dfs;
-// };
+/** DAOS S3 Bucket handle */
+struct ds3_bucket {
+	/** DAOS container handle */
+	daos_handle_t    coh;
+	/** Container information */
+	daos_cont_info_t cont_info;
+	/** DFS handle */
+	dfs_t           *dfs;
+};
 
-// /** DAOS S3 Object handle */
-// struct ds3_obj {
-//     dfs_obj_t* dfs_obj;
-// };
+/** DAOS S3 Object handle */
+struct ds3_obj {
+	dfs_obj_t *dfs_obj;
+};
 
 /** DAOS S3 Upload Part handle */
 struct ds3_part {

@@ -33,59 +33,17 @@ extern "C" {
 /** Maximum upload_id length */
 #define DS3_MAX_UPLOAD_ID   35
 
-// TODO This is temporarily moved here
-#define METADATA_DIR_LIST                                                                          \
-	X(USERS_DIR, "users")                                                                      \
-	X(EMAILS_DIR, "emails")                                                                    \
-	X(ACCESS_KEYS_DIR, "access_keys")                                                          \
-	X(MULTIPART_DIR, "multipart")
-
-/* Define for RPC enum population below */
-#define X(a, b) a,
-enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
-#undef X
-
 /** DAOS S3 Pool handle */
-typedef struct {
-	/** Pool handle */
-	daos_handle_t    poh;
-	/** Pool information */
-	daos_pool_info_t pinfo;
-	/** Metadata container handle */
-	daos_handle_t    meta_coh;
-	/** Metadata dfs mount */
-	dfs_t           *meta_dfs;
-	/** Array of metadata dir handle */
-	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
-} ds3_t;
+typedef struct ds3        ds3_t;
 
 /** DAOS S3 Bucket handle */
-typedef struct ds3_bucket {
-	/** DAOS container handle */
-	daos_handle_t    coh;
-	/** Container information */
-	daos_cont_info_t cont_info;
-	/** DFS handle */
-	dfs_t           *dfs;
-} ds3_bucket_t;
-
-typedef struct {
-	dfs_obj_t *dfs_obj;
-} ds3_obj_t;
-
-// TODO end of temporarily moved here
-
-/** DAOS S3 Pool handle */
-// typedef struct ds3        ds3_t;
-
-/** DAOS S3 Bucket handle */
-// typedef struct ds3_bucket ds3_bucket_t;
+typedef struct ds3_bucket ds3_bucket_t;
 
 /** DAOS S3 Object handle */
-// typedef struct ds3_obj    ds3_obj_t;
+typedef struct ds3_obj    ds3_obj_t;
 
 /** DAOS S3 Upload Part handle */
-typedef struct ds3_part ds3_part_t;
+typedef struct ds3_part   ds3_part_t;
 
 /** S3 User information */
 struct ds3_user_info {
@@ -633,7 +591,7 @@ ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_n
  */
 int
 ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num, bool truncate,
-		ds3_part_t **ds3p, ds3_t *ds3);
+	      ds3_part_t **ds3p, ds3_t *ds3);
 
 /**
  * Close a part handle.
