@@ -126,7 +126,7 @@ struct ds3_common_prefix_info {
 	char prefix[DS3_MAX_KEY];
 };
 
-/** S3 Object information */
+/** S3 Multipart Upload information */
 struct ds3_multipart_upload_info {
 	/** Upload id */
 	char   upload_id[DS3_MAX_UPLOAD_ID];
@@ -136,6 +136,16 @@ struct ds3_multipart_upload_info {
 	void  *encoded;
 	/** Length of encoded data */
 	size_t encoded_length;
+};
+
+/** S3 Multipart part information */
+struct ds3_multipart_part_info {
+	/** Part number */
+	uint32_t part_num;
+	/** Opaque encoded part info */
+	void    *encoded;
+	/** Length of encoded data */
+	size_t   encoded_length;
 };
 
 // General S3
@@ -516,11 +526,11 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
 // S3 Multipart api
 
 /**
- * List S3 multipart uploads pending in the S3 bucket identified by \a ds3b.
+ * List S3 multipart uploads pending in the S3 bucket identified by \a bucket_name.
  *
  * \param[in]	bucket_name	Name of the bucket.
  * \param[in,out]
- *		nobj	[in] \a nmp length in items.
+ *		nmp	[in] \a mps length in items.
  *			[out] Number of multipart uploads returned.
  * \param[out]	mps	Array of object info structures.
  * \param[in,out]
@@ -532,7 +542,6 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
  * \param[in,out]
  *		marker	[in] Start listing from marker key.
  *			[out] Next marker to be used by subsequent calls.
- * \param[in]	list_versions	Also include versions
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  *
@@ -544,8 +553,28 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 			  struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
 			  char *marker, bool *is_truncated, ds3_t *ds3);
 
+/**
+ * List S3 multipart uploaded parts related to \a upload_id in the bucket identified by \a
+ * bucket_name
+ *
+ * \param[in]	bucket_name	Name of the bucket.
+ * \param[in]	upload_id	ID of the upload.
+ * \param[in,out]
+ *		npart	[in] \a parts length in items.
+ *			[out] Number of parts returned.
+ * \param[out]	parts	Array of multipart part info structures.
+ * \param[in,out]
+ *		marker	[in] Start listing from marker key.
+ *			[out] Next marker to be used by subsequent calls.
+ * \param[out]	is_truncated	Are the results truncated
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_list_parts();
+ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *npart,
+		      struct ds3_multipart_part_info *parts, uint32_t *marker, bool *is_truncated,
+		      ds3_t *ds3);
 
 int
 ds3_upload_init();

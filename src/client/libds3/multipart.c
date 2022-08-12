@@ -61,7 +61,6 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	int      prefix_length = strlen(prefix);
 	for (uint32_t i = 0; i < *nmp; i++) {
 		const char *upload_id = dirents[i].d_name;
-		// strcpy(mps[i].upload_id, upload_id);
 
 		// Open upload dir
 		dfs_obj_t  *upload_dir;
@@ -99,16 +98,16 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 				strncpy(cps[cpi].prefix, key, delim_pos - key);
 				cpi++;
 			} else {
-                // Read dirent
-                rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
-                       mps[mpi].encoded, &mps[mpi].encoded_length);
-                
-                // Skip if upload has no dirent
-                if (rc != 0) {
-                    D_WARN("No dirent, skipping upload_id= %s\n", upload_id);
-                    dfs_release(upload_dir);
-                    continue;
-                }
+				// Read dirent
+				rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
+						  mps[mpi].encoded, &mps[mpi].encoded_length);
+
+				// Skip if upload has no dirent
+				if (rc != 0) {
+					D_WARN("No dirent, skipping upload_id= %s\n", upload_id);
+					dfs_release(upload_dir);
+					continue;
+				}
 
 				// Add to mps
 				strcpy(mps[mpi].upload_id, upload_id);
@@ -136,9 +135,102 @@ err_dir:
 }
 
 int
-ds3_upload_list_parts()
+ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *npart,
+		      struct ds3_multipart_part_info *parts, uint32_t *marker, bool *is_truncated,
+		      ds3_t *ds3)
 {
-	return 0;
+	int        rc = 0;
+	dfs_obj_t *multipart_dir;
+	dfs_obj_t *upload_dir;
+
+	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
+			    &multipart_dir, NULL, NULL);
+	if (rc != 0)
+		return -rc;
+
+	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
+			    NULL);
+
+	if (rc != 0) {
+		goto err_multipart_dir;
+	}
+
+	struct dirent *dirents;
+	D_ALLOC_ARRAY(dirents, *npart);
+	if (dirents == NULL) {
+		rc = ENOMEM;
+		goto err_upload_dir;
+	}
+
+	daos_anchor_t anchor;
+	daos_anchor_init(&anchor, 0);
+
+	rc = dfs_readdir(ds3->meta_dfs, upload_dir, &anchor, npart, dirents);
+
+	if (rc != 0) {
+		goto err_dirents;
+	}
+
+	if (is_truncated != NULL) {
+		*is_truncated = !daos_anchor_is_eof(&anchor);
+	}
+
+	uint32_t pi = 0;
+	uint32_t last_num = 0;
+	for (uint32_t i = 0; i < *npart; i++) {
+		const char *part_name = dirents[i].d_name;
+
+		// Parse part_name
+		errno = 0;
+		char          *err;
+		const uint32_t part_num = strtol(part_name, &err, 10);
+		if (errno || err != part_name + strlen(part_name)) {
+			D_ERROR("bad part number: %s", part_name);
+			rc = EINVAL;
+			goto err_dirents;
+		}
+
+		// Skip entries that are not larger than marker
+		if (part_num <= *marker) {
+			continue;
+		}
+
+		last_num = max(part_num, last_num);
+
+		dfs_obj_t *part_obj;
+		rc = dfs_lookup_rel(ds3->meta_dfs, upload_dir, part_name, O_RDWR, &part_obj, NULL,
+				    NULL);
+		if (rc != 0) {
+			goto err_dirents;
+		}
+
+		// The entry is a regular file, read the xattr and add to parts
+		rc = dfs_getxattr(ds3->meta_dfs, part_obj, RGW_PART_XATTR, parts[pi].encoded,
+				  &parts[pi].encoded_length);
+		// Skip if the part has no info
+		if (rc != 0) {
+			rc = dfs_release(part_obj);
+			continue;
+		}
+
+		parts[pi].part_num = part_num;
+		pi++;
+
+		// Close handles
+		dfs_release(part_obj);
+	}
+
+	*npart = pi;
+	// TODO since dirents are not ordered, would this skip certain parts?
+	*marker = last_num;
+
+err_dirents:
+	D_FREE(dirents);
+err_upload_dir:
+	dfs_release(upload_dir);
+err_multipart_dir:
+	dfs_release(multipart_dir);
+	return -rc;
 }
 
 int
