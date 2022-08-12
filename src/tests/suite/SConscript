@@ -82,7 +82,7 @@ def scons():
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal']
 
-    denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
@@ -93,6 +93,11 @@ def scons():
 
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
     Export('daos_test_obj')
+
+    c_files = ['daos_debug_set_params.c']
+    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
+                                   c_files + daos_test_tgt,
+                                   LIBS=['daos_common'] + libraries)
 
     newenv = configure_cmocka(denv.Clone())
 
@@ -117,6 +122,7 @@ def scons():
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 
+    denv.Install('$PREFIX/bin/', daosdebug)
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
