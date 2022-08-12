@@ -63,7 +63,8 @@ class DdbCommand(DdbCommandBase):
                 called.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         cmd = ["ls"]
@@ -88,7 +89,8 @@ class DdbCommand(DdbCommandBase):
                 /var/tmp/daos_testing/<test_name>/my_out.txt
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -110,7 +112,8 @@ class DdbCommand(DdbCommandBase):
             load_file_path (str): Path of the file that contains the data to load.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True
@@ -127,7 +130,8 @@ class DdbCommand(DdbCommandBase):
                 container, second object.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True
@@ -143,7 +147,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -159,7 +164,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -175,7 +181,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -191,7 +198,8 @@ class DdbCommand(DdbCommandBase):
                 e.g., [0]/[1]/[1] for first container, second object, second dkey.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -211,7 +219,8 @@ class DdbCommand(DdbCommandBase):
             active (str): -a flag. Defaults to False.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -235,7 +244,8 @@ class DdbCommand(DdbCommandBase):
                 matter as long as it's valid. Defaults to [0].
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True

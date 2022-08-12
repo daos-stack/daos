@@ -4,23 +4,29 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import PositionalParameter
-from command_utils import TargetedExecutableCommand
+from command_utils import ExecutableCommand
+from general_utils import run_pcmd
 
 
-class DdbCommandBase(TargetedExecutableCommand):
+class DdbCommandBase(ExecutableCommand):
     """Defines the basic structures of ddb command."""
 
-    def __init__(self, server_host, path):
+    def __init__(self, server_host, path, verbose=True, timeout=None, sudo=True):
         """Defines the parameters for ddb.
 
         Args:
-            server_host (NodeSet): Server host to run the command
-            path (str): path to the ddb command
+            server_host (NodeSet): Server host to run the command.
+            path (str): path to the ddb command.
+            verbose (bool, optional): Display command output when run_pcmd is called.
+                Defaults to True.
+            timeout (int, optional): Command timeout (sec) used in run_pcmd. Defaults to
+                None.
+            sudo (bool, optional): Whether to run ddb with sudo. Defaults to True.
         """
-        super().__init__("/run/ddb/*", "ddb", server_host, path)
+        super().__init__("/run/ddb/*", "ddb", path)
 
         # We need to run with sudo.
-        self.sudo = True
+        self.sudo = sudo
 
         self.host = server_host
 
@@ -37,3 +43,19 @@ class DdbCommandBase(TargetedExecutableCommand):
 
         # VOS file path.
         self.vos_path = PositionalParameter(position=4)
+
+        # Members needed for run_pcmd().
+        self.verbose = verbose
+        self.timeout = timeout
+
+    def run(self):
+        """Run the command.
+
+        Returns:
+            list: A list of dictionaries with each entry containing output, exit status,
+                and interrupted status common to each group of hosts.
+
+        """
+        return run_pcmd(
+            hosts=self.host, command=self.__str__(), verbose=self.verbose,
+            timeout=self.timeout)
