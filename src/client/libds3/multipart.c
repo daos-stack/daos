@@ -330,7 +330,7 @@ err_multipart_dir:
 }
 
 int
-ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3)
+ds3_upload_remove(const char *bucket_name, const char *upload_id, ds3_t *ds3)
 {
 	if (bucket_name == NULL || upload_id == NULL || ds3 == NULL)
 		return -EINVAL;
@@ -347,12 +347,6 @@ ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3)
 	rc = dfs_remove(ds3->meta_dfs, multipart_dir, upload_id, true, NULL);
 	dfs_release(multipart_dir);
 	return -rc;
-}
-
-int
-ds3_upload_complete()
-{
-	return 0;
 }
 
 int
@@ -395,7 +389,7 @@ err_multipart_dir:
 }
 
 int
-ds3_part_create(const char *bucket_name, const char *upload_id, uint32_t part_num,
+ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num, bool truncate,
 		ds3_part_t **ds3p, ds3_t *ds3)
 {
 	if (ds3p == NULL || bucket_name == NULL || upload_id == NULL || ds3 == NULL)
@@ -423,10 +417,11 @@ ds3_part_create(const char *bucket_name, const char *upload_id, uint32_t part_nu
 	}
 
 	char part_name_str[7];
-	sprintf(part_name_str, "%06u", part_num);
+	sprintf(part_name_str, "%06lu", part_num);
+	int flags = truncate ? O_RDWR | O_CREAT | O_TRUNC : O_RDWR;
 
 	rc = dfs_open(ds3->meta_dfs, upload_dir, part_name_str, DEFFILEMODE | S_IFREG,
-		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &ds3p_tmp->dfs_obj);
+		      flags, 0, 0, NULL, &ds3p_tmp->dfs_obj);
 
 	if (rc == 0)
 		*ds3p = ds3p_tmp;

@@ -144,7 +144,7 @@ struct ds3_multipart_upload_info {
 /** S3 Multipart part information */
 struct ds3_multipart_part_info {
 	/** Part number */
-	uint32_t part_num;
+	uint64_t part_num;
 	/** Opaque encoded part info */
 	void    *encoded;
 	/** Length of encoded data */
@@ -592,7 +592,7 @@ int
 ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name, ds3_t *ds3);
 
 /**
- * Abort the S3 multipart upload identified by \a upload_id in the bucket identified by \a
+ * Remove the S3 multipart upload identified by \a upload_id in the bucket identified by \a
  * bucket_name
  *
  * \param[in]	bucket_name	Name of the bucket.
@@ -602,10 +602,7 @@ ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name,
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_upload_abort(const char *bucket_name, const char *upload_id, ds3_t *ds3);
-
-int
-ds3_upload_complete();
+ds3_upload_remove(const char *bucket_name, const char *upload_id, ds3_t *ds3);
 
 /**
  * Gwt S3 multipart upload info identified by \a upload_id in the bucket identified by \a
@@ -623,18 +620,19 @@ ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_n
 		    const char *upload_id, ds3_t *ds3);
 
 /**
- * Create an S3 multipart part identified by \a part_num.
+ * Open an S3 multipart part identified by \a part_num.
  *
  * \param[in]	bucket_name	Name of the bucket.
  * \param[in]	upload_id	ID of the upload.
- * \param[in]	part_num	The part number.+
+ * \param[in]	part_num	The part number.
+ * \param[in]	truncate	whether to truncate the part object.
  * \param[out]	ds3p		Returned S3 object handle.
  * \param[in]	ds3			Pointer to the DAOS S3 pool handle to use.
  *
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_part_create(const char *bucket_name, const char *upload_id, uint32_t part_num,
+ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num, bool truncate,
 		ds3_part_t **ds3p, ds3_t *ds3);
 
 /**
