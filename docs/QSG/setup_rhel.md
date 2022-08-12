@@ -62,17 +62,17 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.2/),
    using the subdirectory that matches the EL/CentOS version of the nodes:
 
 	**For CentOS7:**
 
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.2/CentOS7/packages/x86_64/daos_packages.repo'
 
 
 	**For EL8:**
 
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/EL8/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.2/EL8/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
@@ -266,7 +266,7 @@ for more information.
 ## Create Configuration Files
 
 In this section the `daos_server`, `daos_agent`, and dmg command configuration files will be defined.
-Examples are available on [github](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
+Examples are available on [github](https://github.com/daos-stack/daos/tree/release/2.2/utils/config/examples).
 
 1. Determine the addresses for the NVMe devices on the server nodes:
 
