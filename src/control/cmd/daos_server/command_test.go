@@ -122,11 +122,11 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Prepare drives with all opts",
 			[]string{
-				"nvme", "prepare-drives", "--pci-block-list", multiPCIAddrs,
+				"nvme", "prepare", "--pci-block-list", multiPCIAddrs,
 				"--hugepages", "8192", "--target-user", "bob", "--disable-vfio",
 				"-l", "/tmp/foo", multiPCIAddrs,
 			},
-			printCommand(t, (&prepareDrivesCmd{
+			printCommand(t, (&prepareNVMeCmd{
 				PCIBlockList: multiPCIAddrs,
 				NrHugepages:  8192,
 				TargetUser:   "bob",
@@ -137,7 +137,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Prepare drives; bad opt",
 			[]string{
-				"nvme", "prepare-drives", "--pxi-block-list", multiPCIAddrs,
+				"nvme", "prepare", "--pxi-block-list", multiPCIAddrs,
 				"--target-user", "bob", "--disable-vfio", "-l", "/tmp/foo",
 				multiPCIAddrs,
 			},
@@ -147,11 +147,11 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Release drives with all opts",
 			[]string{
-				"nvme", "release-drives", "--pci-block-list", multiPCIAddrs,
+				"nvme", "release", "--pci-block-list", multiPCIAddrs,
 				"--target-user", "bob", "--disable-vfio", "-l", "/tmp/foo",
 				multiPCIAddrs,
 			},
-			printCommand(t, (&releaseDrivesCmd{
+			printCommand(t, (&releaseNVMeCmd{
 				PCIBlockList: multiPCIAddrs,
 				TargetUser:   "bob",
 				DisableVFIO:  true,
@@ -161,7 +161,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		{
 			"Release drives; bad opt",
 			[]string{
-				"nvme", "release-drives", "--pci-block-list", multiPCIAddrs,
+				"nvme", "release", "--pci-block-list", multiPCIAddrs,
 				"--target-user", "bob", "--disble-vfio", "-l", "/tmp/foo",
 				multiPCIAddrs,
 			},

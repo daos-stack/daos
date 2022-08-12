@@ -42,8 +42,8 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 	// bdev req parameters
 	testNrHugePages := 42
 	// bdev mock commands
-	newPrepCmd := func() *prepareDrivesCmd {
-		pdc := &prepareDrivesCmd{
+	newPrepCmd := func() *prepareNVMeCmd {
+		pdc := &prepareNVMeCmd{
 			NrHugepages:  testNrHugePages,
 			PCIBlockList: test.MockPCIAddr(1),
 		}
@@ -53,7 +53,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		prepCmd       *prepareDrivesCmd
+		prepCmd       *prepareNVMeCmd
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
@@ -131,7 +131,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			if tc.prepCmd == nil {
-				tc.prepCmd = &prepareDrivesCmd{}
+				tc.prepCmd = &prepareNVMeCmd{}
 			}
 			tc.prepCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
@@ -170,8 +170,8 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 
 func TestDaosServer_resetNVMe(t *testing.T) {
 	// bdev mock commands
-	newRelCmd := func() *releaseDrivesCmd {
-		rdc := &releaseDrivesCmd{
+	newRelCmd := func() *releaseNVMeCmd {
+		rdc := &releaseNVMeCmd{
 			PCIBlockList: test.MockPCIAddr(1),
 		}
 		rdc.Args.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
@@ -180,7 +180,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		relCmd        *releaseDrivesCmd
+		relCmd        *releaseNVMeCmd
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
@@ -258,7 +258,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			if tc.relCmd == nil {
-				tc.relCmd = &releaseDrivesCmd{}
+				tc.relCmd = &releaseNVMeCmd{}
 			}
 			tc.relCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,

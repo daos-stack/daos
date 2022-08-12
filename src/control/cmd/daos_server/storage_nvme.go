@@ -23,9 +23,9 @@ import (
 type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
 type nvmeCmd struct {
-	Prepare prepareDrivesCmd `command:"prepare-drives" description:"Prepare NVMe SSDs for use by DAOS"`
-	Release releaseDrivesCmd `command:"release-drives" description:"Release NVMe SSDs for use by OS"`
-	Scan    scanDrivesCmd    `command:"scan" description:"Scan NVMe SSDs"`
+	Prepare prepareNVMeCmd `command:"prepare" description:"Prepare NVMe SSDs for use by DAOS"`
+	Release releaseNVMeCmd `command:"release" description:"Release NVMe SSDs for use by OS"`
+	Scan    scanNVMeCmd    `command:"scan" description:"Scan NVMe SSDs"`
 }
 
 func getTargetUser(reqUser string) (string, error) {
@@ -79,7 +79,7 @@ func updatePrepReqParams(log logging.Logger, iommuEnabled bool, req *storage.Bde
 	return nil
 }
 
-type prepareDrivesCmd struct {
+type prepareNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
@@ -93,22 +93,22 @@ type prepareDrivesCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *prepareDrivesCmd) WithDisableVFIO(b bool) *prepareDrivesCmd {
+func (cmd *prepareNVMeCmd) WithDisableVFIO(b bool) *prepareNVMeCmd {
 	cmd.DisableVFIO = b
 	return cmd
 }
 
-func (cmd *prepareDrivesCmd) WithTargetUser(u string) *prepareDrivesCmd {
+func (cmd *prepareNVMeCmd) WithTargetUser(u string) *prepareNVMeCmd {
 	cmd.TargetUser = u
 	return cmd
 }
 
-func (cmd *prepareDrivesCmd) WithPCIAllowList(al string) *prepareDrivesCmd {
+func (cmd *prepareNVMeCmd) WithPCIAllowList(al string) *prepareNVMeCmd {
 	cmd.Args.PCIAllowList = al
 	return cmd
 }
 
-func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
+func (cmd *prepareNVMeCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
 	cmd.Info("Prepare locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
@@ -131,7 +131,7 @@ func (cmd *prepareDrivesCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEn
 	return err
 }
 
-func (cmd *prepareDrivesCmd) Execute(args []string) error {
+func (cmd *prepareNVMeCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (cmd *prepareDrivesCmd) Execute(args []string) error {
 	return cmd.prepareNVMe(scs.NvmePrepare, iommuEnabled)
 }
 
-type releaseDrivesCmd struct {
+type releaseNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
@@ -160,22 +160,22 @@ type releaseDrivesCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *releaseDrivesCmd) WithDisableVFIO(b bool) *releaseDrivesCmd {
+func (cmd *releaseNVMeCmd) WithDisableVFIO(b bool) *releaseNVMeCmd {
 	cmd.DisableVFIO = b
 	return cmd
 }
 
-func (cmd *releaseDrivesCmd) WithTargetUser(u string) *releaseDrivesCmd {
+func (cmd *releaseNVMeCmd) WithTargetUser(u string) *releaseNVMeCmd {
 	cmd.TargetUser = u
 	return cmd
 }
 
-func (cmd *releaseDrivesCmd) WithPCIAllowList(al string) *releaseDrivesCmd {
+func (cmd *releaseNVMeCmd) WithPCIAllowList(al string) *releaseNVMeCmd {
 	cmd.Args.PCIAllowList = al
 	return cmd
 }
 
-func (cmd *releaseDrivesCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
+func (cmd *releaseNVMeCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
 	cmd.Info("Release locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
@@ -198,7 +198,7 @@ func (cmd *releaseDrivesCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnab
 	return err
 }
 
-func (cmd *releaseDrivesCmd) Execute(args []string) error {
+func (cmd *releaseNVMeCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
@@ -214,14 +214,14 @@ func (cmd *releaseDrivesCmd) Execute(args []string) error {
 	return cmd.resetNVMe(scs.NvmePrepare, iommuEnabled)
 }
 
-type scanDrivesCmd struct {
+type scanNVMeCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
 	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
-func (cmd *scanDrivesCmd) Execute(args []string) error {
+func (cmd *scanNVMeCmd) Execute(args []string) error {
 	var bld strings.Builder
 
 	if err := cmd.setHelperLogFile(); err != nil {

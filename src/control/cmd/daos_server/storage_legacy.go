@@ -84,12 +84,12 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 			errSCM = rnc.resetPMem(scs.ScmPrepare)
 		}
 		if doNVMe {
-			var rdc releaseDrivesCmd
+			var rdc releaseNVMeCmd
 			if err := convert.Types(cmd, &rdc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
 			rdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
-			// releaseDrivesCmd expects positional argument, so set it
+			// releaseNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
 			errNVMe = rdc.resetNVMe(scs.NvmePrepare, iommuEnabled)
 		}
@@ -103,12 +103,12 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 			errSCM = cnc.preparePMem(scs.ScmPrepare)
 		}
 		if doNVMe {
-			var pdc prepareDrivesCmd
+			var pdc prepareNVMeCmd
 			if err := convert.Types(cmd, &pdc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
 			pdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
-			// prepareDrivesCmd expects positional argument, so set it
+			// prepareNVMeCmd expects positional argument, so set it
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
 			errNVMe = pdc.prepareNVMe(scs.NvmePrepare, iommuEnabled)
 		}
