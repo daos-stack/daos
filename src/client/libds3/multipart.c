@@ -6,6 +6,21 @@
 
 #include "ds3_internal.h"
 
+// Helper struct
+struct part_for_sort {
+	uint32_t    part_num;
+	const char *part_name;
+};
+
+// Helper function
+static int
+compare_part_for_sort(const void *p1, const void *p2)
+{
+	const struct part_for_sort *ps1 = p1;
+	const struct part_for_sort *ps2 = p2;
+	return ps1->part_num - ps2->part_num;
+}
+
 int
 ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 			  struct ds3_multipart_upload_info *mps, uint32_t *ncp,
@@ -16,8 +31,12 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		return -EINVAL;
 
 	// End
-	if (*nmp == 0)
+	if (*nmp == 0) {
+		if (is_truncated) {
+			*is_truncated = false;
+		}
 		return 0;
+	}
 
 	int        rc = 0;
 	dfs_obj_t *multipart_dir;
@@ -139,6 +158,17 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		      struct ds3_multipart_part_info *parts, uint32_t *marker, bool *is_truncated,
 		      ds3_t *ds3)
 {
+	if (ds3 == NULL || npart == NULL)
+		return -EINVAL;
+
+	// End
+	if (*npart == 0) {
+		if (is_truncated) {
+			*is_truncated = false;
+		}
+		return 0;
+	}
+
 	int        rc = 0;
 	dfs_obj_t *multipart_dir;
 	dfs_obj_t *upload_dir;
@@ -155,8 +185,9 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		goto err_multipart_dir;
 	}
 
+	uint32_t       nr = MULTIPART_MAX_PARTS;
 	struct dirent *dirents;
-	D_ALLOC_ARRAY(dirents, *npart);
+	D_ALLOC_ARRAY(dirents, nr);
 	if (dirents == NULL) {
 		rc = ENOMEM;
 		goto err_upload_dir;
@@ -165,19 +196,19 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 	daos_anchor_t anchor;
 	daos_anchor_init(&anchor, 0);
 
-	rc = dfs_readdir(ds3->meta_dfs, upload_dir, &anchor, npart, dirents);
+	rc = dfs_readdir(ds3->meta_dfs, upload_dir, &anchor, &nr, dirents);
 
 	if (rc != 0) {
 		goto err_dirents;
 	}
 
-	if (is_truncated != NULL) {
-		*is_truncated = !daos_anchor_is_eof(&anchor);
-	}
+	// Pick the first *npart after marker
+	struct part_for_sort *pfs;
+	D_ALLOC_ARRAY(pfs, nr);
 
-	uint32_t pi = 0;
-	uint32_t last_num = 0;
-	for (uint32_t i = 0; i < *npart; i++) {
+	// Fill pfs
+	uint32_t pfi = 0;
+	for (uint32_t i = 0; i < nr; i++) {
 		const char *part_name = dirents[i].d_name;
 
 		// Parse part_name
@@ -185,9 +216,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		char          *err;
 		const uint32_t part_num = strtol(part_name, &err, 10);
 		if (errno || err != part_name + strlen(part_name)) {
-			D_ERROR("bad part number: %s", part_name);
-			rc = EINVAL;
-			goto err_dirents;
+			D_WARN("bad part number: %s", part_name);
+			continue;
 		}
 
 		// Skip entries that are not larger than marker
@@ -195,21 +225,36 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 			continue;
 		}
 
-		last_num = max(part_num, last_num);
+		// Add to pfs
+		pfs[pfi].part_name = part_name;
+		pfs[pfi].part_num  = part_num;
+		pfi++;
+	}
+
+	// Sort pfs
+	qsort(pfs, pfi, sizeof(struct part_for_sort), compare_part_for_sort);
+
+	uint32_t pi       = 0;
+	uint32_t last_num = 0;
+	for (uint32_t i = 0; i < pfi; i++) {
+		uint32_t    part_num  = pfs[i].part_num;
+		const char *part_name = pfs[i].part_name;
+		last_num              = max(part_num, last_num);
 
 		dfs_obj_t *part_obj;
 		rc = dfs_lookup_rel(ds3->meta_dfs, upload_dir, part_name, O_RDWR, &part_obj, NULL,
 				    NULL);
 		if (rc != 0) {
-			goto err_dirents;
+			goto err_pfs;
 		}
 
-		// The entry is a regular file, read the xattr and add to parts
+		// Read the xattr and add to parts
 		rc = dfs_getxattr(ds3->meta_dfs, part_obj, RGW_PART_XATTR, parts[pi].encoded,
 				  &parts[pi].encoded_length);
 		// Skip if the part has no info
 		if (rc != 0) {
-			rc = dfs_release(part_obj);
+			rc = 0;
+			dfs_release(part_obj);
 			continue;
 		}
 
@@ -218,12 +263,22 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 
 		// Close handles
 		dfs_release(part_obj);
+
+		// Stop when we get to *npart parts.
+		if (pi >= *npart) {
+			break;
+		}
 	}
 
-	*npart = pi;
-	// TODO since dirents are not ordered, would this skip certain parts?
+	// Assign read parts and next marker
+	*npart  = pi;
 	*marker = last_num;
+	if (is_truncated) {
+		*is_truncated = pi == pfi;
+	}
 
+err_pfs:
+	D_FREE(pfs);
 err_dirents:
 	D_FREE(dirents);
 err_upload_dir:
