@@ -40,7 +40,7 @@ type createSCMCmd struct {
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
-func (cmd *createSCMCmd) preparePMem(backendCall scmPrepareResetFn) error {
+func (cmd *createSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	if cmd.NrNamespacesPerSocket == 0 {
 		return errors.New("(-S|--pmem-ns-per-socket) should be set to at least 1")
 	}
@@ -58,7 +58,7 @@ func (cmd *createSCMCmd) preparePMem(backendCall scmPrepareResetFn) error {
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
 	// Prepare PMem modules to be presented as pmem device files.
-	resp, err := backendCall(req)
+	resp, err := prepareBackend(req)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ type destroySCMCmd struct {
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
-func (cmd *destroySCMCmd) resetPMem(backendCall scmPrepareResetFn) error {
+func (cmd *destroySCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	cmd.Info("Destroy locally-attached PMem namespaces...")
 
 	cmd.Info(MsgStoragePrepareWarn)
@@ -142,8 +142,8 @@ func (cmd *destroySCMCmd) resetPMem(backendCall scmPrepareResetFn) error {
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
-	// Prepare PMem modules to be presented as pmem device files.
-	resp, err := backendCall(req)
+	// Reset PMem modules to default memory mode after removing any PMem namespaces.
+	resp, err := resetBackend(req)
 	if err != nil {
 		return err
 	}

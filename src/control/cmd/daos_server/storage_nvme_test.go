@@ -136,8 +136,11 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			tc.prepCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
+			tc.prepCmd.setIOMMUChecker(func() (bool, error) {
+				return !tc.iommuDisabled, nil
+			})
 
-			gotErr := tc.prepCmd.prepareNVMe(scs.NvmePrepare, !tc.iommuDisabled)
+			gotErr := tc.prepCmd.prepareNVMe(scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
@@ -258,8 +261,11 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			tc.relCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
+			tc.relCmd.setIOMMUChecker(func() (bool, error) {
+				return !tc.iommuDisabled, nil
+			})
 
-			gotErr := tc.relCmd.resetNVMe(scs.NvmePrepare, !tc.iommuDisabled)
+			gotErr := tc.relCmd.resetNVMe(scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()

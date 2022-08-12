@@ -24,21 +24,13 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-const (
-	defaultConfigFile = "daos_server.yml"
-)
+const defaultConfigFile = "daos_server.yml"
 
-type (
-	// helperLogCmd is an embeddable type that extends a command with
-	// helper privileged binary logging capabilities.
-	helperLogCmd struct {
-		HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
-	}
-
-	// iommuCheckerCmd is an embeddable type that extends a command with
-	// ability to check IOMMU capability of the server host.
-	iommuCheckerCmd struct{}
-)
+// helperLogCmd is an embeddable type that extends a command with
+// helper privileged binary logging capabilities.
+type helperLogCmd struct {
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+}
 
 func (hlc *helperLogCmd) setHelperLogFile() error {
 	filename := hlc.HelperLogFile
@@ -50,13 +42,16 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		"unable to configure privileged helper logging")
 }
 
-func (cmd *iommuCheckerCmd) isIOMMUEnabled(log logging.Logger) (bool, error) {
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-	if err != nil {
-		return false, errors.Wrap(err, "unable to verify if iommu is enabled")
-	}
+type iommuChecker interface {
+	setIOMMUChecker(func() (bool, error))
+}
 
-	return iommuEnabled, nil
+type iommuCheckerCmd struct {
+	isIOMMUEnabled func() (bool, error)
+}
+
+func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
+	icc.isIOMMUEnabled = isIOMMUEnabled
 }
 
 type mainOpts struct {
@@ -143,6 +138,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		} else if opts.ConfigPath != "" {
 			return errors.Errorf("DAOS Server config filepath has been supplied but " +
 				"this command will not use it")
+		}
+
+		if iccCmd, ok := cmd.(iommuChecker); ok {
+			iccCmd.setIOMMUChecker(func() (bool, error) {
+				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
+				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
+			})
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

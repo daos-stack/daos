@@ -166,11 +166,14 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			tc.legacyCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
+			tc.legacyCmd.setIOMMUChecker(func() (bool, error) {
+				return !tc.iommuDisabled, nil
+			})
 			if tc.legacyCmd.NrNamespacesPerSocket == 0 {
 				tc.legacyCmd.NrNamespacesPerSocket = uint(1)
 			}
 
-			gotErr := tc.legacyCmd.prep(scs, !tc.iommuDisabled)
+			gotErr := tc.legacyCmd.prep(scs)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()

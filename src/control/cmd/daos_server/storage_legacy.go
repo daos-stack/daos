@@ -17,7 +17,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -31,7 +30,9 @@ type legacyStorageCmd struct {
 
 type legacyPrepCmd struct {
 	cmdutil.LogCmd
-	scs   *server.StorageControlService
+	iommuCheckerCmd
+	scs *server.StorageControlService
+
 	Reset bool `long:"reset" description:"Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules."`
 
 	ScmOnly               bool `short:"s" long:"scm-only" description:"Only prepare SCM."`
@@ -66,7 +67,7 @@ func (cmd *legacyPrepCmd) Validate() (bool, bool, error) {
 	return prepScm, prepNvme, nil
 }
 
-func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled bool) error {
+func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 	var errSCM, errNVMe error
 
 	doSCM, doNVMe, err := cmd.Validate()
@@ -91,7 +92,8 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 			rdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
 			// releaseNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
-			errNVMe = rdc.resetNVMe(scs.NvmePrepare, iommuEnabled)
+			rdc.setIOMMUChecker(cmd.isIOMMUEnabled)
+			errNVMe = rdc.resetNVMe(scs.NvmePrepare)
 		}
 	} else {
 		if doSCM {
@@ -110,7 +112,8 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService, iommuEnabled b
 			pdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
 			// prepareNVMeCmd expects positional argument, so set it
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
-			errNVMe = pdc.prepareNVMe(scs.NvmePrepare, iommuEnabled)
+			pdc.setIOMMUChecker(cmd.isIOMMUEnabled)
+			errNVMe = pdc.prepareNVMe(scs.NvmePrepare)
 		}
 	}
 
@@ -136,13 +139,8 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 		cmd.scs = server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	}
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
-	if err != nil {
-		return errors.Wrap(err, "detecting if iommu is enabled")
-	}
-
 	cmd.Debugf("executing legacy storage prepare command: %+v", cmd)
-	return cmd.prep(cmd.scs, iommuEnabled)
+	return cmd.prep(cmd.scs)
 }
 
 type legacyScanCmd struct {

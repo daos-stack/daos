@@ -131,7 +131,7 @@ func (cmd *prepareNVMeCmd) WithPCIAllowList(al string) *prepareNVMeCmd {
 	return cmd
 }
 
-func (cmd *prepareNVMeCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
+func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error {
 	cmd.Info("Prepare locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
@@ -142,14 +142,19 @@ func (cmd *prepareNVMeCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnab
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
+	iommuEnabled, err := cmd.isIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
 		return errors.Wrap(err, "updating prepare request params")
 	}
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)
 
-	// Configure NVMe device access.
-	_, err := backendCall(req)
+	// Prepare NVMe device access.
+	_, err = prepareBackend(req)
 
 	return err
 }
@@ -159,15 +164,10 @@ func (cmd *prepareNVMeCmd) Execute(args []string) error {
 		return err
 	}
 
-	iommuEnabled, err := cmd.isIOMMUEnabled(cmd.Logger)
-	if err != nil {
-		return err
-	}
-
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
-	return cmd.prepareNVMe(scs.NvmePrepare, iommuEnabled)
+	return cmd.prepareNVMe(scs.NvmePrepare)
 }
 
 type releaseNVMeCmd struct {
@@ -198,7 +198,7 @@ func (cmd *releaseNVMeCmd) WithPCIAllowList(al string) *releaseNVMeCmd {
 	return cmd
 }
 
-func (cmd *releaseNVMeCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnabled bool) error {
+func (cmd *releaseNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	cmd.Info("Release locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
@@ -209,14 +209,19 @@ func (cmd *releaseNVMeCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnable
 		Reset_:       true,
 	}
 
+	iommuEnabled, err := cmd.isIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
 		return errors.Wrap(err, "updating prepare request params")
 	}
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)
 
-	// Configure NVMe device access.
-	_, err := backendCall(req)
+	// Reset NVMe device access.
+	_, err = resetBackend(req)
 
 	return err
 }
@@ -226,15 +231,10 @@ func (cmd *releaseNVMeCmd) Execute(args []string) error {
 		return err
 	}
 
-	iommuEnabled, err := cmd.isIOMMUEnabled(cmd.Logger)
-	if err != nil {
-		return err
-	}
-
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing release drives command: %+v", cmd)
-	return cmd.resetNVMe(scs.NvmePrepare, iommuEnabled)
+	return cmd.resetNVMe(scs.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
