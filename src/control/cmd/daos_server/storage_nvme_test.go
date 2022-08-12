@@ -22,7 +22,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-var currentUsername string
+var (
+	defaultMultiAddrList  = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), pciAddrSep, test.MockPCIAddr(2))
+	defaultSingleAddrList = test.MockPCIAddr(1)
+	spaceSepMultiAddrList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), storage.BdevPciAddrSep, test.MockPCIAddr(2))
+	currentUsername       string
+)
 
 func getCurrentUsername(t *testing.T) string {
 	t.Helper()
@@ -45,10 +50,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 	newPrepCmd := func() *prepareNVMeCmd {
 		pdc := &prepareNVMeCmd{
 			NrHugepages:  testNrHugePages,
-			PCIBlockList: test.MockPCIAddr(1),
+			PCIBlockList: defaultMultiAddrList,
 		}
-		pdc.Args.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-			storage.BdevPciAddrSep, test.MockPCIAddr(2))
+		pdc.Args.PCIAllowList = defaultSingleAddrList
 		return pdc
 	}
 
@@ -69,21 +73,19 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			prepCmd: newPrepCmd(),
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
-				EnableVMD:    true,
+				PCIAllowList:  defaultSingleAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				EnableVMD:     true,
 			},
 		},
-		"succeeds; different target user": {
-			prepCmd: newPrepCmd().WithTargetUser("bob"),
+		"succeeds; different target user; multi allow list": {
+			prepCmd: newPrepCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
 			expPrepCall: &storage.BdevPrepareRequest{
 				TargetUser:    "bob",
 				HugePageCount: testNrHugePages,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
-				EnableVMD:    true,
+				PCIAllowList:  spaceSepMultiAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				EnableVMD:     true,
 			},
 		},
 		"fails; user params": {
@@ -93,10 +95,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			},
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
-				EnableVMD:    true,
+				PCIAllowList:  defaultSingleAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				EnableVMD:     true,
 			},
 			expErr: errors.New("backend prep setup failed"),
 		},
@@ -114,10 +115,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    "root",
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
-				DisableVFIO:  true,
+				PCIAllowList:  defaultSingleAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				DisableVFIO:   true,
 			},
 		},
 	} {
@@ -172,10 +172,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 	// bdev mock commands
 	newRelCmd := func() *releaseNVMeCmd {
 		rdc := &releaseNVMeCmd{
-			PCIBlockList: test.MockPCIAddr(1),
+			PCIBlockList: defaultMultiAddrList,
 		}
-		rdc.Args.PCIAllowList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-			storage.BdevPciAddrSep, test.MockPCIAddr(2))
+		rdc.Args.PCIAllowList = defaultSingleAddrList
 		return rdc
 	}
 
@@ -195,20 +194,18 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		"succeeds; user params": {
 			relCmd: newRelCmd(),
 			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
 				EnableVMD:    true,
 				Reset_:       true,
 			},
 		},
-		"succeeds; different target user": {
-			relCmd: newRelCmd().WithTargetUser("bob"),
+		"succeeds; different target user; multi allow list": {
+			relCmd: newRelCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
 			expResetCall: &storage.BdevPrepareRequest{
-				TargetUser: "bob",
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				TargetUser:   "bob",
+				PCIAllowList: spaceSepMultiAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
 				EnableVMD:    true,
 				Reset_:       true,
 			},
@@ -219,9 +216,8 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				ResetErr: errors.New("backend prep reset failed"),
 			},
 			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
 				EnableVMD:    true,
 				Reset_:       true,
 			},
@@ -239,10 +235,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			relCmd:        newRelCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
 			expResetCall: &storage.BdevPrepareRequest{
-				TargetUser: "root",
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				TargetUser:   "root",
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
 				DisableVFIO:  true,
 				Reset_:       true,
 			},

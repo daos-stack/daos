@@ -14,11 +14,14 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+const pciAddrSep = ","
 
 type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
@@ -76,6 +79,26 @@ func updatePrepReqParams(log logging.Logger, iommuEnabled bool, req *storage.Bde
 		req.EnableVMD = true
 	}
 
+	// Commandline PCI address lists will be comma-separated, sanitize into expected format.
+
+	if strings.Contains(req.PCIAllowList, " ") {
+		return errors.New("expecting comma-separated list of allowed pci addresses but found space separator")
+	}
+	allowed, err := hardware.NewPCIAddressSet(strings.Split(req.PCIAllowList, pciAddrSep)...)
+	if err != nil {
+		return errors.Wrap(err, "invalid addresses in pci allow list")
+	}
+	req.PCIAllowList = allowed.String()
+
+	if strings.Contains(req.PCIBlockList, " ") {
+		return errors.New("expecting comma-separated list of blocked pci addresses but found space separator")
+	}
+	blocked, err := hardware.NewPCIAddressSet(strings.Split(req.PCIBlockList, pciAddrSep)...)
+	if err != nil {
+		return errors.Wrap(err, "invalid addresses in pci block list")
+	}
+	req.PCIBlockList = blocked.String()
+
 	return nil
 }
 
@@ -84,12 +107,12 @@ type prepareNVMeCmd struct {
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
 
-	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
 	Args         struct {
-		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Comma-separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
 	} `positional-args:"yes"`
 }
 
@@ -120,7 +143,7 @@ func (cmd *prepareNVMeCmd) prepareNVMe(backendCall nvmePrepareResetFn, iommuEnab
 	}
 
 	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
-		return errors.Wrap(err, "evaluating vmd capability on platform")
+		return errors.Wrap(err, "updating prepare request params")
 	}
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)
@@ -152,11 +175,11 @@ type releaseNVMeCmd struct {
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
 
-	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
+	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
 	Args         struct {
-		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
+		PCIAllowList string `positional-arg-name:"pci-allow-list" description:"Comma-separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
 	} `positional-args:"yes"`
 }
 
@@ -187,7 +210,7 @@ func (cmd *releaseNVMeCmd) resetNVMe(backendCall nvmePrepareResetFn, iommuEnable
 	}
 
 	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
-		return errors.Wrap(err, "evaluating vmd capability on platform")
+		return errors.Wrap(err, "updating prepare request params")
 	}
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)

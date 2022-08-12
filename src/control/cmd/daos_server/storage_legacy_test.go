@@ -7,7 +7,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -61,9 +60,8 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 				// NVMe params:
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultMultiAddrList,
+				PCIBlockList: defaultSingleAddrList,
 				NrHugepages:  9182,
 				TargetUser:   "bob",
 				DisableVFIO:  true,
@@ -77,9 +75,8 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 				// NVMe params:
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultMultiAddrList,
+				PCIBlockList: defaultSingleAddrList,
 				NrHugepages:  9182,
 				TargetUser:   "root",
 				DisableVFIO:  true,
@@ -94,10 +91,9 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
 				HugePageCount: 9182,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
-				DisableVFIO:  true,
+				PCIAllowList:  spaceSepMultiAddrList,
+				PCIBlockList:  defaultSingleAddrList,
+				DisableVFIO:   true,
 			},
 		},
 		"set all request params; scm-only": {
@@ -107,9 +103,8 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 				// NVMe params:
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultMultiAddrList,
+				PCIBlockList: defaultSingleAddrList,
 				NrHugepages:  9182,
 				TargetUser:   "root",
 				DisableVFIO:  true,
@@ -129,9 +124,8 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 				// NVMe params:
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: defaultMultiAddrList,
 				NrHugepages:  9182,
 				TargetUser:   "root",
 				DisableVFIO:  true,
@@ -139,11 +133,21 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
 				HugePageCount: 9182,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
-				PCIBlockList: test.MockPCIAddr(1),
+				PCIAllowList:  defaultSingleAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				DisableVFIO:   true,
+			},
+		},
+		"set all request params; nvme-only; space-separated address list": {
+			legacyCmd: &legacyPrepCmd{
+				NvmeOnly:     true,
+				PCIAllowList: spaceSepMultiAddrList,
+				PCIBlockList: defaultSingleAddrList,
+				NrHugepages:  9182,
+				TargetUser:   "root",
 				DisableVFIO:  true,
 			},
+			expErr: errors.New("expecting comma-separated list"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
