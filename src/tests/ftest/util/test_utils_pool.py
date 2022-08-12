@@ -78,7 +78,7 @@ def remove_pool(test, pool):
 
     # Attempt to destroy the pool
     try:
-        pool.destroy(force=1, disconnect=1)
+        pool.destroy(force=1, disconnect=1, recursive=1)
     except (DaosApiError, TestFail) as error:
         test.test_log.info("  {}".format(error))
         error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
@@ -402,7 +402,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1, disconnect=1):
+    def destroy(self, force=1, disconnect=1, recursive=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -411,6 +411,7 @@ class TestPool(TestDaosApiBase):
         Args:
             force (int, optional): force flag. Defaults to 1.
             disconnect (int, optional): disconnect flag. Defaults to 1.
+            recursive (int, optional): recursive flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -425,7 +426,7 @@ class TestPool(TestDaosApiBase):
                 self.log.info("Destroying pool %s", self.identifier)
 
                 # Destroy the pool with the dmg command.
-                self.dmg.pool_destroy(pool=self.identifier, force=force)
+                self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
                 status = True
 
             self.pool = None
