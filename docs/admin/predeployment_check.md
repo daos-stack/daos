@@ -96,7 +96,7 @@ Note that for InfiniBand fabrics, DAOS is only supported with the MLNX\_OFED sta
 provided by NVIDIA, not with the distros' inbox drivers.
 Before installing DAOS, a supported version of MOFED needs to be installed on the DAOS servers
 and DAOS clients. If the control plane communication is set up over the InfiniBand fabric using
-IPoIB, then any dedicated DAOS admin nodes should also be installed with the same MOFED atack.
+IPoIB, then any dedicated DAOS admin nodes should also be installed with the same MOFED stack.
 This is typically done using the `mlnxofedinstall` command that is included with the MOFED
 distribution.
 
