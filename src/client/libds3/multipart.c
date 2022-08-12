@@ -359,6 +359,9 @@ int
 ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_name,
 		    const char *upload_id, ds3_t *ds3)
 {
+	if (info == NULL || bucket_name == NULL || upload_id == NULL || ds3 == NULL)
+		return -EINVAL;
+
 	int        rc = 0;
 	dfs_obj_t *multipart_dir;
 	dfs_obj_t *upload_dir;
@@ -392,19 +395,70 @@ err_multipart_dir:
 }
 
 int
-ds3_upload_open_part()
+ds3_upload_create_part(const char *bucket_name, const char *upload_id, uint32_t part_num,
+		       ds3_part_t **ds3p, ds3_t *ds3)
 {
-	return 0;
+	if (ds3p == NULL || bucket_name == NULL || upload_id == NULL || ds3 == NULL)
+		return -EINVAL;
+
+	int         rc = 0;
+	ds3_part_t *ds3p_tmp;
+	D_ALLOC_PTR(ds3p_tmp);
+	if (ds3p_tmp == NULL)
+		return -ENOMEM;
+
+	dfs_obj_t *multipart_dir;
+	dfs_obj_t *upload_dir;
+	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
+			    &multipart_dir, NULL, NULL);
+
+	if (rc != 0)
+		goto err_ds3p;
+
+	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
+			    NULL);
+
+	if (rc != 0) {
+		goto err_multipart_dir;
+	}
+
+	char part_name_str[7];
+	sprintf(part_name_str, "%06u", part_num);
+
+	rc = dfs_open(ds3->meta_dfs, upload_dir, part_name_str, DEFFILEMODE | S_IFREG,
+		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &ds3p_tmp->dfs_obj);
+
+	if (rc == 0)
+		*ds3p = ds3p_tmp;
+
+	dfs_release(upload_dir);
+err_multipart_dir:
+	dfs_release(multipart_dir);
+err_ds3p:
+	if (rc != 0)
+		D_FREE(ds3p_tmp);
+	return -rc;
 }
 
 int
-ds3_upload_close_part()
+ds3_upload_close_part(ds3_part_t *ds3p)
 {
-	return 0;
+	if (ds3p == NULL)
+		return -EINVAL;
+
+	int rc = dfs_release(ds3p->dfs_obj);
+	D_FREE(ds3p);
+	return -rc;
 }
 
 int
 ds3_upload_write_part()
+{
+	return 0;
+}
+
+int
+ds3_upload_read_part()
 {
 	return 0;
 }

@@ -84,6 +84,9 @@ typedef struct {
 /** DAOS S3 Object handle */
 // typedef struct ds3_obj    ds3_obj_t;
 
+/** DAOS S3 Upload Part handle */
+typedef struct ds3_part ds3_part_t;
+
 /** S3 User information */
 struct ds3_user_info {
 	/** User name */
@@ -321,9 +324,9 @@ int
 ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev);
 
 /**
- * Open a bucket.
+ * Open an S3 bucket identified by \a name.
  *
- * \param[in]	name	Name of the bucket to destroy.
+ * \param[in]	name	Name of the bucket to open.
  * \param[out]	ds3b	Returned S3 bucket handle.
  * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -335,7 +338,7 @@ int
 ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t *ev);
 
 /**
- * Close a bucket handle.
+ * Close an S3 bucket handle.
  *
  * \param[in]	ds3b	S3 bucket handle to close.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -619,14 +622,35 @@ int
 ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_name,
 		    const char *upload_id, ds3_t *ds3);
 
+/**
+ * Create an S3 multipart part identified by \a part_num.
+ *
+ * \param[in]	bucket_name	Name of the bucket.
+ * \param[in]	upload_id	ID of the upload.
+ * \param[in]	part_num	The part number.
+ * \param[in]	ds3	Pointer to the DAOS S3 pool handle to use.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_open_part();
+ds3_upload_create_part(const char *bucket_name, const char *upload_id, uint32_t part_num,
+		     ds3_part_t **ds3p, ds3_t *ds3);
 
+/**
+ * Close a part handle.
+ *
+ * \param[in]	ds3o	S3 part handle to close.
+ *
+ * \return              0 on success, -errno code on failure.
+ */
 int
-ds3_upload_close_part();
+ds3_upload_close_part(ds3_part_t *ds3p);
 
 int
 ds3_upload_write_part();
+
+int
+ds3_upload_read_part();
 
 #if defined(__cplusplus)
 }

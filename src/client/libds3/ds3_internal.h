@@ -65,6 +65,11 @@
 //     dfs_obj_t* dfs_obj;
 // };
 
+/** DAOS S3 Upload Part handle */
+struct ds3_part {
+	dfs_obj_t *dfs_obj;
+};
+
 /** Helper function, returns the meta dir name from the enum value */
 const char *
 meta_dir_name(enum meta_dir dir);
