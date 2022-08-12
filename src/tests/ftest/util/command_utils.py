@@ -143,7 +143,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         # Clear any previous run results
         self.result = None
-        command = self.__str__()
+        command = str(self)
         try:
             # Block until the command is complete or times out
             self.result = run_command(
@@ -196,7 +196,7 @@ class ExecutableCommand(CommandWithParameters):
         if self._process is None:
             # Start the job manager command as a subprocess
             kwargs = {
-                "cmd": self.__str__(),
+                "cmd": str(self),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
                 "shell": False,

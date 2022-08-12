@@ -736,19 +736,19 @@ class Systemctl(JobManager):
         """
         self._systemctl.unit_command.value = command
         self.timestamps[command] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        result = pcmd(self._hosts, self.__str__(), self.verbose, self.timeout)
+        result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
         if 255 in result:
             raise CommandFailure(
                 "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    self.__str__(), self.timeout, NodeSet.fromlist(result[255])))
+                    str(self), self.timeout, NodeSet.fromlist(result[255])))
 
         if 0 not in result or len(result) > 1:
             failed = []
             for item, value in list(result.items()):
                 if item != 0:
                     failed.extend(value)
-            raise CommandFailure("Error occurred running '{}' on {}".format(
-                self.__str__(), NodeSet.fromlist(failed)))
+            raise CommandFailure(
+                "Error occurred running '{}' on {}".format(str(self), NodeSet.fromlist(failed)))
         return result
 
     def _report_unit_command(self, command):
@@ -854,8 +854,7 @@ class Systemctl(JobManager):
         states = {}
         valid_states = ["active", "activating"]
         self._systemctl.unit_command.value = "is-active"
-        results = run_pcmd(
-            self._hosts, self.__str__(), False, self.timeout, None)
+        results = run_pcmd(self._hosts, str(self), False, self.timeout, None)
         for result in results:
             if result["interrupted"]:
                 states["timeout"] = result["hosts"]

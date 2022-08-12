@@ -112,10 +112,10 @@ class DaosRacerCommand(ExecutableCommand):
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
-            self.__str__(), self.host,
+            str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(self.host, self.__str__(), True, self.clush_timeout.value)
+        return_codes = pcmd(self.host, str(self), True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
