@@ -112,11 +112,12 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		SocketID:              cmd.SocketID,
 		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
 	}
-	cmd.Debugf("scm prepare request parameters: %+v", req)
 
 	if err := setSockFromCfg(cmd.Logger, cmd.config, cmd.affinitySource, &req); err != nil {
 		return errors.Wrap(err, "setting sockid in prepare request")
 	}
+
+	cmd.Debugf("scm prepare request parameters: %+v", req)
 
 	// Prepare PMem modules to be presented as pmem device files.
 	resp, err := prepareBackend(req)
@@ -166,7 +167,7 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		}
 		cmd.Infof("%s\n", bld.String())
 	default:
-		return errors.Errorf("unexpected state %q after pmem create-namespaces", state)
+		return errors.Errorf("unexpected state %q after scm prepare", state)
 	}
 
 	return nil
@@ -236,15 +237,12 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 		SocketID: cmd.SocketID,
 		Reset:    true,
 	}
-	cmd.Debugf("scm prepare request parameters: %+v", req)
 
-	// Check if only a single engine has been configured in config file and if so, only
-	// prepare the socket assigned to that engine.
-	//	if !cmd.IgnoreConfig && req.SocketID == nil {
-	//		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
-	//			return errors.Wrap(err, "setting socket id in prepare request")
-	//		}
-	//	}
+	if err := setSockFromCfg(cmd.Logger, cmd.config, cmd.affinitySource, &req); err != nil {
+		return errors.Wrap(err, "setting sockid in prepare (reset) request")
+	}
+
+	cmd.Debugf("scm prepare (reset) request parameters: %+v", req)
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
 	resp, err := resetBackend(req)
@@ -252,7 +250,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 		return err
 	}
 
-	cmd.Debugf("scm prepare response: %+v", resp)
+	cmd.Debugf("scm prepare (reset) response: %+v", resp)
 
 	state := resp.Socket.State
 
@@ -282,7 +280,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	case storage.ScmNoModules:
 		return storage.FaultScmNoModules
 	default:
-		return errors.Errorf("unexpected state %q after pmem remove-namespaces", state)
+		return errors.Errorf("unexpected state %q after scm reset", state)
 	}
 
 	return nil

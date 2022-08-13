@@ -25,14 +25,17 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+var (
+	zero uint = 0
+	one  uint = 1
+)
+
 func mockAffinitySource(l logging.Logger, e *engine.Config) (uint, error) {
 	l.Debugf("mock affinity source: assigning engine numa to its index %d", e.Index)
 	return uint(e.Index), nil
 }
 
 func TestDaosServer_preparePMem(t *testing.T) {
-	var zero uint = 0
-	var one uint = 1
 	var printNamespace strings.Builder
 	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
 	if err := pretty.PrintScmNamespaces(msns, &printNamespace); err != nil {
@@ -301,15 +304,17 @@ func TestDaosServer_resetPMem(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		noForce   bool
-		sockID    *uint
+		cmdSockID *uint
+		cfg       *config.Server
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expErr    error
 		expLogMsg string
-		expCall   *storage.ScmPrepareRequest
+		expCalls  []*storage.ScmPrepareRequest
 	}{
 		"remove regions; no consent": {
-			noForce: true,
+			noForce:  true,
+			expCalls: []*storage.ScmPrepareRequest{},
 			// prompts for confirmation and gets EOF
 			expErr: errors.New("consent not given"),
 		},
@@ -416,6 +421,92 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			},
 			expErr: errors.New("unexpected state"),
 		},
+		"sock specified in command": {
+			cmdSockID: &one,
+			expCalls: []*storage.ScmPrepareRequest{
+				{
+					Reset:    true,
+					SocketID: &one,
+				},
+			},
+			// Only checking that request was made with provided socket so expect
+			// failure.
+			expErr: errors.New("unexpected state"),
+		},
+		"sock derived from config": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expCalls: []*storage.ScmPrepareRequest{
+				{
+					Reset:    true,
+					SocketID: &zero,
+				},
+			},
+			expErr: errors.New("unexpected state"),
+		},
+		"sock derived from config; numa node pinned": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithPinnedNumaNode(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expCalls: []*storage.ScmPrepareRequest{
+				{
+					Reset:    true,
+					SocketID: &one,
+				},
+			},
+			expErr: errors.New("unexpected state"),
+		},
+		"sock derived from config; engines with different numa": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+				engine.NewConfig().WithIndex(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expErr: errors.New("unexpected state"),
+		},
+		"sock derived from config; engines with same numa": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expCalls: []*storage.ScmPrepareRequest{
+				{
+					Reset:    true,
+					SocketID: &zero,
+				},
+			},
+			expErr: errors.New("unexpected state"),
+		},
+		"sock derived from config; engines with different numa; one using ram": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassRam.String())),
+				engine.NewConfig().WithIndex(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expCalls: []*storage.ScmPrepareRequest{
+				{
+					Reset:    true,
+					SocketID: &one,
+				},
+			},
+			expErr: errors.New("unexpected state"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -430,32 +521,31 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			msp := scm.NewProvider(log, msb, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
+			if tc.cfg == nil {
+				tc.cfg = &config.Server{}
+			}
+
 			cmd := resetSCMCmd{
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
 				Force: !tc.noForce,
 			}
-			cmd.SocketID = tc.sockID
+			cmd.SocketID = tc.cmdSockID
+			cmd.config = tc.cfg
+			cmd.affinitySource = mockAffinitySource
 
 			err := cmd.resetPMem(scs.ScmPrepare)
 			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
 
-			if tc.expLogMsg != "" {
-				if !strings.Contains(buf.String(), tc.expLogMsg) {
-					t.Fatalf("expected to see %q in log, got %q", tc.expLogMsg, buf.String())
+			if tc.expCalls == nil {
+				tc.expCalls = []*storage.ScmPrepareRequest{
+					{Reset: true},
 				}
 			}
 
-			if tc.expCall == nil {
-				tc.expCall = &storage.ScmPrepareRequest{Reset: true}
-			}
-
 			msb.RLock()
-			if tc.expCall == nil {
+			if len(tc.expCalls) == 0 {
 				if len(msb.ResetCalls) != 0 {
 					t.Fatalf("unexpected number of reset calls, want 0 got %d",
 						len(msb.ResetCalls))
@@ -465,7 +555,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 					t.Fatalf("unexpected number of reset calls, want 1 got %d",
 						len(msb.ResetCalls))
 				}
-				if diff := cmp.Diff(*tc.expCall, msb.ResetCalls[0]); diff != "" {
+				if diff := cmp.Diff(*(tc.expCalls[0]), msb.ResetCalls[0]); diff != "" {
 					t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 				}
 			}
@@ -474,6 +564,16 @@ func TestDaosServer_resetPMem(t *testing.T) {
 					len(msb.PrepareCalls))
 			}
 			msb.RUnlock()
+
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.expLogMsg != "" {
+				if !strings.Contains(buf.String(), tc.expLogMsg) {
+					t.Fatalf("expected to see %q in log, got %q", tc.expLogMsg, buf.String())
+				}
+			}
 		})
 	}
 }
