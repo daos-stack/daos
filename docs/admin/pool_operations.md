@@ -146,7 +146,7 @@ Creating DAOS pool with automatic storage allocation: 50 GB total, 6,94 tier rat
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
   UUID                 : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
-  Service Ranks        : [1-3]
+  Service Ranks        : [1-5]
   Storage Ranks        : [0-15]
   Total Size           : 50 GB
   Storage tier 0 (SCM) : 3.0 GB (188 MB / rank)
@@ -154,11 +154,9 @@ Pool created with 6.00% SCM/NVMe ratio
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
-with pool service redundancy enabled by default
-(pool service replicas on ranks 1-3).
-
-If no redundancy is desired, use --nsvc=1 in order to specify that only
-a single pool service replica should be created.
+with pool service redundancy enabled by default (pool service replicas on ranks
+1-5). If no redundancy is desired, use `--properties=svc_rf:0` to set the pool
+service redundancy property to 0 (or `--nsvc=1`).
 
 Note that it is difficult to determine the usable space by the user, and
 currently we cannot provide the precise value. The usable space depends not only
@@ -380,6 +378,12 @@ When setting this property, the cell size can be specified in Bytes
 (as a number with no suffix), with a base-10 suffix like `k` or `MB`,
 or with a base-2 suffix like `ki` or `MiB`.
 
+### Service Redundancy Factor (svc\_rf)
+
+This property defines the number of faulty replicas the pool service shall try
+to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
+default. If specified during a pool create operation, this property overrides
+any `--nsvc` options. This property cannot yet be changed afterward.
 
 ## Access Control Lists
 

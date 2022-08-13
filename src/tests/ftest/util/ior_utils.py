@@ -25,9 +25,9 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         test (Test): avocado Test object
         manager (JobManager): command to manage the multi-host execution of ior
         log (str): log file.
-        hosts (list): hostfile list of hosts
-        path (str, optional): hostfile path. Defaults to None.
-        slots (int, optional): hostfile number of slots per host. Defaults to None.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
         group (str): DAOS server group name
         pool (TestPool): DAOS test pool object
         container (TestContainer): DAOS test container object.
@@ -342,7 +342,7 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=10):
+    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=30):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -451,7 +451,7 @@ class Ior:
             test (Test): avocado Test object
             manager (JobManager): command to manage the multi-host execution of ior
             log (str): log file.
-            hosts (list): hostfile list of hosts
+            hosts (NodeSet): hosts on which to run the ior command
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): hostfile number of slots per host. Defaults to None.
             namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".

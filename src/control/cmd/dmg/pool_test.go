@@ -324,6 +324,23 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
+			"Create pool with scrubbing",
+			fmt.Sprintf("pool create --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*control.PoolProperty{
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub-freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []system.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Exclude a target with single target idx",
 			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
@@ -467,6 +484,17 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDestroyReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Destroy pool with recursive",
+			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --recursive",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDestroyReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Recursive: true,
 				}),
 			}, " "),
 			nil,
