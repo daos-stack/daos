@@ -57,30 +57,47 @@ func validateVFIOSetting(targetUser string, reqDisableVFIO bool, iommuEnabled bo
 	return nil
 }
 
-func updatePrepReqParams(log logging.Logger, iommuEnabled bool, req *storage.BdevPrepareRequest) error {
-	targetUser, err := getTargetUser(req.TargetUser)
-	if err != nil {
-		return err
-	}
-	// Update target user parameter in request.
-	req.TargetUser = targetUser
-
-	if err := validateVFIOSetting(targetUser, req.DisableVFIO, iommuEnabled); err != nil {
-		return err
+func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+	if cfg.DisableHugepages {
+		return errors.New("hugepage usage has been disabled in the config file")
 	}
 
-	switch {
-	case req.DisableVFIO:
-		log.Info("VMD not enabled because VFIO disabled in command options")
-	case !iommuEnabled:
-		log.Info("VMD not enabled because IOMMU disabled on platform")
-	default:
-		// If none of the cases above match, set enable VMD flag in request.
-		req.EnableVMD = true
+	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
+
+	if req.HugePageCount == 0 && cfg.NrHugepages > 0 {
+		req.HugePageCount = cfg.NrHugepages
 	}
 
-	// Commandline PCI address lists will be comma-separated, sanitize into expected format.
+	if req.PCIAllowList == "" {
+		// Combine engine bdev_lists to use as allow list.
+		var bdevCfgs storage.TierConfigs
+		for _, ec := range cfg.Engines {
+			bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
+		}
 
+		nvmeBdevs := bdevCfgs.NVMeBdevs()
+		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", nvmeBdevs)
+		if nvmeBdevs.Len() != 0 {
+			req.PCIAllowList = nvmeBdevs.String()
+		}
+	}
+
+	if req.PCIBlockList == "" && len(cfg.BdevExclude) > 0 {
+		log.Debugf("no block list set in req so reading bdev_exclude (%q) from cfg", cfg.BdevExclude)
+		blocked, err := hardware.NewPCIAddressSet(cfg.BdevExclude...)
+		if err != nil {
+			return errors.Wrap(err, "invalid addresses in pci block list")
+		}
+		if blocked.Len() != 0 {
+			req.PCIBlockList = blocked.String()
+		}
+	}
+
+	return nil
+}
+
+// Commandline PCI address lists will be comma-separated, sanitize into expected format.
+func sanitizePCIAddrLists(req *storage.BdevPrepareRequest) error {
 	if strings.Contains(req.PCIAllowList, " ") {
 		return errors.New("expecting comma-separated list of allowed pci addresses but found space separator")
 	}
@@ -106,6 +123,7 @@ type prepareNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
+	cfgCmd          `json:"-"`
 
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
@@ -131,6 +149,50 @@ func (cmd *prepareNVMeCmd) WithPCIAllowList(al string) *prepareNVMeCmd {
 	return cmd
 }
 
+func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker hardware.IOMMUDetector, req *storage.BdevPrepareRequest) error {
+	if cfg == nil {
+		cfg = &config.Server{}
+	}
+
+	if err := sanitizePCIAddrLists(req); err != nil {
+		return errors.Wrap(err, "sanitizing cli input pci address lists")
+	}
+
+	if err := updateNVMePrepReqFromConfig(log, cfg, req); err != nil {
+		return errors.Wrap(err, "updating request parameters with config file settings")
+	}
+
+	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
+	if err != nil {
+		return errors.Wrap(err, "verifying iommu capability on host")
+	}
+
+	targetUser, err := getTargetUser(req.TargetUser)
+	if err != nil {
+		return err
+	}
+	// Update target user parameter in request.
+	req.TargetUser = targetUser
+
+	if err := validateVFIOSetting(targetUser, req.DisableVFIO, iommuEnabled); err != nil {
+		return err
+	}
+
+	switch {
+	case cfg.DisableVMD != nil && *(cfg.DisableVMD):
+		log.Info("VMD not enabled because VMD disabled in config file")
+	case req.DisableVFIO:
+		log.Info("VMD not enabled because VFIO disabled in command options")
+	case !iommuEnabled:
+		log.Info("VMD not enabled because IOMMU disabled on platform")
+	default:
+		// If none of the cases above match, set enable VMD flag in request.
+		req.EnableVMD = true
+	}
+
+	return nil
+}
+
 func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error {
 	cmd.Info("Prepare locally-attached NVMe storage...")
 
@@ -142,19 +204,14 @@ func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error 
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	iommuEnabled, err := cmd.isIOMMUEnabled()
-	if err != nil {
-		return err
-	}
-
-	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
-		return errors.Wrap(err, "updating prepare request params")
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
+		return errors.Wrap(err, "processing request parameters")
 	}
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)
 
 	// Prepare NVMe device access.
-	_, err = prepareBackend(req)
+	_, err := prepareBackend(req)
 
 	return err
 }
@@ -174,6 +231,7 @@ type resetNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
+	cfgCmd          `json:"-"`
 
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
@@ -209,19 +267,16 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 		Reset_:       true,
 	}
 
-	iommuEnabled, err := cmd.isIOMMUEnabled()
-	if err != nil {
-		return err
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
+		return errors.Wrap(err, "processing request parameters")
 	}
-
-	if err := updatePrepReqParams(cmd.Logger, iommuEnabled, &req); err != nil {
-		return errors.Wrap(err, "updating prepare request params")
-	}
+	// As reset nvme backend doesn't use NrHugepages, set to zero value.
+	req.HugePageCount = 0
 
 	cmd.Debugf("nvme prepare request parameters: %+v", req)
 
 	// Reset NVMe device access.
-	_, err = resetBackend(req)
+	_, err := resetBackend(req)
 
 	return err
 }

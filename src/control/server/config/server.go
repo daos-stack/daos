@@ -41,7 +41,6 @@ type Server struct {
 	ControlPort         int                       `yaml:"port"`
 	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
 	Engines             []*engine.Config          `yaml:"engines"`
-	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
 	DisableVMD          *bool                     `yaml:"disable_vmd"`
@@ -207,12 +206,6 @@ func (cfg *Server) WithFaultCb(cb string) *Server {
 // WithBdevExclude sets the block device exclude list.
 func (cfg *Server) WithBdevExclude(bList ...string) *Server {
 	cfg.BdevExclude = bList
-	return cfg
-}
-
-// WithBdevInclude sets the block device include list.
-func (cfg *Server) WithBdevInclude(bList ...string) *Server {
-	cfg.BdevInclude = bList
 	return cfg
 }
 
@@ -436,8 +429,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
-		f := false
-		cfg.DisableVMD = &f
+		cfg.WithDisableVMD(false)
 	}
 
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
@@ -643,16 +635,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			}
 		}
 
-		var bdevCount int
-		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
-			for _, dev := range bdevConf.Bdev.DeviceList.Devices() {
-				if seenIn, exists := seenBdevSet[dev]; exists {
-					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
-					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
-				}
-				seenBdevSet[dev] = idx
+		bdevs := engine.Storage.GetBdevs()
+		bdevCount := bdevs.Len()
+		for _, dev := range bdevs.Devices() {
+			if seenIn, exists := seenBdevSet[dev]; exists {
+				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
-			bdevCount += bdevConf.Bdev.DeviceList.Len()
+			seenBdevSet[dev] = idx
 		}
 		if seenBdevCount != -1 && bdevCount != seenBdevCount {
 			return FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)

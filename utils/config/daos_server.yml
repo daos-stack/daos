@@ -109,15 +109,6 @@
 #
 #core_dump_filter: 0x13
 #
-## NVMe SSD inclusion list
-## Immutable after running "dmg storage format".
-#
-## Only use NVMe controllers with specific PCI addresses.
-## Colons replaced by dots in PCI identifiers.
-## default: Use all the NVMe SSDs that don't have active mount points.
-#
-#bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
-#
 #
 ## NVMe SSD exclusion list
 ## Immutable after running "dmg storage format".
@@ -125,7 +116,6 @@
 ## Only use NVMe controllers with specific PCI addresses.
 ## Excludes drives listed in bdev_include and forces auto-detection to
 ## skip those drives.
-## Colons replaced by dots in PCI identifiers.
 ## default: Use all the NVMe SSDs that don't have active mount points.
 #
 #bdev_exclude: ["0000:81:00.1"]

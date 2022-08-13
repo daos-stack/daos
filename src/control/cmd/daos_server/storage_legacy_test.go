@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -24,6 +25,7 @@ import (
 func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 	for name, tc := range map[string]struct {
 		legacyCmd        *legacyPrepCmd
+		cfg              *config.Server
 		smbc             *scm.MockBackendConfig
 		bmbc             *bdev.MockBackendConfig
 		iommuDisabled    bool
@@ -169,6 +171,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			tc.legacyCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
+			tc.legacyCmd.config = tc.cfg
 			if tc.legacyCmd.NrNamespacesPerSocket == 0 {
 				tc.legacyCmd.NrNamespacesPerSocket = uint(1)
 			}

@@ -18,6 +18,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -59,6 +61,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		prepCmd       *prepareNVMeCmd
+		cfg           *config.Server
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
@@ -121,6 +124,49 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				DisableVFIO:   true,
 			},
 		},
+		"config parameters ignored": {
+			prepCmd: newPrepCmd(),
+			cfg: new(config.Server).
+				WithEngines(engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8)))).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024),
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: testNrHugePages,
+				PCIAllowList:  defaultSingleAddrList,
+				PCIBlockList:  spaceSepMultiAddrList,
+				EnableVMD:     true,
+			},
+		},
+		"config parameters applied; disable vmd": {
+			prepCmd: &prepareNVMeCmd{},
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(7))),
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8))),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 1024,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+					test.MockPCIAddr(8)),
+				PCIBlockList: test.MockPCIAddr(9),
+			},
+		},
+		"config parameters applied; disable vfio": {
+			prepCmd: newPrepCmd(),
+			cfg:     new(config.Server).WithDisableVFIO(true),
+			expErr:  errors.New("can not be disabled if running as non-root"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -137,6 +183,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			tc.prepCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
+			tc.prepCmd.config = tc.cfg
 			tc.prepCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
@@ -184,6 +231,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		relCmd        *resetNVMeCmd
+		cfg           *config.Server
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
@@ -246,6 +294,49 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			},
 		},
+		"config parameters ignored": {
+			relCmd: newRelCmd(),
+			cfg: new(config.Server).
+				WithEngines(engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8)))).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024),
+			expResetCall: &storage.BdevPrepareRequest{
+				PCIAllowList: defaultSingleAddrList,
+				PCIBlockList: spaceSepMultiAddrList,
+				EnableVMD:    true,
+				Reset_:       true,
+			},
+		},
+		"config parameters applied; disable vmd": {
+			relCmd: &resetNVMeCmd{},
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(7))),
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8))),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expResetCall: &storage.BdevPrepareRequest{
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+					test.MockPCIAddr(8)),
+				PCIBlockList: test.MockPCIAddr(9),
+				Reset_:       true,
+			},
+		},
+		"config parameters applied; disable vfio": {
+			relCmd: newRelCmd(),
+			cfg:    new(config.Server).WithDisableVFIO(true),
+			expErr: errors.New("can not be disabled if running as non-root"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -262,6 +353,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			tc.relCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
+			tc.relCmd.config = tc.cfg
 			tc.relCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})

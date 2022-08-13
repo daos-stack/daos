@@ -42,16 +42,23 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		"unable to configure privileged helper logging")
 }
 
+type iommuCheckFn func() (bool, error)
+
 type iommuChecker interface {
-	setIOMMUChecker(func() (bool, error))
+	setIOMMUChecker(iommuCheckFn)
 }
 
 type iommuCheckerCmd struct {
-	isIOMMUEnabled func() (bool, error)
+	isIOMMUEnabled iommuCheckFn
 }
 
-func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
-	icc.isIOMMUEnabled = isIOMMUEnabled
+func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	icc.isIOMMUEnabled = fn
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
+func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	return icc.isIOMMUEnabled()
 }
 
 type mainOpts struct {
@@ -141,10 +148,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(func() (bool, error) {
-				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
-			})
+			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

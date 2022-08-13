@@ -31,6 +31,7 @@ type legacyStorageCmd struct {
 type legacyPrepCmd struct {
 	cmdutil.LogCmd
 	iommuCheckerCmd
+	cfgCmd
 	scs *server.StorageControlService
 
 	Reset bool `long:"reset" description:"Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules."`
@@ -93,6 +94,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			// resetNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
 			rdc.setIOMMUChecker(cmd.isIOMMUEnabled)
+			rdc.config = cmd.config
 			errNVMe = rdc.resetNVMe(scs.NvmePrepare)
 		}
 	} else {
@@ -113,6 +115,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			// prepareNVMeCmd expects positional argument, so set it
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
 			pdc.setIOMMUChecker(cmd.isIOMMUEnabled)
+			pdc.config = cmd.config
 			errNVMe = pdc.prepareNVMe(scs.NvmePrepare)
 		}
 	}
