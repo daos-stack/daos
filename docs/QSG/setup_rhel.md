@@ -92,7 +92,7 @@ SSDs will be prepared and configured to be used by DAOS.
 
 1.  Prepare the pmem devices on Server nodes:
 
-		daos_server scm create
+		daos_server scm prepare
 
 	Sample Script:
 
@@ -114,7 +114,7 @@ SSDs will be prepared and configured to be used by DAOS.
 
 3.  Run the prepare cmdline again:
 
-		daos_server scm create
+		daos_server scm prepare
 
 	Sample Script:
 

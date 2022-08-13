@@ -9,7 +9,7 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node for the
-first time, `daos_server scm create` will set PMem storage into the necessary
+first time, `daos_server scm prepare` will set PMem storage into the necessary
 state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
@@ -397,27 +397,27 @@ PMem preparation is required once per DAOS installation.
 This step requires a reboot to enable PMem resource allocation changes to be
 read by BIOS.
 
-PMem preparation can be performed with `daos_server scm create`.
+PMem preparation can be performed with `daos_server scm prepare`.
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per socket).
 The regions are activated after BIOS reads the new resource allocations.
-Upon completion, the scm create command will prompt the admin to reboot
+Upon completion, the scm prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
-The scm create command does not initiate the reboot itself.
+The scm prepare command does not initiate the reboot itself.
 
 After running the command a reboot will be required, the command will then need
 to be run for a second time to expose the namespace device to be used by DAOS.
 
 Example usage:
 
-- `clush -w wolf-[118-121,130-133] daos_server scm create`
+- `clush -w wolf-[118-121,130-133] daos_server scm prepare`
   after running, the user should be prompted for a reboot.
 
 - `clush -w wolf-[118-121,130-133] reboot`
 
-- `clush -w wolf-[118-121,130-133] daos_server scm create`
+- `clush -w wolf-[118-121,130-133] daos_server scm prepare`
   after running, PMem namespaces (/dev/pmemX block devices created on the new SCM
   regions) should be available on each of the hosts.
 
@@ -429,7 +429,7 @@ Upon successful creation of the PMem namespaces, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
 If required, the PMem namespaces can be destroyed with the command
-`daos_server scm destroy`.
+`daos_server scm reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -443,7 +443,7 @@ allocations.
 
 #### Multiple PMem namespaces per socket (Experimental)
 
-By default the `daos_server scm create` command will create one PMem namespace on each PMem
+By default the `daos_server scm prepare` command will create one PMem namespace on each PMem
 region.
 A single PMem AppDirect region will be created for each NUMA node (typically one NUMA node per CPU
 socket) in interleaved mode (which indicates that all PMem modules attached to a particular socket
@@ -451,13 +451,13 @@ will be used in a single set/region).
 Therefore by default on a dual-socket platform, two regions and two namespaces will be created.
 
 Multiple PMem namespaces can be created on a single region (one per socket) by specifying a value
-of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server scm create`
+of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server scm prepare`
 subcommand.
 
 Example usage:
 
 ```bash
-$ daos_server scm create -f -S 4
+$ daos_server scm prepare -f -S 4
 Prepare locally-attached SCM...
 Memory allocation goals for PMem will be changed and namespaces modified, this may be a destructive
 operation. Please ensure namespaces are unmounted and locally attached PMem modules are not in use.
@@ -503,6 +503,7 @@ network.
     non-'daos_server' user, even as root) will cause access failures.
 
 NVMe SSDs need to be made accessible first by running `daos_server nvme prepare`.
+
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `--disable-vfio` in the nvme prepare command to
 fallback to using UIO user-space driver with SPDK instead.
@@ -540,7 +541,11 @@ configuration file to identified NVMe SSDs.
 Devices with the same NUMA node/socket should be used in the same per-engine
 section of the server configuration file for best performance.
 
-For further info on command usage run `dmg storage --help`.
+For further info on dmg storage command usage run `dmg storage --help`.
+
+To release the NVMe drives from the user-space drivers and bind them back to the kernel "nvme"
+driver so they can be used by the OS (and reappear as /dev/nvme\* block devices), run
+`daos_server nvme reset` with any relevant options (see command help for details).
 
 #### Health
 
