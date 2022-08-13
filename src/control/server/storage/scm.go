@@ -26,33 +26,48 @@ type ScmState int
 const (
 	// ScmStateUnknown represents the default (unknown) state.
 	ScmStateUnknown ScmState = iota
-	// ScmStateNoRegions indicates that PMem modules exist, but no regions have been created.
-	ScmStateNoRegions
-	// ScmStateFreeCapacity indicates that PMem modules exist with configured regions with
-	// available free capacity.
-	ScmStateFreeCapacity
-	// ScmStateNoFreeCapacity indicates that PMem modules exist with configured regions and no free
-	// capacity.
-	ScmStateNoFreeCapacity
-	// ScmStateNotInterleaved indicates that PMem modules exist with configured regions but not
-	// in AppDirect interleaved/persistent mirror mode.
-	ScmStateNotInterleaved
-	// ScmStateNoModules indicates that no PMem modules exist.
-	ScmStateNoModules
+	// ScmNoRegions indicates that PMem modules exist, but no regions have been created.
+	ScmNoRegions
+	// ScmFreeCap indicates that PMem AppDirect regions have free capacity.
+	ScmFreeCap
+	// ScmNoFreeCap indicates that PMem AppDirect regions have no free capacity.
+	ScmNoFreeCap
+	// ScmNotInterleaved indicates that a PMem AppDirect region is in non-interleaved mode.
+	ScmNotInterleaved
+	// ScmNoModules indicates that no PMem modules exist.
+	ScmNoModules
+	// ScmNotHealthy indicates a PMem AppDirect region is showing health state as "Error".
+	ScmNotHealthy
+	// ScmPartFreeCap indicates a PMem AppDirect region has only partial free capacity.
+	ScmPartFreeCap
+	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
+	ScmUnknownMode
 )
 
 func (ss ScmState) String() string {
-	return map[ScmState]string{
-		ScmStateUnknown:        "Unknown",
-		ScmStateNoRegions:      "NoRegions",
-		ScmStateFreeCapacity:   "FreeCapacity",
-		ScmStateNoFreeCapacity: "NoFreeCapacity",
-		ScmStateNotInterleaved: "NotInterleaved",
-		ScmStateNoModules:      "NoModules",
-	}[ss]
+	if val, exists := map[ScmState]string{
+		ScmStateUnknown:   "Unknown",
+		ScmNoRegions:      "NoRegions",
+		ScmFreeCap:        "FreeCapacity",
+		ScmNoFreeCap:      "NoFreeCapacity",
+		ScmNotInterleaved: "NotInterleaved",
+		ScmNoModules:      "NoModules",
+		ScmNotHealthy:     "NotHealthy",
+		ScmPartFreeCap:    "PartialFreeCapacity",
+		ScmUnknownMode:    "UnknownMode",
+	}[ss]; exists {
+		return val
+	}
+	return "Unknown"
 }
 
 type (
+	// ScmSocketState indicates the state of PMem for either a specific socket or all sockets.
+	ScmSocketState struct {
+		SocketID *uint // If set, state applies to a specific socket.
+		State    ScmState
+	}
+
 	// ScmModule represents a PMem DIMM.
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
@@ -84,7 +99,7 @@ type (
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
 	ScmMountPoints []*ScmMountPoint
 
-	// ScmNamespace represents a mapping of AppDirect regions to block device files.
+	// ScmNamespace is a block device exposing a PMem AppDirect region.
 	ScmNamespace struct {
 		UUID        string         `json:"uuid" hash:"ignore"`
 		BlockDevice string         `json:"blockdev"`
@@ -94,7 +109,7 @@ type (
 		Mount       *ScmMountPoint `json:"mount"`
 	}
 
-	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
+	// ScmNamespaces is a type alias for a slice of ScmNamespace references.
 	ScmNamespaces []*ScmNamespace
 
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
@@ -253,13 +268,14 @@ type (
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
 	ScmPrepareRequest struct {
 		pbin.ForwardableRequest
-		Reset                 bool // Clear PMem namespaces and regions.
-		NrNamespacesPerSocket uint // Request this many PMem namespaces per socket.
+		Reset                 bool  // Clear PMem namespaces and regions.
+		NrNamespacesPerSocket uint  // Request this many PMem namespaces per socket.
+		SocketID              *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.
 	ScmPrepareResponse struct {
-		State          ScmState
+		Socket         ScmSocketState
 		RebootRequired bool
 		Namespaces     ScmNamespaces
 	}
@@ -267,11 +283,11 @@ type (
 	// ScmScanRequest defines the parameters for a Scan operation.
 	ScmScanRequest struct {
 		pbin.ForwardableRequest
+		SocketID *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.
 	ScmScanResponse struct {
-		State      ScmState
 		Modules    ScmModules
 		Namespaces ScmNamespaces
 	}

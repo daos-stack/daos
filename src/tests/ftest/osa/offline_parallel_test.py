@@ -34,8 +34,8 @@ class OSAOfflineParallelTest(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = True

@@ -58,13 +58,17 @@ struct pool_iv_prop {
 	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
+	uint64_t	pip_scrub_mode;
+	uint64_t	pip_scrub_freq;
+	uint64_t	pip_scrub_thresh;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
-	uint32_t	pip_redun_fac;
+	uint64_t	pip_redun_fac;
 	uint32_t	pip_ec_pda;
 	uint32_t	pip_rp_pda;
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
+	uint64_t	pip_svc_redun_fac;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -122,7 +126,8 @@ int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler_v4(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
@@ -161,12 +166,14 @@ void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c
  */
-int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
-				  d_rank_list_t *failed, d_rank_list_t *alt);
+int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
+			     d_rank_t self, d_rank_list_t **to_add_out,
+			     d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			     uint32_t *required_buf_size);
@@ -194,11 +201,6 @@ int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
 				     uuid_t *srv_cont_hdl,
 				     uuid_t *srv_pool_hdl);
-/*
- * srv_pool_scrub.c
- */
-int ds_start_scrubbing_ult(struct ds_pool_child *child);
-void ds_stop_scrubbing_ult(struct ds_pool_child *child);
 
 /*
  * srv_metrics.c

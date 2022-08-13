@@ -122,12 +122,12 @@ func PoolProperties() PoolPropertyMap {
 				Number:      daos.PoolPropertyRedunFac,
 				Description: "Pool redundancy factor",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-4)", s)
+					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-%d)", s, daos.PoolRedunFacMax)
 					rfVal, err := strconv.ParseUint(s, 10, 64)
 					if err != nil {
 						return nil, rbErr
 					}
-					if rfVal > 4 {
+					if rfVal > daos.PoolRedunFacMax {
 						return nil, rbErr
 					}
 					return &PoolPropertyValue{rfVal}, nil
@@ -231,6 +231,86 @@ func PoolProperties() PoolPropertyMap {
 				"in progress": daos.PoolUpgradeStatusInProgress,
 				"completed":   daos.PoolUpgradeStatusCompleted,
 				"failed":      daos.PoolUpgradeStatusFailed,
+			},
+		},
+		"scrub": {
+			Property: PoolProperty{
+				Number:      daos.PoolPropertyScrubMode,
+				Description: "Checksum scrubbing mode",
+			},
+			values: map[string]uint64{
+				"off":   daos.PoolScrubModeOff,
+				"lazy":  daos.PoolScrubModeLazy,
+				"timed": daos.PoolScrubModeTimed,
+			},
+		},
+		"scrub-freq": {
+			Property: PoolProperty{
+				Number:      daos.PoolPropertyScrubFreq,
+				Description: "Checksum scrubbing frequency",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
+					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"scrub-thresh": {
+			Property: PoolProperty{
+				Number:      daos.PoolPropertyScrubThresh,
+				Description: "Checksum scrubbing threshold",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Scrubbing Threshold value %s", s)
+					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"svc_rf": {
+			Property: PoolProperty{
+				Number:      daos.PoolPropertySvcRedunFac,
+				Description: "Pool service redundancy factor",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					svcRFErr := errors.Errorf("invalid service redundancy factor value %s (valid values: 0-%d)", s, daos.PoolSvcRedunFacMax)
+					svcRFVal, err := strconv.ParseUint(s, 10, 64)
+					if err != nil {
+						return nil, svcRFErr
+					}
+					if svcRFVal > daos.PoolSvcRedunFacMax {
+						return nil, svcRFErr
+					}
+					return &PoolPropertyValue{svcRFVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
 			},
 		},
 	}

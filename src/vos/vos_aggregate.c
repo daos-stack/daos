@@ -239,7 +239,7 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 	if (rc)
 		return rc;
 
-	rc = vos_iter_delete(ih, NULL);
+	rc = vos_iter_process(ih, VOS_ITER_PROC_OP_DELETE, NULL);
 	if (rc != 0)
 		rc = umem_tx_abort(umm, rc);
 	else
@@ -1436,7 +1436,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERTF(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi, "phy_ent "DF_RECT" off="DF_X64"\n",
 			  DP_RECT(&phy_ent->pe_rect), phy_ent->pe_off);
-		D_ASSERT(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
+		D_ASSERTF(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi,
+			  "phy_ent->pe_remove=%d phy_ent->pe_off=" DF_X64 " rect=" DF_RECT
+			  " mw=" DF_EXT "\n",
+			  phy_ent->pe_remove, phy_ent->pe_off, DP_RECT(&rect), DP_EXT(&mw->mw_ext));
 
 		/*
 		 * The physical entry spans window end, but is fully covered

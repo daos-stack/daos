@@ -7,16 +7,16 @@
 package scm
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
-	"regexp"
-	"strings"
+	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -24,22 +24,14 @@ import (
 
 const (
 	minNrNssPerSocket = 1
-	maxNrNssPerSocket = 8
+	maxNrNssPerSocket = 4
 
-	createNsAnyRegion = -1
+	sockAny = -1 // Select all socket IDs.
 
 	alignmentBoundaryBytes = humanize.MiByte * 2
 )
 
-var badIpmctlVers = []semVer{
-	// https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
-	{"02", "00", "00", "3809"},
-	{"02", "00", "00", "3814"},
-	{"02", "00", "00", "3816"},
-}
-
 type (
-	semVer      []string
 	runCmdFn    func(string) (string, error)
 	lookPathFn  func(string) (string, error)
 	runCmdError struct {
@@ -47,20 +39,6 @@ type (
 		stdout  string
 	}
 )
-
-func (sv semVer) String() string {
-	return strings.Join(sv, ".")
-}
-
-func validateSemVer(sv semVer, badList []semVer) error {
-	for _, badVer := range badList {
-		if sv.String() == badVer.String() {
-			return FaultIpmctlBadVersion(sv.String())
-		}
-	}
-
-	return nil
-}
 
 func (rce *runCmdError) Error() string {
 	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
@@ -83,25 +61,6 @@ func run(cmd string) (string, error) {
 	return string(out), nil
 }
 
-// constants for ipmctl commandline calls
-//
-// Manage AppDirect/Interleaved memory allocation goals across all DCPMMs on a system.
-const (
-	cmdShowIpmctlVersion = "ipmctl version"
-	cmdShowRegions       = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	cmdCreateRegions     = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
-	cmdRemoveRegions     = "ipmctl create -f -goal MemoryMode=100"
-	outScmNoRegions      = "no Regions defined"
-)
-
-// constants for ndctl commandline calls
-const (
-	cmdCreateNamespace  = "ndctl create-namespace"  // returns json ns info
-	cmdListNamespaces   = "ndctl list -N -v"        // returns json ns info
-	cmdDisableNamespace = "ndctl disable-namespace" // expect device name param
-	cmdDestroyNamespace = "ndctl destroy-namespace" // expect device name param
-)
-
 type cmdRunner struct {
 	log       logging.Logger
 	binding   ipmctl.IpmCtl
@@ -110,120 +69,8 @@ type cmdRunner struct {
 	checkOnce sync.Once
 }
 
-// checkIpmctl verifies ipmctl application version is acceptable.
-func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
-	cr.checkOnce.Do(func() {
-		cmdOut, err := cr.runCmd(cmdShowIpmctlVersion)
-		if err != nil {
-			errOut = errors.WithMessage(err, "show version cmd")
-			return
-		}
-
-		re := regexp.MustCompile(`(\d{2}).(\d{2}).(\d{2}).(\d{4})`)
-		matched := re.FindStringSubmatch(cmdOut)
-
-		if matched == nil {
-			errOut = errors.Errorf("could not read ipmctl version (%s)", cmdOut)
-			return
-		}
-
-		ipmctlBinVer := matched[1:]
-		cr.log.Debugf("ipmctl binary semver: %v", ipmctlBinVer)
-
-		errOut = validateSemVer(ipmctlBinVer, badList)
-	})
-
-	return
-}
-
-func (cr *cmdRunner) showRegions() (string, error) {
-	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
-		return "", errors.WithMessage(err, "checkIpmctl")
-	}
-
-	out, err := cr.runCmd(cmdShowRegions)
-	if err != nil {
-		return "", errors.Wrapf(err, "cmd %q", cmdShowRegions)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmdShowRegions, out)
-
-	return out, nil
-}
-
-func (cr *cmdRunner) createRegions() error {
-	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
-		return errors.WithMessage(err, "checkIpmctl")
-	}
-
-	cr.log.Debug("set interleaved appdirect goal to create regions")
-
-	out, err := cr.runCmd(cmdCreateRegions)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmdCreateRegions)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmdCreateRegions, out)
-
-	return nil
-}
-
-func (cr *cmdRunner) removeRegions() error {
-	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
-		return errors.WithMessage(err, "checkIpmctl")
-	}
-
-	cr.log.Debug("set memory mode goal to remove regions")
-
-	out, err := cr.runCmd(cmdRemoveRegions)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmdRemoveRegions)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmdRemoveRegions, out)
-
-	return nil
-}
-
-func (cr *cmdRunner) deleteGoals() error {
-	cr.log.Debug("delete any existing resource allocation goals")
-	return errors.Wrap(cr.binding.DeleteConfigGoals(cr.log), "failed to delete config goals")
-}
-
-func (cr *cmdRunner) createNamespace(regionIdx int, sizeBytes uint64) (string, error) {
-	cmd := cmdCreateNamespace
-	if regionIdx > createNsAnyRegion {
-		cmd = fmt.Sprintf("%s --region %d", cmd, regionIdx)
-	}
-	if sizeBytes > 0 {
-		cmd = fmt.Sprintf("%s --size %d", cmd, sizeBytes)
-	}
-
-	return cr.runCmd(cmd)
-}
-
-func (cr *cmdRunner) listNamespaces() (string, error) {
-	return cr.runCmd(cmdListNamespaces)
-}
-
-func (cr *cmdRunner) disableNamespace(name string) (string, error) {
-	return cr.runCmd(fmt.Sprintf("%s %s", cmdDisableNamespace, name))
-}
-
-func (cr *cmdRunner) destroyNamespace(name string) (string, error) {
-	return cr.runCmd(fmt.Sprintf("%s %s", cmdDestroyNamespace, name))
-}
-
-// checkNdctl verifies ndctl application is installed.
-func (cr *cmdRunner) checkNdctl() (errOut error) {
-	cr.checkOnce.Do(func() {
-		if _, err := cr.lookPath("ndctl"); err != nil {
-			errOut = FaultMissingNdctl
-		}
-	})
-
-	return
-}
-
 // getModules scans the storage host for PMem modules and returns a slice of them.
-func (cr *cmdRunner) getModules() (storage.ScmModules, error) {
+func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
 	discovery, err := cr.binding.GetModules(cr.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover pmem modules")
@@ -232,6 +79,10 @@ func (cr *cmdRunner) getModules() (storage.ScmModules, error) {
 
 	modules := make(storage.ScmModules, 0, len(discovery))
 	for _, d := range discovery {
+		if sockID != sockAny && int(d.Socket_id) != sockID {
+			continue // Skip module not bound to socket specified.
+		}
+
 		modules = append(modules, &storage.ScmModule{
 			ChannelID:        uint32(d.Channel_id),
 			ChannelPosition:  uint32(d.Channel_pos),
@@ -248,219 +99,196 @@ func (cr *cmdRunner) getModules() (storage.ScmModules, error) {
 	return modules, nil
 }
 
-func scmFirmwareUpdateStatusFromIpmctl(ipmctlStatus uint32) storage.ScmFirmwareUpdateStatus {
-	switch ipmctlStatus {
-	case ipmctl.FWUpdateStatusFailed:
-		return storage.ScmUpdateStatusFailed
-	case ipmctl.FWUpdateStatusSuccess:
-		return storage.ScmUpdateStatusSuccess
-	case ipmctl.FWUpdateStatusStaged:
-		return storage.ScmUpdateStatusStaged
+func checkStateHasSock(sockState storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
+	if sockState.SocketID == nil {
+		return errors.Errorf("expecting socket id with %s state", sockState.State)
 	}
-	return storage.ScmUpdateStatusUnknown
+	return faultFunc(*sockState.SocketID)
 }
 
-func uidStringToIpmctl(uidStr string) (ipmctl.DeviceUID, error) {
-	var uid ipmctl.DeviceUID
-	n := copy(uid[:], uidStr)
-	if n == 0 {
-		return ipmctl.DeviceUID{}, errors.New("invalid SCM module UID")
-	}
-	return uid, nil
-}
-
-// noFirmwareVersion is the version string reported if there is no firmware version
-const noFirmwareVersion = "00.00.00.0000"
-
-// GetFirmwareStatus gets the current firmware status for a specific device.
-func (cr *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
-	uid, err := uidStringToIpmctl(deviceUID)
-	if err != nil {
-		return nil, errors.New("invalid SCM module UID")
-	}
-	info, err := cr.binding.GetFirmwareInfo(uid)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get firmware info for device %q", deviceUID)
+func checkStateForErrors(sockState storage.ScmSocketState) error {
+	switch sockState.State {
+	case storage.ScmNotInterleaved:
+		// Non-interleaved AppDirect memory mode is unsupported.
+		return checkStateHasSock(sockState, storage.FaultScmNotInterleaved)
+	case storage.ScmNotHealthy:
+		// A PMem AppDirect region is not healthy.
+		return checkStateHasSock(sockState, storage.FaultScmNotHealthy)
+	case storage.ScmPartFreeCap:
+		// Only create namespaces if none already exist, partial state should not be
+		// supported and user should reset PMem before trying again.
+		return checkStateHasSock(sockState, storage.FaultScmPartialCapacity)
+	case storage.ScmUnknownMode:
+		// A PMem AppDirect region is reporting unsupported value for persistent memory
+		// type.
+		return checkStateHasSock(sockState, storage.FaultScmUnknownMemoryMode)
+	case storage.ScmStateUnknown:
+		return errors.New("unknown scm state")
 	}
 
-	// Avoid displaying the staged version string if there is no staged version
-	stagedVersion := info.StagedFWVersion.String()
-	if stagedVersion == noFirmwareVersion {
-		stagedVersion = ""
-	}
-
-	return &storage.ScmFirmwareInfo{
-		ActiveVersion:     info.ActiveFWVersion.String(),
-		StagedVersion:     stagedVersion,
-		ImageMaxSizeBytes: info.FWImageMaxSize * 4096,
-		UpdateStatus:      scmFirmwareUpdateStatusFromIpmctl(info.FWUpdateStatus),
-	}, nil
-}
-
-// UpdateFirmware attempts to update the firmware on the given device with the binary at
-// the path provided.
-func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error {
-	uid, err := uidStringToIpmctl(deviceUID)
-	if err != nil {
-		return errors.New("invalid SCM module UID")
-	}
-	// Force option permits minor version downgrade.
-	err = cr.binding.UpdateFirmware(uid, firmwarePath, true)
-	if err != nil {
-		return errors.Wrapf(err, "failed to update firmware for device %q", deviceUID)
-	}
 	return nil
 }
 
-// parseShowRegionOutput takes output from ipmctl and returns free capacity.
-//
-// external tool commands return:
-// $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
-//
-// ---ISetID=0x2aba7f4828ef2ccc---
-//    PersistentMemoryType=AppDirect
-//    FreeCapacity=3012.0 GiB
-// ---ISetID=0x81187f4881f02ccc---
-//    PersistentMemoryType=AppDirect
-//    FreeCapacity=3012.0 GiB
-//
-// FIXME DAOS-10173: When libipmctl nvm_get_region() is fixed so that it doesn't take
-//                   a minute to return, replace this with getRegionState() below to use
-//                   libipmctl directly through bindings.
-func parseShowRegionOutput(log logging.Logger, text string) (regionFreeBytes []uint64, err error) {
-	defer func() {
-		err = errors.Wrap(err, "parse show regions cmd output")
-	}()
-
-	lines := strings.Split(strings.TrimSpace(text), "\n")
-	if len(lines) < 3 {
-		return nil, errors.Errorf("expecting at least 3 lines, got %d", len(lines))
+func (cr *cmdRunner) handleFreeCapacity(sockSelector int, nrNsPerSock uint, regions Regions) (storage.ScmNamespaces, *storage.ScmSocketState, error) {
+	regionPerSocket, err := mapRegionsToSocket(regions)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "mapRegionsToSocket")
 	}
 
-	var appDirect bool
-	for _, line := range lines {
-		entry := strings.TrimSpace(line)
-
-		kv := strings.Split(entry, "=")
-		if len(kv) != 2 {
-			continue
-		}
-
-		switch kv[0] {
-		case "PersistentMemoryType":
-			if kv[1] == "AppDirectNotInterleaved" {
-				return nil, storage.FaultScmNotInterleaved
-			}
-			if kv[1] == "AppDirect" {
-				appDirect = true
-				continue
-			}
-		case "FreeCapacity":
-			if !appDirect {
-				continue
-			}
-			fc, err := humanize.ParseBytes(kv[1])
-			if err != nil {
-				return nil, err
-			}
-			regionFreeBytes = append(regionFreeBytes, fc)
-		}
-		appDirect = false
+	if err := cr.createNamespaces(regionPerSocket, nrNsPerSock); err != nil {
+		return nil, nil, errors.Wrap(err, "createNamespaces")
 	}
 
-	return regionFreeBytes, nil
+	nss, err := cr.getNamespaces(sockSelector)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "getNamespaces")
+	}
+
+	cr.log.Debug("namespaces created, fetching updated region details")
+
+	rs, err := cr.getRegions(sockSelector)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "getRegions")
+	}
+	if len(rs) == 0 {
+		return nil, nil, errors.New("getRegions: expected a nonzero number of regions")
+	}
+	regions = rs
+
+	// Retrieve new state from up-to-date region details.
+	ss, err := getPMemState(cr.log, regions)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "getPMemState")
+	}
+
+	if ss.State != storage.ScmNoFreeCap {
+		return nil, nil, errors.Errorf("unexpected state from getPMemState, want %s got %s",
+			storage.ScmNoFreeCap, ss.State)
+	}
+
+	return nss, ss, nil
 }
 
-func (cr *cmdRunner) getRegionFreeSpace() ([]uint64, error) {
-	out, err := cr.showRegions()
-	if err != nil {
-		return nil, errors.WithMessage(err, "show regions cmd")
+func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state storage.ScmState, namespaces storage.ScmNamespaces, regions Regions) (*storage.ScmPrepareResponse, error) {
+	cr.log.Debugf("process actionable state %s", state)
+
+	// If socket ID set in request, only process PMem attached to that socket.
+	sockSelector := sockAny
+	if req.SocketID != nil {
+		sockSelector = int(*req.SocketID)
 	}
 
-	cr.log.Debugf("show region output: %s\n", out)
-
-	if strings.Contains(out, outScmNoRegions) {
-		return nil, nil
+	// Regardless of actionable state, remove any previously applied resource allocation goals.
+	if err := cr.deleteGoals(sockSelector); err != nil {
+		return nil, err
 	}
 
-	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
-	if err != nil {
-		return nil, errors.Wrap(err, "parse show region cmd output")
-	}
-	if len(regionFreeBytes) == 0 {
-		return nil, errors.New("no AppDirect PMem regions parsed")
+	resp := &storage.ScmPrepareResponse{
+		Namespaces: namespaces,
+		Socket: storage.ScmSocketState{
+			State:    state,
+			SocketID: req.SocketID,
+		},
 	}
 
-	return regionFreeBytes, nil
+	switch state {
+	case storage.ScmNoRegions:
+		// No regions exist, create interleaved AppDirect PMem regions.
+		cr.log.Info("Creating PMem regions...")
+		if err := cr.createRegions(sockSelector); err != nil {
+			return nil, errors.Wrap(err, "createRegions")
+		}
+		resp.RebootRequired = true
+	case storage.ScmFreeCap:
+		// Regions exist but no namespaces, create block devices on PMem regions and
+		// populate response with namespace details.
+		cr.log.Info("Creating PMem namespaces...")
+		nss, sockState, err := cr.handleFreeCapacity(sockSelector, req.NrNamespacesPerSocket, regions)
+		if err != nil {
+			return nil, errors.Wrap(err, "handleFreeCapacity")
+		}
+		resp.Namespaces = nss
+		resp.Socket = *sockState
+	case storage.ScmNoFreeCap:
+		// Regions and namespaces exist so no changes to response necessary.
+		cr.log.Info("PMem namespaces already exist.")
+	default:
+		return nil, errors.Errorf("unhandled scm state %q (%d)", state, state)
+	}
+
+	return resp, nil
 }
 
-func (cr *cmdRunner) getRegionState() (storage.ScmState, error) {
-	regionFreeBytes, err := cr.getRegionFreeSpace()
-	if err != nil {
-		if err == storage.FaultScmNotInterleaved {
-			return storage.ScmStateNotInterleaved, nil // state handled in callen
-		}
-		return storage.ScmStateUnknown, err
+// Verify state is as expected and that created namespaces' block device names match the socket ID
+// of the underlying PMem region and that the the expected number of namespaces exist per region.
+func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Regions, nrNsPerSock uint) error {
+	if resp == nil {
+		return errors.New("verifyPMem received nil ScmScanResponse")
 	}
 
-	if len(regionFreeBytes) == 0 {
-		return storage.ScmStateNoRegions, nil
+	switch resp.Socket.State {
+	case storage.ScmNoRegions:
+		return nil
+	case storage.ScmNoFreeCap:
+	default:
+		return errors.Errorf("unexpected state in response, want %s|%s got %s",
+			storage.ScmNoRegions, storage.ScmNoFreeCap, resp.Socket.State)
 	}
 
-	for _, freeBytes := range regionFreeBytes {
-		if freeBytes > 0 {
-			cr.log.Debugf("PMem regions have %v free bytes", regionFreeBytes)
-			return storage.ScmStateFreeCapacity, nil
-		}
-	}
+	nsMajMinMap := make(map[int][]int)
 
-	cr.log.Debug("PMem regions have no free capacity")
-	return storage.ScmStateNoFreeCapacity, nil
-}
-
-// getRegionStateFromBindings establishes state of PMem by fetching region detail from ipmctl bindings and checking
-// memory mode types and free capacity.
-func (cr *cmdRunner) getRegionStateFromBindings() (storage.ScmState, error) {
-	regions, err := cr.binding.GetRegions(cr.log)
-	if err != nil {
-		return storage.ScmStateUnknown, errors.Wrap(err, "failed to discover PMem regions")
-	}
-	cr.log.Debugf("discovered pmem regions: %+v", regions)
-
-	if len(regions) == 0 {
-		return storage.ScmStateNoRegions, nil
-	}
-
-	var totalFree uint64
-	for _, region := range regions {
-		health := ipmctl.PMemRegionHealth(region.Health)
-		if health != ipmctl.RegionHealthNormal && health != ipmctl.RegionHealthPending {
-			cr.log.Errorf("unexpected PMem region health %q, want %q",
-				health, ipmctl.RegionHealthNormal)
+	// Verify each namespace has valid NUMA node and region ID
+	for _, ns := range resp.Namespaces {
+		matches := nsMajMinRegex.FindStringSubmatch(ns.Name)
+		if len(matches) != 3 {
+			return errors.Errorf("unexpected format of namespace dev string: %q", ns.Name)
 		}
 
-		regionType := ipmctl.PMemRegionType(region.Type)
-		switch regionType {
-		case ipmctl.RegionTypeNotInterleaved:
-			return storage.ScmStateNotInterleaved, nil
-		case ipmctl.RegionTypeAppDirect:
-		default:
-			return storage.ScmStateUnknown, errors.Errorf(
-				"unexpected PMem region type %q, want %q", regionType,
-				ipmctl.RegionTypeAppDirect)
+		maj, err := strconv.Atoi(matches[1])
+		if err != nil {
+			return errors.Wrapf(err, "parse major namespace version (%q)", ns.Name)
 		}
 
-		if region.Free_capacity > 0 {
-			totalFree += region.Free_capacity
+		if uint32(maj) != ns.NumaNode {
+			return errors.Errorf("expected namespace major version (%d) to equal numa node (%d)",
+				maj, ns.NumaNode)
+		}
+
+		min, err := strconv.Atoi(matches[2])
+		if err != nil {
+			return errors.Wrapf(err, "parse minor namespace version (%q)", ns.Name)
+		}
+
+		if maj < 0 || min < 0 {
+			return errors.Errorf("unexpected negative value in regex matches %v", matches)
+		}
+
+		log.Debugf("found namespace %d.%d on numa %d", maj, min, ns.NumaNode)
+
+		nsMajMinMap[maj] = append(nsMajMinMap[maj], min)
+		sort.Ints(nsMajMinMap[maj])
+	}
+
+	if len(nsMajMinMap) != len(regions) {
+		return errors.Errorf("expected num namespace major versions (%d) to equal num regions (%d)",
+			len(nsMajMinMap), len(regions))
+	}
+
+	var keys []int
+	for k := range nsMajMinMap {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	for _, maj := range keys {
+		mins := nsMajMinMap[maj]
+		if len(mins) != int(nrNsPerSock) {
+			return errors.Errorf("unexpected num namespaces on numa %d, want %d got %d",
+				maj, nrNsPerSock, len(mins))
 		}
 	}
 
-	if totalFree > 0 {
-		cr.log.Debugf("PMem regions have %s free capacity", humanize.Bytes(totalFree))
-		return storage.ScmStateFreeCapacity, nil
-	}
-	cr.log.Debug("PMem regions have no free capacity")
-	return storage.ScmStateNoFreeCapacity, nil
+	return nil
 }
 
 // prep executes commands to configure PMem modules into AppDirect interleaved
@@ -469,19 +297,31 @@ func (cr *cmdRunner) getRegionStateFromBindings() (storage.ScmState, error) {
 // State is established based on presence and free capacity of regions.
 //
 // Actions based on state:
-// * no modules exist -> return state
+// * regions exist but region not in interleaved mode -> return error
+// * regions exist but region not in healthy state -> return error
+// * regions exist but region has only partial capacity -> return error
+// * regions exist but region has unsupported memory mode -> return error
 // * modules exist and no regions -> create all regions (needs reboot)
-// * regions exist but regions not in interleaved mode -> return state
 // * regions exist and free capacity -> create all namespaces, return created
 // * regions exist but no free capacity -> no-op, return namespaces
-func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmScanResponse) (resp *storage.ScmPrepareResponse, err error) {
-	state := scanRes.State
-	resp = &storage.ScmPrepareResponse{State: state}
+func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	if scanRes == nil {
+		return nil, errors.New("nil scan response")
+	}
+	if len(scanRes.Modules) == 0 {
+		cr.log.Info("Skip SCM prep, no PMem modules.")
+		return &storage.ScmPrepareResponse{
+			Namespaces: storage.ScmNamespaces{},
+			Socket: storage.ScmSocketState{
+				State: storage.ScmNoModules,
+			},
+		}, nil
+	}
 
-	cr.log.Debugf("scm backend prep: state %q", state)
-
-	if err = cr.deleteGoals(); err != nil {
-		return nil, err
+	// If socket ID set in request, only process PMem attached to that socket.
+	sockSelector := sockAny
+	if req.SocketID != nil {
+		sockSelector = int(*req.SocketID)
 	}
 
 	// Handle unspecified NrNamespacesPerSocket in request.
@@ -489,49 +329,38 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		req.NrNamespacesPerSocket = minNrNssPerSocket
 	}
 
-	switch state {
-	case storage.ScmStateNotInterleaved:
-		// Non-interleaved AppDirect memory mode is unsupported.
-		err = storage.FaultScmNotInterleaved
-	case storage.ScmStateNoRegions:
-		// No regions exist, create interleaved AppDirect PMem regions.
-		if err = cr.createRegions(); err != nil {
-			break
-		}
-		resp.RebootRequired = true
-	case storage.ScmStateFreeCapacity:
-		// Regions exist but no namespaces, create block devices on PMem regions.
-		resp.Namespaces, err = cr.createNamespaces(req.NrNamespacesPerSocket)
-		if err != nil {
-			break
-		}
-		resp.State = storage.ScmStateNoFreeCapacity
-	case storage.ScmStateNoFreeCapacity:
-		// Regions and namespaces exist so sanity check number of namespaces matches the
-		// number requested before returning details.
-		var regionFreeBytes []uint64
-		regionFreeBytes, err = cr.getRegionFreeSpace()
-		if err != nil {
-			break
-		}
+	cr.log.Info("Reading PMem configuration...")
 
-		nrRegions := uint(len(regionFreeBytes))
-		nrNamespaces := uint(len(scanRes.Namespaces))
-
-		// Assume 1:1 mapping between region and NUMA node.
-		if (nrRegions * req.NrNamespacesPerSocket) != nrNamespaces {
-			err = storage.FaultScmNamespacesNrMismatch(req.NrNamespacesPerSocket,
-				nrRegions, nrNamespaces)
-			break
-		}
-		resp.Namespaces = scanRes.Namespaces
-	default:
-		err = errors.Errorf("unhandled scm state %q", state)
-	}
-
+	regions, err := cr.getRegions(sockSelector)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "getRegions")
 	}
+
+	sockState, err := getPMemState(cr.log, regions)
+	if err != nil {
+		return nil, errors.Wrap(err, "getPMemState")
+	}
+
+	cr.log.Debugf("scm backend prep: req %+v, pmem state %+v", req, sockState)
+
+	// First identify any socket specific unexpected state that should trigger an immediate
+	// error response.
+	if err := checkStateForErrors(*sockState); err != nil {
+		return nil, errors.Wrap(err, "checkStateForErrors after getPMemState")
+	}
+
+	// After initial validation, process actionable states.
+	resp, err := cr.processActionableState(req, sockState.State, scanRes.Namespaces, regions)
+	if err != nil {
+		return nil, errors.Wrap(err, "processActionableState")
+	}
+
+	cr.log.Info("Verifying that PMem is in a valid state...")
+
+	if err := verifyPMem(cr.log, resp, regions, req.NrNamespacesPerSocket); err != nil {
+		return nil, storage.FaultScmInvalidPMem(err.Error())
+	}
+
 	return resp, nil
 }
 
@@ -539,25 +368,56 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 //
 // Returns indication of whether a reboot is required alongside error.
 // Command output from external tools will be returned. State will be passed in.
-func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
-	state := scanRes.State
-	resp := &storage.ScmPrepareResponse{State: state}
+func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	if scanRes == nil {
+		return nil, errors.New("nil scan response")
+	}
+	resp := &storage.ScmPrepareResponse{
+		Namespaces: storage.ScmNamespaces{},
+		Socket:     storage.ScmSocketState{},
+	}
+	if len(scanRes.Modules) == 0 {
+		cr.log.Info("Skip SCM prep as there are no PMem modules.")
+		resp.Socket.State = storage.ScmNoModules
+		return resp, nil
+	}
 
-	cr.log.Debugf("scm backend prep reset: state %q", state)
+	// If socket ID set in request, only process PMem attached to that socket.
+	sockSelector := sockAny
+	if req.SocketID != nil {
+		sockSelector = int(*req.SocketID)
+	}
 
-	if err := cr.deleteGoals(); err != nil {
+	regions, err := cr.getRegions(sockSelector)
+	if err != nil {
+		return nil, errors.Wrap(err, "getRegions")
+	}
+
+	sockState, err := getPMemState(cr.log, regions)
+	if err != nil {
+		return nil, errors.Wrap(err, "getPMemState")
+	}
+	resp.Socket = *sockState
+
+	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
+
+	if err := cr.deleteGoals(sockSelector); err != nil {
 		return nil, err
 	}
 
-	switch state {
-	case storage.ScmStateNoRegions:
+	switch sockState.State {
+	case storage.ScmNoRegions:
+		cr.log.Info("SCM is already reset as there are no PMem regions.")
 		return resp, nil
-	case storage.ScmStateFreeCapacity, storage.ScmStateNoFreeCapacity, storage.ScmStateNotInterleaved:
+	case storage.ScmFreeCap, storage.ScmNoFreeCap, storage.ScmNotInterleaved, storage.ScmNotHealthy,
+		storage.ScmPartFreeCap, storage.ScmUnknownMode:
 		// Continue to remove namespaces and regions.
 		resp.RebootRequired = true
 	default:
-		return nil, errors.Errorf("unhandled scm state %q", state)
+		return nil, errors.Errorf("unhandled scm state %q", sockState.State)
 	}
+
+	cr.log.Info("Removing PMem namespaces...")
 
 	for _, dev := range scanRes.Namespaces {
 		if err := cr.removeNamespace(dev.Name); err != nil {
@@ -565,167 +425,13 @@ func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPr
 		}
 	}
 
-	cr.log.Infof("Resetting PMem memory allocations.")
+	cr.log.Info("Resetting memory allocations to remove PMem regions...")
 
-	if err := cr.removeRegions(); err != nil {
+	if err := cr.removeRegions(sockSelector); err != nil {
 		return nil, err
 	}
 
 	return resp, nil
-}
-
-func (cr *cmdRunner) removeNamespace(devName string) error {
-	if err := cr.checkNdctl(); err != nil {
-		return err
-	}
-
-	cr.log.Debugf("removing pmem namespace %q", devName)
-
-	if _, err := cr.disableNamespace(devName); err != nil {
-		return errors.WithMessagef(err, "disable namespace cmd (%s)", devName)
-	}
-
-	if _, err := cr.destroyNamespace(devName); err != nil {
-		return errors.WithMessagef(err, "destroy namespace cmd (%s)", devName)
-	}
-
-	return nil
-}
-
-func (cr *cmdRunner) createSingleNsPerSocket() (storage.ScmNamespaces, error) {
-	for {
-		cr.log.Debug("creating pmem namespace")
-
-		if _, err := cr.createNamespace(createNsAnyRegion, 0); err != nil {
-			return nil, errors.WithMessage(err, "create namespace cmd")
-		}
-
-		state, err := cr.getRegionState()
-		if err != nil {
-			return nil, errors.WithMessage(err, "getting state")
-		}
-
-		if state == storage.ScmStateNoFreeCapacity {
-			break
-		}
-		if state == storage.ScmStateFreeCapacity {
-			continue
-		}
-
-		return nil, errors.Errorf("unexpected state: want %s, got %s",
-			storage.ScmStateFreeCapacity.String(), state.String())
-	}
-
-	return cr.getNamespaces()
-}
-
-func (cr *cmdRunner) createMultiNsPerSocket(nrNsPerSocket uint) (storage.ScmNamespaces, error) {
-	// For each region, create two namespaces each with half the total free capacity.
-	// Sanity check alignment.
-
-	if nrNsPerSocket < minNrNssPerSocket || nrNsPerSocket > maxNrNssPerSocket {
-		return nil, errors.Errorf("unexpected number of namespaces per socket: want [%d-%d], got %d",
-			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSocket)
-	}
-
-	regionFreeBytes, err := cr.getRegionFreeSpace()
-	if err != nil {
-		return nil, err
-	}
-
-	for regionIndex, freeBytes := range regionFreeBytes {
-		if freeBytes == 0 {
-			// Catch edge case where trying to create multiple namespaces per socket
-			// but a region already has a single namespace taking full capacity.
-			cr.log.Errorf("createMultiNsPerSocket: region %d has no free space", regionIndex)
-
-			nss, err := cr.getNamespaces()
-			if err != nil {
-				return nil, err
-			}
-
-			return nil, storage.FaultScmNamespacesNrMismatch(nrNsPerSocket,
-				uint(len(regionFreeBytes)), uint(len(nss)))
-		}
-
-		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
-		pmemBytes := freeBytes / uint64(nrNsPerSocket)
-
-		if pmemBytes%alignmentBoundaryBytes != 0 {
-			return nil, errors.New("free region size is not 2MiB aligned")
-		}
-
-		// Create specified number of namespaces on a single region (NUMA node).
-		for j := uint(0); j < nrNsPerSocket; j++ {
-			if _, err := cr.createNamespace(regionIndex, pmemBytes); err != nil {
-				return nil, errors.WithMessage(err, "create namespace cmd")
-			}
-		}
-	}
-
-	state, err := cr.getRegionState()
-	if err != nil {
-		return nil, errors.WithMessage(err, "getting state")
-	}
-	if state != storage.ScmStateNoFreeCapacity {
-		return nil, errors.Errorf("unexpected state: want %s, got %s",
-			storage.ScmStateNoFreeCapacity.String(), state.String())
-	}
-
-	return cr.getNamespaces()
-}
-
-// createNamespaces repeatedly creates namespaces until no free capacity.
-func (cr *cmdRunner) createNamespaces(nrNssPerSocket uint) (storage.ScmNamespaces, error) {
-	if err := cr.checkNdctl(); err != nil {
-		return nil, err
-	}
-
-	switch nrNssPerSocket {
-	case 0:
-		return nil, errors.New("number of namespaces per socket can not be 0")
-	case 1:
-		cr.log.Debug("creating one pmem namespace per socket")
-		return cr.createSingleNsPerSocket()
-	default:
-		cr.log.Debug("creating multiple pmem namespaces per socket")
-		return cr.createMultiNsPerSocket(nrNssPerSocket)
-	}
-}
-
-// getNamespaces calls ndctl to list pmem namespaces and returns converted
-// native storage types.
-func (cr *cmdRunner) getNamespaces() (storage.ScmNamespaces, error) {
-	if err := cr.checkNdctl(); err != nil {
-		return nil, err
-	}
-
-	out, err := cr.listNamespaces()
-	if err != nil {
-		return nil, errors.WithMessage(err, "list namespaces cmd")
-	}
-
-	nss, err := parseNamespaces(out)
-	if err != nil {
-		return nil, err
-	}
-
-	return nss, nil
-}
-
-func parseNamespaces(jsonData string) (storage.ScmNamespaces, error) {
-	nss := storage.ScmNamespaces{}
-
-	// turn single entries into arrays
-	if !strings.HasPrefix(jsonData, "[") {
-		jsonData = "[" + jsonData + "]"
-	}
-
-	if err := json.Unmarshal([]byte(jsonData), &nss); err != nil {
-		return nil, err
-	}
-
-	return nss, nil
 }
 
 func defaultCmdRunner(log logging.Logger) *cmdRunner {

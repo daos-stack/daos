@@ -626,8 +626,11 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	if (grp_size == 1) {
 		pos = grp_idx * obj_get_grp_size(obj);
 		shard = obj_get_shard(obj, pos);
-		if (shard->po_target == -1)
+		if (shard->po_target == -1) {
+			D_ERROR(DF_OID" grp_size 1, obj_get_shard failed\n",
+				DP_OID(obj->cob_md.omd_id));
 			return -DER_IO;
+		}
 
 		/*
 		 * Note that even though there's only one replica here, this
@@ -673,6 +676,8 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 		rc = pos;
 	} else {
 		/* If all the replicas are failed or in-rebuilding, then EIO. */
+		D_ERROR(DF_OID" all the replicas are failed or in-rebuilding\n",
+			DP_OID(obj->cob_md.omd_id));
 		rc = -DER_IO;
 	}
 
@@ -1000,6 +1005,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	if (obj_auxi->cond_modify && (obj_shard->do_rebuilding || obj_shard->do_reintegrating))
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
+	if (obj_shard->do_reintegrating)
+		obj_auxi->reintegrating = 1;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -2704,8 +2711,8 @@ shard_io_task(tse_task_t *task)
 	/*
 	 * If this task belongs to a TX, and if the epoch we got earlier
 	 * doesn't contain a "chosen" TX epoch, then we may need to reinit the
-	 * task. (See dc_tx_get_epoch.) Because tse_task_reinit is less
-	 * practical in the middle of a task, we do it here at the beginning of
+	 * task via dc_tx_get_epoch. Because tse_task_reinit is less practical
+	 * in the middle of a task, we do it here at the beginning of
 	 * shard_io_task.
 	 */
 	th = shard_auxi->obj_auxi->th;
@@ -2714,9 +2721,9 @@ shard_io_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	return shard_io(task, shard_auxi);
@@ -4544,6 +4551,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
+	obj_auxi->reintegrating = 0;
 	shard_task_list_init(obj_auxi);
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;
@@ -6200,9 +6208,9 @@ shard_query_key_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
@@ -6632,9 +6640,10 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
+	struct cont_props	props;
 	int			rc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -6648,6 +6657,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
@@ -6690,7 +6701,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    uint32_t args)
 {
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
@@ -6726,10 +6737,11 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	uint64_t		rf_factor;
 	int			rc;
 	enum daos_obj_redun	ord;
+	struct cont_props	props;
 	uint32_t		nr_grp;
 
 	/** select the oclass */
@@ -6740,6 +6752,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);

@@ -34,8 +34,8 @@ class OSAOnlineExtend(OSAUtils):
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
