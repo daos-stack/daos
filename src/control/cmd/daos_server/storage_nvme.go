@@ -103,23 +103,21 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 
 // Commandline PCI address lists will be comma-separated, sanitize into expected format.
 func sanitizePCIAddrLists(req *storage.BdevPrepareRequest) error {
-	if strings.Contains(req.PCIAllowList, " ") {
-		return errors.New("expecting comma-separated list of allowed pci addresses but found space separator")
+	if !strings.Contains(req.PCIAllowList, " ") {
+		allowed, err := hardware.NewPCIAddressSet(strings.Split(req.PCIAllowList, pciAddrSep)...)
+		if err != nil {
+			return errors.Wrap(err, "invalid addresses in pci allow list")
+		}
+		req.PCIAllowList = allowed.String()
 	}
-	allowed, err := hardware.NewPCIAddressSet(strings.Split(req.PCIAllowList, pciAddrSep)...)
-	if err != nil {
-		return errors.Wrap(err, "invalid addresses in pci allow list")
-	}
-	req.PCIAllowList = allowed.String()
 
-	if strings.Contains(req.PCIBlockList, " ") {
-		return errors.New("expecting comma-separated list of blocked pci addresses but found space separator")
+	if !strings.Contains(req.PCIBlockList, " ") {
+		blocked, err := hardware.NewPCIAddressSet(strings.Split(req.PCIBlockList, pciAddrSep)...)
+		if err != nil {
+			return errors.Wrap(err, "invalid addresses in pci block list")
+		}
+		req.PCIBlockList = blocked.String()
 	}
-	blocked, err := hardware.NewPCIAddressSet(strings.Split(req.PCIBlockList, pciAddrSep)...)
-	if err != nil {
-		return errors.Wrap(err, "invalid addresses in pci block list")
-	}
-	req.PCIBlockList = blocked.String()
 
 	return nil
 }

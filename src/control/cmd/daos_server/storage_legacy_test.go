@@ -149,7 +149,13 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				TargetUser:   "root",
 				DisableVFIO:  true,
 			},
-			expErr: errors.New("expecting comma-separated list"),
+			expPrepNVMeCall: &storage.BdevPrepareRequest{
+				TargetUser:    "root",
+				HugePageCount: 9182,
+				PCIAllowList:  spaceSepMultiAddrList,
+				PCIBlockList:  defaultSingleAddrList,
+				DisableVFIO:   true,
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
