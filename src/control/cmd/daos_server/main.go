@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 const defaultConfigFile = "daos_server.yml"
@@ -59,6 +60,11 @@ func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
 // IsIOMMUEnabled implements hardware.IOMMUDetector interface.
 func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
 	return icc.isIOMMUEnabled()
+}
+
+type socketCmd struct {
+	affinitySource config.EngineAffinityFn
+	SocketID       *uint `long:"socket" description:"Perform command operations on the socket identified by this ID (defaults to all sockets)"`
 }
 
 type mainOpts struct {

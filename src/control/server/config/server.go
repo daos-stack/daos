@@ -740,10 +740,10 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
 		}
 
-		// Special case: If only one engine is defined and engine's detected NUMA node is zero,
-		// don't pin the engine to any NUMA node in order to enable the engine's legacy core
-		// allocation algorithm.
-		if len(cfg.Engines) == 1 && numaAffinity == 0 {
+		// Special case: If only one engine is defined, NUMA is not pinned and engine's
+		// detected NUMA node is zero, don't pin the engine to any NUMA node in order to
+		// enable the engine's legacy core allocation algorithm.
+		if len(cfg.Engines) == 1 && engineCfg.PinnedNumaNode == nil && numaAffinity == 0 {
 			log.Debug("enabling single-engine legacy core allocation algorithm")
 			continue
 		}

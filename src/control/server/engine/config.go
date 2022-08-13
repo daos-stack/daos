@@ -451,3 +451,9 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 	c.Storage.AccelProps.Options = mask
 	return c
 }
+
+// WithIndex sets the I/O Engine instance index.
+func (c *Config) WithIndex(i uint32) *Config {
+	c.Index = i
+	return c
+}

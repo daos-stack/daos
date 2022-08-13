@@ -7,6 +7,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -14,9 +16,12 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -37,17 +42,27 @@ type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 	cfgCmd         `json:"-"`
+	socketCmd      `json:"-"`
 
-	NrNamespacesPerSocket uint  `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
-	Force                 bool  `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
-	SocketID              *uint `long:"socket" description:"Prepare PMem attached to the socket with this ID"`
+	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
+	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
-// If only a single engine has been configured in config file with SCM storage specified, only
-// act on the socket assigned to that engine.
-func setSCMSockFromConfig(log logging.Logger, cfg *config.Server, req *storage.ScmPrepareRequest) error {
+func setSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.EngineAffinityFn, req *storage.ScmPrepareRequest) error {
+	msgSkip := "so skip fetching sockid from config"
+
 	if cfg == nil {
-		log.Debugf("nil input server config so skip getting sock id from config")
+		log.Debug("nil input server config " + msgSkip)
+		return nil
+	}
+	if req.SocketID != nil {
+		log.Debug("sockid set in req " + msgSkip)
+		return nil
+	}
+
+	// Set engine NUMA affinities accurately in config.
+	if err := cfg.SetEngineAffinities(log, affSrc); err != nil {
+		log.Error(fmt.Sprintf("failed to set engine affinities %s: %s", msgSkip, err))
 		return nil
 	}
 
@@ -61,6 +76,9 @@ func setSCMSockFromConfig(log logging.Logger, cfg *config.Server, req *storage.S
 			socksToPrep[ec.Storage.NumaNodeIndex] = true
 		}
 	}
+
+	// Only set socket ID in request if one engine has been configured in config file with SCM
+	// storage specified, if engines exist assigned to different sockets, don't set the value.
 
 	switch len(socksToPrep) {
 	case 0:
@@ -96,12 +114,8 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
-	// If ignore flag and sock have not been set on commandline, check if sock should be set
-	// based on config file contents.
-	if !cmd.IgnoreConfig && req.SocketID == nil {
-		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
-			return errors.Wrap(err, "setting socket id in prepare request")
-		}
+	if err := setSockFromCfg(cmd.Logger, cmd.config, cmd.affinitySource, &req); err != nil {
+		return errors.Wrap(err, "setting sockid in prepare request")
 	}
 
 	// Prepare PMem modules to be presented as pmem device files.
@@ -158,9 +172,41 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	return nil
 }
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+func getAffinitySource(log logging.Logger) (config.EngineAffinityFn, error) {
+	scanner := hwprov.DefaultFabricScanner(log)
+
+	fiSet, err := scanner.Scan(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "scan fabric")
+	}
+
+	return genFiAffFn(fiSet), nil
+}
+
 func (cmd *prepareSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
+	}
+
+	if cmd.IgnoreConfig {
+		cmd.config = nil
+	} else {
+		affSrc, err := getAffinitySource(cmd.Logger)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.affinitySource = affSrc
+		}
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
@@ -173,9 +219,9 @@ type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 	cfgCmd         `json:"-"`
+	socketCmd      `json:"-"`
 
-	Force    bool  `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
-	SocketID *uint `long:"socket" description:"Prepare PMem attached to the socket with this ID"`
+	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
 func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
@@ -194,11 +240,11 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 
 	// Check if only a single engine has been configured in config file and if so, only
 	// prepare the socket assigned to that engine.
-	if !cmd.IgnoreConfig && req.SocketID == nil {
-		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
-			return errors.Wrap(err, "setting socket id in prepare request")
-		}
-	}
+	//	if !cmd.IgnoreConfig && req.SocketID == nil {
+	//		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
+	//			return errors.Wrap(err, "setting socket id in prepare request")
+	//		}
+	//	}
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
 	resp, err := resetBackend(req)
