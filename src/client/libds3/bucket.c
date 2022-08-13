@@ -16,7 +16,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 	int                         rc = 0;
 	struct daos_pool_cont_info *conts;
 	daos_size_t                 ncont = *nbuck;
-	D_ALLOC_ARRAY(conts, *nbuck);
+	D_ALLOC_ARRAY(conts, ncont);
 	if (conts == NULL) {
 		return -ENOMEM;
 	}
@@ -34,22 +34,38 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		goto err;
 	}
 
-	*nbuck = ncont;
+	daos_size_t   bi = 0;
+	ds3_bucket_t *ds3b;
 	for (int i = 0; i < ncont; i++) {
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
 			// Skip metadata bucket
-			(*nbuck)--;
 			continue;
 		}
 
-		// copy bucket name
-		strcpy(buf[i].name, conts[i].pci_label);
+		// Copy bucket name
+		strcpy(buf[bi].name, conts[i].pci_label);
 
-		// TODO load bucket info here
+		// Get info
+		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
+		if (rc)
+			goto err;
+
+		rc = ds3_bucket_get_info(&buf[bi], ds3b, ev);
+		if (rc)
+			goto err_ds3b;
+		
+		ds3_bucket_close(ds3b, ev);
+
+		bi++;
 		// TODO handle marker
 	}
 
+	*nbuck = bi;
+
+err_ds3b:
+	if (ds3b)
+		ds3_bucket_close(ds3b, ev);
 err:
 	D_FREE(conts);
 	return -rc;
