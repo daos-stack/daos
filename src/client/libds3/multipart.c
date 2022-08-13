@@ -390,7 +390,7 @@ err_multipart_dir:
 
 int
 ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num, bool truncate,
-		ds3_part_t **ds3p, ds3_t *ds3)
+	      ds3_part_t **ds3p, ds3_t *ds3)
 {
 	if (ds3p == NULL || bucket_name == NULL || upload_id == NULL || ds3 == NULL)
 		return -EINVAL;
@@ -420,8 +420,8 @@ ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num,
 	sprintf(part_name_str, "%06lu", part_num);
 	int flags = truncate ? O_RDWR | O_CREAT | O_TRUNC : O_RDWR;
 
-	rc = dfs_open(ds3->meta_dfs, upload_dir, part_name_str, DEFFILEMODE | S_IFREG,
-		      flags, 0, 0, NULL, &ds3p_tmp->dfs_obj);
+	rc = dfs_open(ds3->meta_dfs, upload_dir, part_name_str, DEFFILEMODE | S_IFREG, flags, 0, 0,
+		      NULL, &ds3p_tmp->dfs_obj);
 
 	if (rc == 0)
 		*ds3p = ds3p_tmp;

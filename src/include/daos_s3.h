@@ -20,6 +20,7 @@ extern "C" {
 #endif
 
 #include <daos_event.h>
+#include <daos_fs.h>
 
 /** Maximum bucket name length */
 #define DS3_MAX_BUCKET_NAME DAOS_PROP_LABEL_MAX_LEN + 1
@@ -32,6 +33,9 @@ extern "C" {
 
 /** Maximum upload_id length */
 #define DS3_MAX_UPLOAD_ID   35
+
+/** Maximum encoded length */
+#define DS3_MAX_ENCODED_LEN DFS_MAX_XATTR_LEN
 
 /** DAOS S3 Pool handle */
 typedef struct ds3        ds3_t;

@@ -62,6 +62,12 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 	if (ds3 == NULL || name == NULL)
 		return -EINVAL;
 
+	// Prevent attempting to create metadata bucket
+	if (strcmp(name, METADATA_BUCKET) == 0) {
+		D_ERROR("Cannot create metadata bucket");
+		return -EINVAL;
+	}
+
 	int               rc = 0;
 
 	struct ds3_bucket ds3b;
@@ -93,6 +99,12 @@ err:
 int
 ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev)
 {
+	// Prevent attempting to destroy metadata bucket
+	if (strcmp(name, METADATA_BUCKET) == 0) {
+		D_ERROR("Cannot destroy metadata bucket");
+		return -ENOENT;
+	}
+
 	return 0;
 }
 
@@ -101,6 +113,12 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 {
 	if (ds3 == NULL || name == NULL || ds3b == NULL)
 		return -EINVAL;
+
+	// Prevent attempting to open metadata bucket
+	if (strcmp(name, METADATA_BUCKET) == 0) {
+		D_ERROR("Cannot open metadata bucket");
+		return -ENOENT;
+	}
 
 	int           rc;
 	ds3_bucket_t *ds3b_tmp;
@@ -300,7 +318,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 	// Set the number of read objects
 	*nobj = obji;
-	*ncp = cpi;
+	*ncp  = cpi;
 
 err_dirents:
 	D_FREE(dirents);
