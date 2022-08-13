@@ -57,5 +57,5 @@ class DdbCommandBase(ExecutableCommand):
 
         """
         return run_pcmd(
-            hosts=self.host, command=self.__str__(), verbose=self.verbose,
+            hosts=self.host, command=str(self), verbose=self.verbose,
             timeout=self.timeout)
