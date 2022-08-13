@@ -37,6 +37,9 @@ extern "C" {
 /** Maximum encoded length */
 #define DS3_MAX_ENCODED_LEN DFS_MAX_XATTR_LEN
 
+/** Latest instance */
+#define DS3_LATEST_INSTANCE "latest"
+
 /** DAOS S3 Pool handle */
 typedef struct ds3        ds3_t;
 

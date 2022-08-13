@@ -17,7 +17,6 @@
 
 #define METADATA_BUCKET        "_METADATA"
 #define MULTIPART_MAX_PARTS    10000
-#define LATEST_INSTANCE        "latest"
 #define LATEST_INSTANCE_SUFFIX "[latest]"
 #define RGW_BUCKET_INFO        "rgw_info"
 #define RGW_DIR_ENTRY_XATTR    "rgw_entry"
