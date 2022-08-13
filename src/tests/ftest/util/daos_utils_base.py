@@ -240,6 +240,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 """Create a daos container create command object."""
                 super().__init__("create")
                 # Additional daos container create parameters:
+                #  [label]
+                #       Optional container label
+                self.label = PositionalParameter(3)
                 #   --type=<type>
                 #           container type (HDF5, POSIX)
                 self.type = FormattedParameter("--type={}")
@@ -268,7 +271,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
-                self.label = FormattedParameter("{}", None)
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -473,9 +475,9 @@ class DaosCommandBase(CommandWithSubCommand):
                     sub_command (str): sub-command name
                 """
                 super().__init__("/run/daos/object/{}/*".format(sub_command), sub_command)
-                self.pool = FormattedParameter("{}", None)
+                self.pool = PositionalParameter(1)
+                self.cont = PositionalParameter(2)
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.cont = FormattedParameter("{}", None)
                 self.oid = FormattedParameter("--oid={}")
 
         class QuerySubCommand(CommonObjectSubCommand):
