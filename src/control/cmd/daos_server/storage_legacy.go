@@ -24,7 +24,7 @@ import (
 )
 
 type legacyStorageCmd struct {
-	Prepare legacyPrepCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to local servers (deprecated, use scm (create|remove)-namespaces or nvme (prepare|release)-drives instead)."`
+	Prepare legacyPrepCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to local servers (deprecated, use scm (prepare|reset) or nvme (prepare|reset) instead)."`
 	Scan    legacyScanCmd `command:"scan" description:"Scan SCM and NVMe storage attached to local server (deprecated, use scm scan or nvme scan instead)."`
 }
 
@@ -77,7 +77,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 
 	if cmd.Reset {
 		if doSCM {
-			var rnc destroySCMCmd
+			var rnc resetSCMCmd
 			if err := convert.Types(cmd, &rnc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
@@ -85,19 +85,19 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			errSCM = rnc.resetPMem(scs.ScmPrepare)
 		}
 		if doNVMe {
-			var rdc releaseNVMeCmd
+			var rdc resetNVMeCmd
 			if err := convert.Types(cmd, &rdc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}
 			rdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
-			// releaseNVMeCmd expects positional argument, so set it
+			// resetNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
 			rdc.setIOMMUChecker(cmd.isIOMMUEnabled)
 			errNVMe = rdc.resetNVMe(scs.NvmePrepare)
 		}
 	} else {
 		if doSCM {
-			var cnc createSCMCmd
+			var cnc prepareSCMCmd
 			if err := convert.Types(cmd, &cnc); err != nil {
 				return errors.Wrap(err, "converting legacy prepare command")
 			}

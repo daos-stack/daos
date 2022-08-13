@@ -27,7 +27,7 @@ type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareRe
 
 type nvmeCmd struct {
 	Prepare prepareNVMeCmd `command:"prepare" description:"Prepare NVMe SSDs for use by DAOS"`
-	Release releaseNVMeCmd `command:"release" description:"Release NVMe SSDs for use by OS"`
+	Reset   resetNVMeCmd   `command:"reset" description:"Reset NVMe SSDs for use by OS"`
 	Scan    scanNVMeCmd    `command:"scan" description:"Scan NVMe SSDs"`
 }
 
@@ -170,7 +170,7 @@ func (cmd *prepareNVMeCmd) Execute(args []string) error {
 	return cmd.prepareNVMe(scs.NvmePrepare)
 }
 
-type releaseNVMeCmd struct {
+type resetNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
@@ -183,23 +183,23 @@ type releaseNVMeCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *releaseNVMeCmd) WithDisableVFIO(b bool) *releaseNVMeCmd {
+func (cmd *resetNVMeCmd) WithDisableVFIO(b bool) *resetNVMeCmd {
 	cmd.DisableVFIO = b
 	return cmd
 }
 
-func (cmd *releaseNVMeCmd) WithTargetUser(u string) *releaseNVMeCmd {
+func (cmd *resetNVMeCmd) WithTargetUser(u string) *resetNVMeCmd {
 	cmd.TargetUser = u
 	return cmd
 }
 
-func (cmd *releaseNVMeCmd) WithPCIAllowList(al string) *releaseNVMeCmd {
+func (cmd *resetNVMeCmd) WithPCIAllowList(al string) *resetNVMeCmd {
 	cmd.Args.PCIAllowList = al
 	return cmd
 }
 
-func (cmd *releaseNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
-	cmd.Info("Release locally-attached NVMe storage...")
+func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
+	cmd.Info("Reset locally-attached NVMe storage...")
 
 	req := storage.BdevPrepareRequest{
 		TargetUser:   cmd.TargetUser,
@@ -226,14 +226,14 @@ func (cmd *releaseNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	return err
 }
 
-func (cmd *releaseNVMeCmd) Execute(args []string) error {
+func (cmd *resetNVMeCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
-	cmd.Debugf("executing release drives command: %+v", cmd)
+	cmd.Debugf("executing reset nvme command: %+v", cmd)
 	return cmd.resetNVMe(scs.NvmePrepare)
 }
 

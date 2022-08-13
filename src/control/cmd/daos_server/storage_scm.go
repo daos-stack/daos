@@ -27,12 +27,12 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
 
 type scmCmd struct {
-	Create  createSCMCmd  `command:"create" description:"Create SCM devices that can be used with DAOS"`
-	Destroy destroySCMCmd `command:"destroy" description:"Destroy SCM devices that have been used with DAOS"`
+	Prepare prepareSCMCmd `command:"prepare" description:"Prepare SCM devices so that they can be used with DAOS"`
+	Reset   resetSCMCmd   `command:"reset" description:"Reset SCM devices that have been used with DAOS"`
 	Scan    scanSCMCmd    `command:"scan" description:"Scan SCM devices"`
 }
 
-type createSCMCmd struct {
+type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
@@ -40,7 +40,7 @@ type createSCMCmd struct {
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
-func (cmd *createSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
+func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	if cmd.NrNamespacesPerSocket == 0 {
 		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
 	}
@@ -111,25 +111,25 @@ func (cmd *createSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	return nil
 }
 
-func (cmd *createSCMCmd) Execute(args []string) error {
+func (cmd *prepareSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
-	cmd.Debugf("executing create namespaces command: %+v", cmd)
+	cmd.Debugf("executing prepare scm command: %+v", cmd)
 	return cmd.preparePMem(scs.ScmPrepare)
 }
 
-type destroySCMCmd struct {
+type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
 
-func (cmd *destroySCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
+func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	cmd.Info("Reset locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
@@ -184,7 +184,7 @@ func (cmd *destroySCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	return nil
 }
 
-func (cmd *destroySCMCmd) Execute(args []string) error {
+func (cmd *resetSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}

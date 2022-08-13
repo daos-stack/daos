@@ -148,10 +148,10 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			errors.New("unknown"),
 		},
 		{
-			"Release drives with all opts",
-			fmt.Sprintf("nvme release --pci-block-list %s --target-user bob --disable-vfio -l /tmp/foo "+
+			"Reset drives with all opts",
+			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disable-vfio -l /tmp/foo "+
 				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
-			printCommand(t, (&releaseNVMeCmd{
+			printCommand(t, (&resetNVMeCmd{
 				PCIBlockList: multPCIAddrsCommaSep,
 				TargetUser:   "bob",
 				DisableVFIO:  true,
@@ -159,38 +159,38 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			nil,
 		},
 		{
-			"Release drives; bad opt",
-			fmt.Sprintf("nvme release --pci-block-list %s --target-user bob --disble-vfio -l /tmp/foo "+
+			"Reset drives; bad opt",
+			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disble-vfio -l /tmp/foo "+
 				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
 			"",
 			errors.New("unknown"),
 		},
 		{
-			"Create namespaces with all opts",
-			"scm create -S 2 -f",
-			printCommand(t, &createSCMCmd{
+			"Prepare namespaces with all opts",
+			"scm prepare -S 2 -f",
+			printCommand(t, &prepareSCMCmd{
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
 			}),
 			nil,
 		},
 		{
-			"Create namespaces; bad opt",
-			"scm create -X",
+			"Prepare namespaces; bad opt",
+			"scm prepare -X",
 			"",
 			errors.New("unknown"),
 		},
 		{
-			"Remove namespaces with all opts",
-			"scm destroy -f",
-			printCommand(t, &destroySCMCmd{
+			"Reset namespaces with all opts",
+			"scm reset -f",
+			printCommand(t, &resetSCMCmd{
 				Force: true,
 			}),
 			nil,
 		},
 		{
-			"Remove namespaces; bad opt",
-			"scm destroy -S",
+			"Reset namespaces; bad opt",
+			"scm reset -S",
 			"",
 			errors.New("unknown"),
 		},

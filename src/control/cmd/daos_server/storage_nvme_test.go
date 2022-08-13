@@ -174,8 +174,8 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 
 func TestDaosServer_resetNVMe(t *testing.T) {
 	// bdev mock commands
-	newRelCmd := func() *releaseNVMeCmd {
-		rdc := &releaseNVMeCmd{
+	newRelCmd := func() *resetNVMeCmd {
+		rdc := &resetNVMeCmd{
 			PCIBlockList: defaultMultiAddrList,
 		}
 		rdc.Args.PCIAllowList = defaultSingleAddrList
@@ -183,7 +183,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		relCmd        *releaseNVMeCmd
+		relCmd        *resetNVMeCmd
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
@@ -257,7 +257,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			if tc.relCmd == nil {
-				tc.relCmd = &releaseNVMeCmd{}
+				tc.relCmd = &resetNVMeCmd{}
 			}
 			tc.relCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,

@@ -112,7 +112,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			cmd := createSCMCmd{
+			cmd := prepareSCMCmd{
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
@@ -270,7 +270,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			cmd := destroySCMCmd{
+			cmd := resetSCMCmd{
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
