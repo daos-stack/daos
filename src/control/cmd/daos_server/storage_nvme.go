@@ -58,6 +58,11 @@ func validateVFIOSetting(targetUser string, reqDisableVFIO bool, iommuEnabled bo
 }
 
 func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
+	if cfg == nil {
+		log.Debugf("nil input server config so skip updating request from config")
+		return nil
+	}
+
 	if cfg.DisableHugepages {
 		return errors.New("hugepage usage has been disabled in the config file")
 	}
@@ -149,11 +154,12 @@ func (cmd *prepareNVMeCmd) WithPCIAllowList(al string) *prepareNVMeCmd {
 	return cmd
 }
 
-func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker hardware.IOMMUDetector, req *storage.BdevPrepareRequest) error {
-	if cfg == nil {
-		cfg = &config.Server{}
-	}
+func (cmd *prepareNVMeCmd) WithIgnoreConfig(b bool) *prepareNVMeCmd {
+	cmd.IgnoreConfig = b
+	return cmd
+}
 
+func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker hardware.IOMMUDetector, req *storage.BdevPrepareRequest) error {
 	if err := sanitizePCIAddrLists(req); err != nil {
 		return errors.Wrap(err, "sanitizing cli input pci address lists")
 	}
@@ -179,7 +185,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	}
 
 	switch {
-	case cfg.DisableVMD != nil && *(cfg.DisableVMD):
+	case cfg != nil && cfg.DisableVMD != nil && *(cfg.DisableVMD):
 		log.Info("VMD not enabled because VMD disabled in config file")
 	case req.DisableVFIO:
 		log.Info("VMD not enabled because VFIO disabled in command options")
@@ -204,7 +210,12 @@ func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error 
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
+	cfgParam := cmd.config
+	if cmd.IgnoreConfig {
+		cfgParam = nil
+	}
+
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -256,6 +267,11 @@ func (cmd *resetNVMeCmd) WithPCIAllowList(al string) *resetNVMeCmd {
 	return cmd
 }
 
+func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
+	cmd.IgnoreConfig = b
+	return cmd
+}
+
 func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 	cmd.Info("Reset locally-attached NVMe storage...")
 
@@ -267,13 +283,18 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 		Reset_:       true,
 	}
 
-	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
+	cfgParam := cmd.config
+	if cmd.IgnoreConfig {
+		cfgParam = nil
+	}
+
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 	// As reset nvme backend doesn't use NrHugepages, set to zero value.
 	req.HugePageCount = 0
 
-	cmd.Debugf("nvme prepare request parameters: %+v", req)
+	cmd.Debugf("nvme reset request parameters: %+v", req)
 
 	// Reset NVMe device access.
 	_, err := resetBackend(req)

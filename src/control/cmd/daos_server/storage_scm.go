@@ -14,6 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -35,9 +36,46 @@ type scmCmd struct {
 type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	cfgCmd         `json:"-"`
 
-	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
-	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
+	NrNamespacesPerSocket uint  `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
+	Force                 bool  `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
+	SocketID              *uint `long:"socket" description:"Prepare PMem attached to the socket with this ID"`
+}
+
+// If only a single engine has been configured in config file with SCM storage specified, only
+// act on the socket assigned to that engine.
+func setSCMSockFromConfig(log logging.Logger, cfg *config.Server, req *storage.ScmPrepareRequest) error {
+	if cfg == nil {
+		log.Debugf("nil input server config so skip getting sock id from config")
+		return nil
+	}
+
+	socksToPrep := make(map[uint]bool)
+
+	for _, ec := range cfg.Engines {
+		for _, scmCfg := range ec.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassRam {
+				continue
+			}
+			socksToPrep[ec.Storage.NumaNodeIndex] = true
+		}
+	}
+
+	switch len(socksToPrep) {
+	case 0:
+	case 1:
+		log.Debug("config contains scm-engines attached to a single socket, " +
+			"only process that socket")
+		for k := range socksToPrep {
+			req.SocketID = &k
+		}
+	default:
+		log.Debug("config contains scm-engines attached to different sockets, " +
+			"process all sockets")
+	}
+
+	return nil
 }
 
 func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
@@ -53,9 +91,18 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	}
 
 	req := storage.ScmPrepareRequest{
+		SocketID:              cmd.SocketID,
 		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
+
+	// If ignore flag and sock have not been set on commandline, check if sock should be set
+	// based on config file contents.
+	if !cmd.IgnoreConfig && req.SocketID == nil {
+		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
+			return errors.Wrap(err, "setting socket id in prepare request")
+		}
+	}
 
 	// Prepare PMem modules to be presented as pmem device files.
 	resp, err := prepareBackend(req)
@@ -125,8 +172,10 @@ func (cmd *prepareSCMCmd) Execute(args []string) error {
 type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	cfgCmd         `json:"-"`
 
-	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
+	Force    bool  `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
+	SocketID *uint `long:"socket" description:"Prepare PMem attached to the socket with this ID"`
 }
 
 func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
@@ -138,9 +187,18 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	}
 
 	req := storage.ScmPrepareRequest{
-		Reset: true,
+		SocketID: cmd.SocketID,
+		Reset:    true,
 	}
 	cmd.Debugf("scm prepare request parameters: %+v", req)
+
+	// Check if only a single engine has been configured in config file and if so, only
+	// prepare the socket assigned to that engine.
+	if !cmd.IgnoreConfig && req.SocketID == nil {
+		if err := setSCMSockFromConfig(cmd.Logger, cmd.config, &req); err != nil {
+			return errors.Wrap(err, "setting socket id in prepare request")
+		}
+	}
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
 	resp, err := resetBackend(req)

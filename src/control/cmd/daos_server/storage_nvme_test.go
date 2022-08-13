@@ -124,7 +124,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				DisableVFIO:   true,
 			},
 		},
-		"config parameters ignored": {
+		"config parameters ignored; settings exist": {
 			prepCmd: newPrepCmd(),
 			cfg: new(config.Server).
 				WithEngines(engine.NewConfig().
@@ -138,6 +138,25 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				EnableVMD:     true,
+			},
+		},
+		"config parameters ignored; set ignore-config in cmd": {
+			prepCmd: new(prepareNVMeCmd).WithIgnoreConfig(true),
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(7))),
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8))),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expPrepCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
 			},
 		},
 		"config parameters applied; disable vmd": {
@@ -221,7 +240,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 
 func TestDaosServer_resetNVMe(t *testing.T) {
 	// bdev mock commands
-	newRelCmd := func() *resetNVMeCmd {
+	newResetCmd := func() *resetNVMeCmd {
 		rdc := &resetNVMeCmd{
 			PCIBlockList: defaultMultiAddrList,
 		}
@@ -230,7 +249,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		relCmd        *resetNVMeCmd
+		resetCmd      *resetNVMeCmd
 		cfg           *config.Server
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
@@ -244,7 +263,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			},
 		},
 		"succeeds; user params": {
-			relCmd: newRelCmd(),
+			resetCmd: newResetCmd(),
 			expResetCall: &storage.BdevPrepareRequest{
 				PCIAllowList: defaultSingleAddrList,
 				PCIBlockList: spaceSepMultiAddrList,
@@ -253,7 +272,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			},
 		},
 		"succeeds; different target user; multi allow list": {
-			relCmd: newRelCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
+			resetCmd: newResetCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
 			expResetCall: &storage.BdevPrepareRequest{
 				TargetUser:   "bob",
 				PCIAllowList: spaceSepMultiAddrList,
@@ -263,7 +282,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			},
 		},
 		"fails; user params": {
-			relCmd: newRelCmd(),
+			resetCmd: newResetCmd(),
 			bmbc: &bdev.MockBackendConfig{
 				ResetErr: errors.New("backend prep reset failed"),
 			},
@@ -276,15 +295,15 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			expErr: errors.New("backend prep reset failed"),
 		},
 		"non-root; vfio disabled": {
-			relCmd: newRelCmd().WithDisableVFIO(true),
-			expErr: errors.New("VFIO can not be disabled"),
+			resetCmd: newResetCmd().WithDisableVFIO(true),
+			expErr:   errors.New("VFIO can not be disabled"),
 		},
 		"non-root; iommu not detected": {
 			iommuDisabled: true,
 			expErr:        errors.New("no IOMMU capability detected"),
 		},
 		"root; vfio disabled; iommu not detected": {
-			relCmd:        newRelCmd().WithTargetUser("root").WithDisableVFIO(true),
+			resetCmd:      newResetCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
 			expResetCall: &storage.BdevPrepareRequest{
 				TargetUser:   "root",
@@ -294,8 +313,8 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			},
 		},
-		"config parameters ignored": {
-			relCmd: newRelCmd(),
+		"config parameters ignored; settings exist": {
+			resetCmd: newResetCmd(),
 			cfg: new(config.Server).
 				WithEngines(engine.NewConfig().
 					WithStorage(storage.NewTierConfig().
@@ -310,8 +329,28 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			},
 		},
+		"config parameters ignored; set ignore-config in cmd": {
+			resetCmd: new(resetNVMeCmd).WithIgnoreConfig(true),
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(7))),
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(8))),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expResetCall: &storage.BdevPrepareRequest{
+				EnableVMD: true,
+				Reset_:    true,
+			},
+		},
 		"config parameters applied; disable vmd": {
-			relCmd: &resetNVMeCmd{},
+			resetCmd: &resetNVMeCmd{},
 			cfg: new(config.Server).WithEngines(
 				engine.NewConfig().
 					WithStorage(storage.NewTierConfig().
@@ -333,9 +372,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			},
 		},
 		"config parameters applied; disable vfio": {
-			relCmd: newRelCmd(),
-			cfg:    new(config.Server).WithDisableVFIO(true),
-			expErr: errors.New("can not be disabled if running as non-root"),
+			resetCmd: newResetCmd(),
+			cfg:      new(config.Server).WithDisableVFIO(true),
+			expErr:   errors.New("can not be disabled if running as non-root"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -347,18 +386,18 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			msp := scm.NewMockProvider(log, nil, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
-			if tc.relCmd == nil {
-				tc.relCmd = &resetNVMeCmd{}
+			if tc.resetCmd == nil {
+				tc.resetCmd = &resetNVMeCmd{}
 			}
-			tc.relCmd.LogCmd = cmdutil.LogCmd{
+			tc.resetCmd.LogCmd = cmdutil.LogCmd{
 				Logger: log,
 			}
-			tc.relCmd.config = tc.cfg
-			tc.relCmd.setIOMMUChecker(func() (bool, error) {
+			tc.resetCmd.config = tc.cfg
+			tc.resetCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
 
-			gotErr := tc.relCmd.resetNVMe(scs.NvmePrepare)
+			gotErr := tc.resetCmd.resetNVMe(scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
@@ -377,7 +416,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						len(mbb.PrepareCalls))
 				}
 				// If empty TargetUser in cmd, expect current user in call.
-				if tc.relCmd.TargetUser == "" {
+				if tc.resetCmd.TargetUser == "" {
 					tc.expResetCall.TargetUser = getCurrentUsername(t)
 				}
 				if diff := cmp.Diff(*tc.expResetCall, mbb.ResetCalls[0]); diff != "" {
