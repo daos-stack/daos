@@ -30,7 +30,8 @@ class MultipleContainerDelete(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=container,multi_container_delete
+        :avocado: tags=container
+        :avocado: tags=multi_container_delete
         """
         self.add_pool(connect=False)
 
@@ -60,7 +61,8 @@ class MultipleContainerDelete(IorTestBase):
 
         self.log.info("Verifying NVMe space is recovered")
         try:
-            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
+            self.pool.check_free_space(
+                expected_scm=initial_scm_fs, expected_nvme=initial_ssd_fs, timeout=180)
         except DaosTestError as error:
             self.fail("NVMe space is not recovered after 50 "
                       "create-write-destroy iterations {}".format(error))
@@ -68,7 +70,7 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d (Final) == %d (Initial)", final_scm_fs, initial_scm_fs)
         # Uncomment the below verification once DAOS-8643 is fixed
-        # self.assertTrue(final_scm_fs == initial_scm_fs)
+        self.assertTrue(final_scm_fs == initial_scm_fs)
 
     def get_pool_space(self):
         """Get scm and ssd pool free space
