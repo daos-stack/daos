@@ -1,8 +1,21 @@
+daos (2.3.100-20) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
+ -- Wang Shilong <shilong.wang@intel.com>  Thu, 11 Aug 2022 09:52:00 -0400
+
 daos (2.3.100-19) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Update to mercury 2.2.0
 
  -- Jerome Soumagne <jerome.soumagne@intel.com> Fri, 5 Aug 2022 17:30:00 -0600
+
+daos (2.3.100-18) unstable; urgency=medium
+  [Michael MacDonald]
+  * Bump min supported go version to 1.16
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00
+-0400
 
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]
