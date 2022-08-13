@@ -468,9 +468,10 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 
 		// Attempt to destroy the pool.
 		dr := &mgmtpb.PoolDestroyReq{
-			Sys:   svc.sysdb.SystemName(),
-			Force: true,
-			Id:    ps.PoolUUID.String(),
+			Sys:       svc.sysdb.SystemName(),
+			Force:     true,
+			Recursive: true,
+			Id:        ps.PoolUUID.String(),
 		}
 
 		_, err := svc.PoolDestroy(ctx, dr)
@@ -480,6 +481,51 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 	}
 
 	return nil
+}
+
+func (svc *mgmtSvc) poolHasContainers(ctx context.Context, req *mgmtpb.PoolDestroyReq) (bool, error) {
+	lcReq := &mgmtpb.ListContReq{}
+	lcReq.Sys = req.Sys
+	lcReq.Id = req.Id
+	lcReq.SvcRanks = req.SvcRanks
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodListContainers, req:%+v\n", lcReq)
+
+	lcResp, err := svc.ListContainers(ctx, lcReq)
+	if err != nil {
+		svc.log.Debugf("svc.ListContainers failed\n")
+		return false, err
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodListContainers, resp:%+v\n", lcResp)
+
+	dStatus := daos.Status(lcResp.GetStatus())
+	if dStatus != daos.Success {
+		return false, dStatus // daos.Status implements error
+	}
+
+	return len(lcResp.GetContainers()) > 0, nil
+}
+
+func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDestroyReq) (daos.Status, error) {
+	evReq := &mgmtpb.PoolEvictReq{}
+	evReq.Sys = req.Sys
+	evReq.Id = req.Id
+	evReq.SvcRanks = req.SvcRanks
+	evReq.Destroy = true
+	evReq.ForceDestroy = req.Force
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolEvict, req:%+v\n", evReq)
+
+	evResp, err := svc.PoolEvict(ctx, evReq)
+	if err != nil {
+		svc.log.Debugf("svc.PoolEvict failed\n")
+		return 0, err
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, resp:%+v\n", evResp)
+
+	return daos.Status(evResp.GetStatus()), nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
@@ -499,8 +545,28 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 	req.SetUUID(poolUUID)
+	req.SvcRanks = system.RanksToUint32(ps.Replicas)
 
 	resp := &mgmtpb.PoolDestroyResp{}
+
+	// If recursive flag is unset, refuse to destroy pool if resident containers exist.
+	if !req.Recursive {
+		hasContainers, err := svc.poolHasContainers(ctx, req)
+		if err != nil {
+			// Check if error is related to response status code.
+			if dStatus, ok := err.(daos.Status); ok {
+				svc.log.Errorf("ListContainers during pool destroy failed: %s", dStatus)
+				resp.Status = int32(dStatus)
+				return resp, nil
+			}
+			return nil, err
+		}
+
+		if hasContainers {
+			return nil, FaultPoolHasContainers
+		}
+	}
+
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
@@ -509,37 +575,25 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
-		req.SvcRanks = system.RanksToUint32(ps.Replicas)
-
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
-		evreq := &mgmtpb.PoolEvictReq{}
-		evreq.Sys = req.Sys
-		evreq.Id = req.Id
-		evreq.SvcRanks = req.SvcRanks
-		evreq.Destroy = true
-		evreq.ForceDestroy = req.Force
-		svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolEvict, evreq:%+v\n", evreq)
-		evresp, err := svc.PoolEvict(ctx, evreq)
+		evStatus, err := svc.poolEvictConnections(ctx, req)
 		if err != nil {
-			svc.log.Debugf("svc.PoolEvict failed\n")
 			return nil, err
 		}
-		ds := daos.Status(evresp.Status)
-		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
 		// and persist the update(s).
-		if req.Force || ds != daos.Busy {
+		if req.Force || evStatus != daos.Busy {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
 			}
 		}
 
-		if ds != daos.Success {
-			svc.log.Errorf("PoolEvict (first step of destroy) failed: %s", ds)
-			resp.Status = int32(ds)
+		if evStatus != daos.Success {
+			svc.log.Errorf("PoolEvict during pool destroy failed: %s", evStatus)
+			resp.Status = int32(evStatus)
 			return resp, nil
 		}
 	}

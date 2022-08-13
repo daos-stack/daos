@@ -15,12 +15,12 @@ import (
 
 // Discover NVMe devices.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
-	return nil, nil
+	return storage.NvmeControllers{}, nil
 }
 
 // Format devices available through SPDK.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	return nil, nil
+	return []*FormatResult{}, nil
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
