@@ -133,6 +133,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerPoolHasContainers
 )
 
 // server config fault codes

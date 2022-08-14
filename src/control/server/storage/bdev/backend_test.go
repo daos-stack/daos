@@ -865,6 +865,9 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
 			removedFiles := make([]string, 0)
 			remove := func(path string) error {
 				if tc.removeErr == nil {
@@ -880,7 +883,7 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 			}
 
 			var count uint = 0
-			testFn := createHugePageWalkFunc(testDir, stat, remove, &count)
+			testFn := createHugePageWalkFunc(log, testDir, stat, remove, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				test.CmpErr(t, ti.expErr, gotErr)
@@ -1311,7 +1314,7 @@ func TestBackend_Prepare(t *testing.T) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			var hpCleanCall string
-			mockHpClean := func(in string) (uint, error) {
+			mockHpClean := func(_ logging.Logger, in string) (uint, error) {
 				hpCleanCall = in
 				return tc.hpRemCount, tc.hpCleanErr
 			}
