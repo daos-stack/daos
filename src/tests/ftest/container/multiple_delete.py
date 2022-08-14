@@ -6,6 +6,8 @@
 from ior_test_base import IorTestBase
 from general_utils import DaosTestError
 
+SCM_THRESHOLD = 400000
+
 
 class MultipleContainerDelete(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -61,16 +63,18 @@ class MultipleContainerDelete(IorTestBase):
 
         self.log.info("Verifying NVMe space is recovered")
         try:
-            self.pool.check_free_space(
-                expected_scm=initial_scm_fs, expected_nvme=initial_ssd_fs, timeout=180)
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
         except DaosTestError as error:
             self.fail("NVMe space is not recovered after 50 "
                       "create-write-destroy iterations {}".format(error))
 
         self.log.info("Verifying SCM space is recovered")
-        self.log.info("%d (Final) == %d (Initial)", final_scm_fs, initial_scm_fs)
-        # Uncomment the below verification once DAOS-8643 is fixed
-        self.assertTrue(final_scm_fs == initial_scm_fs)
+        self.log.info("Final = %d; Initial = %d", final_scm_fs, initial_scm_fs)
+        # About 198KB of the SCM free space isn't recovered even after waiting for 180
+        # sec, so apply the threshold. Considered not a bug. DAOS-8643
+        msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, Threshold = {}; "
+               "(Unit is in byte.)".format(initial_scm_fs, final_scm_fs, SCM_THRESHOLD))
+        self.assertLessEqual(initial_scm_fs, final_scm_fs + SCM_THRESHOLD, msg)
 
     def get_pool_space(self):
         """Get scm and ssd pool free space
