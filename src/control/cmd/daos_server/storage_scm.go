@@ -291,6 +291,17 @@ func (cmd *resetSCMCmd) Execute(args []string) error {
 		return err
 	}
 
+	if cmd.IgnoreConfig {
+		cmd.config = nil
+	} else {
+		affSrc, err := getAffinitySource(cmd.Logger)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.affinitySource = affSrc
+		}
+	}
+
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing remove namespaces command: %+v", cmd)
