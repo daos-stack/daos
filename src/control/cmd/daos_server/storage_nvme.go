@@ -21,7 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const pciAddrSep = ","
+const cliPCIAddrSep = ","
 
 type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
@@ -84,10 +84,10 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 			bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
 		}
 
-		nvmeBdevs := bdevCfgs.NVMeBdevs()
-		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", nvmeBdevs)
-		if nvmeBdevs.Len() != 0 {
-			req.PCIAllowList = nvmeBdevs.String()
+		allowed := bdevCfgs.NVMeBdevs()
+		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", allowed)
+		if allowed.Len() != 0 {
+			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 		}
 	}
 
@@ -98,7 +98,7 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 			return errors.Wrap(err, "invalid addresses in pci block list")
 		}
 		if blocked.Len() != 0 {
-			req.PCIBlockList = blocked.String()
+			req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 		}
 	}
 
@@ -108,19 +108,19 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 // Commandline PCI address lists will be comma-separated, sanitize into expected format.
 func sanitizePCIAddrLists(req *storage.BdevPrepareRequest) error {
 	if !strings.Contains(req.PCIAllowList, " ") {
-		allowed, err := hardware.NewPCIAddressSet(strings.Split(req.PCIAllowList, pciAddrSep)...)
+		allowed, err := hardware.NewPCIAddressSet(strings.Split(req.PCIAllowList, cliPCIAddrSep)...)
 		if err != nil {
 			return errors.Wrap(err, "invalid addresses in pci allow list")
 		}
-		req.PCIAllowList = allowed.String()
+		req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 	}
 
 	if !strings.Contains(req.PCIBlockList, " ") {
-		blocked, err := hardware.NewPCIAddressSet(strings.Split(req.PCIBlockList, pciAddrSep)...)
+		blocked, err := hardware.NewPCIAddressSet(strings.Split(req.PCIBlockList, cliPCIAddrSep)...)
 		if err != nil {
 			return errors.Wrap(err, "invalid addresses in pci block list")
 		}
-		req.PCIBlockList = blocked.String()
+		req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 	}
 
 	return nil

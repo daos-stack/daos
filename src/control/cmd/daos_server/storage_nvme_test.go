@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	defaultMultiAddrList  = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), pciAddrSep, test.MockPCIAddr(2))
+	defaultMultiAddrList  = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), cliPCIAddrSep, test.MockPCIAddr(2))
 	defaultSingleAddrList = test.MockPCIAddr(1)
 	spaceSepMultiAddrList = fmt.Sprintf("%s%s%s", test.MockPCIAddr(1), storage.BdevPciAddrSep, test.MockPCIAddr(2))
 	currentUsername       string
@@ -176,7 +176,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: 1024,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
 			},
@@ -209,7 +209,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				WithDisableVMD(true),
 			expPrepCall: &storage.BdevPrepareRequest{
 				HugePageCount: 1024,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
 			},
@@ -393,7 +393,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				WithNrHugePages(1024).
 				WithDisableVMD(true),
 			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
 				Reset_:       true,
@@ -426,7 +426,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				WithNrHugePages(1024).
 				WithDisableVMD(true),
 			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
 					test.MockPCIAddr(8)),
 				PCIBlockList: test.MockPCIAddr(9),
 				Reset_:       true,
