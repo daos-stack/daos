@@ -24,7 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -483,46 +482,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	for idx, ec := range cfg.Engines {
 		cfgTargetCount += ec.TargetCount
 
-		ls := ec.LegacyStorage
-		if ls.WasDefined() {
-			log.Noticef("engine %d: Legacy storage configuration detected. Please "+
-				"migrate to new-style storage configuration.", idx)
-			var tierCfgs storage.TierConfigs
-			if ls.ScmClass != storage.ClassNone {
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithStorageClass(ls.ScmClass.String()).
-						WithScmDeviceList(ls.ScmConfig.DeviceList...).
-						WithScmMountPoint(ls.MountPoint).
-						WithScmRamdiskSize(ls.RamdiskSize),
-				)
-			}
-
-			// Do not add bdev tier if cls is none or nvme has no devices to maintain
-			// backward compatible behavior.
-			bc := ls.BdevClass
-			switch {
-			case bc == storage.ClassNvme && ls.BdevConfig.DeviceList.Len() == 0:
-				log.Debugf("legacy storage config conversion skipped for class "+
-					"%s with empty bdev_list", storage.ClassNvme)
-			case bc == storage.ClassNone:
-				log.Debugf("legacy storage config conversion skipped for class %s",
-					storage.ClassNone)
-			default:
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithStorageClass(ls.BdevClass.String()).
-						WithBdevDeviceCount(ls.DeviceCount).
-						WithBdevDeviceList(
-							ls.BdevConfig.DeviceList.Devices()...).
-						WithBdevFileSize(ls.FileSize).
-						WithBdevBusidRange(
-							ls.BdevConfig.BusidRange.String()),
-				)
-			}
-			ec.WithStorage(tierCfgs...)
-			ec.LegacyStorage = engine.LegacyStorage{}
-		}
+		ec.ConvertLegacyStorage(log, idx)
 
 		if ec.Storage.Tiers.HaveBdevs() {
 			cfgHasBdevs = true

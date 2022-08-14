@@ -135,17 +135,6 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-type LegacyStorage struct {
-	storage.ScmConfig  `yaml:",inline,omitempty"`
-	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
-	storage.BdevConfig `yaml:",inline,omitempty"`
-	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
-}
-
-func (ls *LegacyStorage) WasDefined() bool {
-	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
 	Rank              *system.Rank   `yaml:"rank,omitempty"`

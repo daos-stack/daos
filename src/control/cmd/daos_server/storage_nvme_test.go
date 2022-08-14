@@ -186,6 +186,34 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			cfg:     new(config.Server).WithDisableVFIO(true),
 			expErr:  errors.New("can not be disabled if running as non-root"),
 		},
+		"config parameters applied; legacy storage": {
+			prepCmd: &prepareNVMeCmd{},
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithLegacyStorage(engine.LegacyStorage{
+						BdevClass: storage.ClassNvme,
+						BdevConfig: storage.BdevConfig{
+							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(7)),
+						},
+					}),
+				engine.NewConfig().
+					WithLegacyStorage(engine.LegacyStorage{
+						BdevClass: storage.ClassNvme,
+						BdevConfig: storage.BdevConfig{
+							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(8)),
+						},
+					}),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 1024,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+					test.MockPCIAddr(8)),
+				PCIBlockList: test.MockPCIAddr(9),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -375,6 +403,34 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			resetCmd: newResetCmd(),
 			cfg:      new(config.Server).WithDisableVFIO(true),
 			expErr:   errors.New("can not be disabled if running as non-root"),
+		},
+		"config parameters applied; legacy storage": {
+			resetCmd: &resetNVMeCmd{},
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithLegacyStorage(engine.LegacyStorage{
+						BdevClass: storage.ClassNvme,
+						BdevConfig: storage.BdevConfig{
+							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(7)),
+						},
+					}),
+				engine.NewConfig().
+					WithLegacyStorage(engine.LegacyStorage{
+						BdevClass: storage.ClassNvme,
+						BdevConfig: storage.BdevConfig{
+							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(8)),
+						},
+					}),
+			).
+				WithBdevExclude(test.MockPCIAddr(9)).
+				WithNrHugePages(1024).
+				WithDisableVMD(true),
+			expResetCall: &storage.BdevPrepareRequest{
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), pciAddrSep,
+					test.MockPCIAddr(8)),
+				PCIBlockList: test.MockPCIAddr(9),
+				Reset_:       true,
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
