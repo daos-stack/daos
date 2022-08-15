@@ -6700,6 +6700,16 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
 			    uint32_t args)
 {
+	return daos_obj_generate_oid_by_rf2(poh, rf_factor, oid, type, cid,
+					    hints, args, DAOS_PROP_CO_REDUN_NODE);
+}
+
+int
+daos_obj_generate_oid_by_rf2(daos_handle_t poh, uint64_t rf_factor,
+			     daos_obj_id_t *oid, enum daos_otype_t type,
+			     daos_oclass_id_t cid, daos_oclass_hints_t hints,
+			     uint32_t args, uint32_t pa_domain)
+{
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
@@ -6712,6 +6722,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	attr.pa_domain = pa_domain;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);

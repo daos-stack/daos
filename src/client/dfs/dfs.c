@@ -1465,6 +1465,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
 	uint64_t		hlc;
+	uint32_t		pa_domain;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1521,12 +1522,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	} else {
 		rf_factor = dpe->dpe_val;
 	}
+	pa_domain = daos_cont_prop2redunlvl(prop);
 
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
-					 0, dattr.da_oclass_id, 0, 0);
+	rc = daos_obj_generate_oid_by_rf2(poh, rf_factor, &roots.cr_oids[0],
+					 0, dattr.da_oclass_id, 0, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1535,8 +1537,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/* select oclass and generate ROOT OID */
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
-					 0, dattr.da_oclass_id, 0, 0);
+	rc = daos_obj_generate_oid_by_rf2(poh, rf_factor, &roots.cr_oids[1],
+					  0, dattr.da_oclass_id, 0, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
