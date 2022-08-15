@@ -4279,7 +4279,7 @@ oclass_auto_setting(void **state)
 	daos_handle_t		coh;
 	char			str[37];
 	daos_pool_info_t	info = {0};
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
 	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
