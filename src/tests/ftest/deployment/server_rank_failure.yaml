@@ -17,6 +17,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
+      log_mask: DEBUG
       bdev_class: nvme
       bdev_list: ["0000:00:00.0"]
       scm_class: dcpm
@@ -34,6 +35,7 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
+      log_mask: DEBUG
       bdev_class: nvme
       bdev_list: ["0000:00:00.1"]
       scm_class: dcpm
