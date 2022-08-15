@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,11 +5,11 @@
 """
 
 import time
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
-from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd
 
 
@@ -281,7 +280,7 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        cmd = self.env.get_export_str()
+        cmd = self.env.to_export_str()
         if bind_cores:
             cmd += 'taskset -c {} '.format(bind_cores)
         cmd += str(self)
