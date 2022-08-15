@@ -5,8 +5,10 @@
 """
 import random
 
+from avocado.core.exceptions import TestFail
+
 from apricot import TestWithServers
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import get_random_bytes
 from test_utils_container import TestContainerData
 
 
@@ -24,34 +26,44 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
     def write_pool_until_nospace(self):
         """write pool and container until pool is full. """
-        data_size_base = self.params.get("data_size_base", "/run/container/*")
+
+        # Create a container and get pool free space before write
         container = self.get_container(self.pool)
-        container.open()
-        written_byte = 0
-        write_count = 1
+        free_space = self.pool.get_pool_free_space()
+        self.log.info("--pool free space before writing data to container= %s", free_space)
+
+        # Write random data to container until pool out of space
+        base_data_size = container.data_size.value
+        data_written = 0
         while True:
-            data_size = random.randint(data_size_base * 0.5, data_size_base * 1.5) # nosec
-            written_byte += data_size
+            new_data_size = random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
+            container.data_size.update(new_data_size, "data_size")
+
             try:
-                container.written_data.append(TestContainerData(False))
-                container.written_data[-1].write_record(
-                    container,
-                    get_random_bytes(container.akey_size.value),
-                    get_random_bytes(container.dkey_size.value),
-                    get_random_bytes(data_size))
-                self.log.info("--%s wrote container-obj, sz %s", write_count, data_size)
-                write_count += 1
-            except DaosTestError as error:
-                if self.DER_NOSPACE in repr(error):
+                container.write_objects()
+            except TestFail as excep:
+                # Uncomment following for debugging
+                # self.log.info("%s", repr(excep))
+                if self.DER_NOSPACE in str(excep):
                     self.log.info(
-                        "--(3)written_byte= %s, Der_no_space %s detected, pool is "
-                        "unable for an additional %s byte object",
-                        written_byte, self.DER_NOSPACE, data_size)
-                    free_space = self.pool.get_pool_free_space()
-                    self.log.info("--(4)free_space when pool is full= %s", free_space)
+                        "--(3) Der_no_space %s detected, pool is unable for an additional"
+                        " %s byte object", self.DER_NOSPACE, container.data_size.value)
                     break
-                self.fail("#Exception while writing container-obj: {}".format(repr(error)))
+                self.fail("Exception while writing object: {}".format(repr(excep)))
+            data_written += new_data_size
+
+        # display free space and data written
+        free_space_before = self.pool.get_pool_free_space()
+        self.log.info("--(4)%s bytes written when pool is full.", data_written)
+
+        # destroy container and check for free space increase
         container.destroy()
+        free_space_after = self.pool.get_pool_free_space()
+        self.log.info("--(5)pooll full, free_space before container delete= %s", free_space_before)
+        self.log.info("--(6)pooll full, free_space after  container deleted= %s", free_space_after)
+        if free_space_after <= free_space_before:
+            self.fail("Deleting container did not free up pool space.")
+
 
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
@@ -64,8 +76,11 @@ class BoundaryPoolContainerSpace(TestWithServers):
             repeat following steps:
             (1)Create Pool and Container.
             (2)Fill the pool with random block data size, verify return code is as expected
-               DER_NOSPACE -1007 when no more data can be written to the container.
-            (3)destroy the container
+               when no more data can be written to the container.
+            (3)Check for DER_NOSPACE -1007.
+            (4)Display bytes written when pool is full before container delete.
+            (5)Display free space before container delete.
+            (6)Display and verify free space after container delete.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
@@ -77,6 +92,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         # create pool
         self.add_pool()
+
         for test_loop in range(1, testloop + 1):
             # query the pool and get free space before write
             self.log.info("==>Starting test loop: %s ...", test_loop)
@@ -87,10 +103,4 @@ class BoundaryPoolContainerSpace(TestWithServers):
             free_space = self.pool.get_pool_free_space()
             self.log.info("--(2)Pool free space before write: %s", free_space)
 
-            # write container until DER_NOSPACE
             self.write_pool_until_nospace()
-
-        self.pool.set_query_data()
-        self.log.info(
-            "--(5)Pool Query before exit:\n"
-            "--Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
