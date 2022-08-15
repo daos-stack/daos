@@ -253,7 +253,10 @@ pipeline {
             }
         }
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
