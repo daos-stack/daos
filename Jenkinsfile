@@ -310,7 +310,10 @@ pipeline {
             } // parallel
         } // stage('Check PR')
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
@@ -338,7 +341,7 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.h:' +
+                                                  '*.pb-c.[ch]:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
                                                   /* groovylint-disable-next-line LineLength */
