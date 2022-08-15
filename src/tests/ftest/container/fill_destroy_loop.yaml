@@ -7,7 +7,7 @@ pool:
   name: daos_server
   control_method: dmg
   size: 1G
-  testloop: 100 
+  testloop: 100
 container:
   control_method: daos
   oclass: SX

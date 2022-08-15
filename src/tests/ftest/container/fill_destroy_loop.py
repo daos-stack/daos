@@ -29,7 +29,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         container.open()
         written_byte = 0
         write_count = 1
-        while (1):
+        while True:
             data_size = random.randint(data_size_base * 0.5, data_size_base * 1.5) # nosec
             written_byte += data_size
             try:
@@ -39,7 +39,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                     get_random_bytes(container.akey_size.value),
                     get_random_bytes(container.dkey_size.value),
                     get_random_bytes(data_size))
-                self.log.info("--{0} wrote container-obj, sz {1}".format(write_count, data_size))
+                self.log.info("--%s wrote container-obj, sz %s", write_count, data_size)
                 write_count += 1
             except DaosTestError as error:
                 if self.DER_NOSPACE in repr(error):
@@ -50,8 +50,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                     free_space = self.pool.get_pool_free_space()
                     self.log.info("--(4)free_space when pool is full= %s", free_space)
                     break
-                else:
-                    self.fail("#Exception while writing container-obj: {}".format(repr(error)))
+                self.fail("#Exception while writing container-obj: {}".format(repr(error)))
         container.destroy()
 
     def test_fill_destroy_cont_loop(self):
