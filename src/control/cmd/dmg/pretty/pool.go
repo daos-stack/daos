@@ -191,7 +191,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
 			upgradeString = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
 		}
-		row["Upgrade?"] = upgradeString
+		row["UpgradeNeeded?"] = upgradeString
 	}
 
 	return row
@@ -214,7 +214,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 
 	titles := []string{"Pool", "Size", "State", "Used", "Imbalance", "Disabled"}
 	if upgrade {
-		titles = append(titles, "Upgrade?")
+		titles = append(titles, "UpgradeNeeded?")
 	}
 	formatter := txtfmt.NewTableFormatter(titles...)
 
@@ -257,12 +257,12 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	row := txtfmt.TableRow{
-		"Label":    label,
-		"UUID":     pool.UUID,
-		"State":    pool.State,
-		"SvcReps":  svcReps,
-		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
-		"Upgrade?": upgrade,
+		"Label":          label,
+		"UUID":           pool.UUID,
+		"State":          pool.State,
+		"SvcReps":        svcReps,
+		"Disabled":       fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"UpgradeNeeded?": upgrade,
 	}
 
 	for _, tu := range pool.Usage {
@@ -286,7 +286,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 			t.TierName+" Imbalance")
 	}
 	titles = append(titles, "Disabled")
-	titles = append(titles, "Upgrade?")
+	titles = append(titles, "UpgradeNeeded?")
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow

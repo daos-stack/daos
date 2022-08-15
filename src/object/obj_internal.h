@@ -805,7 +805,7 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 enum dc_tx_get_epoch_rc {
 	DC_TX_GE_CHOSEN,
 	DC_TX_GE_CHOOSING,
-	DC_TX_GE_REINIT
+	DC_TX_GE_REINITED
 };
 
 int
