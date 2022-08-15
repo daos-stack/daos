@@ -82,7 +82,7 @@ def scons():
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal']
 
-    denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
+    denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
