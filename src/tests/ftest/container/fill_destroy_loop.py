@@ -8,7 +8,6 @@ import random
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
-from test_utils_container import TestContainerData
 
 
 class BoundaryPoolContainerSpace(TestWithServers):
