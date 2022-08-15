@@ -69,7 +69,7 @@ class MultipleContainerDelete(IorTestBase):
             # self.fail("NVMe space is not recovered after 50 "
             #           "create-write-destroy iterations {}".format(error))
             self.log.info("Either NVMe or SCM space was not recovered after 50 "
-                          "create-write-destroy iterations {}".format(error))
+                          "create-write-destroy iterations %s".format(error))
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("Final = %d; Initial = %d", final_scm_fs, initial_scm_fs)
