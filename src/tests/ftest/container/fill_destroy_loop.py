@@ -8,7 +8,6 @@ import random
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
-from general_utils import get_random_bytes
 from test_utils_container import TestContainerData
 
 
