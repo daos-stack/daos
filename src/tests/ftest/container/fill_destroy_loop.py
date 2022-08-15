@@ -62,7 +62,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
         if free_space_after <= free_space_before:
             self.fail("Deleting container did not free up pool space.")
 
-
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
 
@@ -85,9 +84,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=container,pool
         :avocado: tags=fill_cont_pool_stress,test_fill_destroy_cont_loop
         """
-
         testloop = self.params.get("testloop", "/run/pool/*")
-
         # create pool
         self.add_pool()
 
