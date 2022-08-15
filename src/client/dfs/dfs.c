@@ -1528,7 +1528,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
 	rc = daos_obj_generate_oid_by_rf2(poh, rf_factor, &roots.cr_oids[0],
-					 0, dattr.da_oclass_id, 0, 0, pa_domain);
+					  0, dattr.da_oclass_id, 0, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
