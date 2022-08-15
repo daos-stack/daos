@@ -2,16 +2,15 @@ hosts:
   test_servers: 3
 server_config:
   name: daos_server
-timeout: 500
+timeout: 800
 pool:
   name: daos_server
   control_method: dmg
-  scm_size: 1G
-  testloop: 100
+  size: 1G
+  testloop: 100 
 container:
   control_method: daos
-  properties: "rf:1"
-  obj_class: OC_RP_2G1
-  block_size: 1024000
+  oclass: SX
+  data_size_base: 1024000
   akey_size: 5
   dkey_size: 5

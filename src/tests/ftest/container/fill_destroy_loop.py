@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,41 +24,34 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
     def write_pool_until_nospace(self):
         """write pool and container until pool is full. """
-        cont_obj_class = self.params.get("obj_class", "/run/container/*")
-        block_size = self.params.get("block_size", "/run/container/*")
-        akey_size = self.params.get("akey_size", "/run/container/*")
-        dkey_size = self.params.get("dkey_size", "/run/container/*")
-        # select a random data size based on block_size
-        data_size = random.randint(block_size*0.5, block_size*1.5) # nosec
-
+        data_size_base = self.params.get("data_size_base", "/run/container/*")
         container = self.get_container(self.pool)
         container.open()
         written_byte = 0
         write_count = 1
-        data_str = get_random_bytes(data_size)
-        space_avail_to_write = True
-        while space_avail_to_write:
-            dkey = get_random_bytes(dkey_size)
-            akey = get_random_bytes(akey_size)
+        while (1):
+            data_size = random.randint(data_size_base * 0.5, data_size_base * 1.5) # nosec
+            written_byte += data_size
             try:
-                written_byte += data_size
-                self.d_log.debug("--{0} writing cont-obj {1}  byte data, total {2}..".format(
-                    write_count, data_size, written_byte))
                 container.written_data.append(TestContainerData(False))
                 container.written_data[-1].write_record(
-                    container, akey, dkey, data_str, obj_class=cont_obj_class)
-                self.d_log.debug("--{0}wrote cont-obj, sz {1}".format(write_count, data_size))
+                    container,
+                    get_random_bytes(container.akey_size.value),
+                    get_random_bytes(container.dkey_size.value),
+                    get_random_bytes(data_size))
+                self.log.info("--{0} wrote container-obj, sz {1}".format(write_count, data_size))
                 write_count += 1
-            except DaosTestError as excep:
-                space_avail_to_write = False
-                if self.DER_NOSPACE in repr(excep):
-                    self.log.info("--(3)written_byte= %s, Der_no_space %s detected, pool is "
-                                  "unable for an additional %s byte object", written_byte,
-                                  self.DER_NOSPACE, data_size)
+            except DaosTestError as error:
+                if self.DER_NOSPACE in repr(error):
+                    self.log.info(
+                        "--(3)written_byte= %s, Der_no_space %s detected, pool is "
+                        "unable for an additional %s byte object",
+                        written_byte, self.DER_NOSPACE, data_size)
                     free_space = self.pool.get_pool_free_space()
-                    self.log.info("--(4)free_space when pool is fulfill= %s", free_space)
+                    self.log.info("--(4)free_space when pool is full= %s", free_space)
+                    break
                 else:
-                    self.fail("#Exception while writing object: {}".format(repr(excep)))
+                    self.fail("#Exception while writing container-obj: {}".format(repr(error)))
         container.destroy()
 
     def test_fill_destroy_cont_loop(self):
@@ -79,19 +71,19 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=container,pool
-        :avocado: tags=fill_cont_pool_stress
+        :avocado: tags=fill_cont_pool_stress,test_fill_destroy_cont_loop
         """
 
         testloop = self.params.get("testloop", "/run/pool/*")
 
         # create pool
         self.add_pool()
-
-        for test_loop in range(1, testloop+1):
+        for test_loop in range(1, testloop + 1):
             # query the pool and get free space before write
             self.log.info("==>Starting test loop: %s ...", test_loop)
             self.pool.set_query_data()
-            self.log.info("--(1)Pool Query before write:\n"
+            self.log.info(
+                "--(1)Pool Query before write:\n"
                 "--Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
             self.log.info("--(2)Pool free space before write: %s", free_space)
@@ -100,5 +92,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
             self.write_pool_until_nospace()
 
         self.pool.set_query_data()
-        self.log.info("--(5)Pool Query before exit:\n"
+        self.log.info(
+            "--(5)Pool Query before exit:\n"
             "--Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
