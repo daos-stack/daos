@@ -429,6 +429,31 @@ cleanup:
 	return rc;
 }
 
+int dc_mgmt_net_cfg_check(const char *name)
+{
+	int rc;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
+	Mgmt__GetAttachInfoResp *resp;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	if (rc != 0)
+		return rc;
+
+	/* Client may not set it if the server hasn't. */
+	if (info.srv_srx_set == -1) {
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			return -DER_INVAL;
+		}
+	}
+
+	return rc;
+}
+
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
 	struct drpc		 *ctx;

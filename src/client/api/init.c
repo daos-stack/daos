@@ -194,10 +194,17 @@ daos_init(void)
 		D_GOTO(out_job, rc);
 	}
 
+	/**
+	 * daos_eq_lib_init() might change net cfg, check it.
+	 */
+	rc = dc_mgmt_net_cfg_check(NULL);
+	if (rc != 0)
+		D_GOTO(out_eq, rc);
+
 	/** set up placement */
 	rc = pl_init();
 	if (rc != 0)
-		goto out_eq;
+		D_GOTO(out_eq, rc);
 
 	/** set up management interface */
 	rc = dc_mgmt_init();
