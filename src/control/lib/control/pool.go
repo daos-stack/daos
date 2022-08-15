@@ -279,21 +279,23 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 // PoolDestroyReq contains the parameters for a pool destroy request.
 type PoolDestroyReq struct {
 	poolRequest
-	ID    string
-	Force bool
+	ID        string
+	Recursive bool // Remove pool and any child containers.
+	Force     bool
 }
 
 // PoolDestroy performs a pool destroy operation on a DAOS Management Server instance.
 func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyReq) error {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:   req.getSystem(rpcClient),
-			Id:    req.ID,
-			Force: req.Force,
+			Sys:       req.getSystem(rpcClient),
+			Id:        req.ID,
+			Recursive: req.Recursive,
+			Force:     req.Force,
 		})
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -303,7 +305,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	if err != nil {
 		return errors.Wrap(err, "pool destroy failed")
 	}
-	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
 
 	return nil
 }
