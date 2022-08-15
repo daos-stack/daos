@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -16,6 +15,7 @@ from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
 from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
@@ -28,9 +28,8 @@ from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, get_avocado_config_value, set_avocado_config_value, \
-    dump_engines_stacks
+    dump_engines_stacks, nodeset_append_suffix
 from logger_utils import TestLogger
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -705,6 +704,9 @@ class TestWithServers(TestWithoutServers):
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
 
+        # Suffix to append to each access point name
+        self.access_points_suffix = None
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -759,6 +761,11 @@ class TestWithServers(TestWithoutServers):
         # Access points to use by default when starting servers and agents
         self.access_points = self.params.get(
             "access_points", "/run/setup/*", list(self.hostlist_servers)[:1])
+        self.access_points_suffix = self.params.get(
+            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
+        if self.access_points_suffix:
+            self.access_points = list(nodeset_append_suffix(
+                self.access_points, self.access_points_suffix))
 
         # Display host information
         self.log.info("-" * 100)
@@ -1155,7 +1162,7 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class)
+                self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
 
     def configure_manager(self, name, manager, hosts, slots,
@@ -1688,7 +1695,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp)
+            dmg_config_temp, self.access_points_suffix)
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 
