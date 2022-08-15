@@ -61,7 +61,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	}
 
 	// Store email in email index
-	if (strlen(info->email) == 0) {
+	if (strlen(info->email) != 0) {
 		rc =
 		    dfs_open(ds3->meta_dfs, ds3->meta_dirs[EMAILS_DIR], info->email, S_IFLNK | mode,
 			     O_RDWR | O_CREAT | O_TRUNC, 0, 0, user_path, &user_obj);
@@ -101,7 +101,7 @@ ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_e
 	}
 
 	// Remove email if it exists
-	if (strlen(info->email) == 0) {
+	if (strlen(info->email) != 0) {
 		if (dfs_access(ds3->meta_dfs, ds3->meta_dirs[EMAILS_DIR], info->email, W_OK) == 0) {
 			rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[EMAILS_DIR], info->email,
 					false, NULL);

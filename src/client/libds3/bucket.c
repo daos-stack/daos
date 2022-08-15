@@ -34,17 +34,17 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		goto err;
 	}
 
-	daos_size_t   bi = 0;
-	ds3_bucket_t *ds3b;
+	daos_size_t   bi   = 0;
+	ds3_bucket_t *ds3b = NULL;
 	for (int i = 0; i < ncont; i++) {
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
-			// Skip metadata bucket
+			D_INFO("Skipping _METADATA bucket");
 			continue;
 		}
 
 		// Copy bucket name
-		strcpy(buf[bi].name, conts[i].pci_label);
+		strcpy(buf[bi].name, name);
 
 		// Get info
 		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
@@ -52,10 +52,11 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 			goto err;
 
 		rc = ds3_bucket_get_info(&buf[bi], ds3b, ev);
-		if (rc)
-			goto err_ds3b;
-		
+
 		ds3_bucket_close(ds3b, ev);
+
+		if (rc)
+			goto err;
 
 		bi++;
 		// TODO handle marker
@@ -63,9 +64,6 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 
 	*nbuck = bi;
 
-err_ds3b:
-	if (ds3b)
-		ds3_bucket_close(ds3b, ev);
 err:
 	D_FREE(conts);
 	return -rc;
@@ -84,18 +82,23 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		return -EINVAL;
 	}
 
-	int               rc = 0;
-
-	struct ds3_bucket ds3b;
+	int rc = 0;
 
 	// Create dfs container and open ds3b
-	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, &ds3b.coh, &ds3b.dfs);
+	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create container, rc = %d\n", rc);
 		return -rc;
 	}
 
-	rc = ds3_bucket_set_info(info, &ds3b, ev);
+	ds3_bucket_t *ds3b = NULL;
+	rc                 = ds3_bucket_open(name, &ds3b, ds3, ev);
+	if (rc != 0) {
+		D_ERROR("Failed to open container, rc = %d\n", rc);
+		return -rc;
+	}
+
+	rc = ds3_bucket_set_info(info, ds3b, ev);
 	if (rc != 0) {
 		D_ERROR("Failed to put bucket info, rc = %d\n", rc);
 		goto err;
@@ -108,7 +111,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 	}
 
 err:
-	ds3_bucket_close(&ds3b, ev);
+	ds3_bucket_close(ds3b, ev);
 	return -rc;
 }
 
