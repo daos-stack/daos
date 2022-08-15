@@ -34,7 +34,7 @@
  * Tests can be run by specifying the appropriate argument for a test or
  * all will be run if no test is specified.
  */
-#define TESTS "im"
+#define TESTS "ims"
 static const char *all_tests = TESTS;
 
 static void
@@ -67,8 +67,6 @@ do_openat(void **state)
 	char        input_buf[] = "hello";
 	off_t       offset;
 	int         root = open(test_dir, O_PATH | O_DIRECTORY);
-	FILE       *stream;
-	size_t      count;
 
 	assert_return_code(root, errno);
 
@@ -156,6 +154,23 @@ do_openat(void **state)
 
 	rc = unlinkat(root, "my_file", 0);
 	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
+do_stream(void **state)
+{
+	int    fd;
+	int    rc;
+	FILE  *stream;
+	size_t count;
+	off_t  offset;
+
+	int    root = open(test_dir, O_PATH | O_DIRECTORY);
+
+	assert_return_code(root, errno);
 
 	/* Streaming I/O testing */
 	fd = openat(root, "stream_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
@@ -322,7 +337,7 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
-	assert_true(timespec_gt(now, stbuf.st_mtim));
+	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
 
 	/* Write to the file and verify mtime is newer */
 	rc = write(fd, input_buf, sizeof(input_buf));
@@ -392,6 +407,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
+		case 's':
+			printf("\n\n=================");
+			printf("dfuse streaming tests");
+			printf("=====================");
+			const struct CMUnitTest stream_tests[] = {
+			    cmocka_unit_test(do_stream),
+			};
+			nr_failed = cmocka_run_group_tests(stream_tests, NULL, NULL);
+			break;
+
 		case 'm':
 			printf("\n\n=================");
 			printf("dfuse metadata tests");
@@ -424,12 +449,13 @@ main(int argc, char **argv)
 	static struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
 					       {"all", no_argument, NULL, 'a'},
 					       {"io", no_argument, NULL, 'i'},
+					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {NULL, 0, NULL, 0}};
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "a:M:im", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "a:M:ims", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
