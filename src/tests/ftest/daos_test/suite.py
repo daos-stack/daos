@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_core_base import DaosCoreBase
-import os
+import os.path
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
@@ -58,7 +58,7 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=daos_test,daos_core_test,test_daos_pool
         """
         self.run_subtest()
-        os.rename("/tmp/suite_dmg.log", os.join(self.outputdir, f"{self.subtest_name}_dmg.log"))
+        os.rename("/tmp/suite_dmg.log", os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log"))
 
     def test_daos_container(self):
         """Jira ID: DAOS-1568
