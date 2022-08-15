@@ -2507,7 +2507,7 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 		break;
 	case AGG_MODE_AGGREGATE:
 		if (cont->vc_in_aggregation) {
-			D_ERROR(DF_CONT": Already in aggregation epr["DF_U64", "DF_U64"]\n",
+			D_DEBUG(DB_EPC, DF_CONT": Already in aggregation epr["DF_U64", "DF_U64"]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_aggregation.epr_lo, cont->vc_epr_aggregation.epr_hi);
 			return -DER_BUSY;
@@ -2614,6 +2614,18 @@ struct agg_data {
 	struct vos_agg_param	ad_agg_param;
 	struct vos_iter_anchors	ad_anchors;
 };
+
+int
+vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr)
+{
+	return aggregate_enter(vos_hdl2cont(coh), AGG_MODE_AGGREGATE, epr);
+}
+
+void
+vos_aggregate_exit(daos_handle_t coh)
+{
+	aggregate_exit(vos_hdl2cont(coh), AGG_MODE_AGGREGATE);
+}
 
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,

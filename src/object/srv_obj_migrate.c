@@ -515,8 +515,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	D_ASSERT(tls != NULL);
-	if (opc == RB_OP_REINT)
-		pool->sp_reintegrating++;
+	pool->sp_rebuilding++;
 
 	rc = ABT_cond_create(&tls->mpt_init_cond);
 	if (rc != ABT_SUCCESS)
@@ -1382,7 +1381,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 						 min_eph,
 						 DIOF_FOR_MIGRATION | DIOF_EC_RECOV_FROM_PARITY,
 						 ds_cont);
-		if (rc > 0)
+		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
@@ -1401,8 +1400,22 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
 							 mrone->mo_iods_update_ephs[i][j],
 							 DIOF_FOR_MIGRATION, ds_cont);
-			if (rc > 0)
-				D_GOTO(out, rc);
+			if (rc < 0) {
+				if (rc == -DER_VOS_PARTIAL_UPDATE) {
+					/* In some cases, EC aggregation failed to delete the
+					 * replicate recx, then during rebuild these replicate
+					 * recx might be rebuilt again. Since the data rebuilt
+					 * from parity will be rebuilt first. so let's ignore
+					 * this replicate recx for now.
+					 */
+					D_WARN(DF_UOID" "DF_RECX"/"DF_X64" already rebuilt\n",
+					       DP_UOID(mrone->mo_oid), DP_RECX(iod.iod_recxs[0]),
+					       mrone->mo_iods_update_ephs[i][j]);
+					rc = 0;
+				} else {
+					D_GOTO(out, rc);
+				}
+			}
 		}
 	}
 out:
@@ -2610,6 +2623,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			minimum_nr = obj_ec_tgt_nr(&unpack_arg.oc_attr);
 		else
 			minimum_nr = 2;
+		enum_flags |= DIOF_RECX_REVERSE;
 	} else {
 		minimum_nr = 2;
 		p_csum = &csum;
@@ -2689,6 +2703,13 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
 			}
+			continue;
+		} else if (rc == -DER_UPDATE_AGAIN) {
+			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
+			 * aggregation yet, so let's retry.
+			 */
+			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			rc = 0;
 			continue;
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
@@ -2825,8 +2846,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	if (tls->mpt_opc == RB_OP_REINT)
-		pool->sp_reintegrating--;
+	pool->sp_rebuilding--;
 	migrate_pool_tls_put(tls);
 	tls->mpt_fini = 1;
 	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
@@ -2892,7 +2912,6 @@ migrate_obj_ult(void *data)
 			if (tls->mpt_fini)
 				D_GOTO(free_notls, rc);
 		}
-		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
 		if (tls->mpt_pool->spc_pool->sp_discard_status) {
 			rc = tls->mpt_pool->spc_pool->sp_discard_status;
 			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",

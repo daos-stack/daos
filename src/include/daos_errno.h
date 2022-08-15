@@ -117,7 +117,9 @@ extern "C" {
 	/** Invalid user/group permissions.*/                                                      \
 	ACTION(DER_SHMEM_PERMS, Unable to access shared memory segment due to incompatible user or group permissions) \
 	/** Fatal (non-retry-able) transport layer mercury error */                                \
-	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)
+	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
+        /** Failed to send rpc */                                                                  \
+        ACTION(DER_HG_SEND_FAILED, Failed to send rpc)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */

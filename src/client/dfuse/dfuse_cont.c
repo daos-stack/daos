@@ -33,7 +33,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
+		DFUSE_TRA_DEBUG(parent, "Invalid container uuid");
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}

@@ -6063,6 +6063,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		}
 		memcpy(shard_arg->la_dkey_anchor,
 		       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_dkey_anchor->da_flags = obj_args->dkey_anchor->da_flags;
 	}
 
 	if (obj_args->akey_anchor) {
@@ -6077,6 +6078,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		else
 			memcpy(shard_arg->la_akey_anchor,
 			       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_akey_anchor->da_flags = obj_args->akey_anchor->da_flags;
 	}
 out:
 	return rc;

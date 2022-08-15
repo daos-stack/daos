@@ -1498,4 +1498,22 @@ vos_standalone_tls_init(int tags);
 void
 vos_standalone_tls_fini(void);
 
+/**
+ * Enter the aggregation, so other operation might be excluded at the same time.
+ * \param[in]	coh	container open handle.
+ * \param[in]	epr	epoch range.
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
+
+/**
+ * Exit the aggregation, so other operation can proceed.
+ * \param[in]	coh	container open handle.
+ *
+ */
+void
+vos_aggregate_exit(daos_handle_t coh);
+
 #endif /* __VOS_API_H */

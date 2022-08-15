@@ -79,7 +79,7 @@ struct ds_pool {
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
