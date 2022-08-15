@@ -610,12 +610,19 @@ func TestPromExp_extractLabels(t *testing.T) {
 				"target": "7",
 			},
 		},
-		"pool_tgt_scrubber_corruption": {
+		"pool_tgt_scrubber_corruption_total": {
 			input:   "ID: 1/pool/86eacd2c-eceb-4054-8621-017f4f661fe2/tgt_5/scrubber/corruption/total",
 			expName: "pool_scrubber_corruption_total",
 			expLabels: labelMap{
 				"pool":   "86eacd2c-eceb-4054-8621-017f4f661fe2",
 				"target": "5",
+			},
+		},
+		"nvme_vendor_host_reads_raw": {
+			input:   "ID: 1/nvme/d70505:05:00.0/vendor/host_reads_raw",
+			expName: "nvme_vendor_host_reads_raw",
+			expLabels: labelMap{
+				"device": "d70505:05:00.0",
 			},
 		},
 	} {

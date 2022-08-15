@@ -191,10 +191,24 @@ func appendName(cur, name string) string {
 	return cur + "_" + name
 }
 
+// extractLabels takes a "/"-separated DAOS metric name in order to
+// create a normalized Prometheus name and label map.
+//
+// NB: Prometheus metric names should follow best practices as
+// outlined at https://prometheus.io/docs/practices/naming/
+//
+// In particular, a metric name should describe the measurement,
+// not the entity the measurement is about. In other words, if 4
+// different entities share the same measurement, then there should
+// be a single metric with a label that distinguishes between
+// individual measurement values.
+//
+// Good: pool_started_at {pool="00000000-1111-2222-3333-4444444444"}
+// Bad: pool_00000000_1111_2222_3333_4444444444_started_at
 func extractLabels(in string) (labels labelMap, name string) {
 	labels = make(labelMap)
 	compsIdx := 0
-	comps := strings.Split(in, "/")
+	comps := strings.Split(in, string(telemetry.PathSep))
 	if len(comps) == 0 {
 		return labels, in
 	}
@@ -247,6 +261,11 @@ func extractLabels(in string) (labels labelMap, name string) {
 
 		name = "net"
 		labels["provider"] = comps[compsIdx]
+		compsIdx++
+	case "nvme":
+		name = "nvme"
+		compsIdx++
+		labels["device"] = comps[compsIdx]
 		compsIdx++
 	}
 
