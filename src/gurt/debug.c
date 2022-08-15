@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,7 +34,7 @@ static d_dbug_t DB_OPT8;
 static d_dbug_t DB_OPT9;
 static d_dbug_t DB_OPT10;
 
-#define DBG_ENV_MAX_LEN	(32)
+#define DBG_ENV_MAX_LEN	(128)
 
 #define DBG_DICT_ENTRY(bit, name, longname)				\
 	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\

@@ -82,6 +82,7 @@ def scons():
     dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 
+    denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
@@ -93,6 +94,11 @@ def scons():
 
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
     Export('daos_test_obj')
+
+    c_files = ['daos_debug_set_params.c']
+    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
+                                   c_files + daos_test_tgt,
+                                   LIBS=['daos_common'] + libraries)
 
     newenv = configure_cmocka(denv.Clone())
 
@@ -107,7 +113,6 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
 
@@ -119,6 +124,7 @@ def scons():
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
+    denv.Install('$PREFIX/bin/', daosdebug)
     denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_1')
     denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_2')
     denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_3')

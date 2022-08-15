@@ -246,10 +246,14 @@ struct  _Mgmt__PoolDestroyReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * destroy regardless of any child containers
+   */
+  protobuf_c_boolean recursive;
 };
 #define MGMT__POOL_DESTROY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_destroy_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0 }
 
 
 /*

@@ -60,6 +60,7 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith('weekly-testing') &&
      !env.BRANCH_NAME.startsWith('release/') &&
+     !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
    currentBuild.result = 'SUCCESS'
@@ -259,7 +260,7 @@ pipeline {
                             if (key.contains(' ')) {
                                 return
                             }
-                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                            pragmas[key.toLowerCase()] = value
                         /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
                         } catch (ArrayIndexOutOfBoundsException ignored) {
                             // ignore and move on to the next line

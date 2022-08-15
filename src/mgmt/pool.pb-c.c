@@ -1775,7 +1775,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_create_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[5] =
 {
   {
     "sys",
@@ -1825,17 +1825,30 @@ static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "recursive",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolDestroyReq, recursive),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_destroy_req__field_indices_by_name[] = {
   2,   /* field[2] = force */
   1,   /* field[1] = id */
+  4,   /* field[4] = recursive */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__pool_destroy_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor =
 {
@@ -1845,7 +1858,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor =
   "Mgmt__PoolDestroyReq",
   "mgmt",
   sizeof(Mgmt__PoolDestroyReq),
-  4,
+  5,
   mgmt__pool_destroy_req__field_descriptors,
   mgmt__pool_destroy_req__field_indices_by_name,
   1,  mgmt__pool_destroy_req__number_ranges,

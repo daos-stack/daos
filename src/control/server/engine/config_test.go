@@ -705,7 +705,8 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
-		WithHugePageSize(hugepageSz)
+		WithHugePageSize(hugepageSz).
+		WithSrxDisabled(true)
 
 	cfg.Index = uint32(index)
 
@@ -733,7 +734,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
-		"FI_OFI_RXM_USE_SRX=1",
+		"FI_OFI_RXM_USE_SRX=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
@@ -989,57 +990,82 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 func TestFabricConfig_Update(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fc        *FabricConfig
-		other     FabricConfig
+		new       FabricConfig
 		expResult *FabricConfig
 	}{
-		"set all": {
+		"nil": {},
+		"nothing set": {
+			fc:        &FabricConfig{},
+			new:       FabricConfig{},
+			expResult: &FabricConfig{},
+		},
+		"update": {
 			fc: &FabricConfig{},
-			other: FabricConfig{
-				Provider:              "p",
-				Interface:             "i",
-				InterfacePort:         "1234",
+			new: FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         "9999",
 				CrtCtxShareAddr:       2,
-				CrtTimeout:            3,
+				CrtTimeout:            60,
+				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
 			},
 			expResult: &FabricConfig{
-				Provider:              "p",
-				Interface:             "i",
-				InterfacePort:         "1234",
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         "9999",
 				CrtCtxShareAddr:       2,
-				CrtTimeout:            3,
+				CrtTimeout:            60,
+				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
 			},
 		},
-		"already set": {
+		"don't unset fields": {
 			fc: &FabricConfig{
-				Provider:              "p",
-				Interface:             "i",
-				InterfacePort:         "1234",
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         "9999",
 				CrtCtxShareAddr:       2,
-				CrtTimeout:            3,
+				CrtTimeout:            60,
+				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
 			},
-			other: FabricConfig{
-				Provider:              "q",
-				Interface:             "h",
-				InterfacePort:         "5678",
-				CrtCtxShareAddr:       3,
-				CrtTimeout:            4,
-				NumSecondaryEndpoints: []int{5},
+			new: FabricConfig{},
+			expResult: &FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         "9999",
+				CrtCtxShareAddr:       2,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
+			},
+		},
+		"update mixed": {
+			fc: &FabricConfig{
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+			},
+			new: FabricConfig{
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   "9999",
+				CrtCtxShareAddr: 15,
+				CrtTimeout:      120,
+				DisableSRX:      true,
 			},
 			expResult: &FabricConfig{
-				Provider:              "p",
-				Interface:             "i",
-				InterfacePort:         "1234",
-				CrtCtxShareAddr:       2,
-				CrtTimeout:            3,
-				NumSecondaryEndpoints: []int{1},
+				Provider:        "provider",
+				Interface:       "iface",
+				InterfacePort:   "9999",
+				CrtCtxShareAddr: 2,
+				CrtTimeout:      60,
+				DisableSRX:      true,
 			},
 		},
 		"default secondary ctx": {
 			fc: &FabricConfig{},
-			other: FabricConfig{
+			new: FabricConfig{
 				Provider: multiProviderString("one", "two", "three"),
 			},
 			expResult: &FabricConfig{
@@ -1049,7 +1075,7 @@ func TestFabricConfig_Update(t *testing.T) {
 		},
 		"no secondary ctx": {
 			fc: &FabricConfig{},
-			other: FabricConfig{
+			new: FabricConfig{
 				Provider: "one",
 			},
 			expResult: &FabricConfig{
@@ -1058,7 +1084,7 @@ func TestFabricConfig_Update(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.fc.Update(tc.other)
+			tc.fc.Update(tc.new)
 
 			if diff := cmp.Diff(tc.expResult, tc.fc); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)

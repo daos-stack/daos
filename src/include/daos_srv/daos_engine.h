@@ -747,8 +747,8 @@ struct tree_cache_root {
 };
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-		d_iov_t *val_iov);
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
+		daos_unit_oid_t oid, d_iov_t *val_iov);
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
