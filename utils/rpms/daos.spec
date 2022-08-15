@@ -509,7 +509,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
-%{_bindir}/daos_debug_set_params
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
 %{_bindir}/eq_tests
@@ -523,6 +522,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client-tests-openmpi
 %{_bindir}/crt_launch
+%{_bindir}/daos_debug_set_params
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
@@ -573,7 +573,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Thu Aug 11 2022 Wang Shilong <shilong.wang@intel.com> 2.1.104-3
-- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+- Add daos_debug_set_params to client-tests-openmpi rpm for fault injection test.
 
 * Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
 - Update to mercury 2.2.0
