@@ -67,7 +67,7 @@ RUN dnf -y upgrade && \
         boost-python36-devel \
         bzip2 \
         clang-analyzer \
-        cmake \
+        cmake3 \
         CUnit-devel \
         e2fsprogs \
         file \
@@ -121,7 +121,8 @@ RUN dnf -y upgrade && \
         sudo \
         valgrind-devel \
         yasm && \
-    dnf clean all
+    dnf clean all && \
+    ln -s cmake3 /usr/bin/cmake
 
 ARG UID=1000
 
