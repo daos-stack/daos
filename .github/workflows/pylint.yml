@@ -24,6 +24,8 @@ jobs:
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
       - name: See git diff
         run: git diff ${{ github.event.pull_request.base.sha }} -U10
+      - name: See git diff
+        run: git diff ${{ github.event.pull_request.baseRef.sha }} -U10
       - name: Run pylint check.
         run: >
           git diff ${{ github.event.pull_request.base.sha }} -U5 |
