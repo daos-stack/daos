@@ -273,7 +273,8 @@ struct rebuild_iv {
 
 };
 
-#define DEFAULT_YIELD_FREQ	128
+#define SCAN_YIELD_FREQ		4096
+#define SCAN_OBJ_YIELD_CNT	128
 
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
@@ -365,4 +366,6 @@ rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 
 void rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version,
 			 uint32_t rebuild_gen, uint64_t term);
+int
+rebuild_obj_tree_destroy(daos_handle_t btr_hdl);
 #endif /* __REBUILD_INTERNAL_H_ */
