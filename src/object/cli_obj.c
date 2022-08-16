@@ -6710,7 +6710,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 		return -DER_INVAL;
 
 	if (pa_domain == 0)
-		pa_domain = DAOS_PROP_CO_REDUN_NODE;
+		pa_domain = DAOS_PROP_CO_REDUN_DEFAULT;
 	else if (!daos_pa_domain_is_valid(pa_domain))
 		return -DER_INVAL;
 
