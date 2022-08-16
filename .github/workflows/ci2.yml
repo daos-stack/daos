@@ -13,7 +13,7 @@ jobs:
   # from scratch, but do not save them.
   Build-and-test:
     name: Run DAOS/NLT tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         distro: [ubuntu]

@@ -10,7 +10,7 @@ on:
 
 jobs:
   flake8-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Python Flake8 check
     steps:
       - name: Check out source repository
