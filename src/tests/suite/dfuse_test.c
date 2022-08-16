@@ -45,6 +45,7 @@ print_usage()
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("dfuse_test -a|--all\n");
 	print_message("dfuse_test -i|--io\n");
+	print_message("dfuse_test -s|--stream\n");
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
