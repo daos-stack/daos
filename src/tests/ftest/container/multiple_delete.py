@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from ior_test_base import IorTestBase
 from general_utils import DaosTestError
 
@@ -63,21 +65,37 @@ class MultipleContainerDelete(IorTestBase):
 
         self.log.info("Verifying NVMe space is recovered")
         try:
-            self.pool.check_free_space(
-                expected_scm=initial_scm_fs, expected_nvme=initial_ssd_fs, timeout=180)
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
         except DaosTestError as error:
-            # self.fail("NVMe space is not recovered after 50 "
-            #           "create-write-destroy iterations {}".format(error))
-            self.log.info("Either NVMe or SCM space was not recovered after 50 "
-                          "create-write-destroy iterations %s", error)
+            self.fail("NVMe space is not recovered after 50 "
+                      "create-write-destroy iterations {}".format(error))
 
+        # Verify SCM space recovery. About 198KB of the SCM free space isn't recovered
+        # even after waiting for 180 sec, so apply the threshold. Considered not a bug.
+        # DAOS-8643
         self.log.info("Verifying SCM space is recovered")
-        self.log.info("Final = %d; Initial = %d", final_scm_fs, initial_scm_fs)
-        # About 198KB of the SCM free space isn't recovered even after waiting for 180
-        # sec, so apply the threshold. Considered not a bug. DAOS-8643
-        msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, Threshold = {}; "
-               "(Unit is in byte.)".format(initial_scm_fs, final_scm_fs, SCM_THRESHOLD))
-        self.assertLessEqual(initial_scm_fs, final_scm_fs + SCM_THRESHOLD, msg)
+        scm_recovered = False
+        # Based on the experiments, the recovery occurs in every 8 iterations. However,
+        # since 50 is not divisible by 8, some data would remain in the disk right after
+        # the 50th iteration. If we wait for several seconds, that remaining data will be
+        # deleted (and we have 198KB left as mentioned above).
+        for _ in range(5):
+            final_scm_fs, _ = self.get_pool_space()
+            scm_diff = initial_scm_fs - final_scm_fs
+            if scm_diff <= SCM_THRESHOLD:
+                msg = ("SCM space was recovered. Initial = {}; Final = {}; "
+                       "Threshold = {}; (Unit is in byte)").format(
+                           initial_scm_fs, final_scm_fs, SCM_THRESHOLD)
+                self.log.info(msg)
+                scm_recovered = True
+                break
+            time.sleep(10)
+
+        if not scm_recovered:
+            msg = ("SCM space wasn't recovered! Initial = {}, Final = {}, "
+                   "Threshold = {}; (Unit is in byte.)".format(
+                       initial_scm_fs, final_scm_fs, SCM_THRESHOLD))
+            self.fail(msg)
 
     def get_pool_space(self):
         """Get scm and ssd pool free space
