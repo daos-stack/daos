@@ -9,9 +9,11 @@
  * tests/suite/daos_debug_set_params
  */
 
-#include <getopt.h>
-#include <sys/types.h>
-#include "daos_test.h"
+#include <daos/debug.h>
+#include <daos.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <daos/common.h>
 
 static void
 print_usage()
