@@ -25,7 +25,7 @@ jobs:
       - name: See git diff
         run: git diff ${{ github.event.pull_request.base.sha }} -U10
       - name: See git diff
-        run: git diff ${{ github.event.pull_request.base.ref }}... -U10
+        run: git diff origin/${{ github.event.pull_request.base.ref }}... -U10
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
