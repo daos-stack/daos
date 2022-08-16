@@ -42,8 +42,8 @@ rsvc_class(enum ds_rsvc_class_id id)
 	return rsvc_classes[id];
 }
 
-static char *
-state_str(enum ds_rsvc_state state)
+char *
+ds_rsvc_state_str(enum ds_rsvc_state state)
 {
 	switch (state) {
 	case DS_RSVC_UP_EMPTY:
@@ -388,8 +388,8 @@ ds_rsvc_put_leader(struct ds_rsvc *svc)
 static void
 change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 {
-	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name,
-		svc->s_term, state_str(svc->s_state), state_str(state));
+	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name, svc->s_term,
+		ds_rsvc_state_str(svc->s_state), ds_rsvc_state_str(state));
 	svc->s_state = state;
 	ABT_cond_broadcast(svc->s_state_cv);
 }
@@ -685,7 +685,7 @@ self_only(d_rank_list_t *replicas)
 }
 
 static int
-start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
+start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
 	struct rdb_storage     *storage;
@@ -698,10 +698,10 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	svc->s_ref++;
 
 	if (create)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas, &rsvc_rdb_cbs, svc,
-				&storage);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, term, size, replicas, &rsvc_rdb_cbs,
+				svc, &storage);
 	else
-		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &storage);
+		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, term, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
 		goto err_svc;
 
@@ -837,6 +837,7 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	db_uuid		DB UUID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	create		whether to create the replica before starting
  * \param[in]	size		replica size in bytes
  * \param[in]	replicas	optional initial membership
@@ -844,9 +845,10 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  *
  * \retval -DER_ALREADY		replicated service already started
  * \retval -DER_CANCELED	replicated service stopping
+ * \retval -DER_STALE		stale \a caller_term
  */
 int
-ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
+ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	struct ds_rsvc		*svc = NULL;
@@ -858,8 +860,16 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
-			svc->s_stop);
+		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
+		if (caller_term != RDB_NIL_TERM) {
+			rc = rdb_ping(svc->s_db, caller_term);
+			if (rc != 0) {
+				if (rc != -DER_STALE)
+					D_ERROR("%s: failed to ping local replica\n", svc->s_name);
+				ds_rsvc_put(svc);
+				goto out;
+			}
+		}
 		if (svc->s_stop)
 			rc = -DER_CANCELED;
 		else
@@ -868,7 +878,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		goto out;
 	}
 
-	rc = start(class, id, db_uuid, create, size, replicas, arg, &svc);
+	rc = start(class, id, db_uuid, caller_term, create, size, replicas, arg, &svc);
 	if (rc != 0)
 		goto out;
 
@@ -930,22 +940,37 @@ stop(struct ds_rsvc *svc, bool destroy)
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	destroy		whether to destroy the replica after stopping
  *
  * \retval -DER_ALREADY		replicated service already stopped
  * \retval -DER_CANCELED	replicated service stopping
+ * \retval -DER_STALE		stale \a caller_term
  */
 int
-ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
+ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, bool destroy)
 {
 	struct ds_rsvc		*svc;
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	rc = ds_rsvc_lookup(class, id, &svc);
 	if (rc != 0)
 		return -DER_ALREADY;
+
+	if (caller_term != RDB_NIL_TERM) {
+		rc = rdb_ping(svc->s_db, caller_term);
+		if (rc != 0) {
+			if (rc != -DER_STALE)
+				D_ERROR("%s: failed to ping local replica\n", svc->s_name);
+			ds_rsvc_put(svc);
+			return rc;
+		}
+	}
+
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+
 	return stop(svc, destroy);
 }
 
@@ -1049,7 +1074,7 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 {
 	int	rc;
 
-	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
+	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks, svc->s_term,
 				true /* create */, false /* bootstrap */, size);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
@@ -1060,10 +1085,22 @@ out_stop:
 	/* Clean up ranks that were not added */
 	if (ranks->rl_nr > 0) {
 		D_ASSERT(rc != 0);
-		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks,
-				  NULL, true /* destroy */);
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks, NULL, svc->s_term,
+				  true /* destroy */);
 	}
 	return rc;
+}
+
+enum ds_rsvc_state
+ds_rsvc_get_state(struct ds_rsvc *svc)
+{
+	return svc->s_state;
+}
+
+void
+ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
+{
+	change_state(svc, state);
 }
 
 int
@@ -1083,7 +1120,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 }
 
 int
-ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool stop)
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 {
 	d_rank_list_t	*stop_ranks;
 	int		 rc;
@@ -1095,16 +1132,16 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool stop)
 
 	/* filter out failed ranks */
 	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	if (stop_ranks->rl_nr > 0 && stop)
-		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
-				  NULL, true /* destroy */);
+	if (stop_ranks->rl_nr > 0)
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks, NULL, svc->s_term,
+				  true /* destroy */);
 	d_rank_list_free(stop_ranks);
 	return rc;
 }
 
 int
 ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-			d_rank_list_t *ranks, bool stop, struct rsvc_hint *hint)
+			d_rank_list_t *ranks, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
 	int		 rc;
@@ -1112,7 +1149,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_remove_replicas_s(svc, ranks, stop);
+	rc = ds_rsvc_remove_replicas_s(svc, ranks);
 	ds_rsvc_set_hint(svc, hint);
 	ds_rsvc_put_leader(svc);
 	return rc;
@@ -1160,13 +1197,14 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
  * \param[in]	id		replicated service ID
  * \param[in]	dbid		database UUID
  * \param[in]	ranks		list of replica ranks
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	create		create replicas first
  * \param[in]	bootstrap	start with an initial list of replicas
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
 ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
-		   const d_rank_list_t *ranks, bool create, bool bootstrap,
+		   const d_rank_list_t *ranks, uint64_t caller_term, bool create, bool bootstrap,
 		   size_t size)
 {
 	crt_rpc_t		*rpc;
@@ -1193,6 +1231,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	if (bootstrap)
 		in->sai_flags |= RDB_AF_BOOTSTRAP;
 	in->sai_size = size;
+	in->sai_term = caller_term;
 	in->sai_ranks = (d_rank_list_t *)ranks;
 
 	rc = dss_rpc_send(rpc);
@@ -1205,7 +1244,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		D_ERROR(DF_UUID": failed to start%s %d replicas: "DF_RC"\n",
 			DP_UUID(dbid), create ? "/create" : "", rc,
 			DP_RC(out->sao_rc_errval));
-		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
+		ds_rsvc_dist_stop(class, id, ranks, NULL, caller_term, create);
 		rc = out->sao_rc_errval;
 	}
 
@@ -1231,9 +1270,8 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 
-	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
-			   create, in->sai_size,
-			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid, in->sai_term, create,
+			   in->sai_size, bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
 	if (rc == -DER_ALREADY)
 		rc = 0;
 
@@ -1276,12 +1314,12 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * \param[in]	id		replicated service ID
  * \param[in]	ranks		list of \a ranks->rl_nr replica ranks
  * \param[in]	excluded	excluded rank list.
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	destroy		destroy after close
  */
 int
-ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
-		  const d_rank_list_t *ranks, d_rank_list_t *excluded,
-		  bool destroy)
+ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_list_t *ranks,
+		  d_rank_list_t *excluded, uint64_t caller_term, bool destroy)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_stop_in	*in;
@@ -1303,6 +1341,7 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		goto out_rpc;
 	if (destroy)
 		in->soi_flags |= RDB_OF_DESTROY;
+	in->soi_term = caller_term;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1331,10 +1370,11 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 	struct rsvc_stop_out	*out = crt_reply_get(rpc);
 	int			 rc = 0;
 
-	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
+	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id, in->soi_term,
 			  in->soi_flags & RDB_OF_DESTROY);
 	if (rc == -DER_ALREADY)
 		rc = 0;
+
 	out->soo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
