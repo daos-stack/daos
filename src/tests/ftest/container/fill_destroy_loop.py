@@ -75,7 +75,8 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         Test Description:
             Purpose of the test is to stress pool and container space usage
-            boundary, test by looping of container object_write unitl pool full and destroy
+            boundary, test by looping of container object_write until pool full, check for
+            any other error.
 
         Use Case:
             repeat following steps:
