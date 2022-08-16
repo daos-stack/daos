@@ -79,11 +79,17 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
+    libraries = ['daos', 'dfs', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal']
 
     denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
+
+    c_files = ['daos_debug_set_params.c']
+    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
+                                   c_files,
+                                   LIBS=['daos_common'] + libraries)
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
     Export('daos_test_tgt')
@@ -94,10 +100,7 @@ def scons():
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
     Export('daos_test_obj')
 
-    c_files = ['daos_debug_set_params.c']
-    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
-                                   c_files + daos_test_tgt,
-                                   LIBS=['daos_common'] + libraries)
+    libraries += ['daos_tests']
 
     newenv = configure_cmocka(denv.Clone())
 
@@ -112,7 +115,6 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    newenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
 
