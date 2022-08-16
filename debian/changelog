@@ -1,6 +1,6 @@
 daos (2.1.104-3) unstable; urgency=medium
   [ Wang Shilong ]
-  * Add daos_debug_set_params to client-tests-openmpi rpm for fault injection test.
+  * Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
 
  -- Wang Shilong <shilong.wang@intel.com>  Thu, 11 Aug 2022 09:52:00 -0400
 
