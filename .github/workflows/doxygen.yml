@@ -23,3 +23,9 @@ jobs:
         run: echo -n "::add-matcher::ci/daos-doxygen-matcher.json"
       - name: Run check
         run: doxygen Doxyfile
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: API Documentation
+          path: docs/doxygen/html/
+          retention-days: 1
