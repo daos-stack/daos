@@ -75,7 +75,7 @@ class DdbCommandBase(CommandWithParameters):
 
 
 class DdbCommand(DdbCommandBase):
-    # pylint: too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """ddb command class.
 
     Component path is needed for most of the commands. They're in the form of:
