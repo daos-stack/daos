@@ -104,7 +104,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
 	if (daos_handle_is_valid(tls->rebuild_tree_hdl))
-		obj_tree_destroy(tls->rebuild_tree_hdl);
+		rebuild_obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
 	D_FREE(tls);
 }
