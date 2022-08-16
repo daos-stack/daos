@@ -973,6 +973,23 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 
+	// This is a workaround before we can handle the following race
+	// properly.
+	//
+	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
+	//     Write ps: Creating
+	//                            Read ps: Creating
+	//     Write ps: Ready
+	//                            Write ps: Creating
+	//
+	// The pool remains in Creating state after PoolCreate completes,
+	// leading to DER_AGAINs during PoolDestroy.
+	if ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("ignoring RAS event %q for pool %s in PoolServiceStateCreating",
+			evt.Msg, evt.PoolUUID)
+		return
+	}
+
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
 

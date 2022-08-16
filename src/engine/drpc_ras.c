@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -300,7 +300,7 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 }
 
 int
-ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version)
 {
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
@@ -322,6 +322,8 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 		D_ERROR("failed to convert svc replicas to proto\n");
 		return rc;
 	}
+
+	info.version = version;
 
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
