@@ -107,6 +107,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 "--Pool %s query data: %s\n", test_loop, self.pool.uuid, self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
             self.log.info("--%s.(2)Pool free space before container create: %s",
-                test_loop, free_space)
+                          test_loop, free_space)
 
             self.write_pool_until_nospace(test_loop)
