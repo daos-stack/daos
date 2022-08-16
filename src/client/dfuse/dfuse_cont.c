@@ -27,7 +27,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
-	/* Dentry names where are not valid uuids cannot possibly be added so in
+	/* Dentry names where are not valid uuids cannot posibly be added so in
 	 * this case return the negative dentry with a timeout to prevent future
 	 * lookups.
 	 */

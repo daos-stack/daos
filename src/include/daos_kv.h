@@ -35,7 +35,6 @@ extern "C" {
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the object type
  *			be set to DAOS_OT_KV_*.
- * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	oh	Returned kv object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.

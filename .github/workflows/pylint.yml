@@ -7,7 +7,7 @@ on:
 
 jobs:
   pylint:
-    name: Python Pylint check
+    name: Pylint check
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code

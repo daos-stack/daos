@@ -10,7 +10,7 @@ on:
 jobs:
 
   Doxygen:
-    name: Run doxygen
+    name: Doxygen
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
