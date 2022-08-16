@@ -44,7 +44,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 # self.log.info("%s", repr(excep))
                 if self.DER_NOSPACE in str(excep):
                     self.log.info(
-                        "--(3) Der_no_space %s detected, pool is unable for an additional"
+                        "--(3) DER_NOSPACE %s detected, pool is unable for an additional"
                         " %s byte object", self.DER_NOSPACE, container.data_size.value)
                     break
                 self.fail("Exception while writing object: {}".format(repr(excep)))
@@ -85,8 +85,9 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=fill_cont_pool_stress,test_fill_destroy_cont_loop
         """
         testloop = self.params.get("testloop", "/run/pool/*")
-        # create pool
+        # create pool and enable the aggregation
         self.add_pool()
+        self.pool.set_property("reclaim", "time")
 
         for test_loop in range(1, testloop + 1):
             # query the pool and get free space before write
