@@ -474,11 +474,18 @@ class TelemetryUtils():
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
+        all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
+
+        # Add the NVMe metrics if the test is run on a hardware cluster.
+        for nvme_list in server.manager.job.get_engine_values("bdev_list"):
+            if nvme_list and len(nvme_list) > 0:
+                all_metrics_names.extend(self.ENGINE_NVME_METRICS)
+                break
 
         return all_metrics_names
 
