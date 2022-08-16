@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_core_base import DaosCoreBase
-import os
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
@@ -58,7 +57,12 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=daos_test,daos_core_test,test_daos_pool
         """
         self.run_subtest()
-        os.rename("/tmp/suite_dmg.log", os.join(self.outputdir, f"{self.subtest_name}_dmg.log"))
+        try:
+            with open("/tmp/suite_dmg.log", 'r') as dmg_log:
+                log_data = dmg_log.readlines()
+                self.add_test_data("suite_pool_dmg.log", log_data)
+        except IOError as error:
+            print("unable to move dmg log:", error)
 
     def test_daos_container(self):
         """Jira ID: DAOS-1568
