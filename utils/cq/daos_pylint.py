@@ -381,6 +381,7 @@ sys.path.append('site_scons')"""
         file_warnings = []
 
         for msg in results.linter.reporter.messages:
+            print(msg)
             promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
             # in comments.  Be strict for everything but ftest code currently.
