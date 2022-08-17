@@ -15,12 +15,15 @@ daos_base_deps:
 
 daos_dev_deps:
   rpms:
+    - cmake
     - createrepo
     - dnf-plugins-core
     - meson
+    - mpich-devel
     - python3-clustershell
     - rpmdevtools
     - rpm-build
+    - wget
   pips:
     - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
     - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
@@ -36,9 +39,13 @@ daos_client_deps:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
+    - ior
+    - jq
     - libuuid
     - lz4-libs
+    - mpich
     - systemd
+    - util-linux
 
 daos_server_deps:
   rpms:
