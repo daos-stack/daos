@@ -11,7 +11,8 @@ timeout: 1200
 pool:
   name: daos_server
   control_method: dmg
-  size: 1G
+  scm_size: 1G
+  nvme_size: 1G
   testloop: 100
 container:
   control_method: daos
