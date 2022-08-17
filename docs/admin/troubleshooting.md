@@ -959,6 +959,99 @@ To configure a Syslog daemon to resolve the delivery errors and receive messages
 consult the relevant operating system specific documentation for installing and/or enabling a syslog
 server package e.g. 'rsyslog'.
 
+## Tools to debug connectivity issues across nodes
+
+### ifconfig
+```
+$ ifconfig
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 127  bytes 9664 (9.4 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 127  bytes 9664 (9.4 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 9000
+        inet 10.165.192.121  netmask 255.255.255.128  broadcast 10.165.192.127
+        inet6 fe80::9a03:9bff:fea2:9716  prefixlen 64  scopeid 0x20<link>
+        ether 98:03:9b:a2:97:16  txqueuelen 1000  (Ethernet)
+        RX packets 2347  bytes 766600 (748.6 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 61  bytes 4156 (4.0 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 9000
+        inet 10.165.192.122  netmask 255.255.255.128  broadcast 10.165.192.127
+        inet6 fe80::9a03:9bff:fea2:967e  prefixlen 64  scopeid 0x20<link>
+        ether 98:03:9b:a2:96:7e  txqueuelen 1000  (Ethernet)
+        RX packets 2346  bytes 766272 (748.3 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 61  bytes 4156 (4.0 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+```
+You can get the ip and network interface card (NIC) name with ifconfig. Important: Please run ifconfig on both DAOS server and client nodes to make sure mtu size are same for the network interfaces on different nodes. Mismatched mtu size could lead to DAOS hang on RDMA over converged Ethernet (RoCE) interfaces.
+
+### lstopo-no-graphics
+```
+$ lstopo-no-graphics
+...
+    HostBridge
+      PCIBridge
+        PCI 18:00.0 (Ethernet)
+          Net "eth0"
+          OpenFabrics "mlx5_0"
+...
+    HostBridge
+      PCIBridge
+        PCI af:00.0 (Ethernet)
+          Net "eth1"
+          OpenFabrics "mlx5_1"
+...
+```
+You can get the domain name and numa node information of your NICs.
+In case lstopo-no-graphics in not installed, you can install package "hwloc" with yum/dnf or other package managers.
+
+### ping
+```
+client_node $ ping -c 3 -I eth1 10.165.192.121
+PING 10.165.192.121 (10.165.192.121) from 10.165.192.2 ens102: 56(84) bytes of data.
+64 bytes from 10.165.192.121: icmp_seq=1 ttl=64 time=0.177 ms
+64 bytes from 10.165.192.121: icmp_seq=2 ttl=64 time=0.120 ms
+64 bytes from 10.165.192.121: icmp_seq=3 ttl=64 time=0.083 ms
+```
+Make sure ping can reach the NIC your DAOS server is bound to.
+
+### fi_pinpong
+```
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
+
+bytes   #sent   #ack     total       time     MB/sec    usec/xfer   Mxfers/sec
+64      10      =10      1.2k        0.03s      0.05    1378.30       0.00
+256     10      =10      5k          0.00s     22.26      11.50       0.09
+1k      10      =10      20k         0.00s     89.04      11.50       0.09
+4k      10      =10      80k         0.00s    320.00      12.80       0.08
+64k     10      =10      1.2m        0.01s    154.89     423.10       0.00
+1m      10      =10      20m         0.01s   2659.00     394.35       0.00
+
+Make sure communications with tcp can go through.
+
+server_node # fi_pingpong -p "verbs;ofi_rxm" -e rdm -d eth0
+client_node # fi_pingpong -p "verbs;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
+
+Make sure communications with verbs can go through.
+
+fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
+fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_mlx5_0_server
+```
+
+### ib_send_lat
+```
+server_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3
+client_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3 ip_of_server
+```
+This test checks whether verbs goes through with Infiniband or RoCE cards. In case ib_send_lat in not installed, you can install package "perftest" with yum/dnf or other package managers.
+
 ## Bug Report
 
 Bugs should be reported through our [issue tracker](https://jira.daos.io/)
