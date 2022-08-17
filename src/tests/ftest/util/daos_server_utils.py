@@ -18,7 +18,7 @@ class DaosServerCommandRunner(DaosServerCommand):
         super().__init__(path)
 
         self.debug.value = False
-        self.json_logs.value = True
+        self.json_logs.value = False
 
     def recover(self, force=False):
         """Call daos_server ms recover.
@@ -34,7 +34,7 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server recover command fails.
 
         """
-        return self._get_result(("ms", "recover"), force=force)
+        return self._get_result(["ms", "recover"], force=force)
 
     def restore(self, force=False, path=None):
         """Call daos_server ms restore.
@@ -51,7 +51,7 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server restore command fails.
 
         """
-        return self._get_result(("ms", "restore"), force=force, path=path)
+        return self._get_result(["ms", "restore"], force=force, path=path)
 
     def status(self):
         """Call daos_server ms status.
@@ -64,7 +64,7 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server status command fails.
 
         """
-        return self._get_result(("ms", "status"))
+        return self._get_result(["ms", "status"])
 
     def version(self):
         """Call daos_server version.
@@ -77,4 +77,4 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server version command fails.
 
         """
-        return self._get_result(("version"))
+        return self._get_result(["version"])

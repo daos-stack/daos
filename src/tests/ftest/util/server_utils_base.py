@@ -328,7 +328,7 @@ class DaosServerCommand(YamlCommand):
             """Defines an object for the daos_server storage prepare command."""
 
             def __init__(self):
-                """Create a storage subcommand object."""
+                """Create a storage prepare subcommand object."""
                 super().__init__(
                     "/run/daos_server/storage/prepare/*", "prepare")
 
@@ -361,12 +361,8 @@ class DaosServerCommand(YamlCommand):
         """Defines an object for the daos_server version sub command."""
 
         def __init__(self):
-            """Create a storage subcommand object."""
+            """Create a version subcommand object."""
             super().__init__("/run/daos_server/version/*", "version")
-
-        def get_sub_command_class(self):
-            """Get the daos_server version sub command object."""
-            self.sub_command_class = None
 
 
 class DaosServerInformation():
