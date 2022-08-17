@@ -3,9 +3,12 @@ hosts:
 timeout: 3600
 server_config:
   name: daos_server
+  crt_timeout: 60
   servers:
     scm_size: 600
     targets: 1
+    env_vars:
+      - DAOS_MD_CAP=1024
 pool:
   name: daos_server
   scm_size: 200M
