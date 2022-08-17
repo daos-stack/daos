@@ -302,7 +302,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 			// Add to cps
 			char *cpp = cps[cpi].prefix;
-			if (strlen(path) == 0) {
+			if (strlen(path) != 0) {
 				strcpy(cpp, path);
 				strcat(cpp, delim);
 			} else {
