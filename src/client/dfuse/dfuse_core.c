@@ -416,7 +416,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
 			       &p_info, NULL);
 	if (rc) {
-		if (rc == -DER_NO_PERM)
+		if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
 			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		else
 			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));

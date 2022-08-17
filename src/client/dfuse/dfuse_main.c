@@ -211,12 +211,50 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	return daos_errno2der(rc);
 }
 
+#define DF_POOL_PREFIX "pool="
+#define DF_CONT_PREFIX "container="
+
+/* Extract options for pool and container from fstab style mount options. */
+static int
+parse_mount_option(char *mnt_string, char **_pool_name, char **_cont_name)
+{
+	char  *tok;
+	char  *token;
+	char  *pool_name = NULL;
+	char  *cont_name = NULL;
+	int    rc        = -DER_SUCCESS;
+	size_t max_len   = strlen(mnt_string);
+
+	while ((token = strtok_r(mnt_string, ",", &tok))) {
+		mnt_string = NULL;
+
+		if (strncmp(token, DF_POOL_PREFIX, sizeof(DF_POOL_PREFIX) - 1) == 0) {
+			D_STRNDUP(pool_name, &token[sizeof(DF_POOL_PREFIX) - 1], max_len);
+			if (pool_name == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		} else if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
+			D_STRNDUP(cont_name, &token[sizeof(DF_CONT_PREFIX) - 1], max_len);
+			if (cont_name == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+	}
+
+	if (rc == -DER_SUCCESS) {
+		if (pool_name)
+			*_pool_name = pool_name;
+		if (cont_name)
+			*_cont_name = cont_name;
+	}
+
+out:
+	return rc;
+}
+
 static void
 show_version(char *name)
 {
-	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n",
-		name, DAOS_VERSION, DAOS_API_VERSION_MAJOR,
-		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
+		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
 #if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
@@ -226,56 +264,62 @@ show_version(char *name)
 static void
 show_help(char *name)
 {
-	printf("usage: %s -m mountpoint\n"
-		"Options:\n"
-		"\n"
-		"	-m --mountpoint=<path>	Mount point to use\n"
-		"\n"
-		"	   --pool=name		pool UUID/label\n"
-		"	   --container=name	container UUID/label\n"
-		"	   --path=<path>	Path to load UNS pool/container data\n"
-		"	   --sys-name=STR	DAOS system name context for servers\n"
-		"\n"
-		"	-S --singlethread	Single threaded\n"
-		"	-t --thread-count=count	Number of fuse threads to use\n"
-		"	-f --foreground		Run in foreground\n"
-		"	   --enable-caching	Enable all caching (default)\n"
-		"	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
-		"	   --disable-caching	Disable all caching\n"
-		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
-		"\n"
-		"	-h --help		Show this help\n"
-		"	-v --version		Show version\n"
-		"\n"
-		"Specifying pool and container are optional. If not set then dfuse can connect to\n"
-		"many using the uuids as leading components of the path.\n"
-		"Pools and containers can be specified using either uuids or labels.\n"
-		"\n"
-		"The path option can be use to set a filesystem path from which Namespace attributes\n"
-		"will be loaded, or if path is not set then the mount directory will also be\n"
-		"checked.  Only one way of setting pool and container data should be used.\n"
-		"\n"
-		"The default thread count is one per available core to allow maximum throughput,\n"
-		"this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
-		"One thread will be started for asynchronous I/O handling so at least two threads\n"
-		"must be specified in all cases.\n"
-		"Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
-		"threading logic in dfuse."
-		"\n"
-		"If dfuse is running in background mode (the default unless launched via mpirun)\n"
-		"then it will stay in the foreground until the mount is registered with the\n"
-		"kernel to allow appropriate error reporting.\n"
-		"\n"
-		"Caching is on by default with short metadata timeouts and write-back data cache,\n"
-		"this can be disabled entirely for the mount by the use of command line options.\n"
-		"Further settings can be set on a per-container basis via the use of container\n"
-		"attributes.  If the --disable-caching option is given then no caching will be\n"
-		"performed and the container attributes are not used, if --disable-wb-cache is\n"
-		"given the data caching for the whole mount is performed in write-back mode and\n"
-		"the container attributes are still used\n"
-		"\n"
-		"version: %s\n",
-		name, DAOS_VERSION);
+	printf(
+	    "usage: %s -m mountpoint\n"
+	    "Options:\n"
+	    "\n"
+	    "	-m --mountpoint=<path>	Mount point to use\n"
+	    "\n"
+	    "	   --pool=name		pool UUID/label\n"
+	    "	   --container=name	container UUID/label\n"
+	    "	   --path=<path>	Path to load UNS pool/container data\n"
+	    "	   --sys-name=STR	DAOS system name context for servers\n"
+	    "\n"
+	    "	-S --singlethread	Single threaded\n"
+	    "	-t --thread-count=count	Number of fuse threads to use\n"
+	    "	-f --foreground		Run in foreground\n"
+	    "	   --enable-caching	Enable all caching (default)\n"
+	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
+	    "	   --disable-caching	Disable all caching\n"
+	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
+	    "	-o options		mount style options string"
+	    "\n"
+	    "	-h --help		Show this help\n"
+	    "	-v --version		Show version\n"
+	    "\n"
+	    "Specifying pool and container are optional. If not set then dfuse can connect to\n"
+	    "many using the uuids as leading components of the path.\n"
+	    "Pools and containers can be specified using either uuids or labels.\n"
+	    "\n"
+	    "The path option can be use to set a filesystem path from which Namespace attributes\n"
+	    "will be loaded, or if path is not set then the mount directory will also be\n"
+	    "checked.  Only one way of setting pool and container data should be used.\n"
+	    "\n"
+	    "The default thread count is one per available core to allow maximum throughput,\n"
+	    "this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
+	    "One thread will be started for asynchronous I/O handling so at least two threads\n"
+	    "must be specified in all cases.\n"
+	    "Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
+	    "threading logic in dfuse."
+	    "\n"
+	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
+	    "then it will stay in the foreground until the mount is registered with the\n"
+	    "kernel to allow appropriate error reporting.\n"
+	    "\n"
+	    "The -o is to allow use of dfuse via fstab or similar and accepts standard mount\n"
+	    "options.  This will be treated as a comma separated list of key=value pairs and\n"
+	    "dfuse will use pool= and container= keys from this string.\n"
+	    "\n"
+	    "Caching is on by default with short metadata timeouts and write-back data cache,\n"
+	    "this can be disabled entirely for the mount by the use of command line options.\n"
+	    "Further settings can be set on a per-container basis via the use of container\n"
+	    "attributes.  If the --disable-caching option is given then no caching will be\n"
+	    "performed and the container attributes are not used, if --disable-wb-cache is\n"
+	    "given the data caching for the whole mount is performed in write-back mode and\n"
+	    "the container attributes are still used\n"
+	    "\n"
+	    "version: %s\n",
+	    name, DAOS_VERSION);
 }
 
 int
@@ -313,7 +357,7 @@ main(int argc, char **argv)
 							{"options", required_argument, 0, 'o'},
 							{"version", no_argument, 0, 'v'},
 							{"help", no_argument, 0, 'h'},
-							{0, 0, 0, 0} };
+							{0, 0, 0, 0}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -376,6 +420,11 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
+			break;
+		case 'o':
+			rc = parse_mount_option(optarg, &pool_name, &cont_name);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out_debug, rc);
 			break;
 		case 'h':
 			show_help(argv[0]);
