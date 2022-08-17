@@ -331,18 +331,90 @@ check_tx(daos_handle_t th, int rc)
 	return rc;
 }
 
+#if 0
+static int
+get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_hints_t *file_hints)
+{
+	char	*end_token = NULL;
+	char	*t;
+	char	*local;
+	int	rc = 0;
+
+	D_ASSERT(hints);
+
+	D_STRNDUP(local, hints, DAOS_CONT_MAX_HINT_LEN);
+	if (!local)
+		return ENOMEM;
+
+	/** get a hint value pair */
+	t = strtok_r(local, ";", &end_token);
+	if (t == NULL) {
+		D_DEBUG(DB_TRACE, "Invalid hint format: %s\n", hints);
+		D_GOTO(out, rc = EINVAL);
+	}
+
+	while (t != NULL) {
+		char *name;
+		char *val;
+
+		/** get object type (file or dir) */
+		name = strtok_r(local, ":", &end_token);
+		if (name == NULL) {
+			D_DEBUG(DB_TRACE, "Invalid object type in hint: %s\n", hints);
+			D_GOTO(out, rc = EINVAL);
+		}
+
+		if (strcasecmp(name, "dir") == 0 || strcasecmp(name, "directory") == 0) {
+			/** get prop value */
+			val = strtok_r(NULL, ";", &end_token);
+			if (val == NULL) {
+				D_DEBUG(DB_TRACE, "Invalid Hint value for directory type (%s)\n",
+					hints);
+				D_GOTO(out, rc = EINVAL);
+			}
+
+			if (strcasecmp(val, "single")) {
+				*dir_hints = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+			} else if (strcasecmp(val, "max")) {
+				*dir_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
+			} else {
+				D_DEBUG(DB_TRACE, "Invalid directory hint: %s\n", val);
+				D_GOTO(out, rc = EINVAL);
+			}
+		} else if (strcasecmp(name, "file") == 0) {
+			/** get prop value */
+			val = strtok_r(NULL, ";", &end_token);
+			if (val == NULL) {
+				D_DEBUG(DB_TRACE, "Invalid Hint value for file type (%s)\n", hints);
+				D_GOTO(out, rc = EINVAL);
+			}
+
+			if (strcasecmp(val, "single")) {
+				*file_hints = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+			} else if (strcasecmp(val, "max")) {
+				*file_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
+			} else {
+				D_DEBUG(DB_TRACE, "Invalid file hint: %s\n", val);
+				D_GOTO(out, rc = EINVAL);
+			}
+		}
+		t = strtok_r(NULL, ";", &end_token);
+	}
+
+out:
+	D_FREE(local);
+	return rc;
+}
+#endif
+
 static inline daos_oclass_hints_t
 dir2oid_hint(uint64_t hints)
 {
 	daos_oclass_hints_t dir_oclass_hint = 0;
 
-	if (hints & DFS_HINT_DIR_TY)
+	if (hints & DFS_HINT_DIR_SINGLE)
 		dir_oclass_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
-	else if (hints & DFS_HINT_DIR_SM)
-		dir_oclass_hint = DAOS_OCH_SHD_REG | DAOS_OCH_RDD_RP;
-	else if (hints & DFS_HINT_DIR_MD)
-		dir_oclass_hint = DAOS_OCH_SHD_HI | DAOS_OCH_RDD_RP;
-	else if (hints & DFS_HINT_DIR_LG)
+	else if (hints & DFS_HINT_DIR_MAX)
 		dir_oclass_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
 
 	return dir_oclass_hint;
@@ -353,13 +425,9 @@ file2oid_hint(uint64_t hints)
 {
 	daos_oclass_hints_t file_oclass_hint = 0;
 
-	if (hints & DFS_HINT_FILE_TY)
+	if (hints & DFS_HINT_FILE_SINGLE)
 		file_oclass_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
-	else if (hints & DFS_HINT_FILE_SM)
-		file_oclass_hint = DAOS_OCH_SHD_REG | DAOS_OCH_RDD_EC;
-	else if (hints & DFS_HINT_FILE_MD)
-		file_oclass_hint = DAOS_OCH_SHD_HI | DAOS_OCH_RDD_EC;
-	else if (hints & DFS_HINT_FILE_LG)
+	else if (hints & DFS_HINT_FILE_MAX)
 		file_oclass_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
 
 	return file_oclass_hint;
@@ -408,6 +476,10 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass,
 				   file ? dfs->file_oclass_hint : dfs->dir_oclass_hint, 0);
 	if (rc) {
+		if (file)
+			D_ERROR("file hint = %u, oclass = %u\n", dfs->file_oclass_hint, oclass);
+		else
+			D_ERROR("dir hint = %u, oclass = %u\n", dfs->dir_oclass_hint, oclass);
 		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
@@ -1438,7 +1510,7 @@ set_daos_iod(bool create, daos_iod_t *iod, char *buf, size_t size)
 }
 
 static void
-set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
+set_sb_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 {
 	int i = 0;
 
@@ -1494,7 +1566,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		sgls[i].sg_iovs		= &sg_iovs[i];
 	}
 
-	set_inode_params(create, iods, &dkey);
+	set_sb_params(create, iods, &dkey);
 
 	/** create the SB and exit */
 	if (create) {
@@ -1582,7 +1654,7 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	*akey_count = SB_AKEYS;
 	*dfs_entry_key_size = sizeof(INODE_AKEY_NAME) - 1;
 	*dfs_entry_size = sizeof(struct dfs_entry);
-	set_inode_params(true, *iods, dkey);
+	set_sb_params(true, *iods, dkey);
 
 	return 0;
 }
@@ -1658,7 +1730,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	}
 
-	/** check hint for SB and Root Dir */
+	/** check hints for SB and Root Dir */
 	if (dattr.da_hints != 0)
 		dir_oclass_hint = dir2oid_hint(dattr.da_hints);
 
@@ -1680,6 +1752,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0], 0,
 					 dattr.da_dir_oclass_id, dir_oclass_hint, 0, pa_domain);
 	if (rc) {
+		D_ERROR("dir hint = %u\n", dattr.da_dir_oclass_id);
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
