@@ -51,11 +51,11 @@ class NvmeHealth(ServerFillUp):
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
 
         # Create the pools
-        self.pool = []
+        pool_list = []
         for pool_num in range(actual_num_pools):
             self.log.info("-- Creating pool number = %s", pool_num)
             try:
-                self.pool.append(self.get_pool(scm_size=scm_per_pool, nvme_size=nvme_per_pool))
+                pool_list.append(self.get_pool(scm_size=scm_per_pool, nvme_size=nvme_per_pool))
             except TestFail as error:
                 if 'DER_NOSPACE' in str(error):
                     self.log.info('-- No more storage space. Skip creating more pools.')
@@ -73,7 +73,7 @@ class NvmeHealth(ServerFillUp):
             except CommandFailure as error:
                 self.fail("dmg command failed: {}".format(error))
             # Verify all pools UUID listed as part of query
-            for pool in self.pool:
+            for pool in pool_list:
                 if pool.uuid.lower() not in result.stdout_text:
                     self.fail('Pool uuid {} not found in smd query'.format(pool.uuid.lower()))
 
