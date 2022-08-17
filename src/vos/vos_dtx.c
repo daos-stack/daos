@@ -1236,8 +1236,13 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * finished yet. The DTX entry may be stale, need refresh with
 	 * the leader.
 	 */
-	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, dth, false, true, 6);
+	if (intent == DAOS_INTENT_MIGRATION) {
+		if (DAE_VER(dae) < dth->dth_ver)
+			return dtx_inprogress(dae, dth, false, true, 6);
+
+		/* Skip new DTX entry after rebuild/migration start. */
+		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
