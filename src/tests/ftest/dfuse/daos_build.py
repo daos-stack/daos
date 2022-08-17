@@ -104,7 +104,7 @@ class DaosBuild(DfuseTestBase):
         cache_time = '60m'
         # Timeout.  This is per command so up to double this or more as there are two scons
         # commands which can both take a long time.
-        build_time = 10
+        build_time = 15
 
         self.load_dfuse(self.hostlist_clients)
 
