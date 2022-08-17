@@ -454,18 +454,18 @@ func TestFlags_ContHintsFlag(t *testing.T) {
 			expErr: errors.New("empty container hints"),
 		},
 		"invalid": {
-			arg:    "huge_file",
-			expErr: errors.New("unknown container hint"),
+			arg:    "file:huge",
+			expErr: errors.New("unknown file hint: \"huge\""),
 		},
 		"valid129": {
-			arg: "tiny_file,large_dir",
+			arg: "file:single,dir:max",
 			expFlag: &ContHintsFlag{
 				Set:   true,
-				Hints: 129,
+				Hints: 9,
 			},
 		},
 		"valid1": {
-			arg: "tiny_file",
+			arg: "file:single",
 			expFlag: &ContHintsFlag{
 				Set:   true,
 				Hints: 1,

@@ -258,29 +258,29 @@ func (f *ContHintsFlag) UnmarshalFlag(fv string) error {
 	f.Hints = 0
 
 	chints := strings.Split(fv, ",")
-	for i, chint := range chints {
-		fmt.Println(i, " => ", string(chint))
-		if strings.EqualFold(string(chint), "tiny_file") {
-			f.Hints |= C.DFS_HINT_FILE_TY
-		} else if strings.EqualFold(string(chint), "small_file") {
-			f.Hints |= C.DFS_HINT_FILE_SM
-		} else if strings.EqualFold(string(chint), "medium_file") {
-			f.Hints |= C.DFS_HINT_FILE_MD
-		} else if strings.EqualFold(string(chint), "large_file") {
-			f.Hints |= C.DFS_HINT_FILE_LG
-		} else if strings.EqualFold(string(chint), "tiny_dir") {
-			f.Hints |= C.DFS_HINT_DIR_TY
-		} else if strings.EqualFold(string(chint), "small_dir") {
-			f.Hints |= C.DFS_HINT_DIR_SM
-		} else if strings.EqualFold(string(chint), "medium_dir") {
-			f.Hints |= C.DFS_HINT_DIR_MD
-		} else if strings.EqualFold(string(chint), "large_dir") {
-			f.Hints |= C.DFS_HINT_DIR_LG
+	for _, chint := range chints {
+		pair := strings.Split(chint, ":")
+		if strings.EqualFold(string(pair[0]), "dir") ||
+			strings.EqualFold(string(pair[0]), "directory") {
+			if strings.EqualFold(string(pair[1]), "single") {
+				f.Hints |= C.DFS_HINT_DIR_SINGLE
+			} else if strings.EqualFold(string(pair[1]), "max") {
+				f.Hints |= C.DFS_HINT_DIR_MAX
+			} else {
+				return errors.Errorf("unknown directory hint: %q", pair[1])
+			}
+		} else if strings.EqualFold(string(pair[0]), "file") {
+			if strings.EqualFold(string(pair[1]), "single") {
+				f.Hints |= C.DFS_HINT_FILE_SINGLE
+			} else if strings.EqualFold(string(pair[1]), "max") {
+				f.Hints |= C.DFS_HINT_FILE_MAX
+			} else {
+				return errors.Errorf("unknown file hint: %q", pair[1])
+			}
 		} else {
 			return errors.Errorf("unknown container hint %q", fv)
 		}
 	}
-
 	f.Set = true
 	return nil
 }
