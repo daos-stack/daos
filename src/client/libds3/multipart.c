@@ -277,7 +277,7 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 	*npart  = pi;
 	*marker = last_num;
 	if (is_truncated) {
-		*is_truncated = pi == pfi;
+		*is_truncated = pi < pfi;
 	}
 
 err_pfs:
