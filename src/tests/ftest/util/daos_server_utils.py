@@ -21,7 +21,7 @@ class DaosServerCommandRunner(DaosServerCommand):
         self.json_logs.value = True
 
     def recover(self, force=False):
-        """Call daos_server recover.
+        """Call daos_server ms recover.
 
         Args:
             force (bool, optional): Don't prompt for confirmation. Defaults to False.
@@ -34,10 +34,10 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server recover command fails.
 
         """
-        return self._get_result(["recover"], force=force)
+        return self._get_result(("ms", "recover"), force=force)
 
     def restore(self, force=False, path=None):
-        """Call daos_server restore.
+        """Call daos_server ms restore.
 
         Args:
             force (bool, optional): Don't prompt for confirmation. Defaults to False.
@@ -51,10 +51,10 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server restore command fails.
 
         """
-        return self._get_result(["restore"], force=force, path=path)
+        return self._get_result(("ms", "restore"), force=force, path=path)
 
     def status(self):
-        """Call daos_server status.
+        """Call daos_server ms status.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the daos_server command
@@ -64,7 +64,7 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server status command fails.
 
         """
-        return self._get_result(["status"])
+        return self._get_result(("ms", "status"))
 
     def version(self):
         """Call daos_server version.
@@ -77,4 +77,4 @@ class DaosServerCommandRunner(DaosServerCommand):
             CommandFailure: if the daos_server version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_result(("version"))
