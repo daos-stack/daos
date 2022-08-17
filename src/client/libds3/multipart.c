@@ -91,7 +91,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 
 		// Read the key xattr
 		daos_size_t size;
-		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, mps[i].key, &size);
+		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, key, &size);
 
 		// Skip if file has no saved key
 		if (rc != 0) {
@@ -104,7 +104,10 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		if (strncmp(key, prefix, prefix_length) == 0) {
 			// if it has delim after prefix, add to common prefixes, otherwise add to
 			// multipart uploads
-			char *delim_pos = strstr(key + prefix_length, delim);
+			char *delim_pos = NULL;
+			if (strlen(delim) != 0)
+				delim_pos = strstr(key + prefix_length, delim);
+			
 			if (delim_pos != NULL) {
 				// Add to cps
 				// Out of bounds
