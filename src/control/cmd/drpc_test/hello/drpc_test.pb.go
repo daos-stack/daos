@@ -112,7 +112,7 @@ func (Function) EnumDescriptor() ([]byte, []int) {
 	return file_drpc_test_proto_rawDescGZIP(), []int{1}
 }
 
-//*
+// *
 // Hello is the message to request a greeting from the server
 //
 // name is the name of the user being greeted
@@ -163,7 +163,7 @@ func (x *Hello) GetName() string {
 	return ""
 }
 
-//*
+// *
 // HeloResponse is the greeting returned from the server.
 //
 // greeting is greeting message for the user.

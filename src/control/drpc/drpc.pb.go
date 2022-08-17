@@ -26,7 +26,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-//*
+// *
 // Status represents the valid values for a response status.
 type Status int32
 
@@ -92,7 +92,7 @@ func (Status) EnumDescriptor() ([]byte, []int) {
 	return file_drpc_proto_rawDescGZIP(), []int{0}
 }
 
-//*
+// *
 // Call describes a function call to be executed over the dRPC channel.
 type Call struct {
 	state         protoimpl.MessageState
@@ -165,7 +165,7 @@ func (x *Call) GetBody() []byte {
 	return nil
 }
 
-//*
+// *
 // Response describes the result of a dRPC call.
 type Response struct {
 	state         protoimpl.MessageState
