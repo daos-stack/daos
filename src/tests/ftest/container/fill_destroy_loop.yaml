@@ -12,7 +12,7 @@ pool:
   name: daos_server
   control_method: dmg
   scm_size: 1G
-  nvme_size: 1G
+  nvme_size: 3G
   testloop: 100
 container:
   control_method: daos
