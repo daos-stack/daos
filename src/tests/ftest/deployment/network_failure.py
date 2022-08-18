@@ -402,8 +402,8 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing up the network, so wait until they
-        # are up (joined).
+        # Some ranks may be excluded after bringing up the network interface, so wait
+        # until they are up (joined).
         server_crashed = True
         for _ in range(6):
             time.sleep(10)
