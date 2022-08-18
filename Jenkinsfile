@@ -929,7 +929,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
+                           script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {
