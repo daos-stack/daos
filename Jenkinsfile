@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright (C) 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -15,22 +16,24 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 // Should try to figure this out automatically
-String base_branch = "release/2.2"
+/* groovylint-disable-next-line CompileStatic */
+String base_branch = 'release/2.2'
 // For master, this is just some wildly high number
-next_version = "2.3.0"
+next_version = '2.3'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+/* groovylint-disable-next-line UnusedVariable */
+String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith("weekly-testing") &&
-     !env.BRANCH_NAME.startsWith("release/") &&
+    (!env.BRANCH_NAME.startsWith('weekly-testing') &&
+     !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
-     env.BRANCH_NAME != "master")) {
-   currentBuild.result = 'SUCCESS'
-   return
+     env.BRANCH_NAME != 'master')) {
+    currentBuild.result = 'SUCCESS'
+    return
 }
 
 pipeline {
@@ -43,7 +46,7 @@ pipeline {
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
-        SSH_KEY_ARGS = "-ici_key"
+        SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
@@ -58,10 +61,11 @@ pipeline {
 
     parameters {
         string(name: 'BuildPriority',
+               /* groovylint-disable-next-line UnnecessaryGetter */
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "full_regression",
+               defaultValue: 'full_regression',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
@@ -86,6 +90,22 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
@@ -98,13 +118,13 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -116,7 +136,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -128,7 +148,7 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -140,7 +160,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -152,7 +172,7 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -164,7 +184,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -176,7 +196,7 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -188,7 +208,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -200,7 +220,7 @@ pipeline {
                 stage('Functional Hardware Small') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
@@ -213,7 +233,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -225,7 +245,7 @@ pipeline {
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
@@ -238,7 +258,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -250,7 +270,7 @@ pipeline {
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
@@ -263,7 +283,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
+                                                                     '{client,server}-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
