@@ -430,23 +430,27 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool
- * \param[in]		svc_ranks	Ranks of pool svc replicas.
- * \param[out]		ranks		Optional, returned storage ranks in this pool.
- *					If #pool_info is NULL, engines with disabled targets.
- *					If #pool_info is passed, engines with enabled or disabled
- *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					The caller must free the list with d_rank_list_free().
- * \param[in][out]	pool_info	Query results
+ * \param[in]		pool_uuid	   UUID of the pool.
+ * \param[in]		svc_ranks	   Ranks of pool svc replicas.
+ * \param[out]		ranks		   Optional, returned storage ranks in this pool.
+ *					   If #pool_info is NULL, engines with disabled targets.
+ *					   If #pool_info is passed, engines with enabled or
+ *					   disabled targets according to
+ *					   #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					   The caller must free the list with d_rank_list_free().
+ * \param[in][out]	pool_info	   Query results
+ * \param[in][out]	pool_layout_ver	   Pool global version
+ * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
  *
- * \return		0		Success
- *			-DER_INVAL	Invalid inputs
- *			Negative value	Other error
+ * \return		0		   Success
+ *			-DER_INVAL	   Invalid inputs
+ *			Negative value	   Other error
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info)
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -455,7 +459,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
+	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
+				 pool_layout_ver, upgrade_layout_ver);
 }
 
 static int

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -63,8 +63,9 @@ class CsumContainerValidation(TestWithServers):
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
         :avocado: tags=all,daily_regression
+        :avocado: vm
         :avocado: tags=checksum
-        :avocado: tags=basic_checksum_object
+        :avocado: tags=basic_checksum_object,test_single_object_with_checksum
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0

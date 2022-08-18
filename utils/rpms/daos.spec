@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0~rc6-1%{?dist}
+%global mercury_version 2.2.0-1%{?dist}
 %global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.103
-Release:       4%{?relval}%{?dist}
+Version:       2.1.104
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -571,6 +571,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
+- Update to mercury 2.2.0
+
+* Tue Aug 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.104-1
+- Bump version to 2.1.104
+
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-4
 - Remove now unused openpa dependency
 

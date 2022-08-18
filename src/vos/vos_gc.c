@@ -745,9 +745,6 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			} else if (gc->gc_type == GC_CONT) { /* top level GC */
 				D_DEBUG(DB_TRACE, "Nothing to reclaim\n");
 				*empty_ret = true;
-				if (cont != NULL)
-					vos_cont_decref(cont);
-				cont = NULL;
 				break;
 			}
 			D_DEBUG(DB_TRACE, "GC=%s is empty\n", gc->gc_name);

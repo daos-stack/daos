@@ -1,11 +1,8 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-C
+  test_servers: 2
+  test_clients: 1
 timeout: 360
 server_config:
   engines_per_host: 2
