@@ -1147,7 +1147,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	}
 
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possbile that the DTX resync ULT may have aborted or committed
+	 * possible that the DTX resync ULT may have aborted or committed
 	 * the DTX during current ULT waiting for other non-leaders' reply.
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */

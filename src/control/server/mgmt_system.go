@@ -977,7 +977,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 // SystemCleanup implements the method defined for the Management Service.
 //
-// Signal to the data plane to find all resources associted with a given machine
+// Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
 //
