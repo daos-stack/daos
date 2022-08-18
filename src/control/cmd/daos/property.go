@@ -530,7 +530,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf_lvl", v)
+			vh, err := h.valHdlrs.get("rd_lvl", v)
 			if err != nil {
 				return err
 			}

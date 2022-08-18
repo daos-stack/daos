@@ -23,7 +23,7 @@
 #define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
 #define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
 #define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
-#define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
+#define DAOS_PROP_ENTRY_REDUN_LVL	"rd_lvl"
 #define DAOS_PROP_ENTRY_SNAPSHOT_MAX	"max_snapshot"
 #define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
 #define DAOS_PROP_ENTRY_OWNER		"owner"
