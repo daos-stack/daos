@@ -9,7 +9,7 @@ from cart_utils import CartTest
 
 class GroupTest(CartTest):
     # pylint: disable=too-few-public-methods
-    """Run GroupTests for primary and secondary resizable groups.
+    """Run GroupTests for primary and secondary groups.
 
     :avocado: recursive
     """
