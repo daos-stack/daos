@@ -573,7 +573,9 @@ def main():
             all_files = FileTypeList()
         regions = None
         file = None
+        lineno = 0
         for line in sys.stdin.readlines():
+            lineno += 1
             if line.startswith('diff --git a/'):
                 parts = line.split(' ')
                 file = parts[3][2:-1]
@@ -584,7 +586,12 @@ def main():
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                (post_start, post_len) = parts[2][1:].split(',')
+                try:
+                    (post_start, post_len) = parts[2][1:].split(',')
+                except ValueError:
+                    print(f'Unable to split parts[2] ("{parts[2]}") from line "{line.rstrip()}" '
+                          'on line number {lineno}')
+                    raise
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:
