@@ -1261,17 +1261,19 @@ class DFuse():
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
-    print('Checking file size is {} {}'.format(size, my_stat.st_size))
+    print(f'Checking file size is {size} {my_stat.st_size}')
     assert my_stat.st_size == size
+
 
 def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
     assert_file_size_fd(ofd.fileno(), size)
 
+
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
+    pydir = f'python{sys.version_info.major}.{sys.version_info.minor}'
 
     sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 

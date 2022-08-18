@@ -416,18 +416,21 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
-			       &p_info, NULL);
-	if (rc) {
-		if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
-			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
-		else
-			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC, label,
-					DP_RC(rc));
-		D_GOTO(err_free, rc = daos_der2errno(rc));
-	}
+	if (label[0]) {
+		rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO,
+				       &dfp->dfp_poh, &p_info, NULL);
+		if (rc) {
+			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
+				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC,
+					       DP_RC(rc));
+			else
+				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC,
+						label, DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		}
 
-	uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+		uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+	}
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, fs_handle,
 					 &cont_hops, &dfp->dfp_cont_table);

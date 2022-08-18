@@ -523,8 +523,8 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
-		strncpy(pool_name, path_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-		strncpy(cont_name, path_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+		strncpy(pool_name, path_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN + 1);
+		strncpy(cont_name, path_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN + 1);
 		duns_destroy_attr(&path_attr);
 	}
 
@@ -549,8 +549,8 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
-		strncpy(pool_name, duns_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-		strncpy(cont_name, duns_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+		strncpy(pool_name, duns_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN + 1);
+		strncpy(cont_name, duns_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN + 1);
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
