@@ -513,13 +513,12 @@ cont_prop_define(PyObject *module)
 	DEFINE_CONT(CO_LAYOUT_HDF5);
 }
 
-
 /**
  * Anchor management
  * The anchor is a 128-byte structure which isn't straightforward to serialize
  * between the shim and pydaoos modules. We thus use the PyCapsule abstraction
  * that provides us with the ability to return an anchor pointer as an opaq
- * void * with its own destuctor to free up the data structure when not
+ * void * with its own destructor to free up the data structure when not
  * referenced any longer. That's useful when implementing python iterator
  * since pydaos needs to store the anchor returned by one iteration and
  * pass it back on the subsequent call.
