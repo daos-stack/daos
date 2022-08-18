@@ -318,13 +318,14 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		goto err_parent;
 	}
 
-	// Remove instance
+	// Copy name without instance
+	int name_length = strlen(file_name);
 	char *suffix_start = strrchr(file_name, '[');
 	if (suffix_start != NULL) {
-		*suffix_start = '\0';
+		name_length = suffix_start - file_name;
 	}
 
-	strcpy(link_name, file_name);
+	strncpy(link_name, file_name, name_length);
 	strcat(link_name, LATEST_INSTANCE_SUFFIX);
 
 	// Remove previous link
