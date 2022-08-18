@@ -1,17 +1,12 @@
 hosts:
-  test_servers: 3
+  test_servers: 1
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-timeout: 1200
+timeout: 900
 pool:
   name: daos_server
   control_method: dmg
-  size: 30G
+  size: 300M
   testloop: 100
 container:
   control_method: daos
@@ -19,6 +14,6 @@ container:
   type: POSIX
   object_qty: 1
   record_qty: 1
-  data_size: 10240000
+  data_size: 1024000
   akey_size: 5
   dkey_size: 5
