@@ -1107,7 +1107,6 @@ class DFuse():
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
 
-        # pylint: disable=consider-using-with
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         pre_inode = os.stat(self.dir).st_ino
@@ -1124,8 +1123,8 @@ class DFuse():
             v_hint = get_inc_id()
 
         prefix = f'dnt_dfuse_{v_hint}_'
-        log_file = tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False)
-        self.log_file = log_file.name
+        with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+            self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
@@ -1257,6 +1256,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""

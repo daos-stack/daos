@@ -166,35 +166,34 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return rc;
 
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
-		D_GOTO(out_err, rc = rc);
-		return ENOTSUP;
+		D_GOTO(out_err, rc = ENOTSUP);
 
 	/* Search the currently connect dfp list, if one matches then use that,
 	 * otherwise allocate a new one.
 	 */
 
-		rc = dfuse_pool_connect_by_uuid(fs_handle, dattr.da_puuid, &dfp);
-		if (rc != 0)
-			D_GOTO(out_err, rc);
+	rc = dfuse_pool_connect_by_uuid(fs_handle, dattr.da_puuid, &dfp);
+	if (rc != 0)
+		D_GOTO(out_err, rc);
 
-		rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cuuid, &dfs);
-		if (rc != 0)
-			D_GOTO(out_dfp, rc);
+	rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cuuid, &dfs);
+	if (rc != 0)
+		D_GOTO(out_dfp, rc);
 
-		/* The inode has a reference to the dfs, so keep that. */
-		d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	/* The inode has a reference to the dfs, so keep that. */
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-		rc = dfs_release(ie->ie_obj);
-		if (rc) {
-			DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
-			D_GOTO(out_dfs, rc);
-		}
+	rc = dfs_release(ie->ie_obj);
+	if (rc) {
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
+		D_GOTO(out_dfs, rc);
+	}
 
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
-		if (rc) {
-			DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
-			D_GOTO(out_dfs, rc);
-		}
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
+	if (rc) {
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
+		D_GOTO(out_dfs, rc);
+	}
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 
