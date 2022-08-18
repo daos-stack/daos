@@ -200,6 +200,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_engines; i++) {
 		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_incarnation = req->engines[i]->incarnation;
 		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
 	in.gui_n_servers = req->n_engines;
@@ -562,9 +563,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
-				  (req->force == true) ? 1 : 0);
+	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
@@ -660,7 +659,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
-				machine, req->sys, &count);
+				machine, &count);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
@@ -1607,6 +1606,8 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out_ranks, rc = -DER_NOMEM);
 	}
 	resp.n_containers = containers_len;
+
+	D_DEBUG(DB_MGMT, "Found %lu containers in DAOS pool %s\n", containers_len, req->id);
 
 	for (i = 0; i < containers_len; i++) {
 		D_ALLOC_PTR(resp.containers[i]);
