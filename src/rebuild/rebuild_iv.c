@@ -1,10 +1,10 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * rebuild: rebuild initator
+ * rebuild: rebuild initiator
  *
  * This file contains the server API methods and the RPC handlers for rebuild
  * initiator.

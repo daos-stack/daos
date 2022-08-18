@@ -354,7 +354,7 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
-        # Return 0 on memory leaks while suppresion file is completed
+        # Return 0 on memory leaks while suppression file is completed
         # (CART-975 and CART-977)
         memcheck_error_code = 0
 

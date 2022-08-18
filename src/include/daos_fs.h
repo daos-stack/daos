@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -576,7 +576,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ * \param[out]	oid	Optional: return the internal object ID of the removed obj
  *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.

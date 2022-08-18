@@ -369,7 +369,7 @@ will fail.
 For rf2, only objects with at least 3-way replication or erasure code with two
 parities or more can be stored in the container.
 
-As long as the number of simulatenous engine failures is below the redundancy
+As long as the number of simultaneous engine failures is below the redundancy
 factor, the container is reported as healthy. if not, then the container is
 marked as unclean and cannot be accessed.
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -146,9 +146,9 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rh;
 	/** Global write timestamps */
 	struct vos_wts_cache	tt_w_cache;
-	/** Transaciton id associated with global read low timestamp */
+	/** Transaction id associated with global read low timestamp */
 	struct dtx_id		tt_tx_rl;
-	/** Transaciton id associated with global read high timestamp */
+	/** Transaction id associated with global read high timestamp */
 	struct dtx_id		tt_tx_rh;
 	/** Negative entry cache */
 	struct vos_ts_entry	*tt_misses;

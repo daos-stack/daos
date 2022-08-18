@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -624,7 +624,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 		}
 
 		now = ABT_get_wtime();
-		/* print something at least for each 10 secons */
+		/* print something at least for each 10 seconds */
 		if (now - last_print > 10) {
 			last_print = now;
 			D_PRINT("%s", sbuf);
