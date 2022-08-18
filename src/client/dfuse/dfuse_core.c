@@ -389,21 +389,24 @@ d_hash_table_ops_t cont_hops = {
 	.hop_rec_free		= ch_free,
 };
 
-/* Return a pool connection by label.
+/* Connect to a pool.
  *
- * Only used for command line parsing, so does not check for existing pools
+ * Daos accepts labels and uuids via the same function so simply call that, connect to a pool
+ * and setup a descriptor, then enter into the hash table and verify that it's unique.  If there
+ * is likely already a connection for this pool then use dfuse_pool_connect_by_uuid() instead
+ * which will do a hash-table lookup in advance.
  *
  * Return code is a system errno.
  */
 int
-dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char *label,
-			    struct dfuse_pool **_dfp)
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
+		   struct dfuse_pool **_dfp)
 {
-	struct dfuse_pool	*dfp;
-	daos_pool_info_t        p_info = {};
-	d_list_t		*rlink;
-	int			rc;
-	int			ret;
+	struct dfuse_pool *dfp;
+	daos_pool_info_t   p_info = {};
+	d_list_t          *rlink;
+	int                rc;
+	int                ret;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
@@ -419,24 +422,22 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 		if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
 			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		else
-			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC, label,
+					DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
 	uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &cont_hops,
-					 &dfp->dfp_cont_table);
+	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, fs_handle,
+					 &cont_hops, &dfp->dfp_cont_table);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
-				DP_RC(rc));
+		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: " DF_RC, DP_RC(rc));
 		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
 	}
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
-				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
-				       &dfp->dfp_entry);
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table, &dfp->dfp_pool,
+				       sizeof(dfp->dfp_pool), &dfp->dfp_entry);
 
 	if (rlink != &dfp->dfp_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
@@ -444,8 +445,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
-			DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for " DF_UUID, DP_UUID(dfp->dfp_pool));
 
 	*_dfp = dfp;
 	return rc;
@@ -468,12 +468,11 @@ err:
  * Return code is a system errno.
  */
 int
-dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
-		   struct dfuse_pool **_dfp)
+dfuse_pool_connect_by_uuid(struct dfuse_projection_info *fs_handle, uuid_t pool,
+			   struct dfuse_pool **_dfp)
 {
-	struct dfuse_pool	*dfp;
-	d_list_t		*rlink;
-	int			rc;
+	d_list_t *rlink;
+	char      uuid_str[37];
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, sizeof(*pool));
 	if (rlink) {
@@ -481,64 +480,9 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		return 0;
 	}
 
-	D_ALLOC_PTR(dfp);
-	if (dfp == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	uuid_unparse(pool, uuid_str);
 
-	atomic_store_relaxed(&dfp->dfp_ref, 1);
-
-	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
-
-	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF, DP_UUID(pool));
-
-	if (uuid_is_null(*pool) == 0) {
-		char uuid_str[37];
-
-		uuid_copy(dfp->dfp_pool, *pool);
-		uuid_unparse(dfp->dfp_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str, fs_handle->dpi_info->di_group, DAOS_PC_RO,
-				       &dfp->dfp_poh, NULL, NULL);
-		if (rc) {
-			if (rc == -DER_NO_PERM)
-				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, "DF_RC, DP_RC(rc));
-			else
-				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, "DF_RC,
-						DP_RC(rc));
-			D_GOTO(err_free, rc = daos_der2errno(rc));
-		}
-	}
-
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &cont_hops,
-					 &dfp->dfp_cont_table);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
-				DP_RC(rc));
-		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
-	}
-
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
-				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
-				       &dfp->dfp_entry);
-
-	if (rlink != &dfp->dfp_entry) {
-		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
-		_ph_free(dfp);
-		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
-	}
-
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
-			DP_UUID(dfp->dfp_pool));
-
-	*_dfp = dfp;
-	return rc;
-err_disconnect:
-	if (daos_handle_is_valid(dfp->dfp_poh))
-		daos_pool_disconnect(dfp->dfp_poh, NULL);
-err_free:
-	D_FREE(dfp);
-err:
-	return rc;
+	return dfuse_pool_connect(fs_handle, uuid_str, _dfp);
 }
 
 #define ATTR_COUNT 6

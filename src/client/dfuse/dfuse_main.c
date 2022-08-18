@@ -215,39 +215,23 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 #define DF_CONT_PREFIX "container="
 
 /* Extract options for pool and container from fstab style mount options. */
-static int
-parse_mount_option(char *mnt_string, char **_pool_name, char **_cont_name)
+static void
+parse_mount_option(char *mnt_string, char *pool_name, char *cont_name)
 {
 	char  *tok;
 	char  *token;
-	char  *pool_name = NULL;
-	char  *cont_name = NULL;
-	int    rc        = -DER_SUCCESS;
-	size_t max_len   = strlen(mnt_string);
 
 	while ((token = strtok_r(mnt_string, ",", &tok))) {
 		mnt_string = NULL;
 
 		if (strncmp(token, DF_POOL_PREFIX, sizeof(DF_POOL_PREFIX) - 1) == 0) {
-			D_STRNDUP(pool_name, &token[sizeof(DF_POOL_PREFIX) - 1], max_len);
-			if (pool_name == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+			strncpy(pool_name, &token[sizeof(DF_POOL_PREFIX) - 1],
+				DAOS_PROP_LABEL_MAX_LEN);
 		} else if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
-			D_STRNDUP(cont_name, &token[sizeof(DF_CONT_PREFIX) - 1], max_len);
-			if (cont_name == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+			strncpy(cont_name, &token[sizeof(DF_CONT_PREFIX) - 1],
+				DAOS_PROP_LABEL_MAX_LEN);
 		}
 	}
-
-	if (rc == -DER_SUCCESS) {
-		if (pool_name)
-			*_pool_name = pool_name;
-		if (cont_name)
-			*_cont_name = cont_name;
-	}
-
-out:
-	return rc;
 }
 
 static void
@@ -328,13 +312,11 @@ main(int argc, char **argv)
 	struct dfuse_projection_info *fs_handle  = NULL;
 	struct dfuse_info            *dfuse_info = NULL;
 	struct dfuse_pool            *dfp        = NULL;
-	struct dfuse_cont            *dfs        = NULL;
-	struct duns_attr_t            path_attr  = {};
+	struct dfuse_cont            *dfs                                    = NULL;
 	struct duns_attr_t            duns_attr  = {};
 	uuid_t                        cont_uuid  = {};
-	uuid_t                        pool_uuid  = {};
-	char                         *pool_name  = NULL;
-	char                         *cont_name  = NULL;
+	char                          pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
+	char                          cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char                          c;
 	int                           rc;
 	int                           rc2;
@@ -379,10 +361,10 @@ main(int argc, char **argv)
 
 		switch (c) {
 		case 'p':
-			pool_name = optarg;
+			strncpy(pool_name, optarg, DAOS_PROP_LABEL_MAX_LEN);
 			break;
 		case 'c':
-			cont_name = optarg;
+			strncpy(cont_name, optarg, DAOS_PROP_LABEL_MAX_LEN);
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
@@ -422,9 +404,7 @@ main(int argc, char **argv)
 			dfuse_info->di_foreground = true;
 			break;
 		case 'o':
-			rc = parse_mount_option(optarg, &pool_name, &cont_name);
-			if (rc != -DER_SUCCESS)
-				D_GOTO(out_debug, rc);
+			parse_mount_option(optarg, pool_name, cont_name);
 			break;
 		case 'h':
 			show_help(argv[0]);
@@ -448,10 +428,10 @@ main(int argc, char **argv)
 			dfuse_info->di_mountpoint = argv[optind];
 			break;
 		case 1:
-			pool_name = argv[optind];
+			strncpy(pool_name, argv[optind], DAOS_PROP_LABEL_MAX_LEN);
 			break;
 		case 2:
-			cont_name = argv[optind];
+			strncpy(cont_name, argv[optind], DAOS_PROP_LABEL_MAX_LEN);
 			break;
 		default:
 			show_help(argv[0]);
@@ -500,7 +480,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (cont_name && !pool_name) {
+	if (cont_name[0] && !pool_name[0]) {
 		printf("Container name specified without pool\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
@@ -521,12 +501,13 @@ main(int argc, char **argv)
 	 * it is expected to work.
 	 */
 	if (path) {
-		if (pool_name) {
+		struct duns_attr_t path_attr = {.da_flags = DUNS_NO_REVERSE_LOOKUP};
+
+		if (pool_name[0]) {
 			printf("Pool specified multiple ways\n");
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
-		path_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 		rc = duns_resolve_path(path, &path_attr);
 		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
 			       rc, strerror(rc));
@@ -542,8 +523,9 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
-		pool_name = path_attr.da_pool;
-		cont_name = path_attr.da_cont;
+		strncpy(pool_name, path_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+		strncpy(cont_name, path_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+		duns_destroy_attr(&path_attr);
 	}
 
 	/* Check for attributes on the mount point itself to use.
@@ -556,7 +538,7 @@ main(int argc, char **argv)
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (pool_name) {
+		if (pool_name[0]) {
 			printf("Pool specified multiple ways\n");
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
@@ -567,8 +549,10 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
-		pool_name = duns_attr.da_pool;
-		cont_name = duns_attr.da_cont;
+		strncpy(pool_name, duns_attr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+		strncpy(cont_name, duns_attr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+		duns_destroy_attr(&duns_attr);
+
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -581,20 +565,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	/* Connect to a pool.
-	 * At this point if a pool is chosen by another means then pool_uuid is already set, so try
-	 * and parse pool_name, if that's not a uuid then try it as a label, else try it as a uuid.
-	 */
-	if (pool_name && uuid_parse(pool_name, pool_uuid) < 0)
-		rc = dfuse_pool_connect_by_label(fs_handle, pool_name, &dfp);
-	else
-		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
+	/* Connect to a pool. */
+	rc = dfuse_pool_connect(fs_handle, pool_name, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (cont_name && uuid_parse(cont_name, cont_uuid) < 0)
+	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
 		rc = dfuse_cont_open_by_label(fs_handle, dfp, cont_name, &dfs);
 	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
@@ -638,8 +616,6 @@ out_debug:
 	daos_debug_fini();
 out:
 	dfuse_send_to_fg(rc);
-	duns_destroy_attr(&path_attr);
-	duns_destroy_attr(&duns_attr);
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.

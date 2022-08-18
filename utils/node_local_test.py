@@ -1065,20 +1065,14 @@ class ValgrindHelper():
                         ofd.write(line)
         os.unlink(self._xml_file)
 
+
 class DFuse():
     """Manage a dfuse instance"""
 
     instance_num = 0
 
-    def __init__(self,
-                 daos,
-                 conf,
-                 pool=None,
-                 container=None,
-                 mount_path=None,
-                 uns_path=None,
-                 caching=True,
-                 wbcache=True):
+    def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
+                 caching=True, wbcache=True):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1130,9 +1124,7 @@ class DFuse():
             v_hint = get_inc_id()
 
         prefix = f'dnt_dfuse_{v_hint}_'
-        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                               suffix='.log',
-                                               delete=False)
+        log_file = tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False)
         self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
@@ -1148,16 +1140,13 @@ class DFuse():
             self.valgrind.use_valgrind = False
 
         if self.cores:
-            cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
+            cmd = ['numactl', '--physcpubind', f'0-{self.cores - 1}']
         else:
             cmd = []
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin,
-                    '--mountpoint',
-                    self.dir,
-                    '--foreground'])
+        cmd.extend([dfuse_bin, '--mountpoint', self.dir, '--foreground'])
 
         if single_threaded:
             cmd.append('--singlethread')
@@ -1172,20 +1161,21 @@ class DFuse():
             cmd.extend(['--path', self.uns_path])
 
         if self.pool:
-            cmd.extend(['--pool', self.pool])
-        if self.container:
-            cmd.extend(['--container', self.container])
-        print('Running {}'.format(' '.join(cmd)))
+            if self.container:
+                cmd.extend(['-o', f'pool={self.pool},container={self.container}'])
+            else:
+                cmd.extend(['-o', f'pool={self.pool}'])
+        print(f"Running {' '.join(cmd)}")
         self._sp = subprocess.Popen(cmd, env=my_env)
-        print('Started dfuse at {}'.format(self.dir))
-        print('Log file is {}'.format(self.log_file))
+        print(f'Started dfuse at {self.dir}')
+        print(f'Log file is {self.log_file}')
 
         total_time = 0
         while os.stat(self.dir).st_ino == pre_inode:
             print('Dfuse not started, waiting...')
             try:
                 ret = self._sp.wait(timeout=1)
-                print('dfuse command exited with {}'.format(ret))
+                print(f'dfuse command exited with {ret}')
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
@@ -1207,7 +1197,7 @@ class DFuse():
             except FileNotFoundError:
                 continue
             if tfile.startswith(self.dir):
-                print('closing file {}'.format(tfile))
+                print(f'closing file {tfile}')
                 os.close(int(fname))
                 work_done = True
         return work_done
@@ -1234,7 +1224,7 @@ class DFuse():
         run_log_test = True
         try:
             ret = self._sp.wait(timeout=20)
-            print('rc from dfuse {}'.format(ret))
+            print(f'rc from dfuse {ret}')
             if ret == 42:
                 self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
                 self.conf.valgrind_errors = True
@@ -1259,7 +1249,7 @@ class DFuse():
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
         ret = self._sp.wait()
-        print('rc from dfuse {}'.format(ret))
+        print(f'rc from dfuse {ret}')
         self._sp = None
         log_test(self.conf, self.log_file)
 
