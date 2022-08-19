@@ -2085,7 +2085,7 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
 int crt_group_info_set(d_iov_t *grp_info);
 
 /**
- * Retrieve list of ranks that belong to the specified gorup.
+ * Retrieve list of ranks that belong to the specified group.
  *
  * \param[in] group             Group identifier
  * \param[out] list             Rank list that gets filled with members
