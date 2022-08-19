@@ -131,11 +131,10 @@ class DdbTest(TestWithServers):
         self.add_container(pool=self.pool)
 
         # Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
-        vos_file = self.get_vos_file_path()
-        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            server_host=host, path=self.bin, mount_point="/mnt/daos",
-            pool_uuid=self.pool.uuid, vos_file=vos_file)
+            server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
+            mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
+            vos_file=self.get_vos_file_path())
 
         errors = []
 
@@ -182,9 +181,9 @@ class DdbTest(TestWithServers):
         actual_object_count = len(match)
         expected_object_count = self.params.get("object_count", "/run/*")
         if actual_object_count != expected_object_count:
-            msg = "Unexpected object count! Expected = {}; Actual = {}".format(
-                expected_object_count, actual_object_count)
-            errors.append(msg)
+            errors.append(
+                "Unexpected object count! Expected = {}; Actual = {}".format(
+                    expected_object_count, actual_object_count))
 
         # 3. Verify there are two dkeys for every object. Also verify the dkey string and
         # the size.
