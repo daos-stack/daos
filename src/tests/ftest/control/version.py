@@ -7,7 +7,7 @@ import re
 
 from apricot import TestWithServers
 from general_utils import run_pcmd, report_errors
-from daos_server_utils import DaosServerCommandRunner
+from server_utils_base import DaosServerCommandRunner
 
 
 class DAOSVersion(TestWithServers):
