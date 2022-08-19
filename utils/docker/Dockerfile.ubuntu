@@ -31,7 +31,7 @@ RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
 RUN update-alternatives --set \
-    java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 ARG UID=1000
 
@@ -125,10 +125,11 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    { mkdir /home/daos/.m2 && \
-    cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        mkdir /home/daos/.m2 &&                                                               \
+        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
+    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
