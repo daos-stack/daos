@@ -1028,6 +1028,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1100,7 +1102,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_pinned || dth->dth_prepared) {
+	if (dth->dth_need_validation) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
 		 * by race. Let's check it.
@@ -1147,7 +1149,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	}
 
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possbile that the DTX resync ULT may have aborted or committed
+	 * possible that the DTX resync ULT may have aborted or committed
 	 * the DTX during current ULT waiting for other non-leaders' reply.
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */
@@ -1346,6 +1348,8 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",

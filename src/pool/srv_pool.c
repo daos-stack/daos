@@ -565,7 +565,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	/**
 	 * Firstly write upgrading global version, so resuming could figure
 	 * out what is target global version of upgrading, use this to reject
-	 * resuming pool uprading if DAOS software upgraded again.
+	 * resuming pool upgrading if DAOS software upgraded again.
 	 */
 	d_iov_set(&value, &upgrade_global_version, sizeof(upgrade_global_version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_upgrade_global_version, &value);
@@ -3086,6 +3086,7 @@ realloc_resp:
 		D_ERROR(DF_UUID": failed to get container list for pool: %d\n",
 			DP_UUID(uuid), rc);
 	} else {
+		*ncontainers = out->plco_ncont;
 		*containers = resp_cont;
 	}
 
@@ -4544,13 +4545,16 @@ out_tx:
 	rdb_tx_end(&tx);
 out_svc:
 	if (upgraded) {
+		if (rc == 0 && need_put_leader &&
+		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
+			D_GOTO(out_put_leader, rc = -DER_AGAIN);
 		if (rc == 0)
 			rc = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
 		rc1 = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc);
 		if (rc == 0 && rc1)
 			rc = rc1;
 	}
-
+out_put_leader:
 	if (need_put_leader) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
 		pool_svc_put_leader(svc);
