@@ -180,6 +180,7 @@ CRT_RPC_DECLARE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
 	((d_rank_t)		(se_rank)		CRT_VAR) \
 	((uint16_t)		(se_flags)		CRT_VAR) \
 	((uint16_t)		(se_nctxs)		CRT_VAR) \
+	((uint64_t)		(se_incarnation)	CRT_VAR) \
 	((d_string_t)		(se_uri)		CRT_VAR)
 
 CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
