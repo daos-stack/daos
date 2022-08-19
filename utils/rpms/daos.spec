@@ -19,7 +19,7 @@ Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
-URL:           https//github.com/daos-stack/daos
+URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)

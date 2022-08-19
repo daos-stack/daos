@@ -1980,7 +1980,7 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 	return rc;
 }
 
-/* Handles dkeys returned by the per-object nested iteratior.
+/* Handles dkeys returned by the per-object nested iterator.
 */
 static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
@@ -1991,9 +1991,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
-/* Handles akeys returned by the iteratior.
- *
- */
+/* Handles akeys returned by the iterator. */
 static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
