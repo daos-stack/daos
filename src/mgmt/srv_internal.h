@@ -65,16 +65,13 @@ void ds_mgmt_svc_put(struct mgmt_svc *svc);
 int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 
 /** srv_pool.c */
-int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-			d_rank_list_t *targets, size_t scm_size,
-			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp, int domains_nr,
-			uint32_t *domains);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			 const char *group, uint32_t force);
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+			int domains_nr, uint32_t *domains);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
-		       char *machine, const char *group, uint32_t *count);
+		       char *machine, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     struct pool_target_addr_list *tgt_addr,
 				     pool_comp_state_t new_state);
@@ -147,6 +144,7 @@ int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
 int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);

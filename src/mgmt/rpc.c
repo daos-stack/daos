@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +43,9 @@ CRT_RPC_DEFINE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 
 CRT_RPC_DEFINE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
 	       DAOS_OSEQ_MGMT_GET_BS_STATE)
+
+CRT_RPC_DEFINE(mgmt_tgt_shard_destroy, DAOS_ISEQ_MGMT_TGT_SHARD_DESTROY,
+	       DAOS_OSEQ_MGMT_TGT_SHARD_DESTROY)
 
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition

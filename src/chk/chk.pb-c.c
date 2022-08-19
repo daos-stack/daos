@@ -219,7 +219,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
     offsetof(Chk__CheckReport, act_choices),
     &chk__check_inconsist_action__descriptor,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

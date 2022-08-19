@@ -5,11 +5,77 @@
 """
 import os
 
-from ddb_utils_base import DdbCommandBase
+from command_utils_base import PositionalParameter, CommandWithParameters
+from general_utils import run_pcmd
+
+
+class DdbCommandBase(CommandWithParameters):
+    """Defines the basic structures of ddb command."""
+
+    def __init__(self, server_host, path, verbose=True, timeout=None, sudo=True):
+        """Defines the parameters for ddb.
+
+        Args:
+            server_host (NodeSet): Server host to run the command.
+            path (str): path to the ddb command.
+            verbose (bool, optional): Display command output when run_pcmd is called.
+                Defaults to True.
+            timeout (int, optional): Command timeout (sec) used in run_pcmd. Defaults to
+                None.
+            sudo (bool, optional): Whether to run ddb with sudo. Defaults to True.
+        """
+        super().__init__("/run/ddb/*", "ddb", path)
+
+        # We need to run with sudo.
+        self.sudo = sudo
+
+        self.host = server_host
+
+        # Write mode that's necessary for the commands that alters the data such as load.
+        self.write_mode = PositionalParameter(position=1, default=False, str_format="-w")
+
+        # Run ddb with single mode with -R. i.e., non-interactive mode.
+        self.run_cmd = PositionalParameter(position=2, default=True, str_format="-R")
+
+        # Command to run on the VOS file that contains container, object info, etc.
+        # Specify double quotes in str_format because the command needs to be wrapped
+        # with them.
+        self.single_command = PositionalParameter(position=3, str_format="\"{}\"")
+
+        # VOS file path.
+        self.vos_path = PositionalParameter(position=4)
+
+        # Members needed for run_pcmd().
+        self.verbose = verbose
+        self.timeout = timeout
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        value = super().__str__()
+        if self.sudo:
+            value = " ".join(["sudo -n", value])
+        return value
+
+    def run(self):
+        """Run the command.
+
+        Returns:
+            list: A list of dictionaries with each entry containing output, exit status,
+                and interrupted status common to each group of hosts.
+
+        """
+        return run_pcmd(
+            hosts=self.host, command=str(self), verbose=self.verbose,
+            timeout=self.timeout)
 
 
 class DdbCommand(DdbCommandBase):
-    # pylint: disable=too-many-ancestors,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """ddb command class.
 
     Component path is needed for most of the commands. They're in the form of:
@@ -21,10 +87,11 @@ class DdbCommand(DdbCommandBase):
     with the indices, so it's better for tests to use the UUID.
     """
 
-    def __init__(self, path, mount_point, pool_uuid, vos_file):
-        """Constructor that sets the common variables for subcommands.
+    def __init__(self, server_host, path, mount_point, pool_uuid, vos_file):
+        """Constructor that sets the common variables for sub-commands.
 
         Args:
+            server_host (NodeSet): Server host to run the command.
             path (str): Path to the ddb command. Pass in self.bin for our wolf/CI env.
             mount_point (str): DAOS mount point where pool directory is created. e.g.,
                 /mnt/daos, /mnt/daos0.
@@ -32,7 +99,7 @@ class DdbCommand(DdbCommandBase):
             vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
                 usually in the form of vos-0, vos-1, and so on.
         """
-        super().__init__(path)
+        super().__init__(server_host, path)
 
         # Construct the VOS file path where ddb will inject the command.
         self.update_vos_path(mount_point, pool_uuid, vos_file)
@@ -62,7 +129,8 @@ class DdbCommand(DdbCommandBase):
                 called.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         cmd = ["ls"]
@@ -87,7 +155,8 @@ class DdbCommand(DdbCommandBase):
                 /var/tmp/daos_testing/<test_name>/my_out.txt
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -109,7 +178,8 @@ class DdbCommand(DdbCommandBase):
             load_file_path (str): Path of the file that contains the data to load.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True
@@ -126,7 +196,8 @@ class DdbCommand(DdbCommandBase):
                 container, second object.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True
@@ -142,7 +213,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -158,7 +230,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -174,7 +247,8 @@ class DdbCommand(DdbCommandBase):
                 first container, second object, second dkey. Needs to be object or after.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -190,7 +264,8 @@ class DdbCommand(DdbCommandBase):
                 e.g., [0]/[1]/[1] for first container, second object, second dkey.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -210,7 +285,8 @@ class DdbCommand(DdbCommandBase):
             active (str): -a flag. Defaults to False.
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = False
@@ -234,7 +310,8 @@ class DdbCommand(DdbCommandBase):
                 matter as long as it's valid. Defaults to [0].
 
         Returns:
-            CmdResult: Result object that contains exit_status, stdout, etc.
+            dict: A list of dictionaries with each entry containing output, exit
+                status, and interrupted status common to each group of hosts.
 
         """
         self.write_mode.value = True

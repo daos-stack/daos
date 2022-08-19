@@ -25,6 +25,9 @@
 #include <daos_srv/policy.h>
 #include <daos_srv/rdb.h>
 
+/*, Wrap of pool service (opaque) */
+struct ds_pool_svc;
+
 /*
  * Pool object
  *
@@ -38,7 +41,7 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
-	uint32_t		sp_redun_fac;
+	uint64_t		sp_redun_fac;
 	/* Performance Domain Affinity Level of EC object. */
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
@@ -176,8 +179,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
+		       daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_rf_to_nreplicas(int svc_rf);
+int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -262,6 +267,8 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
+int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
+int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
@@ -324,6 +331,12 @@ enum ds_pool_dir {
 	DS_POOL_DIR_ZOMBIE
 };
 
+enum ds_pool_tgt_status {
+	DS_POOL_TGT_NONEXIST,
+	DS_POOL_TGT_EMPTY,
+	DS_POOL_TGT_NORMAL
+};
+
 /**
  * Pool clue
  *
@@ -332,13 +345,16 @@ enum ds_pool_dir {
  * pc_svc_clue field is valid only if pc_rc is positive value.
  */
 struct ds_pool_clue {
-	uuid_t				pc_uuid;
-	d_rank_t			pc_rank;
-	enum ds_pool_dir		pc_dir;
-	int				pc_rc;
-	uint32_t			pc_label_len;
-	struct ds_pool_svc_clue	       *pc_svc_clue;
-	char			       *pc_label;
+	uuid_t				 pc_uuid;
+	d_rank_t			 pc_rank;
+	enum ds_pool_dir		 pc_dir;
+	int				 pc_rc;
+	uint32_t			 pc_label_len;
+	uint32_t			 pc_tgt_nr;
+	uint32_t			 pc_padding;
+	struct ds_pool_svc_clue		*pc_svc_clue;
+	char				*pc_label;
+	uint32_t			*pc_tgt_status;
 };
 
 void ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);
@@ -363,5 +379,9 @@ void ds_pool_clues_fini(struct ds_pool_clues *clues);
 void ds_pool_clues_print(struct ds_pool_clues *clues);
 
 int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
+
+int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
+
+void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
 
 #endif /* __DAOS_SRV_POOL_H__ */

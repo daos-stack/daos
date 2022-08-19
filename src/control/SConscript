@@ -46,14 +46,13 @@ def is_firmware_mgmt_build(benv):
 
 def get_build_tags(benv):
     "Get custom go build tags."
-    tags = ["ucx"]
+    tags = ["ucx", "spdk"]
     if is_firmware_mgmt_build(benv):
         tags.append("firmware")
     if not is_release_build(benv):
         tags.append("fault_injection")
-    if len(tags) == 0:
-        return ""
-    return "-tags {}".format(','.join(tags))
+        tags.append("pprof")
+    return f"-tags {','.join(tags)}"
 
 
 def is_release_build(benv):

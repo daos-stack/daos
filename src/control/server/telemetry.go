@@ -27,12 +27,7 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		return nil
 	}
 
-	opts := &promexp.CollectorOpts{
-		Ignores: []string{
-			`.*_ID_(\d+)_rank`,
-		},
-	}
-	c, err := promexp.NewCollector(log, opts)
+	c, err := promexp.NewCollector(log, &promexp.CollectorOpts{})
 	if err != nil {
 		return err
 	}
