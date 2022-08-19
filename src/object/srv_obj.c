@@ -387,12 +387,11 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			iov_idx++;
 			cached_bulk = true;
 
-			/* Check if following IOVs are sharing same bulk handle */
+			/* Check if following IOVs are contiguous and from same bulk handle */
 			while (iov_idx < sgl->sg_nr_out &&
 			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
-			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
-						&tmp_off) == local_bulk) {
-				D_ASSERT(tmp_off == 0);
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &tmp_off) == local_bulk &&
+			       tmp_off == local_off) {
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 			};

@@ -8,7 +8,8 @@ This guide will also describe how to use dfuse in order to take advantage of DAO
 
 For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md) section.
 
-For more details reference the [DAOS administration guide](https://docs.daos.io/v2.4/admin/hardware/).
+For more details, including the prerequisite steps before installing DAOS,
+reference the [DAOS administration guide](../admin/hardware/).
 
 ## Requirements
 
@@ -32,7 +33,7 @@ admin and client node.  All nodes must have:
     commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.4/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -77,6 +78,8 @@ of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
+
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
 
 		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
 
@@ -197,9 +200,8 @@ Server nodes require the following certificate files:
 -   A copy of the Client certificate (client.crt) owned by the
     daos_server user
 
-See
-<https://docs.daos.io/v2.4/admin/deployment/#certificate-configuration>
-for more informaation.
+See [Certificate Configuration](../admin/deployment/#certificate-configuration)
+for more information.
 
 !!! note
 	The following commands are run from the `$ADMIN_NODE`.
@@ -271,9 +273,8 @@ for more informaation.
 
 ## Create Configuration Files
 
-In this section the `daos_server`, `daos_agent`, and dmg command
-configuration files will be defined. Examples are available at
-<https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples>
+In this section the `daos_server`, `daos_agent`, and dmg command configuration files will be defined.
+Examples are available on [github](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
 1.  Determine the addresses for the NVMe devices on the server
     nodes:
