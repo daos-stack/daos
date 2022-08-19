@@ -65,7 +65,7 @@ static inline bool
 bulk_hdl_is_inuse(struct bio_bulk_hdl *hdl)
 {
 	D_ASSERT(hdl->bbh_chunk != NULL);
-	D_ASSERT(hdl->bbh_bulk != NULL);
+	D_ASSERT(hdl->bbh_chunk->bdc_bulk_hdl != NULL);
 
 	if (hdl->bbh_inuse) {
 		D_ASSERT(d_list_empty(&hdl->bbh_link));
@@ -111,18 +111,20 @@ bulk_chunk_depopulate(struct bio_dma_chunk *chk, bool fini)
 
 		D_ASSERT(!bulk_hdl_is_inuse(hdl));
 		d_list_del_init(&hdl->bbh_link);
-		rc = bulk_free_fn(hdl->bbh_bulk);
-		if (rc)
-			D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
-				hdl->bbh_bulk, DP_RC(rc));
-		hdl->bbh_bulk = NULL;
 	}
 	chk->bdc_bulk_cnt = chk->bdc_bulk_idle = 0;
 	chk->bdc_bulk_grp = NULL;
 
 	if (fini) {
 		D_FREE(chk->bdc_bulks);
-		chk->bdc_bulks = NULL;
+
+		if (chk->bdc_bulk_hdl != NULL) {
+			rc = bulk_free_fn(chk->bdc_bulk_hdl);
+			if (rc)
+				D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
+					chk->bdc_bulk_hdl, DP_RC(rc));
+			chk->bdc_bulk_hdl = NULL;
+		}
 	}
 }
 
@@ -138,6 +140,8 @@ bulk_grp_evict_one(struct bio_dma_buffer *bdb, struct bio_dma_chunk *chk,
 	bulk_chunk_depopulate(chk, fini);
 	bbg->bbg_chk_cnt--;
 	d_list_move_tail(&chk->bdc_link, &bdb->bdb_idle_list);
+	if (bbg->bbg_chk_cnt == 0 && bdb->bdb_stats.bds_bulk_grps)
+		d_tm_dec_gauge(bdb->bdb_stats.bds_bulk_grps, 1);
 }
 
 static inline void
@@ -180,8 +184,6 @@ bulk_grp_add(struct bio_dma_buffer *bdb, unsigned int pgs)
 		bbc->bbc_sorted[grp_idx] = bbg;
 
 		bbc->bbc_grp_cnt++;
-		if (bdb->bdb_stats.bds_bulk_grps)
-			d_tm_set_gauge(bdb->bdb_stats.bds_bulk_grps, bbc->bbc_grp_cnt);
 		goto done;
 	}
 
@@ -274,46 +276,24 @@ bulk_reclaim_chunk(struct bio_dma_buffer *bdb, struct bio_bulk_group *ex_grp)
 static int
 bulk_create_hdl(struct bio_dma_chunk *chk, struct bio_bulk_args *arg)
 {
-	struct bio_bulk_group	*bbg = chk->bdc_bulk_grp;
-	d_sg_list_t		 sgl;
-	struct bio_bulk_hdl	*bbh;
-	unsigned int		 bulk_idx, pgs;
-	int			 rc;
-
-	D_ASSERT(chk->bdc_bulk_cnt == chk->bdc_bulk_idle);
-	bulk_idx = chk->bdc_bulk_cnt;
-	D_ASSERT(bulk_idx < bio_chk_sz);
-
-	bbh = &chk->bdc_bulks[bulk_idx];
-	D_ASSERT(bbh->bbh_chunk == chk);
-	D_ASSERT(bbh->bbh_bulk == NULL);
-	D_ASSERT(d_list_empty(&bbh->bbh_link));
-
-	D_ASSERT(bbg != NULL);
-	pgs = bbg->bbg_bulk_pgs;
-	bbh->bbh_pg_idx = (bulk_idx * pgs);
-	D_ASSERT(bbh->bbh_pg_idx < bio_chk_sz);
+	d_sg_list_t	sgl;
+	int		rc;
 
 	rc = d_sgl_init(&sgl, 1);
 	if (rc)
 		return rc;
 
 	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs[0].iov_buf = chk->bdc_ptr +
-				(bbh->bbh_pg_idx << BIO_DMA_PAGE_SHIFT);
-	sgl.sg_iovs[0].iov_buf_len = (pgs << BIO_DMA_PAGE_SHIFT);
-	sgl.sg_iovs[0].iov_len = (pgs << BIO_DMA_PAGE_SHIFT);
+	sgl.sg_iovs[0].iov_buf = chk->bdc_ptr;
+	sgl.sg_iovs[0].iov_buf_len = (bio_chk_sz << BIO_DMA_PAGE_SHIFT);
+	sgl.sg_iovs[0].iov_len = (bio_chk_sz << BIO_DMA_PAGE_SHIFT);
 
 	rc = bulk_create_fn(arg->ba_bulk_ctxt, &sgl, arg->ba_bulk_perm,
-			    &bbh->bbh_bulk);
+			    &chk->bdc_bulk_hdl);
 	if (rc) {
 		D_ERROR("Create bulk handle failed. "DF_RC"\n", DP_RC(rc));
-		bbh->bbh_bulk = NULL;
 	} else {
-		D_ASSERT(bbh->bbh_bulk != NULL);
-		chk->bdc_bulk_cnt++;
-		chk->bdc_bulk_idle++;
-		d_list_add_tail(&bbh->bbh_link, &bbg->bbg_idle_bulks);
+		D_ASSERT(chk->bdc_bulk_hdl != NULL);
 	}
 
 	d_sgl_fini(&sgl, false);
@@ -338,11 +318,17 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 			D_INIT_LIST_HEAD(&hdl->bbh_link);
 			hdl->bbh_chunk = chk;
 		}
+
+		D_ASSERT(chk->bdc_bulk_hdl == NULL);
+		rc = bulk_create_hdl(chk, arg);
+		if (rc)
+			goto error;
 	}
 
 	D_ASSERT(bulk_chunk_is_idle(chk));
 	D_ASSERT(chk->bdc_bulk_cnt == 0);
 
+	D_ASSERT(bbg != NULL);
 	chk->bdc_bulk_grp = bbg;
 	chk->bdc_type = BIO_CHK_TYPE_IO;
 
@@ -350,10 +336,15 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 	tot_bulks = bio_chk_sz / bbg->bbg_bulk_pgs;
 
 	for (i = 0; i < tot_bulks; i++) {
-		rc = bulk_create_hdl(chk, arg);
-		if (rc)
-			goto error;
+		hdl = &chk->bdc_bulks[i];
+		D_ASSERT(hdl->bbh_chunk == chk);
+		D_ASSERT(d_list_empty(&hdl->bbh_link));
+
+		hdl->bbh_pg_idx = (bbg->bbg_bulk_pgs * i);
+		d_list_add_tail(&hdl->bbh_link, &bbg->bbg_idle_bulks);
+
 	}
+	chk->bdc_bulk_cnt = chk->bdc_bulk_idle = tot_bulks;
 	return 0;
 error:
 	bulk_chunk_depopulate(chk, true);
@@ -394,6 +385,8 @@ populate:
 
 	d_list_move_tail(&chk->bdc_link, &bbg->bbg_dma_chks);
 	bbg->bbg_chk_cnt++;
+	if (bbg->bbg_chk_cnt == 1 && bdb->bdb_stats.bds_bulk_grps)
+		d_tm_inc_gauge(bdb->bdb_stats.bds_bulk_grps, 1);
 
 	return 0;
 }
@@ -813,8 +806,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 		return NULL;
 
 	D_ASSERT(bulk_hdl_is_inuse(hdl));
-	*bulk_off = hdl->bbh_bulk_off;
-	D_ASSERT(*bulk_off < bulk_hdl2len(hdl));
+	D_ASSERT(hdl->bbh_bulk_off < bulk_hdl2len(hdl));
+	*bulk_off = (hdl->bbh_pg_idx << BIO_DMA_PAGE_SHIFT) + hdl->bbh_bulk_off;
 
-	return hdl->bbh_bulk;
+	return hdl->bbh_chunk->bdc_bulk_hdl;
 }

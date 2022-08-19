@@ -77,7 +77,7 @@ struct pl_obj_layout {
 
 /** common header of all placement map */
 struct pl_map {
-	/** correpsonding pool uuid */
+	/** corresponding pool uuid */
 	uuid_t			 pl_uuid;
 	/** link chain on hash */
 	d_list_t		 pl_link;
