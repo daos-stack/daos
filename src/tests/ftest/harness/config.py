@@ -29,8 +29,8 @@ class HarnessConfigTest(TestWithServers):
         access_points_suffix = self.params.get("access_points_suffix", "/run/setup/*")
         self.assertEqual(self.access_points_suffix, access_points_suffix)
 
-        self.log.info('Verify access_points_suffix is appended to hostlist_servers exactly once')
-        access_points = nodeset_append_suffix(self.hostlist_servers, access_points_suffix)
+        self.log.info('Verify access_points_suffix is appended exactly once')
+        access_points = nodeset_append_suffix(self.access_points, access_points_suffix)
         self.assertEqual(sorted(self.access_points), sorted(access_points))
         access_points = nodeset_append_suffix(access_points, access_points_suffix)
         self.assertEqual(sorted(self.access_points), sorted(access_points))
