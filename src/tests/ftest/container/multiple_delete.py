@@ -35,7 +35,7 @@ class MultipleContainerDelete(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=container
-        :avocado: tags=multi_container_delete
+        :avocado: tags=multi_container_delete,test_multiple_container_delete
         """
         self.add_pool(connect=False)
 
@@ -43,8 +43,8 @@ class MultipleContainerDelete(IorTestBase):
 
         initial_scm_fs, initial_ssd_fs = self.get_pool_space()
 
-        for i in range(50):
-            self.log.info("Create-Write-Destroy Iteration %d", i)
+        for loop in range(50):
+            self.log.info("Create-Write-Destroy Iteration %d", loop)
             self.create_cont()
             self.ior_cmd.set_daos_params(
                 self.server_group, self.pool, self.container.uuid)
@@ -53,7 +53,7 @@ class MultipleContainerDelete(IorTestBase):
             self.run_ior_with_pool(create_cont=False)
             self.container.destroy()
             scm_fs, ssd_fs = self.get_pool_space()
-            out.append("iter = {}, scm = {}, ssd = {}".format(i+1, scm_fs, ssd_fs))
+            out.append("iter = {}, scm = {}, ssd = {}".format(loop+1, scm_fs, ssd_fs))
 
         self.log.info("Initial Free Space")
         self.log.info("SCM = %d, NVMe = %d", initial_scm_fs, initial_ssd_fs)
