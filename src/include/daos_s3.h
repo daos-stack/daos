@@ -376,8 +376,6 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
  * \param[in]	key		Key of the S3 object to destroy.
  * \param[out]	ds3o	Returned S3 object handle.
  * \param[in]	ds3b	Pointer to the S3 bucket handle to use.
- * \param[in]	ev		Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              0 on success, -errno code on failure.
  */
