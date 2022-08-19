@@ -302,15 +302,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu, rocky, leap.15]
+        distro: [ubuntu, alma.8, leap.15]
         compiler: [clang]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
-          - distro: rocky
+          - distro: alma.8
             base: el.8
-            with: rockylinux/rockylinux:8
+            with: almalinux:8
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
