@@ -804,7 +804,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
-		/** ilog isn't visible in range but still has some enrtries */
+		/** ilog isn't visible in range but still has some entries */
 		invisible = true;
 		rc = 0;
 	}
