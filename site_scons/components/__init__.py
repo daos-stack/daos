@@ -35,7 +35,7 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
 
-class installed_comps():
+class InstalledComps():
     """Checks for installed components and keeps track of prior checks"""
     installed = []
     not_installed = []
@@ -55,11 +55,11 @@ class installed_comps():
         if name in self.not_installed:
             return False
         if self.inst(name) and self.reqs.is_installed(name):
-            print("Using installed version of %s" % name)
+            print(f'Using installed version of {name}')
             self.installed.append(name)
             return True
 
-        print("Using build version of %s" % name)
+        print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
@@ -67,22 +67,22 @@ class installed_comps():
 def include(reqs, name, use_value, exclude_value):
     """Return True if in include list"""
     if reqs.included(name):
-        print("Including %s optional component from build" % name)
+        print(f'Including {name} optional component from build')
         return use_value
-    print("Excluding %s optional component from build" % name)
+    print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     return installed.check(name)
 
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
        installed or not"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     if installed.check(name):
         return installed_str
     return built_str
@@ -365,7 +365,7 @@ def define_components(reqs):
                            '--without-isal',
                            '--without-vtune',
                            '--with-shared'],
-                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch)],
+                          ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],

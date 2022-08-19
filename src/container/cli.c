@@ -653,7 +653,7 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_pool_create_map_refresh_task(pool, pm_ver, sched, &ptask);
+	rc = dc_pool_create_map_refresh_task(poh, pm_ver, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
@@ -1777,8 +1777,8 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		unsigned int map_version = out->coao_op.co_map_version;
 
 		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(pool, map_version, sched,
-						     &ptask);
+		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
+						     sched, &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
