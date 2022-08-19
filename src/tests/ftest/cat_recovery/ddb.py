@@ -92,9 +92,6 @@ class DdbTest(TestWithServers):
         vos_path = os.path.join("/mnt/daos", self.pool.uuid.lower())
         command = " ".join(["sudo", "ls", vos_path])
         cmd_out = run_pcmd(hosts=hosts, command=command)
-        self.log.debug(
-            "## sudo ls /mnt/daos/%s output = %s", self.pool.uuid.lower(),
-            cmd_out[0]["stdout"])
 
         vos_file = None
         for file in cmd_out[0]["stdout"]:
@@ -107,7 +104,7 @@ class DdbTest(TestWithServers):
             self.fail(
                 "vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
         else:
-            self.log.debug("## vos_file: %s", vos_file)
+            self.log.info("vos_file: %s", vos_file)
 
         return vos_file
 
@@ -133,10 +130,12 @@ class DdbTest(TestWithServers):
         self.add_pool()
         self.add_container(pool=self.pool)
 
+        # Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
         vos_file = self.get_vos_file_path()
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file=vos_file)
+            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         errors = []
 
@@ -154,8 +153,10 @@ class DdbTest(TestWithServers):
         cmd_result = ddb_command.list_component()
         # Sample output.
         # [0] d4e0c836-17bd-4df3-b255-929732486bab
-        match = re.findall(
-            r"(\[\d+\])\s+([a-f0-9\-]+)", cmd_result.stdout.decode("utf-8"))
+        # stdout is a list which contains each line as separate element. Concatenate them
+        # to single string so that we can apply regex.
+        ls_out = "\n".join(cmd_result[0]["stdout"])
+        match = re.findall(r"(\[\d+\])\s+([a-f0-9\-]+)", ls_out)
         self.log.info("List container match = %s", match)
 
         actual_uuid = match[0][1].lower()
@@ -167,7 +168,6 @@ class DdbTest(TestWithServers):
 
         # 2. Verify object count in the container.
         cmd_result = ddb_command.list_component(component_path="[0]")
-        self.log.debug("## List objects = %s", cmd_result.stdout.decode("utf-8"))
         # Sample output.
         # /d4e0c836-17bd-4df3-b255-929732486bab/
         # [0] '281479271677953.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
@@ -175,8 +175,8 @@ class DdbTest(TestWithServers):
         # [2] '281479271677955.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
         # [3] '281479271677956.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
         # [4] '281479271677957.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
-        match = re.findall(
-            r"(\[\d+\])\s+\'(\d+\.\d+)\'", cmd_result.stdout.decode("utf-8"))
+        ls_out = "\n".join(cmd_result[0]["stdout"])
+        match = re.findall(r"(\[\d+\])\s+\'(\d+\.\d+)\'", ls_out)
         self.log.info("List objects match = %s", match)
 
         actual_object_count = len(match)
@@ -193,12 +193,12 @@ class DdbTest(TestWithServers):
         for obj_index in range(object_count):
             component_path = "[0]/[{}]".format(obj_index)
             cmd_result = ddb_command.list_component(component_path=component_path)
-            self.log.debug("## List dkeys %d = %s", obj_index, cmd_result.stdout)
+            ls_out = "\n".join(cmd_result[0]["stdout"])
             # Sample output.
             # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677953.0.0/
             # [0] 'Sample dkey 0 0' (15)
             # [1] 'Sample dkey 0 1' (15)
-            match = re.findall(dkey_akey_regex, cmd_result.stdout.decode("utf-8"))
+            match = re.findall(dkey_akey_regex, ls_out)
 
             actual_dkey_count += len(match)
 
@@ -236,14 +236,15 @@ class DdbTest(TestWithServers):
             for dkey_index in range(dkey_count):
                 component_path = "[0]/[{}]/[{}]".format(obj_index, dkey_index)
                 cmd_result = ddb_command.list_component(component_path=component_path)
+                ls_out = "\n".join(cmd_result[0]["stdout"])
                 msg = "List akeys obj_index = {}, dkey_index = {}, stdout = {}".format(
-                    obj_index, dkey_index, cmd_result.stdout)
+                    obj_index, dkey_index, ls_out)
                 self.log.info(msg)
                 # Output is in the same format as dkey, so use the same regex.
                 # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677954.0.0/'
                 # Sample dkey 1 0'/
                 # [0] 'Sample akey 1 0 0' (17)
-                match = re.findall(dkey_akey_regex, cmd_result.stdout.decode("utf-8"))
+                match = re.findall(dkey_akey_regex, ls_out)
 
                 akey_count += len(match)
 
@@ -275,14 +276,13 @@ class DdbTest(TestWithServers):
             for dkey_index in range(dkey_count):
                 component_path = "[0]/[{}]/[{}]/[0]".format(obj_index, dkey_index)
                 cmd_result = ddb_command.list_component(component_path=component_path)
+                ls_out = "\n".join(cmd_result[0]["stdout"])
                 path_stat = ("akey data obj_index = {}, dkey_index = {}, "
-                             "stdout = {}").format(
-                                 obj_index, dkey_index, cmd_result.stdout)
+                             "stdout = {}").format(obj_index, dkey_index, ls_out)
                 self.log.info(path_stat)
                 # Sample output.
                 # [0] Single Value (Length: 17 bytes)
-                match = re.findall(
-                    r"Length:\s+(\d+)\s+bytes", cmd_result.stdout.decode("utf-8"))
+                match = re.findall(r"Length:\s+(\d+)\s+bytes", ls_out)
                 data_length = int(match[0])
                 expected_data_length = len(SAMPLE_DATA) + 6
                 if data_length != expected_data_length:
@@ -309,20 +309,21 @@ class DdbTest(TestWithServers):
 
         1. Create a pool and a container. Insert objects, dkeys, and akeys.
         2. Stop the server to use ddb.
-        3. Call ddb rm to remove the akey.
-        4. Restart the server to use the API.
-        5. Reset the object, container, and pool to use the API after server restart.
-        6. Call list_akey() in pydaos API to verify that the akey was removed.
-        7. Stop the server to use ddb.
-        8. Call ddb rm to remove the dkey.
-        9. Restart the server to use the API.
-        10. Reset the object, container, and pool to use the API after server restart.
-        11. Call list_dkey() in pydaos API to verify that the dkey was removed.
-        12. Stop the server to use ddb.
-        13. Call ddb rm to remove the object.
-        14. Restart the server to use daos command.
-        15. Reset the container and pool so that cleanup works.
-        16. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that the
+        3. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        4. Call ddb rm to remove the akey.
+        5. Restart the server to use the API.
+        6. Reset the object, container, and pool to use the API after server restart.
+        7. Call list_akey() in pydaos API to verify that the akey was removed.
+        8. Stop the server to use ddb.
+        9. Call ddb rm to remove the dkey.
+        10. Restart the server to use the API.
+        11. Reset the object, container, and pool to use the API after server restart.
+        12. Call list_dkey() in pydaos API to verify that the dkey was removed.
+        13. Stop the server to use ddb.
+        14. Call ddb rm to remove the object.
+        15. Restart the server to use daos command.
+        16. Reset the container and pool so that cleanup works.
+        17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that the
         object was removed.
 
         :avocado: tags=all,weekly_regression
@@ -345,25 +346,29 @@ class DdbTest(TestWithServers):
         self.log.info("dkeys from API (before) = %s", dkeys)
 
         # For debugging/reference, check that the object was inserted using daos command.
-        obj_list = self.get_daos_command().container_list_objects(
+        list_obj_out = self.get_daos_command().container_list_objects(
             pool=self.pool.uuid, cont=self.container.uuid)
-        self.log.info("Object list (before) = %s", obj_list.stdout.decode("utf-8"))
+        self.log.info("Object list (before) = %s", list_obj_out["response"])
 
         # 2. Need to stop the server to use ddb.
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Call ddb rm to remove the akey.
+        # 3. Find the vos file name.
+        vos_file = self.get_vos_file_path()
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file="vos-0")
-        cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
-        self.log.info("rm akey stdout = %s", cmd_result.stdout)
+            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            pool_uuid=self.pool.uuid, vos_file=vos_file)
 
-        # 4. Restart the server to use the API.
+        # 4. Call ddb rm to remove the akey.
+        cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
+        self.log.info("rm akey stdout = %s", cmd_result[0]["stdout"])
+
+        # 5. Restart the server to use the API.
         dmg_command.system_start()
 
-        # 5. Reset the object, container, and pool to use the API after server restart.
+        # 6. Reset the object, container, and pool to use the API after server restart.
         self.ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
@@ -371,7 +376,7 @@ class DdbTest(TestWithServers):
         self.container.open()
         self.ioreqs[0].obj.open()
 
-        # 6. Call list_akey() in pydaos API to verify that the akey was removed.
+        # 7. Call list_akey() in pydaos API to verify that the akey was removed.
         akeys = self.ioreqs[0].list_akey(dkey=self.dkeys[0])
         self.log.info("akeys from API (after) = %s", akeys)
 
@@ -383,17 +388,17 @@ class DdbTest(TestWithServers):
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
             errors.append(msg)
 
-        # 7. Stop the server to use ddb.
+        # 8. Stop the server to use ddb.
         dmg_command.system_stop()
 
-        # 8. Call ddb rm to remove the dkey.
+        # 9. Call ddb rm to remove the dkey.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]")
-        self.log.info("rm dkey stdout = %s", cmd_result.stdout)
+        self.log.info("rm dkey stdout = %s", cmd_result[0]["stdout"])
 
-        # 9. Restart the server to use the API.
+        # 10. Restart the server to use the API.
         dmg_command.system_start()
 
-        # 10. Reset the object, container, and pool to use the API after server restart.
+        # 11. Reset the object, container, and pool to use the API after server restart.
         self.ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
@@ -401,7 +406,7 @@ class DdbTest(TestWithServers):
         self.container.open()
         self.ioreqs[0].obj.open()
 
-        # 11. Call list_dkey() in pydaos API to verify that the dkey was removed.
+        # 12. Call list_dkey() in pydaos API to verify that the dkey was removed.
         dkeys = self.ioreqs[0].list_dkey()
         self.log.info("dkeys from API (after) = %s", dkeys)
 
@@ -412,30 +417,34 @@ class DdbTest(TestWithServers):
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
             errors.append(msg)
 
-        # 12. Stop the server to use ddb.
+        # 13. Stop the server to use ddb.
         dmg_command.system_stop()
 
-        # 13. Call ddb rm to remove the object.
+        # 14. Call ddb rm to remove the object.
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]")
-        self.log.info("rm object stdout = %s", cmd_result.stdout)
+        self.log.info("rm object stdout = %s", cmd_result[0]["stdout"])
 
-        # 14. Restart the server to use daos command.
+        # 15. Restart the server to use daos command.
         dmg_command.system_start()
 
-        # 15. Reset the container and pool so that cleanup works.
+        # 16. Reset the container and pool so that cleanup works.
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()
         self.container.open()
 
-        # 16. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that
+        # 17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that
         # the object was removed.
-        obj_list = self.get_daos_command().container_list_objects(
+        list_obj_out = self.get_daos_command().container_list_objects(
             pool=self.pool.uuid, cont=self.container.uuid)
-        self.log.info("Object list (after) = %s", obj_list.stdout.decode("utf-8"))
+        obj_list = list_obj_out["response"]
+        self.log.info("Object list (after) = %s", obj_list)
 
         expected_len = len(self.ioreqs) - 1
-        actual_len = len(obj_list)
+        if obj_list:
+            actual_len = len(obj_list)
+        else:
+            actual_len = 0
         if actual_len != expected_len:
             msg = ("Unexpected number of objects after ddb rm! "
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
@@ -483,9 +492,10 @@ class DdbTest(TestWithServers):
 
         # 4. Find the vos file name.
         vos_file = self.get_vos_file_path()
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file=vos_file)
+            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Load new data into [0]/[0]/[0]/[0]
         load_file_path = os.path.join(self.test_dir, "new_data.txt")
@@ -530,10 +540,11 @@ class DdbTest(TestWithServers):
         1. Create a pool and a container.
         2. Insert one object with one dkey with API.
         3. Stop the server to use ddb.
-        4. Dump the two akeys to files.
-        5. Verify the content of the files.
-        6. Restart the server for the cleanup.
-        7. Reset the object, container, and pool to prepare for the cleanup.
+        4. Find the vos file name. e.g., /mnt/daos/<pool_uuid>/vos-0.
+        5. Dump the two akeys to files.
+        6. Verify the content of the files.
+        7. Restart the server for the cleanup.
+        8. Reset the object, container, and pool to prepare for the cleanup.
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
@@ -551,11 +562,14 @@ class DdbTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 4. Dump the two akeys to files.
+        # 4. Find the vos file name.
+        vos_file = self.get_vos_file_path()
+        host = NodeSet(self.hostlist_servers[0])
         ddb_command = DdbCommand(
-            path=self.bin, mount_point="/mnt/daos", pool_uuid=self.pool.uuid,
-            vos_file="vos-0")
+            server_host=host, path=self.bin, mount_point="/mnt/daos",
+            pool_uuid=self.pool.uuid, vos_file=vos_file)
 
+        # 5. Dump the two akeys to files.
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
         ddb_command.dump_value(
             component_path="[0]/[0]/[0]/[0]", out_file_path=akey1_file_path)
@@ -563,7 +577,7 @@ class DdbTest(TestWithServers):
         ddb_command.dump_value(
             component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
 
-        # 5. Verify the content of the files.
+        # 6. Verify the content of the files.
         actual_akey1_data = None
         with open(akey1_file_path, "r") as file:
             actual_akey1_data = file.readlines()[0]
@@ -591,10 +605,10 @@ class DdbTest(TestWithServers):
                        actual_akey1_data, actual_akey2_data, str_data_list)
             errors.append(msg)
 
-        # 6. Restart the server for the cleanup.
+        # 7. Restart the server for the cleanup.
         dmg_command.system_start()
 
-        # 7. Reset the object, container, and pool to prepare for the cleanup.
+        # 8. Reset the object, container, and pool to prepare for the cleanup.
         self.ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
