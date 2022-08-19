@@ -60,7 +60,7 @@ class DestroyTests(TestWithServers):
         """
         return {
             "hosts": hosts,
-            "access_points": list(hosts[:1]),
+            "access_points": hosts[:1],
             "svr_config_file": svr_config_file,
             "dmg_config_file": dmg_config_file,
             "svr_config_temp": svr_config_temp,

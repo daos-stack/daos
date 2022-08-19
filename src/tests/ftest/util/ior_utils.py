@@ -316,7 +316,7 @@ class IorCommand(ExecutableCommand):
             messages = cmdresult.splitlines()
         else:
             messages = cmdresult.stdout_text.splitlines()
-        # Get the index whre the summary starts and add one to
+        # Get the index where the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)
         # idx + 1 is header.
