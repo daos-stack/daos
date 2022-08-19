@@ -96,9 +96,9 @@ It supports both synchronous and asynchronous. The default is asynchronous. You 
 
 ##### DAOS URIs
 
-* daos://<pool UUID>/<container UUID>/.
-* daos://<pool label>/<container label>/.
-* daos://[authority starts with "uns-id"]/<uns path>. The authority is optional.
+* daos://\<pool UUID\>/\<container UUID\>/.
+* daos://\<pool label\>/\<container label\>/.
+* daos://[authority starts with "uns-id"]/\<uns path\>. The authority is optional.
    If the authority doesn't start with "uns-id", it will be considered as either pool UUID or label. You will get
 unexpected parse error.
 
@@ -212,8 +212,8 @@ Beside DAOS setup and environment variables, one more environment for JVM signal
 * daos-java Jars
 
 There are two choices when put daos-java jar, depending on your application.<br/>
-1, daos-java-\<version\>.jar, if your app has protobuf 3 in your classpath.<br/>
-2, daos-java-\<version\>-protobuf3-netty4-shaded.jar, if your app don't have protobuf3 or netty4 or different versions
+1, `daos-java-<version>.jar`, if your app has protobuf 3 in your classpath.<br/>
+2, `daos-java-<version>-protobuf3-netty4-shaded.jar`, if your app don't have protobuf3 or netty4 or different versions
 in your classpath.<br/>
 
 * core-site-daos-ref.xml
