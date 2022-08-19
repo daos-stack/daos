@@ -1359,6 +1359,37 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 	}
 }
 
+#define EV_TRACE_MAX 8192
+static __thread vos_iter_entry_t evt_trace[EV_TRACE_MAX];
+static __thread int evt_trace_start = 0;
+static __thread int evt_trace_count = 0;
+
+static void
+dump_trace(void)
+{
+	int i;
+	int last;
+	vos_iter_entry_t *entry;
+
+	if (evt_trace_count <= EV_TRACE_MAX)
+		last = evt_trace_count;
+	else
+		last = evt_trace_start;
+	D_ERROR("Assertion will trigger, dumping the evt_trace\n");
+
+	i = evt_trace_start;
+	do {
+		entry = &evt_trace[i];
+		D_ERROR("  "DF_U64" recs@"DF_U64" ("DF_U64" recs@ "DF_U64")@"DF_X64
+			".%d tx=%d hole=%d flg=%x rsz="DF_U64" gsz="DF_U64"\n",
+			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
+			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
+			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),
+			entry->ie_vis_flags, entry->ie_rsize, entry->ie_gsize);
+		i = (i + 1) % EV_TRACE_MAX;
+	} while (i != last);
+}
+
 static int
 insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		bool last, unsigned int *acts)
@@ -1436,6 +1467,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERTF(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi, "phy_ent "DF_RECT" off="DF_X64"\n",
 			  DP_RECT(&phy_ent->pe_rect), phy_ent->pe_off);
+		if (!phy_ent->pe_remove && rect.rc_ex.ex_lo > mw->mw_ext.ex_hi)
+			dump_trace();
 		D_ASSERTF(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi,
 			  "phy_ent->pe_remove=%d phy_ent->pe_off=" DF_X64 " rect=" DF_RECT
 			  " mw=" DF_EXT "\n",
@@ -2156,11 +2189,21 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct evt_extent	 phy_ext, lgc_ext;
 	int			 rc = 0;
+	int			 next_idx;
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(acts != NULL);
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
+
+	if (evt_trace_count == EV_TRACE_MAX) {
+		next_idx = evt_trace_start;
+		evt_trace_start = (evt_trace_start + 1) % EV_TRACE_MAX;
+	} else {
+		next_idx = evt_trace_start + evt_trace_count;
+		evt_trace_count++;
+	}
+	memcpy(&evt_trace[next_idx], entry, sizeof(*entry));
 
 	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
 
@@ -2336,6 +2379,8 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
+		evt_trace_start = 0;
+		evt_trace_count = 0;
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_SINGLE:
