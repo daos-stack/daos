@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,10 +28,10 @@ class ThreadResult():
         self.result = result
 
     def __str__(self):
-        """Return the string respresentation of this object.
+        """Return the string representation of this object.
 
         Returns:
-            str: the string respresentation of this object
+            str: the string representation of this object
 
         """
         def get_result(result):

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 import os
 import time
+from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -101,12 +101,17 @@ class NetworkFailureTest(IorTestBase):
 
     def create_ip_to_host(self):
         """Create a dictionary of IP address to hostname of the server nodes.
+
+        Returns:
+            dict: Dictionary of IP address to hostname (NodeSet representation) of all
+                server nodes.
+
         """
         command = "hostname -i"
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        return {result["stdout"][0]: str(result["hosts"]) for result in results}
+        return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
@@ -118,7 +123,7 @@ class NetworkFailureTest(IorTestBase):
         Aurora.
         3. Run IOR with given object class.
         4. Bring up the network interface.
-        5. Restart DAOS with dmg.
+        5. Restart DAOS with dmg system stop and start.
         6. Call dmg pool query -b to find the disabled ranks.
         7. Call dmg pool reintegrate --rank=<rank> one rank at a time to enable all
         ranks. Wait for rebuild after calling the command.
@@ -144,7 +149,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 2. Take down network interface of one of the engines. Use the first host.
         errors = []
-        self.network_down_host = self.hostlist_servers[0]
+        self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
         self.interface = self.params.get(
             "fabric_iface", "/run/server_config/servers/0/*")
