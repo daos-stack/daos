@@ -594,7 +594,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 {
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct chk_report_unit		 cru;
+	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	uint64_t			 seq = 0;
@@ -651,18 +651,11 @@ report:
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
 	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
-	cru.cru_target = 0;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
-	cru.cru_detail_nr = 0;
 	cru.cru_pool = (uuid_t *)&uuid;
-	cru.cru_cont = NULL;
-	cru.cru_obj = NULL;
-	cru.cru_dkey = NULL;
-	cru.cru_akey = NULL;
 	cru.cru_msg = "Check leader detects dangling pool";
 	cru.cru_options = options;
-	cru.cru_details = NULL;
 	cru.cru_result = result;
 
 	rc = chk_leader_report(&cru, &seq, &decision);
@@ -726,7 +719,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct ds_pool_clue		*clue;
-	struct chk_report_unit		 cru;
+	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	uint64_t			 seq = 0;
@@ -825,18 +818,11 @@ report:
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
 	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
-	cru.cru_target = 0;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
-	cru.cru_detail_nr = 0;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_cont = NULL;
-	cru.cru_obj = NULL;
-	cru.cru_dkey = NULL;
-	cru.cru_akey = NULL;
 	cru.cru_msg = "Check leader detects orphan pool";
 	cru.cru_options = options;
-	cru.cru_details = NULL;
 	cru.cru_result = result;
 
 	rc = chk_leader_report(&cru, &seq, &decision);
@@ -943,7 +929,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
-	struct chk_report_unit		 cru;
+	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	uint64_t			 seq = 0;
@@ -1108,15 +1094,10 @@ report:
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
 	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
-	cru.cru_target = 0;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_cont = NULL;
-	cru.cru_obj = NULL;
-	cru.cru_dkey = NULL;
-	cru.cru_akey = NULL;
 	cru.cru_msg = "Check leader detects corrupted pool without quorum";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -1323,7 +1304,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
-	struct chk_report_unit		 cru;
+	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	uint64_t			 seq = 0;
@@ -1429,15 +1410,10 @@ report:
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
 	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
-	cru.cru_target = 0;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_cont = NULL;
-	cru.cru_obj = NULL;
-	cru.cru_dkey = NULL;
-	cru.cru_akey = NULL;
 	cru.cru_msg = "Check leader detects corrupted pool label";
 	cru.cru_options = options;
 	cru.cru_details = details;

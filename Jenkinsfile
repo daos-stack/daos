@@ -347,7 +347,6 @@ pipeline {
                                                   'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
                                                   /* groovylint-disable-next-line LineLength */
                                                   'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  'src/mgmt/rpc.h:' +
                                                   '*.crt:' +
                                                   '*.pem:' +
                                                   '*_test.go:' +
