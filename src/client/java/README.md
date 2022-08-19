@@ -106,6 +106,11 @@ You may want to connect to two DAOS servers or two DFS instances mounted to diff
 same JVM. Then, you need to add authority to your UNS URI to make it unique since Hadoop caches filesystem instance
 keyed by "schema + authority" in global (JVM).
 
+##### core-site.xml Update
+
+There are some DAOS specific configurations in
+[core-site-daos-ref.xml](hadoop-daos/src/main/resources/core-site-daos-ref.xml) to be merged into Hadoop core-site.xml.
+
 ##### Tune More Configurations
 
 The following config items starting from 6th can put into application, Hadoop config files and DAOS container
@@ -189,8 +194,9 @@ and user environment variables.
 
 User can go to each submodule and build it separately too.
 
-For distribution, the default is for including two artifacts daos-jar and hadoop-daos. The other choice is to include
-all dependencies as well when build with "-P with-deps"
+For distribution, the default is for including two artifacts daos-jar and hadoop-daos, as well as core-site-daos-ref.xml,
+which is to be merged with your Hadoop core-site.xml. The other choices are to include dependencies when build with
+"-Pwith-deps" for all dependencies and "-Pwith-proto3-netty4-deps" for protobuf 3 and netty 4 dependencies.
 
 ## Documentation
 You can run below command to generate JavaDoc. There could be some error message during build. Just ignore them if your
@@ -209,6 +215,11 @@ There are two choices when put daos-java jar, depending on your application.<br/
 1, daos-java-\<version\>.jar, if your app has protobuf 3 in your classpath.<br/>
 2, daos-java-\<version\>-protobuf3-netty4-shaded.jar, if your app don't have protobuf3 or netty4 or different versions
 in your classpath.<br/>
+
+* core-site-daos-ref.xml
+
+There are some DAOS specific configurations to be merged to your Hadoop core-site.xml. Check description tags inside
+to determine which properties are required whilst some of them are optional.
 
 * YARN
 
