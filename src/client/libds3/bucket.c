@@ -24,7 +24,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		return -ENOMEM;
 	}
 
-	// TODO: Handle markers and other bucket info
+	// TODO: Handle markers
 	rc = daos_pool_list_cont(ds3->poh, &ncont, conts, ev);
 	if (rc == 0) {
 		*is_truncated = false;
@@ -40,7 +40,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 	for (int i = 0; i < ncont; i++) {
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
-			D_INFO("Skipping _METADATA bucket");
+			D_INFO("Skipping container: %s", name);
 			continue;
 		}
 
@@ -49,12 +49,19 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 
 		// Get info
 		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
-		if (rc != 0)
-			goto err;
+		if (rc != 0) {
+			D_INFO("Skipping container: %s", name);
+			continue;
+		}
 
 		rc = ds3_bucket_get_info(&buf[bi], ds3b, ev);
+		if (rc != 0) {
+			D_INFO("Skipping container: %s", name);
+			rc = ds3_bucket_close(ds3b, ev);
+			continue;
+		}
 
-		ds3_bucket_close(ds3b, ev);
+		rc = ds3_bucket_close(ds3b, ev);
 		if (rc != 0)
 			goto err;
 
@@ -167,7 +174,7 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 err:
 	daos_cont_close(ds3b_tmp->coh, ev);
 err_ds3b:
-	D_FREE(ds3b);
+	D_FREE(ds3b_tmp);
 	return -rc;
 }
 
