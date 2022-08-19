@@ -348,7 +348,9 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	strcat(link_name, LATEST_INSTANCE_SUFFIX);
 
 	// Remove previous link
-	dfs_remove(ds3b->dfs, parent, link_name, false, NULL);
+	rc = dfs_remove(ds3b->dfs, parent, link_name, false, NULL);
+	if (rc != 0 && rc != ENOENT)
+		goto err_link_name;
 
 	// Create the link
 	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK,
@@ -358,6 +360,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	// creation to handle deletion
 	if (rc != 0)
 		dfs_release(link);
+
+err_link_name:
 	D_FREE(link_name);
 err_parent:
 	if (parent)
