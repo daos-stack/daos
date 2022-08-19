@@ -279,6 +279,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
  * Destroy a bucket in the DAOS pool identified by \a ds3.
  *
  * \param[in]	name	Name of the bucket to destroy.
+ * \param[in]	force	If true, remove bucket even if non-empty.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -286,7 +287,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev);
+ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev);
 
 /**
  * Open an S3 bucket identified by \a name.

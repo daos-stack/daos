@@ -123,17 +123,68 @@ err:
 }
 
 int
-ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev)
+ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 {
-	// Prevent attempting to destroy metadata bucket
-	if (strcmp(name, METADATA_BUCKET) == 0) {
-		D_ERROR("Cannot destroy metadata bucket");
-		return -ENOENT;
+	int            rc      = 0;
+	ds3_bucket_t  *ds3b    = NULL;
+	uint32_t       nd      = 10;
+	struct dirent *dirents = NULL;
+	dfs_obj_t     *dir_obj = NULL;
+	daos_anchor_t  anchor;
+
+	if (ds3 == NULL || name == NULL)
+		return -EINVAL;
+
+	rc = ds3_bucket_open(name, &ds3b, ds3, ev);
+	if (rc != 0) {
+		return -rc;
 	}
 
-	// TODO implement
+	// Check if the bucket is empty
+	if (!force) {
+		rc = dfs_lookup(ds3b->dfs, "/", O_RDWR, &dir_obj, NULL, NULL);
+		if (rc != 0) {
+			goto err_ds3b;
+		}
 
-	return 0;
+		D_ALLOC_ARRAY(dirents, nd);
+		if (dirents == NULL) {
+			rc = ENOMEM;
+			goto err_dir_obj;
+		}
+
+		daos_anchor_init(&anchor, 0);
+		rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, &nd, dirents);
+		if (rc != 0) {
+			goto err_dirents;
+		}
+
+		// The bucket is not empty
+		if (nd != 0) {
+			rc = ENOTEMPTY;
+			goto err_dirents;
+		}
+	}
+
+	// Remove the bucket's multipart directory
+	rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, true, NULL);
+	if (rc != 0) {
+		goto err_dirents;
+	}
+
+	// Finally, destroy the bucket
+	rc = daos_cont_destroy(ds3->poh, name, true, NULL);
+	rc = daos_der2errno(rc);
+
+err_dirents:
+	if (dirents) 
+		D_FREE(dirents);
+err_dir_obj:
+	if (dir_obj)
+		dfs_release(dir_obj);
+err_ds3b:
+	ds3_bucket_close(ds3b, ev);
+	return -rc;
 }
 
 int
@@ -200,8 +251,8 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 		return -EINVAL;
 
 	rc = daos_cont_get_attr(ds3b->coh, 1, names, values, sizes, ev);
-	rc = -daos_der2errno(rc);
-	return rc;
+	rc = daos_der2errno(rc);
+	return -rc;
 }
 
 int
@@ -216,8 +267,8 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 		return -EINVAL;
 
 	rc = daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
-	rc = -daos_der2errno(rc);
-	return rc;
+	rc = daos_der2errno(rc);
+	return -rc;
 }
 
 int
