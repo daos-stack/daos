@@ -447,10 +447,13 @@ int dc_mgmt_net_cfg_check(const char *name)
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			goto out;
 		}
 	}
 
+out:
+	put_attach_info(&info, resp);
 	return rc;
 }
 
