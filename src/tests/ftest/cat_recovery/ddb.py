@@ -215,10 +215,10 @@ class DdbTest(TestWithServers):
             # Verify the dkey size field.
             for dkey in match:
                 dkey_string = dkey[1]
-                dkey_size = int(dkey[2])
-                if len(dkey_string) != dkey_size:
+                # int(dkey[2]) is the dkey size; avoid pylint error.
+                if len(dkey_string) != int(dkey[2]):
                     msg = ("Wrong dkey size! obj_index = {}. String = {}; "
-                           "Size = {}").format(obj_index, dkey_string, dkey_size)
+                           "Size = {}").format(obj_index, dkey_string, int(dkey[2]))
                     errors.append(msg)
 
         # Verify there are two dkeys for every object.
