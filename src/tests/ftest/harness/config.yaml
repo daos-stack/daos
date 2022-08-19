@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 1
+  test_servers: 2
   test_clients: 1
 timeout: 60
 setup:
