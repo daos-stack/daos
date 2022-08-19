@@ -36,13 +36,13 @@ enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
 
 /** DAOS S3 Pool handle */
 struct ds3 {
+	/** Pool name */
+	char       pool[128];
 	/** Pool handle */
 	daos_handle_t    poh;
 	/** Pool information */
 	daos_pool_info_t pinfo;
-	/** Metadata container handle */
-	daos_handle_t    meta_coh;
-	/** Metadata dfs mount */
+	/** Metadata DFS handle */
 	dfs_t           *meta_dfs;
 	/** Array of metadata dir handle */
 	dfs_obj_t       *meta_dirs[METADATA_DIR_LAST];
@@ -50,21 +50,19 @@ struct ds3 {
 
 /** DAOS S3 Bucket handle */
 struct ds3_bucket {
-	/** DAOS container handle */
-	daos_handle_t    coh;
-	/** Container information */
-	daos_cont_info_t cont_info;
 	/** DFS handle */
 	dfs_t           *dfs;
 };
 
 /** DAOS S3 Object handle */
 struct ds3_obj {
+	/** DFS object handle */
 	dfs_obj_t *dfs_obj;
 };
 
 /** DAOS S3 Upload Part handle */
 struct ds3_part {
+	/** DFS object handle */
 	dfs_obj_t *dfs_obj;
 };
 

@@ -177,7 +177,7 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 	rc = daos_der2errno(rc);
 
 err_dirents:
-	if (dirents) 
+	if (dirents)
 		D_FREE(dirents);
 err_dir_obj:
 	if (dir_obj)
@@ -206,24 +206,14 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 	if (ds3b_tmp == NULL)
 		return -ENOMEM;
 
-	// TODO: We need to cache open container handles
-	rc = daos_cont_open(ds3->poh, name, DAOS_COO_RW, &ds3b_tmp->coh, &ds3b_tmp->cont_info, ev);
+	rc = dfs_connect(ds3->pool, NULL, name, O_RDWR, NULL, &ds3b_tmp->dfs);
 	if (rc != 0) {
-		D_ERROR("Failed to open to container %s, rc = %d\n", name, rc);
-		rc = daos_der2errno(rc);
 		goto err_ds3b;
-	}
-
-	rc = dfs_mount(ds3->poh, ds3b_tmp->coh, O_RDWR, &ds3b_tmp->dfs);
-	if (rc != 0) {
-		goto err;
 	}
 
 	*ds3b = ds3b_tmp;
 	return 0;
 
-err:
-	daos_cont_close(ds3b_tmp->coh, ev);
 err_ds3b:
 	D_FREE(ds3b_tmp);
 	return -rc;
@@ -233,8 +223,8 @@ int
 ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 {
 	int rc = 0;
-	rc     = dfs_umount(ds3b->dfs);
-	rc     = daos_cont_close(ds3b->coh, ev);
+
+	rc = dfs_disconnect(ds3b->dfs);
 	D_FREE(ds3b);
 	return -rc;
 }
@@ -246,12 +236,19 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void *const       values[] = {info->encoded};
 	size_t            sizes[]  = {info->encoded_length};
+	daos_handle_t     coh;
 
 	if (ds3b == NULL || info == NULL)
 		return -EINVAL;
 
-	rc = daos_cont_get_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc = dfs_cont_get(ds3b->dfs, &coh);
+	if (rc != 0) {
+		return -rc;
+	}
+
+	rc = daos_cont_get_attr(coh, 1, names, values, sizes, ev);
 	rc = daos_der2errno(rc);
+	dfs_cont_put(ds3b->dfs, coh);
 	return -rc;
 }
 
@@ -262,12 +259,19 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void const *const values[] = {info->encoded};
 	size_t const      sizes[]  = {info->encoded_length};
+	daos_handle_t     coh;
 
 	if (ds3b == NULL || info == NULL)
 		return -EINVAL;
 
-	rc = daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc = dfs_cont_get(ds3b->dfs, &coh);
+	if (rc != 0) {
+		return -rc;
+	}
+
+	rc = daos_cont_set_attr(coh, 1, names, values, sizes, ev);
 	rc = daos_der2errno(rc);
+	dfs_cont_put(ds3b->dfs, coh);
 	return -rc;
 }
 

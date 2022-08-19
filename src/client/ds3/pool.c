@@ -86,10 +86,13 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 
 	if (ds3 == NULL || pool == NULL)
 		return -EINVAL;
-	
+
 	D_ALLOC_PTR(ds3_tmp);
 	if (ds3_tmp == NULL)
 		return -ENOMEM;
+
+	/** Copy pool name */
+	strcpy(ds3_tmp->pool, pool);
 
 	/** Connect to the pool first */
 	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
@@ -99,9 +102,9 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		goto err_ds3;
 	}
 
-	/** Check whether mdata container already exist */
-	rc = dfs_cont_create_with_label(ds3_tmp->poh, METADATA_BUCKET, NULL, NULL,
-					&ds3_tmp->meta_coh, &ds3_tmp->meta_dfs);
+	/** Connect to metatata container, create if it doesn't exist */
+	rc = dfs_connect(ds3_tmp->pool, NULL, METADATA_BUCKET, O_CREAT | O_RDWR, NULL,
+			 &ds3_tmp->meta_dfs);
 	if (rc == 0) {
 /** Create inner directories */
 #define X(a, b)                                                                                    \
@@ -114,24 +117,6 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 		METADATA_DIR_LIST
 
 #undef X
-	} else if (rc == EEXIST) {
-		/** Metadata container exists, mount it */
-		rc = daos_cont_open(ds3_tmp->poh, METADATA_BUCKET, DAOS_COO_RW, &ds3_tmp->meta_coh,
-				    NULL, NULL);
-		if (rc != 0) {
-			D_ERROR("Failed to open metadata container for pool %s, rc = %d\n", pool,
-				rc);
-			rc = daos_der2errno(rc);
-			goto err_poh;
-		}
-
-		rc = dfs_mount(ds3_tmp->poh, ds3_tmp->meta_coh, O_RDWR, &ds3_tmp->meta_dfs);
-		if (rc != 0) {
-			D_ERROR("Failed to mount metadata container for pool %s, rc = %d\n", pool,
-				rc);
-			goto err_coh;
-		}
-
 	} else {
 		D_ERROR("Failed to create metadata container in pool %s, rc = %d\n", pool, rc);
 		goto err_poh;
@@ -159,9 +144,7 @@ err:
 
 #undef X
 
-	dfs_umount(ds3_tmp->meta_dfs);
-err_coh:
-	daos_cont_close(ds3_tmp->meta_coh, NULL);
+	dfs_disconnect(ds3_tmp->meta_dfs);
 err_poh:
 	daos_pool_disconnect(ds3_tmp->poh, NULL);
 err_ds3:
@@ -173,7 +156,7 @@ int
 ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 {
 	int rc = 0;
-	
+
 	if (ds3 == NULL) {
 		return 0;
 	}
@@ -184,8 +167,7 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 
 #undef X
 
-	rc     = dfs_umount(ds3->meta_dfs);
-	daos_cont_close(ds3->meta_coh, ev);
+	rc = dfs_disconnect(ds3->meta_dfs);
 	daos_pool_disconnect(ds3->poh, ev);
 	D_FREE(ds3);
 	return -rc;
