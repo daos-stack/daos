@@ -14,6 +14,15 @@ def scons():
 
     denv = base_env.Clone()
 
+    denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+
+    c_files = ['daos_debug_set_params.c']
+    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
+                                   c_files,
+                                   LIBS=['daos', 'daos_common', 'gurt', 'cmocka'])
+
+    denv.Install('$PREFIX/bin/', daosdebug)
+
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, libs_client)
         if mpi is None:

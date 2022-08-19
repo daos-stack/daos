@@ -15,11 +15,11 @@
 
 Name:          daos
 Version:       2.1.104
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
-URL:           https//github.com/daos-stack/daos
+URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)
@@ -507,6 +507,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
+%{_bindir}/daos_debug_set_params
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
 %{_bindir}/eq_tests
@@ -569,8 +570,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-3
+* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-4
 - Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+* Thu Aug 11 2022 Wang Shilong <shilong.wang@intel.com> 2.1.104-3
+- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
 
 * Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
 - Update to mercury 2.2.0
