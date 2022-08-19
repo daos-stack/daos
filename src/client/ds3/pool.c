@@ -44,7 +44,9 @@ create_metadir(dfs_t *dfs, const char *dir)
 	int rc;
 
 	rc = dfs_mkdir(dfs, NULL, dir, DEFFILEMODE, 0);
-	if (rc != 0 && rc != EEXIST)
+	if (rc == EEXIST)
+		rc = 0;
+	if (rc != 0)
 		D_ERROR("failed to create meta dir %s, rc = %d\n", dir, rc);
 
 	return rc;
