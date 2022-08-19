@@ -479,6 +479,9 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 	}()
 	defer srv.grpcServer.Stop()
 
+	// noop on release builds
+	control.StartPProf(srv.log)
+
 	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 

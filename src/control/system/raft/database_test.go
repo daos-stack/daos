@@ -902,15 +902,15 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,
-				RankURIs: map[Rank]URIs{
-					0:  {Primary: MockControlAddr(t, 0).String()},
-					2:  {Primary: MockControlAddr(t, 2).String()},
-					3:  {Primary: MockControlAddr(t, 3).String()},
-					4:  {Primary: MockControlAddr(t, 4).String()},
-					5:  {Primary: MockControlAddr(t, 5).String()},
-					6:  {Primary: MockControlAddr(t, 6).String()},
-					9:  {Primary: MockControlAddr(t, 9).String()},
-					10: {Primary: MockControlAddr(t, 10).String()},
+				RankEntries: map[Rank]RankEntry{
+					0:  {PrimaryURI: MockControlAddr(t, 0).String()},
+					2:  {PrimaryURI: MockControlAddr(t, 2).String()},
+					3:  {PrimaryURI: MockControlAddr(t, 3).String()},
+					4:  {PrimaryURI: MockControlAddr(t, 4).String()},
+					5:  {PrimaryURI: MockControlAddr(t, 5).String()},
+					6:  {PrimaryURI: MockControlAddr(t, 6).String()},
+					9:  {PrimaryURI: MockControlAddr(t, 9).String()},
+					10: {PrimaryURI: MockControlAddr(t, 10).String()},
 				},
 			},
 		},
@@ -918,9 +918,9 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			members: membersWithStates(MemberStateJoined, MemberStateJoined),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]URIs{
-					0: {Primary: MockControlAddr(t, 0).String()},
-					1: {Primary: MockControlAddr(t, 1).String()},
+				RankEntries: map[Rank]RankEntry{
+					0: {PrimaryURI: MockControlAddr(t, 0).String()},
+					1: {PrimaryURI: MockControlAddr(t, 1).String()},
 				},
 				MSRanks: []Rank{1},
 			},
@@ -931,8 +931,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]URIs{
-					0: {Primary: MockControlAddr(t, 0).String()},
+				RankEntries: map[Rank]RankEntry{
+					0: {PrimaryURI: MockControlAddr(t, 0).String()},
 				},
 			},
 		},

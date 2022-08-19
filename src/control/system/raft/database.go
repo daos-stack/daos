@@ -107,17 +107,18 @@ type (
 		SystemName string
 	}
 
-	// URIs represents the set of URIs for a rank.
-	URIs struct {
-		Primary   string
-		Secondary []string
-	}
-
 	// GroupMap represents a version of the system membership map.
 	GroupMap struct {
-		Version  uint32
-		RankURIs map[system.Rank]URIs
-		MSRanks  []system.Rank
+		Version     uint32
+		RankEntries map[system.Rank]RankEntry
+		MSRanks     []system.Rank
+	}
+
+	// RankEntry comprises the information about a rank in GroupMap.
+	RankEntry struct {
+		PrimaryURI    string
+		SecondaryURIs []string
+		Incarnation   uint64
 	}
 )
 
@@ -503,8 +504,8 @@ func (db *Database) IncMapVer() error {
 
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
-		Version:  version,
-		RankURIs: make(map[system.Rank]URIs),
+		Version:     version,
+		RankEntries: make(map[system.Rank]RankEntry),
 	}
 }
 
@@ -533,16 +534,17 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 			continue
 		}
 
-		gm.RankURIs[srv.Rank] = URIs{
-			Primary:   srv.PrimaryFabricURI,
-			Secondary: srv.SecondaryFabricURIs,
+		gm.RankEntries[srv.Rank] = RankEntry{
+			PrimaryURI:    srv.PrimaryFabricURI,
+			SecondaryURIs: srv.SecondaryFabricURIs,
+			Incarnation:   srv.Incarnation,
 		}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
 	}
 
-	if len(gm.RankURIs) == 0 {
+	if len(gm.RankEntries) == 0 {
 		return nil, system.ErrEmptyGroupMap
 	}
 

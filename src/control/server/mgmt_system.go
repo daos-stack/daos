@@ -59,30 +59,30 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 
 	resp := new(mgmtpb.GetAttachInfoResp)
-	rankURIs := groupMap.RankURIs
+	rankURIs := groupMap.RankEntries
 	if !req.GetAllRanks() {
-		rankURIs = make(map[system.Rank]raft.URIs)
+		rankURIs = make(map[system.Rank]raft.RankEntry)
 
 		// If the request does not indicate that all ranks should be returned,
 		// it may be from an older client, in which case we should just return
 		// the MS ranks.
 		for _, rank := range groupMap.MSRanks {
-			rankURIs[rank] = groupMap.RankURIs[rank]
+			rankURIs[rank] = groupMap.RankEntries[rank]
 		}
 	}
 
-	for rank, uris := range rankURIs {
-		if len(svc.clientNetworkHint) < len(uris.Secondary)+1 {
+	for rank, entry := range rankURIs {
+		if len(svc.clientNetworkHint) < len(entry.SecondaryURIs)+1 {
 			return nil, errors.Errorf("not enough client network hints (%d) for rank %d URIs (%d)",
-				len(svc.clientNetworkHint), rank, len(uris.Secondary)+1)
+				len(svc.clientNetworkHint), rank, len(entry.SecondaryURIs)+1)
 		}
 
 		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 			Rank: rank.Uint32(),
-			Uri:  uris.Primary,
+			Uri:  entry.PrimaryURI,
 		})
 
-		for i, uri := range uris.Secondary {
+		for i, uri := range entry.SecondaryURIs {
 			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank:        rank.Uint32(),
 				Uri:         uri,
@@ -363,7 +363,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	if err != nil {
 		return err
 	}
-	if len(gm.RankURIs) == 0 {
+	if len(gm.RankEntries) == 0 {
 		return system.ErrEmptyGroupMap
 	}
 	if gm.Version == svc.lastMapVer {
@@ -378,10 +378,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 		MapVersion: gm.Version,
 	}
 	rankSet := &system.RankSet{}
-	for rank, uris := range gm.RankURIs {
+	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
-			Rank: rank.Uint32(),
-			Uri:  uris.Primary,
+			Rank:        rank.Uint32(),
+			Uri:         entry.PrimaryURI,
+			Incarnation: entry.Incarnation,
 		})
 		rankSet.Add(rank)
 	}
@@ -1001,7 +1002,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 // SystemCleanup implements the method defined for the Management Service.
 //
-// Signal to the data plane to find all resources associted with a given machine
+// Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
 //

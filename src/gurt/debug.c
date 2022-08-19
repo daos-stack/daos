@@ -320,7 +320,7 @@ debug_mask_load(const char *mask_name)
 }
 
 /**
- * Create an identifier/group name for muliple debug bits
+ * Create an identifier/group name for multiple debug bits
  *
  * \param[in]	dbgmask		group mask
  * \param[in]	grpname		debug mask group name
