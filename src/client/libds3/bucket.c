@@ -10,12 +10,15 @@ int
 ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, bool *is_truncated,
 		ds3_t *ds3, daos_event_t *ev)
 {
-	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
-		return -EINVAL;
-
 	int                         rc = 0;
 	struct daos_pool_cont_info *conts;
 	daos_size_t                 ncont = *nbuck;
+	daos_size_t                 bi    = 0;
+	ds3_bucket_t               *ds3b  = NULL;
+
+	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
+		return -EINVAL;
+
 	D_ALLOC_ARRAY(conts, ncont);
 	if (conts == NULL) {
 		return -ENOMEM;
@@ -34,8 +37,6 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		goto err;
 	}
 
-	daos_size_t   bi   = 0;
-	ds3_bucket_t *ds3b = NULL;
 	for (int i = 0; i < ncont; i++) {
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
@@ -48,14 +49,13 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 
 		// Get info
 		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
-		if (rc)
+		if (rc != 0)
 			goto err;
 
 		rc = ds3_bucket_get_info(&buf[bi], ds3b, ev);
 
 		ds3_bucket_close(ds3b, ev);
-
-		if (rc)
+		if (rc != 0)
 			goto err;
 
 		bi++;
@@ -73,6 +73,9 @@ int
 ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *attr, ds3_t *ds3,
 		  daos_event_t *ev)
 {
+	int           rc   = 0;
+	ds3_bucket_t *ds3b = NULL;
+
 	if (ds3 == NULL || name == NULL)
 		return -EINVAL;
 
@@ -82,8 +85,6 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		return -EINVAL;
 	}
 
-	int rc = 0;
-
 	// Create dfs container and open ds3b
 	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
 	if (rc != 0) {
@@ -91,8 +92,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		return -rc;
 	}
 
-	ds3_bucket_t *ds3b = NULL;
-	rc                 = ds3_bucket_open(name, &ds3b, ds3, ev);
+	rc = ds3_bucket_open(name, &ds3b, ds3, ev);
 	if (rc != 0) {
 		D_ERROR("Failed to open container, rc = %d\n", rc);
 		return -rc;
@@ -124,12 +124,17 @@ ds3_bucket_destroy(const char *name, ds3_t *ds3, daos_event_t *ev)
 		return -ENOENT;
 	}
 
+	// TODO implement
+
 	return 0;
 }
 
 int
 ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t *ev)
 {
+	int           rc;
+	ds3_bucket_t *ds3b_tmp;
+
 	if (ds3 == NULL || name == NULL || ds3b == NULL)
 		return -EINVAL;
 
@@ -139,8 +144,6 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 		return -ENOENT;
 	}
 
-	int           rc;
-	ds3_bucket_t *ds3b_tmp;
 	D_ALLOC_PTR(ds3b_tmp);
 	if (ds3b_tmp == NULL)
 		return -ENOMEM;
@@ -154,7 +157,6 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 	}
 
 	rc = dfs_mount(ds3->poh, ds3b_tmp->coh, O_RDWR, &ds3b_tmp->dfs);
-
 	if (rc != 0) {
 		goto err;
 	}
@@ -174,7 +176,7 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 {
 	int rc = 0;
 	rc     = dfs_umount(ds3b->dfs);
-	daos_cont_close(ds3b->coh, ev);
+	rc     = daos_cont_close(ds3b->coh, ev);
 	D_FREE(ds3b);
 	return -rc;
 }
@@ -182,28 +184,32 @@ ds3_bucket_close(ds3_bucket_t *ds3b, daos_event_t *ev)
 int
 ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	if (ds3b == NULL || info == NULL)
-		return -EINVAL;
-
+	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void *const       values[] = {info->encoded};
 	size_t            sizes[]  = {info->encoded_length};
-	int               rc       = daos_cont_get_attr(ds3b->coh, 1, names, values, sizes, ev);
-	rc                         = -daos_der2errno(rc);
+
+	if (ds3b == NULL || info == NULL)
+		return -EINVAL;
+
+	rc = daos_cont_get_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc = -daos_der2errno(rc);
 	return rc;
 }
 
 int
 ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event_t *ev)
 {
-	if (ds3b == NULL || info == NULL)
-		return -EINVAL;
-
+	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void const *const values[] = {info->encoded};
 	size_t const      sizes[]  = {info->encoded_length};
-	int               rc       = daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
-	rc                         = -daos_der2errno(rc);
+
+	if (ds3b == NULL || info == NULL)
+		return -EINVAL;
+
+	rc = daos_cont_set_attr(ds3b->coh, 1, names, values, sizes, ev);
+	rc = -daos_der2errno(rc);
 	return rc;
 }
 
@@ -212,6 +218,22 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
 		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b)
 {
+	int            rc = 0;
+	char          *file_start;
+	const char    *path        = "";
+	const char    *prefix_rest = prefix;
+	dfs_obj_t     *dir_obj;
+	char          *lookup_path;
+	struct dirent *dirents;
+	daos_anchor_t  anchor;
+	uint32_t       cpi  = 0;
+	uint32_t       obji = 0;
+	uint32_t       i;
+	const char    *name;
+	dfs_obj_t     *entry_obj;
+	mode_t         mode;
+	char          *cpp;
+
 	if (ds3b == NULL || nobj == NULL)
 		return -EINVAL;
 
@@ -224,20 +246,13 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		return -EINVAL;
 	}
 
-	int         rc          = 0;
-	char       *file_start  = strrchr(prefix, delim[0]);
-	const char *path        = "";
-	const char *prefix_rest = prefix;
-
+	file_start = strrchr(prefix, delim[0]);
 	if (file_start != NULL) {
 		*file_start = '\0';
 		path        = prefix;
 		prefix_rest = file_start + 1;
 	}
 
-	dfs_obj_t *dir_obj;
-
-	char      *lookup_path;
 	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
 	if (lookup_path == NULL)
 		return -ENOMEM;
@@ -245,12 +260,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	strcpy(lookup_path, "/");
 	strcat(lookup_path, path);
 	rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &dir_obj, NULL, NULL);
-
 	if (rc != 0) {
 		goto err_path;
 	}
 
-	struct dirent *dirents;
 	D_ALLOC_ARRAY(dirents, *nobj);
 	if (dirents == NULL) {
 		rc = ENOMEM;
@@ -260,7 +273,6 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	// TODO handle bigger directories
 	// TODO handle ordering
 	// TODO handle marker
-	daos_anchor_t anchor;
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, nobj, dirents);
@@ -272,10 +284,8 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		*is_truncated = !daos_anchor_is_eof(&anchor);
 	}
 
-	uint32_t cpi  = 0;
-	uint32_t obji = 0;
-	for (uint32_t i = 0; i < *nobj; i++) {
-		const char *name = dirents[i].d_name;
+	for (i = 0; i < *nobj; i++) {
+		name = dirents[i].d_name;
 
 		// Skip entries that do not start with prefix_rest
 		// TODO handle how this affects max
@@ -283,8 +293,6 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			continue;
 		}
 
-		dfs_obj_t *entry_obj;
-		mode_t     mode;
 		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
 				    &mode, NULL);
 		if (rc != 0) {
@@ -301,7 +309,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			}
 
 			// Add to cps
-			char *cpp = cps[cpi].prefix;
+			cpp = cps[cpi].prefix;
 			if (strlen(path) != 0) {
 				strcpy(cpp, path);
 				strcat(cpp, delim);

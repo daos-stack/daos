@@ -9,6 +9,14 @@
 int
 ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
+	int         rc;
+	dfs_obj_t  *user_obj;
+	mode_t      mode = DEFFILEMODE;
+	d_sg_list_t wsgl;
+	d_iov_t     iov;
+	char       *user_path;
+	int         i;
+
 	if (ds3 == NULL || name == NULL || info == NULL)
 		return -EINVAL;
 
@@ -16,19 +24,14 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	ds3_user_remove(name, info, ds3, ev);
 
 	// Open user file
-	int        rc;
-	dfs_obj_t *user_obj;
-	mode_t     mode = DEFFILEMODE;
-	rc              = dfs_open(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, S_IFREG | mode,
-				   O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &user_obj);
+	rc = dfs_open(ds3->meta_dfs, ds3->meta_dirs[USERS_DIR], name, S_IFREG | mode,
+		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, NULL, &user_obj);
 	if (rc != 0) {
 		D_ERROR("Failed to open user file, name = %s, rc = %d\n", name, rc);
 		goto err_ret;
 	}
 
 	// Write user data
-	d_sg_list_t wsgl;
-	d_iov_t     iov;
 	d_iov_set(&iov, info->encoded, info->encoded_length);
 	wsgl.sg_nr   = 1;
 	wsgl.sg_iovs = &iov;
@@ -40,7 +43,6 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	}
 
 	// Build user path
-	char *user_path;
 	D_ALLOC_ARRAY(user_path, DS3_MAX_KEY);
 	strcpy(user_path, "../");
 	strcat(user_path, meta_dir_name(USERS_DIR));
@@ -48,7 +50,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	strcat(user_path, name);
 
 	// Store access key in access key index
-	for (int i = 0; i < info->access_ids_nr; i++) {
+	for (i = 0; i < info->access_ids_nr; i++) {
 		rc = dfs_open(ds3->meta_dfs, ds3->meta_dirs[ACCESS_KEYS_DIR], info->access_ids[i],
 			      S_IFLNK | mode, O_RDWR | O_CREAT | O_TRUNC, 0, 0, user_path,
 			      &user_obj);
@@ -81,13 +83,14 @@ err_ret:
 int
 ds3_user_remove(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
+	int rc = 0;
+	int i;
+
 	if (ds3 == NULL || name == NULL || info == NULL)
 		return -EINVAL;
 
-	int rc = 0;
-
 	// Remove access keys
-	for (int i = 0; i < info->access_ids_nr; i++) {
+	for (i = 0; i < info->access_ids_nr; i++) {
 		if (dfs_access(ds3->meta_dfs, ds3->meta_dirs[ACCESS_KEYS_DIR], info->access_ids[i],
 			       W_OK) == 0) {
 			rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[ACCESS_KEYS_DIR],
@@ -132,20 +135,21 @@ static int
 ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds3_t *ds3,
 	      daos_event_t *ev)
 {
+	int         rc;
+	dfs_obj_t  *user_obj;
+	d_iov_t     iov;
+	d_sg_list_t rsgl;
+
 	if (ds3 == NULL || name == NULL || info == NULL)
 		return -EINVAL;
 
 	// Open file
-	int        rc;
-	dfs_obj_t *user_obj;
 	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[by], name, O_RDWR, &user_obj, NULL, NULL);
 	if (rc != 0) {
 		return -ENOENT;
 	}
 
 	// Reserve buffers
-	d_iov_t     iov;
-	d_sg_list_t rsgl;
 	d_iov_set(&iov, info->encoded, info->encoded_length);
 	rsgl.sg_nr     = 1;
 	rsgl.sg_iovs   = &iov;

@@ -81,12 +81,12 @@ close_metadir(const char *dir, dfs_obj_t *obj)
 int
 ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 {
-	if (ds3 == NULL || pool == NULL)
-		return -EINVAL;
-	
 	int    rc;
 	ds3_t *ds3_tmp;
 
+	if (ds3 == NULL || pool == NULL)
+		return -EINVAL;
+	
 	D_ALLOC_PTR(ds3_tmp);
 	if (ds3_tmp == NULL)
 		return -ENOMEM;
@@ -172,6 +172,8 @@ err_ds3:
 int
 ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 {
+	int rc = 0;
+	
 	if (ds3 == NULL) {
 		return 0;
 	}
@@ -182,7 +184,6 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 
 #undef X
 
-	int rc = 0;
 	rc     = dfs_umount(ds3->meta_dfs);
 	daos_cont_close(ds3->meta_coh, ev);
 	daos_pool_disconnect(ds3->poh, ev);

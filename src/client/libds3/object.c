@@ -10,18 +10,35 @@
 static bool
 ends_with(const char *str, const char *suffix)
 {
+	size_t lenstr;
+	size_t lensuffix;
+
 	if (!str || !suffix)
-		return 0;
-	size_t lenstr    = strlen(str);
-	size_t lensuffix = strlen(suffix);
+		return false;
+
+	lenstr    = strlen(str);
+	lensuffix = strlen(suffix);
 	if (lensuffix > lenstr)
-		return 0;
+		return false;
+
 	return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
 int
 ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 {
+	int        rc = 0;
+	ds3_obj_t *ds3o_tmp;
+	char      *path;
+	dfs_obj_t *parent = NULL;
+	char      *file_start;
+	char      *file_name;
+	char      *parent_path = NULL;
+	mode_t     mode        = DEFFILEMODE;
+	dfs_obj_t *dir_obj;
+	char      *sptr = NULL;
+	char      *dir;
+
 	if (ds3b == NULL || key == NULL || ds3o == NULL)
 		return -EINVAL;
 
@@ -32,41 +49,31 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	}
 
 	// TODO: cache open file handles
-	int        rc = 0;
-	ds3_obj_t *ds3o_tmp;
 	D_ALLOC_PTR(ds3o_tmp);
 	if (ds3o_tmp == NULL)
 		return -ENOMEM;
 
-	char *path;
 	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
 	if (path == NULL) {
 		rc = ENOMEM;
 		goto err_ds3o;
 	}
 
-	dfs_obj_t *parent      = NULL;
-	char      *file_start  = strrchr(path, '/');
-	char      *file_name   = path;
-	char      *parent_path = NULL;
+	file_start = strrchr(path, '/');
+	file_name  = path;
 	if (file_start != NULL) {
 		*file_start = '\0';
 		file_name   = file_start + 1;
 		parent_path = path;
 	}
-	mode_t mode = DEFFILEMODE;
 
 	if (parent_path != NULL) {
 		// Recursively open parent directories
-		dfs_obj_t *dir_obj;
-		char      *sptr = NULL;
-		char      *dir;
 
 		for (dir = strtok_r(parent_path, "/", &sptr); dir != NULL;
 		     dir = strtok_r(NULL, "/", &sptr)) {
 			// Create directory
 			rc = dfs_mkdir(ds3b->dfs, parent, dir, mode, 0);
-
 			if (rc != 0 && rc != EEXIST) {
 				goto err_parent;
 			}
@@ -88,7 +95,6 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	// Finally create the file
 	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG, O_RDWR | O_CREAT | O_TRUNC, 0,
 		      0, NULL, &ds3o_tmp->dfs_obj);
-
 	if (rc == 0 || rc == EEXIST) {
 		rc    = 0;
 		*ds3o = ds3o_tmp;
@@ -107,17 +113,19 @@ err_ds3o:
 int
 ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 {
+	int        rc = 0;
+	ds3_obj_t *ds3o_tmp;
+	char      *path;
+	size_t     suffix_location;
+
 	if (ds3b == NULL || key == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	int        rc = 0;
-	ds3_obj_t *ds3o_tmp;
 	D_ALLOC_PTR(ds3o_tmp);
 	if (ds3o_tmp == NULL)
 		return -ENOMEM;
 
 	// TODO: cache open file handles
-	char *path;
 	D_ALLOC_ARRAY(path, DS3_MAX_KEY);
 	if (path == NULL) {
 		rc = ENOMEM;
@@ -132,18 +140,16 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	strcat(path, key);
 
 	rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
-
 	if (rc == ENOENT) {
 		if (ends_with(path, LATEST_INSTANCE_SUFFIX)) {
 			// If we are trying to access the latest version, try accessing key with
 			// null instance since it is possible that the bucket did not have
 			// versioning before
-			size_t suffix_location = strlen(path) - strlen(LATEST_INSTANCE_SUFFIX);
-			path[suffix_location]  = '\0';
+			suffix_location       = strlen(path) - strlen(LATEST_INSTANCE_SUFFIX);
+			path[suffix_location] = '\0';
 			rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
 		}
 	}
-
 	if (rc == 0) {
 		*ds3o = ds3o_tmp;
 	}
@@ -158,10 +164,12 @@ err_ds3o:
 int
 ds3_obj_close(ds3_obj_t *ds3o)
 {
+	int rc = 0;
+
 	if (ds3o == NULL)
 		return -EINVAL;
 
-	int rc = dfs_release(ds3o->dfs_obj);
+	rc = dfs_release(ds3o->dfs_obj);
 	D_FREE(ds3o);
 	return -rc;
 }
@@ -181,6 +189,7 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
 {
 	if (ds3b == NULL || info == NULL || ds3o == NULL)
 		return -EINVAL;
+
 	return -dfs_setxattr(ds3b->dfs, ds3o->dfs_obj, RGW_DIR_ENTRY_XATTR, info->encoded,
 			     info->encoded_length, 0);
 }
@@ -189,13 +198,13 @@ int
 ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
 	     daos_event_t *ev)
 {
+	d_iov_t     iov;
+	d_sg_list_t rsgl;
+
 	if (ds3b == NULL || buf == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	d_iov_t iov;
 	d_iov_set(&iov, buf, *size);
-
-	d_sg_list_t rsgl;
 	rsgl.sg_nr     = 1;
 	rsgl.sg_iovs   = &iov;
 	rsgl.sg_nr_out = 1;
@@ -205,24 +214,27 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, d
 int
 ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 {
-	int   rc = 0;
-	char *path;
+	int         rc = 0;
+	char       *path;
+	dfs_obj_t  *parent = NULL;
+	char       *file_start;
+	const char *file_name;
+	const char *parent_path = NULL;
+	char       *lookup_path = NULL;
+
 	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
 	if (path == NULL) {
 		return -ENOMEM;
 	}
 
-	dfs_obj_t  *parent      = NULL;
-	char       *file_start  = strrchr(path, '/');
-	const char *file_name   = path;
-	const char *parent_path = NULL;
+	file_start = strrchr(path, '/');
+	file_name  = path;
 	if (file_start != NULL) {
 		*file_start = '\0';
 		file_name   = file_start + 1;
 		parent_path = path;
 	}
 
-	char *lookup_path = NULL;
 	if (parent_path != NULL) {
 		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
 		if (lookup_path == NULL) {
@@ -254,11 +266,12 @@ int
 ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
 	      daos_event_t *ev)
 {
+	d_sg_list_t wsgl;
+	d_iov_t     iov;
+
 	if (ds3b == NULL || buf == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	d_sg_list_t wsgl;
-	d_iov_t     iov;
 	d_iov_set(&iov, buf, *size);
 	wsgl.sg_nr   = 1;
 	wsgl.sg_iovs = &iov;
@@ -268,6 +281,17 @@ ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, 
 int
 ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 {
+	int         rc = 0;
+	char       *path;
+	dfs_obj_t  *parent = NULL;
+	char       *file_start;
+	const char *file_name;
+	const char *parent_path = NULL;
+	char       *link_name   = NULL;
+	int         name_length;
+	char       *suffix_start;
+	dfs_obj_t  *link;
+
 	if (ds3b == NULL || key == NULL)
 		return -EINVAL;
 
@@ -277,17 +301,13 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		return -EINVAL;
 	}
 
-	int   rc = 0;
-	char *path;
 	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
 	if (path == NULL) {
 		return -ENOMEM;
 	}
 
-	dfs_obj_t  *parent      = NULL;
-	char       *file_start  = strrchr(path, '/');
-	const char *file_name   = path;
-	const char *parent_path = NULL;
+	file_start = strrchr(path, '/');
+	file_name  = path;
 	if (file_start != NULL) {
 		*file_start = '\0';
 		file_name   = file_start + 1;
@@ -311,7 +331,6 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	}
 
 	// Build link name
-	char *link_name = NULL;
 	D_ALLOC_ARRAY(link_name, DS3_MAX_KEY);
 	if (link_name == NULL) {
 		rc = ENOMEM;
@@ -319,8 +338,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	}
 
 	// Copy name without instance
-	int name_length = strlen(file_name);
-	char *suffix_start = strrchr(file_name, '[');
+	name_length  = strlen(file_name);
+	suffix_start = strrchr(file_name, '[');
 	if (suffix_start != NULL) {
 		name_length = suffix_start - file_name;
 	}
@@ -332,13 +351,11 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	dfs_remove(ds3b->dfs, parent, link_name, false, NULL);
 
 	// Create the link
-	dfs_obj_t *link;
 	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK,
 		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, file_name, &link);
 
 	// TODO Update an xattr with a list to all the version ids, ordered by
 	// creation to handle deletion
-
 	if (rc != 0)
 		dfs_release(link);
 	D_FREE(link_name);
