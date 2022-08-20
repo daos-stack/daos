@@ -347,12 +347,10 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		return cmd.outputJSON(resp, err)
 	}
 
-	var b strings.Builder
-	err = pretty.PrintMetricsListResp(&b, resp)
+	err = pretty.PrintMetricsListResp(cmd.writer, resp)
 	if err != nil {
 		return err
 	}
-	cmd.Info(b.String())
 	return nil
 }
 
@@ -409,11 +407,9 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		return cmd.outputJSON(resp, err)
 	}
 
-	var b strings.Builder
-	err = pretty.PrintMetricsQueryResp(&b, resp)
+	err = pretty.PrintMetricsQueryResp(cmd.writer, resp)
 	if err != nil {
 		return err
 	}
-	cmd.Info(b.String())
 	return nil
 }

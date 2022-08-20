@@ -539,8 +539,10 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 	int			rc;
 
 	iv_key_unpack(&key, iv_key);
-	if (key.rank == ((d_rank_t)-1))
+	if (key.rank == ((d_rank_t)-1)) {
+		D_INFO("Uninitialize master rank\n");
 		return -DER_NOTLEADER;
+	}
 
 	/* Check if it matches with current NS master */
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
@@ -548,8 +550,8 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 		return rc;
 
 	if (key.rank != ns->iv_master_rank) {
-		D_DEBUG(DB_MD, "key rank %d ns iv master rank %d\n",
-			key.rank, ns->iv_master_rank);
+		D_INFO("ns %u key rank %d ns iv master rank %d\n",
+		       ns->iv_ns_id, key.rank, ns->iv_master_rank);
 		D_GOTO(out_put, rc = -DER_NOTLEADER);
 	}
 
@@ -819,9 +821,9 @@ free:
 void
 ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
 {
-	D_DEBUG(DB_MGMT, "update iv_ns %u master rank %u new master rank %u "
-		"myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-		master_rank, dss_self_rank(), ns);
+	D_INFO("update iv_ns %u master rank %u new master rank %u "
+	       "myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+	       master_rank, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
 }
 
@@ -1053,8 +1055,9 @@ retry:
 		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("retry upon %d for class %d opc %d\n", rc,
-		       key->class_id, opc);
+		D_WARN("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
+		       ns->iv_ns_id, rc, key->class_id, opc, key->rank,
+		       ns->iv_master_rank);
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
 		goto retry;
