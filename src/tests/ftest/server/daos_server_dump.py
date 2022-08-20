@@ -46,7 +46,8 @@ class DaosServerDumpTest(TestWithServers):
                 "{}: rc={}".format(val, key)
                 for key, val in ret_codes.items() if key != 0
             ]
-            self.log.info("no ULT stacks dump found on following hosts: {}".format(", ".join(failed)))
+            hostlist = format(", ".join(failed))
+            self.log.info("no ULT stacks dump found on following hosts: %s", hostlist)
             # see previous comment for similar forced update of status
             self._Test__status = 'FAIL'  # pylint: disable=attribute-defined-outside-init
 
