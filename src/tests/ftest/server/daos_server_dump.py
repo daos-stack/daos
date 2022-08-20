@@ -66,9 +66,8 @@ class DaosServerDumpTest(TestWithServers):
         # at this time there is no way to know when Argobots ULTs stacks
         # has completed, see DAOS-1452/DAOS-9942.
         if 1 in ret_codes:
-            self.log.info(
-                "Dumped daos_engine stacks on {}".format(
-                    str(ret_codes[1])))
+            hostlist = format(str(ret_codes[1]))
+            self.log.info("Dumped daos_engine stacks on %s", hostlist)
         if 0 in ret_codes:
             self.fail(
                 "No daos_engine processes found on {}".format(
