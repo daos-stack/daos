@@ -155,19 +155,18 @@ class CriticalIntegrationWithServers(TestWithServers):
             self.log.info("Ranks to stop: %s", ranks_to_stop)
             # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
-            check_stopped_ranks = self.server_managers[0].check_rank_state(sub_list, "stopped", 5)
-            check_excluded_ranks = self.server_managers[0].check_rank_state(sub_list, "excluded", 5)
-            if not (check_stopped_ranks[0] or check_excluded_ranks[0]):
-                if not check_stopped_ranks[0]:
-                    self.log.info("Rank %s failed to stop", check_stopped_ranks[1])
-                elif not check_excluded_ranks[0]:
-                    self.log.info("Rank %s failed to stop", check_excluded_ranks[1])
+            check_stopped_ranks = self.server_managers[0].check_rank_state(sub_list,
+                                                                           ["stopped", "excluded"],
+                                                                           5)
+            if check_stopped_ranks:
+                self.log.info("Ranks %s failed to stop", check_stopped_ranks)
                 self.fail("Failed to stop ranks cleanly")
+
             # restart stopped ranks and verify if they are joined
             dmg.system_start(ranks=ranks_to_stop)
-            check_started_ranks = self.server_managers[0].check_rank_state(sub_list, "joined", 5)
-            if not check_started_ranks[0]:
-                self.fail("Rank {} failed to restart".format(check_started_ranks[1]))
+            check_started_ranks = self.server_managers[0].check_rank_state(sub_list, ["joined"], 5)
+            if check_started_ranks:
+                self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
 
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
