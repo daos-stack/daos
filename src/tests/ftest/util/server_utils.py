@@ -613,15 +613,15 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             rankv(list): daos rank list whose state need's to be checked
-            valid_state (list): list of expected states for the rank
+            valid_states (list): list of expected states for the rank
             max_checks (int, optional): number of times to check the state
                 Defaults to 1.
         Raises:
             ServerFailed: if there was error obtaining the data for daos
                           system query
         Returns:
-            list: returns list of a boolean and failed rank if state does
-                  not match the expected state, otherwise returns True.
+            list: returns list of failed rank(s) if state does
+                  not match the expected state, otherwise returns empty list.
 
         """
         checks = 0
