@@ -95,8 +95,7 @@ ioil_shrink_pool(struct ioil_pool *pool)
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_pool_disconnect() failed, "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
 		pool->iop_poh = DAOS_HDL_INVAL;
@@ -128,8 +127,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_cont_close() failed, "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_cont_close() failed, " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
 		cont->ioc_coh = DAOS_HDL_INVAL;
@@ -151,10 +149,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
-	int rc;
-
-	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
-			entry, entry->fd_cont->ioc_open_count);
+	int              rc;
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	rc = dfs_release(entry->fd_dfsoh);
@@ -193,7 +188,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -214,7 +209,7 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read\n");
+		__real_fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_preadv(iov, count, offset, entry,
@@ -234,7 +229,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -257,7 +252,7 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write\n");
+		__real_fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -340,9 +335,10 @@ ioil_show_summary()
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
 
-	fprintf(stderr,
-		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+	__real_fprintf(stderr,
+		       "[libioil] Performed %" PRIu64 " reads and %" PRIu64 " writes from %" PRIu64
+		       " files\n",
+		       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
 
 static __attribute__((destructor)) void
@@ -405,9 +401,8 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
-
+		if (errno != EISDIR)
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd, err, strerror(err));
 		return err;
 	}
 
@@ -684,13 +679,13 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 }
 
 static bool
-check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
+check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 {
-	struct dfuse_il_reply	il_reply;
-	int			rc;
-	struct ioil_pool	*pool;
-	struct ioil_cont	*cont;
-	bool			pool_alloc = false;
+	struct dfuse_il_reply il_reply;
+	int                   rc;
+	struct ioil_pool     *pool;
+	struct ioil_cont     *cont;
+	bool                  pool_alloc = false;
 
 	if (ioil_iog.iog_no_daos) {
 		DFUSE_LOG_DEBUG("daos_init() has previously failed");
@@ -709,9 +704,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	}
 
 	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  il_reply.fir_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected %d got %d", fd,
+				  DFUSE_IOCTL_VERSION, il_reply.fir_version);
 		return false;
 	}
 
@@ -721,8 +715,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (!ioil_iog.iog_daos_init) {
 		rc = daos_init();
 		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
 			ioil_iog.iog_no_daos = true;
 			D_GOTO(err, 0);
 		}
@@ -733,10 +726,8 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
 			continue;
 
-		d_list_for_each_entry(cont, &pool->iop_container_head,
-				      ioc_containers) {
-			if (uuid_compare(cont->ioc_uuid,
-					 il_reply.fir_cont) != 0)
+		d_list_for_each_entry(cont, &pool->iop_container_head, ioc_containers) {
+			if (uuid_compare(cont->ioc_uuid, il_reply.fir_cont) != 0)
 				continue;
 
 			D_GOTO(get_file, rc = 0);
@@ -804,6 +795,9 @@ get_file:
 	else if (rc)
 		D_GOTO(shrink, rc);
 
+	DFUSE_LOG_DEBUG("fd:%d flags %#lx fstat %s", fd, il_reply.fir_flags,
+			entry->fd_fstat ? "yes" : "no");
+
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
 		DFUSE_LOG_DEBUG("Failed to track IOF file fd=%d., disabling kernel bypass", fd);
@@ -862,8 +856,7 @@ DFUSE_PUBLIC int
 dfuse___open64_2(const char *pathname, int flags)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real___open64_2(pathname, flags);
 
@@ -871,28 +864,25 @@ dfuse___open64_2(const char *pathname, int flags)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = "
-			"%d. intercepted, fstat=%d, bypass=%s",
-			pathname, flags, fd, entry.fd_fstat,
-			bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+			pathname, flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -901,8 +891,7 @@ DFUSE_PUBLIC int
 dfuse___open_2(const char *pathname, int flags)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real___open_2(pathname, flags);
 
@@ -910,28 +899,25 @@ dfuse___open_2(const char *pathname, int flags)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = "
-			"%d. intercepted, fstat=%d, bypass=%s",
-			pathname, flags, fd, entry.fd_fstat,
-			bypass_status[entry.fd_status]);
+	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+			pathname, flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -940,11 +926,8 @@ DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
-	unsigned int mode; /* mode_t gets "promoted" to unsigned int
-			    * for va_arg routine
-			    */
+	int             fd;
+	unsigned int    mode; /* mode_t gets "promoted" to unsigned int for va_arg routine */
 
 	if (flags & O_CREAT) {
 		va_list ap;
@@ -963,19 +946,17 @@ dfuse_open(const char *pathname, int flags, ...)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -999,11 +980,8 @@ DFUSE_PUBLIC int
 dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
-	unsigned int mode; /* mode_t gets "promoted" to unsigned int
-			    * for va_arg routine
-			    */
+	int             fd;
+	unsigned int    mode; /* mode_t gets "promoted" to unsigned int for va_arg routine */
 
 	if (flags & O_CREAT) {
 		va_list ap;
@@ -1022,19 +1000,17 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-	/* Disable bypass for O_APPEND|O_PATH */
-	if ((flags & (O_PATH | O_APPEND)) != 0)
-		status = DFUSE_IO_DIS_FLAG;
+	if ((flags & (O_PATH | O_APPEND)) != 0) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by flag", pathname);
+		return fd;
+	}
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, flags)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -1057,8 +1033,7 @@ DFUSE_PUBLIC int
 dfuse_mkstemp(char *template)
 {
 	struct fd_entry entry = {0};
-	int fd;
-	int status;
+	int             fd;
 
 	fd = __real_mkstemp(template);
 
@@ -1066,16 +1041,12 @@ dfuse_mkstemp(char *template)
 		return fd;
 
 	if (!dfuse_check_valid_path(template)) {
-		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path",
-				template);
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path", template);
 		return fd;
 	}
 
-	status = DFUSE_IO_BYPASS;
-
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR, status)) {
-		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible",
-				template);
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR)) {
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible", template);
 		return fd;
 	}
 
@@ -1100,14 +1071,12 @@ dfuse_creat(const char *pathname, mode_t mode)
 		return fd;
 
 	if (!dfuse_check_valid_path(pathname)) {
-		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path",
-				pathname);
+		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path", pathname);
 		return fd;
 	}
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_BYPASS)) {
-		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible",
-				pathname);
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible", pathname);
 		return fd;
 	}
 
@@ -1236,12 +1205,15 @@ dfuse_write(int fd, const void *buf, size_t len)
 	if (rc != 0)
 		goto do_real_write;
 
+	if (drop_reference_if_disabled(entry))
+		goto do_real_write;
+
+	/* This function might get called from daos logging itself so do not log anything until
+	 * after the disabled check above or the logging will recurse and deadlock.
+	 */
 	DFUSE_LOG_DEBUG("write(fd=%d, buf=%p, len=%zu) "
 			"intercepted, bypass=%s", fd,
 			buf, len, bypass_status[entry->fd_status]);
-
-	if (drop_reference_if_disabled(entry))
-		goto do_real_write;
 
 	oldpos = entry->fd_pos;
 	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
@@ -1299,9 +1271,8 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	if (rc != 0)
 		goto do_real_lseek;
 
-	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%d) "
-			"intercepted, bypass=%s",
-			fd, offset, whence, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_lseek;
@@ -1310,14 +1281,16 @@ dfuse_lseek(int fd, off_t offset, int whence)
 		new_offset = offset;
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
+	} else if (whence == SEEK_END) {
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling SEEK_END");
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_lseek(fd, offset, whence);
 	} else {
-		/* Let the system handle SEEK_END as well as non-standard
-		 * values such as SEEK_DATA and SEEK_HOLE
-		 */
-		new_offset = __real_lseek(fd, offset, whence);
-		if (new_offset >= 0)
-			entry->fd_pos = new_offset;
-		goto cleanup;
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling %d", whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_lseek(fd, offset, whence);
 	}
 
 	if (new_offset < 0) {
@@ -1326,8 +1299,6 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else {
 		entry->fd_pos = new_offset;
 	}
-
-cleanup:
 
 	SAVE_ERRNO(new_offset < 0);
 
@@ -1339,6 +1310,174 @@ cleanup:
 
 do_real_lseek:
 	return __real_lseek(fd, offset, whence);
+}
+
+DFUSE_PUBLIC int
+dfuse_fseek(FILE *stream, long offset, int whence)
+{
+	struct fd_entry *entry;
+	off_t            new_offset = -1;
+	int              rc;
+	int              fd;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fseek;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fseek;
+
+	DFUSE_LOG_DEBUG("fseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fseek;
+
+	if (whence == SEEK_SET) {
+		new_offset    = offset;
+		entry->fd_eof = false;
+	} else if (whence == SEEK_CUR) {
+		new_offset    = entry->fd_pos + offset;
+		entry->fd_eof = false;
+	} else if (whence == SEEK_END) {
+		DFUSE_TRA_INFO(entry->fd_dfsoh,
+			       "Unsupported function, disabling streaming SEEK_END");
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseek(stream, offset, whence);
+	} else {
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling streaming %d",
+			       whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseek(stream, offset, whence);
+	}
+
+	if (new_offset < 0) {
+		new_offset = (off_t)-1;
+		errno      = EINVAL;
+	} else {
+		entry->fd_pos = new_offset;
+	}
+
+	SAVE_ERRNO(new_offset < 0);
+
+	vector_decref(&fd_table, entry);
+
+	RESTORE_ERRNO(new_offset < 0);
+
+	if (new_offset > 0)
+		return 0;
+	return new_offset;
+
+do_real_fseek:
+	return __real_fseek(stream, offset, whence);
+}
+
+DFUSE_PUBLIC int
+dfuse_fseeko(FILE *stream, off_t offset, int whence)
+{
+	struct fd_entry *entry;
+	off_t            new_offset = -1;
+	int              rc;
+	int              fd;
+
+	DFUSE_TRA_DEBUG(stream, "fseeko(offset=%zd, whence=%#x) skipped", offset, whence);
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fseeko;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0) {
+		DFUSE_TRA_DEBUG(stream, "fseeko(fd=%d, offset=%zd, whence=%#x) skipped", fd, offset,
+				whence);
+		goto do_real_fseeko;
+	}
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh,
+			"fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fseeko;
+
+	if (whence == SEEK_SET) {
+		new_offset    = offset;
+		entry->fd_eof = false;
+	} else if (whence == SEEK_CUR) {
+		new_offset    = entry->fd_pos + offset;
+		entry->fd_eof = false;
+	} else if (whence == SEEK_END) {
+		DFUSE_TRA_INFO(entry->fd_dfsoh,
+			       "Unsupported function, disabling streaming SEEK_END");
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseeko(stream, offset, whence);
+	} else {
+		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling streaming %d",
+			       whence);
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
+		vector_decref(&fd_table, entry);
+		return __real_fseeko(stream, offset, whence);
+	}
+
+	if (new_offset < 0) {
+		new_offset = (off_t)-1;
+		errno      = EINVAL;
+	} else {
+		entry->fd_pos = new_offset;
+	}
+
+	SAVE_ERRNO(new_offset < 0);
+
+	vector_decref(&fd_table, entry);
+
+	RESTORE_ERRNO(new_offset < 0);
+
+	if (new_offset > 0)
+		return 0;
+	rc = new_offset;
+	DFUSE_TRA_DEBUG(stream, "returning %d", rc);
+	return rc;
+
+do_real_fseeko:
+	rc = __real_fseeko(stream, offset, whence);
+	DFUSE_TRA_DEBUG(stream, "returning %d", rc);
+	return rc;
+}
+
+DFUSE_PUBLIC void
+dfuse_rewind(FILE *stream)
+{
+	struct fd_entry *entry;
+	int              rc;
+	int              fd;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_rewind;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_rewind;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_rewind;
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "rewind(fd=%d) intercepted, bypass=%s", fd,
+			bypass_status[entry->fd_status]);
+
+	entry->fd_pos = 0;
+	entry->fd_err = 0;
+
+	vector_decref(&fd_table, entry);
+
+	return;
+
+do_real_rewind:
+	__real_rewind(stream);
 }
 
 DFUSE_PUBLIC ssize_t
@@ -1597,26 +1736,76 @@ dfuse_dup2(int oldfd, int newfd)
 	return realfd;
 }
 
+/* If we intercept a streaming function that cannot be handled then log this and back-off to the
+ * libc functions.  Ensure that the file position is updated correctly.
+ * If fd_pos and offset are both non-zero then it means the intereption library has been partially
+ * working so there is a conflict on where data has been served from which we need to identify.
+ * fd_pos can either be 0 for files with no I/O or -1 on some error paths, do not do the seek
+ * in either of these cases.
+ * TODO: Add assert to check for this.
+ */
+#define DISABLE_STREAM(_entry, _stream)                                                            \
+	do {                                                                                       \
+		off_t            _offset;                                                          \
+		int              _rc   = 0;                                                        \
+		int              _err  = 0;                                                        \
+		struct _IO_FILE *_file = (struct _IO_FILE *)(_stream);                             \
+		(_entry)->fd_status    = DFUSE_IO_DIS_STREAM;                                      \
+		_offset                = __real_ftello(_stream);                                   \
+		if ((_entry)->fd_pos > 0) {                                                        \
+			_rc = __real_fseeko(_stream, (_entry)->fd_pos, SEEK_SET);                  \
+			if (_rc == -1)                                                             \
+				_err = errno;                                                      \
+		}                                                                                  \
+		DFUSE_TRA_INFO((_entry)->fd_dfsoh, "disabling streaming %ld %ld rc=%d %d %s, %p",  \
+			       _offset, (_entry)->fd_pos, _rc, _err, strerror(_err), (_stream));   \
+		if (_file->_IO_read_base)                                                          \
+			DFUSE_TRA_DEBUG((_entry)->fd_dfsoh, "Private data %p %p %p",               \
+					_file->_IO_read_base, _file->_IO_read_ptr,                 \
+					_file->_IO_read_end);                                      \
+	} while (0)
+
+/* Check if file data is being cached in memory, if it is then disable interception */
+static inline bool
+_stream_macros_used(FILE *stream)
+{
+	struct _IO_FILE *file = (struct _IO_FILE *)(stream);
+
+	if (file->_IO_read_base)
+		return true;
+
+	return false;
+}
+
 DFUSE_PUBLIC FILE *
 dfuse_fdopen(int fd, const char *mode)
 {
 	struct fd_entry *entry;
-	int rc;
+	FILE            *file;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
-	if (rc == 0) {
-		DFUSE_LOG_DEBUG("fdopen(fd=%d, mode=%s) intercepted, disabling kernel bypass",
-				fd, mode);
+	if (rc != 0)
+		goto do_real_fn;
 
-		if (entry->fd_pos != 0)
-			__real_lseek(fd, entry->fd_pos, SEEK_SET);
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
-		/* Disable kernel bypass */
-		entry->fd_status = DFUSE_IO_DIS_STREAM;
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "fdopen(fd=%d, mode=%s) intercepted", fd, mode);
 
-		vector_decref(&fd_table, entry);
+	file = __real_fdopen(fd, mode);
+
+	if (file && _stream_macros_used(file)) {
+		DFUSE_TRA_WARNING(entry->fd_dfsoh,
+				  "fdopen(fd=%d, mode=%s) buffers pre-loaded, disabling", fd, mode);
+		DISABLE_STREAM(entry, file);
 	}
 
+	vector_decref(&fd_table, entry);
+
+	return file;
+
+do_real_fn:
 	return __real_fdopen(fd, mode);
 }
 
@@ -1679,38 +1868,53 @@ dfuse_fcntl(int fd, int cmd, ...)
 DFUSE_PUBLIC FILE *
 dfuse_fopen(const char *path, const char *mode)
 {
-	FILE *fp;
+	FILE           *fp;
 	struct fd_entry entry = {0};
-	int fd;
+	int             fd;
+	off_t           offset;
 
 	pthread_once(&init_links_flag, init_links);
 
 	fp = __real_fopen(path, mode);
 
-	if (!ioil_iog.iog_initialized || fp == NULL)
-		return fp;
-
-	fd = fileno(fp);
-
-	if (fd == -1)
-		return fp;
-
-	if (!dfuse_check_valid_path(path)) {
-		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path",
-				path);
+	if (!ioil_iog.iog_initialized || fp == NULL) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) not initialized %p", path, fp);
 		return fp;
 	}
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
-		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible",
-				path);
+	fd = fileno(fp);
+	if (fd == -1)
+		return fp;
+
+	/* If open in append mode then the initial offset is at the end of file, not the
+	 * beginning so disable I/O at this point, in the same way we do for O_APPEND.
+	 */
+	offset = __real_ftello(fp);
+	if (offset != 0) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by offset %d %p", path, fd, fp);
+		return fp;
+	}
+
+	if (!dfuse_check_valid_path(path)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path %d %p", path, fd, fp);
+		return fp;
+	}
+
+	if (_stream_macros_used(fp)) {
+		DFUSE_LOG_WARNING("fopen(pathname=%s) buffers pre-loaded, disabling", path);
+		return fp;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible %d %p", path, fd, fp);
 		return fp;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
-			path, mode, fp, fd, bypass_status[entry.fd_status]);
+	DFUSE_TRA_DEBUG(entry.fd_dfsoh,
+			"fopen(path='%s', mode=%s) = %p(fd=%d) intercepted, bypass=%s", path, mode,
+			fp, fd, bypass_status[entry.fd_status]);
 
 	return fp;
 }
@@ -1740,32 +1944,25 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 
 	newfd = fileno(newstream);
 
-	if (newfd == -1 ||
-	    !check_ioctl_on_open(newfd, &new_entry, 0, DFUSE_IO_DIS_STREAM)) {
+	if (newfd == -1 || !check_ioctl_on_open(newfd, &new_entry, 0)) {
 		if (rc == 0) {
-			DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p"
-					"(fd=%d) = %p(fd=%d) "
-					"intercepted, bypass=%s", path, mode,
-					stream, oldfd,
-					newstream, newfd,
-					bypass_status[DFUSE_IO_DIS_STREAM]);
+			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
+					"(fd=%d) = %p(fd=%d) intercepted",
+					path, mode, stream, oldfd, newstream, newfd);
 			vector_decref(&fd_table, old_entry);
 		}
 		return newstream;
 	}
 
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
-				" intercepted, bypass=%s", path, mode, stream,
-				oldfd, newstream, newfd,
-				bypass_status[DFUSE_IO_DIS_STREAM]);
+		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
+				" intercepted",
+				path, mode, stream, oldfd, newstream, newfd);
 		vector_decref(&fd_table, old_entry);
 	} else {
-		DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p(fd=%d)) "
-				"= %p(fd=%d) intercepted, "
-				"bypass=%s", path, mode, stream, oldfd,
-				newstream, newfd,
-				bypass_status[DFUSE_IO_DIS_STREAM]);
+		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d)) "
+				"= %p(fd=%d) intercepted",
+				path, mode, stream, oldfd, newstream, newfd);
 	}
 
 	return newstream;
@@ -1791,14 +1988,675 @@ dfuse_fclose(FILE *stream)
 	if (rc != 0)
 		goto do_real_fclose;
 
-	DFUSE_LOG_DEBUG("fclose(stream=%p(fd=%d)) intercepted, "
-			"bypass=%s", stream, fd,
+	DFUSE_LOG_DEBUG("fclose(stream=%p(fd=%d)) intercepted, bypass=%s", stream, fd,
 			bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
 do_real_fclose:
 	return __real_fclose(stream);
+}
+
+DFUSE_PUBLIC size_t
+dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	ssize_t          bytes_read;
+	off_t            oldpos;
+	size_t           nread = 0;
+	size_t           len;
+	int              fd;
+	int              rc;
+	int              errcode = EIO;
+	int              counter;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fread;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fread;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fread;
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "performing fread of %#zx %#zx from %#zx", size, nmemb,
+			entry->fd_pos);
+
+	len = nmemb * size;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		__real_fprintf(stderr, "[libioil] Intercepting fread of size %zi\n", len);
+
+	oldpos     = entry->fd_pos;
+	bytes_read = ioil_do_pread(ptr, len, oldpos, entry, &errcode);
+	if (bytes_read > 0) {
+		nread         = bytes_read / size;
+		entry->fd_pos = oldpos + (nread * size);
+		if (nread != nmemb)
+			entry->fd_eof = true;
+	} else if (bytes_read < 0) {
+		entry->fd_err = bytes_read;
+	} else {
+		entry->fd_eof = true;
+	}
+
+	vector_decref(&fd_table, entry);
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "performed %#zx reads", nread);
+
+	return nread;
+
+do_real_fread:
+	return __real_fread(ptr, size, nmemb, stream);
+}
+
+DFUSE_PUBLIC size_t
+dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	size_t           len;
+	int              fd;
+	off_t            oldpos;
+	int              rc;
+	int              errcode = EIO;
+	int              counter;
+	ssize_t          bytes_written;
+	size_t           nwrite = 0;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fwrite;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fwrite;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fwrite;
+
+	if (_stream_macros_used(stream)) {
+		DISABLE_STREAM(entry, stream);
+		vector_decref(&fd_table, entry);
+		goto do_real_fwrite;
+	}
+
+	len = nmemb * size;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		__real_fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
+	oldpos        = entry->fd_pos;
+	bytes_written = ioil_do_writex(ptr, len, oldpos, entry, &errcode);
+	if (bytes_written > 0) {
+		nwrite        = bytes_written / size;
+		entry->fd_pos = oldpos + (nwrite * size);
+	} else if (bytes_written < 0) {
+		entry->fd_err = bytes_written;
+	}
+
+	vector_decref(&fd_table, entry);
+	return nwrite;
+
+do_real_fwrite:
+	return __real_fwrite(ptr, size, nmemb, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_feof(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_feof;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_feof;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_feof;
+
+	rc = (int)entry->fd_eof;
+
+	vector_decref(&fd_table, entry);
+
+	return rc;
+do_real_feof:
+	return __real_feof(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_ferror(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_ferror;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ferror;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_ferror;
+
+	rc = entry->fd_err;
+
+	vector_decref(&fd_table, entry);
+
+	return rc;
+do_real_ferror:
+	return __real_ferror(stream);
+}
+
+DFUSE_PUBLIC void
+dfuse_clearerr(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_clearerr;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_clearerr;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_clearerr;
+
+	entry->fd_err = 0;
+
+	vector_decref(&fd_table, entry);
+
+do_real_clearerr:
+	__real_clearerr(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse___uflow(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_uflow;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_uflow;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_uflow;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_uflow:
+	return __real___uflow(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse___overflow(FILE *stream, int i)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real___overflow(stream, i);
+}
+
+DFUSE_PUBLIC long
+dfuse_ftell(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+	long             off;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_ftell;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ftell;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_ftell;
+
+	/* Load the position from the interception library */
+	off = entry->fd_pos;
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
+
+	vector_decref(&fd_table, entry);
+
+	return off;
+do_real_ftell:
+	return __real_ftell(stream);
+}
+
+DFUSE_PUBLIC off_t
+dfuse_ftello(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+	off_t            off;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_ftello;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ftello;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_ftello;
+
+	off = entry->fd_pos;
+
+	vector_decref(&fd_table, entry);
+
+	return off;
+do_real_ftello:
+	return __real_ftello(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputc(int c, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fputc(c, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputs(char *__str, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	D_ERROR("Unsupported function\n");
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_fputs(__str, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputws(const wchar_t *ws, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return -1;
+
+do_real_fn:
+	return __real_fputws(ws, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fgetc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgetc(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_getc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getc(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_getc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getc_unlocked(stream);
+}
+
+DFUSE_PUBLIC char *
+dfuse_fgets(char *str, int n, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgets(str, n, stream);
+}
+
+DFUSE_PUBLIC wchar_t *
+dfuse_fgetws(const wchar_t *ws, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return NULL;
+
+do_real_fn:
+	return __real_fgetws(ws, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_ungetc(int c, FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_ungetc(c, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fscanf(FILE *stream, const char *format, ...)
+{
+	struct fd_entry *entry = NULL;
+	va_list          ap;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	va_start(ap, format);
+	rc = __real_vfscanf(stream, format, ap);
+	va_end(ap);
+	return rc;
+}
+
+DFUSE_PUBLIC int
+dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+do_real_fn:
+	return __real_vfscanf(stream, format, arg);
+}
+
+DFUSE_PUBLIC int
+dfuse_fprintf(FILE *stream, const char *format, ...)
+{
+	struct fd_entry *entry = NULL;
+	va_list          ap;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	va_start(ap, format);
+	rc = __real_vfprintf(stream, format, ap);
+	va_end(ap);
+	return rc;
+}
+
+DFUSE_PUBLIC int
+dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+do_real_fn:
+	return __real_vfprintf(stream, format, arg);
 }
 
 DFUSE_PUBLIC int
@@ -1823,7 +2681,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting fstat\n");
+		__real_fprintf(stderr, "[libioil] Intercepting fstat\n");
 
 	/* fstat needs to return both the device magic number and the inode
 	 * neither of which can change over time, but they're also not known

@@ -538,7 +538,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 /**
  * Helper function to fetch a single record (nr=1). Iod size is set to
  * DAOS_REC_ANY, which indicates that extent is unknown, and the entire record
- * should be returned in a single extent (as it most likey was inserted that
+ * should be returned in a single extent (as it most likely was inserted that
  * way). This lookup will only return 1 extent, therefore is not appropriate to
  * use if the record was inserted using insert_single_with_rxnr() in most cases.
  */
@@ -2780,7 +2780,7 @@ tx_discard(void **state)
 
 /**
  * Basic test to insert a few large and small records at different transactions,
- * commit only the first few TXs, and verfiy that all TXs remain after
+ * commit only the first few TXs, and verify that all TXs remain after
  * container close and non-committed TXs were successfully discarded.
  */
 static void
@@ -2933,7 +2933,7 @@ tx_commit(void **state)
 
 	/**
 	 * Check data after container close. Last tx was not committed and
-	 * should be discarded, therefore data should be from transaciton 2.
+	 * should be discarded, therefore data should be from transaction 2.
 	 */
 	print_message("verifying transaction after container re-open\n");
 	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
@@ -4279,7 +4279,7 @@ oclass_auto_setting(void **state)
 	daos_handle_t		coh;
 	char			str[37];
 	daos_pool_info_t	info = {0};
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
 	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;

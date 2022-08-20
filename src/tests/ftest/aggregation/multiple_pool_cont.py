@@ -55,7 +55,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
     def verify_free_space(self, space_tag1, space_tag2):
         """Verify whether the free space is decremented between two IOR runs.
-           Asserts if free sapce with space_tag1 less than free space with
+           Asserts if free space with space_tag1 less than free space with
            space_tag2.
 
         Args:

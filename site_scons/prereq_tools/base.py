@@ -705,6 +705,8 @@ class PreReqComponent():
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
+        self.add_opts(BoolVariable('STACK_MMAP',
+                                   'Allocate ABT ULTs stacks with mmap()', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -1059,18 +1061,15 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def load_defaults(self, is_arm):
+    def load_defaults(self):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4']
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
-        if not is_arm:
-            server_reqs.extend(['spdk'])
-            common_reqs.extend(['isal', 'isal_crypto'])
         reqs = []
         if not self._build_targets:
             raise ValueError("Call init_build_targets before load_defaults")

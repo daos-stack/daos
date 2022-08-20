@@ -92,7 +92,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
         :avocado: tags=vm
         :avocado: tags=control,telemetry
         :avocado: tags=test_with_telemetry_basic,test_io_telemetry
-        :avocado: tags=test_io_telemetry_basic
+        :avocado: tags=test_io_telemetry_basic,test_io_telmetry_metrics_basic
 
         """
         block_sizes = self.params.get("block_sizes", "/run/*")

@@ -551,14 +551,14 @@ struct pool_connect_arg {
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
-	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
-	struct dc_pool		*pool = dc_task_get_priv(task);
-	daos_pool_info_t	*info = arg->pca_info;
-	struct pool_buf		*map_buf = arg->pca_map_buf;
-	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
-	struct pool_connect_out	*pco = crt_reply_get(arg->rpc);
-	bool			 put_pool = true;
-	int			 rc = task->dt_result;
+	struct pool_connect_arg   *arg = (struct pool_connect_arg *)data;
+	struct dc_pool		  *pool = dc_task_get_priv(task);
+	daos_pool_info_t	  *info = arg->pca_info;
+	struct pool_buf		  *map_buf = arg->pca_map_buf;
+	struct pool_connect_v5_in  *pci = crt_req_get(arg->rpc);
+	struct pool_connect_v5_out *pco = crt_reply_get(arg->rpc);
+	bool			   put_pool = true;
+	int			   rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &pco->pco_op, task);
@@ -675,13 +675,13 @@ static int
 dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 			 const char *label, daos_handle_t *poh)
 {
-	struct dc_pool		*pool;
-	crt_endpoint_t		 ep;
-	crt_rpc_t		*rpc;
-	struct pool_connect_in	*pci;
-	struct pool_buf		*map_buf;
-	struct pool_connect_arg	 con_args;
-	int			 rc;
+	struct dc_pool		 *pool;
+	crt_endpoint_t		  ep;
+	crt_rpc_t		 *rpc;
+	struct pool_connect_v5_in *pci;
+	struct pool_buf		 *map_buf;
+	struct pool_connect_arg	  con_args;
+	int			  rc;
 
 	pool = dc_task_get_priv(task);
 	/** Choose an endpoint and create an RPC. */
@@ -719,6 +719,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_flags = pool->dp_capas;
 	pci->pci_query_bits = pool_query_bits(info, NULL);
+	pci->pci_pool_version = DAOS_POOL_GLOBAL_VERSION;
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
@@ -1909,13 +1910,14 @@ map_refresh(tse_task_t *task)
 			DP_UUID(pool->dp_pool), task, pool->dp_map_task);
 		arg->mra_passive = true;
 		rc = tse_task_register_deps(task, 1, &pool->dp_map_task);
-		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to depend on active pool map "
 				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 			goto out_task;
 		}
 		rc = tse_task_reinit(task);
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
 				DP_UUID(pool->dp_pool), task, DP_RC(rc));
@@ -1924,10 +1926,12 @@ map_refresh(tse_task_t *task)
 		goto out;
 	}
 
-	/* No active pool map refresh task; become one. */
-	D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
-	tse_task_addref(task);
-	pool->dp_map_task = task;
+	if (pool->dp_map_task == NULL) {
+		/* No active pool map refresh task; become one */
+		D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
+		tse_task_addref(task);
+		pool->dp_map_task = task;
+	}
 
 	rank = choose_map_refresh_rank(arg);
 
@@ -1966,9 +1970,11 @@ out_cb_arg:
 	crt_req_decref(cb_arg.mrc_rpc);
 	destroy_map_refresh_rpc(rpc, cb_arg.mrc_map_buf);
 out_map_task:
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
 	tse_task_decref(pool->dp_map_task);
 	pool->dp_map_task = NULL;
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 out_task:
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
