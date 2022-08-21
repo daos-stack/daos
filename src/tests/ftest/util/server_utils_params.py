@@ -389,7 +389,6 @@ class DaosServerYamlParameters(YamlParameters):
                 "DAOS_MD_CAP=1024",
                 "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
-                "UCX_MAX_RNDV_LANES=1",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
             for name in self._provider.split(";"):
