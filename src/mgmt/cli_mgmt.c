@@ -336,7 +336,7 @@ int dc_mgmt_net_cfg(const char *name)
 	char buf[SYS_INFO_BUF_SIZE];
 	char *crt_timeout;
 	char *ofi_interface;
-	char *ofi_domain;
+	char *ofi_domain = NULL;
 	char *cli_srx_set;
 	struct dc_mgmt_sys_info info;
 	Mgmt__GetAttachInfoResp *resp;
@@ -390,7 +390,7 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
-	ofi_domain = getenv("OFI_DOMAIN");
+	/* ofi_domain = getenv("OFI_DOMAIN"); */
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
