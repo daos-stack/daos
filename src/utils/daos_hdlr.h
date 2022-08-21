@@ -9,6 +9,8 @@
 
 #include <daos_fs.h>
 
+#define OID_ARR_SIZE 8
+
 enum fs_op {
 	FS_COPY,
 	FS_SET_ATTR,
@@ -171,7 +173,6 @@ int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 int cont_set_owner_hdlr(struct cmd_args_s *ap);
 int cont_rollback_hdlr(struct cmd_args_s *ap);
-int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:

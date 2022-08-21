@@ -5,10 +5,10 @@ hosts:
 timeout: 300
 
 setup:
-    start_agents_once: False
+    start_agents_once: false
 
 daos_server:
-  pattern_timeout: 60
+    pattern_timeout: 60
 
 server_config:
     name: daos_server
