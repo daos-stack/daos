@@ -414,7 +414,8 @@ int dc_mgmt_net_cfg(const char *name)
 		if (ofi_domain)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
-
+	rc = setenv("OFI_DOMAIN", info.domain, 1);
+/*
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
@@ -422,6 +423,7 @@ int dc_mgmt_net_cfg(const char *name)
 		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
 		getenv("CRT_PHY_ADDR_STR"),
 		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+*/
 
 cleanup:
 	put_attach_info(&info, resp);
