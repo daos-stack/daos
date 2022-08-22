@@ -33,7 +33,7 @@ agent_config_val: !mux
     config_val:
       - "name"
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-      - "PASS"
+      - "FAIL"
   name_alphanumeric:
     config_val:
       - "name"

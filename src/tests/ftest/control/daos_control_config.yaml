@@ -33,7 +33,7 @@ control_config_val: !mux
     config_val:
       - "name"
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-      - "PASS"
+      - "FAIL"
   name_numeric:
     config_val:
       - "name"
