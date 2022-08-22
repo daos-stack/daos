@@ -7,7 +7,7 @@ hosts:
 # other than hosts.
 extra_servers:
   test_servers: server-3
-timeout: 1200
+timeout: 1800
 skip_add_log_msg: True
 server_config:
   name: daos_server
@@ -66,4 +66,3 @@ test_sequence:
     - ["0", "1,2", "Pass"]
     - ["4", "0,2", "Pass"]
     - ["5", "1,2", "Pass"]
-
