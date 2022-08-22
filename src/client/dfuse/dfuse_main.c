@@ -218,8 +218,8 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 static void
 parse_mount_option(char *mnt_string, char *pool_name, char *cont_name)
 {
-	char  *tok;
-	char  *token;
+	char *tok;
+	char *token;
 
 	while ((token = strtok_r(mnt_string, ",", &tok))) {
 		mnt_string = NULL;
@@ -309,12 +309,12 @@ show_help(char *name)
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info *fs_handle  = NULL;
-	struct dfuse_info            *dfuse_info = NULL;
-	struct dfuse_pool            *dfp        = NULL;
+	struct dfuse_projection_info *fs_handle                              = NULL;
+	struct dfuse_info            *dfuse_info                             = NULL;
+	struct dfuse_pool            *dfp                                    = NULL;
 	struct dfuse_cont            *dfs                                    = NULL;
-	struct duns_attr_t            duns_attr  = {};
-	uuid_t                        cont_uuid  = {};
+	struct duns_attr_t            duns_attr                              = {};
+	uuid_t                        cont_uuid                              = {};
 	char                          pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char                          cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char                          c;
