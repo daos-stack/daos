@@ -60,8 +60,9 @@ Export all DAOS-specific env variables in your application, e.g.,
 `spark-env.sh` for Spark and `hadoop-env.sh` for Hadoop. Or you can simply put
 env variables in your `.bashrc`.
 
-Besides, you should have `LD_LIBRARY_PATH` include DAOS library path so that
-Java can link to DAOS libs, like below.
+Besides, if your DAOS is not installed from linux package, like RPM, you should
+have `LD_LIBRARY_PATH` include DAOS library path so that Java can link to DAOS
+libs, like below.
 
 ```bash
 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/lib
