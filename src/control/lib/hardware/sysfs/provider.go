@@ -50,7 +50,7 @@ func isNetvscDevice(path string, subsystem string) bool {
 		return false
 	}
 
-	val, err := common.FindEnvValue(strings.Split(string(content), "\n"), "DRIVER")
+	val, err := common.FindKeyValue(strings.Split(string(content), "\n"), "DRIVER")
 	return err == nil && val == netvscDriver
 }
 
@@ -123,7 +123,7 @@ func (s *Provider) topologySubsystems() []string {
 }
 
 func (s *Provider) addSubsystemDevices(topo *hardware.Topology, subsystem string) error {
-	netvscPaths := make([]string, 0)
+	var netvscPaths []string
 	subsysRoot := s.sysPath("class", subsystem)
 	err := filepath.Walk(subsysRoot, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
@@ -267,9 +267,6 @@ func (s *Provider) addNetvscDevice(topo *hardware.Topology, path string) error {
 	virt.BackingDevice = backingDev
 
 	s.log.Tracef("Adding NetVSC network adapter at %q", path)
-	if len(topo.VirtualDevices) == 0 {
-		topo.VirtualDevices = make([]*hardware.VirtualDevice, 0)
-	}
 	topo.VirtualDevices = append(topo.VirtualDevices, virt)
 
 	return nil

@@ -133,7 +133,7 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 // WithFabricAuthKey sets the top-level fabric authorization key.
 func (cfg *Server) WithFabricAuthKey(key string) *Server {
 	cfg.Fabric.AuthKey = key
-	cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
 		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
@@ -370,7 +370,7 @@ func (cfg *Server) Load() error {
 	}
 
 	if cfg.Fabric.AuthKey != "" {
-		cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	return nil
