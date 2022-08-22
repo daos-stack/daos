@@ -1186,7 +1186,7 @@ label_strings_test(void **state)
 }
 
 static void
-pool_map_refreshes(void **state)
+pool_map_refreshes_common(void **state, bool fall_back)
 {
 	test_arg_t	*arg = *state;
 	d_rank_t	 rank = ranks_to_kill[0];
@@ -1210,6 +1210,7 @@ pool_map_refreshes(void **state)
 	rebuild_single_pool_target(arg, rank, tgt, false);
 
 	if (arg->myrank == 1) {
+		uint64_t	 fail_loc;
 		int		 n = 4;
 		daos_obj_id_t	 oids[n];
 		struct ioreq	 reqs[n];
@@ -1226,7 +1227,11 @@ pool_map_refreshes(void **state)
 		}
 
 		print_message("rank 1: setting fail_loc DAOS_POOL_FAIL_MAP_REFRESH\n");
-		daos_fail_loc_set(DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE);
+		if (fall_back)
+			fail_loc = DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY | DAOS_FAIL_ALWAYS;
+		else
+			fail_loc = DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE;
+		daos_fail_loc_set(fail_loc);
 
 		print_message("rank 1: invoking concurrent updates to trigger concurrent pool map "
 			      "refreshes\n");
@@ -1253,6 +1258,18 @@ pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
+}
+
+static void
+pool_map_refreshes(void **state)
+{
+	pool_map_refreshes_common(state, false /* fall_back */);
+}
+
+static void
+pool_map_refreshes_fallback(void **state)
+{
+	pool_map_refreshes_common(state, true /* fall_back */);
 }
 
 static const struct CMUnitTest pool_tests[] = {
@@ -1288,6 +1305,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  label_strings_test, NULL, test_case_teardown},
 	{ "POOL16: pool map refreshes",
 	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
+	{ "POOL17: pool map refreshes (fallback)",
+	  pool_map_refreshes_fallback, pool_map_refreshes_setup, test_case_teardown},
 };
 
 int

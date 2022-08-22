@@ -735,7 +735,7 @@ complete_epoch_task(tse_task_t *task, void *arg)
  * \retval DC_TX_GE_CHOOSING	\a task shall call dc_tx_set_epoch, if a TX
  *				epoch is chosen, in a completion callback
  *				registered after this function returns
- * \retval DC_TX_GE_REINIT	\a task must reinit itself
+ * \retval DC_TX_GE_REINITED	\a task has been reinitialized
  */
 int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
@@ -793,7 +793,12 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 				tx->tx_epoch_task, DP_RC(rc));
 			goto out;
 		}
-		rc = DC_TX_GE_REINIT;
+		rc = tse_task_reinit(task);
+		if (rc != 0) {
+			D_ERROR("cannot reinitialize task %p: "DF_RC"\n", task, DP_RC(rc));
+			goto out;
+		}
+		rc = DC_TX_GE_REINITED;
 	}
 
 out:
