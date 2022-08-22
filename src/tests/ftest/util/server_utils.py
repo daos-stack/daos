@@ -609,10 +609,10 @@ class DaosServerManager(SubprocessManager):
         return states.pop()
 
     def check_rank_state(self, ranks, valid_states, max_checks=1):
-        """Check the state of single rank in DAOS system.
+        """Check the states of list of ranks in DAOS system.
 
         Args:
-            rankv(list): daos rank list whose state need's to be checked
+            ranks(list): daos rank list whose state need's to be checked
             valid_states (list): list of expected states for the rank
             max_checks (int, optional): number of times to check the state
                 Defaults to 1.
@@ -625,8 +625,6 @@ class DaosServerManager(SubprocessManager):
 
         """
         checks = 0
-        counter = 0
-        rank = None
         while checks < max_checks:
             if checks > 0:
                 time.sleep(1)
@@ -639,9 +637,7 @@ class DaosServerManager(SubprocessManager):
             for rank in ranks:
                 if data[rank]["state"] not in valid_states:
                     failed_ranks.append(rank)
-                else:
-                    counter += 1
-            if counter == len(ranks):
+            if not failed_ranks:
                 return []
 
         return failed_ranks
