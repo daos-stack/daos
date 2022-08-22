@@ -1,9 +1,3 @@
-daos (2.1.104-3) unstable; urgency=medium
-  [ Jeff Olivier ]
-  * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
-
-  -- Jeff Olivier <jeffrey.v.olivier@intel.com> Tue, 16 Aug 2022 15:58:09 -0500
-
 daos (2.1.104-2) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Update to mercury 2.2.0

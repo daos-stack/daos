@@ -15,7 +15,7 @@ dnf -y --nodocs install \
     boost-python36-devel \
     bzip2 \
     clang-analyzer \
-    cmake3 \
+    cmake \
     CUnit-devel \
     e2fsprogs \
     file \
@@ -69,4 +69,3 @@ dnf -y --nodocs install \
     sudo \
     valgrind-devel \
     yasm
-ln -s cmake3 /usr/bin/cmake

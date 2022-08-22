@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.104
-Release:       3%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -59,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.12.1~rc1
+BuildRequires: libpmemobj-devel >= 1.11
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -166,10 +166,12 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj1 = 1.11.0-3.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
@@ -569,9 +571,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-3
-- Update PMDK to 1.12.1~rc1 to fix DAOS-11151
-
 * Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
 - Update to mercury 2.2.0
 

@@ -303,7 +303,6 @@ def define_components(reqs):
                            'BUILD_RPMEM=n',
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
-                           'EXTRA_CFLAGS="-Wno-error"',
                            'DOC=n',
                            'install',
                            'prefix=$PMDK_PREFIX']],
