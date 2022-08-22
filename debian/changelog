@@ -1,3 +1,9 @@
+daos (2.3.100-21) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 16 Aug 2022 12:52:00 -0400
+
 daos (2.3.100-20) unstable; urgency=medium
   [ Wang Shilong ]
   * Add daos_debug_set_params to daos-client-tests rpm for fault injection test.

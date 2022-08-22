@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +9,7 @@ from cart_utils import CartTest
 
 class GroupTest(CartTest):
     # pylint: disable=too-few-public-methods
-    """Run GroupTests for primary and secondary resizeable groups.
+    """Run GroupTests for primary and secondary groups.
 
     :avocado: recursive
     """
