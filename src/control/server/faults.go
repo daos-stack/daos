@@ -50,6 +50,11 @@ var (
 		"cannot create a pool without a pool label",
 		"retry the operation with a label set",
 	)
+	FaultPoolHasContainers = serverFault(
+		code.ServerPoolHasContainers,
+		"cannot destroy a pool with existing containers",
+		"retry the operation with the recursive flag set to remove containers along with the pool",
+	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {

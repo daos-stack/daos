@@ -1743,15 +1743,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host": {
 			req: &mgmtpb.JoinReq{
-				Rank: curMember.Rank.Uint32(),
-				Uuid: curMember.UUID.String(),
+				Rank:        curMember.Rank.Uint32(),
+				Uuid:        curMember.UUID.String(),
+				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
-						Rank: curMember.Rank.Uint32(),
-						Uri:  curMember.FabricURI,
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         curMember.FabricURI,
+						Incarnation: curMember.Incarnation + 1,
 					},
 				},
 			},
@@ -1763,15 +1765,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host; NilRank": {
 			req: &mgmtpb.JoinReq{
-				Rank: uint32(system.NilRank),
-				Uuid: curMember.UUID.String(),
+				Rank:        uint32(system.NilRank),
+				Uuid:        curMember.UUID.String(),
+				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
-						Rank: curMember.Rank.Uint32(),
-						Uri:  curMember.FabricURI,
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         curMember.FabricURI,
+						Incarnation: curMember.Incarnation + 1,
 					},
 				},
 			},
@@ -1783,15 +1787,17 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
-				Rank: uint32(system.NilRank),
+				Rank:        uint32(system.NilRank),
+				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
-						Rank: newMember.Rank.Uint32(),
-						Uri:  newMember.FabricURI,
+						Rank:        newMember.Rank.Uint32(),
+						Uri:         newMember.FabricURI,
+						Incarnation: newMember.Incarnation,
 					},
 				},
 			},
@@ -1804,17 +1810,19 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (local)": {
 			req: &mgmtpb.JoinReq{
-				Addr: common.LocalhostCtrlAddr().String(),
-				Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
-				Rank: uint32(system.NilRank),
+				Addr:        common.LocalhostCtrlAddr().String(),
+				Uri:         "tcp://" + common.LocalhostCtrlAddr().String(),
+				Rank:        uint32(system.NilRank),
+				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 2,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					// rank 0 is excluded, so shouldn't be in the map
 					{
-						Rank: newMember.Rank.Uint32(),
-						Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+						Rank:        newMember.Rank.Uint32(),
+						Uri:         "tcp://" + common.LocalhostCtrlAddr().String(),
+						Incarnation: newMember.Incarnation,
 					},
 				},
 			},
