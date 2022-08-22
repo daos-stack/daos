@@ -1062,9 +1062,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	pg_cnt -= pg_idx;
 
 	while (pg_cnt > 0) {
-		/* NVMe poll needs be scheduled */
-		if (bio_need_nvme_poll(xs_ctxt))
-			bio_yield();
+		drain_inflight_ios(xs_ctxt);
 
 		biod->bd_inflights++;
 		xs_ctxt->bxc_blob_rw++;
@@ -1482,6 +1480,13 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	struct bio_sglist	*bsgl;
 	struct bio_desc		*biod;
 	int			 i, rc;
+
+	for (i = 0; i < bsgl_in->bs_nr; i++) {
+		if (bio_addr_is_hole(&bsgl_in->bs_iovs[i].bi_addr)) {
+			D_ERROR("Read/write a hole isn't allowed\n");
+			return -DER_INVAL;
+		}
+	}
 
 	/* allocate blob I/O descriptor */
 	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */,

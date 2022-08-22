@@ -1,12 +1,14 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - server-B
+  test_servers: 1
+  test_clients: 1
 timeout: 600
 server_config:
   name: daos_server
   port: 10001
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
   control_method: dmg
 pool_acl:

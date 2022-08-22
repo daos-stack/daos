@@ -190,7 +190,7 @@ estimate_space_key(struct umem_instance *umm, daos_key_t *key)
 
 /*
  * Estimate how much space will be consumed by an update request. This
- * conservative esimation always assumes new object, dkey, akey will be
+ * conservative estimation always assumes new object, dkey, akey will be
  * created for the update.
  */
 static void

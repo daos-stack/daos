@@ -387,12 +387,11 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			iov_idx++;
 			cached_bulk = true;
 
-			/* Check if following IOVs are sharing same bulk handle */
+			/* Check if following IOVs are contiguous and from same bulk handle */
 			while (iov_idx < sgl->sg_nr_out &&
 			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
-			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
-						&tmp_off) == local_bulk) {
-				D_ASSERT(tmp_off == 0);
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &tmp_off) == local_bulk &&
+			       tmp_off == local_off) {
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 			};
@@ -642,11 +641,13 @@ out:
  * Pack sgl's data size in the reply, client fetch can based on
  * it to update sgl's iov_len.
  *
+ * @echo_sgl is set only for echo_rw()
+ *
  * Note: this is only needed for bulk transfer, for inline transfer,
  * it will pack the complete sgls inside the req/reply, see obj_shard_rw().
  */
 static int
-obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
+obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *echo_sgl)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -679,14 +680,11 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	nrs = orwo->orw_nrs.ca_arrays;
 	data_sizes = orwo->orw_data_sizes.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
-		struct bio_sglist	*bsgl;
-		d_sg_list_t		*sgl;
-
-		if (sgls != NULL) {
-			sgl = &sgls[i];
-			D_ASSERT(sgl != NULL);
-			nrs[i] = sgl->sg_nr_out;
+		if (echo_sgl != NULL) {
+			nrs[i] = echo_sgl->sg_nr_out;
 		} else {
+			struct bio_sglist *bsgl;
+
 			bsgl = vos_iod_sgl_at(ioh, i);
 			D_ASSERT(bsgl != NULL);
 			nrs[i] = bsgl->bs_nr_out;
@@ -2602,7 +2600,7 @@ again2:
 					 ioc.ioc_ec_rotate_parity ? orw->orw_dkey_hash : 0,
 					 &orw->orw_iod_array, orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL, NULL, 0, &ioc.ioc_oca,
-					 tgt_cnt, tgts, &split_req);
+					 tgt_cnt, tgts, &split_req, opm);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -2672,10 +2670,6 @@ again2:
 		 * the restart to the RPC client.
 		 */
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			struct obj_pool_metrics	*m;
-
-			m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-
 			/*
 			 * Only standalone updates use this RPC. Retry with
 			 * newer epoch.
@@ -2683,7 +2677,7 @@ again2:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_inc_counter(m->opm_update_restart, 1);
+			d_tm_inc_counter(opm->opm_update_restart, 1);
 			goto again2;
 		}
 
@@ -4414,8 +4408,8 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 					 ioc->ioc_ec_rotate_parity ? dcsr->dcsr_dkey_hash : 0,
 					 &dcu->dcu_iod_array, dcsr->dcsr_nr,
 					 dcu->dcu_start_shard, 0, ddt->ddt_id,
-					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
-					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
+					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr, NULL,
+					 tgt_cnt, tgts, &dcu->dcu_ec_split_req, NULL);
 		if (rc != 0) {
 			D_ERROR("obj_ec_rw_req_split failed for obj "
 				DF_UOID", DTX "DF_DTI": "DF_RC"\n",

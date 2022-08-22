@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,11 +5,11 @@
 """
 
 import time
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
-from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd
 
 
@@ -82,11 +81,15 @@ class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
     def __init__(self, hosts, tmp):
-        """Create a dfuse object."""
+        """Create a dfuse object.
+
+        Args:
+            hosts (NodeSet): hosts on which to run dfuse
+        """
         super().__init__("/run/dfuse/*", "dfuse")
 
         # set params
-        self.hosts = hosts
+        self.hosts = hosts.copy()
         self.tmp = tmp
         self.running_hosts = NodeSet()
 
@@ -113,7 +116,7 @@ class Dfuse(DfuseCommand):
             "nodirectory": NodeSet()
         }
         if not nodes:
-            nodes = NodeSet.fromlist(self.hosts)
+            nodes = self.hosts.copy()
         check_mounted = NodeSet()
 
         # Detect which hosts have mount point directories defined
@@ -209,7 +212,7 @@ class Dfuse(DfuseCommand):
         dir_exists, clean_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
-            target_nodes = list(self.hosts)
+            target_nodes = self.hosts.copy()
             if clean_nodes:
                 target_nodes.remove(clean_nodes)
 
@@ -260,7 +263,7 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse run command fails
 
         """
-        self.log.info('Starting dfuse at %s', self.mount_dir.value)
+        self.log.info('Starting dfuse at %s on %s', self.mount_dir.value, str(self.hosts))
 
         # A log file must be defined to ensure logs are captured
         if "D_LOG_FILE" not in self.env:
@@ -277,7 +280,7 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        cmd = self.env.get_export_str()
+        cmd = self.env.to_export_str()
         if bind_cores:
             cmd += 'taskset -c {} '.format(bind_cores)
         cmd += str(self)
@@ -355,7 +358,7 @@ class Dfuse(DfuseCommand):
         """
         # Include all hosts when stopping to ensure all mount points in any
         # state are properly removed
-        self.running_hosts.add(NodeSet.fromlist(self.hosts))
+        self.running_hosts.add(self.hosts)
 
         self.log.info(
             "Stopping dfuse at %s on %s",

@@ -1,12 +1,8 @@
 server_manager:
   srv_timeout: 500
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-D
+  test_servers: 3
+  test_clients: 1
 timeout: 2400
 setup:
   start_servers_once: False
