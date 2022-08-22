@@ -451,6 +451,10 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	struct vos_obj_iter	*oiter;
 	int			 rc;
 
+	/* Don't verify a hole */
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return 0;
+
 	/*
 	 * Know that there will always only be 1 recx because verifying a
 	 * single extent at a time so use first recx in iod for data_len
