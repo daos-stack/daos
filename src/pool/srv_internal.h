@@ -63,11 +63,12 @@ struct pool_iv_prop {
 	uint64_t	pip_scrub_thresh;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
-	uint32_t	pip_redun_fac;
+	uint64_t	pip_redun_fac;
 	uint32_t	pip_ec_pda;
 	uint32_t	pip_rp_pda;
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
+	uint64_t	pip_svc_redun_fac;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -125,7 +126,8 @@ int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler_v4(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
@@ -169,8 +171,9 @@ void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 /*
  * srv_util.c
  */
-int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
-				  d_rank_list_t *failed, d_rank_list_t *alt);
+int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
+			     d_rank_t self, d_rank_list_t **to_add_out,
+			     d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			     uint32_t *required_buf_size);

@@ -70,10 +70,11 @@ struct  _Mgmt__GroupUpdateReq__Engine
   ProtobufCMessage base;
   uint32_t rank;
   char *uri;
+  uint64_t incarnation;
 };
 #define MGMT__GROUP_UPDATE_REQ__ENGINE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__engine__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__GroupUpdateReq

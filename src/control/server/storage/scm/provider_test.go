@@ -23,8 +23,7 @@ import (
 )
 
 var (
-	mm               = MockModule(nil)
-	defaultModule    = &mm
+	defaultModule    = mockModule()
 	defaultNamespace = storage.MockScmNamespace()
 )
 
@@ -39,7 +38,8 @@ func TestProvider_Scan(t *testing.T) {
 				GetModulesRes: storage.ScmModules{},
 			},
 			expResp: &storage.ScmScanResponse{
-				State: storage.ScmStateNoModules,
+				Modules:    storage.ScmModules{},
+				Namespaces: storage.ScmNamespaces{},
 			},
 		},
 		"no namespaces": {
@@ -56,12 +56,10 @@ func TestProvider_Scan(t *testing.T) {
 			mbc: &MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{defaultModule},
 				GetNamespacesRes: storage.ScmNamespaces{defaultNamespace},
-				GetStateRes:      storage.ScmStateNoFreeCapacity,
 			},
 			expResp: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
-				State:      storage.ScmStateNoFreeCapacity,
 			},
 		},
 		"get modules fails": {
@@ -76,13 +74,6 @@ func TestProvider_Scan(t *testing.T) {
 				GetNamespacesErr: errors.New("get namespaces failed"),
 			},
 			expErr: errors.New("get namespaces failed"),
-		},
-		"get state fails": {
-			mbc: &MockBackendConfig{
-				GetModulesRes: storage.ScmModules{defaultModule},
-				GetStateErr:   errors.New("get state failed"),
-			},
-			expErr: errors.New("get state failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -125,20 +116,9 @@ func TestProvider_Prepare(t *testing.T) {
 			scanErr:  FaultGetModulesFailed,
 			expErr:   FaultGetModulesFailed,
 		},
-		"no modules": {
-			scanResp: &storage.ScmScanResponse{
-				Modules: storage.ScmModules{},
-				State:   storage.ScmStateNoModules,
-			},
-			expResp: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateNoModules,
-				Namespaces: storage.ScmNamespaces{},
-			},
-		},
 		"prep fails": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State:   storage.ScmStateNoRegions,
 			},
 			mbc: &MockBackendConfig{
 				PrepErr: errors.New("fail"),
@@ -148,17 +128,20 @@ func TestProvider_Prepare(t *testing.T) {
 		"prep succeeds": {
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State:   storage.ScmStateNoRegions,
 			},
 			mbc: &MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					State:          storage.ScmStateNoFreeCapacity,
+					Socket: storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
 					Namespaces:     storage.ScmNamespaces{defaultNamespace},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateNoFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
 				Namespaces:     storage.ScmNamespaces{defaultNamespace},
 				RebootRequired: true,
 			},
@@ -167,7 +150,6 @@ func TestProvider_Prepare(t *testing.T) {
 			reset: true,
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State:   storage.ScmStateFreeCapacity,
 			},
 			mbc: &MockBackendConfig{
 				PrepResetErr: errors.New("fail"),
@@ -178,16 +160,19 @@ func TestProvider_Prepare(t *testing.T) {
 			reset: true,
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{defaultModule},
-				State:   storage.ScmStateFreeCapacity,
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					State:          storage.ScmStateFreeCapacity,
+					Socket: storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
 				RebootRequired: true,
 			},
 		},
@@ -199,16 +184,19 @@ func TestProvider_Prepare(t *testing.T) {
 					defaultNamespace,
 					storage.MockScmNamespace(1),
 				},
-				State: storage.ScmStateNoFreeCapacity,
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					State:          storage.ScmStateNoFreeCapacity,
+					Socket: storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateNoFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
 				RebootRequired: true,
 			},
 		},
