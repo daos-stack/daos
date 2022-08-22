@@ -1165,6 +1165,7 @@ class DFuse():
             else:
                 cmd.extend(['-o', f'pool={self.pool}'])
         print(f"Running {' '.join(cmd)}")
+        # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)
         print(f'Started dfuse at {self.dir}')
         print(f'Log file is {self.log_file}')
