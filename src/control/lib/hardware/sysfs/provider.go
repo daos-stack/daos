@@ -7,6 +7,7 @@
 package sysfs
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"io/ioutil"
@@ -23,11 +24,43 @@ import (
 
 var netSubsystems = []string{"cxi", "infiniband", "net"}
 
-const cxiProvider = "ofi+cxi"
+const (
+	cxiProvider     = "ofi+cxi"
+	netvscSubsystem = "net"
+	netvscDriver    = "hv_netvsc"
+)
 
 func isNetwork(subsystem string) bool {
 	for _, netSubsystem := range netSubsystems {
 		if subsystem == netSubsystem {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isNetvscDevice(path string, subsystem string) bool {
+	if subsystem != netvscSubsystem {
+		return false
+	}
+
+	file, err := os.Open(filepath.Join(path, "device", "uevent"))
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		kv := strings.Split(scanner.Text(), "=")
+		if len(kv) != 2 {
+			continue
+		}
+		if kv[0] != "DRIVER" {
+			continue
+		}
+		if kv[1] == netvscDriver {
 			return true
 		}
 	}
@@ -95,6 +128,10 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 		return nil, err
 	}
 
+	if err := s.addNetvscDevices(topo); err != nil {
+		return nil, err
+	}
+
 	return topo, nil
 }
 
@@ -115,6 +152,10 @@ func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) erro
 		}
 
 		if path == subsysRoot {
+			return nil
+		}
+
+		if isNetvscDevice(path, subsystem) {
 			return nil
 		}
 
@@ -246,6 +287,53 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 
 	if len(virtualDevices) > 0 {
 		topo.VirtualDevices = virtualDevices
+	}
+
+	return nil
+}
+
+func (s *Provider) addNetvscDevices(topo *hardware.Topology) error {
+	virtualDevices := make([]*hardware.VirtualDevice, 0)
+	addedDevices := topo.AllDevices()
+
+	netPath := s.sysPath("class", netvscSubsystem)
+	netIfaces, err := ioutil.ReadDir(netPath)
+	if err != nil {
+		s.log.Tracef("Unable to read any NetVSC network adapter: %s", err.Error())
+		return nil
+	}
+
+	for _, iface := range netIfaces {
+		ifacePath := filepath.Join(netPath, iface.Name())
+
+		if !isNetvscDevice(ifacePath, netvscSubsystem) {
+			continue
+		}
+
+		virt := &hardware.VirtualDevice{
+			Name: iface.Name(),
+			Type: hardware.DeviceTypeNetInterface,
+		}
+
+		backingDev, err := s.getBackingDevice(ifacePath, addedDevices)
+		if err != nil {
+			s.log.Noticef("Skipping NetVSC network adapter %q: not found physical backing device",
+				iface.Name())
+			continue
+		}
+		s.log.Tracef("NetVSC network adapter %q has physical backing device %q",
+			iface.Name(), backingDev.DeviceName())
+		virt.BackingDevice = backingDev
+
+		s.log.Tracef("Adding NetVSC network adapter at %q", ifacePath)
+		virtualDevices = append(virtualDevices, virt)
+	}
+
+	if len(virtualDevices) > 0 {
+		if len(topo.VirtualDevices) == 0 {
+			topo.VirtualDevices = make([]*hardware.VirtualDevice, 0)
+		}
+		topo.VirtualDevices = append(topo.VirtualDevices, virtualDevices...)
 	}
 
 	return nil
