@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -466,6 +466,9 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 
+				// Virtual IB device
+				setupVirtualIB(t, root, "virt_ib0", "net0")
+
 				setupNetvscDev(t, root, "eth0", "net0")
 				setupNetvscDev(t, root, "eth1", "")
 			},
@@ -475,6 +478,11 @@ func TestProvider_GetTopology(t *testing.T) {
 				VirtualDevices: []*hardware.VirtualDevice{
 					{
 						Name:          "eth0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
+					{
+						Name:          "virt_ib0",
 						Type:          hardware.DeviceTypeNetInterface,
 						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
 					},
