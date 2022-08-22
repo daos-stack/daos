@@ -38,16 +38,17 @@ class HarnessConfigTest(TestWithServers):
         self.log.info('Verify self.get_dmg_command().hostlist_suffix and hostlist')
         dmg = self.get_dmg_command()
         self.assertEqual(dmg.hostlist_suffix, self.access_points_suffix)
-        self.assertEqual(sorted(dmg.hostlist), sorted(self.access_points))
+        expected_hostlist = sorted(nodeset_append_suffix(dmg.hostlist, self.access_points_suffix))
+        self.assertEqual(sorted(dmg.hostlist), expected_hostlist)
 
         self.log.info('Verify self.get_dmg_command().yaml.get_yaml_data()["hostlist"]')
-        self.assertEqual(sorted(dmg.yaml.get_yaml_data()['hostlist']), sorted(self.access_points))
+        self.assertEqual(sorted(dmg.yaml.get_yaml_data()['hostlist']), expected_hostlist)
 
         self.log.info('Verify DmgCommand().hostlist_suffix and hostlist')
-        dmg = DmgCommand(self.bin, hostlist_suffix=access_points_suffix)
-        dmg.hostlist = self.hostlist_servers
-        self.assertEqual(dmg.hostlist_suffix, self.access_points_suffix)
-        self.assertEqual(sorted(dmg.hostlist), sorted(self.access_points))
+        dmg2 = DmgCommand(self.bin, hostlist_suffix=access_points_suffix)
+        dmg2.hostlist = dmg.hostlist
+        self.assertEqual(dmg2.hostlist_suffix, self.access_points_suffix)
+        self.assertEqual(sorted(dmg2.hostlist), expected_hostlist)
 
         self.log.info('Verify server_manager...get_yaml_data...access_points"]')
         yaml_data = self.server_managers[0].manager.job.yaml.get_yaml_data()
@@ -61,7 +62,7 @@ class HarnessConfigTest(TestWithServers):
         self.log.info('Verify daos_control.yaml hostlist')
         with open(self.get_dmg_command().temporary_file, 'r') as yaml_file:
             daos_agent_yaml = yaml.safe_load(yaml_file.read())
-        self.assertEqual(sorted(daos_agent_yaml['hostlist']), sorted(self.access_points))
+        self.assertEqual(sorted(daos_agent_yaml['hostlist']), expected_hostlist)
 
         self.log.info('Verify daos_agent.yaml access_points')
         with open(self.agent_managers[0].manager.job.temporary_file, 'r') as yaml_file:
