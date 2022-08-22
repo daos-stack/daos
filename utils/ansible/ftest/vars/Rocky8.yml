@@ -36,8 +36,10 @@ daos_client_deps:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
+    - ior
     - libuuid
     - lz4-libs
+    - mpich
     - systemd
 
 daos_server_deps:
