@@ -137,7 +137,21 @@ func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) erro
 
 		pciAddr, err := s.getPCIAddress(path)
 		if err != nil {
-			s.log.Debug(err.Error())
+			// FIXME DAOS-10749 Horrible hack to manage eth0 virtual device from AZURE cloud VMs
+			s.log.Noticef("DAOS-10749: SPY 001 path=%q", path)
+			if path != "/sys/class/net/eth0" {
+				return nil
+			}
+
+			err = nil
+			virt := &hardware.VirtualDevice{
+				Name:          "eth0",
+				Type:          hardware.DeviceTypeNetInterface,
+				BackingDevice: nil,
+			}
+			s.log.Noticef("DAOS-10749: Workaround to manage AZURE Cloud network interface eth0: Adding it as virtual device")
+			topo.VirtualDevices = []*hardware.VirtualDevice{virt}
+
 			return nil
 		}
 		dev.PCIAddr = *pciAddr
@@ -266,7 +280,11 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	}
 
 	if len(virtualDevices) > 0 {
-		topo.VirtualDevices = virtualDevices
+		// FIXME DAOS-10749 Horrible hack to manage eth0 virtual device from AZURE cloud VMs
+		if len(topo.VirtualDevices) == 0 {
+			topo.VirtualDevices = make([]*hardware.VirtualDevice, 0)
+		}
+		topo.VirtualDevices = append(topo.VirtualDevices, virtualDevices...)
 	}
 
 	return nil
