@@ -100,6 +100,16 @@ func FaultBdevAccelOptionUnknown(input string, options ...string) *fault.Fault {
 			options))
 }
 
+var FaultBdevNonRootVFIODisable = storageFault(
+	code.BdevNonRootVFIODisable,
+	"VFIO can not be disabled if running as non-root user",
+	"Either run server as root or do not disable VFIO when invoking the command")
+
+var FaultBdevNoIOMMU = storageFault(
+	code.BdevNoIOMMU,
+	"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
+	"enable IOMMU per the DAOS Admin Guide")
+
 func storageFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "storage",

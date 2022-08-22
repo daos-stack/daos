@@ -38,8 +38,6 @@ struct bio_bulk_args {
 struct bio_bulk_hdl {
 	/* Link to bbg_idle_bulks */
 	d_list_t		 bbh_link;
-	/* Bulk handle used by upper layer caller */
-	void			*bbh_bulk;
 	/* DMA chunk the hdl localted on */
 	struct bio_dma_chunk	*bbh_chunk;
 	/* Page offset (4k pages) within the chunk */
@@ -85,6 +83,7 @@ struct bio_dma_chunk {
 	/* == Bulk handle caching related fields == */
 	struct bio_bulk_group	*bdc_bulk_grp;
 	struct bio_bulk_hdl	*bdc_bulks;
+	void			*bdc_bulk_hdl;	/* Bulk handle used by upper layer caller */
 	unsigned int		 bdc_bulk_cnt;
 	unsigned int		 bdc_bulk_idle;
 };

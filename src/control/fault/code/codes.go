@@ -91,6 +91,8 @@ const (
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
 	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
