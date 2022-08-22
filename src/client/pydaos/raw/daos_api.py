@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1246,7 +1246,7 @@ class DaosContainer():
         # Create DaosProperty for checksum
         # 1. Layout Type.
         # 2. Enable checksum,
-        # 3. Server Verfiy
+        # 3. Server Verify
         # 4. Chunk Size Allocation.
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
