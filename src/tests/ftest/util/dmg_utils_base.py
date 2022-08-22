@@ -109,7 +109,11 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg check sub command object."""
-            if self.sub_command.value == "prop":
+            if self.sub_command.value == "disable":
+                self.sub_command_class = self.DisableSubCommand()
+            elif self.sub_command.value == "enable":
+                self.sub_command_class = self.EnableSubCommand()
+            elif self.sub_command.value == "prop":
                 self.sub_command_class = self.PropSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -121,6 +125,20 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.StopSubCommand()
             else:
                 self.sub_command_class = None
+
+        class DisableSubCommand(CommandWithParameters):
+            """Defines an object for the dmg check disable command."""
+
+            def __init__(self):
+                """Create a dmg check disable object."""
+                super().__init__("/run/dmg/check/disable/*", "disable")
+
+        class EnableSubCommand(CommandWithParameters):
+            """Defines an object for the dmg check enable command."""
+
+            def __init__(self):
+                """Create a dmg check enable object."""
+                super().__init__("/run/dmg/check/enable/*", "enable")
 
         class PropSubCommand(CommandWithParameters):
             """Defines an object for the dmg check prop command."""
