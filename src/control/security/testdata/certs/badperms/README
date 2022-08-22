@@ -1,4 +1,0 @@
-Git does not store empty directories so we need this file here to keep this
-directory in the git tree. It is used as a permission check for the
-certificiate directory validation code.
-

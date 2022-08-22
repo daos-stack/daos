@@ -59,7 +59,8 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.11
+BuildRequires: libpmemobj-devel = 1.11
+BuildRequires: libpmem-devel = 1.11
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -172,6 +173,8 @@ Requires: libpmemobj1 = 1.11.0-3.suse1500
 Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
 Requires: libpmemobj = 1.11.0-3%{?dist}
+Requires: libpmem = 1.11.0-3%{?dist}
+Requires: libpmemblk = 1.11.0-3%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig

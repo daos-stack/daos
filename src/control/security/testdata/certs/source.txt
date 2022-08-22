@@ -1,1 +1,0 @@
-This tile is here to act as a source file for generating hash and signiture files to test the sign and verify signature functionality.
