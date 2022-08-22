@@ -235,6 +235,10 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 	D_ASSERT(layout != NULL);
 
 	for (i = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_rebuilding ||
+		    layout->ol_shards[i].po_reintegrating ||
+		    layout->ol_shards[i].po_target == -1)
+			continue;
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
@@ -348,7 +352,7 @@ static struct d_hash_table	pl_htable;
  * will based on container's DAOS_PROP_CO_REDUN_LVL property to set the fault domain level for
  * that object's layout calculating.
  */
-#define PL_DEFAULT_DOMAIN	PO_COMP_TP_RANK
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -578,6 +582,16 @@ pl_map_version(struct pl_map *map)
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
 }
 
+/**
+ * Query pl_map_attr, the attr->pa_domain is an input&output parameter.
+ * if (attr->pa_domain <= 0 || attr->pa_domain > PO_COMP_TP_MAX) the returned attr->pa_domain is
+ * the pl_map's default fault domain level and attr->pa_domain_nr is the domain number of that
+ * fault domain level;
+ * if (attr->pa_domain > 0 && attr->pa_domain <= PO_COMP_TP_MAX) the returned attr->pa_domain_nr
+ * is the domain number of that specific input fault domain level;
+ * To support the case that different container with different fault domain level, but they share
+ * the same pool map and pl_map.
+ */
 int
 pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
 {
@@ -588,7 +602,6 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
 	if (!map)
 		return -DER_ENOENT;
 
-	memset(attr, 0, sizeof(*attr));
 	if (map->pl_ops->o_query != NULL)
 		rc = map->pl_ops->o_query(map, attr);
 	else

@@ -444,7 +444,7 @@ def launch_snapshot(self, pool, name):
         self.log.error("Snapshot failed", exc_info=error)
         status &= False
     if status:
-        self.log.info("Sanpshot Created")
+        self.log.info("Snapshot Created")
         # write more data to object
         data_pattern2 = get_random_bytes(500)
         datasize2 = len(data_pattern2) + 1

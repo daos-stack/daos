@@ -339,20 +339,26 @@ func (cmd *poolCmd) PoolID() *PoolID {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	Force bool `short:"f" long:"force" description:"Force removal of DAOS pool"`
+	Recursive bool `short:"r" long:"recursive" description:"Remove pool with existing containers"`
+	Force     bool `short:"f" long:"force" description:"Forcibly remove pool with active client connections"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (cmd *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &control.PoolDestroyReq{ID: cmd.PoolID().String(), Force: cmd.Force}
+	req := &control.PoolDestroyReq{
+		ID:        cmd.PoolID().String(),
+		Force:     cmd.Force,
+		Recursive: cmd.Recursive,
+	}
 
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
+	cmd.ctlInvoker.Debugf("Pool-destroy command %s", msg)
 	cmd.Infof("Pool-destroy command %s\n", msg)
 
 	return err
