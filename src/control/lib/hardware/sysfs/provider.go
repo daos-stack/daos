@@ -7,7 +7,6 @@
 package sysfs
 
 import (
-	"bufio"
 	"context"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -45,27 +45,13 @@ func isNetvscDevice(path string, subsystem string) bool {
 		return false
 	}
 
-	file, err := os.Open(filepath.Join(path, "device", "uevent"))
+	content, err := ioutil.ReadFile(filepath.Join(path, "device", "uevent"))
 	if err != nil {
 		return false
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		kv := strings.Split(scanner.Text(), "=")
-		if len(kv) != 2 {
-			continue
-		}
-		if kv[0] != "DRIVER" {
-			continue
-		}
-		if kv[1] == netvscDriver {
-			return true
-		}
-	}
-
-	return false
+	val, err := common.FindEnvValue(strings.Split(string(content), "\n"), "DRIVER")
+	return err == nil && val == netvscDriver
 }
 
 // NewProvider creates a new SysfsProvider.
