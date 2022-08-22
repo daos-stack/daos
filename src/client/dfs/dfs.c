@@ -57,24 +57,28 @@
 #define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	14
+#define INODE_AKEYS	12
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
 #define OID_IDX		(sizeof(mode_t))
-#define ATIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
-#define MTIME_IDX	(ATIME_IDX + sizeof(uint64_t))
+#define MTIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
 #define CTIME_IDX	(MTIME_IDX + sizeof(uint64_t))
 #define CSIZE_IDX	(CTIME_IDX + sizeof(uint64_t))
 #define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
-#define ATIME_NSEC_IDX	(OCLASS_IDX + sizeof(daos_oclass_id_t))
-#define MTIME_NSEC_IDX	(ATIME_NSEC_IDX + sizeof(uint64_t))
+#define MTIME_NSEC_IDX	(OCLASS_IDX + sizeof(daos_oclass_id_t))
 #define CTIME_NSEC_IDX	(MTIME_NSEC_IDX + sizeof(uint64_t))
 #define UID_IDX		(CTIME_NSEC_IDX + sizeof(uint64_t))
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
 #define SIZE_IDX	(GID_IDX + sizeof(gid_t))
 #define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
 #define END_IDX		(HLC_IDX + sizeof(uint64_t))
+
+/*
+ * END IDX for layout V2 (2.0) is at the current offset where we store the mtime nsec, but also need
+ * to account for the atime which is not stored anymore, but was stored (as a time_t) in layout V2.
+ */
+#define END_L2_IDX	(MTIME_NSEC_IDX + sizeof(time_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -258,6 +262,15 @@ print_stat(struct stat *stbuf)
 	D_DEBUG(DB_TRACE, "Change time %s\n", buf);
 }
 #endif
+
+static inline bool
+tspec_gt(struct timespec l, struct timespec r)
+{
+	if (l.tv_sec == r.tv_sec)
+		return l.tv_nsec > r.tv_nsec;
+	else
+		return l.tv_sec > r.tv_sec;
+}
 
 static inline int
 get_daos_obj_mode(int flags)
@@ -448,17 +461,17 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
+	/** atime is stored only in 2.0 containers */
+	if (ver <= 2)
+		d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 
-	/* if we are reading from a layout ver 2 or older, we only have up to oclass IDX */
 	if (ver <= 2) {
-		recx.rx_nr = ATIME_NSEC_IDX;
+		recx.rx_nr = END_L2_IDX;
 	} else {
-		d_iov_set(&sg_iovs[i++], &entry->atime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
@@ -503,10 +516,10 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 		/*
 		 * If we are reading from a layout ver 2 or older container, symlink value starts at
-		 * the current ATIME_NSEC_IDX; otherwise symlink is in a separate akey.
+		 * the current END_L2_IDX; otherwise symlink is in a separate akey.
 		 */
 		if (ver <= 2) {
-			recx.rx_idx = ATIME_NSEC_IDX;
+			recx.rx_idx = END_L2_IDX;
 			recx.rx_nr = val_len;
 		} else {
 			d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
@@ -633,7 +646,9 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
+	/** atime is stored only in 2.0 containers */
+	if (ver <= 2)
+		d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
@@ -645,11 +660,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	 * mtime, nsec granularity for times, and put symlink value in the same akey.
 	 */
 	if (ver <= 2) {
-		/*
-		 * length of the array in that version is at the first new entry added in the new
-		 * format, which is the uid.
-		 */
-		recx.rx_nr = ATIME_NSEC_IDX;
+		recx.rx_nr = END_L2_IDX;
 
 		/** Add symlink value to the array */
 		if (S_ISLNK(entry->mode)) {
@@ -657,7 +668,6 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 			recx.rx_nr += entry->value_len;
 		}
 	} else {
-		d_iov_set(&sg_iovs[i++], &entry->atime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
 		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
@@ -869,10 +879,20 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	stbuf->st_mode = entry.mode;
 	stbuf->st_uid = entry.uid;
 	stbuf->st_gid = entry.gid;
-	stbuf->st_atim.tv_sec = entry.atime;
-	stbuf->st_atim.tv_nsec = entry.atime_nano;
 	stbuf->st_ctim.tv_sec = entry.ctime;
 	stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+	if (dfs->layout_v > 2) {
+		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+			stbuf->st_atim.tv_sec = entry.ctime;
+			stbuf->st_atim.tv_nsec = entry.ctime_nano;
+		} else {
+			stbuf->st_atim.tv_sec = entry.mtime;
+			stbuf->st_atim.tv_nsec = entry.mtime_nano;
+		}
+	} else {
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_atim.tv_nsec = 0;
+	}
 	return 0;
 }
 
@@ -1981,12 +2001,22 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root_stbuf.st_mode = dfs->root.mode;
 	dfs->root_stbuf.st_uid = root_dir.uid;
 	dfs->root_stbuf.st_gid = root_dir.gid;
-	dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
-	dfs->root_stbuf.st_atim.tv_nsec = root_dir.atime_nano;
 	dfs->root_stbuf.st_mtim.tv_sec = root_dir.mtime;
 	dfs->root_stbuf.st_mtim.tv_nsec = root_dir.mtime_nano;
 	dfs->root_stbuf.st_ctim.tv_sec = root_dir.ctime;
 	dfs->root_stbuf.st_ctim.tv_nsec = root_dir.ctime_nano;
+	if (dfs->layout_v > 2) {
+		if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
+			dfs->root_stbuf.st_atim.tv_sec = root_dir.ctime;
+			dfs->root_stbuf.st_atim.tv_nsec = root_dir.ctime_nano;
+		} else {
+			dfs->root_stbuf.st_atim.tv_sec = root_dir.mtime;
+			dfs->root_stbuf.st_atim.tv_nsec = root_dir.mtime_nano;
+		}
+	} else {
+		dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
+		dfs->root_stbuf.st_atim.tv_nsec = root_dir.atime_nano;
+	}
 
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
@@ -3277,12 +3307,22 @@ lookup_rel_path_loop:
 			stbuf->st_mode = obj->mode;
 			stbuf->st_uid = entry.uid;
 			stbuf->st_gid = entry.gid;
-			stbuf->st_atim.tv_sec = entry.atime;
-			stbuf->st_atim.tv_nsec = entry.atime_nano;
 			stbuf->st_mtim.tv_sec = entry.mtime;
 			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 			stbuf->st_ctim.tv_sec = entry.ctime;
 			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			if (dfs->layout_v > 2) {
+				if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+					stbuf->st_atim.tv_sec = entry.ctime;
+					stbuf->st_atim.tv_nsec = entry.ctime_nano;
+				} else {
+					stbuf->st_atim.tv_sec = entry.mtime;
+					stbuf->st_atim.tv_nsec = entry.mtime_nano;
+				}
+			} else {
+				stbuf->st_atim.tv_sec = entry.atime;
+				stbuf->st_atim.tv_nsec = 0;
+			}
 		}
 	}
 
@@ -3612,12 +3652,22 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = entry.uid;
 		stbuf->st_gid = entry.gid;
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_atim.tv_nsec = entry.atime_nano;
 		stbuf->st_mtim.tv_sec = entry.mtime;
 		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 		stbuf->st_ctim.tv_sec = entry.ctime;
 		stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+		if (dfs->layout_v > 2) {
+			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+				stbuf->st_atim.tv_sec = entry.ctime;
+				stbuf->st_atim.tv_nsec = entry.ctime_nano;
+			} else {
+				stbuf->st_atim.tv_sec = entry.mtime;
+				stbuf->st_atim.tv_nsec = entry.mtime_nano;
+			}
+		} else {
+			stbuf->st_atim.tv_sec = entry.atime;
+			stbuf->st_atim.tv_nsec = 0;
+		}
 	}
 
 out:
@@ -3744,12 +3794,22 @@ out:
 			stbuf->st_mode = entry.mode;
 			stbuf->st_uid = entry.uid;
 			stbuf->st_gid = entry.gid;
-			stbuf->st_atim.tv_sec = entry.atime;
-			stbuf->st_atim.tv_nsec = entry.atime_nano;
 			stbuf->st_mtim.tv_sec = entry.mtime;
 			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 			stbuf->st_ctim.tv_sec = entry.ctime;
 			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			if (dfs->layout_v > 2) {
+				if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+					stbuf->st_atim.tv_sec = entry.ctime;
+					stbuf->st_atim.tv_nsec = entry.ctime_nano;
+				} else {
+					stbuf->st_atim.tv_sec = entry.mtime;
+					stbuf->st_atim.tv_nsec = entry.mtime_nano;
+				}
+			} else {
+				stbuf->st_atim.tv_sec = entry.atime;
+				stbuf->st_atim.tv_nsec = 0;
+			}
 		}
 		*_obj = obj;
 	} else {
@@ -4706,9 +4766,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
-	d_iov_t			sg_iovs[5];
+	d_iov_t			sg_iovs[8];
 	daos_iod_t		iod;
-	daos_recx_t		recx[5];
+	daos_recx_t		recx[8];
 	bool			set_size = false;
 	int			i = 0;
 	size_t			len;
@@ -4766,18 +4826,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_mode = stbuf->st_mode;
 	}
 	if (flags & DFS_SET_ATTR_ATIME) {
-		d_iov_set(&sg_iovs[i], &stbuf->st_atim.tv_sec, sizeof(uint64_t));
-		recx[i].rx_idx = ATIME_IDX;
-		recx[i].rx_nr = sizeof(uint64_t);
-		i++;
-
-		d_iov_set(&sg_iovs[i], &stbuf->st_atim.tv_nsec, sizeof(uint64_t));
-		recx[i].rx_idx = ATIME_NSEC_IDX;
-		recx[i].rx_nr = sizeof(uint64_t);
-		i++;
-
 		flags &= ~DFS_SET_ATTR_ATIME;
-		rstat.st_atim = stbuf->st_atim;
+		D_WARN("ATIME is no longer stored in DFS and setting it is ignored.\n");
 	}
 	if (flags & DFS_SET_ATTR_MTIME) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_mtim.tv_sec, sizeof(uint64_t));
@@ -4822,8 +4872,10 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		 * isn't a file but check here anyway, as entries which aren't
 		 * files won't have array objects so check and return error here
 		 */
-		if (!S_ISREG(obj->mode))
+		if (!S_ISREG(obj->mode)) {
+			D_ERROR("Cannot set_size on a non file object\n");
 			D_GOTO(out_obj, rc = EIO);
+		}
 
 		set_size = true;
 		flags &= ~DFS_SET_ATTR_SIZE;
