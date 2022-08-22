@@ -215,8 +215,6 @@ type systemStartCmd struct {
 	ctlInvokerCmd
 	jsonOutputCmd
 	rankListCmd
-
-	Checker bool `short:"c" long:"checker" description:"Start DAOS system in checker mode"`
 }
 
 // Execute is run when systemStartCmd activates.
@@ -230,14 +228,9 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 
-	if cmd.Checker && (hostSet.Count() > 0 || rankSet.Count() > 0) {
-		return errors.New("--check option cannot be used with --ranks or --rank-hosts options")
-	}
-
 	req := new(control.SystemStartReq)
-	req.Checker = cmd.Checker
-	req.Hosts = hostSet.String()
-	req.Ranks = rankSet.String()
+	req.Hosts.Replace(hostSet)
+	req.Ranks.Replace(rankSet)
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

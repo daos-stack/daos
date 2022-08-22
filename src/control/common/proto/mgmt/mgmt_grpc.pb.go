@@ -75,6 +75,10 @@ type MgmtSvcClient interface {
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
 	SystemCleanup(ctx context.Context, in *SystemCleanupReq, opts ...grpc.CallOption) (*SystemCleanupResp, error)
+	// Enable system check mode
+	SystemCheckEnable(ctx context.Context, in *CheckEnableReq, opts ...grpc.CallOption) (*DaosResp, error)
+	// Disable system check mode
+	SystemCheckDisable(ctx context.Context, in *CheckDisableReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Initiate a system check
 	SystemCheckStart(ctx context.Context, in *CheckStartReq, opts ...grpc.CallOption) (*CheckStartResp, error)
 	// Stop a system check
@@ -350,6 +354,24 @@ func (c *mgmtSvcClient) SystemCleanup(ctx context.Context, in *SystemCleanupReq,
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCheckEnable(ctx context.Context, in *CheckEnableReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckEnable", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemCheckDisable(ctx context.Context, in *CheckDisableReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckDisable", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemCheckStart(ctx context.Context, in *CheckStartReq, opts ...grpc.CallOption) (*CheckStartResp, error) {
 	out := new(CheckStartResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckStart", in, out, opts...)
@@ -508,6 +530,10 @@ type MgmtSvcServer interface {
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
 	SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error)
+	// Enable system check mode
+	SystemCheckEnable(context.Context, *CheckEnableReq) (*DaosResp, error)
+	// Disable system check mode
+	SystemCheckDisable(context.Context, *CheckDisableReq) (*DaosResp, error)
 	// Initiate a system check
 	SystemCheckStart(context.Context, *CheckStartReq) (*CheckStartResp, error)
 	// Stop a system check
@@ -617,6 +643,12 @@ func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) 
 }
 func (UnimplementedMgmtSvcServer) SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCleanup not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckEnable(context.Context, *CheckEnableReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckEnable not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckDisable(context.Context, *CheckDisableReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckDisable not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemCheckStart(context.Context, *CheckStartReq) (*CheckStartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckStart not implemented")
@@ -1150,6 +1182,42 @@ func _MgmtSvc_SystemCleanup_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCheckEnable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckEnableReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckEnable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCheckEnable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckEnable(ctx, req.(*CheckEnableReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemCheckDisable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckDisableReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckDisable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCheckDisable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckDisable(ctx, req.(*CheckDisableReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemCheckStart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckStartReq)
 	if err := dec(in); err != nil {
@@ -1462,6 +1530,14 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemCleanup",
 			Handler:    _MgmtSvc_SystemCleanup_Handler,
+		},
+		{
+			MethodName: "SystemCheckEnable",
+			Handler:    _MgmtSvc_SystemCheckEnable_Handler,
+		},
+		{
+			MethodName: "SystemCheckDisable",
+			Handler:    _MgmtSvc_SystemCheckDisable_Handler,
 		},
 		{
 			MethodName: "SystemCheckStart",

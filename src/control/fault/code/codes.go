@@ -91,6 +91,8 @@ const (
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
 	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
@@ -188,4 +190,6 @@ const (
 const (
 	SystemCheckerUnknown Code = iota + 1000
 	SystemCheckerInvalidMemberStates
+	SystemCheckerNotEnabled
+	SystemCheckerEnabled
 )

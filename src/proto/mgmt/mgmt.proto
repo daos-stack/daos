@@ -80,6 +80,10 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	// Enable system check mode
+	rpc SystemCheckEnable(CheckEnableReq) returns(DaosResp){}
+	// Disable system check mode
+	rpc SystemCheckDisable(CheckDisableReq) returns(DaosResp){}
 	// Initiate a system check
 	rpc SystemCheckStart(CheckStartReq) returns(CheckStartResp){}
 	// Stop a system check

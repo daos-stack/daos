@@ -292,9 +292,13 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			member.Rank, member.FabricURI, joinResponse.PrevState, member.State)
 	}
 
+	joinState := mgmtpb.JoinResp_IN
+	if svc.checkerIsEnabled() {
+		joinState = mgmtpb.JoinResp_CHECK
+	}
 	resp := &batchJoinResponse{
 		JoinResp: mgmtpb.JoinResp{
-			State: mgmtpb.JoinResp_IN,
+			State: joinState,
 			Rank:  member.Rank.Uint32(),
 		},
 	}
@@ -410,7 +414,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 // with listening port from joining instance's host addr contained in the
 // provided request.
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb.JoinResp, err error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.Join dispatch, req:%s", mgmtpb.Debug(req))
@@ -463,7 +467,7 @@ type (
 		Ranks      *system.RankSet
 		Force      bool
 		FullSystem bool
-		Checker    bool
+		CheckMode  bool
 	}
 
 	fanoutResponse struct {
@@ -580,7 +584,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	}
 
 	ranksReq := &control.RanksReq{
-		Ranks: req.Ranks.String(), Force: req.Force, Checker: req.Checker,
+		Ranks:     req.Ranks.String(),
+		Force:     req.Force,
+		CheckMode: req.CheckMode,
 	}
 
 	funcName := func(i interface{}) string {
@@ -644,7 +650,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 // same name in lib/control/system.go and returns results from all selected
 // ranks.
 func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("Received SystemQuery RPC: %+v", req)
@@ -719,14 +725,6 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 		return nil, nil, errors.New("nil system request")
 	}
 
-	checker := false
-	if checkerReq, ok := req.(interface{ GetChecker() bool }); ok {
-		checker = checkerReq.GetChecker()
-	}
-	if checker && (req.GetHosts() != "" || req.GetRanks() != "") {
-		return nil, nil, errors.New("cannot specify hosts or ranks in checker mode")
-	}
-
 	// populate missing hosts/ranks in outer response and resolve active ranks
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.GetHosts(), req.GetRanks())
 	if err != nil {
@@ -744,7 +742,6 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 	return &fanoutRequest{
 			Ranks:      hitRanks,
 			Force:      force,
-			Checker:    checker,
 			FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
 		}, &fanoutResponse{
 			AbsentRanks: missRanks,
@@ -762,7 +759,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStop RPC")
@@ -868,7 +865,7 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq) (*mgmtpb.SystemStartResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
@@ -878,15 +875,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 		return nil, err
 	}
 
-	if fReq.Checker {
-		if err := svc.checkMemberStates(
-			system.MemberStateAdminExcluded,
-			system.MemberStateStopped,
-		); err != nil {
-			return nil, err
-		}
-	}
-
+	fReq.CheckMode = req.CheckMode
 	fReq.Method = control.StartRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 	if err != nil {
@@ -906,7 +895,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
 func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -1030,7 +1019,6 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 // Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
-//
 func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanupReq) (*mgmtpb.SystemCleanupResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -1143,7 +1131,7 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 
 // SystemGetProp gets user-visible system properties.
 func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (resp *mgmtpb.SystemGetPropResp, err error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("Received SystemGetProp RPC: %+v", req)

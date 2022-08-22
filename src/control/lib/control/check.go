@@ -18,6 +18,70 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
+type SystemCheckEnableReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckEnableReq
+}
+
+// SystemCheckEnable enables the system checker.
+func SystemCheckEnable(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckEnableReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T", req)
+	}
+
+	req.CheckEnableReq.Sys = req.getSystem(rpcClient)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEnable(ctx, &req.CheckEnableReq)
+	})
+	rpcClient.Debugf("DAOS system checker enable request: %+v", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	ms, err := ur.getMSResponse()
+	if err != nil {
+		return err
+	}
+	rpcClient.Debugf("DAOS system checker enable response: %+v", ms)
+
+	return nil
+}
+
+type SystemCheckDisableReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckDisableReq
+}
+
+// SystemCheckDisable disables the system checker.
+func SystemCheckDisable(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckDisableReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T", req)
+	}
+
+	req.CheckDisableReq.Sys = req.getSystem(rpcClient)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDisable(ctx, &req.CheckDisableReq)
+	})
+	rpcClient.Debugf("DAOS system checker disable request: %+v", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	ms, err := ur.getMSResponse()
+	if err != nil {
+		return err
+	}
+	rpcClient.Debugf("DAOS system checker disable response: %+v", ms)
+
+	return nil
+}
+
 const (
 	SystemCheckFlagDryRun  = uint32(chkpb.CheckFlag_CF_DRYRUN)
 	SystemCheckFlagReset   = uint32(chkpb.CheckFlag_CF_RESET)

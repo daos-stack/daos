@@ -347,7 +347,6 @@ pipeline {
                                                   'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
                                                   /* groovylint-disable-next-line LineLength */
                                                   'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  'src/mgmt/rpc.h:' +
                                                   '*.crt:' +
                                                   '*.pem:' +
                                                   '*_test.go:' +
@@ -931,7 +930,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
+                           script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {
