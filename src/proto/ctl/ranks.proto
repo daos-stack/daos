@@ -16,7 +16,7 @@ import "shared/ranks.proto";
 message RanksReq {
 	bool force = 3; // force operation
 	string ranks = 4; // rankset to operate over
-	bool checker = 5; // start in check mode
+	bool check_mode = 5; // start in check mode
 }
 
 // Generic response containing DER result from multiple ranks.

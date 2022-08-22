@@ -52,6 +52,96 @@ void   mgmt__check_inconsist_policy__free_unpacked
   assert(message->base.descriptor == &mgmt__check_inconsist_policy__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__check_enable_req__init
+                     (Mgmt__CheckEnableReq         *message)
+{
+  static const Mgmt__CheckEnableReq init_value = MGMT__CHECK_ENABLE_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__check_enable_req__get_packed_size
+                     (const Mgmt__CheckEnableReq *message)
+{
+  assert(message->base.descriptor == &mgmt__check_enable_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__check_enable_req__pack
+                     (const Mgmt__CheckEnableReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__check_enable_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__check_enable_req__pack_to_buffer
+                     (const Mgmt__CheckEnableReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__check_enable_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__CheckEnableReq *
+       mgmt__check_enable_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__CheckEnableReq *)
+     protobuf_c_message_unpack (&mgmt__check_enable_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__check_enable_req__free_unpacked
+                     (Mgmt__CheckEnableReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__check_enable_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__check_disable_req__init
+                     (Mgmt__CheckDisableReq         *message)
+{
+  static const Mgmt__CheckDisableReq init_value = MGMT__CHECK_DISABLE_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__check_disable_req__get_packed_size
+                     (const Mgmt__CheckDisableReq *message)
+{
+  assert(message->base.descriptor == &mgmt__check_disable_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__check_disable_req__pack
+                     (const Mgmt__CheckDisableReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__check_disable_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__check_disable_req__pack_to_buffer
+                     (const Mgmt__CheckDisableReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__check_disable_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__CheckDisableReq *
+       mgmt__check_disable_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__CheckDisableReq *)
+     protobuf_c_message_unpack (&mgmt__check_disable_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__check_disable_req__free_unpacked
+                     (Mgmt__CheckDisableReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__check_disable_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__check_start_req__init
                      (Mgmt__CheckStartReq         *message)
 {
@@ -733,6 +823,82 @@ const ProtobufCMessageDescriptor mgmt__check_inconsist_policy__descriptor =
   (ProtobufCMessageInit) mgmt__check_inconsist_policy__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__check_enable_req__field_descriptors[1] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckEnableReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__check_enable_req__field_indices_by_name[] = {
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__check_enable_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__check_enable_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.CheckEnableReq",
+  "CheckEnableReq",
+  "Mgmt__CheckEnableReq",
+  "mgmt",
+  sizeof(Mgmt__CheckEnableReq),
+  1,
+  mgmt__check_enable_req__field_descriptors,
+  mgmt__check_enable_req__field_indices_by_name,
+  1,  mgmt__check_enable_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__check_enable_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__check_disable_req__field_descriptors[1] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckDisableReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__check_disable_req__field_indices_by_name[] = {
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__check_disable_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__check_disable_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.CheckDisableReq",
+  "CheckDisableReq",
+  "Mgmt__CheckDisableReq",
+  "mgmt",
+  sizeof(Mgmt__CheckDisableReq),
+  1,
+  mgmt__check_disable_req__field_descriptors,
+  mgmt__check_disable_req__field_indices_by_name,
+  1,  mgmt__check_disable_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__check_disable_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__check_start_req__field_descriptors[5] =
 {
   {
@@ -768,7 +934,7 @@ static const ProtobufCFieldDescriptor mgmt__check_start_req__field_descriptors[5
     offsetof(Mgmt__CheckStartReq, ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

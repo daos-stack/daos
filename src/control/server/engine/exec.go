@@ -112,10 +112,6 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	}
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
-	// FIXME: Hack to allow the checker to be started.
-	if os.Getenv("DAOS_ENGINE_CHECKER") == "1" {
-		args = append(args, "--check")
-	}
 	return r.run(ctx, args, env, errOut)
 }
 

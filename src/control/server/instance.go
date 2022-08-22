@@ -156,6 +156,12 @@ func (ei *EngineInstance) Index() uint32 {
 	return ei.runner.GetConfig().Index
 }
 
+// SetCheckerMode adjusts the engine configuration to enable or disable
+// starting the engine in checker mode.
+func (ei *EngineInstance) SetCheckerMode(enabled bool) {
+	ei.runner.GetConfig().CheckerEnabled = enabled
+}
+
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
 func (ei *EngineInstance) removeSocket() error {
@@ -201,8 +207,21 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateExcluded {
+	}
+	switch resp.State {
+	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+	case system.MemberStateCheckerStarted:
+		// If the system is in checker mode but the rank was not started in
+		// checker mode, we need to restart it in order to get the correct
+		// modules loaded.
+		if !ready.GetCheckMode() {
+			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
+			go func() { ei.requestStart(context.Background()) }()
+			ei.SetCheckerMode(true)
+			ei.Stop(os.Kill)
+			return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
+		}
 	}
 	r = system.Rank(resp.Rank)
 

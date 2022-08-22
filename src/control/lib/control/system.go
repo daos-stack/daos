@@ -133,6 +133,30 @@ type SystemJoinResp struct {
 	LocalJoin bool
 }
 
+func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {
+	type fromJSON SystemJoinResp
+	aux := &struct {
+		State mgmtpb.JoinResp_State `json:"state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	switch aux.State {
+	case mgmtpb.JoinResp_IN:
+		resp.State = system.MemberStateJoined
+	case mgmtpb.JoinResp_OUT:
+		resp.State = system.MemberStateExcluded
+	case mgmtpb.JoinResp_CHECK:
+		resp.State = system.MemberStateCheckerStarted
+	}
+
+	return nil
+}
+
 // SystemJoin will attempt to join a new member to the DAOS system.
 func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
 	pbReq := new(mgmtpb.JoinReq)
@@ -279,16 +303,7 @@ func concatSysErrs(errSys, errRes error) error {
 type SystemStartReq struct {
 	unaryRequest
 	msRequest
-
-	mgmtpb.SystemStartReq
-}
-
-func (req *SystemStartReq) SetRanks(ranks *system.RankSet) {
-	req.Ranks = ranks.String()
-}
-
-func (req *SystemStartReq) SetHosts(hosts *hostlist.HostSet) {
-	req.Hosts = hosts.String()
+	sysRequest
 }
 
 // SystemStartResp contains the request response.
@@ -334,13 +349,13 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	if req.Checker && (req.Hosts != "" || req.Ranks != "") {
-		return nil, errors.New("cannot specify hosts or ranks with checker")
+	pbReq := &mgmtpb.SystemStartReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
 	}
-
-	req.SystemStartReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, &req.SystemStartReq)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system start request: %+v", req)
 
@@ -604,9 +619,9 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 type RanksReq struct {
 	unaryRequest
 	respReportCb HostResponseReportFn
-	Ranks        string
-	Force        bool
-	Checker      bool
+	Ranks        string `json:"ranks"`
+	Force        bool   `json:"force"`
+	CheckMode    bool   `json:"check_mode"`
 }
 
 func (r *RanksReq) reportResponse(resp *HostResponse) {

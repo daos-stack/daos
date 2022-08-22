@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -25,18 +24,6 @@ import (
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
-	withSys := func(req control.UnaryRequest, sys ...string) control.UnaryRequest {
-		if len(sys) == 0 {
-			sys = append(sys, build.DefaultSystemName+"-"+build.DaosVersion)
-		}
-
-		switch unwrapped := req.(type) {
-		case *control.SystemStartReq:
-			unwrapped.SystemStartReq.Sys = sys[0]
-		}
-
-		return req
-	}
 	withRanks := func(req control.UnaryRequest, ranks ...system.Rank) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetRanks(*system.RankSet) }); ok {
 			rs.SetRanks(system.RankSetFromRanks(ranks))
@@ -175,7 +162,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
-				printRequest(t, withRanks(withSys(&control.SystemStartReq{}))),
+				printRequest(t, &control.SystemStartReq{}),
 			}, " "),
 			nil,
 		},
@@ -183,7 +170,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				printRequest(t, withRanks(withSys(&control.SystemStartReq{}), 0)),
+				printRequest(t, withRanks(&control.SystemStartReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -191,7 +178,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t, withRanks(withSys(&control.SystemStartReq{}), 0, 1, 4)),
+				printRequest(t, withRanks(&control.SystemStartReq{}, 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -199,7 +186,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				printRequest(t, withHosts(withSys(&control.SystemStartReq{}), "foo-[0-100]", "bar9")),
+				printRequest(t, withHosts(&control.SystemStartReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},

@@ -995,16 +995,18 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   (ProtobufCMessageInit) mgmt__join_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue mgmt__join_resp__state__enum_values_by_number[2] =
+static const ProtobufCEnumValue mgmt__join_resp__state__enum_values_by_number[3] =
 {
   { "IN", "MGMT__JOIN_RESP__STATE__IN", 0 },
   { "OUT", "MGMT__JOIN_RESP__STATE__OUT", 1 },
+  { "CHECK", "MGMT__JOIN_RESP__STATE__CHECK", 2 },
 };
 static const ProtobufCIntRange mgmt__join_resp__state__value_ranges[] = {
-{0, 0},{0, 2}
+{0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex mgmt__join_resp__state__enum_values_by_name[2] =
+static const ProtobufCEnumValueIndex mgmt__join_resp__state__enum_values_by_name[3] =
 {
+  { "CHECK", 2 },
   { "IN", 0 },
   { "OUT", 1 },
 };
@@ -1015,9 +1017,9 @@ const ProtobufCEnumDescriptor mgmt__join_resp__state__descriptor =
   "State",
   "Mgmt__JoinResp__State",
   "mgmt",
-  2,
+  3,
   mgmt__join_resp__state__enum_values_by_number,
-  2,
+  3,
   mgmt__join_resp__state__enum_values_by_name,
   1,
   mgmt__join_resp__state__value_ranges,
@@ -1455,7 +1457,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     offsetof(Mgmt__GetAttachInfoResp, ms_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

@@ -705,13 +705,13 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
-	testReqHS.Hosts = testHS.String()
+	testReqHS.Hosts.Replace(testHS)
 	testRespHS := new(SystemStartResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
-	testReqRS.Ranks = testRS.String()
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStartResp)
 	testRespRS.AbsentRanks.Replace(testRS)
 
@@ -1326,7 +1326,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 				t.Fatalf("unexpected error: %v", gotErr)
 			}
 
-			expResp := &SystemJoinResp{Rank: 42}
+			expResp := &SystemJoinResp{Rank: 42, State: system.MemberStateJoined}
 			if diff := cmp.Diff(expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -1380,7 +1380,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 					},
 				},
 			},
-			expResp: &SystemJoinResp{Rank: 42},
+			expResp: &SystemJoinResp{Rank: 42, State: system.MemberStateJoined},
 		},
 		"MS response contains timeout; request is retried": {
 			mic: &MockInvokerConfig{
@@ -1405,7 +1405,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 					MockMSResponse("", nil, &mgmtpb.JoinResp{Rank: 42}),
 				},
 			},
-			expResp: &SystemJoinResp{Rank: 42},
+			expResp: &SystemJoinResp{Rank: 42, State: system.MemberStateJoined},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
