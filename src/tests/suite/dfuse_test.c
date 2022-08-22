@@ -25,7 +25,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include <sys/statfs.h>
 #include <sys/ioctl.h>
 
 #include "dfuse_ioctl.h"
@@ -315,6 +315,8 @@ timespec_gt(struct timespec t1, struct timespec t2)
 		return t1.tv_sec > t2.tv_sec;
 }
 
+#define FUSE_SUPER_MAGIC  0x65735546
+
 void
 do_mtime(void **state)
 {
@@ -325,6 +327,7 @@ do_mtime(void **state)
 	int             fd;
 	int             rc;
 	char            input_buf[] = "hello";
+	struct statfs   fs;
 	int             root        = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
@@ -332,6 +335,10 @@ do_mtime(void **state)
 	/* Open a file and sanity check the mtime */
 	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
+
+	rc = fstatfs(root, &fs);
+	assert_return_code(fd, errno);
+
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	assert_return_code(fd, errno);
 	rc = fstat(fd, &stbuf);
@@ -339,13 +346,19 @@ do_mtime(void **state)
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
-
 	/* Write to the file and verify mtime is newer */
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+		printf("%ld %ld\n", prev_ts.tv_sec, prev_ts.tv_nsec);
+	}
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -354,7 +367,13 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+		printf("%ld %ld\n", prev_ts.tv_sec, prev_ts.tv_nsec);
+	}
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
