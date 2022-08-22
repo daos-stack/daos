@@ -59,8 +59,9 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel = 1.11
-BuildRequires: libpmem-devel = 1.11
+BuildRequires: libpmemobj-devel = 1.11.0-3%{?dist}
+BuildRequires: libpmem-devel = 1.11.0-3%{?dist}
+BuildRequires: libpmemblk-devel = 1.11.0-3%{?dist}
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
