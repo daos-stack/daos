@@ -129,27 +129,27 @@ class WrapScript():
         newlines = 0
 
         for variable in variables:
+            outfile.write(f'{prefix}# pylint: disable-next=invalid-name\n')
+            newlines += 1
             if variable.upper() == 'PREREQS':
                 newlines += 1
                 outfile.write(
                     f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
-                variables.remove(variable)
-        for variable in variables:
-            if "ENV" in variable.upper():
+            elif "ENV" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = DefaultEnvironment()\n')
             elif "OPTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = Variables()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = Variables()\n')
             elif "PREFIX" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ''\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ""\n')
             elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ["fake"]\n')
             else:
                 newlines += 1
-                outfile.write("%s%s = None\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = None\n')
 
         return newlines
 
@@ -270,7 +270,7 @@ class FileTypeList():
         # pylint: disable=too-many-branches
 
         def word_is_allowed(word, code):
-            """Return True is misspelling is permitted"""
+            """Return True if misspelling is permitted"""
 
             # pylint: disable=too-many-return-statements
 
@@ -339,7 +339,7 @@ class FileTypeList():
             target.extend(['--jobs', str(min(len(target_file), 20))])
         elif scons:
             # Do not warn on module name for SConstruct files, we don't get to pick their name.
-            ignore = ['invalid-name', 'ungrouped-imports']
+            ignore = ['ungrouped-imports']
             if target_file.endswith('__init__.py'):
                 ignore.append('relative-beyond-top-level')
             wrapper = WrapScript(target_file)
@@ -573,7 +573,9 @@ def main():
             all_files = FileTypeList()
         regions = None
         file = None
+        lineno = 0
         for line in sys.stdin.readlines():
+            lineno += 1
             if line.startswith('diff --git a/'):
                 parts = line.split(' ')
                 file = parts[3][2:-1]
@@ -584,7 +586,12 @@ def main():
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                (post_start, post_len) = parts[2][1:].split(',')
+                try:
+                    (post_start, post_len) = parts[2][1:].split(',')
+                except ValueError:
+                    print(f'Unable to split parts[2] ("{parts[2]}") from line "{line.rstrip()}" '
+                          'on line number {lineno}')
+                    raise
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:
