@@ -118,7 +118,9 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
-	setenv("UCX_IB_FORK_INIT", "n", 1);
+	if (crt_is_service())
+		setenv("UCX_IB_FORK_INIT", "n", 1);
+
 	dump_envariables();
 
 	/*
