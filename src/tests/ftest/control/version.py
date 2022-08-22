@@ -78,8 +78,7 @@ class DAOSVersion(TestWithServers):
         self.log.info("RPM version = %s", rpm_version)
 
         # Remove configuration files
-        cleanup_cmd = "sudo rm -frv /etc/daos/daos_control.yml /etc/daos/daos_server.yml"
-        cleanup_cmd += " /etc/daos/daos_agent.yml /etc/daos/certs"
+        cleanup_cmd = "sudo find /etc/daos -type f -delete -print"
         run_pcmd(hosts=self.hostlist_servers, command=cleanup_cmd)
 
         # Get dmg version.
