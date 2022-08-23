@@ -238,8 +238,7 @@ out:
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		     const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 {
 	int		 rc;
 	d_rank_list_t	*ranks = NULL;
@@ -332,8 +331,7 @@ out:
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
-		   uint32_t destroy, uint32_t force_destroy, char *machine,
-		   const char *group, uint32_t *count)
+		   uint32_t destroy, uint32_t force_destroy, char *machine, uint32_t *count)
 {
 	int		 rc;
 
@@ -415,21 +413,22 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool.
- * \param[in]		svc_ranks	Ranks of pool svc replicas.
- * \param[out]		ranks		Optional, returned storage ranks in this pool.
- *					If #pool_info is NULL, engines with disabled targets.
- *					If #pool_info is passed, engines with enabled or disabled
- *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					The caller must free the list with d_rank_list_free().
- * \param[in][out]	pool_info	Query results
- * \param[in][out]	pool_layout_ver	Pool global version
+ * \param[in]		pool_uuid	   UUID of the pool.
+ * \param[in]		svc_ranks	   Ranks of pool svc replicas.
+ * \param[out]		ranks		   Optional, returned storage ranks in this pool.
+ *					   If #pool_info is NULL, engines with disabled targets.
+ *					   If #pool_info is passed, engines with enabled or
+ *					   disabled targets according to
+ *					   #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					   The caller must free the list with d_rank_list_free().
+ * \param[in][out]	pool_info	   Query results
+ * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
  *
- * \return		0		Success
- *			-DER_INVAL	Invalid inputs
- *			Negative value	Other error
+ * \return		0		   Success
+ *			-DER_INVAL	   Invalid inputs
+ *			Negative value	   Other error
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
