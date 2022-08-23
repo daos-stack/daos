@@ -159,7 +159,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
+		// cmd.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
+		cmd.Infof("DAOS-10885: Creating DAOS pool with %d%% of all storage", storageRatio)
 	case cmd.Size != "":
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
