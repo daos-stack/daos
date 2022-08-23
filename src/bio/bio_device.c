@@ -65,7 +65,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state */
-	rc = bio_set_led_state(xs_ctxt, d_bdev->bb_uuid, "off", false/*reset*/);
+	rc = bio_set_led_state(xs_ctxt, d_bdev->bb_uuid, "off", false /*reset*/);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
 			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
@@ -794,23 +794,23 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 int
-bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
-		  const char *led_state_str, bool reset)
+bio_led_action(struct bio_xs_context *xs_ctxt, char *traddr, enum led_action act,
+	       enum spdk_vmd_led_state *state)
 {
-	struct bio_bdev	       *bio_dev;
-	struct bio_dev_info	b_info = { 0 };
+//	struct bio_bdev	       *bio_dev;
+//	struct bio_dev_info	b_info = { 0 };
 	struct led_opts		opts = { 0 };
 	int			led_state;
 	int			rc = 0;
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
 
-	bio_dev = lookup_dev_by_id(dev_uuid);
-	if (bio_dev == NULL) {
-		D_ERROR("Failed to find dev "DF_UUID"\n",
-			DP_UUID(dev_uuid));
-		return -DER_NONEXIST;
-	}
+//	bio_dev = lookup_dev_by_id(dev_uuid);
+//	if (bio_dev == NULL) {
+//		D_ERROR("Failed to find dev "DF_UUID"\n",
+//			DP_UUID(dev_uuid));
+//		return -DER_NONEXIST;
+//	}
 
 	/* Init LED context state */
 	opts.all_devices = false;
@@ -819,139 +819,159 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 	opts.status = 0;
 
 	/* LED will be reset to the original saved state */
-	opts.action = LED_ACTION_SET;
-	if (reset) {
-		opts.action = LED_ACTION_RESET;
+	opts.action = act;
+	switch (act) {
+	case LED_ACTION_RESET:
 		opts.led_state = bio_dev->bb_led_state;
-		goto skip_led_str;
-	}
-
-	if (led_state_str == NULL)
+		break;
+	case LED_ACTION_GET:
+		if (state == NULL) {
+			D_ERROR("LED state receiver not supplied when action is GET\n");
+			return -DER_INVAL;
+		}
+		break;
+	case LED_ACTION_SET:
+		if (state == NULL) {
+			D_ERROR("LED state not supplied when action is SET\n");
+			return -DER_INVAL;
+		}
+		opts.led_state = *state;
+		break;
+	case LED_ACTION_NOP:
+		D_ERROR("invalid action supplied\n");
 		return -DER_INVAL;
+	}
 
 	/* Determine SPDK LED state based on led_state string */
-	for (led_state = SPDK_VMD_LED_STATE_OFF;
-	     led_state <= SPDK_VMD_LED_STATE_REBUILD;
-	     led_state++) {
-		if (strcmp(led_state_str, g_led_states[led_state]) == 0) {
-			opts.led_state = (enum spdk_vmd_led_state)led_state;
-			break;
-		}
-	}
+//	for (led_state = SPDK_VMD_LED_STATE_OFF;
+//	     led_state <= SPDK_VMD_LED_STATE_REBUILD;
+//	     led_state++) {
+//		if (strcmp(led_state_str, g_led_states[led_state]) == 0) {
+//			opts.led_state = (enum spdk_vmd_led_state)led_state;
+//			break;
+//		}
+//	}
 
-skip_led_str:
-	if (opts.led_state == SPDK_VMD_LED_STATE_UNKNOWN) {
-		D_ERROR("LED state is not valid or supported\n");
-		return -DER_INVAL;
-	}
+//skip_led_str:
+//	if (opts.led_state == SPDK_VMD_LED_STATE_UNKNOWN) {
+//		D_ERROR("LED state is not valid or supported\n");
+//		return -DER_INVAL;
+//	}
 
-	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
-	if (rc != 0) {
-		D_ERROR("Unable to get traddr for device %s\n", bio_dev->bb_name);
-		return -DER_INVAL;
-	}
+//	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
+//	if (rc != 0) {
+//		D_ERROR("Unable to get traddr for device %s\n", bio_dev->bb_name);
+//		return -DER_INVAL;
+//	}
 
-	rc = spdk_pci_addr_parse(&opts.pci_addr, b_info.bdi_traddr);
+	rc = spdk_pci_addr_parse(&opts.pci_addr, traddr);
 	if (rc != 0) {
 		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
 			spdk_strerror(-rc));
-		D_GOTO(free_traddr, rc = -DER_INVAL);
+		return -DER_INVAL;
+		// D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		D_ERROR("Setting LED state failed\n");
-		D_GOTO(free_traddr, rc = opts.status);
+		D_ERROR("LED action failed\n");
+		return opts.status;
+		// D_GOTO(free_traddr, rc = opts.status);
 	}
 	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device with traddr %s could not be found\n", b_info.bdi_traddr);
-		D_GOTO(free_traddr, rc = -DER_NONEXIST);
+		return -DER_NONEXIST;
+		// D_GOTO(free_traddr, rc = -DER_NONEXIST);
 	}
+
+	// TODO: so do want to do this if it's just identify?
 
 	/* Update current LED state after action */
-	bio_dev->bb_led_state = opts.led_state;
+	// bio_dev->bb_led_state = opts.led_state;
 
-	if (!reset && (opts.led_state != SPDK_VMD_LED_STATE_OFF)) {
-		/* Init the start time for the LED for a new event. */
-		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
-	} else {
-		/* Reset the LED start time to indicate a LED event has completed. */
-		bio_dev->bb_led_start_time = 0;
-	}
+//	if (!reset && (opts.led_state != SPDK_VMD_LED_STATE_OFF)) {
+//		/* Init the start time for the LED for a new event. */
+//		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
+//	} else {
+//		/* Reset the LED start time to indicate a LED event has completed. */
+//		bio_dev->bb_led_start_time = 0;
+//	}
 
-free_traddr:
-	if (b_info.bdi_traddr != NULL)
-		D_FREE(b_info.bdi_traddr);
+//free_traddr:
+//	if (b_info.bdi_traddr != NULL)
+//		D_FREE(b_info.bdi_traddr);
 
-	return rc;
+	if (act) == LED_ACTION_GET
+		*state = opts.led_state;
+
+	return 0;
 }
 
-int
-bio_get_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
-		  int *led_state)
-{
-	struct spdk_pci_addr	pci_addr;
-	struct spdk_pci_device *pci_device;
-	struct bio_bdev	       *bio_dev;
-	struct bio_dev_info	b_info = { 0 };
-	enum spdk_vmd_led_state current_led_state;
-	int			rc = 0;
-	bool			found = false;
-
-	D_ASSERT(is_init_xstream(xs_ctxt));
-
-	bio_dev = lookup_dev_by_id(dev_uuid);
-	if (bio_dev == NULL) {
-		D_ERROR("Failed to find dev "DF_UUID"\n",
-			DP_UUID(dev_uuid));
-		return -DER_NONEXIST;
-	}
-
-	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
-	if (rc) {
-		D_ERROR("Unable to get traddr for device:%s\n",
-			bio_dev->bb_name);
-		return -DER_INVAL;
-	}
-
-
-	if (spdk_pci_addr_parse(&pci_addr, b_info.bdi_traddr)) {
-		D_ERROR("Unable to parse PCI address: %s\n", b_info.bdi_traddr);
-		D_GOTO(free_traddr, rc = -DER_INVAL);
-	}
-
-	for (pci_device = spdk_pci_get_first_device(); pci_device != NULL;
-	     pci_device = spdk_pci_get_next_device(pci_device)) {
-		if (spdk_pci_addr_compare(&pci_addr, &pci_device->addr) == 0) {
-			found = true;
-			break;
-		}
-	}
-
-	if (found) {
-		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
-			D_DEBUG(DB_MGMT, "%s is not a VMD device\n",
-				b_info.bdi_traddr);
-			D_GOTO(free_traddr, rc = -DER_NOSYS);
-		}
-	} else {
-		D_ERROR("Unable to set led state, VMD device not found\n");
-		D_GOTO(free_traddr, rc = -DER_INVAL);
-	}
-
-	/* First check the current state of the VMD LED */
-	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
-	if (rc) {
-		D_ERROR("Failed to get the VMD LED state\n");
-		D_GOTO(free_traddr, rc = -DER_INVAL);
-	}
-
-	*led_state = current_led_state;
-
-free_traddr:
-	if (b_info.bdi_traddr != NULL)
-		D_FREE(b_info.bdi_traddr);
-
-	return rc;
-}
+//int
+//bio_get_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, int *led_state)
+//{
+//	struct spdk_pci_addr	pci_addr;
+//	struct spdk_pci_device *pci_device;
+//	struct bio_bdev	       *bio_dev;
+//	struct bio_dev_info	b_info = { 0 };
+//	enum spdk_vmd_led_state current_led_state;
+//	int			rc = 0;
+//	bool			found = false;
+//
+//	D_ASSERT(is_init_xstream(xs_ctxt));
+//
+//	bio_dev = lookup_dev_by_id(dev_uuid);
+//	if (bio_dev == NULL) {
+//		D_ERROR("Failed to find dev "DF_UUID"\n",
+//			DP_UUID(dev_uuid));
+//		return -DER_NONEXIST;
+//	}
+//
+//	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
+//	if (rc) {
+//		D_ERROR("Unable to get traddr for device:%s\n",
+//			bio_dev->bb_name);
+//		return -DER_INVAL;
+//	}
+//
+//
+//	if (spdk_pci_addr_parse(&pci_addr, b_info.bdi_traddr)) {
+//		D_ERROR("Unable to parse PCI address: %s\n", b_info.bdi_traddr);
+//		D_GOTO(free_traddr, rc = -DER_INVAL);
+//	}
+//
+//	for (pci_device = spdk_pci_get_first_device(); pci_device != NULL;
+//	     pci_device = spdk_pci_get_next_device(pci_device)) {
+//		if (spdk_pci_addr_compare(&pci_addr, &pci_device->addr) == 0) {
+//			found = true;
+//			break;
+//		}
+//	}
+//
+//	if (found) {
+//		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
+//			D_DEBUG(DB_MGMT, "%s is not a VMD device\n",
+//				b_info.bdi_traddr);
+//			D_GOTO(free_traddr, rc = -DER_NOSYS);
+//		}
+//	} else {
+//		D_ERROR("Unable to set led state, VMD device not found\n");
+//		D_GOTO(free_traddr, rc = -DER_INVAL);
+//	}
+//
+//	/* First check the current state of the VMD LED */
+//	rc = spdk_vmd_get_led_state(pci_device, &current_led_state);
+//	if (rc) {
+//		D_ERROR("Failed to get the VMD LED state\n");
+//		D_GOTO(free_traddr, rc = -DER_INVAL);
+//	}
+//
+//	*led_state = current_led_state;
+//
+//free_traddr:
+//	if (b_info.bdi_traddr != NULL)
+//		D_FREE(b_info.bdi_traddr);
+//
+//	return rc;
+//}
