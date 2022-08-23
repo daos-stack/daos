@@ -77,6 +77,45 @@ static struct daos_rpc_handler obj_handlers_1[] = {
 
 #undef X
 
+static int
+obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *sub_path, char *desc)
+{
+	unsigned int	bucket_max = 256;
+	int		i;
+	int		rc = 0;
+
+	for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
+		char *path;
+
+		if (bucket_max < 1024) /** B */
+			D_ASPRINTF(path, "io/latency/%s%s%uB/tgt_%u",
+				   obj_opc_to_str(opc), sub_path == NULL ? "/" : sub_path,
+				   bucket_max, tgt_id);
+		else if (bucket_max < 1024 * 1024) /** KB */
+			D_ASPRINTF(path, "io/latency/%s%s%uKB/tgt_%u",
+				   obj_opc_to_str(opc), sub_path == NULL ? "/" : sub_path,
+				   bucket_max / 1024, tgt_id);
+		else if (bucket_max <= 1024 * 1024 * 4) /** MB */
+			D_ASPRINTF(path, "io/latency/%s%s%uMB/tgt_%u",
+				   obj_opc_to_str(opc), sub_path == NULL ? "/" : sub_path,
+				   bucket_max / (1024 * 1024), tgt_id);
+		else /** >4MB */
+			D_ASPRINTF(path, "io/latency/%s%s/GT4MB/tgt_%u",
+				   obj_opc_to_str(opc), sub_path == NULL ? "/" : sub_path,
+				   tgt_id);
+
+		rc = d_tm_add_metric(&tm[i], D_TM_STATS_GAUGE, desc, "us", path);
+		if (rc)
+			D_WARN("Failed to create per-I/O size latency "
+			       "sensor: "DF_RC"\n", DP_RC(rc));
+		D_FREE(path);
+
+		bucket_max <<= 1;
+	}
+
+	return rc;
+}
+
 static void *
 obj_tls_init(int xs_id, int tgt_id)
 {
@@ -125,42 +164,24 @@ obj_tls_init(int xs_id, int tgt_id)
 	 * Maintain per-I/O size latency for update & fetch RPCs
 	 * of type gauge
 	 */
-	for (opc = 0; opc < 2; opc++) {
-		int			i;
-		unsigned int		bucket_max = 256;
-		struct d_tm_node_t	**tm[2] = { tls->ot_update_lat,
-						    tls->ot_fetch_lat };
 
-		for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
-			char *path;
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_lat,
+			    NULL, "I/O RPC processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_lat,
+			    NULL, "I/O RPC processing time");
 
-			if (bucket_max < 1024) /** B */
-				D_ASPRINTF(path, "io/latency/%s/%uB/tgt_%u",
-					   opc ? "fetch" : "update", bucket_max,
-					   tgt_id);
-			else if (bucket_max < 1024 * 1024) /** KB */
-				D_ASPRINTF(path, "io/latency/%s/%uKB/tgt_%u",
-					   opc ? "fetch" : "update",
-					   bucket_max / 1024, tgt_id);
-			else if (bucket_max <= 1024 * 1024 * 4) /** MB */
-				D_ASPRINTF(path, "io/latency/%s/%uMB/tgt_%u",
-					   opc ? "fetch" : "update",
-					   bucket_max / (1024 * 1024), tgt_id);
-			else /** >4MB */
-				D_ASPRINTF(path, "io/latency/%s/GT4MB/tgt_%u",
-					   opc ? "fetch" : "update", tgt_id);
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_bulk_lat,
+			    "/bulk_update/", "Bulk processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bulk_lat,
+			    "/bulk_fetch/", "Bulk processing time");
 
-			rc = d_tm_add_metric(&tm[opc][i], D_TM_STATS_GAUGE,
-					     "I/O RPC processing time", "us",
-					     path);
-			if (rc)
-				D_WARN("Failed to create per-I/O size latency "
-				       "sensor: "DF_RC"\n", DP_RC(rc));
-			D_FREE(path);
+	obj_latency_tm_init(DAOS_OBJ_RPC_TGT_UPDATE, tgt_id, tls->ot_tgt_update_lat,
+			    NULL, "I/O tgt processing time");
 
-			bucket_max <<= 1;
-		}
-	}
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_vos_lat,
+			    "/vos_update/", "VOS processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_vos_lat,
+			    "/vos_fetch/", "VOS processing time");
 
 	return tls;
 }

@@ -1174,6 +1174,9 @@ vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh);
+
 /**
  * Helper functions for dedup verify.
  */
