@@ -149,6 +149,7 @@ class DaosCoreBase(TestWithServers):
             "CMOCKA_MESSAGE_OUTPUT": "xml",
             "POOL_SCM_SIZE": str(scm_size),
             "POOL_NVME_SIZE": str(nvme_size),
+            "IBV_FORK_SAFE": "1",
         })
 
         # Assign the test to run

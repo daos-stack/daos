@@ -98,7 +98,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 static void
 log_stderr_pipe(int fd)
 {
-	char	buf[512];
+	char	buf[512] = {0};
 	char	*full_msg = NULL;
 	ssize_t	len = 0;
 
@@ -117,7 +117,7 @@ log_stderr_pipe(int fd)
 		}
 
 		len = len + n;
-		D_REALLOC(tmp, full_msg, old_len, len);
+		D_REALLOC(tmp, full_msg, old_len, len + 1);
 		if (tmp == NULL) {
 			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld\n",
 				len);
@@ -128,7 +128,6 @@ log_stderr_pipe(int fd)
 		strncpy(&full_msg[old_len], buf, n);
 	}
 
-
 	D_DEBUG(DB_TEST, "done reading stderr pipe\n");
 	close(fd);
 
@@ -137,18 +136,63 @@ log_stderr_pipe(int fd)
 		return;
 	}
 
+	full_msg[len] = '\0';
+
 	D_DEBUG(DB_TEST, "stderr: %s\n", full_msg);
 	D_FREE(full_msg);
 }
 
 static int
+cmd2tokens(const char *cmd, char*** tokens, int *tokens_len)
+{
+	char	*tmp_cmd;
+	char	*ch;
+	char	*saveptr = NULL;
+	char	**tmp = NULL;
+	char	**result = NULL;
+	int	result_len = 0;
+	int	rc = 0;
+
+	D_STRNDUP(tmp_cmd, cmd, strnlen(cmd, 1024));
+	if (tmp_cmd == NULL)
+		return -DER_NOMEM;
+
+	ch = strtok_r(tmp_cmd, " ", &saveptr);
+	while (ch != NULL) {
+		result = cmd_push_arg(result, &result_len, ch);
+		if (result == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		ch = strtok_r(NULL, " ", &saveptr);
+	}
+
+	D_ASSERT(result_len > 1);
+
+	/* last item of the array must be NULL for use with exec */
+	D_REALLOC_ARRAY(tmp, result, result_len, result_len + 1);
+	if (tmp == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	result = tmp;
+	result[result_len] = NULL;
+	result_len++;
+
+	*tokens = result;
+	*tokens_len = result_len;
+
+out:
+	D_FREE(tmp_cmd);
+	return rc;
+}
+
+static int
 run_cmd(const char *command, int *outputfd)
 {
-	int rc = 0;
-	int child_rc = 0;
-	int child_pid;
-	int stdoutfd[2];
-	int stderrfd[2];
+	int	rc = 0;
+	int	child_rc = 0;
+	int	child_pid;
+	int	stdoutfd[2];
+	int	stderrfd[2];
+	char	**cmd_tokens = NULL;
+	int	tokens_len = 0;
 
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
 
@@ -156,15 +200,19 @@ run_cmd(const char *command, int *outputfd)
 	if (pipe(stdoutfd) == -1) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to create stdout pipe: %s\n", strerror(errno));
-		return rc;
+		D_GOTO(err, rc);
 	}
 
 	if (pipe(stderrfd) == -1) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to create stderr pipe: %s\n", strerror(errno));
-		close(stdoutfd[0]);
-		close(stdoutfd[1]);
-		return rc;
+		D_GOTO(err_stdout, rc);
+	}
+
+	rc = cmd2tokens(command, &cmd_tokens, &tokens_len);
+	if (rc != 0) {
+		D_ERROR("failed to split command into tokens: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_stderr, rc);
 	}
 
 	D_DEBUG(DB_TEST, "forking to run dmg command\n");
@@ -173,48 +221,71 @@ run_cmd(const char *command, int *outputfd)
 	if (child_pid == -1) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to fork: %s\n", strerror(errno));
-		return rc;
+		D_GOTO(err_tokens, rc);
 	} else if (child_pid == 0) {
+		int exec_err;
+
 		/* child doesn't need the read end of the pipes */
 		close(stdoutfd[0]);
 		close(stderrfd[0]);
 
-		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1)
+		if (dup2(stderrfd[1], STDERR_FILENO) == -1)
 			_exit(errno);
 
-		if (dup2(stderrfd[1], STDERR_FILENO) == -1)
+		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1)
 			_exit(errno);
 
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
 
-		rc = system(command);
-		if (rc == -1)
-			_exit(errno);
-		_exit(rc);
+		rc = execvp(cmd_tokens[0], cmd_tokens);
+
+		/* if we get here, the exec must have failed */
+		exec_err = errno;
+		D_ASSERT(rc == -1);
+		fprintf(stderr, "exec failed: %s\n", strerror(exec_err));
+		_exit(exec_err);
 	}
+
+	D_DEBUG(DB_TEST, "waiting for child process\n");
+	if (waitpid(child_pid, &child_rc, 0) == -1) {
+		rc = daos_errno2der(errno);
+		D_ERROR("wait failed: %s\n", strerror(errno));
+		D_GOTO(err_tokens, rc);
+	}
+	D_DEBUG(DB_TEST, "child process completed\n");
+
+	cmd_free_args(cmd_tokens, tokens_len);
 
 	/* parent doesn't need the write end of the pipes */
 	close(stdoutfd[1]);
 	close(stderrfd[1]);
 
-	D_DEBUG(DB_TEST, "waiting for dmg to finish executing\n");
-	if (wait(&child_rc) == -1) {
-		D_ERROR("wait failed: %s\n", strerror(errno));
-		return daos_errno2der(errno);
-	}
-	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
+	log_stderr_pipe(stderrfd[0]);
 
 	if (child_rc != 0) {
-		D_ERROR("child process failed, rc=%d (%s)\n", child_rc, strerror(child_rc));
+		D_ERROR("child process failed, exit status=%d\n", WEXITSTATUS(child_rc));
+		if (WIFSIGNALED(child_rc))
+			D_ERROR("child signal: %d\n", WTERMSIG(child_rc));
 		close(stdoutfd[0]);
-		log_stderr_pipe(stderrfd[0]);
-		return daos_errno2der(child_rc);
+		return -DER_MISC;
 	}
 
-	close(stderrfd[0]);
+	D_DEBUG(DB_TEST, "child process succeeded\n");
+
 	*outputfd = stdoutfd[0];
 	return 0;
+
+err_tokens:
+	cmd_free_args(cmd_tokens, tokens_len);
+err_stderr:
+	close(stderrfd[0]);
+	close(stderrfd[1]);
+err_stdout:
+	close(stdoutfd[0]);
+	close(stdoutfd[1]);
+err:
+	return rc;
 }
 
 #ifndef HAVE_JSON_TOKENER_GET_PARSE_END
@@ -288,7 +359,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		}
 
 		n = fread(jbuf + total, 1, JSON_CHUNK_SIZE, fp);
-		if (n == 0)
+		if (n == 0 && feof(fp))
 			break;
 
 		total += n;

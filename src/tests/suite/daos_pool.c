@@ -602,6 +602,7 @@ pool_properties(void **state)
 		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(expected_group);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
 	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_MODE_OFF)
@@ -1084,6 +1085,8 @@ expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
 	daos_prop_t	*prop;
 	int		 rc;
 
+	par_barrier(PAR_COMM_WORLD);
+
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
@@ -1107,8 +1110,6 @@ static void
 pool_connect_access(void **state)
 {
 	test_arg_t	*arg0 = *state;
-
-	par_barrier(PAR_COMM_WORLD);
 
 	print_message("pool ACL gives the owner no permissions\n");
 	expect_pool_connect_access(arg0, 0, DAOS_PC_RO, -DER_NO_PERM);
