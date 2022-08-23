@@ -40,7 +40,8 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 	for (int i = 0; i < ncont; i++) {
 		char *name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
-			D_INFO("Skipping container: %s", name);
+			D_DEBUG(DB_ALL, "Skipping container %s because it is the metadata bucket",
+				name);
 			continue;
 		}
 
@@ -50,14 +51,20 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		// Get info
 		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
 		if (rc != 0) {
-			D_INFO("Skipping container: %s", name);
+			D_DEBUG(DB_ALL,
+				"Skipping container %s because it could not be mounted by dfs",
+				name);
 			continue;
 		}
 
 		rc = ds3_bucket_get_info(&buf[bi], ds3b, ev);
 		if (rc != 0) {
-			D_INFO("Skipping container: %s", name);
+			D_DEBUG(DB_ALL, "Skipping container %s because it is not a ds3 bucket",
+				name);
 			rc = ds3_bucket_close(ds3b, ev);
+			if (rc != 0)
+				goto err;
+
 			continue;
 		}
 
@@ -81,6 +88,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		  daos_event_t *ev)
 {
 	int           rc   = 0;
+	int           rc2  = 0;
 	ds3_bucket_t *ds3b = NULL;
 
 	if (ds3 == NULL || name == NULL)
@@ -118,7 +126,8 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 	}
 
 err:
-	ds3_bucket_close(ds3b, ev);
+	rc2 = ds3_bucket_close(ds3b, ev);
+	rc  = rc == 0 ? rc2 : rc;
 	return -rc;
 }
 
@@ -126,6 +135,7 @@ int
 ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 {
 	int            rc      = 0;
+	int            rc2     = 0;
 	ds3_bucket_t  *ds3b    = NULL;
 	uint32_t       nd      = 10;
 	struct dirent *dirents = NULL;
@@ -181,9 +191,11 @@ err_dirents:
 		D_FREE(dirents);
 err_dir_obj:
 	if (dir_obj)
-		dfs_release(dir_obj);
+		rc2 = dfs_release(dir_obj);
+	rc = rc == 0 ? rc2 : rc;
 err_ds3b:
-	ds3_bucket_close(ds3b, ev);
+	rc2 = ds3_bucket_close(ds3b, ev);
+	rc  = rc == 0 ? rc2 : rc;
 	return -rc;
 }
 
@@ -390,19 +402,23 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 					  objs[obji].encoded, &objs[obji].encoded_length);
 			// Skip if file has no dirent
 			if (rc != 0) {
-				D_WARN("No dirent, skipping entry= %s\n", name);
-				dfs_release(entry_obj);
+				D_DEBUG(DB_ALL, "No dirent, skipping entry= %s\n", name);
+				rc = dfs_release(entry_obj);
+				if (rc != 0)
+					goto err_dirents;
 				continue;
 			}
 
 			obji++;
 		} else {
 			// Skip other types
-			D_INFO("Skipping entry = %s\n", name);
+			D_DEBUG(DB_ALL, "Skipping entry = %s\n", name);
 		}
 
 		// Close handles
-		dfs_release(entry_obj);
+		rc = dfs_release(entry_obj);
+		if (rc != 0)
+			goto err_dirents;
 	}
 
 	// Set the number of read objects

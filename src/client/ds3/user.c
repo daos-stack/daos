@@ -9,7 +9,8 @@
 int
 ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev)
 {
-	int         rc;
+	int         rc = 0;
+	int         rc2 = 0;
 	dfs_obj_t  *user_obj;
 	mode_t      mode = DEFFILEMODE;
 	d_sg_list_t wsgl;
@@ -36,7 +37,8 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 	wsgl.sg_nr   = 1;
 	wsgl.sg_iovs = &iov;
 	rc           = dfs_write(ds3->meta_dfs, user_obj, &wsgl, 0, ev);
-	dfs_release(user_obj);
+	rc2 = dfs_release(user_obj);
+	rc = rc == 0 ? rc2 : rc;
 	if (rc != 0) {
 		D_ERROR("Failed to write to user file, name = %s, rc = %d\n", name, rc);
 		goto err_ret;
@@ -59,7 +61,9 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 				info->access_ids[i], rc);
 			goto err;
 		}
-		dfs_release(user_obj);
+		rc = dfs_release(user_obj);
+		if (rc != 0)
+			goto err;
 	}
 
 	// Store email in email index
@@ -71,7 +75,9 @@ ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_even
 			D_ERROR("Failed to create symlink, name = %s, rc = %d\n", info->email, rc);
 			goto err;
 		}
-		dfs_release(user_obj);
+		rc = dfs_release(user_obj);
+		if (rc != 0)
+			goto err;
 	}
 
 err:
@@ -135,7 +141,8 @@ static int
 ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds3_t *ds3,
 	      daos_event_t *ev)
 {
-	int         rc;
+	int         rc = 0;
+	int         rc2 = 0;
 	dfs_obj_t  *user_obj;
 	d_iov_t     iov;
 	d_sg_list_t rsgl;
@@ -162,7 +169,8 @@ ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds
 	}
 
 	// Close file
-	dfs_release(user_obj);
+	rc2 = dfs_release(user_obj);
+	rc = rc == 0 ? rc2 : rc;
 	return -rc;
 }
 

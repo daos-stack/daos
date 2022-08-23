@@ -27,7 +27,8 @@ ends_with(const char *str, const char *suffix)
 int
 ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 {
-	int        rc = 0;
+	int        rc  = 0;
+	int        rc2 = 0;
 	ds3_obj_t *ds3o_tmp;
 	char      *path;
 	dfs_obj_t *parent = NULL;
@@ -72,21 +73,18 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 
 		for (dir = strtok_r(parent_path, "/", &sptr); dir != NULL;
 		     dir = strtok_r(NULL, "/", &sptr)) {
-			// Create directory
-			rc = dfs_mkdir(ds3b->dfs, parent, dir, mode, 0);
+			// Open or Create directory
+			rc = dfs_open(ds3b->dfs, parent, dir, mode | S_IFDIR, O_RDWR | O_CREAT, 0,
+				      0, NULL, dir_obj);
 			if (rc != 0 && rc != EEXIST) {
-				goto err_parent;
-			}
-
-			// Open directory
-			rc = dfs_lookup_rel(ds3b->dfs, parent, dir, O_RDWR, &dir_obj, NULL, NULL);
-			if (rc != 0) {
 				goto err_parent;
 			}
 
 			// Next parent
 			if (parent) {
-				dfs_release(parent);
+				rc = dfs_release(parent);
+				if (rc != 0)
+					goto err_parent;
 			}
 			parent = dir_obj;
 		}
@@ -102,7 +100,8 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 
 err_parent:
 	if (parent)
-		dfs_release(parent);
+		rc2 = dfs_release(parent);
+	rc = rc == 0 ? rc2 : rc;
 	D_FREE(path);
 err_ds3o:
 	if (rc != 0)
@@ -214,7 +213,8 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, d
 int
 ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 {
-	int         rc = 0;
+	int         rc  = 0;
+	int         rc2 = 0;
 	char       *path;
 	dfs_obj_t  *parent = NULL;
 	char       *file_start;
@@ -254,7 +254,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 
 err_parent:
 	if (parent)
-		dfs_release(parent);
+		rc2 = dfs_release(parent);
+	rc = rc == 0 ? rc2 : rc;
 	if (lookup_path)
 		D_FREE(lookup_path);
 err_path:
@@ -281,7 +282,8 @@ ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, 
 int
 ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 {
-	int         rc = 0;
+	int         rc  = 0;
+	int         rc2 = 0;
 	char       *path;
 	dfs_obj_t  *parent = NULL;
 	char       *file_start;
@@ -358,14 +360,15 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 
 	// TODO Update an xattr with a list to all the version ids, ordered by
 	// creation to handle deletion
-	if (rc != 0)
-		dfs_release(link);
+	rc2 = dfs_release(link);
+	rc  = rc == 0 ? rc2 : rc;
 
 err_link_name:
 	D_FREE(link_name);
 err_parent:
 	if (parent)
-		dfs_release(parent);
+		rc2 = dfs_release(parent);
+	rc = rc == 0 ? rc2 : rc;
 	if (lookup_path)
 		D_FREE(lookup_path);
 err_path:
