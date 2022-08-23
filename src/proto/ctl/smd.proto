@@ -77,11 +77,13 @@ message SmdDevReq {
 
 message SmdDevResp {
 	message Device {
+		reserved 3;
+		reserved "state";
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 3; // Transport address of blobstore
-		string dev_state = 4; // NVMe device state
-		string led_state = 5; // VMD LED state
+		string tr_addr = 4; // Transport address of blobstore
+		string dev_state = 5; // NVMe device state
+		string led_state = 6; // VMD LED state
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -105,10 +107,11 @@ message DevStateReq {
 }
 
 message DevStateResp {
+	reserved 3;
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	string dev_state = 3; // NVMe device state
-	string led_state = 4; // VMD LED state
+	string dev_state = 4; // NVMe device state
+	string led_state = 5; // VMD LED state
 }
 
 message DevReplaceReq {
@@ -118,10 +121,11 @@ message DevReplaceReq {
 }
 
 message DevReplaceResp {
+	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 3; // NVMe device state
-	string led_state = 4; // VMD LED state
+	string dev_state = 4; // NVMe device state
+	string led_state = 5; // VMD LED state
 }
 
 message DevIdentifyReq {
@@ -129,10 +133,11 @@ message DevIdentifyReq {
 }
 
 message DevIdentifyResp {
+	reserved 3;
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of VMD uuid
-	string led_state = 3; // VMD LED state
 	string dev_state = 4; // NVMe device state
+	string led_state = 5; // VMD LED state
 }
 
 message DevResetLEDReq {
@@ -177,12 +182,14 @@ message SmdQueryReq {
 
 message SmdQueryResp {
 	message Device {
+		reserved 3;
+		reserved "state";
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 3; // Transport address of blobstore
-		BioHealthResp health = 4; // optional BIO health
-		string dev_state = 5; // NVMe device state
-		string led_state = 6; // VMD LED state
+		string tr_addr = 4; // Transport address of blobstore
+		BioHealthResp health = 5; // optional BIO health
+		string dev_state = 6; // NVMe device state
+		string led_state = 7; // VMD LED state
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
