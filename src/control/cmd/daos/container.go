@@ -720,13 +720,15 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%#x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-			{"Latest open time": fmt.Sprintf("%#x", *ci.OpenTime)},
-			{"Latest close/modify time": fmt.Sprintf("%#x", *ci.CloseModifyTime)},
+			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
+			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 		}...)
 
+		if *ci.LatestSnapshot != 0 {
+			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", *ci.LatestSnapshot, daos.HLC(*ci.LatestSnapshot))})
+		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}

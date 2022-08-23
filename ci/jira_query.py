@@ -89,10 +89,13 @@ def main():
     parts = ticket_number.split('-', maxsplit=1)
     if parts[0] not in VALID_TICKET_PREFIX:
         errors.append('Ticket number prefix incorrect')
+    link = 'https://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Comments'
     try:
         int(parts[1])
     except ValueError:
-        errors.append('Ticket number suffix is not a number')
+        errors.append(f'Ticket number suffix is not a number. See {link}')
+    except IndexError:
+        errors.append(f'PR title is malformatted. See {link}')
 
     try:
         ticket = server.issue(ticket_number, fields=FIELDS)

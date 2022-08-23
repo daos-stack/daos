@@ -1,18 +1,15 @@
 # DAOS Set-Up on OpenSUSE
 
-
-
-## Introduction
-
-
 The purpose of this guide is to provide a user with a set of command lines to quickly setup and use DAOS with POSIX on openSUSE/SLES 15.3.
 
 This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
 
 This guide will also describe how to use dfuse in order to take advantage of DAOS support for POSIX.
+
 For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md) section.
-For more details reference the DAOS administration guide:
-<https://docs.daos.io/v2.2/admin/hardware/>
+
+For more details, including the prerequisite steps before installing DAOS,
+reference the [DAOS administration guide](../admin/hardware/).
 
 ## Requirements
 
@@ -35,8 +32,8 @@ admin and client node.  All nodes must have:
 -   pdsh installed (or some other means of running multiple remote
     commands in parallel)
 
-In addition the server nodes should also have IOMMU enabled:
-<https://docs.daos.io/v2.2/admin/predeployment_check/#enable-iommu-optional>
+In addition the server nodes should also have
+[IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -80,35 +77,27 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1.  Configure access to the DAOS package repository at
-    <https://packages.daos.io/v2.0>.
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
 
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
 
-		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.0/Leap15/packages/x86_64/ daos_packages'
-
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
 
 2. Import GPG key on all nodes:
 
 		pdsh -w $ALL_NODES 'sudo rpm --import https://packages.daos.io/RPM-GPG-KEY'
 
-7.  Perform the additional steps:
+3.  Perform the additional steps:
 
 		pdsh -w $ALL_NODES 'sudo zypper --non-interactive refresh'
 
-
-
-12. Install the DAOS server RPMs on the server nodes:
-
+3. Install the DAOS server RPMs on the server nodes:
 
 		pdsh -w $SERVER_NODES 'sudo zypper install -y daos-server'
 
-
-
-17. Install the DAOS client RPMs on the client and admin nodes:
-
+4. Install the DAOS client RPMs on the client and admin nodes:
 
 		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo zypper install -y daos-client'
-
 
 
 ## Hardware Provisioning
@@ -122,17 +111,17 @@ SSDs will be prepared and configured to be used by DAOS.
 !!! note
 	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from https://build.opensuse.org/package/binaries/hardware:nvdimm/ipmctl/openSUSE_Leap_15.3
 
-1.     Prepare the pmem devices on Server nodes:
+1.  Prepare the pmem devices on Server nodes:
 
-		daos_server storage prepare --scm-only
+		daos_server scm prepare
 
 	Sample Script:
 
-		Preparing locally-attached SCM\...
+		Prepare locally-attached PMem\...
 
-		Memory allocation goals for SCM will be changed and namespaces
-		modified, this will be a destructive operation. Please ensure
-		namespaces are unmounted and locally attached SCM & NVMe devices are
+		Memory allocation goals for PMem will be changed and namespaces
+		modified, this may be a destructive operation. Please ensure
+		namespaces are unmounted and locally attached PMem modules are
 		not in use. Please be patient as it may take several minutes and
 		subsequent reboot maybe required.
 
@@ -140,32 +129,32 @@ SSDs will be prepared and configured to be used by DAOS.
 
 		yes
 
-		A reboot is required to process new SCM memory allocation goals.
+		A reboot is required to process new PMem memory allocation goals.
 
-8.  Reboot the server node.
+2.  Reboot the server node.
 
-9.  Run the prepare cmdline again:
+3.  Run the prepare cmdline again:
 
-		daos_server storage prepare --scm-only
+		daos_server scm prepare
 
 	Sample Script:
 
-		Preparing locally-attached SCM\...
+		Prepare locally-attached PMem\...
 		SCM namespaces:
 		SCM Namespace	Socket ID	Capacity
 		-------------	---------	--------
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-17. Prepare the NVME devices on Server nodes:
+4. Prepare the NVME devices on Server nodes:
 
-		daos_server storage prepare --nvme-only -u root
+		daos_server nvme prepare -u root
 		Preparing locally-attached NVMe storage\...
 
-19. Scan the available storage on the Server nodes:
+5. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
-		Scanning locally-attached storage...
+		Scanning locally-attached storage\...
 
 		NVMe PCI		Model				FW Revision	Socket ID	Capacity
 		--------		-----				-----------	---------	--------
@@ -211,9 +200,8 @@ Server nodes require the following certificate files:
 -   A copy of the Client certificate (client.crt) owned by the
     daos_server user
 
-See
-<https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration>
-for more informaation.
+See [Certificate Configuration](../admin/deployment/#certificate-configuration)
+for more information.
 
 !!! note
 	The following commands are run from the `$ADMIN_NODE`.
@@ -285,9 +273,8 @@ for more informaation.
 
 ## Create Configuration Files
 
-In this section the `daos_server`, `daos_agent`, and dmg command
-configuration files will be defined. Examples are available at
-<https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples>
+In this section the `daos_server`, `daos_agent`, and dmg command configuration files will be defined.
+Examples are available on [github](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
 1.  Determine the addresses for the NVMe devices on the server
     nodes:
@@ -351,9 +338,11 @@ configuration files will be defined. Examples are available at
 			bdev_class: nvme
 			bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
 
-1. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
+3. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
-1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. 
+4. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.
+   The following is an example daos_agent.yml.
+   Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`.
 
 		name: daos_server
 		access_points: ['node-4']
@@ -367,7 +356,8 @@ configuration files will be defined. Examples are available at
 			key: /etc/daos/certs/agent.key
 		log_file: /tmp/daos_agent.log
 
-1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. 
+5. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node.
+   The following is an example of the `daos_control.yml`.
 
 		name: daos_server
 		port: 10001
@@ -379,7 +369,7 @@ configuration files will be defined. Examples are available at
 			cert: /etc/daos/certs/admin.crt
 			key: /etc/daos/certs/admin.key
 
-1. Create socket directories
+6. Create socket directories
 
 		mkdir /var/run/daos_server
 		mkdir /var/run/daos_agent
@@ -391,7 +381,7 @@ configuration files will be defined. Examples are available at
 		pdsh -S -w $SERVER_NODES "sudo systemctl daemon-reload"
 		pdsh -S -w $SERVER_NODES "sudo systemctl start daos_server"
 
-1. Check status and format storage:
+2. Check status and format storage:
 
 		# check status
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
@@ -402,7 +392,7 @@ configuration files will be defined. Examples are available at
 		# format storage
 		dmg storage format -l $SERVER_NODES --force
 
-1. Verify that all servers have started:
+3. Verify that all servers have started:
 
 		# system query from ADMIN_NODE
 		dmg system query -v
@@ -423,7 +413,7 @@ configuration files will be defined. Examples are available at
 		pdsh -S -w $CLIENT_NODES "sudo systemctl start daos_agent"
 
 
-1. (Optional) Check daos_agent status:
+2. (Optional) Check daos_agent status:
 
 		# check status
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
@@ -431,6 +421,4 @@ configuration files will be defined. Examples are available at
 		# Sample output depending on number of client nodes
 		node-2: agent INFO 2021/05/05 22:38:46 DAOS Agent v1.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
 		node-3: agent INFO 2021/05/05 22:38:53 DAOS Agent v1.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
-
-
 
