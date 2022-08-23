@@ -388,15 +388,15 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             Successfully created container (.*)
 
         Args:
-            output (str): The string to parse for the uuid.
+            output (str): The string to parse for the uuid or label
 
         Returns:
-            str: The parsed uuid.
+            str: The parsed uuid or label
 
         """
         label_search = re.search(r"Successfully created container (.*)", output)
         if not label_search:
-            self.fail("Failed to parse container uuid")
+            self.fail("Failed to parse container label")
         return label_search.group(1).strip()
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
