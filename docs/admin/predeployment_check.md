@@ -87,18 +87,31 @@ The DAOS Agent (running on the client nodes) is responsible for resolving a user
 UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
-## Multi-rail/NIC Setup
+## HPC Fabric setup
+
+DAOS depends on the HPC fabric software stack and drivers. Depending on the type of HPC fabric
+that is used, a supported version of the fabric stack needs to be installed.
+
+Note that for InfiniBand fabrics, DAOS is only supported with the MLNX\_OFED stack that is
+provided by NVIDIA, not with the distros' inbox drivers.
+Before installing DAOS, a supported version of MOFED needs to be installed on the DAOS servers
+and DAOS clients. If the control plane communication is set up over the InfiniBand fabric using
+IPoIB, then any dedicated DAOS admin nodes should also be installed with the same MOFED stack.
+This is typically done using the `mlnxofedinstall` command that is included with the MOFED
+distribution.
+
+### Multi-rail/NIC Setup
 
 Storage nodes can be configured with multiple network interfaces to run
 multiple engine instances.
 
-### Subnet
+#### Subnet
 
 Since all engines need to be able to communicate, the different network
 interfaces must be on the same subnet or you must configuring routing
 across the different subnets.
 
-### Interface Settings
+#### Interface Settings
 
 Some special configuration is required for the `verbs` provider to use librdmacm
 with multiple interfaces, and the same configuration is required for the `tcp` provider.

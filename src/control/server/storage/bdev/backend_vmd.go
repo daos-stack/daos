@@ -173,7 +173,7 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
 	if vmdCount == 0 {
 		// sometimes the output may not include "0000:" prefix
-		// usually when muliple devices are in PCI_ALLOWED
+		// usually when multiple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
 	} else {
 		prefixIncluded = true
