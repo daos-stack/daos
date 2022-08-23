@@ -204,7 +204,7 @@ func (cr *cmdRunner) showRegions(sockID int) (string, error) {
 
 	cmd := cmdShowRegions
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	out, err := cr.runCmd(cmd)
@@ -225,7 +225,7 @@ func (cr *cmdRunner) createRegions(sockID int) error {
 
 	cmd := cmdCreateRegions
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	out, err := cr.runCmd(cmd)
@@ -246,7 +246,7 @@ func (cr *cmdRunner) removeRegions(sockID int) error {
 
 	cmd := cmdRemoveRegions
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	out, err := cr.runCmd(cmd)
@@ -267,7 +267,7 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 
 	cmd := cmdDeleteGoals
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	if _, err := cr.runCmd(cmd); err != nil {

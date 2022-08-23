@@ -587,7 +587,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expErr: errors.New("parse show region cmd"),
 			expCalls: []string{
-				cmdShowIpmctlVersion, cmdShowRegions + " --socket 1",
+				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
 			},
 		},
 		"get pmem state fails": {
