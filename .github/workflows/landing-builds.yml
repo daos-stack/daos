@@ -377,7 +377,6 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
-                            --tag build-image
       - name: Run NLT
         if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
