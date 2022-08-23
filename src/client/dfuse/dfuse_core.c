@@ -999,11 +999,10 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
 }
 
 int
-dfuse_fs_init(struct dfuse_info *dfuse_info,
-	      struct dfuse_projection_info **_fsh)
+dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh)
 {
-	struct dfuse_projection_info	*fs_handle;
-	int				rc;
+	struct dfuse_projection_info *fs_handle;
+	int                           rc;
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
@@ -1013,15 +1012,14 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	fs_handle->dpi_info = dfuse_info;
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &pool_hops,
-					 &fs_handle->dpi_pool_table);
+	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, fs_handle,
+					 &pool_hops, &fs_handle->dpi_pool_table);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL |
 					     D_HASH_FT_EPHEMERAL_RO_DEC,
-					 5, fs_handle, &ie_hops, &fs_handle->dpi_iet);
+					 8, fs_handle, &ie_hops, &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err_pt, rc);
 
@@ -1036,7 +1034,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	fs_handle->dpi_shutdown = false;
-	*_fsh = fs_handle;
+	*_fsh                   = fs_handle;
 	return rc;
 
 err_eq:
