@@ -8,7 +8,6 @@ package common
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
@@ -23,7 +22,7 @@ func addProcEntry(t *testing.T, root string, pid int, name string) {
 	if err := os.MkdirAll(root+"/"+strconv.Itoa(pid), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(root+"/"+strconv.Itoa(pid)+"/status", []byte("Name: "+name), 0644); err != nil {
+	if err := os.WriteFile(root+"/"+strconv.Itoa(pid)+"/stat", []byte(fmt.Sprintf("%d (%s) D 42 \n", pid, name)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(name, root+"/"+strconv.Itoa(pid)+"/exe"); err != nil {
@@ -70,6 +69,7 @@ func Test_Common_checkDupeProcess(t *testing.T) {
 func Test_Common_getProcPids(t *testing.T) {
 	procRoot := makeProcTree(t, 5)
 	addProcEntry(t, procRoot, 5, "test-1")
+	addProcEntry(t, procRoot, 6, "very-long-name-that-is-longer-than-15")
 
 	for name, tc := range map[string]struct {
 		procName string
@@ -81,24 +81,36 @@ func Test_Common_getProcPids(t *testing.T) {
 		"dupe process name": {
 			procName: "test-1",
 			expPids:  []int{1, 5},
-			expErr:   nil,
 		},
 		"unique process name": {
 			procName: "test-2",
 			expPids:  []int{2},
-			expErr:   nil,
+		},
+		"long process name": {
+			procName: "very-long-name-that-is-longer-than-15",
+			expPids:  []int{6},
+		},
+		"unreadable stat file": {
+			setup: func(t *testing.T) {
+				addProcEntry(t, procRoot, 7, "missing")
+				os.Chmod(procRoot+"/7/stat", 0000)
+			},
+			cleanup: func(t *testing.T) {
+				os.RemoveAll(procRoot + "/7")
+			},
+			expErr: errors.New("process file"),
 		},
 		"bad status file": {
-			procName: "bad-status",
-			expErr:   errors.New("status file"),
+			procName: "bad-stat",
+			expErr:   errors.New("stat file"),
 			setup: func(t *testing.T) {
-				addProcEntry(t, procRoot, 6, "bad-status")
-				if err := os.Truncate(procRoot+"/6/status", 0); err != nil {
+				addProcEntry(t, procRoot, 7, "bad-stat")
+				if err := os.Truncate(procRoot+"/7/stat", 0); err != nil {
 					t.Fatal(err)
 				}
 			},
 			cleanup: func(t *testing.T) {
-				os.RemoveAll(procRoot + "/6")
+				os.RemoveAll(procRoot + "/7")
 			},
 		},
 	} {
