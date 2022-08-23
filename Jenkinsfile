@@ -541,15 +541,19 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg PREFIX=/opt/daos' +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
+                        sconsBuild parallel_build: true,
+                                   build_deps: false,
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_args: sconsFaultsArgs()
                     }
