@@ -295,13 +295,14 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	int            rc = 0;
 	char          *file_start;
 	const char    *path        = "";
-	const char    *prefix_rest = prefix;
+	char          *prefix_copy = NULL;
+	const char    *prefix_rest;
 	dfs_obj_t     *dir_obj;
 	char          *lookup_path;
 	struct dirent *dirents;
 	daos_anchor_t  anchor;
-	uint32_t       cpi  = 0;
-	uint32_t       obji = 0;
+	uint32_t       cpi;
+	uint32_t       obji;
 	uint32_t       i;
 	const char    *name;
 	dfs_obj_t     *entry_obj;
@@ -309,6 +310,8 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	char          *cpp;
 
 	if (ds3b == NULL || nobj == NULL)
+		return -EINVAL;
+	if (prefix != NULL && strnlen(prefix, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
 	// End
@@ -320,16 +323,26 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		return -EINVAL;
 	}
 
-	file_start = strrchr(prefix, delim[0]);
+	if (prefix != NULL) {
+		D_STRNDUP(prefix_copy, prefix, DS3_MAX_KEY - 1);
+		if (prefix_copy == NULL) {
+			return -ENOMEM;
+		}
+	}
+
+	file_start  = strrchr(prefix_copy, delim[0]);
+	prefix_rest = prefix_copy;
 	if (file_start != NULL) {
 		*file_start = '\0';
-		path        = prefix;
+		path        = prefix_copy;
 		prefix_rest = file_start + 1;
 	}
 
 	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
-	if (lookup_path == NULL)
-		return -ENOMEM;
+	if (lookup_path == NULL) {
+		rc = -ENOMEM;
+		goto err_prefix;
+	}
 
 	strcpy(lookup_path, "/");
 	strcat(lookup_path, path);
@@ -358,6 +371,10 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		*is_truncated = !daos_anchor_is_eof(&anchor);
 	}
 
+	// Go through the returned objects, if it is a regular file, add to objs. If it's a
+	// directory add to cps. Otherwise ignore.
+	cpi  = 0;
+	obji = 0;
 	for (i = 0; i < *nobj; i++) {
 		name = dirents[i].d_name;
 
@@ -367,6 +384,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 			continue;
 		}
 
+		// Open the file and check mode
 		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
 				    &mode, NULL);
 		if (rc != 0) {
@@ -431,5 +449,8 @@ err_dir_obj:
 	dfs_release(dir_obj);
 err_path:
 	D_FREE(lookup_path);
+err_prefix:
+	if (prefix_copy != NULL)
+		D_FREE(prefix_copy);
 	return -rc;
 }

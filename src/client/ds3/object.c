@@ -40,7 +40,9 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	char      *sptr = NULL;
 	char      *dir;
 
-	if (ds3b == NULL || key == NULL || ds3o == NULL)
+	if (ds3b == NULL || ds3o == NULL)
+		return -EINVAL;
+	if (key == NULL || strnlen(key, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
 	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
@@ -75,7 +77,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		     dir = strtok_r(NULL, "/", &sptr)) {
 			// Open or Create directory
 			rc = dfs_open(ds3b->dfs, parent, dir, mode | S_IFDIR, O_RDWR | O_CREAT, 0,
-				      0, NULL, dir_obj);
+				      0, NULL, &dir_obj);
 			if (rc != 0 && rc != EEXIST) {
 				goto err_parent;
 			}
@@ -93,8 +95,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	// Finally create the file
 	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG, O_RDWR | O_CREAT | O_TRUNC, 0,
 		      0, NULL, &ds3o_tmp->dfs_obj);
-	if (rc == 0 || rc == EEXIST) {
-		rc    = 0;
+	if (rc == 0) {
 		*ds3o = ds3o_tmp;
 	}
 
@@ -117,7 +118,9 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	char      *path;
 	size_t     suffix_location;
 
-	if (ds3b == NULL || key == NULL || ds3o == NULL)
+	if (ds3b == NULL || ds3o == NULL)
+		return -EINVAL;
+	if (key == NULL || strnlen(key, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
 	D_ALLOC_PTR(ds3o_tmp);
@@ -222,6 +225,11 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 	const char *parent_path = NULL;
 	char       *lookup_path = NULL;
 
+	if (ds3b == NULL)
+		return -EINVAL;
+	if (key == NULL || strnlen(key, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
+		return -EINVAL;
+
 	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
 	if (path == NULL) {
 		return -ENOMEM;
@@ -294,7 +302,9 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	char       *suffix_start;
 	dfs_obj_t  *link;
 
-	if (ds3b == NULL || key == NULL)
+	if (ds3b == NULL)
+		return -EINVAL;
+	if (key == NULL || strnlen(key, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
 	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
@@ -355,8 +365,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		goto err_link_name;
 
 	// Create the link
-	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK,
-		      O_RDWR | O_CREAT | O_TRUNC, 0, 0, file_name, &link);
+	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK, O_RDWR | O_CREAT, 0, 0,
+		      file_name, &link);
 
 	// TODO Update an xattr with a list to all the version ids, ordered by
 	// creation to handle deletion
