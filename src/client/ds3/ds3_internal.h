@@ -37,7 +37,7 @@ enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
 /** DAOS S3 Pool handle */
 struct ds3 {
 	/** Pool name */
-	char       pool[128];
+	char       pool[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	/** Pool handle */
 	daos_handle_t    poh;
 	/** Pool information */

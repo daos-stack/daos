@@ -23,7 +23,7 @@ extern "C" {
 #include <daos_fs.h>
 
 /** Maximum bucket name length */
-#define DS3_MAX_BUCKET_NAME DAOS_PROP_LABEL_MAX_LEN + 1
+#define DS3_MAX_BUCKET_NAME DAOS_PROP_MAX_LABEL_BUF_LEN
 
 /** Maximum key length */
 #define DS3_MAX_KEY         DFS_MAX_PATH
