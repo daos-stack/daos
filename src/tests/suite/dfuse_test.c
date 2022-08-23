@@ -345,7 +345,14 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
-	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(now, stbuf.st_mtim));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", now.tv_sec, now.tv_nsec);
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+	}
+
 	/* Write to the file and verify mtime is newer */
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);

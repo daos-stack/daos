@@ -90,7 +90,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
         cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream']
 
         # Metadata tests don't work with caching enabled, see DAOS-11204
-        if intercept or cache_mode == 'nocache':
+        if intercept or cache_mode in ('nocache', 'native'):
             cmd.append('--metadata')
 
         if intercept:
