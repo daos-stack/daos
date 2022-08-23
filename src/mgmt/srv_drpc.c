@@ -2539,7 +2539,7 @@ ds_mgmt_drpc_dev_reset_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Unpack the inner request from the drpc call body */
 	req = ctl__dev_reset_ledreq__unpack(&alloc.alloc,
-					     drpc_req->body.len,
+					    drpc_req->body.len,
 					     drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
@@ -2623,7 +2623,7 @@ ds_mgmt_drpc_dev_get_led_state(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Unpack the inner request from the drpc call body */
 	req = ctl__dev_get_ledstate_req__unpack(&alloc.alloc,
-						 drpc_req->body.len,
+						drpc_req->body.len,
 						 drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
