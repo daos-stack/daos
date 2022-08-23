@@ -4025,8 +4025,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 	switch (opc) {
 	case CONT_CREATE:
-		D_DEBUG(DB_MD, DF_CONT": opc=%d (CONT_CREATE)\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc);
 		rc = cont_create(&tx, pool_hdl, svc, rpc);
 		if (likely(rc == 0)) {
 			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
@@ -4034,8 +4032,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		}
 		break;
 	case CONT_OPEN_BYLABEL:
-		D_DEBUG(DB_MD, DF_CONT": opc=%d (CONT_OPEN_BYLABEL)\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc);
 		olbl_in = crt_req_get(rpc);
 		olbl_out = crt_reply_get(rpc);
 		rc = cont_lookup_bylabel(&tx, svc, olbl_in->coli_label, &cont);
@@ -4048,8 +4044,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 				false : true;
 		break;
 	case CONT_DESTROY_BYLABEL:
-		D_DEBUG(DB_MD, DF_CONT": opc=%d (CONT_DESTROY_BYLABEL)\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc);
 		dlbl_in = crt_req_get(rpc);
 		rc = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
 		if (rc != 0)
@@ -4058,15 +4052,11 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 		break;
 	case CONT_OPEN:
-		D_DEBUG(DB_MD, DF_CONT": opc=%d (CONT_OPEN)\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc);
 		o_in = crt_req_get(rpc);
 		update_otime = ((o_in->coi_flags & FLAG_RO_MDSTATS) == FLAG_RO_MDSTATS) ?
 				false : true;
 		/* pass through */
 	default:
-		D_DEBUG(DB_MD, DF_CONT": opc=%d\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), opc);
 		rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
 		if (rc != 0)
 			goto out_lock;
@@ -4106,6 +4096,33 @@ out:
 	return rc;
 }
 
+static char *
+cont_cli_opc_name(crt_opcode_t opc)
+{
+	switch (opc) {
+	case CONT_CREATE:		return "CREATE";
+	case CONT_DESTROY:		return "DESTROY";
+	case CONT_OPEN:			return "OPEN";
+	case CONT_CLOSE:		return "CLOSE";
+	case CONT_QUERY:		return "QUERY";
+	case CONT_OID_ALLOC:		return "OID_ALLOC";
+	case CONT_ATTR_LIST:		return "ATTR_LIST";
+	case CONT_ATTR_GET:		return "ATTR_GET";
+	case CONT_ATTR_SET:		return "ATTR_SET";
+	case CONT_ATTR_DEL:		return "ATTR_DEL";
+	case CONT_EPOCH_AGGREGATE:	return "EPOCH_AGGREGATE";
+	case CONT_SNAP_LIST:		return "SNAP_LIST";
+	case CONT_SNAP_CREATE:		return "SNAP_CREATE";
+	case CONT_SNAP_DESTROY:		return "SNAP_DESTROY";
+	case CONT_PROP_SET:		return "PROP_SET";
+	case CONT_ACL_UPDATE:		return "ACL_UPDATE";
+	case CONT_ACL_DELETE:		return "ACL_DELETE";
+	case CONT_OPEN_BYLABEL:		return "OPEN_BYLABEL";
+	case CONT_DESTROY_BYLABEL:	return "DESTROY_BYLABEL";
+	default:			return "?";
+	}
+}
+
 /* Look up the pool handle and the matching container service. */
 static void
 ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
@@ -4122,8 +4139,9 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u(%s)\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc,
+		cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those
@@ -4133,9 +4151,9 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": rpc: %p hdl=" DF_UUID " opc=%u find leader\n",
+		D_ERROR(DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
-			opc);
+			opc, cont_cli_opc_name(opc));
 		D_GOTO(out_pool_hdl, rc);
 	}
 
@@ -4148,18 +4166,19 @@ out_pool_hdl:
 		struct cont_open_bylabel_in	*lin = crt_req_get(rpc);
 		struct cont_open_bylabel_out	*lout = crt_reply_get(rpc);
 
-		D_DEBUG(DB_MD, DF_CONT ":%s: replying rpc: %p hdl=" DF_UUID " opc=%u " DF_RC "\n",
+		D_DEBUG(DB_MD, DF_CONT":%s: replying rpc: %p hdl=" DF_UUID " opc=%u(%s) "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, lout->colo_uuid), lin->coli_label, rpc,
-			DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+			DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc), DP_RC(rc));
 	} else if (opc == CONT_DESTROY_BYLABEL) {
 		struct cont_destroy_bylabel_in	*lin = crt_req_get(rpc);
 
-		D_DEBUG(DB_MD, DF_UUID ":%s: replying rpc: %p opc=%u, " DF_RC "\n",
-			DP_UUID(pool_hdl->sph_pool->sp_uuid), lin->cdli_label, rpc, opc, DP_RC(rc));
+		D_DEBUG(DB_MD, DF_UUID":%s: replying rpc: %p opc=%u(%s), "DF_RC"\n",
+			DP_UUID(pool_hdl->sph_pool->sp_uuid), lin->cdli_label, rpc, opc,
+			cont_cli_opc_name(opc), DP_RC(rc));
 	} else {
-		D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p hdl=" DF_UUID " opc=%u " DF_RC "\n",
+		D_DEBUG(DB_MD, DF_CONT": replying rpc: %p hdl=" DF_UUID " opc=%u(%s) "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
-			opc, DP_RC(rc));
+			opc, cont_cli_opc_name(opc), DP_RC(rc));
 	}
 	ds_pool_hdl_put(pool_hdl);
 out:

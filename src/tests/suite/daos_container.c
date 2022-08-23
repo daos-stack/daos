@@ -333,6 +333,7 @@ co_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
 	/** setting the label on entries with no type should fail */
 	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
 	assert_rc_equal(rc, -DER_NONEXIST);
@@ -1954,6 +1955,7 @@ co_owner_implicit_access(void **state)
 
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
+	assert_non_null(tmp_prop);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
@@ -2227,6 +2229,7 @@ co_rf_simple(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 
@@ -2591,6 +2594,7 @@ co_redun_lvl(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -2604,6 +2608,7 @@ co_redun_lvl(void **state)
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
 		prop_out = daos_prop_alloc(2);
+		assert_non_null(prop_out);
 		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 		prop_out->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 
@@ -2888,7 +2893,7 @@ co_mdtimes(void **state)
 	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_otime);
+	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_mtime);
 
 	print_message("create container snapshot, query and verify updated mtime\n");
 	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);

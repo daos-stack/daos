@@ -79,11 +79,6 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  *   usage shall be described above in this comment following existing
  *   examples. If the value is another KVS, its type shall be the KVS name.
  */
-struct co_md_times {
-	uint64_t	otime;	/* container open time */
-	uint64_t	mtime;	/* container metadata modify time */
-};
-
 extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
 extern d_iov_t ds_cont_prop_alloced_oid;	/* uint64_t */
 extern d_iov_t ds_cont_prop_label;		/* string */
@@ -114,8 +109,12 @@ extern d_iov_t ds_cont_prop_rp_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32_t */
 extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
-
 /* Please read the IMPORTANT notes above before adding new keys. */
+
+struct co_md_times {
+	uint64_t	otime;	/* container open time */
+	uint64_t	mtime;	/* container metadata modify time */
+};
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
