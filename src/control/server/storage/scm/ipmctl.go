@@ -398,6 +398,9 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 		return nil, errors.Wrap(err, "getPMemState")
 	}
 	resp.Socket = *sockState
+	if resp.Socket.SocketID == nil {
+		resp.Socket.SocketID = req.SocketID
+	}
 
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
 
