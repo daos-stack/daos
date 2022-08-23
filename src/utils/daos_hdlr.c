@@ -1937,14 +1937,16 @@ dm_connect(struct cmd_args_s *ap,
 			}
 		}
 
-		/* try to open container if this is a filesystem copy, and if it fails try to create
-		 * a destination, then attempt to open again
+		/* try to open container if this is a filesystem copy, and if it fails try to
+		 * create a destination, then attempt to open again
 		 */
 		if (dst_cont_passed) {
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
-			if (rc != 0 && rc != -DER_NONEXIST)
+			if (rc != 0 && rc != -DER_NONEXIST) {
+				DH_PERROR_DER(ap, rc, "failed to open destination container");
 				D_GOTO(err, rc);
+			}
 		} else {
 			rc = -DER_NONEXIST;
 		}
@@ -1955,6 +1957,13 @@ dm_connect(struct cmd_args_s *ap,
 			if (dst_cont_passed) {
 				rc = uuid_parse(ca->dst_cont, cuuid);
 				dst_cont_is_uuid = (rc == 0);
+				if (dst_cont_is_uuid) {
+					/* Cannot create a container with a user-supplied UUID */
+					rc = -DER_NONEXIST;
+					DH_PERROR_DER(ap, rc,
+						      "failed to open destination container");
+					D_GOTO(err, rc);
+				}
 			}
 
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
