@@ -393,7 +393,7 @@ d_hash_table_ops_t cont_hops = {
  *
  * Daos accepts labels and uuids via the same function so simply call that, connect to a pool
  * and setup a descriptor, then enter into the hash table and verify that it's unique.  If there
- * is likely already a connection for this pool then use dfuse_pool_connect_by_uuid() instead
+ * is likely already a connection for this pool then use dfuse_pool_get_handle() instead
  * which will do a hash-table lookup in advance.
  *
  * Return code is a system errno.
@@ -403,7 +403,6 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 		   struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool *dfp;
-	daos_pool_info_t   p_info = {};
 	d_list_t          *rlink;
 	int                rc;
 	int                ret;
@@ -416,7 +415,12 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
+	/* Handle the case where no identifier is supplied, this is for when dfuse
+	 * is started without any pool on the command line.
+	 */
 	if (label[0]) {
+		daos_pool_info_t p_info = {};
+
 		rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO,
 				       &dfp->dfp_poh, &p_info, NULL);
 		if (rc) {
@@ -462,17 +466,9 @@ err:
 	return rc;
 }
 
-/* Return a pool connection by uuid.
- *
- * Re-use an existing connection if possible, otherwise open new connection.
- *
- * If successsfull with pass out a pool pointer, with one reference held.
- *
- * Return code is a system errno.
- */
 int
-dfuse_pool_connect_by_uuid(struct dfuse_projection_info *fs_handle, uuid_t pool,
-			   struct dfuse_pool **_dfp)
+dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
+		      struct dfuse_pool **_dfp)
 {
 	d_list_t *rlink;
 	char      uuid_str[37];

@@ -172,7 +172,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	 * otherwise allocate a new one.
 	 */
 
-	rc = dfuse_pool_connect_by_uuid(fs_handle, dattr.da_puuid, &dfp);
+	rc = dfuse_pool_get_handle(fs_handle, dattr.da_puuid, &dfp);
 	if (rc != 0)
 		D_GOTO(out_err, rc);
 

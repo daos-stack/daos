@@ -1099,7 +1099,7 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False):
+    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
         """Start a dfuse instance"""
 
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1154,11 +1154,19 @@ class DFuse():
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
 
-        if self.pool:
+        if use_oopt:
+            if self.pool:
+                if self.container:
+                    cmd.extend(['-o', f'pool={self.pool},container={self.container}'])
+                else:
+                    cmd.extend(['-o', f'pool={self.pool}'])
+
+        else:
+            if self.pool:
+                cmd.extend(['--pool', self.pool])
             if self.container:
-                cmd.extend(['-o', f'pool={self.pool},container={self.container}'])
-            else:
-                cmd.extend(['-o', f'pool={self.pool}'])
+                cmd.extend(['--container', self.container])
+
         print(f"Running {' '.join(cmd)}")
         # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)
@@ -2600,6 +2608,37 @@ class posix_tests():
         fname = join(dfuse.dir, 'test_file3')
         with open(fname, 'w') as ofd:
             ofd.write('hello')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_dfuse_oopt(self):
+        """Test dfuse with -opool=,container= options as used by fstab"""
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid, container=self.container)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.label)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf)
+
+        dfuse.start(use_oopt=True)
 
         if dfuse.stop():
             self.fatal_errors = True
