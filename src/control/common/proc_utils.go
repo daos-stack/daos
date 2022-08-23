@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -29,21 +30,36 @@ func getProcPids(procDir, procName string) (pids []int, _ error) {
 	}
 
 	maxProcName := 15 // TASK_COMM_LEN-1 in linux/sched.h
-	var pid int
-	var name string
+	var pid, ppid, pgrp int
 	for _, proc := range allProcs {
 		data, err := os.ReadFile(proc)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to read process file")
-		}
-		stat := string(data)
-		if _, err := fmt.Sscanf(stat, "%d %s", &pid, &name); err != nil {
-			return nil, errors.Wrapf(err, "failed to parse process stat file %q", stat)
-		}
-		if len(name) < 2 {
 			continue
 		}
-		if subStr(name[1:len(name)-1], maxProcName) != subStr(procName, maxProcName) {
+		if len(data) == 0 {
+			return nil, errors.New("empty process file")
+		}
+		line := string(data)
+
+		lIdx := strings.Index(line, "(")
+		rIdx := strings.Index(line, ")")
+		if lIdx == -1 || rIdx == -1 {
+			continue
+		}
+		if subStr(line[lIdx+1:rIdx], maxProcName) != subStr(procName, maxProcName) {
+			continue
+		}
+
+		if n, err := fmt.Sscanf(line, "%d", &pid); err != nil || n == 0 {
+			return nil, errors.Wrapf(err, "failed to parse pid from process stat file %q", line)
+		}
+		if n, err := fmt.Sscanf(line[rIdx+3:], "%d %d", &ppid, &pgrp); err != nil || n == 0 {
+			return nil, errors.Wrapf(err, "failed to parse pgrp from process stat file %q", line[rIdx+3:])
+		}
+		if pgrp != 0 {
+			// use the process group as the pid to avoid misidentifying
+			// threads as separate processes
+			pids = append(pids, pgrp)
 			continue
 		}
 		pids = append(pids, pid)
@@ -53,12 +69,12 @@ func getProcPids(procDir, procName string) (pids []int, _ error) {
 }
 
 // GetProcPids returns a list of pids for the given process name.
-func GetProcPids(procName string) (pids []int, _ error) {
+func GetProcPids(procName string) ([]int, error) {
 	return getProcPids("/proc", procName)
 }
 
 func getProcName(pid int, procDir string) (string, error) {
-	exe, err := os.Readlink(procDir + "/" + strconv.Itoa(pid) + "/exe")
+	exe, err := os.Readlink(filepath.Join(procDir, strconv.Itoa(pid), "exe"))
 	if err != nil {
 		return "", errors.Wrap(err, "failed to read executable path")
 	}

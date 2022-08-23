@@ -22,7 +22,7 @@ func addProcEntry(t *testing.T, root string, pid int, name string) {
 	if err := os.MkdirAll(root+"/"+strconv.Itoa(pid), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(root+"/"+strconv.Itoa(pid)+"/stat", []byte(fmt.Sprintf("%d (%s) D 42 \n", pid, name)), 0644); err != nil {
+	if err := os.WriteFile(root+"/"+strconv.Itoa(pid)+"/stat", []byte(fmt.Sprintf("%d (%s) D 42 %d\n", pid, name, pid)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(name, root+"/"+strconv.Itoa(pid)+"/exe"); err != nil {
@@ -70,6 +70,7 @@ func Test_Common_getProcPids(t *testing.T) {
 	procRoot := makeProcTree(t, 5)
 	addProcEntry(t, procRoot, 5, "test-1")
 	addProcEntry(t, procRoot, 6, "very-long-name-that-is-longer-than-15")
+	addProcEntry(t, procRoot, 42, "weird but valid")
 
 	for name, tc := range map[string]struct {
 		procName string
@@ -90,7 +91,11 @@ func Test_Common_getProcPids(t *testing.T) {
 			procName: "very-long-name-that-is-longer-than-15",
 			expPids:  []int{6},
 		},
-		"unreadable stat file": {
+		"space in process name": {
+			procName: "weird but valid",
+			expPids:  []int{42},
+		},
+		"unreadable stat file is skipped": {
 			setup: func(t *testing.T) {
 				addProcEntry(t, procRoot, 7, "missing")
 				os.Chmod(procRoot+"/7/stat", 0000)
@@ -98,11 +103,10 @@ func Test_Common_getProcPids(t *testing.T) {
 			cleanup: func(t *testing.T) {
 				os.RemoveAll(procRoot + "/7")
 			},
-			expErr: errors.New("process file"),
 		},
 		"bad status file": {
 			procName: "bad-stat",
-			expErr:   errors.New("stat file"),
+			expErr:   errors.New("empty process file"),
 			setup: func(t *testing.T) {
 				addProcEntry(t, procRoot, 7, "bad-stat")
 				if err := os.Truncate(procRoot+"/7/stat", 0); err != nil {
