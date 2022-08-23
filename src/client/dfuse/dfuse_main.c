@@ -548,9 +548,9 @@ main(int argc, char **argv)
 
 	rc = dfuse_fs_stop(fs_handle);
 
-	DFUSE_TRA_INFO(fs_handle, "Counts, new %ld found %ld inserted %ld",
+	DFUSE_TRA_INFO(fs_handle, "Counts, new %ld found %ld pre %ld inserted %ld",
 		       fs_handle->dpi_lookup_new, fs_handle->dpi_lookup_found,
-		       fs_handle->dpi_lookup_inserted);
+		       fs_handle->dpi_lookup_pre_found, fs_handle->dpi_lookup_inserted);
 
 	/* Remove all inodes from the hash tables */
 	rc2 = dfuse_fs_fini(fs_handle);

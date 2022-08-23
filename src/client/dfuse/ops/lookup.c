@@ -42,6 +42,13 @@ dfuse_reply_entry2(struct dfuse_projection_info *fs_handle, struct dfuse_inode_e
 		D_ASSERT(rc == -DER_SUCCESS);
 		atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_new, 1);
 	} else {
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+					sizeof(ie->ie_stat.st_ino));
+		if (rlink) {
+			atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_pre_found, 1);
+			goto found;
+		}
+
 		rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 					       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
 
@@ -50,9 +57,9 @@ dfuse_reply_entry2(struct dfuse_projection_info *fs_handle, struct dfuse_inode_e
 
 		} else {
 			struct dfuse_inode_entry *inode;
-
 			atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_found, 1);
 
+found:
 			inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 			/* The lookup has resulted in an existing file, so reuse that

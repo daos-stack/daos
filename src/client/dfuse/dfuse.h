@@ -51,6 +51,7 @@ struct dfuse_projection_info {
 
 	ATOMIC uint64_t     dpi_lookup_new;
 	ATOMIC uint64_t     dpi_lookup_found;
+	ATOMIC uint64_t     dpi_lookup_pre_found;
 	ATOMIC uint64_t     dpi_lookup_inserted;
 };
 
