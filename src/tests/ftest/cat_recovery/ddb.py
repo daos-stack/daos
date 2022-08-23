@@ -10,8 +10,11 @@ from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
 from pydaos.raw import IORequest, DaosObjClass
-from general_utils import create_string_buffer, report_errors, run_pcmd
+from general_utils import create_string_buffer, report_errors, run_pcmd, \
+    distribute_files, DaosTestError, get_clush_command, run_command
 from ddb_utils import DdbCommand
+from exception_utils import CommandFailure
+
 
 SAMPLE_DKEY = "Sample dkey"
 SAMPLE_AKEY = "Sample akey"
@@ -107,6 +110,34 @@ class DdbTest(TestWithServers):
             self.log.info("vos_file: %s", vos_file)
 
         return vos_file
+
+    def copy_remote_to_local(self, remote_file_path):
+        """Copy the given file from the server node to the local test node and retrieve
+        the original name.
+
+        Args:
+            remote_file_path (str): File path to copy to local.
+        """
+        # Use clush --rcopy to copy the file from the remote server node to the local test
+        # node. clush will append .<server_hostname> to the file when copying.
+        args = "--rcopy {} --dest {}".format(remote_file_path, self.test_dir)
+        clush_command = get_clush_command(hosts=self.hostlist_servers[0], args=args)
+        try:
+            run_command(command=clush_command)
+        except DaosTestError as error:
+            raise CommandFailure(
+                "ERROR: Copying {} from {}: {}".format(
+                    remote_file_path, self.hostlist_servers[0], error)) from error
+
+        # Remove the appended .<server_hostname> from the copied file.
+        current_file_path = "".join([remote_file_path, ".", self.hostlist_servers[0]])
+        mv_command = "mv {} {}".format(current_file_path, remote_file_path)
+        try:
+            run_command(command=mv_command)
+        except DaosTestError as error:
+            raise CommandFailure(
+                "ERROR: Moving {} to {}: {}".format(
+                    current_file_path, remote_file_path, error)) from error
 
     def test_ls(self):
         """Test ddb ls.
@@ -497,11 +528,22 @@ class DdbTest(TestWithServers):
             pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         # 5. Load new data into [0]/[0]/[0]/[0]
+        # Create a file in test node.
         load_file_path = os.path.join(self.test_dir, "new_data.txt")
         new_data = "New akey data 0123456789"
         with open(load_file_path, "w") as file:
             file.write(new_data)
 
+        # Copy the created file to server node.
+        try:
+            distribute_files(
+                hosts=host, source=load_file_path, destination=load_file_path,
+                mkdir=False)
+        except DaosTestError as error:
+            raise CommandFailure(
+                "ERROR: Copying new_data.txt to {}: {}".format(host, error)) from error
+
+        # The file with the new data is ready. Run ddb load.
         ddb_command.load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
 
         # 6. Restart the server.
@@ -575,6 +617,10 @@ class DdbTest(TestWithServers):
         akey2_file_path = os.path.join(self.test_dir, "akey2.txt")
         ddb_command.dump_value(
             component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
+
+        # Copy them from server node to test node.
+        self.copy_remote_to_local(remote_file_path=akey1_file_path)
+        self.copy_remote_to_local(remote_file_path=akey2_file_path)
 
         # 6. Verify the content of the files.
         actual_akey1_data = None
