@@ -79,6 +79,16 @@ log_section() {
   log "$1" "1"
 }
 
+fix_admin_cert_permissions() {
+  # In order to run dmg you must run it with a key which is owned by you
+  # This is a hack to allow daos-user to run dmg
+  if [[ -f /etc/daos/certs/admin.key ]];then
+    clush --hostfile="${SCRIPT_DIR}/hosts_clients" --dsh sudo chown "${SSH_USER}":"${SSH_USER}" /etc/daos/certs/admin*
+  else
+    log_error "Unable to fix admin cert permissions. admin.key does not exist."
+  fi
+}
+
 unmount_defuse() {
   if [[ -d "${IO500_RESULTS_DFUSE_DIR}" ]]; then
     log_section "Unmount DFuse mountpoint ${IO500_RESULTS_DFUSE_DIR}"
@@ -104,13 +114,13 @@ cleanup(){
 
 storage_scan() {
   log "Run DAOS storage scan"
-  dmg -l ${SERVER_LIST} storage scan --verbose
+  sudo dmg -l ${SERVER_LIST} storage scan --verbose
 }
 
 format_storage() {
 
   log_section "Format DAOS storage"
-  dmg -l ${SERVER_LIST} storage format --reformat
+  sudo dmg -l ${SERVER_LIST} storage format --reformat
 
   printf "%s" "Waiting for DAOS storage format to finish"
   while true
@@ -184,7 +194,7 @@ io500_prepare() {
 
   # cp -f "${IO500_DIR}/config-full-sc21.ini" .
   # envsubst < config-full-sc21.ini > temp.ini
-  envsubst < io500-isc22.config-template.daos-rf0.ini > temp.ini
+  envsubst < "${IO500_INI}" > temp.ini
   sed -i "s|^resultdir.*|resultdir = ${IO500_RESULTS_DFUSE_DIR}|g" temp.ini
   sed -i "s/^stonewall-time.*/stonewall-time = ${IO500_STONEWALL_TIME}/g" temp.ini
   sed -i "s/^transferSize.*/transferSize = 4m/g" temp.ini
@@ -215,26 +225,50 @@ show_pool_state() {
 process_results() {
   log_section "Copy results from ${IO500_RESULTS_DFUSE_DIR} to ${IO500_RESULTS_DIR_TIMESTAMPED}"
 
-  # Copy results from dfuse mount to another directory so we don't lose them
-  # when the dfuse mount is removed
-  rsync -avh "${IO500_RESULTS_DFUSE_DIR}/" "${IO500_RESULTS_DIR_TIMESTAMPED}/"
-  cp temp.ini "${IO500_RESULTS_DIR_TIMESTAMPED}/"
+  cp config.sh "${IO500_RESULTS_DIR_TIMESTAMPED}/"
+  cp hosts* "${IO500_RESULTS_DIR_TIMESTAMPED}/"
 
-  # Save a copy of the environment variables for the IO500 run
-  printenv | sort > "${IO500_RESULTS_DIR_TIMESTAMPED}/env.sh"
-
-  # Save output from "dmg pool query"
-  dmg pool query "${DAOS_POOL_LABEL}" > \
-    "${IO500_RESULTS_DIR_TIMESTAMPED}/dmg_pool_query_${DAOS_POOL_LABEL}.txt"
+  echo "${TIMESTAMP}" > "${IO500_RESULTS_DIR_TIMESTAMPED}/io500_run_timestamp.txt"
 
   FIRST_SERVER=$(echo ${SERVER_LIST} | cut -d, -f1)
   ssh ${FIRST_SERVER} 'daos_server version' > \
     "${IO500_RESULTS_DIR_TIMESTAMPED}/daos_server_version.txt"
 
+  RESULT_SERVER_FILES_DIR="${IO500_RESULTS_DIR_TIMESTAMPED}/server_files"
+  for server in $(cat hosts_servers);do
+    SERVER_FILES_DIR="${RESULT_SERVER_FILES_DIR}/${server}"
+    mkdir -p "${SERVER_FILES_DIR}/etc/daos"
+    scp "${server}":/etc/daos/*.yaml "${SERVER_FILES_DIR}/etc/daos/"
+    mkdir -p "${SERVER_FILES_DIR}/var/daos"
+    scp "${server}":/var/daos/*.log "${SERVER_FILES_DIR}/var/daos/"
+    ssh ${server} 'daos_server version' > "${SERVER_FILES_DIR}/daos_server_version.txt"
+  done
+
+  # Save a copy of the environment variables for the IO500 run
+  printenv | sort > "${IO500_RESULTS_DIR_TIMESTAMPED}/env.sh"
+
+  # Copy results from dfuse mount to another directory so we don't lose them
+  # when the dfuse mount is removed
+  rsync -avh "${IO500_RESULTS_DFUSE_DIR}/" "${IO500_RESULTS_DIR_TIMESTAMPED}/"
+  cp temp.ini "${IO500_RESULTS_DIR_TIMESTAMPED}/"
+
+  # Save output from "sudo dmg pool query"
+  sudo dmg pool query "${DAOS_POOL_LABEL}" > \
+    "${IO500_RESULTS_DIR_TIMESTAMPED}/dmg_pool_query_${DAOS_POOL_LABEL}.txt"
+
   log "Results files located in ${IO500_RESULTS_DIR_TIMESTAMPED}"
+
+  RESULTS_TAR_FILE="${IO500_TEST_CONFIG_ID}_${TIMESTAMP}.tar.gz"
+
+  log "Creating '${HOME}/${RESULTS_TAR_FILE}' file with contents of ${IO500_RESULTS_DIR_TIMESTAMPED} directory"
+  pushd "${IO500_RESULTS_DIR_TIMESTAMPED}"
+  tar -czf "${HOME}/${RESULTS_TAR_FILE}" ./
+  log "Results tar file: ${HOME}/${RESULTS_TAR_FILE}"
+  popd
 }
 
 main(){
+  fix_admin_cert_permissions
   cleanup
   storage_scan
   format_storage

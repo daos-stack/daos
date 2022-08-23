@@ -469,6 +469,8 @@ copy_files_to_first_client() {
     ${SCRIPT_DIR}/clean_storage.sh \
     ${SCRIPT_DIR}/run_io500-isc22.sh \
     ${SCRIPT_DIR}/io500-isc22.config-template.daos-rf0.ini \
+    ${SCRIPT_DIR}/io500-isc22.config-template.daos-rf1.ini \
+    ${SCRIPT_DIR}/io500-isc22.config-template.daos-rf2.ini \
     "${FIRST_CLIENT_IP}:~/"
 
   ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} \

@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ------------------------------------------------------------------------------
+# Configuration: 1 client, 1 server, 8 disks per server
+# ------------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------
-# Configuration: 1 client, 1 server with 8 disks
-# ------------------------------------------------------------------------------
 # Optional identifier to allow multiple DAOS clusters in the same GCP
 # project by using this ID in the DAOS server and client instance names.
 # Typically, this would contain the username of each user who is running
@@ -49,7 +49,9 @@ DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${
 DAOS_CONT_REPLICATION_FACTOR="rf:0"
 
 # IO500
-IO500_STONEWALL_TIME=5  # Number of seconds to run the benchmark
+IO500_TEST_CONFIG_ID="GCP-1C-1S8d-1"
+IO500_STONEWALL_TIME=30  # Number of seconds to run the benchmark
+IO500_INI="io500-isc22.config-template.daos-rf0.ini"
 
 # ------------------------------------------------------------------------------
 # Modify instance base names if ID variable is set
@@ -73,6 +75,7 @@ export TF_VAR_subnetwork_project="${TF_VAR_project_id}"
 export TF_VAR_region="us-central1"
 export TF_VAR_zone="us-central1-f"
 export TF_VAR_allow_insecure="${DAOS_ALLOW_INSECURE}"
+
 # Servers
 export TF_VAR_server_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_server_number_of_instances=${DAOS_SERVER_INSTANCE_COUNT}
@@ -88,6 +91,7 @@ export TF_VAR_server_machine_type="${DAOS_SERVER_MACHINE_TYPE}"
 export TF_VAR_server_os_project="${TF_VAR_project_id}"
 export TF_VAR_server_os_family="daos-server-io500-centos-7"
 export TF_VAR_server_gvnic="${DAOS_SERVER_GVNIC}"
+
 # Clients
 export TF_VAR_client_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_client_number_of_instances=${DAOS_CLIENT_INSTANCE_COUNT}
