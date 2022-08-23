@@ -14,7 +14,7 @@ sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
 
 TMP_DIR=$(mktemp -d)
 
-cp utils/node_local_test.py utils/nlt_server.yaml utils/nlt_agent.yaml .build_vars.json "$TMP_DIR"
+cp utils/node_local_test.py utils/nlt_server.yaml .build_vars.json "$TMP_DIR"
 cp src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py "$TMP_DIR"
 
 pushd "$TMP_DIR"
