@@ -169,6 +169,7 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
  *
  * \param[in]	name	Name of the S3 user to look up.
  * \param[in]	info	User info.
+ * \param[in]	info	(Optional) Old user info.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -176,7 +177,8 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
  * \return              0 on success, -errno code on failure.
  */
 int
-ds3_user_set(const char *name, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
+ds3_user_set(const char *name, struct ds3_user_info *info, struct ds3_user_info *old_info,
+	     ds3_t *ds3, daos_event_t *ev);
 
 /**
  * Remove user from S3 user database.
@@ -352,8 +354,8 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  *		ncp	[in]				\a cps length in items.
  *			[out] 				Number of common prefixes returned.
  * \param[out]	cps				Array of common prefix info structures.
- * \param[in]	prefix			List objects that start with this prefix.
- * \param[in]	delim			Divide results by delim.
+ * \param[in]	prefix			(Optional) List objects that start with this prefix.
+ * \param[in]	delim			(Optional) Divide results by delim.
  * \param[in,out]
  *		marker	[in] 			Start listing from marker key.
  *				[out] 			Next marker to be used by subsequent calls.
@@ -504,8 +506,9 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
  *		ncp	[in] 				\a cps length in items.
  *			[out] 				Number of common prefixes returned.
  * \param[out]	cps				Array of common prefix info structures.
- * \param[in]	prefix			List multipart uploads that start with this prefix.
- * \param[in]	delim			Divide results by delim.
+ * \param[in]	prefix			(Optional) List multipart uploads that start with this
+ *								prefix.
+ * \param[in]	delim			(Optional) Divide results by delim.
  * \param[in,out]
  *		marker	[in] 			Start listing from marker key.
  *				[out] 			Next marker to be used by subsequent calls.
