@@ -407,9 +407,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
 
-		if (mbs->dm_dte_flags & DTE_LEADER)
-			goto commit;
-
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
@@ -522,22 +519,13 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
-	if (ent->ie_dtx_flags & DTE_LEADER) {
-		/* Pool map refresh, non-discard case, I am still the leader, do nothing. */
-		if (!dra->resync_all)
-			return 0;
-
-		/*
-		 * Open container, old committable DTX entries are not in the CoS cache.
-		 * Then handle the DTX entries with old epoch (dtx_epoch < resync_epoch).
-		 */
-		if (ent->ie_epoch > dra->epoch)
-			return 0;
-	} else {
-		/* Leader switch only can happen for old DTX entries (dtx_ver < resync_ver). */
-		if (ent->ie_dtx_ver >= dra->resync_version)
-			return 0;
-	}
+	/*
+	 * Current DTX resync may be shared by pool map refresh and container open. If it is
+	 * sponsored by pool map refresh, then it is possible that resync version is smaller
+	 * than some DTX entries that also need to be resynced. So here, we only trust epoch.
+	 */
+	if (ent->ie_epoch > dra->epoch)
+		return 0;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
