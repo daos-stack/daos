@@ -545,7 +545,6 @@ pipeline {
                                                                 parallel_build: true,
                                                                 qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg PREFIX=/opt/daos' +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
@@ -553,9 +552,11 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   build_deps: false,
+                                   build_deps: 'no',
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: sconsFaultsArgs() +
+                                               ' --build-arg PREFIX=/opt/daos'
+
                     }
                     post {
                         unsuccessful {
