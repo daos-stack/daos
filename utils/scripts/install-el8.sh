@@ -20,7 +20,6 @@ dnf --nodocs install \
     cmake \
     CUnit-devel \
     diffutils \
-    e2fsprogs \
     file \
     flex \
     fuse3 \
