@@ -889,7 +889,7 @@ void
 d_getenv_int(const char *env, unsigned *int_val)
 {
 	char		*env_val;
-	char		 value;
+	int		 value;
 
 	if (env == NULL || int_val == NULL)
 		return;
