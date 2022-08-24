@@ -855,7 +855,6 @@ d_getenv_bool(const char *env, bool *bool_val)
 /**
  * get single character environment variable
  *
- *
  * \param[in]           env     name of the environment variable
  * \param[in,out]       char_val returned value of the ENV. Will not change the original value
  */
