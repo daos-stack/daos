@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/pkg/errors"
 )
@@ -105,5 +106,11 @@ func checkDupeProcess(pid int, procDir string) error {
 // CheckDupeProcess checks to see if another process with the same name as
 // ours is running.
 func CheckDupeProcess() error {
-	return checkDupeProcess(os.Getpid(), "/proc")
+	// Prefer the pgrp over the pid if it's set. This will
+	// allow us to avoid misidentifying threads as separate processes.
+	pid := syscall.Getpgrp()
+	if pid == 0 {
+		pid = os.Getpid()
+	}
+	return checkDupeProcess(pid, "/proc")
 }
