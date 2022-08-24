@@ -41,6 +41,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	const char    *upload_id;
 	dfs_obj_t     *upload_dir;
 	daos_size_t    size;
+	char          *delim_pos;
 
 	if (bucket_name == NULL || ds3 == NULL || nmp == NULL || ncp == NULL)
 		return -EINVAL;
@@ -51,17 +52,15 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 
 	/* End */
 	if (*nmp == 0) {
-		if (is_truncated) {
+		if (is_truncated)
 			*is_truncated = false;
-		}
 		return 0;
 	}
 
 	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
 			    &multipart_dir, NULL, NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		return -rc;
-	}
 
 	D_ALLOC_ARRAY(dirents, *nmp);
 	if (dirents == NULL) {
@@ -75,13 +74,11 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3->meta_dfs, multipart_dir, &anchor, nmp, dirents);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_dirents;
-	}
 
-	if (is_truncated != NULL) {
+	if (is_truncated != NULL)
 		*is_truncated = !daos_anchor_is_eof(&anchor);
-	}
 
 	D_ALLOC_ARRAY(key, DS3_MAX_KEY_BUFF);
 	if (key == NULL) {
@@ -114,9 +111,11 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 
 		/* Only add entries that start with prefix */
 		if (strncmp(key, prefix, prefix_length) == 0) {
-			/* if it has delim after prefix, add to common prefixes, otherwise add to */
-			/* multipart uploads */
-			char *delim_pos = NULL;
+			/*
+			 * If it has delim after prefix, add to common prefixes, otherwise add to
+			 * multipart uploads
+			 */
+			delim_pos = NULL;
 			if (strlen(delim) != 0)
 				delim_pos = strstr(key + prefix_length, delim);
 
@@ -200,9 +199,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 
 	/* End */
 	if (*npart == 0) {
-		if (is_truncated) {
+		if (is_truncated)
 			*is_truncated = false;
-		}
 		return 0;
 	}
 
@@ -213,9 +211,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 
 	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
 			    NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_multipart_dir;
-	}
 
 	D_ALLOC_ARRAY(dirents, nr);
 	if (dirents == NULL) {
@@ -226,9 +223,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3->meta_dfs, upload_dir, &anchor, &nr, dirents);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_dirents;
-	}
 
 	/* Pick the first *npart after marker */
 	D_ALLOC_ARRAY(pfs, nr);
@@ -247,9 +243,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		}
 
 		/* Skip entries that are not larger than marker */
-		if (part_num <= *marker) {
+		if (part_num <= *marker)
 			continue;
-		}
 
 		/* Add to pfs */
 		pfs[pfi].part_name = part_name;
@@ -267,9 +262,8 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 
 		rc = dfs_lookup_rel(ds3->meta_dfs, upload_dir, part_name, O_RDWR, &part_obj, NULL,
 				    NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_pfs;
-		}
 
 		/* Read the xattr and add to parts */
 		rc = dfs_getxattr(ds3->meta_dfs, part_obj, RGW_PART_XATTR, parts[pi].encoded,
@@ -291,17 +285,15 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 			goto err_pfs;
 
 		/* Stop when we get to *npart parts. */
-		if (pi >= *npart) {
+		if (pi >= *npart)
 			break;
-		}
 	}
 
 	/* Assign read parts and next marker */
 	*npart  = pi;
 	*marker = last_num;
-	if (is_truncated) {
+	if (is_truncated)
 		*is_truncated = pi < pfi;
-	}
 
 err_pfs:
 	D_FREE(pfs);
@@ -402,9 +394,8 @@ ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_n
 
 	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
 			    NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_multipart_dir;
-	}
 
 	rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR, info->encoded,
 			  &info->encoded_length);
@@ -449,9 +440,8 @@ ds3_part_open(const char *bucket_name, const char *upload_id, uint64_t part_num,
 
 	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir, NULL,
 			    NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_multipart_dir;
-	}
 
 	sprintf(part_name_str, "%06lu", part_num);
 	flags = truncate ? O_RDWR | O_CREAT | O_TRUNC : O_RDWR;

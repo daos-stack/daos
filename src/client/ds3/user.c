@@ -153,9 +153,8 @@ ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds
 
 	/* Open file */
 	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[by], name, O_RDWR, &user_obj, NULL, NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		return -ENOENT;
-	}
 
 	/* Reserve buffers */
 	d_iov_set(&iov, info->encoded, info->encoded_length);
@@ -165,9 +164,8 @@ ds3_read_user(const char *name, enum meta_dir by, struct ds3_user_info *info, ds
 
 	/* Read file */
 	rc = dfs_read(ds3->meta_dfs, user_obj, &rsgl, 0, &info->encoded_length, ev);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("Failed to read user file, name = %s, rc = %d\n", name, rc);
-	}
 
 	/* Close file */
 	rc2 = dfs_release(user_obj);

@@ -78,9 +78,8 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 			/* Open or Create directory */
 			rc = dfs_open(ds3b->dfs, parent, dir, mode | S_IFDIR, O_RDWR | O_CREAT, 0,
 				      0, NULL, &dir_obj);
-			if (rc != 0 && rc != EEXIST) {
+			if (rc != 0 && rc != EEXIST)
 				goto err_parent;
-			}
 
 			/* Next parent */
 			if (parent) {
@@ -95,9 +94,8 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	/* Finally create the file */
 	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG, O_RDWR | O_CREAT | O_TRUNC, 0,
 		      0, NULL, &ds3o_tmp->dfs_obj);
-	if (rc == 0) {
+	if (rc == 0)
 		*ds3o = ds3o_tmp;
-	}
 
 err_parent:
 	if (parent)
@@ -134,11 +132,10 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		goto err_ds3o;
 	}
 
-	if (key[0] == '/') {
+	if (key[0] == '/')
 		strcpy(path, "");
-	} else {
+	else
 		strcpy(path, "/");
-	}
 	strcat(path, key);
 
 	rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
@@ -154,9 +151,8 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 			rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
 		}
 	}
-	if (rc == 0) {
+	if (rc == 0)
 		*ds3o = ds3o_tmp;
-	}
 
 	D_FREE(path);
 err_ds3o:
@@ -233,9 +229,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 		return -EINVAL;
 
 	D_STRNDUP(path, key, DS3_MAX_KEY_BUFF - 1);
-	if (path == NULL) {
+	if (path == NULL)
 		return -ENOMEM;
-	}
 
 	file_start = strrchr(path, '/');
 	file_name  = path;
@@ -255,9 +250,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 		strcpy(lookup_path, "/");
 		strcat(lookup_path, path);
 		rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &parent, NULL, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_parent;
-		}
 	}
 
 	rc = dfs_remove(ds3b->dfs, parent, file_name, false, NULL);
@@ -300,6 +294,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	const char *file_name;
 	const char *parent_path = NULL;
 	char       *link_name   = NULL;
+	char       *lookup_path = NULL;
 	int         name_length;
 	char       *suffix_start;
 	dfs_obj_t  *link;
@@ -316,9 +311,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	}
 
 	D_STRNDUP(path, key, DS3_MAX_KEY_BUFF - 1);
-	if (path == NULL) {
+	if (path == NULL)
 		return -ENOMEM;
-	}
 
 	file_start = strrchr(path, '/');
 	file_name  = path;
@@ -328,7 +322,6 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		parent_path = path;
 	}
 
-	char *lookup_path = NULL;
 	if (parent_path != NULL) {
 		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY_BUFF);
 		if (lookup_path == NULL) {
@@ -339,9 +332,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		strcpy(lookup_path, "/");
 		strcat(lookup_path, path);
 		rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &parent, NULL, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_parent;
-		}
 	}
 
 	/* Build link name */
@@ -354,9 +346,8 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	/* Copy name without instance */
 	name_length  = strlen(file_name);
 	suffix_start = strrchr(file_name, '[');
-	if (suffix_start != NULL) {
+	if (suffix_start != NULL)
 		name_length = suffix_start - file_name;
-	}
 
 	strncpy(link_name, file_name, name_length);
 	strcat(link_name, LATEST_INSTANCE_SUFFIX);

@@ -159,9 +159,8 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev)
 {
 	int rc = 0;
 
-	if (ds3 == NULL) {
+	if (ds3 == NULL)
 		return 0;
-	}
 
 #define X(a, b) close_metadir(b, ds3->meta_dirs[a]);
 

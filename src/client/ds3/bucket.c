@@ -14,15 +14,16 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 	struct daos_pool_cont_info *conts;
 	daos_size_t                 ncont = *nbuck;
 	daos_size_t                 bi    = 0;
+	daos_size_t                 i     = 0;
 	ds3_bucket_t               *ds3b  = NULL;
+	char		       *name;
 
 	if (ds3 == NULL || nbuck == NULL || buf == NULL || marker == NULL)
 		return -EINVAL;
 
 	D_ALLOC_ARRAY(conts, ncont);
-	if (conts == NULL) {
+	if (conts == NULL)
 		return -ENOMEM;
-	}
 
 	/* TODO: Handle markers */
 	rc = daos_pool_list_cont(ds3->poh, &ncont, conts, ev);
@@ -37,8 +38,8 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		goto err;
 	}
 
-	for (int i = 0; i < ncont; i++) {
-		char *name = conts[i].pci_label;
+	for (i = 0; i < ncont; i++) {
+		name = conts[i].pci_label;
 		if (strcmp(name, METADATA_BUCKET) == 0) {
 			D_DEBUG(DB_ALL, "Skipping container %s because it is the metadata bucket",
 				name);
@@ -121,9 +122,8 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 
 	/* Create multipart index */
 	rc = dfs_mkdir(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, DEFFILEMODE, 0);
-	if (rc != 0 && rc != EEXIST) {
+	if (rc != 0 && rc != EEXIST)
 		D_ERROR("Failed to create multipart index, rc = %d\n", rc);
-	}
 
 err:
 	rc2 = ds3_bucket_close(ds3b, ev);
@@ -146,16 +146,14 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 		return -EINVAL;
 
 	rc = ds3_bucket_open(name, &ds3b, ds3, ev);
-	if (rc != 0) {
+	if (rc != 0)
 		return -rc;
-	}
 
 	/* Check if the bucket is empty */
 	if (!force) {
 		rc = dfs_lookup(ds3b->dfs, "/", O_RDWR, &dir_obj, NULL, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_ds3b;
-		}
 
 		D_ALLOC_ARRAY(dirents, nd);
 		if (dirents == NULL) {
@@ -165,9 +163,8 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 
 		daos_anchor_init(&anchor, 0);
 		rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, &nd, dirents);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_dirents;
-		}
 
 		/* The bucket is not empty */
 		if (nd != 0) {
@@ -178,9 +175,8 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 
 	/* Remove the bucket's multipart directory */
 	rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, true, NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_dirents;
-	}
 
 	/* Finally, destroy the bucket */
 	rc = daos_cont_destroy(ds3->poh, name, true, NULL);
@@ -219,9 +215,8 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 		return -ENOMEM;
 
 	rc = dfs_connect(ds3->pool, NULL, name, O_RDWR, NULL, &ds3b_tmp->dfs);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_ds3b;
-	}
 
 	*ds3b = ds3b_tmp;
 	return 0;
@@ -246,7 +241,7 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 {
 	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
-	void *const       values[] = {info->encoded};
+	void *const values[]       = {info->encoded};
 	size_t            sizes[]  = {info->encoded_length};
 	daos_handle_t     coh;
 
@@ -254,9 +249,8 @@ ds3_bucket_get_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 		return -EINVAL;
 
 	rc = dfs_cont_get(ds3b->dfs, &coh);
-	if (rc != 0) {
+	if (rc != 0)
 		return -rc;
-	}
 
 	rc = daos_cont_get_attr(coh, 1, names, values, sizes, ev);
 	rc = daos_der2errno(rc);
@@ -270,16 +264,15 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
 	int               rc       = 0;
 	char const *const names[]  = {RGW_BUCKET_INFO};
 	void const *const values[] = {info->encoded};
-	size_t const      sizes[]  = {info->encoded_length};
+	size_t const sizes[]       = {info->encoded_length};
 	daos_handle_t     coh;
 
 	if (ds3b == NULL || info == NULL)
 		return -EINVAL;
 
 	rc = dfs_cont_get(ds3b->dfs, &coh);
-	if (rc != 0) {
+	if (rc != 0)
 		return -rc;
-	}
 
 	rc = daos_cont_set_attr(coh, 1, names, values, sizes, ev);
 	rc = daos_der2errno(rc);
@@ -319,15 +312,13 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		return 0;
 
 	/* TODO: support the case when delim is not / */
-	if (strcmp(delim, "/") != 0) {
+	if (strcmp(delim, "/") != 0)
 		return -EINVAL;
-	}
 
 	if (prefix != NULL) {
 		D_STRNDUP(prefix_copy, prefix, DS3_MAX_KEY_BUFF - 1);
-		if (prefix_copy == NULL) {
+		if (prefix_copy == NULL)
 			return -ENOMEM;
-		}
 	}
 
 	file_start  = strrchr(prefix_copy, delim[0]);
@@ -347,9 +338,8 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	strcpy(lookup_path, "/");
 	strcat(lookup_path, path);
 	rc = dfs_lookup(ds3b->dfs, lookup_path, O_RDWR, &dir_obj, NULL, NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_path;
-	}
 
 	D_ALLOC_ARRAY(dirents, *nobj);
 	if (dirents == NULL) {
@@ -365,13 +355,11 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, nobj, dirents);
-	if (rc != 0) {
+	if (rc != 0)
 		goto err_dirents;
-	}
 
-	if (is_truncated != NULL) {
+	if (is_truncated != NULL)
 		*is_truncated = !daos_anchor_is_eof(&anchor);
-	}
 
 	/**
 	 * Go through the returned objects, if it is a regular file, add to objs. If it's a
@@ -386,16 +374,14 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		 * Skip entries that do not start with prefix_rest
 		 * TODO handle how this affects max
 		 */
-		if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0) {
+		if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0)
 			continue;
-		}
 
 		/* Open the file and check mode */
 		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
 				    &mode, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			goto err_dirents;
-		}
 
 		if (S_ISDIR(mode)) {
 			/* The entry is a directory */

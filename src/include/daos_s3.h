@@ -119,7 +119,7 @@ struct ds3_multipart_part_info {
 	size_t   encoded_length;
 };
 
-// General S3
+/* General S3 */
 
 /**
  * Initialize all the relevant DAOS libraries.
@@ -165,7 +165,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev);
 int
 ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
 
-// S3 users
+/* S3 users */
 
 /**
  * Add/update user information in the S3 user database.
@@ -239,18 +239,18 @@ ds3_user_get_by_email(const char *email, struct ds3_user_info *info, ds3_t *ds3,
 int
 ds3_user_get_by_key(const char *key, struct ds3_user_info *info, ds3_t *ds3, daos_event_t *ev);
 
-// S3 Buckets
+/* S3 Buckets */
 
 /**
  * List buckets stored in the DAOS pool identified by \a ds3.
  *
  * \param[in,out]
- *		nbuck	[in] 			\a buf length in items.
- *				[out] 			Number of buckets returned.
+ *		nbuck	[in]:			\a buf length in items.
+ *				[out]:			Number of buckets returned.
  * \param[out]	buf				Array of bucket info structures.
  * \param[in,out]
- *		marker	[in] 			Start listing from marker key
- *				[out] 			Returned marker key for next call
+ *		marker	[in]:			Start listing from marker key
+ *				[out]:			Returned marker key for next call
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3				Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev				Completion event, it is optional and can be NULL.
@@ -350,18 +350,18 @@ ds3_bucket_set_info(struct ds3_bucket_info *info, ds3_bucket_t *ds3b, daos_event
  * List S3 objects stored in the S3 bucket identified by \a ds3b.
  *
  * \param[in,out]
- *		nobj	[in] 			\a objs length in items.
- *				[out] 			Number of objects returned.
+ *		nobj	[in]:			\a objs length in items.
+ *				[out]:			Number of objects returned.
  * \param[out]	objs			Array of object info structures.
  * \param[in,out]
- *		ncp	[in]				\a cps length in items.
- *			[out] 				Number of common prefixes returned.
+ *		ncp	[in]:				\a cps length in items.
+ *			[out]:				Number of common prefixes returned.
  * \param[out]	cps				Array of common prefix info structures.
  * \param[in]	prefix			(Optional) List objects that start with this prefix.
  * \param[in]	delim			(Optional) Divide results by delim.
  * \param[in,out]
- *		marker	[in] 			Start listing from marker key.
- *				[out] 			Next marker to be used by subsequent calls.
+ *		marker	[in]:			Start listing from marker key.
+ *				[out]:			Next marker to be used by subsequent calls.
  * \param[in]	list_versions	Also include versions
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3b			Pointer to the S3 bucket handle to use.
@@ -373,7 +373,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		    struct ds3_common_prefix_info *cps, const char *prefix, const char *delim,
 		    char *marker, bool list_versions, bool *is_truncated, ds3_bucket_t *ds3b);
 
-// S3 Objects
+/* S3 Objects */
 
 /**
  * Create an S3 Object in the S3 bucket identified by \a ds3b.
@@ -437,12 +437,12 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
  * Read S3 object data.
  *
  * \param[in,out]
- *		buf	[in]: 		Allocated buffer for data.
- *			[out]: 		Actual data read.
+ *		buf	[in]:		Allocated buffer for data.
+ *			[out]:		Actual data read.
  * \param[in]	off		Offset into the file to read from.
  * \param[in,out]
- *		size	[in]: 	Size of buffer passed in.
- * 				[out]: 	Actual size of data read.
+ *		size	[in]:	Size of buffer passed in.
+ *				[out]:	Actual size of data read.
  * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	S3 object handle to read from.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
@@ -471,8 +471,8 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b);
  * \param[in]	buf		Data to write.
  * \param[in]	off		Offset into the file to write to.
  * \param[in,out]
- *		size	[in]: 	Size of buffer passed in.
- * 				[out]: 	Actual size of data written.
+ *		size	[in]:	Size of buffer passed in.
+ *				[out]:	Actual size of data written.
  * \param[in]	ds3b	ds3b	Pointer to the S3 bucket handle to use.
  * \param[in]	ds3o	S3 object handle to read from.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
@@ -495,26 +495,26 @@ ds3_obj_write(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, 
 int
 ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b);
 
-// S3 Multipart api
+/* S3 Multipart api */
 
 /**
  * List S3 multipart uploads pending in the S3 bucket identified by \a bucket_name.
  *
  * \param[in]	bucket_name		Name of the bucket.
  * \param[in,out]
- *		nmp	[in] 				\a mps length in items.
- *			[out] 				Number of multipart uploads returned.
+ *		nmp	[in]:				\a mps length in items.
+ *			[out]:				Number of multipart uploads returned.
  * \param[out]	mps				Array of object info structures.
  * \param[in,out]
- *		ncp	[in] 				\a cps length in items.
- *			[out] 				Number of common prefixes returned.
+ *		ncp	[in]:				\a cps length in items.
+ *			[out]:				Number of common prefixes returned.
  * \param[out]	cps				Array of common prefix info structures.
  * \param[in]	prefix			(Optional) List multipart uploads that start with this
  *								prefix.
  * \param[in]	delim			(Optional) Divide results by delim.
  * \param[in,out]
- *		marker	[in] 			Start listing from marker key.
- *				[out] 			Next marker to be used by subsequent calls.
+ *		marker	[in]:			Start listing from marker key.
+ *				[out]:			Next marker to be used by subsequent calls.
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3				Pointer to the DAOS S3 pool handle to use.
  *
@@ -533,12 +533,12 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
  * \param[in]	bucket_name		Name of the bucket.
  * \param[in]	upload_id		ID of the upload.
  * \param[in,out]
- *		npart	[in] 			\a parts length in items.
- *				[out] 			Number of parts returned.
+ *		npart	[in]:			\a parts length in items.
+ *				[out]:			Number of parts returned.
  * \param[out]	parts			Array of multipart part info structures.
  * \param[in,out]
- *		marker	[in] 			Start listing from marker key.
- *				[out] 			Next marker to be used by subsequent calls.
+ *		marker	[in]:			Start listing from marker key.
+ *				[out]:			Next marker to be used by subsequent calls.
  * \param[out]	is_truncated	Are the results truncated
  * \param[in]	ds3				Pointer to the DAOS S3 pool handle to use.
  *
@@ -621,8 +621,8 @@ ds3_part_close(ds3_part_t *ds3p);
  * \param[in]	buf		Data to write.
  * \param[in]	off		Offset into the file to write to.
  * \param[in,out]
- *		size	[in]: 	Size of buffer passed in.
- * 				[out]: 	Actual size of data written.
+ *		size	[in]:	Size of buffer passed in.
+ *				[out]:	Actual size of data written.
  * \param[in]	ds3p	S3 part handle to read from.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
@@ -640,8 +640,8 @@ ds3_part_write(void *buf, daos_off_t off, daos_size_t *size, ds3_part_t *ds3p, d
  * \param[in]	buf		Data to read.
  * \param[in]	off		Offset into the file to read from.
  * \param[in,out]
- *		size	[in]: 	Size of buffer passed in.
- * 				[out]: 	Actual size of data read.
+ *		size	[in]:	Size of buffer passed in.
+ *				[out]:	Actual size of data read.
  * \param[in]	ds3p	S3 part handle to read from.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
