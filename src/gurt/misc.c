@@ -817,6 +817,13 @@ dis_integer_str(char *str)
 	return true;
 }
 
+static inline bool
+dis_single_char_str(char *str)
+{
+	return strlen(str) == 1;
+
+}
+
 /**
  * get a bool type environment variables
  *
@@ -846,6 +853,32 @@ d_getenv_bool(const char *env, bool *bool_val)
 }
 
 /**
+ * get single character environment variable
+ *
+ *
+ * \param[in]           env     name of the environment variable
+ * \param[in,out]       char_val returned value of the ENV. Will not change the original value
+ */
+void
+d_getenv_char(const char *env, char *char_val)
+{
+	char		*env_val;
+
+	if (env == NULL || char_val == NULL)
+		return;
+
+	env_val = getenv(env);
+	if (!env_val)
+		return;
+
+	if (!dis_single_char_str(env_val)) {
+		D_ERROR("ENV %s is not single character.\n", env_val);
+		return;
+	}
+	*char_val = *env_val;
+}
+
+/**
  * get an integer type environment variables
  *
  * \param[in]		env	name of the environment variable
@@ -857,7 +890,7 @@ void
 d_getenv_int(const char *env, unsigned *int_val)
 {
 	char		*env_val;
-	unsigned	 value;
+	char		 value;
 
 	if (env == NULL || int_val == NULL)
 		return;
