@@ -170,9 +170,6 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit CI tests')
-        booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
-                     description: 'Run the Fault Injection on EL 8 CI tests')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
