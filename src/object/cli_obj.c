@@ -1153,7 +1153,7 @@ shard_open:
 				shard_tgt->st_rank = DAOS_TGT_IGNORE;
 				rc = 0;
 			} else {
-				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH && !obj_auxi->spec_shard)
 					ec_degrade = true;
 				else
 					shard_tgt->st_rank = DAOS_TGT_IGNORE;
