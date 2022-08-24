@@ -14,7 +14,7 @@ def scons():
     denv.AppendUnique(LIBPATH=["../dfs"])
     denv.AppendUnique(CPPPATH=["../dfs"])
 
-    ds3_src = ['pool.c', 'user.c', 'bucket.c', 'object.c']
+    ds3_src = ['pool.c', 'user.c', 'bucket.c', 'object.c', 'multipart.c']
     ds3 = daos_build.library(denv, 'ds3', ds3_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', ds3)
 
