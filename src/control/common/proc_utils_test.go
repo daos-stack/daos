@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 )
@@ -22,7 +21,7 @@ func addProcEntry(t *testing.T, root string, pid int, name string) {
 	if err := os.MkdirAll(root+"/"+strconv.Itoa(pid), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(root+"/"+strconv.Itoa(pid)+"/stat", []byte(fmt.Sprintf("%d (%s) D 42 %d\n", pid, name, pid)), 0644); err != nil {
+	if err := os.WriteFile(root+"/"+strconv.Itoa(pid)+"/cmdline", []byte(fmt.Sprintf("/random/path/%s\x00-o\x00/foo/bar\x00", name)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(name, root+"/"+strconv.Itoa(pid)+"/exe"); err != nil {
@@ -95,21 +94,19 @@ func Test_Common_getProcPids(t *testing.T) {
 			procName: "weird but valid",
 			expPids:  []int{42},
 		},
-		"unreadable stat file is skipped": {
+		"unreadable cmdline file is skipped": {
 			setup: func(t *testing.T) {
 				addProcEntry(t, procRoot, 7, "missing")
-				os.Chmod(procRoot+"/7/stat", 0000)
+				os.Chmod(procRoot+"/7/cmdline", 0000)
 			},
 			cleanup: func(t *testing.T) {
 				os.RemoveAll(procRoot + "/7")
 			},
 		},
-		"bad status file": {
-			procName: "bad-stat",
-			expErr:   errors.New("empty process file"),
+		"empty cmdline file is skipped": {
 			setup: func(t *testing.T) {
-				addProcEntry(t, procRoot, 7, "bad-stat")
-				if err := os.Truncate(procRoot+"/7/stat", 0); err != nil {
+				addProcEntry(t, procRoot, 7, "empty")
+				if err := os.Truncate(procRoot+"/7/cmdline", 0); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -132,7 +129,7 @@ func Test_Common_getProcPids(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(gotPids, tc.expPids); diff != "" {
+			if diff := cmp.Diff(tc.expPids, gotPids); diff != "" {
 				t.Fatalf("getProcPids() mismatch (-want +got):\n%s", diff)
 			}
 		})
