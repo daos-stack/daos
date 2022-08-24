@@ -25,7 +25,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include <sys/statfs.h>
 #include <sys/ioctl.h>
 
 #include "dfuse_ioctl.h"
@@ -34,7 +34,7 @@
  * Tests can be run by specifying the appropriate argument for a test or
  * all will be run if no test is specified.
  */
-#define TESTS "im"
+#define TESTS "ims"
 static const char *all_tests = TESTS;
 
 static void
@@ -45,6 +45,7 @@ print_usage()
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("dfuse_test -a|--all\n");
 	print_message("dfuse_test -i|--io\n");
+	print_message("dfuse_test -s|--stream\n");
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
@@ -160,6 +161,110 @@ do_openat(void **state)
 }
 
 void
+do_stream(void **state)
+{
+	int    fd;
+	int    rc;
+	FILE  *stream;
+	size_t count;
+	off_t  offset;
+
+	int    root = open(test_dir, O_PATH | O_DIRECTORY);
+
+	assert_return_code(root, errno);
+
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	count = fwrite("abcdefghijkl", 1, 10, stream);
+	assert_int_equal(count, 10);
+
+	errno = 0;
+	rewind(stream);
+	assert_int_equal(errno, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 0);
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'a');
+
+	rc = ungetc('z', stream);
+	assert_int_equal(rc, 'z');
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'z');
+
+	rc = fgetc(stream);
+	assert_int_equal(rc, 'b');
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'c');
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 3);
+
+	errno = 0;
+	rewind(stream);
+	assert_int_equal(errno, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 0);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'a');
+
+	rc = ungetc('z', stream);
+	assert_int_equal(rc, 'z');
+
+	rc = getc(stream);
+	assert_int_equal(rc, 'z');
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 1);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	/* Streaming I/O testing */
+	fd = openat(root, "stream_file", O_RDWR | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	stream = fdopen(fd, "w+");
+	assert_non_null(stream);
+
+	/* now see to two before the end of file, this needs the filesize so will back-off */
+	offset = fseeko(stream, -2, SEEK_END);
+	assert_int_equal(offset, 0);
+
+	offset = ftello(stream);
+	assert_int_equal(offset, 8);
+
+	/* This will also close fd */
+	rc = fclose(stream);
+	assert_int_equal(rc, 0);
+
+	rc = unlinkat(root, "stream_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
 do_ioctl(void **state)
 {
 	int                     fd;
@@ -174,13 +279,13 @@ do_ioctl(void **state)
 	assert_return_code(fd, errno);
 
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+	if (rc == -1 && errno == ENOTTY) {
+		goto out;
+	}
 	assert_return_code(rc, errno);
 
 	assert_int_equal(dur.uid, geteuid());
 	assert_int_equal(dur.gid, getegid());
-
-	rc = close(fd);
-	assert_return_code(rc, errno);
 
 	/* Now do the same test but on the directory itself */
 	rc = ioctl(root, DFUSE_IOCTL_DFUSE_USER, &dur);
@@ -188,6 +293,11 @@ do_ioctl(void **state)
 
 	assert_int_equal(dur.uid, geteuid());
 	assert_int_equal(dur.gid, getegid());
+
+out:
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "ioctl_file", 0);
 	assert_return_code(rc, errno);
@@ -205,6 +315,8 @@ timespec_gt(struct timespec t1, struct timespec t2)
 		return t1.tv_sec > t2.tv_sec;
 }
 
+#define FUSE_SUPER_MAGIC  0x65735546
+
 void
 do_mtime(void **state)
 {
@@ -215,6 +327,7 @@ do_mtime(void **state)
 	int             fd;
 	int             rc;
 	char            input_buf[] = "hello";
+	struct statfs   fs;
 	int             root        = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
@@ -222,20 +335,37 @@ do_mtime(void **state)
 	/* Open a file and sanity check the mtime */
 	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
+
+	rc = fstatfs(root, &fs);
+	assert_return_code(fd, errno);
+
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	assert_return_code(fd, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
-	assert_true(now.tv_sec - prev_ts.tv_sec < 3);
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(now, stbuf.st_mtim));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", now.tv_sec, now.tv_nsec);
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+	}
 
 	/* Write to the file and verify mtime is newer */
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+		printf("%ld %ld\n", prev_ts.tv_sec, prev_ts.tv_nsec);
+	}
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -244,7 +374,13 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	if (fs.f_type == FUSE_SUPER_MAGIC) {
+		assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
+	} else {
+		printf("Not comparing mtime\n");
+		printf("%ld %ld\n", stbuf.st_mtim.tv_sec, stbuf.st_mtim.tv_nsec);
+		printf("%ld %ld\n", prev_ts.tv_sec, prev_ts.tv_nsec);
+	}
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -260,6 +396,13 @@ do_mtime(void **state)
 	assert_int_equal(stbuf.st_mtim.tv_nsec, times[1].tv_nsec);
 	prev_ts.tv_sec  = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/* Repeat the write test again */
+	rc = write(fd, input_buf, sizeof(input_buf));
+	assert_return_code(rc, errno);
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(timespec_gt(stbuf.st_mtim, prev_ts));
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
@@ -291,6 +434,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
+		case 's':
+			printf("\n\n=================");
+			printf("dfuse streaming tests");
+			printf("=====================");
+			const struct CMUnitTest stream_tests[] = {
+			    cmocka_unit_test(do_stream),
+			};
+			nr_failed = cmocka_run_group_tests(stream_tests, NULL, NULL);
+			break;
+
 		case 'm':
 			printf("\n\n=================");
 			printf("dfuse metadata tests");
@@ -323,12 +476,13 @@ main(int argc, char **argv)
 	static struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
 					       {"all", no_argument, NULL, 'a'},
 					       {"io", no_argument, NULL, 'i'},
+					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {NULL, 0, NULL, 0}};
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "a:M:im", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "a:M:ims", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

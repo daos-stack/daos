@@ -206,11 +206,13 @@ type containerCreateCmd struct {
 	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
 	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Label       string               `long:"label" short:"l" description:"container label"`
 	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args        struct {
+		Label string `positional-arg-name:"label"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -260,16 +262,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		defer freeString(ap.aclfile)
 	}
 
-	if cmd.Label != "" {
+	if cmd.Args.Label != "" {
 		for key := range cmd.Properties.ParsedProps {
 			if key == "label" {
-				return errors.New("can't use both --label and --properties label:")
+				return errors.New("can't supply label arg and --properties label:")
 			}
 		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
 			return err
 		}
-		cmd.contLabel = cmd.Label
+		cmd.contLabel = cmd.Args.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -337,7 +339,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ci.PoolUUID = &cmd.poolUUID
 		ci.Type = cmd.Type.String()
 		ci.ContainerUUID = &cmd.contUUID
-		ci.ContainerLabel = cmd.Label
+		ci.ContainerLabel = cmd.Args.Label
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -356,17 +358,13 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Path     string      `long:"path" short:"d" description:"unified namespace path"`
-	ContFlag ContainerID `long:"cont" short:"c" description:"container UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Container ContainerID `positional-arg-name:"<container name or UUID>"`
+	Path string `long:"path" short:"d" description:"unified namespace path"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *existingContainerCmd) ContainerID() ContainerID {
-	if !cmd.ContFlag.Empty() {
-		return cmd.ContFlag
-	}
 	return cmd.Args.Container
 }
 
@@ -719,11 +717,13 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%#x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 		}...)
 
+		if *ci.LatestSnapshot != 0 {
+			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", *ci.LatestSnapshot, daos.HLC(*ci.LatestSnapshot))})
+		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}
@@ -767,7 +767,6 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-
 	return ci
 }
 
