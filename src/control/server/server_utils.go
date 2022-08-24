@@ -211,8 +211,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	// When requesting to prepare NVMe drives during service start-up, use all addresses
 	// specified in engine config BdevList parameters as the PCIAllowList and the server
-	// config BdevExclude parameter as the PCIBlockList. BdevInclude config parameter has
-	// been removed.
+	// config BdevExclude parameter as the PCIBlockList.
 
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,

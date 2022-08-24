@@ -114,8 +114,7 @@
 ## Immutable after running "dmg storage format".
 #
 ## Only use NVMe controllers with specific PCI addresses.
-## Excludes drives listed in bdev_include and forces auto-detection to
-## skip those drives.
+## Excludes drives listed and forces auto-detection to skip those drives.
 ## default: Use all the NVMe SSDs that don't have active mount points.
 #
 #bdev_exclude: ["0000:81:00.1"]

@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -62,8 +61,7 @@ func setSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 
 	// Set engine NUMA affinities accurately in config.
 	if err := cfg.SetEngineAffinities(log, affSrc); err != nil {
-		log.Error(fmt.Sprintf("failed to set engine affinities %s: %s", msgSkip, err))
-		return nil
+		return errors.Wrapf(err, "failed to set engine affinities %s: %s", msgSkip, err)
 	}
 
 	socksToPrep := make(map[uint]bool)

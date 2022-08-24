@@ -54,11 +54,21 @@ type iommuCheckerCmd struct {
 }
 
 func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	if icc == nil {
+		return
+	}
 	icc.isIOMMUEnabled = fn
 }
 
 // IsIOMMUEnabled implements hardware.IOMMUDetector interface.
 func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	if icc == nil {
+		return false, errors.New("nil pointer receiver")
+	}
+	if icc.isIOMMUEnabled == nil {
+		return false, errors.New("nil isIOMMUEnabled function")
+	}
+
 	return icc.isIOMMUEnabled()
 }
 

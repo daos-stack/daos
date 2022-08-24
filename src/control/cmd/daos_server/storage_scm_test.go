@@ -25,14 +25,112 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-var (
-	zero uint = 0
-	one  uint = 1
-)
+func TestDaosServer_setSockFromCfg(t *testing.T) {
+	var (
+		zero uint = 0
+		one  uint = 1
+	)
 
-func mockAffinitySource(l logging.Logger, e *engine.Config) (uint, error) {
-	l.Debugf("mock affinity source: assigning engine numa to its index %d", e.Index)
-	return uint(e.Index), nil
+	mockAffinitySource := func(l logging.Logger, e *engine.Config) (uint, error) {
+		l.Debugf("mock affinity source: assigning engine numa to its index %d", e.Index)
+		return uint(e.Index), nil
+	}
+
+	for name, tc := range map[string]struct {
+		cmdSockID *uint
+		cfg       *config.Server
+		affSrc    config.EngineAffinityFn
+		expSockID *uint
+		expErr    error
+	}{
+		"nil config": {},
+		"sock specified in command": {
+			cmdSockID: &one,
+			expSockID: &one,
+		},
+		"sock derived from config": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expSockID: &zero,
+		},
+		"sock derived from config; numa node pinned": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().
+					WithPinnedNumaNode(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expSockID: &one,
+		},
+		"sock derived from config; engines with different numa": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+				engine.NewConfig().WithIndex(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+		},
+		"sock derived from config; engines with same numa": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expSockID: &zero,
+		},
+		"sock derived from config; engines with different numa; one using ram": {
+			cfg: new(config.Server).WithEngines(
+				engine.NewConfig().WithIndex(0).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassRam.String())),
+				engine.NewConfig().WithIndex(1).
+					WithStorage(storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String())),
+			),
+			expSockID: &one,
+		},
+		"affinity source returns error": {
+			affSrc: func(logging.Logger, *engine.Config) (uint, error) {
+				return 0, errors.New("fail")
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.cfg == nil {
+				tc.cfg = &config.Server{}
+			}
+
+			req := &storage.ScmPrepareRequest{
+				SocketID: tc.cmdSockID,
+			}
+
+			affSrc := tc.affSrc
+			if affSrc == nil {
+				affSrc = mockAffinitySource
+			}
+
+			err := setSockFromCfg(log, tc.cfg, affSrc, req)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expSockID, req.SocketID); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
 }
 
 func TestDaosServer_preparePMem(t *testing.T) {
@@ -44,12 +142,10 @@ func TestDaosServer_preparePMem(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		noForce   bool
-		cmdSockID *uint
 		zeroNrNs  bool
-		cfg       *config.Server
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
-		expCalls  []*storage.ScmPrepareRequest
+		expCalls  []storage.ScmPrepareRequest
 		expErr    error
 		expLogMsg string
 	}{
@@ -67,7 +163,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"create regions; no consent": {
 			noForce:  true,
-			expCalls: []*storage.ScmPrepareRequest{},
+			expCalls: []storage.ScmPrepareRequest{},
 			// prompts for confirmation and gets EOF
 			expErr: errors.New("consent not given"),
 		},
@@ -100,7 +196,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		},
 		"invalid number of namespaces per socket": {
 			zeroNrNs: true,
-			expCalls: []*storage.ScmPrepareRequest{},
+			expCalls: []storage.ScmPrepareRequest{},
 			expErr:   errors.New("at least 1"),
 		},
 		"create namespaces; no state change": {
@@ -128,97 +224,6 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			},
 			expLogMsg: printNamespace.String(),
 		},
-		"sock specified in command": {
-			cmdSockID: &one,
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					NrNamespacesPerSocket: 1,
-					SocketID:              &one,
-				},
-			},
-			// Only checking that request was made with provided socket so expect
-			// failure.
-			expErr: errors.New("failed to report state"),
-		},
-		"sock derived from config": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					SocketID:              &zero,
-					NrNamespacesPerSocket: 1,
-				},
-			},
-			expErr: errors.New("failed to report state"),
-		},
-		"sock derived from config; numa node pinned": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithPinnedNumaNode(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					SocketID:              &one,
-					NrNamespacesPerSocket: 1,
-				},
-			},
-			expErr: errors.New("failed to report state"),
-		},
-		"sock derived from config; engines with different numa": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-				engine.NewConfig().WithIndex(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					NrNamespacesPerSocket: 1,
-				},
-			},
-			expErr: errors.New("failed to report state"),
-		},
-		"sock derived from config; engines with same numa": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					SocketID:              &zero,
-					NrNamespacesPerSocket: 1,
-				},
-			},
-			expErr: errors.New("failed to report state"),
-		},
-		"sock derived from config; engines with different numa; one using ram": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassRam.String())),
-				engine.NewConfig().WithIndex(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					SocketID:              &one,
-					NrNamespacesPerSocket: 1,
-				},
-			},
-			expErr: errors.New("failed to report state"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -233,19 +238,12 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			msp := scm.NewProvider(log, msb, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
-			if tc.cfg == nil {
-				tc.cfg = &config.Server{}
-			}
-
 			cmd := prepareSCMCmd{
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
 				Force: !tc.noForce,
 			}
-			cmd.SocketID = tc.cmdSockID
-			cmd.config = tc.cfg
-			cmd.affinitySource = mockAffinitySource
 			nrNs := uint(1)
 			if tc.zeroNrNs {
 				nrNs = 0
@@ -256,25 +254,17 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expCalls == nil {
-				tc.expCalls = []*storage.ScmPrepareRequest{
+				tc.expCalls = []storage.ScmPrepareRequest{
 					{NrNamespacesPerSocket: 1},
 				}
 			}
 
 			msb.RLock()
-			if len(tc.expCalls) == 0 {
-				if len(msb.PrepareCalls) != 0 {
-					t.Fatalf("unexpected number of prepare calls, want 0 got %d",
-						len(msb.PrepareCalls))
-				}
-			} else {
-				if len(msb.PrepareCalls) != 1 {
-					t.Fatalf("unexpected number of prepare calls, want 1 got %d",
-						len(msb.PrepareCalls))
-				}
-				if diff := cmp.Diff(*(tc.expCalls[0]), msb.PrepareCalls[0]); diff != "" {
-					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
-				}
+			if msb.PrepareCalls == nil {
+				msb.PrepareCalls = []storage.ScmPrepareRequest{}
+			}
+			if diff := cmp.Diff(tc.expCalls, msb.PrepareCalls); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
 			}
 			if len(msb.ResetCalls) != 0 {
 				t.Fatalf("unexpected number of reset calls, want 0 got %d",
@@ -304,17 +294,15 @@ func TestDaosServer_resetPMem(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		noForce   bool
-		cmdSockID *uint
-		cfg       *config.Server
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expErr    error
 		expLogMsg string
-		expCalls  []*storage.ScmPrepareRequest
+		expCalls  []storage.ScmPrepareRequest
 	}{
 		"remove regions; no consent": {
 			noForce:  true,
-			expCalls: []*storage.ScmPrepareRequest{},
+			expCalls: []storage.ScmPrepareRequest{},
 			// prompts for confirmation and gets EOF
 			expErr: errors.New("consent not given"),
 		},
@@ -421,92 +409,6 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			},
 			expErr: errors.New("unexpected state"),
 		},
-		"sock specified in command": {
-			cmdSockID: &one,
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					Reset:    true,
-					SocketID: &one,
-				},
-			},
-			// Only checking that request was made with provided socket so expect
-			// failure.
-			expErr: errors.New("unexpected state"),
-		},
-		"sock derived from config": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					Reset:    true,
-					SocketID: &zero,
-				},
-			},
-			expErr: errors.New("unexpected state"),
-		},
-		"sock derived from config; numa node pinned": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().
-					WithPinnedNumaNode(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					Reset:    true,
-					SocketID: &one,
-				},
-			},
-			expErr: errors.New("unexpected state"),
-		},
-		"sock derived from config; engines with different numa": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-				engine.NewConfig().WithIndex(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expErr: errors.New("unexpected state"),
-		},
-		"sock derived from config; engines with same numa": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					Reset:    true,
-					SocketID: &zero,
-				},
-			},
-			expErr: errors.New("unexpected state"),
-		},
-		"sock derived from config; engines with different numa; one using ram": {
-			cfg: new(config.Server).WithEngines(
-				engine.NewConfig().WithIndex(0).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassRam.String())),
-				engine.NewConfig().WithIndex(1).
-					WithStorage(storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String())),
-			),
-			expCalls: []*storage.ScmPrepareRequest{
-				{
-					Reset:    true,
-					SocketID: &one,
-				},
-			},
-			expErr: errors.New("unexpected state"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -521,43 +423,28 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			msp := scm.NewProvider(log, msb, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
-			if tc.cfg == nil {
-				tc.cfg = &config.Server{}
-			}
-
 			cmd := resetSCMCmd{
 				LogCmd: cmdutil.LogCmd{
 					Logger: log,
 				},
 				Force: !tc.noForce,
 			}
-			cmd.SocketID = tc.cmdSockID
-			cmd.config = tc.cfg
-			cmd.affinitySource = mockAffinitySource
 
 			err := cmd.resetPMem(scs.ScmPrepare)
 			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expCalls == nil {
-				tc.expCalls = []*storage.ScmPrepareRequest{
+				tc.expCalls = []storage.ScmPrepareRequest{
 					{Reset: true},
 				}
 			}
 
 			msb.RLock()
-			if len(tc.expCalls) == 0 {
-				if len(msb.ResetCalls) != 0 {
-					t.Fatalf("unexpected number of reset calls, want 0 got %d",
-						len(msb.ResetCalls))
-				}
-			} else {
-				if len(msb.ResetCalls) != 1 {
-					t.Fatalf("unexpected number of reset calls, want 1 got %d",
-						len(msb.ResetCalls))
-				}
-				if diff := cmp.Diff(*(tc.expCalls[0]), msb.ResetCalls[0]); diff != "" {
-					t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
-				}
+			if msb.ResetCalls == nil {
+				msb.ResetCalls = []storage.ScmPrepareRequest{}
+			}
+			if diff := cmp.Diff(tc.expCalls, msb.ResetCalls); diff != "" {
+				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 			}
 			if len(msb.PrepareCalls) != 0 {
 				t.Fatalf("unexpected number of prepare calls, want 0 got %d",

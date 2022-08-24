@@ -48,15 +48,14 @@ func (ec *Config) ConvertLegacyStorage(log logging.Logger, idx int) {
 			)
 		}
 
-		// Do not add bdev tier if cls is none or nvme has no devices to maintain
-		// backward compatible behavior.
+		// Do not add bdev tier if BdevClass is none or nvme has no devices.
 		bc := ls.BdevClass
 		switch {
 		case bc == storage.ClassNvme && ls.BdevConfig.DeviceList.Len() == 0:
 			log.Debugf("legacy storage config conversion skipped for class "+
 				"%s with empty bdev_list", storage.ClassNvme)
 		case bc == storage.ClassNone:
-			log.Debugf("legacy storage config conversion skipped for class %s",
+			log.Debugf("legacy storage config bdev bonversion skipped for class %s",
 				storage.ClassNone)
 		default:
 			tierCfgs = append(tierCfgs,
