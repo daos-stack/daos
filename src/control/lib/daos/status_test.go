@@ -15,7 +15,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
-func Testdaos_Status(t *testing.T) {
+func TestDaos_Status(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in     int32
 		expErr error
@@ -39,7 +39,7 @@ func Testdaos_Status(t *testing.T) {
 	}
 }
 
-func Testdaos_Error(t *testing.T) {
+func TestDaos_Error(t *testing.T) {
 	// Light test to make sure the error stringer works as expected.
 	for ds, expStr := range map[daos.Status]string{
 		daos.Success:        "DER_SUCCESS(0): Success",
