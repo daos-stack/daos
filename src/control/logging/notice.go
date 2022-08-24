@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -22,7 +23,7 @@ func NewCommandLineNoticeLogger(output io.Writer) *DefaultNoticeLogger {
 	return &DefaultNoticeLogger{
 		baseLogger{
 			dest: output,
-			log:  log.New(output, "", emptyLogFlags),
+			log:  log.New(output, "NOTICE: ", emptyLogFlags),
 		},
 	}
 }

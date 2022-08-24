@@ -91,6 +91,8 @@ const (
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
 	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
@@ -133,6 +135,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerPoolHasContainers
 )
 
 // server config fault codes

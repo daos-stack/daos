@@ -34,7 +34,7 @@ func New(localAddress raft.ServerAddress, dialOptions []grpc.DialOption) *Manage
 
 // Register the RaftTransport gRPC service on a gRPC server.
 func (m *Manager) Register(s *grpc.Server) {
-	pb.RegisterRaftTransportServer(s, gRPCAPI{m})
+	pb.RegisterRaftTransportServer(s, gRPCAPI{manager: m})
 }
 
 // Transport returns a raft.Transport that communicates over gRPC.

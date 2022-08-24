@@ -369,6 +369,13 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_SCRUB_THRESH:
 			/* accepting any number for threshold for now */
 			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_svc_rf_is_valid(val)) {
+				D_ERROR("invalid svc_rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
 		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
@@ -946,8 +953,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	acl2_size = daos_acl_get_size(acl2);
 
 	if (acl1_size != acl2_size) {
-		D_ERROR("ACL len mistmatch, %lu != %lu\n",
-			acl1_size, acl2_size);
+		D_ERROR("ACL len mismatch, %lu != %lu\n", acl1_size, acl2_size);
 		return -DER_MISMATCH;
 	}
 
