@@ -24,7 +24,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 		return -ENOMEM;
 	}
 
-	// TODO: Handle markers
+	/* TODO: Handle markers */
 	rc = daos_pool_list_cont(ds3->poh, &ncont, conts, ev);
 	if (rc == 0) {
 		*is_truncated = false;
@@ -45,10 +45,10 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 			continue;
 		}
 
-		// Copy bucket name
+		/* Copy bucket name */
 		strcpy(buf[bi].name, name);
 
-		// Get info
+		/* Get info */
 		rc = ds3_bucket_open(name, &ds3b, ds3, ev);
 		if (rc != 0) {
 			D_DEBUG(DB_ALL,
@@ -73,7 +73,7 @@ ds3_bucket_list(daos_size_t *nbuck, struct ds3_bucket_info *buf, char *marker, b
 			goto err;
 
 		bi++;
-		// TODO handle marker
+		/* TODO handle marker */
 	}
 
 	*nbuck = bi;
@@ -94,13 +94,13 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 	if (ds3 == NULL || name == NULL)
 		return -EINVAL;
 
-	// Prevent attempting to create metadata bucket
+	/* Prevent attempting to create metadata bucket */
 	if (strcmp(name, METADATA_BUCKET) == 0) {
 		D_ERROR("Cannot create metadata bucket");
 		return -EINVAL;
 	}
 
-	// Create dfs container and open ds3b
+	/* Create dfs container and open ds3b */
 	rc = dfs_cont_create_with_label(ds3->poh, name, attr, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create container, rc = %d\n", rc);
@@ -119,7 +119,7 @@ ds3_bucket_create(const char *name, struct ds3_bucket_info *info, dfs_attr_t *at
 		goto err;
 	}
 
-	// Create multipart index
+	/* Create multipart index */
 	rc = dfs_mkdir(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, DEFFILEMODE, 0);
 	if (rc != 0 && rc != EEXIST) {
 		D_ERROR("Failed to create multipart index, rc = %d\n", rc);
@@ -150,7 +150,7 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 		return -rc;
 	}
 
-	// Check if the bucket is empty
+	/* Check if the bucket is empty */
 	if (!force) {
 		rc = dfs_lookup(ds3b->dfs, "/", O_RDWR, &dir_obj, NULL, NULL);
 		if (rc != 0) {
@@ -169,20 +169,20 @@ ds3_bucket_destroy(const char *name, bool force, ds3_t *ds3, daos_event_t *ev)
 			goto err_dirents;
 		}
 
-		// The bucket is not empty
+		/* The bucket is not empty */
 		if (nd != 0) {
 			rc = ENOTEMPTY;
 			goto err_dirents;
 		}
 	}
 
-	// Remove the bucket's multipart directory
+	/* Remove the bucket's multipart directory */
 	rc = dfs_remove(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], name, true, NULL);
 	if (rc != 0) {
 		goto err_dirents;
 	}
 
-	// Finally, destroy the bucket
+	/* Finally, destroy the bucket */
 	rc = daos_cont_destroy(ds3->poh, name, true, NULL);
 	rc = daos_der2errno(rc);
 
@@ -208,7 +208,7 @@ ds3_bucket_open(const char *name, ds3_bucket_t **ds3b, ds3_t *ds3, daos_event_t 
 	if (ds3 == NULL || name == NULL || ds3b == NULL)
 		return -EINVAL;
 
-	// Prevent attempting to open metadata bucket
+	/* Prevent attempting to open metadata bucket */
 	if (strcmp(name, METADATA_BUCKET) == 0) {
 		D_ERROR("Cannot open metadata bucket");
 		return -ENOENT;
@@ -314,11 +314,11 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	if (prefix != NULL && strnlen(prefix, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
-	// End
+	/* End */
 	if (*nobj == 0)
 		return 0;
 
-	// TODO: support the case when delim is not /
+	/* TODO: support the case when delim is not / */
 	if (strcmp(delim, "/") != 0) {
 		return -EINVAL;
 	}
@@ -357,9 +357,11 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		goto err_dir_obj;
 	}
 
-	// TODO handle bigger directories
-	// TODO handle ordering
-	// TODO handle marker
+	/**
+	 * TODO handle bigger directories
+	 * TODO handle ordering
+	 * TODO handle marker
+	 */
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3b->dfs, dir_obj, &anchor, nobj, dirents);
@@ -371,20 +373,24 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		*is_truncated = !daos_anchor_is_eof(&anchor);
 	}
 
-	// Go through the returned objects, if it is a regular file, add to objs. If it's a
-	// directory add to cps. Otherwise ignore.
+	/**
+	 * Go through the returned objects, if it is a regular file, add to objs. If it's a
+	 * directory add to cps. Otherwise ignore.
+	 */
 	cpi  = 0;
 	obji = 0;
 	for (i = 0; i < *nobj; i++) {
 		name = dirents[i].d_name;
 
-		// Skip entries that do not start with prefix_rest
-		// TODO handle how this affects max
+		/**
+		 * Skip entries that do not start with prefix_rest
+		 * TODO handle how this affects max
+		 */
 		if (strncmp(name, prefix_rest, strlen(prefix_rest)) != 0) {
 			continue;
 		}
 
-		// Open the file and check mode
+		/* Open the file and check mode */
 		rc = dfs_lookup_rel(ds3b->dfs, dir_obj, name, O_RDWR | O_NOFOLLOW, &entry_obj,
 				    &mode, NULL);
 		if (rc != 0) {
@@ -392,15 +398,15 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		}
 
 		if (S_ISDIR(mode)) {
-			// The entry is a directory
+			/* The entry is a directory */
 
-			// Out of bounds
+			/* Out of bounds */
 			if (cpi >= *ncp) {
 				rc = EINVAL;
 				goto err_dirents;
 			}
 
-			// Add to cps
+			/* Add to cps */
 			cpp = cps[cpi].prefix;
 			if (strlen(path) != 0) {
 				strcpy(cpp, path);
@@ -413,12 +419,12 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 			cpi++;
 		} else if (S_ISREG(mode)) {
-			// The entry is a regular file
-			// Read the xattr and add to objs
-			// TODO make more efficient
+			/* The entry is a regular file */
+			/* Read the xattr and add to objs */
+			/* TODO make more efficient */
 			rc = dfs_getxattr(ds3b->dfs, entry_obj, RGW_DIR_ENTRY_XATTR,
 					  objs[obji].encoded, &objs[obji].encoded_length);
-			// Skip if file has no dirent
+			/* Skip if file has no dirent */
 			if (rc != 0) {
 				D_DEBUG(DB_ALL, "No dirent, skipping entry= %s\n", name);
 				rc = dfs_release(entry_obj);
@@ -429,17 +435,17 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 
 			obji++;
 		} else {
-			// Skip other types
+			/* Skip other types */
 			D_DEBUG(DB_ALL, "Skipping entry = %s\n", name);
 		}
 
-		// Close handles
+		/* Close handles */
 		rc = dfs_release(entry_obj);
 		if (rc != 0)
 			goto err_dirents;
 	}
 
-	// Set the number of read objects
+	/* Set the number of read objects */
 	*nobj = obji;
 	*ncp  = cpi;
 

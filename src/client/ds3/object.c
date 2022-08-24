@@ -6,7 +6,7 @@
 
 #include "ds3_internal.h"
 
-// helper
+/* helper */
 static bool
 ends_with(const char *str, const char *suffix)
 {
@@ -51,7 +51,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		return -EINVAL;
 	}
 
-	// TODO: cache open file handles
+	/* TODO: cache open file handles */
 	D_ALLOC_PTR(ds3o_tmp);
 	if (ds3o_tmp == NULL)
 		return -ENOMEM;
@@ -71,18 +71,18 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	}
 
 	if (parent_path != NULL) {
-		// Recursively open parent directories
+		/* Recursively open parent directories */
 
 		for (dir = strtok_r(parent_path, "/", &sptr); dir != NULL;
 		     dir = strtok_r(NULL, "/", &sptr)) {
-			// Open or Create directory
+			/* Open or Create directory */
 			rc = dfs_open(ds3b->dfs, parent, dir, mode | S_IFDIR, O_RDWR | O_CREAT, 0,
 				      0, NULL, &dir_obj);
 			if (rc != 0 && rc != EEXIST) {
 				goto err_parent;
 			}
 
-			// Next parent
+			/* Next parent */
 			if (parent) {
 				rc = dfs_release(parent);
 				if (rc != 0)
@@ -92,7 +92,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		}
 	}
 
-	// Finally create the file
+	/* Finally create the file */
 	rc = dfs_open(ds3b->dfs, parent, file_name, mode | S_IFREG, O_RDWR | O_CREAT | O_TRUNC, 0,
 		      0, NULL, &ds3o_tmp->dfs_obj);
 	if (rc == 0) {
@@ -127,7 +127,7 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	if (ds3o_tmp == NULL)
 		return -ENOMEM;
 
-	// TODO: cache open file handles
+	/* TODO: cache open file handles */
 	D_ALLOC_ARRAY(path, DS3_MAX_KEY_BUFF);
 	if (path == NULL) {
 		rc = ENOMEM;
@@ -144,9 +144,11 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
 	if (rc == ENOENT) {
 		if (ends_with(path, LATEST_INSTANCE_SUFFIX)) {
-			// If we are trying to access the latest version, try accessing key with
-			// null instance since it is possible that the bucket did not have
-			// versioning before
+			/**
+			 * If we are trying to access the latest version, try accessing key with
+			 * null instance since it is possible that the bucket did not have
+			 * versioning before
+			 */
 			suffix_location       = strlen(path) - strlen(LATEST_INSTANCE_SUFFIX);
 			path[suffix_location] = '\0';
 			rc = dfs_lookup(ds3b->dfs, path, O_RDWR, &ds3o_tmp->dfs_obj, NULL, NULL);
@@ -342,14 +344,14 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		}
 	}
 
-	// Build link name
+	/* Build link name */
 	D_ALLOC_ARRAY(link_name, DS3_MAX_KEY_BUFF);
 	if (link_name == NULL) {
 		rc = ENOMEM;
 		goto err_parent;
 	}
 
-	// Copy name without instance
+	/* Copy name without instance */
 	name_length  = strlen(file_name);
 	suffix_start = strrchr(file_name, '[');
 	if (suffix_start != NULL) {
@@ -359,17 +361,19 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	strncpy(link_name, file_name, name_length);
 	strcat(link_name, LATEST_INSTANCE_SUFFIX);
 
-	// Remove previous link
+	/* Remove previous link */
 	rc = dfs_remove(ds3b->dfs, parent, link_name, false, NULL);
 	if (rc != 0 && rc != ENOENT)
 		goto err_link_name;
 
-	// Create the link
+	/* Create the link */
 	rc = dfs_open(ds3b->dfs, parent, link_name, DEFFILEMODE | S_IFLNK, O_RDWR | O_CREAT, 0, 0,
 		      file_name, &link);
 
-	// TODO Update an xattr with a list to all the version ids, ordered by
-	// creation to handle deletion
+	/**
+	 * TODO Update an xattr with a list to all the version ids, ordered by
+	 * creation to handle deletion
+	 */
 	rc2 = dfs_release(link);
 	rc  = rc == 0 ? rc2 : rc;
 

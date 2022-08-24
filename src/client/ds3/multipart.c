@@ -6,18 +6,19 @@
 
 #include "ds3_internal.h"
 
-// Helper struct
+/** Helper struct */
 struct part_for_sort {
 	uint32_t    part_num;
 	const char *part_name;
 };
 
-// Helper function
+/** Helper function */
 static int
 compare_part_for_sort(const void *p1, const void *p2)
 {
 	const struct part_for_sort *ps1 = p1;
 	const struct part_for_sort *ps2 = p2;
+
 	return ps1->part_num - ps2->part_num;
 }
 
@@ -48,7 +49,7 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	if (delim != NULL && strnlen(delim, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
-	// End
+	/* End */
 	if (*nmp == 0) {
 		if (is_truncated) {
 			*is_truncated = false;
@@ -68,9 +69,9 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		goto err_dir;
 	}
 
-	// TODO handle more than max
-	// TODO handle ordering
-	// TODO handle marker
+	/* TODO handle more than max */
+	/* TODO handle ordering */
+	/* TODO handle marker */
 	daos_anchor_init(&anchor, 0);
 
 	rc = dfs_readdir(ds3->meta_dfs, multipart_dir, &anchor, nmp, dirents);
@@ -94,14 +95,14 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	for (i = 0; i < *nmp; i++) {
 		upload_id = dirents[i].d_name;
 
-		// Open upload dir
+		/* Open upload dir */
 		rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, upload_id, O_RDWR, &upload_dir,
 				    NULL, NULL);
 		if (rc != 0)
 			goto err_key;
 
-		// Read the key xattr
-		// Skip if file has no saved key
+		/* Read the key xattr */
+		/* Skip if file has no saved key */
 		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, key, &size);
 		if (rc != 0) {
 			D_DEBUG(DB_ALL, "No key xattr, skipping upload_id= %s\n", upload_id);
@@ -111,17 +112,17 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 			continue;
 		}
 
-		// Only add entries that start with prefix
+		/* Only add entries that start with prefix */
 		if (strncmp(key, prefix, prefix_length) == 0) {
-			// if it has delim after prefix, add to common prefixes, otherwise add to
-			// multipart uploads
+			/* if it has delim after prefix, add to common prefixes, otherwise add to */
+			/* multipart uploads */
 			char *delim_pos = NULL;
 			if (strlen(delim) != 0)
 				delim_pos = strstr(key + prefix_length, delim);
 
 			if (delim_pos != NULL) {
-				// Add to cps
-				// Out of bounds
+				/* Add to cps */
+				/* Out of bounds */
 				if (cpi >= *ncp) {
 					rc = EINVAL;
 					dfs_release(upload_dir);
@@ -131,8 +132,8 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 				strncpy(cps[cpi].prefix, key, delim_pos - key);
 				cpi++;
 			} else {
-				// Read dirent
-				// Skip if upload has no dirent
+				/* Read dirent */
+				/* Skip if upload has no dirent */
 				rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
 						  mps[mpi].encoded, &mps[mpi].encoded_length);
 				if (rc != 0) {
@@ -144,24 +145,24 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 					continue;
 				}
 
-				// Add to mps
+				/* Add to mps */
 				strcpy(mps[mpi].upload_id, upload_id);
 				strcpy(mps[mpi].key, key);
 				mpi++;
 			}
 		}
 
-		// Close handle
+		/* Close handle */
 		rc = dfs_release(upload_dir);
 		if (rc != 0)
 			goto err_key;
 	}
 
-	// Set the number of read uploads
+	/* Set the number of read uploads */
 	*nmp = mpi;
 	*ncp = cpi;
 
-	// TODO Sort uploads
+	/* TODO Sort uploads */
 err_key:
 	D_FREE(key);
 err_dirents:
@@ -197,7 +198,7 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 	if (bucket_name == NULL || upload_id == NULL || ds3 == NULL || npart == NULL)
 		return -EINVAL;
 
-	// End
+	/* End */
 	if (*npart == 0) {
 		if (is_truncated) {
 			*is_truncated = false;
@@ -229,14 +230,14 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		goto err_dirents;
 	}
 
-	// Pick the first *npart after marker
+	/* Pick the first *npart after marker */
 	D_ALLOC_ARRAY(pfs, nr);
 
-	// Fill pfs
+	/* Fill pfs */
 	for (i = 0; i < nr; i++) {
 		part_name = dirents[i].d_name;
 
-		// Parse part_name
+		/* Parse part_name */
 		errno = 0;
 
 		part_num = strtol(part_name, &err, 10);
@@ -245,18 +246,18 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 			continue;
 		}
 
-		// Skip entries that are not larger than marker
+		/* Skip entries that are not larger than marker */
 		if (part_num <= *marker) {
 			continue;
 		}
 
-		// Add to pfs
+		/* Add to pfs */
 		pfs[pfi].part_name = part_name;
 		pfs[pfi].part_num  = part_num;
 		pfi++;
 	}
 
-	// Sort pfs
+	/* Sort pfs */
 	qsort(pfs, pfi, sizeof(struct part_for_sort), compare_part_for_sort);
 
 	for (i = 0; i < pfi; i++) {
@@ -270,10 +271,10 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 			goto err_pfs;
 		}
 
-		// Read the xattr and add to parts
+		/* Read the xattr and add to parts */
 		rc = dfs_getxattr(ds3->meta_dfs, part_obj, RGW_PART_XATTR, parts[pi].encoded,
 				  &parts[pi].encoded_length);
-		// Skip if the part has no info
+		/* Skip if the part has no info */
 		if (rc != 0) {
 			rc = dfs_release(part_obj);
 			if (rc != 0)
@@ -284,18 +285,18 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 		parts[pi].part_num = part_num;
 		pi++;
 
-		// Close handles
+		/* Close handles */
 		rc = dfs_release(part_obj);
 		if (rc != 0)
 			goto err_pfs;
 
-		// Stop when we get to *npart parts.
+		/* Stop when we get to *npart parts. */
 		if (pi >= *npart) {
 			break;
 		}
 	}
 
-	// Assign read parts and next marker
+	/* Assign read parts and next marker */
 	*npart  = pi;
 	*marker = last_num;
 	if (is_truncated) {
@@ -335,7 +336,7 @@ ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name,
 	if (rc != 0)
 		goto err_multipart_dir;
 
-	// Insert an entry into bucket multipart index
+	/* Insert an entry into bucket multipart index */
 	rc = dfs_lookup_rel(ds3->meta_dfs, multipart_dir, info->upload_id, O_RDWR, &upload_dir,
 			    NULL, NULL);
 	if (rc != 0)
@@ -346,7 +347,7 @@ ds3_upload_init(struct ds3_multipart_upload_info *info, const char *bucket_name,
 	if (rc != 0)
 		goto err_upload_dir;
 
-	// Set key
+	/* Set key */
 	rc =
 	    dfs_setxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, info->key, strlen(info->key), 0);
 
@@ -369,7 +370,7 @@ ds3_upload_remove(const char *bucket_name, const char *upload_id, ds3_t *ds3)
 	if (bucket_name == NULL || upload_id == NULL || ds3 == NULL)
 		return -EINVAL;
 
-	// Remove upload from bucket multipart index
+	/* Remove upload from bucket multipart index */
 	rc = dfs_lookup_rel(ds3->meta_dfs, ds3->meta_dirs[MULTIPART_DIR], bucket_name, O_RDWR,
 			    &multipart_dir, NULL, NULL);
 	if (rc != 0)
@@ -410,7 +411,7 @@ ds3_upload_get_info(struct ds3_multipart_upload_info *info, const char *bucket_n
 	if (rc != 0)
 		goto err_upload_dir;
 
-	// Set key
+	/* Set key */
 	rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, info->key, &size);
 
 err_upload_dir:
