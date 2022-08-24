@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,7 @@ main(int argc, char **argv)
 	D_ASSERT(plt_obj_layout_match(lo_1, lo_3));
 
 	/* test pl_obj_find_rebuild */
-	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare tagets ...\n");
+	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare targets ...\n");
 	failed_tgts[0] = lo_3->ol_shards[0].po_target;
 	failed_tgts[1] = lo_3->ol_shards[1].po_target;
 	D_PRINT("failed target %d[0], %d[1], expected spare %d %d\n",
@@ -119,7 +119,7 @@ main(int argc, char **argv)
 
 	/* test pl_obj_find_reint */
 	D_PRINT("\ntest pl_obj_find_reint to get correct reintegration "
-		"tagets ...\n");
+		"targets ...\n");
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	failed_tgts[0] = lo_3->ol_shards[1].po_target;
 	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 1, reint_tgts, 1,
@@ -155,8 +155,8 @@ main(int argc, char **argv)
 
 
 	/* test pl_obj_find_reint */
-	D_PRINT("\ntest pl_obj_find_reint to get correct reintregationi "
-		"tagets ...\n");
+	D_PRINT("\ntest pl_obj_find_reint to get correct reintregation "
+		"targets ...\n");
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	reint_tgts[1] = spare_tgt_candidate[0];
 	failed_tgts[0] = lo_3->ol_shards[1].po_target;

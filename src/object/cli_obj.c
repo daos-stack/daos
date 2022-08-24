@@ -468,7 +468,7 @@ obj_init_oca(struct dc_object *obj)
 
 		/* Use the cell size from container property to overwrite
 		 * the default value.
-		 * NB: don't ovewrite cell size of private class.
+		 * NB: don't overwrite cell size of private class.
 		 */
 		props = dc_cont_hdl2props(obj->cob_coh);
 		if (props.dcp_ec_cell_sz != 0)

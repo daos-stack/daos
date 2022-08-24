@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1110,7 +1110,7 @@ int d_log_setlogmask(int facility, int mask)
 int d_log_setmasks(char *mstr, int mlen0)
 {
 	char *m, *current, *fac, *pri;
-	int mlen, facno, clen, elen, prino, rv, tmp;
+	int          mlen, facno, length, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
 	int log_flags;
 
@@ -1135,29 +1135,29 @@ int d_log_setmasks(char *mstr, int mlen0)
 	while (m) {
 		/* note current chunk, and advance m to the next one */
 		current = m;
-		for (clen = 0; clen < mlen && m[clen] != ','; clen++)
+		for (length = 0; length < mlen && m[length] != ','; length++)
 			;
-		if (clen < mlen) {
-			m = m + clen + 1;	/* skip the comma too */
-			mlen = mlen - (clen + 1);
+		if (length < mlen) {
+			m    = m + length + 1; /* skip the comma too */
+			mlen = mlen - (length + 1);
 		} else {
 			m = NULL;
 			mlen = 0;
 		}
-		if (clen == 0)
+		if (length == 0)
 			continue;	/* null entry, just skip it */
-		for (elen = 0; elen < clen && current[elen] != '='; elen++)
+		for (elen = 0; elen < length && current[elen] != '='; elen++)
 			;
-		if (elen < clen) {	/* has a facility prefix? */
+		if (elen < length) { /* has a facility prefix? */
 			fac = current;
 			faclen = elen;
 			pri = current + elen + 1;
-			prilen = clen - (elen + 1);
+			prilen = length - (elen + 1);
 		} else {
 			fac = NULL;	/* means we apply to all facs */
 			faclen = 0;
 			pri = current;
-			prilen = clen;
+			prilen = length;
 		}
 		if (m == NULL)
 			/* remove trailing white space from count */

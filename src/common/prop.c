@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -861,8 +861,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	acl2_size = daos_acl_get_size(acl2);
 
 	if (acl1_size != acl2_size) {
-		D_ERROR("ACL len mistmatch, %lu != %lu\n",
-			acl1_size, acl2_size);
+		D_ERROR("ACL len mismatch, %lu != %lu\n", acl1_size, acl2_size);
 		return -DER_MISMATCH;
 	}
 

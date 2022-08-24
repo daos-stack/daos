@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1300,7 +1300,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	/*
 	 * The first started xstream will scan all bdevs and create blobstores,
-	 * it's a prequisite for all per-xstream blobstore initialization.
+	 * it's a prerequisite for all per-xstream blobstore initialization.
 	 */
 	if (nvme_glb.bd_init_thread == NULL) {
 		struct common_cp_arg cp_arg;

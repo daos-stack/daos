@@ -1941,7 +1941,7 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 	ioc->ioc_oca = *oca;
 	ioc->ioc_oca.ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
-		/* don't ovewrite cell size of private class */
+		/* don't overwrite cell size of private class */
 		D_ASSERT(ioc->ioc_coc != NULL);
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
