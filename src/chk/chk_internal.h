@@ -43,6 +43,8 @@
 		0,	&CQF_chk_mark,		ds_chk_mark_hdlr,	&chk_mark_co_ops),	\
 	X(CHK_ACT,										\
 		0,	&CQF_chk_act,		ds_chk_act_hdlr,	&chk_act_co_ops),	\
+	X(CHK_CONT_LIST,									\
+		0,	&CQF_chk_cont_list,	ds_chk_cont_list_hdlr,	&chk_cont_list_co_ops),	\
 	X(CHK_POOL_MBS,										\
 		0,	&CQF_chk_pool_mbs,	ds_chk_pool_mbs_hdlr,	NULL),			\
 	X(CHK_REPORT,										\
@@ -114,7 +116,7 @@ CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
 
 #define DAOS_OSEQ_CHK_QUERY							\
 	((int32_t)			(cqo_status)		CRT_VAR)	\
-	((uint32_t)			(cqo_child_status)	CRT_VAR)	\
+	((int32_t)			(cqo_child_status)	CRT_VAR)	\
 	((struct chk_query_pool_shard)	(cqo_shards)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
@@ -154,6 +156,23 @@ CRT_RPC_DECLARE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 	((uint32_t)		(cao_padding)		CRT_VAR)
 
 CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
+
+/*
+ * CHK_CONT_LIST:
+ * From PS leader to check engine to get containers list.
+ */
+#define DAOS_ISEQ_CHK_CONT_LIST							\
+	((uint64_t)		(ccli_gen)		CRT_VAR)		\
+	((uuid_t)		(ccli_pool)		CRT_VAR)
+
+#define DAOS_OSEQ_CHK_CONT_LIST							\
+	((int32_t)		(cclo_status)		CRT_VAR)		\
+	((int32_t)		(cclo_child_status)	CRT_VAR)		\
+	((d_rank_t)		(cclo_rank)		CRT_VAR)		\
+	((uint32_t)		(cclo_padding)		CRT_VAR)		\
+	((uuid_t)		(cclo_conts)		CRT_ARRAY)
+
+CRT_RPC_DECLARE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST);
 
 /*
  * CHK_POOL_MBS:
@@ -474,10 +493,12 @@ extern struct crt_corpc_ops	chk_stop_co_ops;
 extern struct crt_corpc_ops	chk_query_co_ops;
 extern struct crt_corpc_ops	chk_mark_co_ops;
 extern struct crt_corpc_ops	chk_act_co_ops;
+extern struct crt_corpc_ops	chk_cont_list_co_ops;
 
 extern btr_ops_t		chk_pool_ops;
 extern btr_ops_t		chk_pending_ops;
 extern btr_ops_t		chk_rank_ops;
+extern btr_ops_t		chk_cont_ops;
 
 /* chk_common.c */
 
@@ -528,6 +549,8 @@ int chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[],
 int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
 int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
+
+int chk_engine_cont_list(uint64_t gen, uuid_t uuid, uuid_t **conts, uint32_t *count);
 
 int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, const char *label, uint32_t flags,
 			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
@@ -588,6 +611,8 @@ int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint3
 
 int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
 		   uint32_t act, d_rank_t rank, bool for_all);
+
+int chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args);
 
 int chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint32_t flags,
 			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
@@ -746,6 +771,13 @@ chk_fini_shards(struct chk_query_pool_shard *shards, int nr)
 {
 	if (nr != 0 && shards[0].cqps_rank == dss_self_rank())
 		chk_query_free(shards, nr);
+}
+
+static inline void
+chk_fini_conts(uuid_t *conts, d_rank_t rank)
+{
+	if (rank == dss_self_rank())
+		D_FREE(conts);
 }
 
 static inline void

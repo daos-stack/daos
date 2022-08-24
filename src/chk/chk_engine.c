@@ -47,6 +47,117 @@ struct chk_query_xstream_args {
 	struct chk_query_target		 cqxa_target;
 };
 
+struct chk_cont_list_args {
+	uuid_t				 ccla_pool;
+	uint32_t			 ccla_cap;
+	uint32_t			 ccla_idx;
+	uuid_t				*ccla_conts;
+};
+
+struct chk_cont_list_aggregator {
+	uuid_t				 ccla_pool;
+	d_list_t			 ccla_list;
+	daos_handle_t			 ccla_toh;
+	struct btr_root			 ccla_btr;
+	uint32_t			 ccla_count;
+};
+
+struct chk_cont_rec {
+	d_list_t			 ccr_link;
+	uuid_t				 ccr_uuid;
+	struct chk_cont_list_aggregator	*ccr_aggregator;
+	daos_prop_t			*ccr_label_prop;
+	uint32_t			 ccr_label_checked:1,
+					 ccr_skip:1;
+};
+
+struct chk_cont_bundle {
+	struct chk_cont_list_aggregator	*ccb_aggregator;
+	uuid_t				 ccb_uuid;
+};
+
+static int
+chk_cont_hkey_size(void)
+{
+	return sizeof(uuid_t);
+}
+
+static void
+chk_cont_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
+{
+	D_ASSERT(key_iov->iov_len == sizeof(uuid_t));
+
+	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
+}
+
+static int
+chk_cont_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
+	       struct btr_record *rec, d_iov_t *val_out)
+{
+	struct chk_cont_bundle	*ccb = val_iov->iov_buf;
+	struct chk_cont_rec	*ccr;
+	int			 rc = 0;
+
+	D_ALLOC_PTR(ccr);
+	if (ccr == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_copy(ccr->ccr_uuid, ccb->ccb_uuid);
+	ccr->ccr_aggregator = ccb->ccb_aggregator;
+	d_list_add_tail(&ccr->ccr_link, &ccb->ccb_aggregator->ccla_list);
+	ccb->ccb_aggregator->ccla_count++;
+
+	rec->rec_off = umem_ptr2off(&tins->ti_umm, ccr);
+
+out:
+	return rc;
+}
+
+static int
+chk_cont_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	struct chk_cont_rec	*ccr = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+
+	rec->rec_off = UMOFF_NULL;
+
+	ccr->ccr_aggregator->ccla_count--;
+	d_list_del(&ccr->ccr_link);
+	daos_prop_free(ccr->ccr_label_prop);
+	D_FREE(ccr);
+
+	return 0;
+}
+
+static int
+chk_cont_fetch(struct btr_instance *tins, struct btr_record *rec,
+	       d_iov_t *key_iov, d_iov_t *val_iov)
+{
+	struct chk_cont_rec	*ccr;
+
+	D_ASSERT(val_iov != NULL);
+
+	ccr = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	d_iov_set(val_iov, ccr, sizeof(*ccr));
+
+	return 0;
+}
+
+static int
+chk_cont_update(struct btr_instance *tins, struct btr_record *rec,
+		d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
+{
+	return 0;
+}
+
+btr_ops_t chk_cont_ops = {
+	.to_hkey_size	= chk_cont_hkey_size,
+	.to_hkey_gen	= chk_cont_hkey_gen,
+	.to_rec_alloc	= chk_cont_alloc,
+	.to_rec_free	= chk_cont_free,
+	.to_rec_fetch	= chk_cont_fetch,
+	.to_rec_update  = chk_cont_update,
+};
+
 static void
 chk_destroy_pool_tree(struct chk_instance *ins)
 {
@@ -790,17 +901,81 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 	return result;
 }
 
+static int
+chk_engine_cont_list_init(uuid_t pool, struct chk_cont_list_aggregator *aggregator)
+{
+	struct umem_attr	uma = { 0 };
+
+	uma.uma_id = UMEM_CLASS_VMEM;
+	uuid_copy(aggregator->ccla_pool, pool);
+	D_INIT_LIST_HEAD(&aggregator->ccla_list);
+
+	return dbtree_create_inplace(DBTREE_CLASS_CHK_CONT, 0, CHK_BTREE_ORDER, &uma,
+				     &aggregator->ccla_btr, &aggregator->ccla_toh);
+}
+
+static void
+chk_engine_cont_list_fini(struct chk_cont_list_aggregator *aggregator)
+{
+	if (daos_handle_is_valid(aggregator->ccla_toh)) {
+		dbtree_destroy(aggregator->ccla_toh, NULL);
+		aggregator->ccla_toh = DAOS_HDL_INVAL;
+	}
+}
+
+static int
+chk_engine_cont_list_reduce_internal(struct chk_cont_list_aggregator *aggregator,
+				     uuid_t *conts, uint32_t count)
+{
+	struct chk_cont_bundle		ccb = { 0 };
+	d_iov_t				kiov;
+	d_iov_t				riov;
+	int				i;
+	int				rc = 0;
+
+	ccb.ccb_aggregator = aggregator;
+	d_iov_set(&riov, &ccb, sizeof(ccb));
+
+	for (i = 0; i < count; i++) {
+		uuid_copy(ccb.ccb_uuid, conts[i]);
+		d_iov_set(&kiov, conts[i], sizeof(uuid_t));
+		rc = dbtree_upsert(aggregator->ccla_toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
+				   &kiov, &riov, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to upsert "DF_UUIDF"/"DF_UUIDF" for cont list: "DF_RC"\n",
+				DP_UUID(aggregator->ccla_pool), DP_UUID(conts[i]), DP_RC(rc));
+			break;
+		}
+	}
+
+	return rc;
+}
+
+static int
+chk_engine_cont_list_remote_cb(void *args, uint32_t rank, uint32_t phase,
+			       int result, void *data, uint32_t nr)
+{
+	int	rc;
+
+	rc = chk_engine_cont_list_reduce_internal(args, data, nr);
+	chk_fini_conts(data, rank);
+
+	return rc;
+}
+
 static void
 chk_engine_pool_ult(void *args)
 {
-	struct chk_pool_rec	*cpr = args;
-	struct chk_instance	*ins = cpr->cpr_ins;
-	struct chk_bookmark	*cbk = &cpr->cpr_bk;
-	struct ds_pool_svc	*svc = NULL;
-	struct pool_map		*map = NULL;
-	int			 i;
-	int			 rc = 0;
-	int			 rc1 = 0;
+	struct chk_cont_list_aggregator	 aggregator = { 0 };
+	struct chk_pool_rec		*cpr = args;
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	struct ds_pool_svc		*svc = NULL;
+	struct pool_map			*map = NULL;
+	struct ds_pool			*pool = NULL;
+	int				 i;
+	int				 rc = 0;
+	int				 rc1 = 0;
 
 	rc = ds_pool_svc_lookup_leader(cpr->cpr_uuid, &svc, NULL);
 	if (rc != 0)
@@ -824,6 +999,20 @@ again:
 	}
 
 	ABT_mutex_unlock(cpr->cpr_mutex);
+
+	/*
+	 * This engine maybe not PS leader in former run, at time time,
+	 * its phase will be marked as 'DONE'. But after check restart,
+	 * it becomes new PS leader, let's re-scan the pool/containers.
+	 */
+	if (cbk->cb_phase > CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP &&
+	    cbk->cb_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE)
+		goto cont;
+
+	cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP;
+	/* XXX: How to estimate the left time? */
+	cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+	chk_bk_update_pool(cbk, cpr->cpr_uuid);
 
 	rc = ds_pool_svc_load_map(svc, &map);
 	if (rc != 0)
@@ -860,7 +1049,35 @@ again:
 	 */
 	ds_pool_svc_evict_all(svc);
 
+	if (cpr->cpr_skip)
+		goto out;
+
+cont:
+	cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST;
+	/* XXX: How to estimate the left time? */
+	cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+	chk_bk_update_pool(cbk, cpr->cpr_uuid);
+
+	rc = chk_engine_cont_list_init(cpr->cpr_uuid, &aggregator);
+	if (rc != 0)
+		goto out;
+
+	pool = ds_pool_svc2pool(svc);
+	/* Collect containers from pool shards. */
+	rc = chk_cont_list_remote(pool, cbk->cb_gen, chk_engine_cont_list_remote_cb, &aggregator);
+	if (rc != 0)
+		goto out;
+
+	cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP;
+	/* XXX: How to estimate the left time? */
+	cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+	chk_bk_update_pool(cbk, cpr->cpr_uuid);
+
+	/* TBD: verify the containers from pool shards with PS known ones. */
+
 out:
+	chk_engine_cont_list_fini(&aggregator);
+
 	if (map != NULL)
 		pool_map_decref(map);
 	ds_pool_svc_put_leader(svc);
@@ -882,6 +1099,7 @@ chk_engine_sched(void *args)
 {
 	struct chk_instance	*ins = args;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_bookmark	*cpr_bk;
 	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_bookmark	*pool_cbk;
 	struct chk_pool_rec	*cpr;
@@ -945,7 +1163,21 @@ chk_engine_sched(void *args)
 				D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
 
 				chk_pool_get(cpr);
-				cpr->cpr_bk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
+				cpr_bk = &cpr->cpr_bk;
+				/*
+				 * This engine maybe not PS leader in former run, at time time,
+				 * its phase will be marked as 'DONE'. But after check restart,
+				 * it becomes new PS leader, let's re-scan the pool/containers.
+				 */
+				if (cpr_bk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS ||
+				    cpr_bk->cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
+					cpr_bk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
+					/* XXX: How to estimate the left time? */
+					cpr_bk->cb_time.ct_left_time =
+						CHK__CHECK_SCAN_PHASE__DSP_DONE - cpr_bk->cb_phase;
+					chk_bk_update_pool(cpr_bk, cpr->cpr_uuid);
+				}
+
 				rc = dss_ult_create(chk_engine_pool_ult, cpr, DSS_XS_SYS, 0,
 						    DSS_DEEP_STACK_SZ, &cpr->cpr_thread);
 				if (rc != 0) {
@@ -990,7 +1222,7 @@ chk_engine_sched(void *args)
 					D_GOTO(out, rc = 1);
 
 				phase = chk_engine_find_slowest(ins, &done);
-				if (phase != cbk->cb_phase) {
+				if (phase > cbk->cb_phase) {
 					cbk->cb_phase = phase;
 					/* XXX: How to estimate the left time? */
 					cbk->cb_time.ct_left_time =
@@ -1618,8 +1850,8 @@ out:
 static void
 chk_engine_query_reduce(void *a_args, void *s_args)
 {
-	struct	chk_query_xstream_args	*aggregator = a_args;
-	struct  chk_query_xstream_args	*stream = s_args;
+	struct chk_query_xstream_args	*aggregator = a_args;
+	struct chk_query_xstream_args	*stream = s_args;
 	struct chk_query_pool_shard	*shard;
 	struct chk_query_target		*target;
 
@@ -1648,7 +1880,6 @@ out:
 static void
 chk_engine_query_stream_free(struct dss_stream_arg_type *args)
 {
-	D_ASSERT(args->st_arg != NULL);
 	D_FREE(args->st_arg);
 }
 
@@ -1861,6 +2092,157 @@ out:
 		 DF_ENGINE" on rank %u takes action for seq "
 		 DF_X64" with gen "DF_X64", class %u, action %u, flags %x: "DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), seq, gen, cla, act, flags, DP_RC(rc));
+
+	return rc;
+}
+
+static int
+chk_engine_cont_list_local_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+			      vos_iter_param_t *param, void *data, unsigned int *acts)
+{
+	struct chk_cont_list_args	*ccla = data;
+	uuid_t				*new_array;
+	int				 rc = 0;
+
+	if (ccla->ccla_idx >= ccla->ccla_cap) {
+		D_REALLOC_ARRAY(new_array, ccla->ccla_conts, ccla->ccla_cap, ccla->ccla_cap << 1);
+		if (new_array == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		ccla->ccla_conts = new_array;
+		ccla->ccla_cap <<= 1;
+	}
+
+	uuid_copy(ccla->ccla_conts[ccla->ccla_idx++], entry->ie_couuid);
+
+out:
+	return rc;
+}
+
+/*
+ * Enumerate the containers for one pool target.
+ * Different pool targets (on the same rank) may have different containers list.
+ */
+static int
+chk_engine_cont_list_one(void *args)
+{
+	struct dss_coll_stream_args	*reduce = args;
+	struct dss_stream_arg_type	*streams = reduce->csa_streams;
+	struct chk_cont_list_args	*ccla;
+	struct ds_pool_child		*pool;
+	vos_iter_param_t		 param = { 0 };
+	struct vos_iter_anchors		 anchor = { 0 };
+	int				 rc = 0;
+
+	ccla = streams[dss_get_module_info()->dmi_tgt_id].st_arg;
+	pool = ds_pool_child_lookup(ccla->ccla_pool);
+	/* non-exist pool is not fatal. */
+	if (pool != NULL) {
+		param.ip_hdl = pool->spc_hdl;
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+				 chk_engine_cont_list_local_cb, NULL, ccla, NULL);
+		ds_pool_child_put(pool);
+	}
+
+	return rc;
+}
+
+static void
+chk_engine_cont_list_reduce(void *a_args, void *s_args)
+{
+	struct chk_cont_list_args	*ccla = s_args;
+
+	chk_engine_cont_list_reduce_internal(a_args, ccla->ccla_conts, ccla->ccla_idx);
+}
+
+static int
+chk_engine_cont_list_alloc(struct dss_stream_arg_type *args, void *a_arg)
+{
+	struct chk_cont_list_aggregator	*aggregator = a_arg;
+	struct chk_cont_list_args	*ccla;
+	int					 rc = 0;
+
+	D_ALLOC_PTR(ccla);
+	if (ccla == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	ccla->ccla_cap = 2;
+	D_ALLOC_ARRAY(ccla->ccla_conts, ccla->ccla_cap);
+	if (ccla->ccla_conts == NULL) {
+		D_FREE(ccla);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	uuid_copy(ccla->ccla_pool, aggregator->ccla_pool);
+	args->st_arg = ccla;
+
+out:
+	return rc;
+}
+
+static void
+chk_engine_cont_list_free(struct dss_stream_arg_type *args)
+{
+	struct chk_cont_list_args	*ccla = args->st_arg;
+
+	if (ccla != NULL) {
+		D_FREE(ccla->ccla_conts);
+		D_FREE(args->st_arg);
+	}
+}
+
+int
+chk_engine_cont_list(uint64_t gen, uuid_t pool, uuid_t **conts, uint32_t *count)
+{
+	struct chk_instance		*ins = chk_engine;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct chk_cont_list_aggregator	 aggregator = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct chk_cont_rec		*ccr;
+	uuid_t				*uuids;
+	int				 i = 0;
+	int				 rc = 0;
+
+	if (cbk->cb_gen != gen)
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+
+	rc = chk_engine_cont_list_init(pool, &aggregator);
+	if (rc != 0)
+		goto out;
+
+	coll_args.ca_func_args = &coll_args.ca_stream_args;
+	coll_args.ca_aggregator = &aggregator;
+
+	coll_ops.co_func = chk_engine_cont_list_one;
+	coll_ops.co_reduce = chk_engine_cont_list_reduce;
+	coll_ops.co_reduce_arg_alloc = chk_engine_cont_list_alloc;
+	coll_ops.co_reduce_arg_free = chk_engine_cont_list_free;
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	if (rc != 0)
+		goto out;
+
+out:
+	if (rc == 0 && aggregator.ccla_count > 0) {
+		D_ALLOC_ARRAY(uuids, aggregator.ccla_count);
+		if (uuids == NULL) {
+			rc = -DER_NOMEM;
+			*conts = NULL;
+			*count = 0;
+		} else {
+			d_list_for_each_entry(ccr, &aggregator.ccla_list, ccr_link)
+				uuid_copy(uuids[i++], ccr->ccr_uuid);
+
+			*conts = uuids;
+			*count = aggregator.ccla_count;
+		}
+	} else {
+		*conts = NULL;
+		*count = 0;
+	}
+
+	chk_engine_cont_list_fini(&aggregator);
 
 	return rc;
 }
