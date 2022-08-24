@@ -35,7 +35,7 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
 
-class installed_comps():
+class InstalledComps():
     """Checks for installed components and keeps track of prior checks"""
     installed = []
     not_installed = []
@@ -55,11 +55,11 @@ class installed_comps():
         if name in self.not_installed:
             return False
         if self.inst(name) and self.reqs.is_installed(name):
-            print("Using installed version of %s" % name)
+            print(f'Using installed version of {name}')
             self.installed.append(name)
             return True
 
-        print("Using build version of %s" % name)
+        print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
@@ -67,22 +67,22 @@ class installed_comps():
 def include(reqs, name, use_value, exclude_value):
     """Return True if in include list"""
     if reqs.included(name):
-        print("Including %s optional component from build" % name)
+        print(f'Including {name} optional component from build')
         return use_value
-    print("Excluding %s optional component from build" % name)
+    print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     return installed.check(name)
 
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
        installed or not"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     if installed.check(name):
         return installed_str
     return built_str
@@ -104,12 +104,6 @@ def define_mercury(reqs):
         libs = []
     else:
         reqs.define('rt', libs=['rt'])
-    reqs.define('stdatomic', headers=['stdatomic.h'])
-
-    if reqs.check_component('stdatomic'):
-        atomic = 'stdatomic'
-    else:
-        atomic = 'openpa'
 
     reqs.define('psm2',
                 retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
@@ -162,16 +156,6 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-    reqs.define('openpa',
-                retriever=GitRepoRetriever('https://github.com/pmodels/openpa.git'),
-                commands=[['libtoolize'],
-                          ['./autogen.sh'],
-                          ['./configure', '--prefix=$OPENPA_PREFIX'],
-                          ['make'],
-                          ['make', 'install']],
-                libs=['opa'],
-                package='openpa-devel' if inst(reqs, 'openpa') else None)
-
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
                      '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
@@ -199,7 +183,6 @@ def define_mercury(reqs):
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
-                     '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/',
                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX',
                      '-DCMAKE_CXX_FLAGS="-std=c++11"',
                      '-DBUILD_EXAMPLES=OFF',
@@ -216,11 +199,6 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    mercury_build.append(check(reqs,
-                               'openpa',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a'))
-
     mercury_build.extend(check(reqs,
                                'ofi',
                                ['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
@@ -232,12 +210,11 @@ def define_mercury(reqs):
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
-                libs=['mercury', 'na', 'mercury_util'],
+                libs=['mercury'],
                 pkgconfig='mercury',
-                requires=[atomic, 'boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
-                patch_rpath=['lib'])
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
 
 
 def define_common(reqs):
@@ -299,7 +276,7 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
+                retriever=GitRepoRetriever('https://github.com/intel/isa-l.git'),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
@@ -323,6 +300,7 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n',
+                           'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
@@ -388,7 +366,7 @@ def define_components(reqs):
                            '--without-isal',
                            '--without-vtune',
                            '--with-shared'],
-                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch)],
+                          ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
@@ -398,11 +376,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
-                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
-                extra_include_path=['/usr/include/dpdk',
-                                    '$SPDK_PREFIX/include/dpdk',
-                                    # debian dpdk rpm puts rte_config.h here
-                                    '/usr/include/x86_64-linux-gnu/dpdk'],
+                headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',

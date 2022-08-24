@@ -223,7 +223,7 @@ pconnect(void)
 
 	/** gather domain_nr for poh */
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);

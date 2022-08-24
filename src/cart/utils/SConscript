@@ -1,5 +1,4 @@
-#!python
-# (C) Copyright 2021 Intel Corporation.
+# (C) Copyright 2021-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -22,21 +21,16 @@ def build_utility_shared_obj(env):
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'conf_dir')
 
     prereqs.require(env, 'protobufc')
 
     daos_build.add_build_rpath(env)
 
-    env.Alias('install', '$PREFIX')
-
-    # There is probably a better way to do this but let's get it linking first
-    env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
-
     # Generate cart utility shared objects
     build_utility_shared_obj(env)
+
+    env.Install(conf_dir, ['memcheck-cart.supp', 'fault-inject-cart.yaml'])
 
 
 if __name__ == "SCons.Script":

@@ -186,9 +186,10 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 out:
 	D_DEBUG(DB_IO,
 		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
-		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
-		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
+		"ver %u/%u, may need %s retry.\n", hit_again ? "Repeat" : "First",
+		DP_DTI(&DAE_XID(dae)), pos, dth, dth != NULL && dth->dth_dist ? "yes" : "no",
+		DAE_LID(dae), DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), DAE_VER(dae),
+		dth != NULL ? dth->dth_ver : 0, s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -320,11 +321,20 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
 	D_ASSERT(dae_old != dae_new);
-	D_ASSERTF(dae_old->dae_aborted,
-		  "NOT allow to update act DTX entry for "DF_DTI
-		  " from epoch "DF_X64" to "DF_X64"\n",
-		  DP_DTI(&DAE_XID(dae_old)),
-		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+
+	if (unlikely(!dae_old->dae_aborted)) {
+		/*
+		 * XXX: There are two possible reasons for that:
+		 *
+		 *	1. Client resent the RPC but without set 'RESEND' flag.
+		 *	2. Client reused the DTX ID for different modifications.
+		 *
+		 *	Currently, the 1st case is more suspected.
+		 */
+		D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
+			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+		return -DER_TX_ID_REUSED;
+	}
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae_new);
 	dtx_evict_lid(cont, dae_old);
@@ -1220,15 +1230,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	/* For rebuild fetch, if hit non-committed DTX, has to ask the
-	 * sponsor to wait and retry, otherwise, the new in-rebuilding
-	 * target may miss some data.
-	 * Under such case, DTX resync on related leader server is not
-	 * finished yet. The DTX entry may be stale, need refresh with
-	 * the leader.
+	/*
+	 * Up layer rebuild logic guarantees that the rebuild scan will not be
+	 * triggered until DTX resync has been done on all related targets. So
+	 * here, if rebuild logic hits non-committed DTX entry, it must be for
+	 * new IO that version is not older than rebuild, then it is invisible
+	 * to rebuild. Related new IO corresponding to such non-committed DTX
+	 * has already been sent to the in-rebuilding target.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, dth, false, true, 6);
+		return ALB_UNAVAILABLE;
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
@@ -1728,7 +1739,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1794,8 +1806,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared)
+		if (dae->dae_prepared) {
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
+
 			return DTX_ST_PREPARED;
+		}
 
 		return DTX_ST_INITED;
 	}
@@ -2032,26 +2054,19 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_dtx_act_ent	 *dae = NULL;
-	struct vos_dtx_cmt_ent	 *dce = NULL;
 	struct vos_container	 *cont;
 	int			  committed = 0;
 	int			  rc = 0;
 
 	D_ASSERT(count > 0);
 
-	if (count > 1) {
-		D_ALLOC_ARRAY(daes, count);
-		if (daes == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(daes, count);
+	if (daes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, count);
-		if (dces == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		daes = &dae;
-		dces = &dce;
-	}
+	D_ALLOC_ARRAY(dces, count);
+	if (dces == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -2071,10 +2086,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	}
 
 out:
-	if (daes != &dae)
-		D_FREE(daes);
-	if (dces != &dce)
-		D_FREE(dces);
+	D_FREE(daes);
+	D_FREE(dces);
 
 	return rc < 0 ? rc : committed;
 }

@@ -44,6 +44,7 @@ struct oit_scan_args {
 	daos_key_t		oa_dkey;
 	daos_epoch_t		oa_epoch;
 	daos_obj_id_t		oa_oit_id;
+	daos_obj_id_t		oa_pre_id;
 	d_iov_t			oa_iov;
 	int			oa_hash;
 	/** sgl for OID each bucket */
@@ -88,7 +89,6 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	if (rc)
 		goto failed;
 
-	bucket->ob_nr = 0;
 	return 0;
 failed:
 	return rc;
@@ -108,6 +108,17 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	if (daos_oid_is_oit(oid))
 		return 0; /* ignore IOT object */
 
+	/* There might be some objects, which has same oid.id_pub, but different
+	 * id_shard, so let's compare with the previous oid to avoid duplicate
+	 * oid. Because these same oid will be put together in OI table, so only
+	 * check the previous OID should be safe here.
+	 */
+	if (daos_oid_cmp(oa->oa_pre_id, oid) == 0) {
+		D_DEBUG(DB_TRACE, "skip duplicate OID="DF_UOID"\n", DP_UOID(ent->ie_oid));
+		return 0;
+	}
+	oa->oa_pre_id = oid;
+
 	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
 
 	bid = d_hash_murmur64((unsigned char *)&oid, sizeof(oid), 0) %
@@ -122,6 +133,10 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	/* bucket is full, store it now */
 	D_DEBUG(DB_TRACE, "Bucket is full, send OIDs\n");
 	rc = cont_send_oit_bucket(oa, bid);
+	if (rc == 0) { /* store the current OID for the next send */
+		bucket->ob_oids[0] = oid;
+		bucket->ob_nr = 1;
+	}
 	*acts |= VOS_ITER_CB_YIELD;
 	return rc;
 }
@@ -190,8 +205,10 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 
 	/* send out remaining OIDs */
 	for (i = 0; i < OIT_BUCKET_MAX; i++) {
-		if (oa->oa_buckets[i].ob_nr > 0)
+		if (oa->oa_buckets[i].ob_nr > 0) {
 			rc = cont_send_oit_bucket(oa, i);
+			oa->oa_buckets[i].ob_nr = 0;
+		}
 	}
 out:
 	if (daos_handle_is_valid(oa->oa_oh))

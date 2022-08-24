@@ -205,6 +205,10 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh dyn ukey -s ${BTREE_SIZE}
     run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
 
+    COMP="UTEST_csum"
+    run_test "${SL_PREFIX}/bin/srv_checksum_tests"
+    run_test "${SL_PREFIX}/bin/pool_scrubbing_tests"
+
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem

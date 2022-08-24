@@ -825,7 +825,12 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
-		assert_string_equal(buffer, rec);
+		/* SX only has one replica, and reintegration will delete the "stale"
+		 * data anyway, so it may lose data here, so do not need verify data
+		 * for SX object. Incremental reintegration might fix this.
+		 */
+		if (oclass != OC_SX)
+			assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
 }
@@ -1191,7 +1196,15 @@ rebuild_with_dfs_open_create_punch(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 

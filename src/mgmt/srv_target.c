@@ -809,9 +809,11 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_count  = 1;
 
 	rc = ds_pool_start(tc_in->tc_pool_uuid);
-	if (rc)
+	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
 out:
 	if (rc && tca.tca_newborn != NULL) {
 		/*

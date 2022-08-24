@@ -469,32 +469,36 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 				Status: 0,
 				UUID:   "foo",
 				PoolInfo: PoolInfo{
-					TotalTargets:    1,
-					ActiveTargets:   2,
-					TotalEngines:    3,
-					DisabledTargets: 4,
-					Version:         5,
-					Leader:          6,
+					TotalTargets:     1,
+					ActiveTargets:    2,
+					TotalEngines:     3,
+					DisabledTargets:  4,
+					Version:          5,
+					Leader:           6,
+					PoolLayoutVer:    7,
+					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
 				PoolInfo: PoolInfo{
-					TotalTargets:    1,
-					ActiveTargets:   2,
-					TotalEngines:    3,
-					DisabledTargets: 4,
-					Version:         5,
-					Leader:          6,
-					EnabledRanks:    system.MustCreateRankSet("[0-3,5]"),
-					DisabledRanks:   &system.RankSet{},
+					TotalTargets:     1,
+					ActiveTargets:    2,
+					TotalEngines:     3,
+					DisabledTargets:  4,
+					Version:          5,
+					Leader:           6,
+					EnabledRanks:     system.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:    &system.RankSet{},
+					PoolLayoutVer:    7,
+					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -517,34 +521,38 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 		expErr  error
 	}{
 		"null rankset": {
-			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
 				PoolInfo: PoolInfo{
-					TotalTargets:    1,
-					ActiveTargets:   2,
-					TotalEngines:    3,
-					DisabledTargets: 4,
-					Version:         5,
-					Leader:          6,
+					TotalTargets:     1,
+					ActiveTargets:    2,
+					TotalEngines:     3,
+					DisabledTargets:  4,
+					Version:          5,
+					Leader:           6,
+					PoolLayoutVer:    7,
+					UpgradeLayoutVer: 8,
 				},
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
 				PoolInfo: PoolInfo{
-					TotalTargets:    1,
-					ActiveTargets:   2,
-					TotalEngines:    3,
-					DisabledTargets: 4,
-					Version:         5,
-					Leader:          6,
-					EnabledRanks:    system.MustCreateRankSet("[0-3,5]"),
-					DisabledRanks:   &system.RankSet{},
+					TotalTargets:     1,
+					ActiveTargets:    2,
+					TotalEngines:     3,
+					DisabledTargets:  4,
+					Version:          5,
+					Leader:           6,
+					EnabledRanks:     system.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:    &system.RankSet{},
+					PoolLayoutVer:    7,
+					UpgradeLayoutVer: 8,
 				},
 			},
 		},
@@ -553,7 +561,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			expErr: errors.New("invalid character"),
 		},
 		"invalid rankset": {
-			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expErr: errors.New("unexpected alphabetic character(s)"),
 		},
 	} {
@@ -595,10 +603,12 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:            test.MockUUID(),
-						TotalTargets:    42,
-						ActiveTargets:   16,
-						DisabledTargets: 17,
+						Uuid:             test.MockUUID(),
+						TotalTargets:     42,
+						ActiveTargets:    16,
+						DisabledTargets:  17,
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -628,9 +638,11 @@ func TestControl_PoolQuery(t *testing.T) {
 			expResp: &PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: PoolInfo{
-					TotalTargets:    42,
-					ActiveTargets:   16,
-					DisabledTargets: 17,
+					TotalTargets:     42,
+					ActiveTargets:    16,
+					DisabledTargets:  17,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
 					Rebuild: &PoolRebuildStatus{
 						State:   PoolRebuildStateBusy,
 						Objects: 1,
@@ -661,10 +673,12 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:            test.MockUUID(),
-						TotalTargets:    42,
-						ActiveTargets:   16,
-						DisabledTargets: 17,
+						Uuid:             test.MockUUID(),
+						TotalTargets:     42,
+						ActiveTargets:    16,
+						DisabledTargets:  17,
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -695,9 +709,11 @@ func TestControl_PoolQuery(t *testing.T) {
 			expResp: &PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: PoolInfo{
-					TotalTargets:    42,
-					ActiveTargets:   16,
-					DisabledTargets: 17,
+					TotalTargets:     42,
+					ActiveTargets:    16,
+					DisabledTargets:  17,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
 					Rebuild: &PoolRebuildStatus{
 						State:   PoolRebuildStateBusy,
 						Objects: 1,
@@ -729,10 +745,12 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:            test.MockUUID(),
-						TotalTargets:    42,
-						ActiveTargets:   16,
-						DisabledTargets: 17,
+						Uuid:             test.MockUUID(),
+						TotalTargets:     42,
+						ActiveTargets:    16,
+						DisabledTargets:  17,
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -763,9 +781,11 @@ func TestControl_PoolQuery(t *testing.T) {
 			expResp: &PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: PoolInfo{
-					TotalTargets:    42,
-					ActiveTargets:   16,
-					DisabledTargets: 17,
+					TotalTargets:     42,
+					ActiveTargets:    16,
+					DisabledTargets:  17,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
 					Rebuild: &PoolRebuildStatus{
 						State:   PoolRebuildStateBusy,
 						Objects: 1,
@@ -1045,6 +1065,22 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("policy", "").Number,
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
+						{
+							Number: propWithVal("scrub", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
+						},
+						{
+							Number: propWithVal("scrub-freq", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1024},
+						},
+						{
+							Number: propWithVal("scrub-thresh", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{0},
+						},
+						{
+							Number: propWithVal("svc_rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{3},
+						},
 					},
 				}),
 			},
@@ -1060,8 +1096,12 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("reclaim", "disabled"),
 				propWithVal("rf", "1"),
 				propWithVal("rp_pda", "2"),
+				propWithVal("scrub", "timed"),
+				propWithVal("scrub-freq", "1024"),
+				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("svc_rf", "3"),
 				propWithVal("upgrade_status", "in progress"),
 			},
 		},
