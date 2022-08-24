@@ -15,8 +15,6 @@ ForEachMacros: ['d_list_for_each_entry',
                 'd_list_for_each_entry_safe',
                 'evt_ent_array_for_each']
 PointerAlignment: Right
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
 ColumnLimit: 100
 SortIncludes: false
@@ -29,4 +27,3 @@ AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
-...
