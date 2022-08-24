@@ -4803,8 +4803,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	len = strlen(obj->name);
 
-	/* Fetch the remote entry first so we can check the oid, then keep
-	 * a track locally of what has been updated
+	/* Fetch the remote entry first so we can check the oid, then keep a track locally of what
+	 * has been updated.  One potential improvement here is if we are setting the size do not
+	 * sample the size here to avoid an extra fetch.
 	 */
 	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
 	if (rc)
@@ -4888,7 +4889,11 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
-		rstat.st_size = stbuf->st_size;
+
+		/* If the size was set then do a second stat to fetch the new mtime */
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
+		if (rc)
+			D_GOTO(out_obj, rc);
 	}
 
 	iod.iod_nr = i;
@@ -4904,13 +4909,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (rc) {
 		D_ERROR("Failed to update attr "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
-	}
-
-	/* If the size was set then do a second stat to fetch the new mtime */
-	if (set_size) {
-		rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
-		if (rc)
-			D_GOTO(out_obj, rc);
 	}
 
 out_stat:
