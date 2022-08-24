@@ -30,6 +30,7 @@
               <descriptors>
                 <descriptor>src/assembly/make-assembly.xml</descriptor>
               </descriptors>
+	      <tarLongFileMode>posix</tarLongFileMode>
             </configuration>
             <executions>
               <execution>

@@ -48,9 +48,10 @@ for Hadoop, which is accessible to all the nodes or copy them to every node.
 ### `core-site-daos-ref.xml` (version >= 2.2.1, or `daos-site-example.xml`)
 
 Extract from `hadoop-daos-<version>-protobuf3-netty4-shaded.jar`. Then merge
-with your Hadoop `core-site.xml` which is under your application config
-directory, e.g., `$SPARK_HOME/conf` for Spark and `$HADOOP_HOME/etc/hadoop`
-for Hadoop.
+with your Hadoop `core-site.xml` under `$HADOOP_HOME/etc/hadoop`. If Hadoop
+installation is not present, you can rename the file to `core-site.xml` and put
+it under `$SPARK_HOME/conf` or directory to `$HADOOP_CONF_DIR/` if
+`HADOOP_CONF_DIR` env variable is defined.
 
 ## Configuring Hadoop
 
@@ -111,7 +112,7 @@ spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop
 spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
 ```
 
-### Validatng Spark Access
+### Validating Spark Access
 
 All Spark APIs that work with the Hadoop filesystem will work with DAOS. We can
 use the `daos://Pool1/Cont1/` URI to access files stored in DAOS. For example,
