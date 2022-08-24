@@ -1359,7 +1359,7 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 	}
 }
 
-#define EV_TRACE_MAX 8192
+#define EV_TRACE_MAX 256
 static __thread vos_iter_entry_t evt_trace[EV_TRACE_MAX];
 static __thread int evt_trace_start = 0;
 static __thread int evt_trace_count = 0;
@@ -2282,6 +2282,8 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
+		evt_trace_start = 0;
+		evt_trace_count = 0;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
