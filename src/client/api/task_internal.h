@@ -8,11 +8,11 @@
  */
 
 #ifndef __DAOS_TASK_INTERNAL_H__
-#define  __DAOS_TASK_INTERNAL_H__
+#define __DAOS_TASK_INTERNAL_H__
 
 #include <daos_task.h>
 #include <daos/task.h>
 
-#define DAOS_TASK_MAGIC			0xbabeface
+#define DAOS_TASK_MAGIC 0xbabeface
 
 #endif /* __DAOS_TASK_INTERNAL_H__ */

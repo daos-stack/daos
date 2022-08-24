@@ -23,14 +23,15 @@ typedef void (*vector_destroy_cb)(void *arg);
  *                        0 for no maximum
  * \retval -DER_SUCCESS on success
  */
-int vector_init(vector_t *vector, int sizeof_entry, int max_entries,
-		vector_destroy_cb destroy_cb);
+int
+vector_init(vector_t *vector, int sizeof_entry, int max_entries, vector_destroy_cb destroy_cb);
 
 /* Destroy a vector
  * \param vector[in] The vector to destroy
  * \return 0 on success
  */
-int vector_destroy(vector_t *vector);
+int
+vector_destroy(vector_t *vector);
 
 /* Get an existing vector entry from the table
  * Increments the reference count on the entry
@@ -43,9 +44,9 @@ int vector_destroy(vector_t *vector);
  * \retval -DER_UNINIT Vector not initialized
  * \retval -DER_NONEXIST No entry at index
  */
-#define vector_get(vector, index, entrypp) \
-	vector_get_(vector, index, (void **)(entrypp))
-int vector_get_(vector_t *vector, unsigned int index, void **entry);
+#define vector_get(vector, index, entrypp) vector_get_(vector, index, (void **)(entrypp))
+int
+vector_get_(vector_t *vector, unsigned int index, void **entry);
 
 /* Duplicate a vector entry.  If src_idx isn't empty, dst_idx will
  * reference the same entry.
@@ -61,10 +62,10 @@ int vector_get_(vector_t *vector, unsigned int index, void **entry);
  * \retval -DER_UNINIT Vector not initialized
  * \retval -DER_NONEXIST No entry at src_idx
  */
-#define vector_dup(vector, dst_idx, src_idx, entrypp) \
+#define vector_dup(vector, dst_idx, src_idx, entrypp)                                              \
 	vector_dup_(vector, dst_idx, src_idx, (void **)(entrypp))
-int vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
-		void **entry);
+int
+vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx, void **entry);
 
 /* Decrement the reference count on an entry.  Delete the entry if
  * refcount is 0
@@ -77,7 +78,8 @@ int vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
  * \retval -DER_INVAL Bad arguments
  * \retval -DER_UNINIT Vector not initialized
  */
-int vector_decref(vector_t *vector, void *entry);
+int
+vector_decref(vector_t *vector, void *entry);
 
 /* Allocate and initialize an entry
  * If index exists, it is removed.
@@ -89,8 +91,7 @@ int vector_decref(vector_t *vector, void *entry);
  * \retval -DER_NOMEM Out of memory
  * \retval -DER_UNINIT Vector not initialized
  */
-#define vector_set(vector, index, entryp) \
-	vector_set_(vector, index, entryp, sizeof(*entryp))
+#define vector_set(vector, index, entryp) vector_set_(vector, index, entryp, sizeof(*entryp))
 
 /* Allocate and initialize an entry.  Normally, the vector_set macro
  * will suffice.  However, if the size isn't determinable from the
@@ -105,7 +106,8 @@ int vector_decref(vector_t *vector, void *entry);
  * \retval -DER_NOMEM Out of memory
  * \retval -DER_UNINIT Vector not initialized
  */
-int vector_set_(vector_t *vector, unsigned int index, void *entry, size_t size);
+int
+vector_set_(vector_t *vector, unsigned int index, void *entry, size_t size);
 
 /* Remove an entry from the vector.  If entrypp is not NULL and entry
  * was present, a reference is taken on the entry.
@@ -117,8 +119,8 @@ int vector_set_(vector_t *vector, unsigned int index, void *entry, size_t size);
  * \retval -DER_UNINIT Vector not initialized
  * \retval -DER_NONEXIST No entry at index
  */
-#define vector_remove(vector, index, entrypp) \
-	vector_remove_(vector, index, (void **)entrypp)
-int vector_remove_(vector_t *vector, unsigned int index, void **entry);
+#define vector_remove(vector, index, entrypp) vector_remove_(vector, index, (void **)entrypp)
+int
+vector_remove_(vector_t *vector, unsigned int index, void **entry);
 
 #endif /*  __DFUSE_VECTOR_H__ */

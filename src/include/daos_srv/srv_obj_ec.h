@@ -9,5 +9,6 @@
 
 #include <daos_srv/container.h>
 
-void ds_obj_ec_aggregate(void *arg);
+void
+ds_obj_ec_aggregate(void *arg);
 #endif /* __DAOS_SRV_OBJ_EC_H__ */

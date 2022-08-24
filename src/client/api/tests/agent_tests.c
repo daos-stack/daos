@@ -22,9 +22,10 @@
  * Mocks
  */
 
-static char *getenv_return; /* value to be returned */
-static const char *getenv_name; /* saved input */
-char *getenv(const char *name)
+static char       *getenv_return; /* value to be returned */
+static const char *getenv_name;   /* saved input */
+char *
+getenv(const char *name)
 {
 	getenv_name = name;
 	return getenv_return;
@@ -39,7 +40,7 @@ setup_agent_mocks(void **state)
 {
 	/* Initialize mock values to something sane */
 	getenv_return = NULL;
-	getenv_name = NULL;
+	getenv_name   = NULL;
 
 	return 0;
 }
@@ -85,20 +86,15 @@ test_dc_agent_init_with_env(void **state)
 	dc_agent_fini();
 }
 
-
 /* Convenience macro for declaring unit tests in this suite */
-#define AGENT_UTEST(X) \
-	cmocka_unit_test_setup_teardown(X, setup_agent_mocks, \
-			teardown_agent_mocks)
+#define AGENT_UTEST(X) cmocka_unit_test_setup_teardown(X, setup_agent_mocks, teardown_agent_mocks)
 
 int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		AGENT_UTEST(
-			test_dc_agent_init_no_env),
-		AGENT_UTEST(
-			test_dc_agent_init_with_env),
+	    AGENT_UTEST(test_dc_agent_init_no_env),
+	    AGENT_UTEST(test_dc_agent_init_with_env),
 	};
 
 	d_register_alt_assert(mock_assert);

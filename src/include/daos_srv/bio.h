@@ -16,18 +16,17 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
-#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags & BIO_FLAG_HOLE)
-#define BIO_ADDR_SET_HOLE(addr) ((addr)->ba_flags |= BIO_FLAG_HOLE)
-#define BIO_ADDR_CLEAR_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
-#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags & BIO_FLAG_DEDUP)
-#define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
-#define BIO_ADDR_CLEAR_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
-#define BIO_ADDR_IS_DEDUP_BUF(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
-#define BIO_ADDR_SET_DEDUP_BUF(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
-#define BIO_ADDR_SET_NOT_DEDUP_BUF(addr)	\
-			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
-#define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
-#define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_HOLE(addr)           ((addr)->ba_flags & BIO_FLAG_HOLE)
+#define BIO_ADDR_SET_HOLE(addr)          ((addr)->ba_flags |= BIO_FLAG_HOLE)
+#define BIO_ADDR_CLEAR_HOLE(addr)        ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
+#define BIO_ADDR_IS_DEDUP(addr)          ((addr)->ba_flags & BIO_FLAG_DEDUP)
+#define BIO_ADDR_SET_DEDUP(addr)         ((addr)->ba_flags |= BIO_FLAG_DEDUP)
+#define BIO_ADDR_CLEAR_DEDUP(addr)       ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+#define BIO_ADDR_IS_DEDUP_BUF(addr)      ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_DEDUP_BUF(addr)     ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_NOT_DEDUP_BUF(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
+#define BIO_ADDR_IS_CORRUPTED(addr)      ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_SET_CORRUPTED(addr)     ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
@@ -45,13 +44,13 @@ typedef struct {
 	 * Byte offset within PMDK pmemobj pool for SCM;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
-	uint64_t	ba_off;
+	uint64_t ba_off;
 	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
-	uint8_t		ba_type;
-	uint8_t		ba_pad1;
+	uint8_t  ba_type;
+	uint8_t  ba_pad1;
 	/* See BIO_FLAG enum */
-	uint16_t	ba_flags;
-	uint32_t	ba_pad2;
+	uint16_t ba_flags;
+	uint32_t ba_pad2;
 } bio_addr_t;
 
 struct sys_db;
@@ -64,24 +63,24 @@ struct bio_iov {
 	 * For SCM, it's direct memory address of 'ba_off';
 	 * For NVMe, it's a DMA buffer allocated by SPDK malloc API.
 	 */
-	void		*bi_buf;
+	void      *bi_buf;
 	/* Data length in bytes */
-	size_t		 bi_data_len;
-	bio_addr_t	 bi_addr;
+	size_t     bi_data_len;
+	bio_addr_t bi_addr;
 
 	/** can be used to fetch more than actual address. Useful if more
 	 * data is needed for processing (like checksums) than requested.
 	 * Prefix and suffix are needed because 'extra' needed data might
 	 * be before or after actual requested data.
 	 */
-	size_t		 bi_prefix_len; /** bytes before */
-	size_t		 bi_suffix_len; /** bytes after */
+	size_t     bi_prefix_len; /** bytes before */
+	size_t     bi_suffix_len; /** bytes after */
 };
 
 struct bio_sglist {
-	struct bio_iov	*bs_iovs;
-	unsigned int	 bs_nr;
-	unsigned int	 bs_nr_out;
+	struct bio_iov *bs_iovs;
+	unsigned int    bs_nr;
+	unsigned int    bs_nr_out;
 };
 
 /* Opaque I/O descriptor */
@@ -97,18 +96,18 @@ struct bio_copy_desc;
  * Header for SPDK blob per VOS pool
  */
 struct bio_blob_hdr {
-	uint32_t	bbh_magic;
-	uint32_t	bbh_blk_sz;
-	uint32_t	bbh_hdr_sz; /* blocks reserved for blob header */
-	uint32_t	bbh_vos_id; /* service xstream id */
-	uint64_t	bbh_blob_id;
-	uuid_t		bbh_blobstore;
-	uuid_t		bbh_pool;
+	uint32_t bbh_magic;
+	uint32_t bbh_blk_sz;
+	uint32_t bbh_hdr_sz; /* blocks reserved for blob header */
+	uint32_t bbh_vos_id; /* service xstream id */
+	uint64_t bbh_blob_id;
+	uuid_t   bbh_blobstore;
+	uuid_t   bbh_pool;
 };
 
 enum bio_bs_state {
 	/* Healthy and fully functional */
-	BIO_BS_STATE_NORMAL	= 0,
+	BIO_BS_STATE_NORMAL = 0,
 	/* Being detected & marked as faulty */
 	BIO_BS_STATE_FAULTY,
 	/* Affected targets are marked as DOWN, safe to tear down blobstore */
@@ -123,7 +122,7 @@ static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
 	addr->ba_type = type;
-	addr->ba_off = umem_off2offset(off);
+	addr->ba_off  = umem_off2offset(off);
 }
 
 static inline bool
@@ -144,16 +143,15 @@ bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 static inline void
 bio_iov_set(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len)
 {
-	biov->bi_addr = addr;
-	biov->bi_data_len = data_len;
-	biov->bi_buf = NULL;
+	biov->bi_addr       = addr;
+	biov->bi_data_len   = data_len;
+	biov->bi_buf        = NULL;
 	biov->bi_prefix_len = 0;
 	biov->bi_suffix_len = 0;
 }
 
 static inline void
-bio_iov_set_extra(struct bio_iov *biov,	uint64_t prefix_len,
-		  uint64_t suffix_len)
+bio_iov_set_extra(struct bio_iov *biov, uint64_t prefix_len, uint64_t suffix_len)
 {
 	biov->bi_prefix_len = prefix_len;
 	biov->bi_suffix_len = suffix_len;
@@ -238,8 +236,8 @@ bio_iov2req_len(const struct bio_iov *biov)
 	return biov->bi_data_len - (biov->bi_prefix_len + biov->bi_suffix_len);
 }
 
-static inline
-uint8_t bio_iov2media(const struct bio_iov *biov)
+static inline uint8_t
+bio_iov2media(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_type;
 }
@@ -248,7 +246,7 @@ static inline int
 bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
 	sgl->bs_nr_out = 0;
-	sgl->bs_nr = nr;
+	sgl->bs_nr     = nr;
 
 	if (nr == 0) {
 		sgl->bs_iovs = NULL;
@@ -268,7 +266,7 @@ bio_sgl_fini(struct bio_sglist *sgl)
 
 	D_FREE(sgl->bs_iovs);
 	sgl->bs_nr_out = 0;
-	sgl->bs_nr = 0;
+	sgl->bs_nr     = 0;
 }
 
 /*
@@ -290,15 +288,15 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 	sgl->sg_nr_out = bsgl->bs_nr_out;
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
-		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		d_iov_t	*iov = &sgl->sg_iovs[i];
+		struct bio_iov *biov = &bsgl->bs_iovs[i];
+		d_iov_t        *iov  = &sgl->sg_iovs[i];
 
 		/* Skip bulk transfer for deduped extent */
 		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			iov->iov_buf = NULL;
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);
-		iov->iov_len = bio_iov2req_len(biov);
+		iov->iov_len     = bio_iov2req_len(biov);
 		iov->iov_buf_len = iov->iov_len;
 	}
 
@@ -322,7 +320,7 @@ static inline uint32_t
 bio_sgl_holes(struct bio_sglist *bsgl)
 {
 	uint32_t result = 0;
-	int i;
+	int      i;
 
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		if (bio_addr_is_hole(&bsgl->bs_iovs[i].bi_addr))
@@ -339,13 +337,13 @@ bio_sgl_holes(struct bio_sglist *bsgl)
  * NB. Move it to control.h if it needs be shared by control plane.
  */
 struct bio_dev_info {
-	d_list_t		bdi_link;
-	uuid_t			bdi_dev_id;
-	uint32_t		bdi_flags;	/* defined in control.h */
-	uint32_t		bdi_tgt_cnt;
-	int		       *bdi_tgts;
-	char		       *bdi_traddr;
-	uint32_t		bdi_dev_type;	/* reserved */
+	d_list_t bdi_link;
+	uuid_t   bdi_dev_id;
+	uint32_t bdi_flags; /* defined in control.h */
+	uint32_t bdi_tgt_cnt;
+	int     *bdi_tgts;
+	char    *bdi_traddr;
+	uint32_t bdi_dev_type; /* reserved */
 };
 
 static inline void
@@ -367,7 +365,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
  *
  * \return		Zero on success, negative value on error
  */
-int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
+int
+bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Callbacks called on NVMe device state transition
@@ -390,7 +389,8 @@ struct bio_reaction_ops {
  *
  * \param ops[IN]	Reaction callback functions
  */
-void bio_register_ract_ops(struct bio_reaction_ops *ops);
+void
+bio_register_ract_ops(struct bio_reaction_ops *ops);
 
 /*
  * Register bulk operations for bulk cache.
@@ -398,10 +398,10 @@ void bio_register_ract_ops(struct bio_reaction_ops *ops);
  * \param[IN]	bulk_create	Bulk create operation
  * \param[IN]	bulk_free	Bulk free operation
  */
-void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
-					      unsigned int perm,
-					      void **bulk_hdl),
-			   int (*bulk_free)(void *bulk_hdl));
+void
+bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl, unsigned int perm,
+					 void **bulk_hdl),
+		      int (*bulk_free)(void *bulk_hdl));
 /**
  * Global NVMe initialization.
  *
@@ -415,25 +415,27 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-		  unsigned int hugepage_size, unsigned int tgt_nr,
-		  struct sys_db *db, bool bypass);
+int
+bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
+	      unsigned int hugepage_size, unsigned int tgt_nr, struct sys_db *db, bool bypass);
 
 /**
  * Global NVMe finilization.
  *
  * \return		N/A
  */
-void bio_nvme_fini(void);
+void
+bio_nvme_fini(void);
 
 /**
  * Check if NVMe is configured
  */
-bool bio_nvme_configured(void);
+bool
+bio_nvme_configured(void);
 
 enum {
 	/* Notify BIO that all xsxtream contexts created */
-	BIO_CTL_NOTIFY_STARTED	= 0,
+	BIO_CTL_NOTIFY_STARTED = 0,
 };
 
 /**
@@ -444,7 +446,8 @@ enum {
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_ctl(unsigned int cmd, void *arg);
+int
+bio_nvme_ctl(unsigned int cmd, void *arg);
 
 /*
  * Initialize SPDK env and per-xstream NVMe context.
@@ -454,7 +457,8 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
+int
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -463,7 +467,8 @@ int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
  *
  * \returns		N/A
  */
-void bio_xsctxt_free(struct bio_xs_context *ctxt);
+void
+bio_xsctxt_free(struct bio_xs_context *ctxt);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
@@ -474,7 +479,8 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  *			1: If work was done
  *			-1: If thread has exited
  */
-int bio_nvme_poll(struct bio_xs_context *ctxt);
+int
+bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
@@ -485,8 +491,8 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt,
-		    uint64_t blob_sz);
+int
+bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz);
 
 /*
  * Delete per VOS instance blob.
@@ -496,7 +502,8 @@ int bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt,
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
+int
+bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
 
 /*
  * Open per VOS instance I/O context.
@@ -509,9 +516,9 @@ int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_open(struct bio_io_context **pctxt,
-		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
+int
+bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+		struct umem_instance *umem, uuid_t uuid, bool skip_blob);
 
 /*
  * Finalize per VOS instance I/O context.
@@ -521,7 +528,8 @@ int bio_ioctxt_open(struct bio_io_context **pctxt,
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
+int
+bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
 
 /*
  * Unmap (TRIM) the extent being freed.
@@ -532,7 +540,8 @@ int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
+int
+bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
 
 /*
  * Unmap (TRIM) a SGL consists of freed extents.
@@ -543,7 +552,8 @@ int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz);
+int
+bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz);
 
 /**
  * Write to per VOS instance blob.
@@ -554,7 +564,8 @@ int bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
+int
+bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Read from per VOS instance blob.
@@ -565,7 +576,8 @@ int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
+int
+bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Write SGL to per VOS instance blob.
@@ -576,8 +588,8 @@ int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	       d_sg_list_t *sgl);
+int
+bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 /**
  * Read SGL from per VOS instance blob.
@@ -588,8 +600,8 @@ int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	      d_sg_list_t *sgl);
+int
+bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 /*
  * Finish setting up blob header and write info to blob offset 0.
@@ -599,13 +611,14 @@ int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr);
+int
+bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr);
 
 /* Note: Do NOT change the order of these types */
 enum bio_iod_type {
-	BIO_IOD_TYPE_UPDATE = 0,	/* For update request */
-	BIO_IOD_TYPE_FETCH,		/* For fetch request */
-	BIO_IOD_TYPE_GETBUF,		/* For get buf request */
+	BIO_IOD_TYPE_UPDATE = 0, /* For update request */
+	BIO_IOD_TYPE_FETCH,      /* For fetch request */
+	BIO_IOD_TYPE_GETBUF,     /* For get buf request */
 	BIO_IOD_TYPE_MAX,
 };
 
@@ -618,8 +631,8 @@ enum bio_iod_type {
  *
  * \return			Opaque io descriptor or NULL on error
  */
-struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
-			       unsigned int sgl_cnt, unsigned int type);
+struct bio_desc *
+bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, unsigned int type);
 /**
  * Free an io descriptor
  *
@@ -627,12 +640,13 @@ struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
  *
  * \return			N/A
  */
-void bio_iod_free(struct bio_desc *biod);
+void
+bio_iod_free(struct bio_desc *biod);
 
 enum bio_chunk_type {
-	BIO_CHK_TYPE_IO	= 0,	/* For IO request */
-	BIO_CHK_TYPE_LOCAL,	/* For local DMA transfer */
-	BIO_CHK_TYPE_REBUILD,	/* For rebuild pull */
+	BIO_CHK_TYPE_IO = 0,  /* For IO request */
+	BIO_CHK_TYPE_LOCAL,   /* For local DMA transfer */
+	BIO_CHK_TYPE_REBUILD, /* For rebuild pull */
 	BIO_CHK_TYPE_MAX,
 };
 
@@ -652,8 +666,8 @@ enum bio_chunk_type {
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
-		 unsigned int bulk_perm);
+int
+bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt, unsigned int bulk_perm);
 
 /*
  * Post operation after the RDMA transfer or local copy done for the io
@@ -669,7 +683,8 @@ int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_post(struct bio_desc *biod, int err);
+int
+bio_iod_post(struct bio_desc *biod, int err);
 
 /*
  * Helper function to copy data between SG lists of io descriptor and user
@@ -681,7 +696,8 @@ int bio_iod_post(struct bio_desc *biod, int err);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
+int
+bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
 
 /*
  * Helper function to flush memory vectors in SG lists of io descriptor
@@ -690,7 +706,8 @@ int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
  *
  * \return			N/A
  */
-void bio_iod_flush(struct bio_desc *biod);
+void
+bio_iod_flush(struct bio_desc *biod);
 
 /*
  * Helper function to get the specified SG list of an io descriptor
@@ -700,7 +717,8 @@ void bio_iod_flush(struct bio_desc *biod);
  *
  * \return			SG list, or NULL on error
  */
-struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
+struct bio_sglist *
+bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
 
 /*
  * Helper function to get the specified bulk for an io descriptor
@@ -712,8 +730,8 @@ struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
  *
  * \return			Cached bulk, or NULL if no cached bulk
  */
-void *bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
-		   unsigned int *bulk_off);
+void *
+bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx, unsigned int *bulk_off);
 
 /*
  * Wrapper of ABT_thread_yield()
@@ -736,8 +754,8 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_stats *dev_state,
-		      struct bio_xs_context *xs);
+int
+bio_get_dev_state(struct nvme_stats *dev_state, struct bio_xs_context *xs);
 
 /*
  * Helper function to get the internal blobstore state for a given xstream.
@@ -747,8 +765,8 @@ int bio_get_dev_state(struct nvme_stats *dev_state,
  * \param xs		[IN]	xstream context
  *
  */
-void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
-
+void
+bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
 
 /*
  * Helper function to set the device health state to FAULTY, and trigger device
@@ -758,13 +776,16 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_dev_set_faulty(struct bio_xs_context *xs);
+int
+bio_dev_set_faulty(struct bio_xs_context *xs);
 
 /* Function to increment CSUM media error. */
-void bio_log_csum_err(struct bio_xs_context *xs);
+void
+bio_log_csum_err(struct bio_xs_context *xs);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
-bool bio_need_nvme_poll(struct bio_xs_context *xs);
+bool
+bio_need_nvme_poll(struct bio_xs_context *xs);
 
 /*
  * Replace a device.
@@ -775,8 +796,8 @@ bool bio_need_nvme_poll(struct bio_xs_context *xs);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
-		    uuid_t new_dev_id);
+int
+bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id, uuid_t new_dev_id);
 
 /*
  * Set the LED on a VMD device to new state.
@@ -791,8 +812,8 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  *
  * \return                      Zero on success, negative value on error
  */
-int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
-		      const char *led_state, bool reset);
+int
+bio_set_led_state(struct bio_xs_context *xs, uuid_t devid, const char *led_state, bool reset);
 
 /*
  * Allocate DMA buffer, the buffer could be from bulk cache if bulk context
@@ -805,9 +826,9 @@ int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
  *
  * \return			Buffer descriptor on success, NULL on error
  */
-struct bio_desc *bio_buf_alloc(struct bio_io_context *ioctxt,
-			       unsigned int len, void *bulk_ctxt,
-			       unsigned int bulk_perm);
+struct bio_desc *
+bio_buf_alloc(struct bio_io_context *ioctxt, unsigned int len, void *bulk_ctxt,
+	      unsigned int bulk_perm);
 
 /*
  * Free allocated DMA buffer.
@@ -816,7 +837,8 @@ struct bio_desc *bio_buf_alloc(struct bio_io_context *ioctxt,
  *
  * \return			N/A
  */
-void bio_buf_free(struct bio_desc *biod);
+void
+bio_buf_free(struct bio_desc *biod);
 
 /*
  * Get the bulk handle of DMA buffer.
@@ -826,7 +848,8 @@ void bio_buf_free(struct bio_desc *biod);
  *
  * \return			Bulk handle
  */
-void *bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
+void *
+bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
 
 /*
  * Get the address of DMA buffer.
@@ -835,7 +858,8 @@ void *bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
  *
  * \return			Buffer address
  */
-void *bio_buf_addr(struct bio_desc *biod);
+void *
+bio_buf_addr(struct bio_desc *biod);
 
 /*
  * Prepare source and target bio SGLs for direct data copy between these two
@@ -847,16 +871,16 @@ void *bio_buf_addr(struct bio_desc *biod);
  *
  * \return			BIO copy descriptor on success, NULL on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt,
-				    struct bio_sglist *bsgl_src,
-				    struct bio_sglist *bsgl_dst);
+struct bio_copy_desc *
+bio_copy_prep(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
+	      struct bio_sglist *bsgl_dst);
 
 struct bio_csum_desc {
-	uint8_t		*bmd_csum_buf;
-	uint32_t	 bmd_csum_buf_len;
-	uint32_t	 bmd_chunk_sz;
-	uint16_t	 bmd_csum_len;
-	uint16_t	 bmd_csum_type;
+	uint8_t *bmd_csum_buf;
+	uint32_t bmd_csum_buf_len;
+	uint32_t bmd_chunk_sz;
+	uint16_t bmd_csum_len;
+	uint16_t bmd_csum_type;
 };
 
 /*
@@ -869,8 +893,9 @@ struct bio_csum_desc {
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
-		 struct bio_csum_desc *csum_desc);
+int
+bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
+	     struct bio_csum_desc *csum_desc);
 
 /*
  * Release resource held by bio_copy_prep(), write data back to NVMe if the
@@ -881,7 +906,8 @@ int bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy_post(struct bio_copy_desc *copy_desc, int err);
+int
+bio_copy_post(struct bio_copy_desc *copy_desc, int err);
 
 /*
  * Get the prepared source or target BIO SGL from a copy descriptor.
@@ -891,7 +917,8 @@ int bio_copy_post(struct bio_copy_desc *copy_desc, int err);
  *
  * \return			Source/Target BIO SGL
  */
-struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
+struct bio_sglist *
+bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
 
 /*
  * Copy data from source BIO SGL to target BIO SGL.
@@ -905,8 +932,8 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
-	     struct bio_csum_desc *csum_desc);
+int
+bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	 unsigned int copy_size, struct bio_csum_desc *csum_desc);
 
 #endif /* __BIO_API_H__ */

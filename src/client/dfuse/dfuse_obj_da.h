@@ -31,9 +31,7 @@ obj_da_destroy(obj_da_t *da);
  * \param [in] Allocator from which to get item
  * \param [out] Pointer in which to store pointer to item
  */
-#define obj_da_get(da, itempp)             \
-	obj_da_get_(da, (void **)(itempp), \
-		      sizeof(**(itempp)))
+#define obj_da_get(da, itempp) obj_da_get_(da, (void **)(itempp), sizeof(**(itempp)))
 
 /* Return an item to the da
  * \param [in] Item to return to da

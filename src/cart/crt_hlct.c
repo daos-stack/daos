@@ -46,12 +46,14 @@
 
 static ATOMIC uint64_t crt_hlct;
 
-uint64_t crt_hlct_get(void)
+uint64_t
+crt_hlct_get(void)
 {
 	return crt_hlct;
 }
 
-void crt_hlct_sync(uint64_t msg)
+void
+crt_hlct_sync(uint64_t msg)
 {
 	uint64_t hlct, hlct_new;
 

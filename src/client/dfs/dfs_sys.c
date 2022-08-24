@@ -23,48 +23,48 @@
 #define DFS_SYS_NUM_DIRENTS 24
 
 /** Size of the hash table */
-#define DFS_SYS_HASH_SIZE 12
+#define DFS_SYS_HASH_SIZE   12
 
 struct dfs_sys {
-	dfs_t			*dfs;	/* mounted filesystem */
-	struct d_hash_table	*hash;	/* optional lookup hash */
+	dfs_t               *dfs;  /* mounted filesystem */
+	struct d_hash_table *hash; /* optional lookup hash */
 };
 
 /** struct holding parsed dirname, name, and cached parent obj */
 struct sys_path {
-	const char	*path;		/* original, full path */
-	size_t		path_len;	/* length of path */
-	char		*alloc;		/* allocation of dir and name */
-	char		*dir_name;	/* dirname(path) */
-	size_t		dir_name_len;	/* length of dir_name */
-	char		*name;		/* basename(path) */
-	size_t		name_len;	/* length of name */
-	dfs_obj_t	*parent;	/* dir_name obj */
-	d_list_t	*rlink;		/* hash link */
+	const char *path;         /* original, full path */
+	size_t      path_len;     /* length of path */
+	char       *alloc;        /* allocation of dir and name */
+	char       *dir_name;     /* dirname(path) */
+	size_t      dir_name_len; /* length of dir_name */
+	char       *name;         /* basename(path) */
+	size_t      name_len;     /* length of name */
+	dfs_obj_t  *parent;       /* dir_name obj */
+	d_list_t   *rlink;        /* hash link */
 };
 
 struct dfs_sys_dir {
-	dfs_obj_t	*obj;
-	struct dirent	ents[DFS_SYS_NUM_DIRENTS];
-	daos_anchor_t	anchor;
-	uint32_t	num_ents;
+	dfs_obj_t    *obj;
+	struct dirent ents[DFS_SYS_NUM_DIRENTS];
+	daos_anchor_t anchor;
+	uint32_t      num_ents;
 };
 
 /**
  * Hash handle for each entry.
  */
 struct hash_hdl {
-	dfs_obj_t	*obj;
-	d_list_t	entry;
-	char		*name;
-	size_t		name_len;
-	ATOMIC uint	ref;
+	dfs_obj_t  *obj;
+	d_list_t    entry;
+	char       *name;
+	size_t      name_len;
+	ATOMIC uint ref;
 };
 
 /*
  * Get a hash_hdl from the d_list_t.
  */
-static inline struct hash_hdl*
+static inline struct hash_hdl *
 hash_hdl_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct hash_hdl, entry);
@@ -75,10 +75,9 @@ hash_hdl_obj(d_list_t *rlink)
  * Simple string comparison of name.
  */
 static bool
-hash_key_cmp(struct d_hash_table *table, d_list_t *rlink,
-	     const void *key, unsigned int ksize)
+hash_key_cmp(struct d_hash_table *table, d_list_t *rlink, const void *key, unsigned int ksize)
 {
-	struct hash_hdl	*hdl = hash_hdl_obj(rlink);
+	struct hash_hdl *hdl = hash_hdl_obj(rlink);
 
 	if (hdl->name_len != ksize)
 		return false;
@@ -93,12 +92,11 @@ static void
 hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl;
-	uint		oldref;
+	uint             oldref;
 
-	hdl = hash_hdl_obj(rlink);
+	hdl    = hash_hdl_obj(rlink);
 	oldref = atomic_fetch_add_relaxed(&hdl->ref, 1);
-	D_DEBUG(DB_TRACE, "%s, oldref = %u\n",
-		hdl->name, oldref);
+	D_DEBUG(DB_TRACE, "%s, oldref = %u\n", hdl->name, oldref);
 }
 
 /**
@@ -107,13 +105,12 @@ hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 static bool
 hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct hash_hdl	*hdl;
-	uint		oldref;
+	struct hash_hdl *hdl;
+	uint             oldref;
 
-	hdl = hash_hdl_obj(rlink);
+	hdl    = hash_hdl_obj(rlink);
 	oldref = atomic_fetch_sub_relaxed(&hdl->ref, 1);
-	D_DEBUG(DB_TRACE, "%s, oldref = %u\n",
-		hdl->name, oldref);
+	D_DEBUG(DB_TRACE, "%s, oldref = %u\n", hdl->name, oldref);
 	D_ASSERT(oldref > 0);
 
 	return oldref == 1;
@@ -126,7 +123,7 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
-	int		rc = 0;
+	int              rc  = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
@@ -148,13 +145,11 @@ hash_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 /**
  * Operations for the hash table.
  */
-static d_hash_table_ops_t hash_hdl_ops = {
-	.hop_key_cmp	= hash_key_cmp,
-	.hop_rec_addref = hash_rec_addref,
-	.hop_rec_decref	= hash_rec_decref,
-	.hop_rec_free	= hash_rec_free,
-	.hop_rec_hash	= hash_rec_hash
-};
+static d_hash_table_ops_t hash_hdl_ops = {.hop_key_cmp    = hash_key_cmp,
+					  .hop_rec_addref = hash_rec_addref,
+					  .hop_rec_decref = hash_rec_decref,
+					  .hop_rec_free   = hash_rec_free,
+					  .hop_rec_hash   = hash_rec_hash};
 
 /**
  * Try to get dir_name from the hash.
@@ -177,18 +172,17 @@ static d_hash_table_ops_t hash_hdl_ops = {
 static int
 hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 {
-	struct hash_hdl	*hdl;
-	d_list_t	*rlink;
-	mode_t		mode;
-	int		rc = 0;
+	struct hash_hdl *hdl;
+	d_list_t        *rlink;
+	mode_t           mode;
+	int              rc = 0;
 
 	/* If we aren't caching, just call dfs_lookup */
 	if (dfs_sys->hash == NULL) {
-		rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR,
-				&sys_path->parent, &mode, NULL);
+		rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &sys_path->parent, &mode,
+				NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-				sys_path->dir_name, rc);
+			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path->dir_name, rc);
 			return rc;
 		}
 
@@ -201,8 +195,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	}
 
 	/* If cached, return it */
-	rlink = d_hash_rec_find(dfs_sys->hash, sys_path->dir_name,
-				sys_path->dir_name_len);
+	rlink = d_hash_rec_find(dfs_sys->hash, sys_path->dir_name, sys_path->dir_name_len);
 	if (rlink != NULL) {
 		hdl = hash_hdl_obj(rlink);
 		D_GOTO(out, rc = 0);
@@ -224,8 +217,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	atomic_store_relaxed(&hdl->ref, 2);
 
 	/* Lookup name in dfs */
-	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj,
-			&mode, NULL);
+	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj, &mode, NULL);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path->dir_name, rc);
 		D_GOTO(free_hdl_name, rc);
@@ -238,18 +230,18 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	/* call find_insert in case another thread added the same entry
 	 * after calling find.
 	 */
-	rlink = d_hash_rec_find_insert(dfs_sys->hash, hdl->name,
-				       sys_path->dir_name_len, &hdl->entry);
+	rlink =
+	    d_hash_rec_find_insert(dfs_sys->hash, hdl->name, sys_path->dir_name_len, &hdl->entry);
 	if (rlink != &hdl->entry) {
 		/* another thread beat us. Use the existing entry. */
 		sys_path->parent = hash_hdl_obj(rlink)->obj;
-		sys_path->rlink = rlink;
+		sys_path->rlink  = rlink;
 		D_GOTO(free_hdl_obj, rc = 0);
 	}
 
 out:
 	sys_path->parent = hdl->obj;
-	sys_path->rlink = rlink;
+	sys_path->rlink  = rlink;
 	return rc;
 
 free_hdl_obj:
@@ -281,19 +273,18 @@ sys_path_free(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
  * Lookup dir_name in the hash.
  */
 static int
-sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
-	       const char *path)
+sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path, const char *path)
 {
-	int	rc;
-	char	*new_path = NULL;
-	char	*dir_name = NULL;
-	char	*name = NULL;
-	size_t	path_len;
-	size_t	dir_name_len = 0;
-	size_t	name_len = 0;
-	size_t	i;
-	size_t	end_idx = 0;
-	size_t	slash_idx = 0;
+	int    rc;
+	char  *new_path = NULL;
+	char  *dir_name = NULL;
+	char  *name     = NULL;
+	size_t path_len;
+	size_t dir_name_len = 0;
+	size_t name_len     = 0;
+	size_t i;
+	size_t end_idx   = 0;
+	size_t slash_idx = 0;
 
 	if (path == NULL)
 		return EINVAL;
@@ -340,20 +331,19 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	name_len = end_idx - slash_idx;
 	if (name_len > 0) {
 		new_path[dir_name_len] = 0;
-		strncpy(new_path + dir_name_len + 1, path + slash_idx + 1,
-			name_len);
+		strncpy(new_path + dir_name_len + 1, path + slash_idx + 1, name_len);
 		name = new_path + dir_name_len + 1;
 	}
 
-	sys_path->path = path;
-	sys_path->path_len = path_len;
-	sys_path->alloc = new_path;
-	sys_path->dir_name = dir_name;
+	sys_path->path         = path;
+	sys_path->path_len     = path_len;
+	sys_path->alloc        = new_path;
+	sys_path->dir_name     = dir_name;
 	sys_path->dir_name_len = dir_name_len;
-	sys_path->name = name;
-	sys_path->name_len = name_len;
-	sys_path->parent = NULL;
-	sys_path->rlink = NULL;
+	sys_path->name         = name;
+	sys_path->name_len     = name_len;
+	sys_path->parent       = NULL;
+	sys_path->rlink        = NULL;
 
 	rc = hash_lookup(dfs_sys, sys_path);
 	if (rc != 0) {
@@ -367,11 +357,11 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 static int
 init_sys(int mflags, int sflags, dfs_sys_t **_dfs_sys)
 {
-	dfs_sys_t	*dfs_sys;
-	int		rc;
-	uint32_t	hash_feats = D_HASH_FT_EPHEMERAL;
-	bool		no_cache = false;
-	bool		no_lock = false;
+	dfs_sys_t *dfs_sys;
+	int        rc;
+	uint32_t   hash_feats = D_HASH_FT_EPHEMERAL;
+	bool       no_cache   = false;
+	bool       no_lock    = false;
 
 	if (_dfs_sys == NULL)
 		return EINVAL;
@@ -407,11 +397,10 @@ init_sys(int mflags, int sflags, dfs_sys_t **_dfs_sys)
 	else
 		hash_feats |= D_HASH_FT_RWLOCK;
 
-	rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE, NULL, &hash_hdl_ops,
-				 &dfs_sys->hash);
+	rc =
+	    d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE, NULL, &hash_hdl_ops, &dfs_sys->hash);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to create hash table "
-			DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_TRACE, "failed to create hash table " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_dfs_sys, rc = daos_der2errno(rc));
 	}
 
@@ -426,8 +415,8 @@ int
 dfs_sys_connect(const char *pool, const char *sys, const char *cont, int mflags, int sflags,
 		dfs_attr_t *attr, dfs_sys_t **_dfs_sys)
 {
-	dfs_sys_t	*dfs_sys;
-	int		rc;
+	dfs_sys_t *dfs_sys;
+	int        rc;
 
 	rc = init_sys(mflags, sflags, &dfs_sys);
 	if (rc)
@@ -453,8 +442,8 @@ err_dfs_sys:
 static int
 fini_sys(dfs_sys_t *dfs_sys, bool disconnect)
 {
-	int		rc;
-	d_list_t	*rlink;
+	int       rc;
+	d_list_t *rlink;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -471,7 +460,7 @@ fini_sys(dfs_sys_t *dfs_sys, bool disconnect)
 
 		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
+			D_DEBUG(DB_TRACE, "failed to destroy hash table: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
 		dfs_sys->hash = NULL;
@@ -507,11 +496,10 @@ dfs_sys_disconnect(dfs_sys_t *dfs_sys)
 }
 
 int
-dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
-	      dfs_sys_t **_dfs_sys)
+dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags, dfs_sys_t **_dfs_sys)
 {
-	dfs_sys_t	*dfs_sys;
-	int		rc;
+	dfs_sys_t *dfs_sys;
+	int        rc;
 
 	rc = init_sys(mflags, sflags, &dfs_sys);
 	if (rc)
@@ -556,8 +544,8 @@ dfs_sys_local2global_all(dfs_sys_t *dfs_sys, d_iov_t *glob)
 int
 dfs_sys_global2local_all(int mflags, int sflags, d_iov_t glob, dfs_sys_t **_dfs_sys)
 {
-	dfs_sys_t	*dfs_sys;
-	int		rc;
+	dfs_sys_t *dfs_sys;
+	int        rc;
 
 	rc = init_sys(mflags, sflags, &dfs_sys);
 	if (rc)
@@ -590,11 +578,11 @@ dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob)
 }
 
 int
-dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
-		     int sflags, d_iov_t glob, dfs_sys_t **_dfs_sys)
+dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags, d_iov_t glob,
+		     dfs_sys_t **_dfs_sys)
 {
-	dfs_sys_t	*dfs_sys;
-	int		rc;
+	dfs_sys_t *dfs_sys;
+	int        rc;
 
 	rc = init_sys(mflags, sflags, &dfs_sys);
 	if (rc)
@@ -629,11 +617,11 @@ dfs_sys2base(dfs_sys_t *dfs_sys, dfs_t **_dfs)
 int
 dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	mode_t		mode;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	mode_t          mode;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -653,12 +641,10 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 		lookup_flags |= O_NOFOLLOW;
 
 		/* Lookup the obj and get it's mode */
-		rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent,
-				    sys_path.name, lookup_flags, &obj,
-				    &mode, NULL);
+		rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags,
+				    &obj, &mode, NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-				sys_path.name, rc);
+			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 			D_GOTO(out_free_path, rc);
 		}
 
@@ -682,8 +668,8 @@ out_free_path:
 int
 dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 {
-	int		rc;
-	struct sys_path	sys_path;
+	int             rc;
+	struct sys_path sys_path;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -704,8 +690,8 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 int
 dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags)
 {
-	int		rc;
-	struct sys_path	sys_path;
+	int             rc;
+	struct sys_path sys_path;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -724,13 +710,12 @@ dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int fl
 }
 
 int
-dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
-		int flags, int sflags)
+dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf, int flags, int sflags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -750,19 +735,17 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 	if (sflags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent,
-			    sys_path.name, lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
 setattr:
 	rc = dfs_osetattr(dfs_sys->dfs, obj, stbuf, flags);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to setattr %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to setattr %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_close_obj, rc);
 	}
 
@@ -775,29 +758,25 @@ out_free_path:
 }
 
 int
-dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path,
-		const struct timespec times[2], int flags)
+dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path, const struct timespec times[2], int flags)
 {
-	int		rc;
-	struct stat	stbuf;
+	int         rc;
+	struct stat stbuf;
 
 	stbuf.st_atim = times[0];
 	stbuf.st_mtim = times[1];
 
-	rc = dfs_sys_setattr(dfs_sys, path, &stbuf,
-			     DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME,
-			     flags);
+	rc = dfs_sys_setattr(dfs_sys, path, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME, flags);
 	return rc;
 }
 
 int
-dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
-	     struct stat *buf)
+dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags, struct stat *buf)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -817,11 +796,10 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	if (flags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent,
-			    sys_path.name, lookup_flags, &obj, NULL, buf);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    buf);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 	dfs_release(obj);
@@ -832,12 +810,12 @@ out_free_path:
 }
 
 int
-dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
-	      daos_oclass_id_t cid, daos_size_t chunk_size)
+dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, daos_oclass_id_t cid,
+	      daos_size_t chunk_size)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -848,11 +826,10 @@ dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, mode,
-		      O_CREAT | O_EXCL, cid, chunk_size, NULL, &obj);
+	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, mode, O_CREAT | O_EXCL, cid,
+		      chunk_size, NULL, &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -864,14 +841,13 @@ out_free_path:
 }
 
 int
-dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
-		  daos_size_t *size, int flags)
+dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list, daos_size_t *size, int flags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	daos_size_t	got_size = *size;
-	int		lookup_flags = O_RDONLY;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	daos_size_t     got_size     = *size;
+	int             lookup_flags = O_RDONLY;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -891,11 +867,10 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 	if (flags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -918,14 +893,14 @@ out_free_path:
 }
 
 int
-dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
-		 void *value, daos_size_t *size, int flags)
+dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, void *value,
+		 daos_size_t *size, int flags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	daos_size_t	got_size = *size;
-	int		lookup_flags = O_RDONLY;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	daos_size_t     got_size     = *size;
+	int             lookup_flags = O_RDONLY;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -945,11 +920,10 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	if (flags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -972,13 +946,13 @@ out_free_path:
 }
 
 int
-dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
-		 const void *value, daos_size_t size, int flags, int sflags)
+dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, const void *value,
+		 daos_size_t size, int flags, int sflags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -998,11 +972,10 @@ dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	if (sflags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1020,13 +993,12 @@ out_free_path:
 }
 
 int
-dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
-		    int flags)
+dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name, int flags)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1046,11 +1018,10 @@ dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	if (flags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1068,13 +1039,12 @@ out_free_path:
 }
 
 int
-dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
-		 daos_size_t *size)
+dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf, daos_size_t *size)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDONLY | O_NOFOLLOW;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDONLY | O_NOFOLLOW;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1085,11 +1055,10 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags, &obj, NULL,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1105,9 +1074,9 @@ out_free_path:
 int
 dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj = NULL;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj = NULL;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1118,12 +1087,10 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
-		      S_IFLNK, O_CREAT | O_EXCL,
-		      0, 0, target, &obj);
+	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, S_IFLNK, O_CREAT | O_EXCL, 0, 0,
+		      target, &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1136,14 +1103,13 @@ out_free_path:
 }
 
 int
-dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
-	     daos_oclass_id_t cid, daos_size_t chunk_size,
-	     const char *value, dfs_obj_t **_obj)
+dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags, daos_oclass_id_t cid,
+	     daos_size_t chunk_size, const char *value, dfs_obj_t **_obj)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	mode_t		actual_mode;
-	dfs_obj_t	*obj;
+	int             rc;
+	struct sys_path sys_path;
+	mode_t          actual_mode;
+	dfs_obj_t      *obj;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1164,11 +1130,9 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 		if (!S_ISDIR(mode))
 			D_GOTO(out_free_path, rc = ENOTDIR);
 
-		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, mode,
-			     _obj);
+		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, mode, _obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n",
-				sys_path.name, rc);
+			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n", sys_path.name, rc);
 		}
 		D_GOTO(out_free_path, rc);
 	}
@@ -1178,21 +1142,19 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 	 * and creating the target pointed to.
 	 */
 	if ((flags & O_CREAT) || (flags & O_NOFOLLOW)) {
-		rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			      mode, flags, cid, chunk_size, value, _obj);
+		rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, mode, flags, cid,
+			      chunk_size, value, _obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
-				sys_path.name, rc);
+			D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n", sys_path.name, rc);
 		}
 		D_GOTO(out_free_path, rc);
 	}
 
 	/* Call dfs_lookup_rel to follow symlinks */
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    flags, &obj, &actual_mode, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, flags, &obj, &actual_mode,
+			    NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1221,11 +1183,11 @@ dfs_sys_close(dfs_obj_t *obj)
 }
 
 int
-dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
-	     daos_size_t *size, daos_event_t *ev)
+dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off, daos_size_t *size,
+	     daos_event_t *ev)
 {
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
+	d_iov_t     iov;
+	d_sg_list_t sgl;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1235,19 +1197,19 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 		return EINVAL;
 
 	d_iov_set(&iov, buf, *size);
-	sgl.sg_nr = 1;
-	sgl.sg_iovs = &iov;
+	sgl.sg_nr     = 1;
+	sgl.sg_iovs   = &iov;
 	sgl.sg_nr_out = 1;
 
 	return dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
 }
 
 int
-dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
-	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
+dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf, daos_off_t off,
+	      daos_size_t *size, daos_event_t *ev)
 {
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
+	d_iov_t     iov;
+	d_sg_list_t sgl;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1257,20 +1219,19 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 		return EINVAL;
 
 	d_iov_set(&iov, (void *)buf, *size);
-	sgl.sg_nr = 1;
-	sgl.sg_iovs = &iov;
+	sgl.sg_nr     = 1;
+	sgl.sg_iovs   = &iov;
 	sgl.sg_nr_out = 1;
 
 	return dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
 }
 
 int
-dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
-	      daos_off_t offset, daos_off_t len)
+dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path, daos_off_t offset, daos_off_t len)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1281,11 +1242,10 @@ dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
-		      S_IFREG, O_RDWR, 0, 0, NULL, &obj);
+	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, S_IFREG, O_RDWR, 0, 0, NULL,
+		      &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1298,20 +1258,19 @@ out:
 }
 
 int
-dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force,
-	       daos_obj_id_t *oid)
+dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force, daos_obj_id_t *oid)
 {
 	return dfs_sys_remove_type(dfs_sys, path, force, 0, oid);
 }
 
 int
-dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
-		    mode_t mode, daos_obj_id_t *oid)
+dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force, mode_t mode,
+		    daos_obj_id_t *oid)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	struct stat	stbuf;
-	mode_t		type_mask = mode & S_IFMT;
+	int             rc;
+	struct sys_path sys_path;
+	struct stat     stbuf;
+	mode_t          type_mask = mode & S_IFMT;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1333,8 +1292,7 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 	/* Stat the object and make sure it is the correct type */
 	rc = dfs_stat(dfs_sys->dfs, sys_path.parent, sys_path.name, &stbuf);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to stat %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to stat %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1342,16 +1300,13 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 		D_GOTO(out_free_path, rc = EINVAL);
 
 remove:
-	rc = dfs_remove(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			force, oid);
+	rc = dfs_remove(dfs_sys->dfs, sys_path.parent, sys_path.name, force, oid);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to remove %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to remove %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
-	if ((dfs_sys->hash != NULL) &&
-	    (type_mask == 0 || type_mask == S_IFDIR)) {
+	if ((dfs_sys->hash != NULL) && (type_mask == 0 || type_mask == S_IFDIR)) {
 		bool deleted;
 
 		/* TODO - Ideally, we should return something like EBUSY
@@ -1359,10 +1314,8 @@ remove:
 		 * TODO - if force=true then we need to delete any child
 		 * directories as well.
 		 */
-		deleted = d_hash_rec_delete(dfs_sys->hash, sys_path.path,
-					    sys_path.path_len);
-		D_DEBUG(DB_TRACE, "d_hash_rec_delete() %s = %d\n",
-			sys_path.path, deleted);
+		deleted = d_hash_rec_delete(dfs_sys->hash, sys_path.path, sys_path.path_len);
+		D_DEBUG(DB_TRACE, "d_hash_rec_delete() %s = %d\n", sys_path.path, deleted);
 	}
 
 out_free_path:
@@ -1371,11 +1324,10 @@ out_free_path:
 }
 
 int
-dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
-	      daos_oclass_id_t cid)
+dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode, daos_oclass_id_t cid)
 {
-	int		rc;
-	struct sys_path	sys_path;
+	int             rc;
+	struct sys_path sys_path;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1390,8 +1342,7 @@ dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
 	if (sys_path.name == NULL)
 		D_GOTO(out_free_path, rc = EEXIST);
 
-	rc = dfs_mkdir(dfs_sys->dfs, sys_path.parent, sys_path.name,
-		       mode, cid);
+	rc = dfs_mkdir(dfs_sys->dfs, sys_path.parent, sys_path.name, mode, cid);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
@@ -1401,11 +1352,11 @@ out_free_path:
 int
 dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 {
-	int			rc;
-	struct sys_path		sys_path;
-	struct dfs_sys_dir	*sys_dir;
-	mode_t			mode;
-	int			lookup_flags = O_RDWR;
+	int                 rc;
+	struct sys_path     sys_path;
+	struct dfs_sys_dir *sys_dir;
+	mode_t              mode;
+	int                 lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1422,11 +1373,9 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 
 	/* If this is root, just dup the handle */
 	if (sys_path.name == NULL) {
-		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, O_RDWR,
-			     &sys_dir->obj);
+		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, O_RDWR, &sys_dir->obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n",
-				sys_path.name, rc);
+			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n", sys_path.name, rc);
 			D_GOTO(out_free_path, rc);
 		}
 		D_GOTO(out, rc);
@@ -1435,11 +1384,10 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 	if (flags & O_NOFOLLOW)
 		lookup_flags |= O_NOFOLLOW;
 
-	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
-			    lookup_flags, &sys_dir->obj, &mode, NULL);
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name, lookup_flags,
+			    &sys_dir->obj, &mode, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
-			sys_path.name, rc);
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
 
@@ -1462,8 +1410,8 @@ out_free_dir:
 int
 dfs_sys_closedir(DIR *dirp)
 {
-	int			rc;
-	struct dfs_sys_dir	*sys_dir;
+	int                 rc;
+	struct dfs_sys_dir *sys_dir;
 
 	if (dirp == NULL)
 		return EINVAL;
@@ -1482,8 +1430,8 @@ dfs_sys_closedir(DIR *dirp)
 int
 dfs_sys_readdir(dfs_sys_t *dfs_sys, DIR *dirp, struct dirent **_dirent)
 {
-	int			rc = 0;
-	struct dfs_sys_dir	*sys_dir;
+	int                 rc = 0;
+	struct dfs_sys_dir *sys_dir;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1497,8 +1445,7 @@ dfs_sys_readdir(dfs_sys_t *dfs_sys, DIR *dirp, struct dirent **_dirent)
 
 	sys_dir->num_ents = DFS_SYS_NUM_DIRENTS;
 	while (!daos_anchor_is_eof(&sys_dir->anchor)) {
-		rc = dfs_readdir(dfs_sys->dfs, sys_dir->obj,
-				 &sys_dir->anchor, &sys_dir->num_ents,
+		rc = dfs_readdir(dfs_sys->dfs, sys_dir->obj, &sys_dir->anchor, &sys_dir->num_ents,
 				 sys_dir->ents);
 		if (rc != 0)
 			D_GOTO(out_null, rc);
@@ -1510,7 +1457,7 @@ dfs_sys_readdir(dfs_sys_t *dfs_sys, DIR *dirp, struct dirent **_dirent)
 
 out_null:
 	sys_dir->num_ents = 0;
-	*_dirent = NULL;
+	*_dirent          = NULL;
 	return rc;
 out:
 	sys_dir->num_ents--;

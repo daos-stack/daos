@@ -23,12 +23,12 @@
  * @{
  */
 
-#define D_FOREACH_GURT_FAC(ACTION, arg)                                 \
-	ACTION(misc, misc, arg)  /* misc debug messages */              \
-	ACTION(mem,  mem,  arg)  /* memory debug messages */            \
-	ACTION(swim, swim, arg)  /* swim debug messages (move ?) */     \
-	ACTION(fi,   fi,   arg)  /* fault injection debug messages */   \
-	ACTION(telem, telem, arg)  /* telemetry debug messages */
+#define D_FOREACH_GURT_FAC(ACTION, arg)                                                            \
+	ACTION(misc, misc, arg)   /* misc debug messages */                                        \
+	ACTION(mem, mem, arg)     /* memory debug messages */                                      \
+	ACTION(swim, swim, arg)   /* swim debug messages (move ?) */                               \
+	ACTION(fi, fi, arg)       /* fault injection debug messages */                             \
+	ACTION(telem, telem, arg) /* telemetry debug messages */
 
 /**
  * d_alt_assert is a pointer to an alternative assert function, meaning an
@@ -40,24 +40,24 @@
  * \param[in] file		The file which calls the alternative assert
  * \param[in] line		The line which calls the alternative assert
  */
-extern void (*d_alt_assert)(const int, const char*, const char*, const int);
+extern void (*d_alt_assert)(const int, const char *, const char *, const int);
 
-#define DB_ALL_BITS	"all"
+#define DB_ALL_BITS               "all"
 
-#define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
-#define D_LOG_SIZE_ENV	"D_LOG_SIZE"	/**< Env to specify log max file size */
-#define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
+#define D_LOG_FILE_ENV            "D_LOG_FILE" /**< Env to specify log file */
+#define D_LOG_SIZE_ENV            "D_LOG_SIZE" /**< Env to specify log max file size */
+#define D_LOG_MASK_ENV            "D_LOG_MASK" /**< Env to specify log mask */
 
 /**< Env to specify log file pid append to filename*/
-#define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
+#define D_LOG_FILE_APPEND_PID_ENV "D_LOG_FILE_APPEND_PID"
 
-#define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
+#define D_LOG_TRUNCATE_ENV        "D_LOG_TRUNCATE"
 
 /**< Env to specify flush priority */
-#define D_LOG_FLUSH_ENV			"D_LOG_FLUSH"
+#define D_LOG_FLUSH_ENV           "D_LOG_FLUSH"
 
 /**< Env to specify stderr merge with logfile*/
-#define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
+#define D_LOG_STDERR_IN_LOG_ENV   "D_LOG_STDERR_IN_LOG"
 
 /* Enable shadow warning where users use same variable name in nested
  * scope.   This enables use of a variable in the macro below and is
@@ -66,22 +66,20 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #pragma GCC diagnostic error "-Wshadow"
 
 /** Internal macro for printing the message using resolved mask */
-#define _D_LOG_NOCHECK(mask, fmt, ...)				\
-	d_log(mask, "%s:%d %s() " fmt, __FILE__, __LINE__,	\
-	      __func__, ##__VA_ARGS__)
+#define _D_LOG_NOCHECK(mask, fmt, ...)                                                             \
+	d_log(mask, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 /** Internal macro for printing trace message with resolved mask */
-#define _D_TRACE_NOCHECK(mask, ptr, fmt, ...)			\
-	d_log(mask, "%s:%d %s(%p) " fmt, __FILE__, __LINE__,	\
-	      __func__, ptr, ##__VA_ARGS__)
+#define _D_TRACE_NOCHECK(mask, ptr, fmt, ...)                                                      \
+	d_log(mask, "%s:%d %s(%p) " fmt, __FILE__, __LINE__, __func__, ptr, ##__VA_ARGS__)
 
 /** Internal macro for saving the log, checking it, and printing, if enabled */
-#define _D_LOG_CHECK(func, saved_mask, mask, ...)			\
-	do {								\
-		(saved_mask) = d_log_check(mask);			\
-									\
-		if (saved_mask)						\
-			func(saved_mask, ##__VA_ARGS__);		\
+#define _D_LOG_CHECK(func, saved_mask, mask, ...)                                                  \
+	do {                                                                                       \
+		(saved_mask) = d_log_check(mask);                                                  \
+                                                                                                   \
+		if (saved_mask)                                                                    \
+			func(saved_mask, ##__VA_ARGS__);                                           \
 	} while (0)
 
 /**
@@ -90,31 +88,29 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  * function can be used directly by users or by user defined macros if the
  * provided log level macros are not flexible enough.
  */
-#define _D_LOG(func, mask, ...)						\
-	do {								\
-		int __tmp_mask;						\
-									\
-		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);	\
+#define _D_LOG(func, mask, ...)                                                                    \
+	do {                                                                                       \
+		int __tmp_mask;                                                                    \
+                                                                                                   \
+		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);                               \
 	} while (0)
 
-#define _D_DEBUG(func, flag, ...)					   \
-	do {								   \
-		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {	   \
-			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) { \
-				_D_LOG_CHECK(func,			   \
-					     DD_FLAG(flag, D_LOGFAC),	   \
-					     (flag) | D_LOGFAC,		   \
-					     ##__VA_ARGS__);		   \
-				break;					   \
-			}						   \
-			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);	   \
-		}							   \
+#define _D_DEBUG(func, flag, ...)                                                                  \
+	do {                                                                                       \
+		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {                                \
+			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) {                         \
+				_D_LOG_CHECK(func, DD_FLAG(flag, D_LOGFAC), (flag) | D_LOGFAC,     \
+					     ##__VA_ARGS__);                                       \
+				break;                                                             \
+			}                                                                          \
+			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);                              \
+		}                                                                                  \
 	} while (0)
 
-#define D_LOG_ENABLED(flag)					\
-	({							\
-		_D_DEBUG(D_NOOP, flag);				\
-		__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0);	\
+#define D_LOG_ENABLED(flag)                                                                        \
+	({                                                                                         \
+		_D_DEBUG(D_NOOP, flag);                                                            \
+		__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0);                                      \
 	})
 
 /* Log a message conditionally upon resolving the mask
@@ -127,8 +123,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  *
  *  User should define D_LOGFAC for the file
  */
-#define D_DEBUG(flag, fmt, ...)				\
-	_D_DEBUG(_D_LOG_NOCHECK, flag, fmt, ##__VA_ARGS__)
+#define D_DEBUG(flag, fmt, ...)            _D_DEBUG(_D_LOG_NOCHECK, flag, fmt, ##__VA_ARGS__)
 
 /* Log a pointer value and message conditionally upon resolving the mask
  *
@@ -141,63 +136,52 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  *
  *  User should define D_LOGFAC for the file
  */
-#define D_TRACE_DEBUG(flag, ptr, fmt, ...)				\
-	_D_DEBUG(_D_TRACE_NOCHECK, flag, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_DEBUG(flag, ptr, fmt, ...) _D_DEBUG(_D_TRACE_NOCHECK, flag, ptr, fmt, ##__VA_ARGS__)
 
 /** Special conditional debug so we can pass different flags to base routine
  *  based on a condition.   With V2, things like cond ? flag1 : flag2 don't
  *  work natively.
  */
-#define D_CDEBUG(cond, flag_true, flag_false, ...)		\
-	do {							\
-		if (cond)					\
-			D_DEBUG(flag_true, __VA_ARGS__);	\
-		else						\
-			D_DEBUG(flag_false, __VA_ARGS__);	\
+#define D_CDEBUG(cond, flag_true, flag_false, ...)                                                 \
+	do {                                                                                       \
+		if (cond)                                                                          \
+			D_DEBUG(flag_true, __VA_ARGS__);                                           \
+		else                                                                               \
+			D_DEBUG(flag_false, __VA_ARGS__);                                          \
 	} while (0)
 
 /* Register a descriptor with a parent and a type */
-#define D_TRACE_UP(flag, ptr, parent, type)				\
-	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n",	\
-		      type, parent)
+#define D_TRACE_UP(flag, ptr, parent, type)                                                        \
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n", type, parent)
 
 /* De-register a descriptor, including all aliases */
-#define D_TRACE_DOWN(flag, ptr)						\
-	D_TRACE_DEBUG(flag, ptr, "Deregistered\n")
+#define D_TRACE_DOWN(flag, ptr) D_TRACE_DEBUG(flag, ptr, "Deregistered\n")
 
 /** Register a root with type */
-#define D_TRACE_ROOT(flag, ptr, type)					\
+#define D_TRACE_ROOT(flag, ptr, type)                                                              \
 	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' as root\n", type)
 
 /** Helper macros to conditionally output logs conditionally based on
  *  the message priority and the current log level.  See D_DEBUG and
  *  D_TRACE_DEBUG
  */
-#define D_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ## __VA_ARGS__)
-#define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
-#define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
-#define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
-#define D_ALERT(fmt, ...)	D_DEBUG(DLOG_ALERT, fmt, ## __VA_ARGS__)
-#define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
-#define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
-#define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
+#define D_INFO(fmt, ...)             D_DEBUG(DLOG_INFO, fmt, ##__VA_ARGS__)
+#define D_NOTE(fmt, ...)             D_DEBUG(DLOG_NOTE, fmt, ##__VA_ARGS__)
+#define D_WARN(fmt, ...)             D_DEBUG(DLOG_WARN, fmt, ##__VA_ARGS__)
+#define D_ERROR(fmt, ...)            D_DEBUG(DLOG_ERR, fmt, ##__VA_ARGS__)
+#define D_ALERT(fmt, ...)            D_DEBUG(DLOG_ALERT, fmt, ##__VA_ARGS__)
+#define D_CRIT(fmt, ...)             D_DEBUG(DLOG_CRIT, fmt, ##__VA_ARGS__)
+#define D_FATAL(fmt, ...)            D_DEBUG(DLOG_EMERG, fmt, ##__VA_ARGS__)
+#define D_EMIT(fmt, ...)             D_DEBUG(DLOG_EMIT, fmt, ##__VA_ARGS__)
 
-#define D_TRACE_INFO(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_NOTE(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_NOTE, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_WARN(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_ERROR(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_ALERT(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_ALERT, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_CRIT(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_FATAL(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
-#define D_TRACE_EMIT(ptr, fmt, ...)	\
-	D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_INFO(ptr, fmt, ...)  D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_NOTE(ptr, fmt, ...)  D_TRACE_DEBUG(DLOG_NOTE, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_WARN(ptr, fmt, ...)  D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_ERROR(ptr, fmt, ...) D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_ALERT(ptr, fmt, ...) D_TRACE_DEBUG(DLOG_ALERT, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_CRIT(ptr, fmt, ...)  D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_FATAL(ptr, fmt, ...) D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ##__VA_ARGS__)
+#define D_TRACE_EMIT(ptr, fmt, ...)  D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ##__VA_ARGS__)
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
@@ -209,11 +193,10 @@ D_FOREACH_GURT_DB(D_LOG_DECLARE_DB, D_NOOP)
  * D_PRINT_ERR must be used for any error logging before clog is enabled or
  * after it is disabled
  */
-#define D_PRINT_ERR(fmt, ...)					\
-	do {							\
-		fprintf(stderr, "%s:%d:%s() " fmt, __FILE__,	\
-			__LINE__, __func__, ## __VA_ARGS__);	\
-		fflush(stderr);					\
+#define D_PRINT_ERR(fmt, ...)                                                                      \
+	do {                                                                                       \
+		fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__);   \
+		fflush(stderr);                                                                    \
 	} while (0)
 
 /**
@@ -261,7 +244,8 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
  *
  * \return		0 on success, -1 on error
  */
-int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
+int
+d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
 
 /**
  * Set an alternative assert function. This is useful in unit testing when you
@@ -272,44 +256,43 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  *
  * \return			0 on success, -DER_INVAL on error
  */
-int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-					     const char*, const int));
+int
+d_register_alt_assert(void (*alt_assert)(const int, const char *, const char *, const int));
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled
  */
-#define D_PRINT(fmt, ...)						\
-	do {								\
-		fprintf(stdout, fmt, ## __VA_ARGS__);			\
-		fflush(stdout);						\
+#define D_PRINT(fmt, ...)                                                                          \
+	do {                                                                                       \
+		fprintf(stdout, fmt, ##__VA_ARGS__);                                               \
+		fflush(stdout);                                                                    \
 	} while (0)
 
-#define D_ASSERT(e)							\
-	do {								\
-		if (likely(e))						\
-			break;						\
-		D_FATAL("Assertion '%s' failed\n", #e);			\
-		d_log_sync();						\
-		if (d_alt_assert != NULL)				\
-			d_alt_assert(0, #e, __FILE__, __LINE__);	\
-		assert(0);						\
+#define D_ASSERT(e)                                                                                \
+	do {                                                                                       \
+		if (likely(e))                                                                     \
+			break;                                                                     \
+		D_FATAL("Assertion '%s' failed\n", #e);                                            \
+		d_log_sync();                                                                      \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #e, __FILE__, __LINE__);                                   \
+		assert(0);                                                                         \
 	} while (0)
 
-#define D_ASSERTF(cond, fmt, ...)						\
-	do {									\
-		if (likely(cond))						\
-			break;							\
-		D_FATAL("Assertion '%s' failed: " fmt, #cond, ## __VA_ARGS__);	\
-		if (d_alt_assert != NULL)					\
-			d_alt_assert(0, #cond, __FILE__, __LINE__);		\
-		assert(0);							\
+#define D_ASSERTF(cond, fmt, ...)                                                                  \
+	do {                                                                                       \
+		if (likely(cond))                                                                  \
+			break;                                                                     \
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ##__VA_ARGS__);                      \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #cond, __FILE__, __LINE__);                                \
+		assert(0);                                                                         \
 	} while (0)
 
-#define D_CASSERT(cond, ...)						\
-	_Static_assert(cond, #cond ": " __VA_ARGS__)
+#define D_CASSERT(cond, ...) _Static_assert(cond, #cond ": " __VA_ARGS__)
 
-#define DF_U64		"%" PRIu64
-#define DF_X64		"%" PRIx64
+#define DF_U64               "%" PRIu64
+#define DF_X64               "%" PRIx64
 
 /** @}
  */

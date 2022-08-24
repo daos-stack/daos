@@ -45,9 +45,9 @@
 
 enum {
 	/** minimum log file size is 1MB */
-	LOG_SIZE_MIN	= (1ULL << 20),
+	LOG_SIZE_MIN = (1ULL << 20),
 	/** default log file size is 2GB */
-	LOG_SIZE_DEF	= (1ULL << 31),
+	LOG_SIZE_DEF = (1ULL << 31),
 };
 
 /**
@@ -55,41 +55,41 @@ enum {
  */
 struct d_log_state {
 	/** logfile name [malloced] */
-	char		*log_file;
+	char          *log_file;
 	/** backup file name */
-	char		*log_old;
+	char          *log_old;
 	/** buffer to cache log messages */
-	char		*log_buf;
+	char          *log_buf;
 	/** Number Of Bytes in the buffer */
-	off_t		 log_buf_nob;
+	off_t          log_buf_nob;
 	/** fd of the open logfile */
-	int		 log_fd;
+	int            log_fd;
 	/** fd of the backup logfile, only for log_sync on assertion failure */
-	int		 log_old_fd;
+	int            log_old_fd;
 	/** current size of log file */
-	uint64_t	 log_size;
+	uint64_t       log_size;
 	/** max size of log file */
-	uint64_t	 log_size_max;
+	uint64_t       log_size_max;
 	/** Callback to get thread id and ULT id */
-	d_log_id_cb_t	 log_id_cb;
+	d_log_id_cb_t  log_id_cb;
 	/* note: tag, dlog_facs, and fac_cnt are in xstate now */
-	int def_mask;		/* default facility mask value */
-	int stderr_mask;	/* mask above which we send to stderr  */
-	int oflags;		/* open flags */
-	int fac_alloc;		/* # of slots in facs[] (>=fac_cnt) */
-	struct utsname uts;	/* for hostname, from uname(3) */
-	int stdout_isatty;	/* non-zero if stdout is a tty */
-	int stderr_isatty;	/* non-zero if stderr is a tty */
-	int flush_pri;		/* flush priority */
+	int            def_mask;      /* default facility mask value */
+	int            stderr_mask;   /* mask above which we send to stderr  */
+	int            oflags;        /* open flags */
+	int            fac_alloc;     /* # of slots in facs[] (>=fac_cnt) */
+	struct utsname uts;           /* for hostname, from uname(3) */
+	int            stdout_isatty; /* non-zero if stdout is a tty */
+	int            stderr_isatty; /* non-zero if stderr is a tty */
+	int            flush_pri;     /* flush priority */
 #ifdef DLOG_MUTEX
-	pthread_mutex_t clogmux;	/* protect clog in threaded env */
+	pthread_mutex_t clogmux; /* protect clog in threaded env */
 #endif
 };
 
 struct cache_entry {
-	int		*ce_cache;
-	d_list_t	 ce_link;
-	int		 ce_nr;
+	int     *ce_cache;
+	d_list_t ce_link;
+	int      ce_nr;
 };
 
 /*
@@ -115,13 +115,16 @@ static bool               merge_stderr;
 #define clog_unlock()
 #endif
 
-static int d_log_write(char *buf, int len, bool flush);
-static const char *clog_pristr(int);
-static int clog_setnfac(int);
+static int
+d_log_write(char *buf, int len, bool flush);
+static const char *
+clog_pristr(int);
+static int
+			 clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
-static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG", "EMIT"};
+static const char *const norm[] = {"DBUG", "INFO", "NOTE", "WARN", "ERR ",
+				   "CRIT", "ALRT", "EMRG", "EMIT"};
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -129,7 +132,8 @@ static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
  *
  * \return			the string (symbolic name) of the priority
  */
-static const char *clog_pristr(int pri)
+static const char *
+clog_pristr(int pri)
 {
 	int s;
 
@@ -151,9 +155,10 @@ static const char *clog_pristr(int pri)
  *
  * \return		zero on success, -1 on error.
  */
-static int clog_setnfac(int n)
+static int
+clog_setnfac(int n)
 {
-	int try, lcv;
+	int              try, lcv;
 	struct dlog_fac *nfacs;
 
 	/*
@@ -171,30 +176,29 @@ static int clog_setnfac(int n)
 		return 0;
 	}
 	/* must grow the array */
-	try = (n < 1024) ? (n + 32) : n; /* pad a bit for small values of n */
+	try   = (n < 1024) ? (n + 32) : n; /* pad a bit for small values of n */
 	nfacs = calloc(1, try * sizeof(*nfacs));
 	if (!nfacs)
 		return -1;
 
 	/* over the hump, setup the new array */
 	lcv = 0;
-	if (d_log_xst.dlog_facs && d_log_xst.fac_cnt) {	/* copy old? */
-		for (/*null */ ; lcv < d_log_xst.fac_cnt; lcv++)
+	if (d_log_xst.dlog_facs && d_log_xst.fac_cnt) { /* copy old? */
+		for (/*null */; lcv < d_log_xst.fac_cnt; lcv++)
 			nfacs[lcv] = d_log_xst.dlog_facs[lcv];
 	}
-	for (/*null */ ; lcv < try; lcv++) {	/* init the new */
-		nfacs[lcv].fac_mask = mst.def_mask;
-		nfacs[lcv].fac_aname =
-		    (lcv == 0) ? (char *)default_fac0name : NULL;
-		nfacs[lcv].fac_lname = NULL;
+	for (/*null */; lcv < try; lcv++) { /* init the new */
+		nfacs[lcv].fac_mask   = mst.def_mask;
+		nfacs[lcv].fac_aname  = (lcv == 0) ? (char *)default_fac0name : NULL;
+		nfacs[lcv].fac_lname  = NULL;
 		nfacs[lcv].is_enabled = true; /* enable all facs by default */
 	}
 	/* install */
 	if (d_log_xst.dlog_facs)
 		free(d_log_xst.dlog_facs);
 	d_log_xst.dlog_facs = nfacs;
-	d_log_xst.fac_cnt = n;
-	mst.fac_alloc = try;
+	d_log_xst.fac_cnt   = n;
+	mst.fac_alloc       = try;
 	return 0;
 }
 
@@ -207,21 +211,21 @@ static int clog_setnfac(int n)
  * @param totcp pointer to total bytes moved counter
  * @param str the string to copy in (null to just add a \0)
  */
-static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
-		      const char *str)
+static void
+clog_bput(char **bpp, int *skippy, int *residp, int *totcp, const char *str)
 {
 	static const char *nullsrc = "X\0\0"; /* 'X' is a non-null dummy char */
-	const char *sp;
+	const char        *sp;
 
 	if (str == NULL) /* trick to allow a null insert */
 		str = nullsrc;
 	for (sp = str; *sp; sp++) {
 		if (sp == nullsrc)
-			sp++;	/* skip over 'X' to null */
+			sp++; /* skip over 'X' to null */
 		if (totcp)
-			(*totcp)++;	/* update the total */
+			(*totcp)++; /* update the total */
 		if (skippy && *skippy > 0) {
-			(*skippy)--;	/* honor skip */
+			(*skippy)--; /* honor skip */
 			continue;
 		}
 		if (*residp > 0 && *bpp != NULL) {
@@ -236,8 +240,8 @@ static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
 static void
 reset_caches(bool lock_held)
 {
-	struct cache_entry	*ce;
-	int			 i;
+	struct cache_entry *ce;
+	int                 i;
 
 	if (!lock_held)
 		clog_lock();
@@ -252,7 +256,7 @@ reset_caches(bool lock_held)
 void
 d_log_add_cache(int *cache, int nr)
 {
-	struct cache_entry	*ce;
+	struct cache_entry *ce;
 
 	/* Can't use D_ALLOC yet */
 	ce = malloc(sizeof(*ce));
@@ -261,7 +265,7 @@ d_log_add_cache(int *cache, int nr)
 
 	clog_lock();
 	ce->ce_cache = cache;
-	ce->ce_nr = nr;
+	ce->ce_nr    = nr;
 	d_list_add(&ce->ce_link, &d_log_caches);
 	clog_unlock();
 }
@@ -276,10 +280,11 @@ d_log_add_cache(int *cache, int nr)
  *
  * the caller handles cleanout of d_log_xst.tag (not us).
  */
-static void dlog_cleanout(void)
+static void
+dlog_cleanout(void)
 {
-	struct cache_entry	*ce;
-	int			 lcv;
+	struct cache_entry *ce;
+	int                 lcv;
 
 	clog_lock();
 	if (mst.log_file) {
@@ -302,7 +307,7 @@ static void dlog_cleanout(void)
 
 	if (mst.log_buf) {
 		free(mst.log_buf);
-		mst.log_buf = NULL;
+		mst.log_buf     = NULL;
 		mst.log_buf_nob = 0;
 	}
 
@@ -313,21 +318,19 @@ static void dlog_cleanout(void)
 		 */
 		for (lcv = 0; lcv < mst.fac_alloc; lcv++) {
 			if (d_log_xst.dlog_facs[lcv].fac_aname &&
-			    d_log_xst.dlog_facs[lcv].fac_aname !=
-			    default_fac0name)
+			    d_log_xst.dlog_facs[lcv].fac_aname != default_fac0name)
 				free(d_log_xst.dlog_facs[lcv].fac_aname);
 			if (d_log_xst.dlog_facs[lcv].fac_lname)
 				free(d_log_xst.dlog_facs[lcv].fac_lname);
 		}
 		free(d_log_xst.dlog_facs);
 		d_log_xst.dlog_facs = NULL;
-		d_log_xst.fac_cnt = 0;
-		mst.fac_alloc = 0;
+		d_log_xst.fac_cnt   = 0;
+		mst.fac_alloc       = 0;
 	}
 
 	reset_caches(true); /* Log is going away, reset cached masks */
-	while ((ce = d_list_pop_entry(&d_log_caches,
-				      struct cache_entry, ce_link)))
+	while ((ce = d_list_pop_entry(&d_log_caches, struct cache_entry, ce_link)))
 		free(ce);
 	clog_unlock();
 #ifdef DLOG_MUTEX
@@ -335,12 +338,12 @@ static void dlog_cleanout(void)
 	 * do not destroy mutex to allow correct execution of dlog_sync()
 	 * which as been registered using atexit() and to be run upon exit()
 	 */
-	 /* D_MUTEX_DESTROY(&mst.clogmux); */
+	/* D_MUTEX_DESTROY(&mst.clogmux); */
 #endif
 }
 
-static __thread int	 pre_err;
-static __thread int	 pre_err_line;
+static __thread int      pre_err;
+static __thread int      pre_err_line;
 static __thread uint64_t pre_err_time;
 
 #define dlog_print_err(err, fmt, ...)                                                              \
@@ -356,7 +359,7 @@ static __thread uint64_t pre_err_time;
 			strerror(err), ##__VA_ARGS__);                                             \
 	} while (0)
 
-#define LOG_BUF_SIZE	(16 << 10)
+#define LOG_BUF_SIZE (16 << 10)
 
 /**
  * This function can do a few things:
@@ -370,14 +373,13 @@ static __thread uint64_t pre_err_time;
 static int
 d_log_write(char *msg, int len, bool flush)
 {
-	int	 rc;
+	int rc;
 
 	if (mst.log_fd < 0)
 		return 0;
 
 	if (len >= LOG_BUF_SIZE) {
-		dlog_print_err(0, "message='%.64s' is too long, len=%d\n",
-			       msg, len);
+		dlog_print_err(0, "message='%.64s' is too long, len=%d\n", msg, len);
 		return 0;
 	}
 
@@ -389,7 +391,7 @@ d_log_write(char *msg, int len, bool flush)
 		}
 	}
 	D_ASSERT(!msg || len);
- again:
+again:
 	if (msg && (len <= LOG_BUF_SIZE - mst.log_buf_nob)) {
 		/* the current buffer is not full */
 		strncpy(&mst.log_buf[mst.log_buf_nob], msg, len);
@@ -447,7 +449,8 @@ d_log_write(char *msg, int len, bool flush)
 		} else {
 			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
 			if (mst.log_fd < 0) {
-				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				fprintf(stderr,
+					"d_log_write(): failed to recreate log file %s: %s\n",
 					mst.log_file, strerror(errno));
 				return -1;
 			}
@@ -527,28 +530,29 @@ d_log_sync(void)
  * @param fmt the printf(3) format to use
  * @param ap the stdargs va_list to use for the printf format
  */
-void d_vlog(int flags, const char *fmt, va_list ap)
+void
+d_vlog(int flags, const char *fmt, va_list ap)
 {
-#define DLOG_TBSIZ    1024	/* bigger than any line should be */
-	static __thread char b[DLOG_TBSIZ];
+#define DLOG_TBSIZ 1024 /* bigger than any line should be */
+	static __thread char     b[DLOG_TBSIZ];
 	static __thread uint32_t tid = -1;
 	static __thread uint32_t pid = -1;
-	static uint64_t	last_flush;
+	static uint64_t          last_flush;
 
-	uint64_t uid = 0;
-	int fac, lvl, pri;
-	bool flush;
-	char *b_nopt1hdr;
-	char facstore[16], *facstr;
-	struct timeval tv;
-	struct tm *tm;
-	unsigned int hlen_pt1, hlen, mlen, tlen;
+	uint64_t                 uid = 0;
+	int                      fac, lvl, pri;
+	bool                     flush;
+	char                    *b_nopt1hdr;
+	char                     facstore[16], *facstr;
+	struct timeval           tv;
+	struct tm               *tm;
+	unsigned int             hlen_pt1, hlen, mlen, tlen;
 	/*
 	 * since we ignore any potential errors in CLOG let's always re-set
 	 * errno to its original value
 	 */
-	int save_errno = errno;
-	int rc;
+	int                      save_errno = errno;
+	int                      rc;
 
 	if (flags == 0)
 		return;
@@ -587,7 +591,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	/*
 	 * we must log it, start computing the parts of the log we'll need.
 	 */
-	clog_lock();		/* lock out other threads */
+	clog_lock(); /* lock out other threads */
 	if (d_log_xst.dlog_facs[fac].fac_aname) {
 		facstr = d_log_xst.dlog_facs[fac].fac_aname;
 	} else {
@@ -609,31 +613,25 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (mst.oflags & DLOG_FLV_YEAR)
 		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
 
-	hlen += snprintf(b + hlen, sizeof(b) - hlen,
-			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
-			 tm->tm_mon + 1, tm->tm_mday,
-			 tm->tm_hour, tm->tm_min, tm->tm_sec,
+	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
+			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
 			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%d/%d/" DF_U64 "] ",
+					 d_log_xst.tag, pid, tid, uid);
 		} else {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
-					 d_log_xst.tag);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ", d_log_xst.tag);
 		}
 	}
 
-	hlen_pt1 = hlen;	/* save part 1 length */
+	hlen_pt1 = hlen; /* save part 1 length */
 	if (hlen < sizeof(b)) {
 		if (mst.oflags & DLOG_FLV_FAC)
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%-4s ", facstr);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-4s ", facstr);
 
-		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
-				 clog_pristr(lvl));
+		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ", clog_pristr(lvl));
 	}
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
@@ -641,10 +639,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * check for it anyway.
 	 */
 	if (hlen + 1 >= sizeof(b)) {
-		clog_unlock();	/* drop lock, this is the only early exit */
-		dlog_print_err(E2BIG,
-			       "header overflowed %zd byte buffer (%d)\n",
-			       sizeof(b), hlen + 1);
+		clog_unlock(); /* drop lock, this is the only early exit */
+		dlog_print_err(E2BIG, "header overflowed %zd byte buffer (%d)\n", sizeof(b),
+			       hlen + 1);
 		errno = save_errno;
 		return;
 	}
@@ -668,8 +665,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	}
 	/* Ensure it ends with '\n' and '\0' */
 	b[tlen - 1] = '\n';
-	b[tlen] = '\0';
-	b_nopt1hdr = b + hlen_pt1;
+	b[tlen]     = '\0';
+	b_nopt1hdr  = b + hlen_pt1;
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
@@ -691,7 +688,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (rc < 0)
 		errno = save_errno;
 
-	clog_unlock();		/* drop lock here */
+	clog_unlock(); /* drop lock here */
 	/*
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
@@ -702,7 +699,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		else
 			fprintf(stderr, "%s", b);
 	}
-	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
+	if ((flags & DLOG_STDOUT) && (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
@@ -721,7 +718,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
  * len should be the number of characters to evaluate, not including any
  * termination character.
  */
-static int d_log_str2pri(const char *pstr, size_t len)
+static int
+d_log_str2pri(const char *pstr, size_t len)
 {
 	int lcv;
 	int size;
@@ -739,11 +737,9 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||
-	     (strncasecmp(pstr, "DBUG", len) == 0))) {
+	if (((strncasecmp(pstr, "DEBUG", len) == 0) || (strncasecmp(pstr, "DBUG", len) == 0))) {
 		/* check to see is debug mask bits are set */
-		return d_dbglog_data.dd_mask != 0 ?
-		       d_dbglog_data.dd_mask : DLOG_DBG;
+		return d_dbglog_data.dd_mask != 0 ? d_dbglog_data.dd_mask : DLOG_DBG;
 	}
 
 	/*
@@ -764,7 +760,7 @@ static int d_log_str2pri(const char *pstr, size_t len)
 static uint64_t
 d_getenv_size(char *env)
 {
-	char *end;
+	char    *end;
 	uint64_t size;
 
 	size = strtoull(env, &end, 0);
@@ -806,16 +802,16 @@ d_getenv_size(char *env)
  * return 0 on success, -1 on error.
  */
 int
-d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
-	   char *logfile, int flags, d_log_id_cb_t log_id_cb)
+d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask, char *logfile, int flags,
+	   d_log_id_cb_t log_id_cb)
 {
-	int		tagblen;
-	char		*newtag = NULL, *cp;
-	int		truncate = 0, rc;
-	char		*env;
-	char		*buffer = NULL;
-	uint64_t	log_size = LOG_SIZE_DEF;
-	int		pri;
+	int      tagblen;
+	char    *newtag   = NULL, *cp;
+	int      truncate = 0, rc;
+	char    *env;
+	char    *buffer   = NULL;
+	uint64_t log_size = LOG_SIZE_DEF;
+	int      pri;
 
 	memset(&mst, 0, sizeof(mst));
 	mst.flush_pri = DLOG_WARN;
@@ -855,23 +851,22 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	}
 
 	/* quick sanity check (mst.tag is non-null if already open) */
-	if (d_log_xst.tag || !tag ||
-	    (maxfac_hint < 0) || (default_mask & ~DLOG_PRIMASK) ||
+	if (d_log_xst.tag || !tag || (maxfac_hint < 0) || (default_mask & ~DLOG_PRIMASK) ||
 	    (stderr_mask & ~DLOG_PRIMASK)) {
 		fprintf(stderr, "d_log_open invalid parameter.\n");
 		goto early_error;
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
-	mst.log_fd = -1;
+	mst.log_fd     = -1;
 	mst.log_old_fd = -1;
 	/* start filling it in */
-	tagblen = strlen(tag) + DLOG_TAGPAD;	/* add a bit for pid */
-	newtag = calloc(1, tagblen);
+	tagblen = strlen(tag) + DLOG_TAGPAD; /* add a bit for pid */
+	newtag  = calloc(1, tagblen);
 	if (!newtag) {
 		fprintf(stderr, "d_log_open calloc failed.\n");
 		goto early_error;
 	}
-#ifdef DLOG_MUTEX		/* create lock */
+#ifdef DLOG_MUTEX /* create lock */
 	if (D_MUTEX_INIT(&mst.clogmux, NULL) != 0) {
 		/* XXX: consider cvt to PTHREAD_MUTEX_INITIALIZER */
 		fprintf(stderr, "d_log_open D_MUTEX_INIT failed.\n");
@@ -880,7 +875,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 #endif
 	/* it is now safe to use dlog_cleanout() for error handling */
 
-	clog_lock();		/* now locked */
+	clog_lock(); /* now locked */
 
 	D_INIT_LIST_HEAD(&d_log_caches);
 
@@ -888,7 +883,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		snprintf(newtag, tagblen, "%s[", tag);
 	else
 		snprintf(newtag, tagblen, "%s", tag);
-	mst.def_mask = default_mask;
+	mst.def_mask    = default_mask;
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
 		int         log_flags = O_RDWR | O_CREAT;
@@ -923,8 +918,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		}
 
 		if (mst.log_fd < 0) {
-			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-				mst.log_file, strerror(errno));
+			fprintf(stderr, "d_log_open: cannot open %s: %s\n", mst.log_file,
+				strerror(errno));
 			goto error;
 		}
 		/* Use a higher, consistent, number for the daos log file.  This isn't strictly
@@ -958,7 +953,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		goto error;
 	}
 	(void)uname(&mst.uts);
-	d_log_xst.nodename = mst.uts.nodename;	/* expose this */
+	d_log_xst.nodename = mst.uts.nodename; /* expose this */
 	/* chop off the domainname */
 	if ((flags & DLOG_FLV_FQDN) == 0) {
 		for (cp = mst.uts.nodename; *cp && *cp != '.'; cp++)
@@ -968,7 +963,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	/* cache value of isatty() to avoid extra system calls */
 	mst.stdout_isatty = isatty(fileno(stdout));
 	mst.stderr_isatty = isatty(fileno(stderr));
-	d_log_xst.tag = newtag;
+	d_log_xst.tag     = newtag;
 	clog_unlock();
 
 	/* ensure buffer+log flush upon exit in case fini routine not
@@ -977,8 +972,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	rc = atexit(d_log_sync);
 	if (rc != 0)
 		fprintf(stderr, "unable to register flush of log,\n"
-			"potential risk to miss last lines if fini method "
-			"not invoked upon exit\n");
+				"potential risk to miss last lines if fini method "
+				"not invoked upon exit\n");
 
 	if (buffer)
 		free(buffer);
@@ -993,7 +988,7 @@ early_error:
 	if (buffer)
 		free(buffer);
 	if (newtag)
-		free(newtag);		/* was never installed */
+		free(newtag); /* was never installed */
 	return -1;
 }
 
@@ -1002,13 +997,14 @@ early_error:
  * (e.g. as part of an orderly shutdown, after all worker threads have
  * been collected). if already closed, this function is a noop.
  */
-void d_log_close(void)
+void
+d_log_close(void)
 {
 	if (!d_log_xst.tag)
-		return;		/* return if already closed */
+		return; /* return if already closed */
 
 	free(d_log_xst.tag);
-	d_log_xst.tag = NULL;	/* marks us as down */
+	d_log_xst.tag = NULL; /* marks us as down */
 	dlog_cleanout();
 }
 
@@ -1019,11 +1015,12 @@ void d_log_close(void)
  * DD_SUBSYS="all" will enable all facilities
  * if DD_SUBSYS env does not exist, then treat it as "all" (enable all facs)
  */
-bool d_logfac_is_enabled(const char *fac_name)
+bool
+d_logfac_is_enabled(const char *fac_name)
 {
 	char *ddsubsys_env;
 	char *ddsubsys_fac;
-	int len = strlen(fac_name);
+	int   len = strlen(fac_name);
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
 	ddsubsys_env = getenv(DD_FAC_ENV);
@@ -1047,16 +1044,17 @@ bool d_logfac_is_enabled(const char *fac_name)
  * d_log_namefacility: assign a name to a facility
  * return 0 on success, -1 on error (malloc problem).
  */
-int d_log_namefacility(int facility, const char *aname, const char *lname)
+int
+d_log_namefacility(int facility, const char *aname, const char *lname)
 {
-	int rv;
+	int   rv;
 	char *n, *nl;
 
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
 
-	rv = -1;	/* assume error */
+	rv = -1; /* assume error */
 	clog_lock();
 	/* need to allocate facility? */
 	if (facility >= d_log_xst.fac_cnt)
@@ -1087,7 +1085,7 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 	else
 		d_log_xst.dlog_facs[facility].is_enabled = true;
 
-	rv = 0;		/* now we have success */
+	rv = 0; /* now we have success */
 done:
 	clog_unlock();
 	return rv;
@@ -1097,7 +1095,8 @@ done:
  * d_log_allocfacility: allocate a new facility with the given name.
  * return new facility number on success, -1 on error (malloc problem).
  */
-int d_log_allocfacility(const char *aname, const char *lname)
+int
+d_log_allocfacility(const char *aname, const char *lname)
 {
 	int newfac;
 	/* not open? */
@@ -1120,7 +1119,8 @@ int d_log_allocfacility(const char *aname, const char *lname)
  * (expanding as needed).  return oldmask on success, -1 on error.  cannot
  * fail if facility array was preallocated.
  */
-int d_log_setlogmask(int facility, int mask)
+int
+d_log_setlogmask(int facility, int mask)
 {
 	int oldmask;
 	/* not open? */
@@ -1129,12 +1129,11 @@ int d_log_setlogmask(int facility, int mask)
 	clog_lock();
 	/* need to allocate facility? */
 	if (facility >= d_log_xst.fac_cnt && clog_setnfac(facility + 1) < 0) {
-		oldmask = -1;	/* error */
+		oldmask = -1; /* error */
 	} else {
 		/* swap it in, masking out any naughty bits */
-		oldmask = d_log_xst.dlog_facs[facility].fac_mask;
-		d_log_xst.dlog_facs[facility].fac_mask =
-			(mask & DLOG_PRIMASK);
+		oldmask                                = d_log_xst.dlog_facs[facility].fac_mask;
+		d_log_xst.dlog_facs[facility].fac_mask = (mask & DLOG_PRIMASK);
 	}
 	clog_unlock();
 
@@ -1147,17 +1146,18 @@ int d_log_setlogmask(int facility, int mask)
  * if the "PREFIX=" part is omitted, then the level applies to all defined
  * facilities (e.g. d_log_setmasks("WARN") sets everything to WARN).
  */
-int d_log_setmasks(char *mstr, int mlen0)
+int
+d_log_setmasks(char *mstr, int mlen0)
 {
-	char *m, *current, *fac, *pri;
+	char        *m, *current, *fac, *pri;
 	int          mlen, facno, length, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
-	int log_flags;
+	int          log_flags;
 
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
-	m = mstr;
+	m    = mstr;
 	mlen = mlen0;
 	if (mlen < 0)
 		mlen = strlen(mstr);
@@ -1167,10 +1167,10 @@ int d_log_setmasks(char *mstr, int mlen0)
 		mlen--;
 	}
 	if (mlen <= 0)
-		return -1;		/* nothing doing */
-	facno = 0;		/* make sure it gets init'd */
-	rv = 0;
-	tmp = 0;
+		return -1; /* nothing doing */
+	facno = 0;         /* make sure it gets init'd */
+	rv    = 0;
+	tmp   = 0;
 	reset_caches(false);
 	while (m) {
 		/* note current chunk, and advance m to the next one */
@@ -1181,28 +1181,27 @@ int d_log_setmasks(char *mstr, int mlen0)
 			m    = m + length + 1; /* skip the comma too */
 			mlen = mlen - (length + 1);
 		} else {
-			m = NULL;
+			m    = NULL;
 			mlen = 0;
 		}
 		if (length == 0)
-			continue;	/* null entry, just skip it */
+			continue; /* null entry, just skip it */
 		for (elen = 0; elen < length && current[elen] != '='; elen++)
 			;
 		if (elen < length) { /* has a facility prefix? */
-			fac = current;
+			fac    = current;
 			faclen = elen;
-			pri = current + elen + 1;
+			pri    = current + elen + 1;
 			prilen = length - (elen + 1);
 		} else {
-			fac = NULL;	/* means we apply to all facs */
+			fac    = NULL; /* means we apply to all facs */
 			faclen = 0;
-			pri = current;
+			pri    = current;
 			prilen = length;
 		}
 		if (m == NULL)
 			/* remove trailing white space from count */
-			while (prilen > 0 && (pri[prilen - 1] == '\n' ||
-					      pri[prilen - 1] == ' ' ||
+			while (prilen > 0 && (pri[prilen - 1] == '\n' || pri[prilen - 1] == ' ' ||
 					      pri[prilen - 1] == '\t'))
 				prilen--;
 		/* parse complete! */
@@ -1212,7 +1211,8 @@ int d_log_setmasks(char *mstr, int mlen0)
 			log_flags = d_log_check(DLOG_ERR);
 
 			if (log_flags)
-				d_log(log_flags, "d_log_setmasks: %.*s: "
+				d_log(log_flags,
+				      "d_log_setmasks: %.*s: "
 				      "unknown priority %.*s",
 				      faclen, fac, prilen, pri);
 			continue;
@@ -1223,18 +1223,14 @@ int d_log_setmasks(char *mstr, int mlen0)
 			/* Search structure to see if it already exists */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				if (d_log_xst.dlog_facs[facno].fac_aname &&
-				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_aname) == faclen &&
-				    strncasecmp(d_log_xst.dlog_facs[facno].
-						fac_aname, fac,
+				    strlen(d_log_xst.dlog_facs[facno].fac_aname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].fac_aname, fac,
 						faclen) == 0) {
 					break;
 				}
 				if (d_log_xst.dlog_facs[facno].fac_lname &&
-				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_lname) == faclen &&
-				    strncasecmp(d_log_xst.dlog_facs[facno].
-						fac_lname, fac,
+				    strlen(d_log_xst.dlog_facs[facno].fac_lname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].fac_lname, fac,
 						faclen) == 0) {
 					break;
 				}
@@ -1251,7 +1247,8 @@ int d_log_setmasks(char *mstr, int mlen0)
 				log_flags = d_log_check(DLOG_DBG);
 
 				if (log_flags)
-					d_log(log_flags, "d_log_setmasks: "
+					d_log(log_flags,
+					      "d_log_setmasks: "
 					      "unknown facility %.*s",
 					      faclen, fac);
 				rv = -1;
@@ -1276,20 +1273,21 @@ int d_log_setmasks(char *mstr, int mlen0)
 }
 
 /* d_log_getmasks: get current masks levels */
-int d_log_getmasks(char *buf, int discard, int len, int unterm)
+int
+d_log_getmasks(char *buf, int discard, int len, int unterm)
 {
-	char *bp, *myname;
+	char       *bp, *myname;
 	const char *p;
-	int skipcnt, resid, total, facno;
-	char store[64];		/* fac unlikely to overflow this */
+	int         skipcnt, resid, total, facno;
+	char        store[64]; /* fac unlikely to overflow this */
 	/* not open? */
 	if (!d_log_xst.tag)
 		return 0;
 
-	bp = buf;
+	bp      = buf;
 	skipcnt = discard;
-	resid = len;
-	total = 0;
+	resid   = len;
+	total   = 0;
 	clog_lock();
 	for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 		if (facno)
@@ -1305,7 +1303,7 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm)
 			clog_bput(&bp, &skipcnt, &resid, &total, myname);
 		}
 		clog_bput(&bp, &skipcnt, &resid, &total, "=");
-		p = clog_pristr(d_log_xst.dlog_facs[facno].fac_mask);
+		p        = clog_pristr(d_log_xst.dlog_facs[facno].fac_mask);
 		store[1] = 0;
 		while (*p && *p != ' ' && *p != '-') {
 			store[0] = *p;

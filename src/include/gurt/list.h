@@ -33,14 +33,18 @@ struct d_list_head {
 
 typedef struct d_list_head d_list_t;
 
-#define D_LIST_HEAD_INIT(name) { &(name), &(name) }
+#define D_LIST_HEAD_INIT(name)                                                                     \
+	{                                                                                          \
+		&(name), &(name)                                                                   \
+	}
 
-#define D_LIST_HEAD(name) \
-	d_list_t name = D_LIST_HEAD_INIT(name)
+#define D_LIST_HEAD(name) d_list_t name = D_LIST_HEAD_INIT(name)
 
-#define D_INIT_LIST_HEAD(ptr) do { \
-	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
-} while (0)
+#define D_INIT_LIST_HEAD(ptr)                                                                      \
+	do {                                                                                       \
+		(ptr)->next = (ptr);                                                               \
+		(ptr)->prev = (ptr);                                                               \
+	} while (0)
 
 #if defined(__cplusplus)
 extern "C" {
@@ -193,14 +197,14 @@ static inline void
 __gurt_list_splice(d_list_t *list, d_list_t *head)
 {
 	d_list_t *first = list->next;
-	d_list_t *last = list->prev;
-	d_list_t *at = head->next;
+	d_list_t *last  = list->prev;
+	d_list_t *at    = head->next;
 
 	first->prev = head;
-	head->next = first;
+	head->next  = first;
 
 	last->next = at;
-	at->prev = last;
+	at->prev   = last;
 }
 
 /**
@@ -242,17 +246,16 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * \param[in] type	the type of the struct this is embedded in.
  * \param[in] member	the member name of the list within the struct.
  */
-#define d_list_entry(ptr, type, member) \
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+#define d_list_entry(ptr, type, member) ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 
-#define d_list_pop_entry(list, type, member)			\
-	({							\
-		type *__r = NULL;				\
-		if (!d_list_empty(list)) {				\
-			__r = d_list_entry((list)->next, type, member);	\
-			d_list_del_init((list)->next);			\
-		}						\
-		__r;						\
+#define d_list_pop_entry(list, type, member)                                                       \
+	({                                                                                         \
+		type *__r = NULL;                                                                  \
+		if (!d_list_empty(list)) {                                                         \
+			__r = d_list_entry((list)->next, type, member);                            \
+			d_list_del_init((list)->next);                                             \
+		}                                                                                  \
+		__r;                                                                               \
 	})
 
 /**
@@ -264,9 +267,9 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * \param[in] head	the list to iterate over
  *
  */
-#define d_list_for_each(pos, head) \
-	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
-		pos = pos->next, prefetch(pos->next))
+#define d_list_for_each(pos, head)                                                                 \
+	for (pos = (head)->next, prefetch(pos->next); pos != (head);                               \
+	     pos = pos->next, prefetch(pos->next))
 
 /**
  * Iterate over a list safely
@@ -278,9 +281,8 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * \param[in] n		temporary storage
  * \param[in] head	the list to iterate over
  */
-#define d_list_for_each_safe(pos, n, head) \
-	for (pos = (head)->next, n = pos->next; pos != (head); \
-		pos = n, n = pos->next)
+#define d_list_for_each_safe(pos, n, head)                                                         \
+	for (pos = (head)->next, n = pos->next; pos != (head); pos = n, n = pos->next)
 
 /**
  * Iterate over a list continuing after existing point
@@ -289,9 +291,9 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * \param[in] head	the list head
  * \param[in] member	the name of the list_struct within the struct
  */
-#define d_list_for_each_entry_continue(pos, head, member)                 \
-	for (pos = d_list_entry(pos->member.next, __typeof__(*pos), member);\
-	     prefetch(pos->member.next), &pos->member != (head);             \
+#define d_list_for_each_entry_continue(pos, head, member)                                          \
+	for (pos = d_list_entry(pos->member.next, __typeof__(*pos), member);                       \
+	     prefetch(pos->member.next), &pos->member != (head);                                   \
 	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member))
 
 typedef struct d_hlist_node {
@@ -302,7 +304,6 @@ typedef struct d_hlist_head {
 	d_hlist_node_t *first;
 } d_hlist_head_t;
 
-
 /*
  * "NULL" might not be defined at this point
  */
@@ -312,9 +313,11 @@ typedef struct d_hlist_head {
 #define NULL_P ((void *)0)
 #endif
 
-
-#define D_HLIST_HEAD_INIT { NULL_P }
-#define D_HLIST_HEAD(name) d_hlist_head_t name = { NULL_P }
+#define D_HLIST_HEAD_INIT                                                                          \
+	{                                                                                          \
+		NULL_P                                                                             \
+	}
+#define D_HLIST_HEAD(name)     d_hlist_head_t name = {NULL_P}
 #define D_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
 #define D_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
 
@@ -333,9 +336,9 @@ d_hlist_empty(const d_hlist_head_t *h)
 static inline void
 __gurt_hlist_del(d_hlist_node_t *n)
 {
-	d_hlist_node_t *next = n->next;
+	d_hlist_node_t  *next  = n->next;
 	d_hlist_node_t **pprev = n->pprev;
-	*pprev = next;
+	*pprev                 = next;
 	if (next)
 		next->pprev = pprev;
 }
@@ -349,7 +352,7 @@ d_hlist_del(d_hlist_node_t *n)
 static inline void
 d_hlist_del_init(d_hlist_node_t *n)
 {
-	if (n->pprev)  {
+	if (n->pprev) {
 		__gurt_hlist_del(n);
 		D_INIT_HLIST_NODE(n);
 	}
@@ -371,8 +374,8 @@ d_hlist_add_head(d_hlist_node_t *n, d_hlist_head_t *h)
 static inline void
 d_hlist_add_before(d_hlist_node_t *n, d_hlist_node_t *next)
 {
-	n->pprev = next->pprev;
-	n->next = next;
+	n->pprev    = next->pprev;
+	n->next     = next;
 	next->pprev = &n->next;
 	*(n->pprev) = n;
 }
@@ -381,23 +384,21 @@ d_hlist_add_before(d_hlist_node_t *n, d_hlist_node_t *next)
 static inline void
 d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 {
-	n->pprev = &prev->next;
-	n->next = prev->next;
+	n->pprev   = &prev->next;
+	n->next    = prev->next;
 	prev->next = n;
 
 	if (n->next)
-		n->next->pprev  = &n->next;
+		n->next->pprev = &n->next;
 }
 
 #define d_hlist_entry(ptr, type, member) d_list_entry(ptr, type, member)
 
-#define dhlist_for_each(pos, head) \
-	for (pos = (head)->first; pos && (prefetch(pos->next), 1); \
-	     pos = pos->next)
+#define dhlist_for_each(pos, head)                                                                 \
+	for (pos = (head)->first; pos && (prefetch(pos->next), 1); pos = pos->next)
 
-#define dhlist_for_each_safe(pos, n, head) \
-	for (pos = (head)->first; pos && (n = pos->next, 1); \
-	     pos = n)
+#define dhlist_for_each_safe(pos, n, head)                                                         \
+	for (pos = (head)->first; pos && (n = pos->next, 1); pos = n)
 
 /**
  * Iterate over an hlist of given type
@@ -407,11 +408,15 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the hlist_node within the struct.
  */
-#define dhlist_for_each_entry(tpos, pos, head, member)                   \
-	for (pos = (head)->first;                                           \
-	     pos && ({ prefetch(pos->next); 1; }) &&                        \
-		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
-		   1; });                                                   \
+#define dhlist_for_each_entry(tpos, pos, head, member)                                             \
+	for (pos = (head)->first; pos && ({                                                        \
+					  prefetch(pos->next);                                     \
+					  1;                                                       \
+				  }) &&                                                            \
+				  ({                                                               \
+					  tpos = d_hlist_entry(pos, __typeof__(*tpos), member);    \
+					  1;                                                       \
+				  });                                                              \
 	     pos = pos->next)
 
 /**
@@ -421,11 +426,15 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] pos	the &struct hlist_node to use as a loop counter.
  * \param[in] member	the name of the hlist_node within the struct.
  */
-#define dhlist_for_each_entry_continue(tpos, pos, member)                \
-	for (pos = (pos)->next;                                             \
-	     pos && ({ prefetch(pos->next); 1; }) &&                        \
-		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
-		   1; });                                                   \
+#define dhlist_for_each_entry_continue(tpos, pos, member)                                          \
+	for (pos = (pos)->next; pos && ({                                                          \
+					prefetch(pos->next);                                       \
+					1;                                                         \
+				}) &&                                                              \
+				({                                                                 \
+					tpos = d_hlist_entry(pos, __typeof__(*tpos), member);      \
+					1;                                                         \
+				});                                                                \
 	     pos = pos->next)
 
 /**
@@ -435,10 +444,15 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] pos	the &struct hlist_node to use as a loop counter.
  * \param[in] member	the name of the hlist_node within the struct.
  */
-#define dhlist_for_each_entry_from(tpos, pos, member)		    \
-	for (; pos && ({ prefetch(pos->next); 1; }) &&                      \
-		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
-		   1; });                                                   \
+#define dhlist_for_each_entry_from(tpos, pos, member)                                              \
+	for (; pos && ({                                                                           \
+		       prefetch(pos->next);                                                        \
+		       1;                                                                          \
+	       }) &&                                                                               \
+	       ({                                                                                  \
+		       tpos = d_hlist_entry(pos, __typeof__(*tpos), member);                       \
+		       1;                                                                          \
+	       });                                                                                 \
 	     pos = pos->next)
 
 /**
@@ -450,13 +464,16 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the hlist_node within the struct.
  */
-#define dhlist_for_each_entry_safe(tpos, pos, n, head, member)           \
-	for (pos = (head)->first;                                            \
-	     pos && ({ n = pos->next; 1; }) &&                               \
-		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
-		   1; });                                                    \
+#define dhlist_for_each_entry_safe(tpos, pos, n, head, member)                                     \
+	for (pos = (head)->first; pos && ({                                                        \
+					  n = pos->next;                                           \
+					  1;                                                       \
+				  }) &&                                                            \
+				  ({                                                               \
+					  tpos = d_hlist_entry(pos, __typeof__(*tpos), member);    \
+					  1;                                                       \
+				  });                                                              \
 	     pos = n)
-
 
 #ifndef d_list_for_each_prev
 /**
@@ -465,9 +482,9 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] pos	the &struct list_head to use as a loop counter.
  * \param[in] head	the head for your list.
  */
-#define d_list_for_each_prev(pos, head) \
-	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
-		pos = pos->prev, prefetch(pos->prev))
+#define d_list_for_each_prev(pos, head)                                                            \
+	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);                               \
+	     pos = pos->prev, prefetch(pos->prev))
 
 #endif /* d_list_for_each_prev */
 
@@ -479,22 +496,20 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the list_struct within the struct.
  */
-#define d_list_for_each_entry(pos, head, member)                          \
-	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),  \
-		     prefetch(pos->member.next);                             \
-	     &pos->member != (head);                                         \
-	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member),\
-	     prefetch(pos->member.next))
+#define d_list_for_each_entry(pos, head, member)                                                   \
+	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),                           \
+	    prefetch(pos->member.next);                                                            \
+	     &pos->member != (head);                                                               \
+	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member),                       \
+	    prefetch(pos->member.next))
 #endif /* d_list_for_each_entry */
 
 #ifndef d_list_for_each_entry_rcu
-#define d_list_for_each_entry_rcu(pos, head, member) \
-	list_for_each_entry(pos, head, member)
+#define d_list_for_each_entry_rcu(pos, head, member) list_for_each_entry(pos, head, member)
 #endif
 
 #ifndef d_list_for_each_entry_rcu
-#define d_list_for_each_entry_rcu(pos, head, member) \
-	list_for_each_entry(pos, head, member)
+#define d_list_for_each_entry_rcu(pos, head, member) list_for_each_entry(pos, head, member)
 #endif
 
 #ifndef d_list_for_each_entry_reverse
@@ -505,9 +520,9 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the list_struct within the struct.
  */
-#define d_list_for_each_entry_reverse(pos, head, member)                  \
-	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member);  \
-	     prefetch(pos->member.prev), &pos->member != (head);             \
+#define d_list_for_each_entry_reverse(pos, head, member)                                           \
+	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member);                           \
+	     prefetch(pos->member.prev), &pos->member != (head);                                   \
 	     pos = d_list_entry(pos->member.prev, __typeof__(*pos), member))
 #endif /* d_list_for_each_entry_reverse */
 
@@ -520,13 +535,11 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the list_struct within the struct.
  */
-#define d_list_for_each_entry_safe(pos, n, head, member)                   \
-	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),   \
-		n = d_list_entry(pos->member.next, __typeof__(*pos),       \
-				    member);                                  \
-	     &pos->member != (head);                                          \
-	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n),     \
-					  member))
+#define d_list_for_each_entry_safe(pos, n, head, member)                                           \
+	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),                           \
+	    n    = d_list_entry(pos->member.next, __typeof__(*pos), member);                       \
+	     &pos->member != (head);                                                               \
+	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n), member))
 
 #endif /* d_list_for_each_entry_safe */
 
@@ -541,47 +554,38 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  * \param[in] head	the head for your list.
  * \param[in] member	the name of the list_struct within the struct.
  */
-#define d_list_for_each_entry_safe_from(pos, n, head, member)             \
-	for (n = d_list_entry(pos->member.next, __typeof__(*pos), member);\
-	     &pos->member != (head);                                         \
-	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n),    \
-					  member))
+#define d_list_for_each_entry_safe_from(pos, n, head, member)                                        \
+	for (n   = d_list_entry(pos->member.next, __typeof__(*pos), member); &pos->member != (head); \
+	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n), member))
 #endif /* d_list_for_each_entry_safe_from */
 
-#define d_list_for_each_entry_typed(pos, head, type, member)		\
-	for (pos = d_list_entry((head)->next, type, member),		\
-	     prefetch(pos->member.next);				\
-	     &pos->member != (head);                                    \
-	     pos = d_list_entry(pos->member.next, type, member),	\
-	     prefetch(pos->member.next))
+#define d_list_for_each_entry_typed(pos, head, type, member)                                       \
+	for (pos = d_list_entry((head)->next, type, member), prefetch(pos->member.next);           \
+	     &pos->member != (head);                                                               \
+	     pos = d_list_entry(pos->member.next, type, member), prefetch(pos->member.next))
 
-#define d_list_for_each_entry_reverse_typed(pos, head, type, member)	\
-	for (pos = d_list_entry((head)->prev, type, member);		\
-	     prefetch(pos->member.prev), &pos->member != (head);	\
+#define d_list_for_each_entry_reverse_typed(pos, head, type, member)                               \
+	for (pos = d_list_entry((head)->prev, type, member);                                       \
+	     prefetch(pos->member.prev), &pos->member != (head);                                   \
 	     pos = d_list_entry(pos->member.prev, type, member))
 
-#define d_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
-	for (pos = d_list_entry((head)->next, type, member),		\
-	     n = d_list_entry(pos->member.next, type, member);		\
-	     &pos->member != (head);					\
+#define d_list_for_each_entry_safe_typed(pos, n, head, type, member)                               \
+	for (pos                         = d_list_entry((head)->next, type, member),               \
+	    n                            = d_list_entry(pos->member.next, type, member);           \
+	     &pos->member != (head); pos = n, n = d_list_entry(n->member.next, type, member))
+
+#define d_list_for_each_entry_safe_from_typed(pos, n, head, type, member)                          \
+	for (n   = d_list_entry(pos->member.next, type, member); &pos->member != (head);           \
 	     pos = n, n = d_list_entry(n->member.next, type, member))
 
-#define d_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
-	for (n = d_list_entry(pos->member.next, type, member);             \
-	     &pos->member != (head);                                       \
-	     pos = n, n = d_list_entry(n->member.next, type, member))
-
-#define dhlist_for_each_entry_typed(tpos, pos, head, type, member)	\
-	for (pos = (head)->first;					\
-	     pos && (prefetch(pos->next), 1) &&				\
-		(tpos = d_hlist_entry(pos, type, member), 1);		\
+#define dhlist_for_each_entry_typed(tpos, pos, head, type, member)                                 \
+	for (pos = (head)->first;                                                                  \
+	     pos && (prefetch(pos->next), 1) && (tpos = d_hlist_entry(pos, type, member), 1);      \
 	     pos = pos->next)
 
-#define dhlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
-	for (pos = (head)->first;                                              \
-	     pos && (n = pos->next, 1) &&                                      \
-		(tpos = d_hlist_entry(pos, type, member), 1);               \
-	     pos = n)
+#define dhlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member)                         \
+	for (pos = (head)->first;                                                                  \
+	     pos && (n = pos->next, 1) && (tpos = d_hlist_entry(pos, type, member), 1); pos = n)
 
 /**
  * Circular queue definitions:
@@ -596,101 +600,105 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
  *
  * A CIRCLEQ_HEAD structure is declared as follows:
  */
-#define	D_CIRCLEQ_HEAD(name, type)					\
-struct name {								\
-	struct type *cqh_first;		/* first element */		\
-	struct type *cqh_last;		/* last element */		\
-}
+#define D_CIRCLEQ_HEAD(name, type)                                                                 \
+	struct name {                                                                              \
+		struct type *cqh_first; /* first element */                                        \
+		struct type *cqh_last;  /* last element */                                         \
+	}
 
-#define	D_CIRCLEQ_HEAD_INIT(head)				\
-	{ (void *)&head, (void *)&head }
+#define D_CIRCLEQ_HEAD_INIT(head)                                                                  \
+	{                                                                                          \
+		(void *)&head, (void *)&head                                                       \
+	}
 
-#define	d_circleq_entry(type)						\
-struct {								\
-	struct type *cqe_next;		/* next element */		\
-	struct type *cqe_prev;		/* previous element */		\
-}
+#define d_circleq_entry(type)                                                                      \
+	struct {                                                                                   \
+		struct type *cqe_next; /* next element */                                          \
+		struct type *cqe_prev; /* previous element */                                      \
+	}
 
 /*
  * Circular queue functions.
  */
-#define	D_CIRCLEQ_INIT(head) do {					\
-	(head)->cqh_first = (void *)(head);				\
-	(head)->cqh_last  = (void *)(head);				\
-} while (0)
+#define D_CIRCLEQ_INIT(head)                                                                       \
+	do {                                                                                       \
+		(head)->cqh_first = (void *)(head);                                                \
+		(head)->cqh_last  = (void *)(head);                                                \
+	} while (0)
 
-#define	D_CIRCLEQ_INSERT_AFTER(head, listelm, elm, field) do {		\
-	(elm)->field.cqe_next = (listelm)->field.cqe_next;		\
-	(elm)->field.cqe_prev = (listelm);				\
-	if ((listelm)->field.cqe_next == (void *)(head))		\
-		(head)->cqh_last = (elm);				\
-	else								\
-		(listelm)->field.cqe_next->field.cqe_prev = (elm);	\
-	(listelm)->field.cqe_next = (elm);				\
-} while (0)
+#define D_CIRCLEQ_INSERT_AFTER(head, listelm, elm, field)                                          \
+	do {                                                                                       \
+		(elm)->field.cqe_next = (listelm)->field.cqe_next;                                 \
+		(elm)->field.cqe_prev = (listelm);                                                 \
+		if ((listelm)->field.cqe_next == (void *)(head))                                   \
+			(head)->cqh_last = (elm);                                                  \
+		else                                                                               \
+			(listelm)->field.cqe_next->field.cqe_prev = (elm);                         \
+		(listelm)->field.cqe_next = (elm);                                                 \
+	} while (0)
 
-#define	D_CIRCLEQ_INSERT_BEFORE(head, listelm, elm, field) do {		\
-	(elm)->field.cqe_next = (listelm);				\
-	(elm)->field.cqe_prev = (listelm)->field.cqe_prev;		\
-	if ((listelm)->field.cqe_prev == (void *)(head))		\
-		(head)->cqh_first = (elm);				\
-	else								\
-		(listelm)->field.cqe_prev->field.cqe_next = (elm);	\
-	(listelm)->field.cqe_prev = (elm);				\
-} while (0)
+#define D_CIRCLEQ_INSERT_BEFORE(head, listelm, elm, field)                                         \
+	do {                                                                                       \
+		(elm)->field.cqe_next = (listelm);                                                 \
+		(elm)->field.cqe_prev = (listelm)->field.cqe_prev;                                 \
+		if ((listelm)->field.cqe_prev == (void *)(head))                                   \
+			(head)->cqh_first = (elm);                                                 \
+		else                                                                               \
+			(listelm)->field.cqe_prev->field.cqe_next = (elm);                         \
+		(listelm)->field.cqe_prev = (elm);                                                 \
+	} while (0)
 
-#define	D_CIRCLEQ_INSERT_HEAD(head, elm, field) do {			\
-	(elm)->field.cqe_next = (head)->cqh_first;			\
-	(elm)->field.cqe_prev = (void *)(head);				\
-	if ((head)->cqh_last == (void *)(head))				\
-		(head)->cqh_last = (elm);				\
-	else								\
-		(head)->cqh_first->field.cqe_prev = (elm);		\
-	(head)->cqh_first = (elm);					\
-} while (0)
+#define D_CIRCLEQ_INSERT_HEAD(head, elm, field)                                                    \
+	do {                                                                                       \
+		(elm)->field.cqe_next = (head)->cqh_first;                                         \
+		(elm)->field.cqe_prev = (void *)(head);                                            \
+		if ((head)->cqh_last == (void *)(head))                                            \
+			(head)->cqh_last = (elm);                                                  \
+		else                                                                               \
+			(head)->cqh_first->field.cqe_prev = (elm);                                 \
+		(head)->cqh_first = (elm);                                                         \
+	} while (0)
 
-#define	D_CIRCLEQ_INSERT_TAIL(head, elm, field) do {			\
-	(elm)->field.cqe_next = (void *)(head);				\
-	(elm)->field.cqe_prev = (head)->cqh_last;			\
-	if ((head)->cqh_first == (void *)(head))			\
-		(head)->cqh_first = (elm);				\
-	else								\
-		(head)->cqh_last->field.cqe_next = (elm);		\
-	(head)->cqh_last = (elm);					\
-} while (0)
+#define D_CIRCLEQ_INSERT_TAIL(head, elm, field)                                                    \
+	do {                                                                                       \
+		(elm)->field.cqe_next = (void *)(head);                                            \
+		(elm)->field.cqe_prev = (head)->cqh_last;                                          \
+		if ((head)->cqh_first == (void *)(head))                                           \
+			(head)->cqh_first = (elm);                                                 \
+		else                                                                               \
+			(head)->cqh_last->field.cqe_next = (elm);                                  \
+		(head)->cqh_last = (elm);                                                          \
+	} while (0)
 
-#define	D_CIRCLEQ_REMOVE(head, elm, field) do {				\
-	if ((elm)->field.cqe_next == (void *)(head))			\
-		(head)->cqh_last = (elm)->field.cqe_prev;		\
-	else								\
-		(elm)->field.cqe_next->field.cqe_prev =			\
-		    (elm)->field.cqe_prev;				\
-	if ((elm)->field.cqe_prev == (void *)(head))			\
-		(head)->cqh_first = (elm)->field.cqe_next;		\
-	else								\
-		(elm)->field.cqe_prev->field.cqe_next =			\
-		    (elm)->field.cqe_next;				\
-} while (0)
+#define D_CIRCLEQ_REMOVE(head, elm, field)                                                         \
+	do {                                                                                       \
+		if ((elm)->field.cqe_next == (void *)(head))                                       \
+			(head)->cqh_last = (elm)->field.cqe_prev;                                  \
+		else                                                                               \
+			(elm)->field.cqe_next->field.cqe_prev = (elm)->field.cqe_prev;             \
+		if ((elm)->field.cqe_prev == (void *)(head))                                       \
+			(head)->cqh_first = (elm)->field.cqe_next;                                 \
+		else                                                                               \
+			(elm)->field.cqe_prev->field.cqe_next = (elm)->field.cqe_next;             \
+	} while (0)
 
 /*
  * The macro CIRCLEQ_FOREACH() traverses the circle queue referenced by head
  * in the forward direction, assigning each element in turn to var. Each
  * element is assigned exactly once.
  */
-#define	D_CIRCLEQ_FOREACH(var, head, field)				\
-	for ((var) = ((head)->cqh_first);				\
-		(var) != (const void *)(head);				\
-		(var) = ((var)->field.cqe_next))
+#define D_CIRCLEQ_FOREACH(var, head, field)                                                        \
+	for ((var) = ((head)->cqh_first); (var) != (const void *)(head);                           \
+	     (var) = ((var)->field.cqe_next))
 
 /*
  * The macro CIRCLEQ_FOREACH_REVERSE() traverses the circle queue referenced
  * by head in the reverse direction, assigning each element in turn to var.
  * Each element is assigned exactly once.
  */
-#define	D_CIRCLEQ_FOREACH_REVERSE(var, head, field)			\
-	for ((var) = ((head)->cqh_last);				\
-		(var) != (const void *)(head);				\
-		(var) = ((var)->field.cqe_prev))
+#define D_CIRCLEQ_FOREACH_REVERSE(var, head, field)                                                \
+	for ((var) = ((head)->cqh_last); (var) != (const void *)(head);                            \
+	     (var) = ((var)->field.cqe_prev))
 
 /*
  * Circular queue access methods.
@@ -699,41 +707,37 @@ struct {								\
  * The macro CIRCLEQ_EMPTY() return true if the circular queue head has no
  * elements.
  */
-#define	D_CIRCLEQ_EMPTY(head)		((head)->cqh_first == (void *)(head))
+#define D_CIRCLEQ_EMPTY(head)      ((head)->cqh_first == (void *)(head))
 /*
  * The macro CIRCLEQ_FIRST() returns the first element of the circular queue
  * head.
  */
-#define	D_CIRCLEQ_FIRST(head)		((head)->cqh_first)
+#define D_CIRCLEQ_FIRST(head)      ((head)->cqh_first)
 /*
  * The macro CIRCLEQ_LAST() returns the last element of the circular queue head.
  */
-#define	D_CIRCLEQ_LAST(head)		((head)->cqh_last)
+#define D_CIRCLEQ_LAST(head)       ((head)->cqh_last)
 /*
  * The macro CIRCLEQ_NEXT() returns the element after the element elm.
  */
-#define	D_CIRCLEQ_NEXT(elm, field)	((elm)->field.cqe_next)
+#define D_CIRCLEQ_NEXT(elm, field) ((elm)->field.cqe_next)
 /*
  * The macro CIRCLEQ_PREV() returns the element before the element elm.
  */
-#define	D_CIRCLEQ_PREV(elm, field)	((elm)->field.cqe_prev)
+#define D_CIRCLEQ_PREV(elm, field) ((elm)->field.cqe_prev)
 
 /*
  * The macro CIRCLEQ_LOOP_NEXT() returns the element after the element elm.
  * If elm was the last element in the queue, the first element is returned.
  */
-#define D_CIRCLEQ_LOOP_NEXT(head, elm, field)				\
-	(((elm)->field.cqe_next == (void *)(head))			\
-	    ? ((head)->cqh_first)					\
-	    : (elm->field.cqe_next))
+#define D_CIRCLEQ_LOOP_NEXT(head, elm, field)                                                      \
+	(((elm)->field.cqe_next == (void *)(head)) ? ((head)->cqh_first) : (elm->field.cqe_next))
 /*
  * The macro CIRCLEQ_LOOP_PREV() returns the element before the element elm.
  * If elm was the first element in the queue, the last element is returned.
  */
-#define D_CIRCLEQ_LOOP_PREV(head, elm, field)				\
-	(((elm)->field.cqe_prev == (void *)(head))			\
-	    ? ((head)->cqh_last)					\
-	    : (elm->field.cqe_prev))
+#define D_CIRCLEQ_LOOP_PREV(head, elm, field)                                                      \
+	(((elm)->field.cqe_prev == (void *)(head)) ? ((head)->cqh_last) : (elm->field.cqe_prev))
 
 #if defined(__cplusplus)
 }

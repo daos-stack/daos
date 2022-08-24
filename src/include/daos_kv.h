@@ -20,13 +20,13 @@ extern "C" {
 #endif
 
 /** Conditional Op: Insert key if it doesn't exist, fail otherwise */
-#define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
+#define DAOS_COND_KEY_INSERT DAOS_COND_DKEY_INSERT
 /** Conditional Op: Update key if it exists, fail otherwise */
-#define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
+#define DAOS_COND_KEY_UPDATE DAOS_COND_DKEY_UPDATE
 /** Conditional Op: Get key if it exists, fail otherwise */
-#define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
+#define DAOS_COND_KEY_GET    DAOS_COND_DKEY_FETCH
 /** Conditional Op: Remove key if it exists, fail otherwise */
-#define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
+#define DAOS_COND_KEY_REMOVE DAOS_COND_PUNCH
 
 /**
  * Open a KV object. This is a local operation (no RPC involved).
@@ -47,8 +47,8 @@ extern "C" {
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_kv_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
-	     daos_handle_t *oh, daos_event_t *ev);
+daos_kv_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode, daos_handle_t *oh,
+	     daos_event_t *ev);
 
 /**
  * Close an opened KV object.
@@ -108,8 +108,8 @@ daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
-	    daos_size_t size, const void *buf, daos_event_t *ev);
+daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key, daos_size_t size,
+	    const void *buf, daos_event_t *ev);
 
 /**
  * Fetch value of a key.
@@ -136,8 +136,8 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
-	    daos_size_t *size, void *buf, daos_event_t *ev);
+daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key, daos_size_t *size,
+	    void *buf, daos_event_t *ev);
 
 /**
  * Remove a Key and it's value from the KV store
@@ -159,8 +159,8 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-	       const char *key, daos_event_t *ev);
+daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
+	       daos_event_t *ev);
 
 /**
  * List/enumerate all keys in an object.
@@ -193,9 +193,8 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-	     daos_event_t *ev);
+daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr, daos_key_desc_t *kds,
+	     d_sg_list_t *sgl, daos_anchor_t *anchor, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

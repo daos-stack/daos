@@ -10,7 +10,7 @@
  *
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
-#define D_LOGFAC	DD_FAC(tests)
+#define D_LOGFAC DD_FAC(tests)
 
 #include <pthread.h>
 #include <stdarg.h>
@@ -24,7 +24,7 @@
 #include <gurt/hash.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
 /* XXX For the testing purpose, this test case will use
@@ -32,35 +32,33 @@
  * cases, this daos_eq_internal should not be exposed */
 #include "../client_internal.h"
 
-#define EQT_EV_COUNT		1000
-#define EQ_COUNT		5
-#define EQT_SLEEP_INV		2
+#define EQT_EV_COUNT                        1000
+#define EQ_COUNT                            5
+#define EQT_SLEEP_INV                       2
 
-#define DAOS_TEST_FMT	"-------- %s test_%s: %s\n"
+#define DAOS_TEST_FMT                       "-------- %s test_%s: %s\n"
 
-#define DAOS_TEST_ENTRY(test_id, test_name)	\
-	print_message(DAOS_TEST_FMT, "EQ", test_id, test_name)
+#define DAOS_TEST_ENTRY(test_id, test_name) print_message(DAOS_TEST_FMT, "EQ", test_id, test_name)
 
-#define DAOS_TEST_EXIT(rc)					\
-do {								\
-	if (rc == 0)						\
-		print_message("-------- PASS\n");		\
-	else							\
-		print_message("-------- FAILED\n");		\
-	sleep(1);						\
-} while (0)
+#define DAOS_TEST_EXIT(rc)                                                                         \
+	do {                                                                                       \
+		if (rc == 0)                                                                       \
+			print_message("-------- PASS\n");                                          \
+		else                                                                               \
+			print_message("-------- FAILED\n");                                        \
+		sleep(1);                                                                          \
+	} while (0)
 
-
-static daos_handle_t	my_eqh;
+static daos_handle_t my_eqh;
 
 static int
 eq_test_1()
 {
-	struct daos_event	*ep[4];
-	struct daos_event	ev;
-	struct daos_event	abort_ev;
-	daos_handle_t		eqh;
-	int			rc;
+	struct daos_event *ep[4];
+	struct daos_event  ev;
+	struct daos_event  abort_ev;
+	daos_handle_t      eqh;
+	int                rc;
 
 	DAOS_TEST_ENTRY("1", "daos_eq_create/destroy");
 
@@ -121,10 +119,10 @@ out:
 static int
 eq_test_2()
 {
-	struct daos_event	*eps[EQT_EV_COUNT + 1] = { 0 };
-	struct daos_event	*events[EQT_EV_COUNT + 1] = { 0 };
-	int			rc;
-	int			i;
+	struct daos_event *eps[EQT_EV_COUNT + 1]    = {0};
+	struct daos_event *events[EQT_EV_COUNT + 1] = {0};
+	int                rc;
+	int                i;
 
 	DAOS_TEST_ENTRY("2", "Event Query & Poll");
 
@@ -170,7 +168,8 @@ eq_test_2()
 		rc = daos_eq_query(my_eqh, DAOS_EQR_WAITING, 0, NULL);
 		if (rc != i + 1) {
 			print_error("Expect to see %d inflight event, "
-				 "but got %d\n", i + 1, rc);
+				    "but got %d\n",
+				    i + 1, rc);
 			rc = -1;
 			goto out;
 		}
@@ -187,18 +186,18 @@ eq_test_2()
 	print_message("Query EQ with completion events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		daos_event_complete(events[i], 0);
-		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
-				   EQT_EV_COUNT, eps);
+		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED, EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
 			print_error("Expect to see %d inflight event, "
-				 "but got %d\n", i + 1, rc);
+				    "but got %d\n",
+				    i + 1, rc);
 			rc = -1;
 			goto out;
 		}
 
 		if (eps[rc - 1] != events[i]) {
-			print_error("Unexpected result from query: %d %p %p\n",
-				    i, eps[rc - 1], &events[i]);
+			print_error("Unexpected result from query: %d %p %p\n", i, eps[rc - 1],
+				    &events[i]);
 			rc = -1;
 			goto out;
 		}
@@ -207,8 +206,7 @@ eq_test_2()
 	print_message("Poll EQ with completion events\n");
 	rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, eps);
 	if (rc != EQT_EV_COUNT) {
-		print_error("Expect to poll %d event: %d\n",
-			EQT_EV_COUNT, rc);
+		print_error("Expect to poll %d event: %d\n", EQT_EV_COUNT, rc);
 		goto out;
 	}
 	rc = 0;
@@ -226,13 +224,13 @@ out:
 static int
 eq_test_3()
 {
-	struct daos_event	*eps[2];
-	struct daos_event	*child_events[EQT_EV_COUNT + 1] = { 0 };
-	struct daos_event	event;
-	struct daos_event	child_event;
-	bool			ev_flag;
-	int			i;
-	int			rc;
+	struct daos_event *eps[2];
+	struct daos_event *child_events[EQT_EV_COUNT + 1] = {0};
+	struct daos_event  event;
+	struct daos_event  child_event;
+	bool               ev_flag;
+	int                i;
+	int                rc;
 
 	DAOS_TEST_ENTRY("3", "parent event");
 
@@ -267,8 +265,7 @@ eq_test_3()
 	print_message("Add a child when parent is launched. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
-			    rc);
+		print_error("Add child to inflight parent should fail (%d)\n", rc);
 		goto out_free;
 	}
 
@@ -278,8 +275,7 @@ eq_test_3()
 	print_message("Add a child when parent is completed but not init\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
-			    rc);
+		print_error("Add child to inflight parent should fail (%d)\n", rc);
 		goto out_free;
 	}
 
@@ -324,7 +320,7 @@ eq_test_3()
 			goto out_free;
 		}
 
-		if (i >= EQT_EV_COUNT/2)
+		if (i >= EQT_EV_COUNT / 2)
 			daos_event_complete(child_events[i], 0);
 	}
 
@@ -345,8 +341,7 @@ eq_test_3()
 	print_message("Add an EV when parent is not polled. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
-			    rc);
+		print_error("Add child to inflight parent should fail (%d)\n", rc);
 		goto out_free;
 	}
 
@@ -358,7 +353,7 @@ eq_test_3()
 		goto out_free;
 	}
 
-	for (i = 0; i < EQT_EV_COUNT/2; i++)
+	for (i = 0; i < EQT_EV_COUNT / 2; i++)
 		daos_event_complete(child_events[i], 0);
 
 	print_message("wait on parent barrier event\n");
@@ -395,87 +390,84 @@ out:
 }
 
 typedef struct {
-	pthread_mutex_t	epc_mutex;
-	pthread_cond_t	epc_cond;
-	unsigned int	epc_error;
-	unsigned int	epc_barrier;
-	unsigned int	epc_index;
+	pthread_mutex_t epc_mutex;
+	pthread_cond_t  epc_cond;
+	unsigned int    epc_error;
+	unsigned int    epc_barrier;
+	unsigned int    epc_index;
 } eq_pc_data_t;
 
-static eq_pc_data_t	epc_data;
+static eq_pc_data_t epc_data;
 
-#define EQ_TEST_CHECK_EMPTY(eqh, rc, out)			\
-do {								\
-	if (epc_data.epc_error != 0) {				\
-		rc = epc_data.epc_error;			\
-		goto out;					\
-	}							\
-	rc = daos_eq_query(eqh, DAOS_EQR_ALL, 0, NULL);		\
-	if (rc == 0) {						\
-		print_error("\tProducer verified EQ empty\n");	\
-		break;						\
-	}							\
-	print_error("\tQuery should return 0 but not: %d\n", rc);	\
-	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
-	epc_data.epc_error = rc;				\
-	pthread_cond_broadcast(&epc_data.epc_cond);		\
-	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
-} while (0)
+#define EQ_TEST_CHECK_EMPTY(eqh, rc, out)                                                          \
+	do {                                                                                       \
+		if (epc_data.epc_error != 0) {                                                     \
+			rc = epc_data.epc_error;                                                   \
+			goto out;                                                                  \
+		}                                                                                  \
+		rc = daos_eq_query(eqh, DAOS_EQR_ALL, 0, NULL);                                    \
+		if (rc == 0) {                                                                     \
+			print_error("\tProducer verified EQ empty\n");                             \
+			break;                                                                     \
+		}                                                                                  \
+		print_error("\tQuery should return 0 but not: %d\n", rc);                          \
+		D_MUTEX_LOCK(&epc_data.epc_mutex);                                                 \
+		epc_data.epc_error = rc;                                                           \
+		pthread_cond_broadcast(&epc_data.epc_cond);                                        \
+		D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                               \
+	} while (0)
 
-#define EQ_TEST_BARRIER(msg, out)				\
-do {								\
-	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
-	if (epc_data.epc_error != 0) {				\
-		D_MUTEX_UNLOCK(&epc_data.epc_mutex);	\
-		goto out;					\
-	}							\
-	epc_data.epc_barrier++;					\
-	if (epc_data.epc_barrier == 1) {			\
-		pthread_cond_wait(&epc_data.epc_cond,		\
-				  &epc_data.epc_mutex);		\
-	} else {						\
-		pthread_cond_broadcast(&epc_data.epc_cond);	\
-		epc_data.epc_barrier = 0;			\
-		epc_data.epc_index++;				\
-	}							\
-	print_error(msg);						\
-	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
-} while (0)
+#define EQ_TEST_BARRIER(msg, out)                                                                  \
+	do {                                                                                       \
+		D_MUTEX_LOCK(&epc_data.epc_mutex);                                                 \
+		if (epc_data.epc_error != 0) {                                                     \
+			D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                       \
+			goto out;                                                                  \
+		}                                                                                  \
+		epc_data.epc_barrier++;                                                            \
+		if (epc_data.epc_barrier == 1) {                                                   \
+			pthread_cond_wait(&epc_data.epc_cond, &epc_data.epc_mutex);                \
+		} else {                                                                           \
+			pthread_cond_broadcast(&epc_data.epc_cond);                                \
+			epc_data.epc_barrier = 0;                                                  \
+			epc_data.epc_index++;                                                      \
+		}                                                                                  \
+		print_error(msg);                                                                  \
+		D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                               \
+	} while (0)
 
-#define EQ_TEST_DONE(rc)					\
-do {								\
-	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
-	if (epc_data.epc_error == 0 && rc != 0)			\
-		epc_data.epc_error = rc;			\
-	pthread_cond_broadcast(&epc_data.epc_cond);		\
-	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
-} while (0)
+#define EQ_TEST_DONE(rc)                                                                           \
+	do {                                                                                       \
+		D_MUTEX_LOCK(&epc_data.epc_mutex);                                                 \
+		if (epc_data.epc_error == 0 && rc != 0)                                            \
+			epc_data.epc_error = rc;                                                   \
+		pthread_cond_broadcast(&epc_data.epc_cond);                                        \
+		D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                               \
+	} while (0)
 
-#define EQ_TEST_CHECK_SLEEP(name, then, intv, rc, out)		\
-do {								\
-	struct timeval	__now;					\
-	unsigned int	__intv;					\
-								\
-	gettimeofday(&__now, NULL);				\
-	__intv = (int)(__now.tv_sec - (then).tv_sec);		\
-	if (__intv >= (intv) - 1) {				\
-		print_error("\t%s slept for %d seconds\n",		\
-			name, __intv);				\
-		break;						\
-	}							\
-	print_error("%s should sleep for %d seconds not %d\n",	\
-		name, intv, __intv);				\
-	rc = -1;						\
-	goto out;						\
-} while (0)
+#define EQ_TEST_CHECK_SLEEP(name, then, intv, rc, out)                                             \
+	do {                                                                                       \
+		struct timeval __now;                                                              \
+		unsigned int   __intv;                                                             \
+                                                                                                   \
+		gettimeofday(&__now, NULL);                                                        \
+		__intv = (int)(__now.tv_sec - (then).tv_sec);                                      \
+		if (__intv >= (intv)-1) {                                                          \
+			print_error("\t%s slept for %d seconds\n", name, __intv);                  \
+			break;                                                                     \
+		}                                                                                  \
+		print_error("%s should sleep for %d seconds not %d\n", name, intv, __intv);        \
+		rc = -1;                                                                           \
+		goto out;                                                                          \
+	} while (0)
 
 static void *
 eq_test_consumer(void *arg)
 {
-	struct daos_event	**evpps = NULL;
-	struct timeval		then;
-	int			total;
-	int			rc = 0;
+	struct daos_event **evpps = NULL;
+	struct timeval      then;
+	int                 total;
+	int                 rc = 0;
 
 	EQ_TEST_BARRIER("EQ Consumer started\n", out);
 
@@ -486,11 +478,10 @@ eq_test_consumer(void *arg)
 	}
 
 	/* step-1 */
-	print_message("\tConsumer should be blocked for %d seconds\n",
-		      EQT_SLEEP_INV);
+	print_message("\tConsumer should be blocked for %d seconds\n", EQT_SLEEP_INV);
 	gettimeofday(&then, NULL);
 
-	for (total = 0; total < EQT_EV_COUNT; ) {
+	for (total = 0; total < EQT_EV_COUNT;) {
 		rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
 			print_error("EQ poll returned error: %d\n", rc);
@@ -507,7 +498,7 @@ eq_test_consumer(void *arg)
 	EQ_TEST_BARRIER("\tConsumer wait for producer completing event\n", out);
 	gettimeofday(&then, NULL);
 
-	for (total = 0; total < EQT_EV_COUNT; ) {
+	for (total = 0; total < EQT_EV_COUNT;) {
 		rc = daos_eq_poll(my_eqh, 1, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
 			print_error("EQ poll returned error: %d\n", rc);
@@ -522,8 +513,9 @@ eq_test_consumer(void *arg)
 
 	/* step-3 */
 	EQ_TEST_BARRIER("\tConsumer races with producer and tries "
-			"to poll event\n", out);
-	for (total = 0; total < EQT_EV_COUNT; ) {
+			"to poll event\n",
+			out);
+	for (total = 0; total < EQT_EV_COUNT;) {
 		rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
 			print_error("EQ poll returned error: %d\n", rc);
@@ -542,11 +534,11 @@ out:
 static int
 eq_test_4()
 {
-	struct daos_event	*events[EQT_EV_COUNT*3 + 1] = { 0 };
-	pthread_t		thread;
-	int			step = 0;
-	int			rc;
-	int			i;
+	struct daos_event *events[EQT_EV_COUNT * 3 + 1] = {0};
+	pthread_t          thread;
+	int                step = 0;
+	int                rc;
+	int                i;
 
 	DAOS_TEST_ENTRY("4", "Producer & Consumer");
 
@@ -573,8 +565,7 @@ eq_test_4()
 	EQ_TEST_BARRIER("EQ Producer started\n", out);
 	print_message("Step-1: launch & complete %d events\n", EQT_EV_COUNT);
 
-	print_message("\tProducer sleep for %d seconds and block consumer\n",
-		EQT_SLEEP_INV);
+	print_message("\tProducer sleep for %d seconds and block consumer\n", EQT_SLEEP_INV);
 	sleep(EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
@@ -591,7 +582,8 @@ eq_test_4()
 
 	step++;
 	print_message("Step-2: launch %d events, sleep for %d seconds and "
-		"complete these events\n", EQT_EV_COUNT, EQT_SLEEP_INV);
+		      "complete these events\n",
+		      EQT_EV_COUNT, EQT_SLEEP_INV);
 	print_message("\tProducer launch %d events\n", EQT_EV_COUNT);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
 		rc = daos_event_launch(events[i]);
@@ -602,8 +594,8 @@ eq_test_4()
 	EQ_TEST_BARRIER("\tProducer wakes up consumer and sleep\n", out);
 	sleep(EQT_SLEEP_INV);
 
-	print_message("\tProducer complete %d events after %d seconds\n",
-		EQT_EV_COUNT, EQT_SLEEP_INV);
+	print_message("\tProducer complete %d events after %d seconds\n", EQT_EV_COUNT,
+		      EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++)
 		daos_event_complete(events[i], 0);
@@ -613,7 +605,8 @@ eq_test_4()
 
 	step++;
 	print_message("Step-3: Producer launch & complete %d events, "
-		"race with consumer\n", EQT_EV_COUNT);
+		      "race with consumer\n",
+		      EQT_EV_COUNT);
 
 	EQ_TEST_BARRIER("\tProducer launch and complete all events\n", out);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
@@ -652,11 +645,11 @@ free:
 static int
 eq_test_5()
 {
-	struct daos_event	*eps[EQT_EV_COUNT + 1] = { 0 };
-	struct daos_event	*events[EQT_EV_COUNT + 1] = { 0 };
-	bool			ev_flag;
-	int			rc;
-	int			i;
+	struct daos_event *eps[EQT_EV_COUNT + 1]    = {0};
+	struct daos_event *events[EQT_EV_COUNT + 1] = {0};
+	bool               ev_flag;
+	int                rc;
+	int                i;
 
 	DAOS_TEST_ENTRY("5", "Event Test & Poll");
 
@@ -680,15 +673,13 @@ eq_test_5()
 		}
 
 		/** Complete half the events */
-		if (i > EQT_EV_COUNT/2) {
+		if (i > EQT_EV_COUNT / 2) {
 			daos_event_complete(events[i], 0);
 
 			/** Test completion which polls them out of the EQ */
-			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
-					     &ev_flag);
+			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 			if (rc != 0) {
-				print_error("Test on child event returns %d\n",
-					    rc);
+				print_error("Test on child event returns %d\n", rc);
 				goto out;
 			}
 			if (!ev_flag) {
@@ -697,11 +688,9 @@ eq_test_5()
 				goto out;
 			}
 		} else {
-			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
-					     &ev_flag);
+			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 			if (rc != 0) {
-				print_error("Test on child event returns %d\n",
-					    rc);
+				print_error("Test on child event returns %d\n", rc);
 				goto out;
 			}
 			if (ev_flag) {
@@ -713,7 +702,7 @@ eq_test_5()
 	}
 
 	print_message("Poll EQ with 1/2 the events\n");
-	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT/2, eps);
+	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT / 2, eps);
 	if (rc != 0) {
 		print_error("Expect to poll zero event: %d\n", rc);
 		rc = -1;
@@ -721,20 +710,18 @@ eq_test_5()
 	}
 
 	print_message("Query EQ with completion events\n");
-	for (i = 0; i < EQT_EV_COUNT/2; i++) {
+	for (i = 0; i < EQT_EV_COUNT / 2; i++) {
 		daos_event_complete(events[i], 0);
-		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
-				   EQT_EV_COUNT, eps);
+		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED, EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
-			print_error("Expected %d inflight event, but got %d\n",
-				    i + 1, rc);
+			print_error("Expected %d inflight event, but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
 
 		if (eps[rc - 1] != events[i]) {
-			print_error("Unexpected result from query: %d %p %p\n",
-				    i, eps[rc - 1], &events[i]);
+			print_error("Unexpected result from query: %d %p %p\n", i, eps[rc - 1],
+				    &events[i]);
 			rc = -1;
 			goto out;
 		}
@@ -742,9 +729,8 @@ eq_test_5()
 
 	print_message("Poll EQ with completion events\n");
 	rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, eps);
-	if (rc != EQT_EV_COUNT/2) {
-		print_error("Expect to poll %d event: %d\n",
-			EQT_EV_COUNT, rc);
+	if (rc != EQT_EV_COUNT / 2) {
+		print_error("Expect to poll %d event: %d\n", EQT_EV_COUNT, rc);
 		rc = -1;
 		goto out;
 	}
@@ -767,12 +753,12 @@ out:
 static int
 eq_test_6()
 {
-	static daos_handle_t	eqh[EQ_COUNT];
-	struct daos_event	*eps[EQ_COUNT][EQT_EV_COUNT];
-	struct daos_event	*events[EQ_COUNT][EQT_EV_COUNT];
-	bool			ev_flag;
-	int			rc;
-	int			i, j;
+	static daos_handle_t eqh[EQ_COUNT];
+	struct daos_event   *eps[EQ_COUNT][EQT_EV_COUNT];
+	struct daos_event   *events[EQ_COUNT][EQT_EV_COUNT];
+	bool                 ev_flag;
+	int                  rc;
+	int                  i, j;
 
 	DAOS_TEST_ENTRY("6", "Multiple EQs");
 
@@ -801,18 +787,16 @@ eq_test_6()
 		for (i = 0; i < EQ_COUNT; i++) {
 			rc = daos_event_launch(events[i][j]);
 			if (rc != 0) {
-				print_error("Failed to launch event %d: %d\n",
-					    j, rc);
+				print_error("Failed to launch event %d: %d\n", j, rc);
 				goto out_ev;
 			}
 
 			/** Complete half the events */
-			if (i > EQT_EV_COUNT/2) {
+			if (i > EQT_EV_COUNT / 2) {
 				daos_event_complete(events[i][j], 0);
 
 				/** Test completion */
-				rc = daos_event_test(events[i][j],
-						     DAOS_EQ_NOWAIT, &ev_flag);
+				rc = daos_event_test(events[i][j], DAOS_EQ_NOWAIT, &ev_flag);
 				if (rc != 0) {
 					print_error("Test returns %d\n", rc);
 					goto out_ev;
@@ -823,8 +807,7 @@ eq_test_6()
 					goto out_ev;
 				}
 			} else {
-				rc = daos_event_test(events[i][j],
-						     DAOS_EQ_NOWAIT, &ev_flag);
+				rc = daos_event_test(events[i][j], DAOS_EQ_NOWAIT, &ev_flag);
 				if (rc != 0) {
 					print_error("Test returns %d\n", rc);
 					goto out_ev;
@@ -840,7 +823,7 @@ eq_test_6()
 
 	print_message("Poll EQs with 1/2 the events\n");
 	for (i = 0; i < EQ_COUNT; i++) {
-		rc = daos_eq_poll(eqh[i], 1, 10, EQT_EV_COUNT/2, eps[i]);
+		rc = daos_eq_poll(eqh[i], 1, 10, EQT_EV_COUNT / 2, eps[i]);
 		if (rc != 0) {
 			print_error("Expect to poll zero event: %d\n", rc);
 			rc = -1;
@@ -849,16 +832,15 @@ eq_test_6()
 	}
 
 	print_message("Complete events\n");
-	for (j = 0; j < EQT_EV_COUNT/2; j++)
+	for (j = 0; j < EQT_EV_COUNT / 2; j++)
 		for (i = 0; i < EQ_COUNT; i++)
 			daos_event_complete(events[i][j], 0);
 
 	print_message("Poll EQ with completion events\n");
 	for (i = 0; i < EQ_COUNT; i++) {
 		rc = daos_eq_poll(eqh[i], 0, -1, EQT_EV_COUNT, eps[i]);
-		if (rc != EQT_EV_COUNT/2) {
-			print_error("Expect to poll %d event: %d\n",
-				EQT_EV_COUNT, rc);
+		if (rc != EQT_EV_COUNT / 2) {
+			print_error("Expect to poll %d event: %d\n", EQT_EV_COUNT, rc);
 			rc = -1;
 			goto out_ev;
 		}
@@ -889,11 +871,11 @@ out_eq:
 static int
 eq_test_7()
 {
-	struct daos_event	*child_events[EQT_EV_COUNT];
-	struct daos_event	*events[EQT_EV_COUNT];
-	bool			ev_flag;
-	int			rc;
-	int			i;
+	struct daos_event *child_events[EQT_EV_COUNT];
+	struct daos_event *events[EQT_EV_COUNT];
+	bool               ev_flag;
+	int                rc;
+	int                i;
 
 	DAOS_TEST_ENTRY("7", "Events with no EQ");
 
@@ -909,8 +891,7 @@ eq_test_7()
 		rc = daos_event_init(events[i], DAOS_HDL_INVAL, NULL);
 		if (rc != 0)
 			goto out_free;
-		rc = daos_event_init(child_events[i], DAOS_HDL_INVAL,
-				     events[i]);
+		rc = daos_event_init(child_events[i], DAOS_HDL_INVAL, events[i]);
 		if (rc != 0)
 			goto out_free;
 
@@ -997,10 +978,10 @@ inc_cb(void *udata, daos_event_t *ev, int ret)
 static int
 eq_test_8()
 {
-	struct daos_event	*ep;
-	struct daos_event	ev;
-	int			*udata = NULL;
-	int			rc = 0;
+	struct daos_event *ep;
+	struct daos_event  ev;
+	int               *udata = NULL;
+	int                rc    = 0;
 
 	DAOS_TEST_ENTRY("8", "Event Completion Callback");
 
@@ -1029,7 +1010,7 @@ eq_test_8()
 	daos_event_complete(&ev, 0);
 	if (*udata != 999) {
 		print_error("invalid udata value (%d)\n", *udata);
-		rc =  -DER_INVAL;
+		rc = -DER_INVAL;
 		goto out;
 	}
 
@@ -1047,14 +1028,14 @@ out:
 	return rc;
 }
 
-static bool	stop_progress;
-static int	polled_events;
-pthread_mutex_t	eqh_mutex;
+static bool     stop_progress;
+static int      polled_events;
+pthread_mutex_t eqh_mutex;
 
 static void *
 th_eq_poll(void *arg)
 {
-	struct daos_event	*eps[EQT_EV_COUNT] = { 0 };
+	struct daos_event *eps[EQT_EV_COUNT] = {0};
 
 	while (1) {
 		int rc;
@@ -1080,13 +1061,13 @@ th_eq_poll(void *arg)
 static int
 eq_test_9()
 {
-	struct daos_event	*events[EQT_EV_COUNT] = { 0 };
-	struct daos_event	*eps[EQT_EV_COUNT] = { 0 };
-	int			nr_threads;
-	cpu_set_t		cpuset;
-	pthread_t		*c_th = NULL;
-	int			rc;
-	int			i;
+	struct daos_event *events[EQT_EV_COUNT] = {0};
+	struct daos_event *eps[EQT_EV_COUNT]    = {0};
+	int                nr_threads;
+	cpu_set_t          cpuset;
+	pthread_t         *c_th = NULL;
+	int                rc;
+	int                i;
 
 	DAOS_TEST_ENTRY("9", "Event multi thread EQ pollers");
 
@@ -1155,8 +1136,8 @@ eq_test_9()
 
 	print_message("total polled events = %d\n", polled_events);
 	if (polled_events != EQT_EV_COUNT) {
-		print_error("Total polled events (%d) != total events (%d)\n",
-			    polled_events, EQT_EV_COUNT);
+		print_error("Total polled events (%d) != total events (%d)\n", polled_events,
+			    EQT_EV_COUNT);
 		rc = -1;
 		D_GOTO(out, rc);
 	}
@@ -1189,8 +1170,8 @@ out:
 int
 main(int argc, char **argv)
 {
-	int		test_fail = 0;
-	int		rc;
+	int test_fail = 0;
+	int rc;
 
 	d_register_alt_assert(mock_assert);
 

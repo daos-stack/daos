@@ -6,7 +6,7 @@
 /**
  * This file is part of CaRT. It implements the CaRT bulk related APIs.
  */
-#define D_LOGFAC	DD_FAC(bulk)
+#define D_LOGFAC DD_FAC(bulk)
 
 #include "crt_internal.h"
 
@@ -14,8 +14,8 @@
 static inline bool
 crt_sgl_valid(d_sg_list_t *sgl)
 {
-	d_iov_t	*iov;
-	int		i;
+	d_iov_t *iov;
+	int      i;
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
@@ -37,10 +37,12 @@ crt_sgl_valid(d_sg_list_t *sgl)
 		if (iov->iov_buf == NULL || iov->iov_buf_len == 0) {
 			if (iov->iov_buf == NULL)
 				D_ERROR("invalid parameter, sg_iovs[%d]."
-					"iov_buf is NULL.\n", i);
+					"iov_buf is NULL.\n",
+					i);
 			else
 				D_ERROR("invalid parameter, sg_iovs[%d]."
-					"iov_buf_len is 0.\n", i);
+					"iov_buf_len is 0.\n",
+					i);
 			return false;
 		}
 	}
@@ -53,10 +55,8 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 {
 	if (bulk_desc == NULL || bulk_desc->bd_rpc == NULL ||
 	    bulk_desc->bd_rpc->cr_ctx == CRT_CONTEXT_NULL ||
-	    bulk_desc->bd_remote_hdl == CRT_BULK_NULL ||
-	    bulk_desc->bd_local_hdl == CRT_BULK_NULL ||
-	    (bulk_desc->bd_bulk_op != CRT_BULK_PUT &&
-	     bulk_desc->bd_bulk_op != CRT_BULK_GET) ||
+	    bulk_desc->bd_remote_hdl == CRT_BULK_NULL || bulk_desc->bd_local_hdl == CRT_BULK_NULL ||
+	    (bulk_desc->bd_bulk_op != CRT_BULK_PUT && bulk_desc->bd_bulk_op != CRT_BULK_GET) ||
 	    bulk_desc->bd_len == 0) {
 		if (bulk_desc == NULL) {
 			D_ERROR("invalid parameter, NULL bulk_desc.\n");
@@ -71,10 +71,9 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 			return false;
 		}
 		D_ERROR("invalid parameter, bulk_desc remote_hdl:%p,"
-			"local_hdl:%p, bulk_op:%d, len: "DF_U64".\n",
-			bulk_desc->bd_remote_hdl,
-			bulk_desc->bd_local_hdl,
-			bulk_desc->bd_bulk_op, bulk_desc->bd_len);
+			"local_hdl:%p, bulk_op:%d, len: " DF_U64 ".\n",
+			bulk_desc->bd_remote_hdl, bulk_desc->bd_local_hdl, bulk_desc->bd_bulk_op,
+			bulk_desc->bd_len);
 		return false;
 	} else {
 		return true;
@@ -82,11 +81,11 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 }
 
 int
-crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
-		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
+crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		crt_bulk_t *bulk_hdl)
 {
-	struct crt_context	*ctx;
-	int			rc = 0;
+	struct crt_context *ctx;
+	int                 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || !crt_sgl_valid(sgl) ||
 	    /* Now HG treats WO as invalid parameter */
@@ -99,10 +98,9 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	}
 
 	ctx = crt_ctx;
-	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
+	rc  = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -111,8 +109,8 @@ out:
 int
 crt_bulk_bind(crt_bulk_t bulk_hdl, crt_context_t crt_ctx)
 {
-	struct crt_context	*ctx = crt_ctx;
-	int			rc = 0;
+	struct crt_context *ctx = crt_ctx;
+	int                 rc  = 0;
 
 	if (ctx == CRT_CONTEXT_NULL || bulk_hdl == CRT_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL crt_ctx or bulk_hdl.\n");
@@ -171,10 +169,10 @@ out:
 }
 
 int
-crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
-		  void *arg, crt_bulk_opid_t *opid)
+crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
+		  crt_bulk_opid_t *opid)
 {
-	int			rc = 0;
+	int rc = 0;
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
 		D_ERROR("invalid parameter of bulk_desc.\n");
@@ -190,11 +188,10 @@ out:
 }
 
 int
-crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
-		       crt_bulk_cb_t complete_cb, void *arg,
+crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		       crt_bulk_opid_t *opid)
 {
-	int			rc = 0;
+	int rc = 0;
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
 		D_ERROR("invalid parameter, bulk_desc not valid.\n");
@@ -245,7 +242,7 @@ crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 int
 crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 {
-	int		rc = 0;
+	int rc = 0;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl.\n");

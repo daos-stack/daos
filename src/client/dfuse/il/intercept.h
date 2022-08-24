@@ -82,22 +82,21 @@
 	ACTION(int, __overflow, (FILE *, int))                                                     \
 	ACTION(int, getc_unlocked, (FILE * stream))
 
-#define FOREACH_INTERCEPT(ACTION)            \
-	FOREACH_SINGLE_INTERCEPT(ACTION)     \
+#define FOREACH_INTERCEPT(ACTION)                                                                  \
+	FOREACH_SINGLE_INTERCEPT(ACTION)                                                           \
 	FOREACH_ALIASED_INTERCEPT(ACTION)
 
 #ifdef IOIL_PRELOAD
 #include <dlfcn.h>
 
-#define IOIL_FORWARD_DECL(type, name, params)  \
-	static type(*__real_##name) params;
+#define IOIL_FORWARD_DECL(type, name, params) static type(*__real_##name) params;
 
-#define IOIL_DECL(name) name
+#define IOIL_DECL(name)                       name
 
-#define IOIL_DECLARE_ALIAS(type, name, params) \
+#define IOIL_DECLARE_ALIAS(type, name, params)                                                     \
 	DFUSE_PUBLIC type name params __attribute__((weak, alias("dfuse_" #name)));
 
-#define IOIL_DECLARE_ALIAS64(type, name, params) \
+#define IOIL_DECLARE_ALIAS64(type, name, params)                                                   \
 	DFUSE_PUBLIC type name##64 params __attribute__((weak, alias(#name)));
 
 /* Initialize the __real_##name function pointer */
@@ -113,20 +112,17 @@
 	} while (0);
 
 #else /* !IOIL_PRELOAD */
-#define IOIL_FORWARD_DECL(type, name, params)  \
-	extern type __real_##name params;
+#define IOIL_FORWARD_DECL(type, name, params)        extern type __real_##name params;
 
-#define IOIL_DECL(name) __wrap_##name
+#define IOIL_DECL(name)                              __wrap_##name
 
 #define IOIL_FORWARD_MAP_OR_FAIL(type, name, params) (void)0;
 
-#define IOIL_DECLARE_ALIAS(type, name, params) \
-	DFUSE_PUBLIC type __wrap_##name params \
-		__attribute__((weak, alias("dfuse_" #name)));
+#define IOIL_DECLARE_ALIAS(type, name, params)                                                     \
+	DFUSE_PUBLIC type __wrap_##name params __attribute__((weak, alias("dfuse_" #name)));
 
-#define IOIL_DECLARE_ALIAS64(type, name, params)                \
-	DFUSE_PUBLIC type __wrap_##name##64 params                \
-		__attribute__((weak, alias("__wrap_" #name)));
+#define IOIL_DECLARE_ALIAS64(type, name, params)                                                   \
+	DFUSE_PUBLIC type __wrap_##name##64 params __attribute__((weak, alias("__wrap_" #name)));
 
 #endif /* IOIL_PRELOAD */
 

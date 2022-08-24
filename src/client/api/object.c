@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC DD_FAC(client)
 
 #include <daos/object.h>
 #include <daos/task.h>
@@ -12,35 +12,35 @@
 #include "task_internal.h"
 
 int
-daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
-			struct daos_oclass_attr *cattr, daos_event_t *ev)
+daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid, struct daos_oclass_attr *cattr,
+			daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
-		     struct daos_oclass_attr *cattr, daos_event_t *ev)
+daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid, struct daos_oclass_attr *cattr,
+		     daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
-		    daos_anchor_t *anchor, daos_event_t *ev)
+daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist, daos_anchor_t *anchor,
+		    daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
-	      daos_handle_t *oh, daos_event_t *ev)
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode, daos_handle_t *oh,
+	      daos_event_t *ev)
 {
 	tse_task_t *task;
-	int rc;
+	int         rc;
 
 	rc = dc_obj_open_task_create(coh, oid, mode, oh, ev, NULL, &task);
 	if (rc)
@@ -52,8 +52,8 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
 	rc = dc_obj_close_task_create(oh, ev, NULL, &task);
 	if (rc)
@@ -63,11 +63,10 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 }
 
 int
-daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-	       daos_event_t *ev)
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
 	rc = dc_obj_punch_task_create(oh, th, flags, ev, NULL, &task);
 	if (rc)
@@ -77,11 +76,11 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev)
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags, unsigned int nr,
+		     daos_key_t *dkeys, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
 	if (nr != 1) {
 		/* TODO: create multiple tasks for punch of multiple dkeys */
@@ -89,8 +88,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		return -DER_INVAL;
 	}
 
-	rc = dc_obj_punch_dkeys_task_create(oh, th, flags, nr, dkeys, ev, NULL,
-					    &task);
+	rc = dc_obj_punch_dkeys_task_create(oh, th, flags, nr, dkeys, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -98,15 +96,13 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
-		     daos_event_t *ev)
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_punch_akeys_task_create(oh, th, flags, dkey, nr, akeys, ev,
-					    NULL, &task);
+	rc = dc_obj_punch_akeys_task_create(oh, th, flags, dkey, nr, akeys, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -114,23 +110,20 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
-	       daos_event_t *ev)
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
-		   daos_event_t *ev)
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		   daos_key_t *akey, daos_recx_t *recx, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_query_key_task_create(oh, th, flags, dkey, akey, recx,
-					  ev, NULL, &task);
+	rc = dc_obj_query_key_task_create(oh, th, flags, dkey, akey, recx, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -138,15 +131,15 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev)
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *maps,
+	       daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		 rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods,
-				      sgls, maps, NULL, NULL, ev, NULL, &task);
+	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods, sgls, maps, NULL, NULL, ev,
+				      NULL, &task);
 	if (rc)
 		return rc;
 
@@ -154,15 +147,13 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		d_sg_list_t *sgls, daos_event_t *ev)
+daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, iods, sgls,
-				       ev, NULL, &task);
+	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, iods, sgls, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -170,15 +161,13 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-		   daos_key_desc_t *kds, d_sg_list_t *sgl,
-		   daos_anchor_t *anchor, daos_event_t *ev)
+daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr, daos_key_desc_t *kds,
+		   d_sg_list_t *sgl, daos_anchor_t *anchor, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_list_dkey_task_create(oh, th, nr, kds, sgl, anchor, ev,
-					  NULL, &task);
+	rc = dc_obj_list_dkey_task_create(oh, th, nr, kds, sgl, anchor, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -186,15 +175,13 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 }
 
 int
-daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
-		   daos_anchor_t *anchor, daos_event_t *ev)
+daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, uint32_t *nr,
+		   daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_list_akey_task_create(oh, th, dkey, nr, kds, sgl, anchor,
-					  ev, NULL, &task);
+	rc = dc_obj_list_akey_task_create(oh, th, dkey, nr, kds, sgl, anchor, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -202,17 +189,15 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 }
 
 int
-daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
+daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, daos_key_t *akey,
+		   daos_size_t *size, uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		   daos_anchor_t *anchor, bool incr_order, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		rc;
+	tse_task_t *task;
+	int         rc;
 
-	rc = dc_obj_list_recx_task_create(oh, th, dkey, akey, DAOS_IOD_ARRAY,
-					  size, nr, recxs, eprs, anchor,
-					  incr_order, ev, NULL, &task);
+	rc = dc_obj_list_recx_task_create(oh, th, dkey, akey, DAOS_IOD_ARRAY, size, nr, recxs, eprs,
+					  anchor, incr_order, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -221,11 +206,10 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 
 /* Use to query the object layout */
 int
-daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
-		    struct daos_obj_layout **layout)
+daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid, struct daos_obj_layout **layout)
 {
-	daos_handle_t	oh;
-	int		rc;
+	daos_handle_t oh;
+	int           rc;
 
 	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 	if (rc)
@@ -243,19 +227,18 @@ daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 int
 daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 {
-	tse_task_t	*task;
-	daos_handle_t	 oh;
-	daos_epoch_t	*epochs_p = NULL;
-	int		 epoch_nr = 0;
-	int		 rc;
+	tse_task_t   *task;
+	daos_handle_t oh;
+	daos_epoch_t *epochs_p = NULL;
+	int           epoch_nr = 0;
+	int           rc;
 
 	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 	if (rc != 0)
 		return rc;
 
 	/* Sync object against the given @epoch. */
-	rc = dc_obj_sync_task_create(oh, epoch, &epochs_p, &epoch_nr,
-				     NULL, NULL, &task);
+	rc = dc_obj_sync_task_create(oh, epoch, &epochs_p, &epoch_nr, NULL, NULL, &task);
 	if (rc == 0) {
 		rc = dc_task_schedule(task, true);
 		if (rc == 0)
@@ -272,8 +255,8 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 int
 daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 {
-	struct daos_obj_layout	*layout;
-	int			rc;
+	struct daos_obj_layout *layout;
+	int                     rc;
 
 	if (nr == NULL)
 		return -DER_INVAL;
@@ -292,8 +275,8 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 	*nr = layout->ol_nr;
 
 	if (anchors) {
-		int		grp_size;
-		uint32_t	i;
+		int      grp_size;
+		uint32_t i;
 
 		rc = dc_obj_get_grp_size(oh, &grp_size);
 		if (rc)
@@ -313,8 +296,8 @@ out:
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
 {
-	int	grp_size;
-	int	rc;
+	int grp_size;
+	int rc;
 
 	rc = dc_obj_get_grp_size(oh, &grp_size);
 	if (rc)
@@ -329,23 +312,21 @@ daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
 }
 
 int
-daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
-	      daos_handle_t *oh, daos_event_t *ev)
+daos_oit_open(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *oh, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	daos_obj_id_t	 oid;
-	int		 cont_rf;
-	int		 rc;
+	tse_task_t   *task;
+	daos_obj_id_t oid;
+	int           cont_rf;
+	int           rc;
 
 	cont_rf = dc_cont_hdl2redunfac(coh);
 	if (cont_rf < 0) {
-		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n",
-			DP_RC(cont_rf));
+		D_ERROR("dc_cont_hdl2redunfac failed, " DF_RC "\n", DP_RC(cont_rf));
 		return cont_rf;
 	}
 
 	oid = daos_oit_gen_id(epoch, cont_rf);
-	rc = dc_obj_open_task_create(coh, oid, DAOS_OO_RO, oh, ev, NULL, &task);
+	rc  = dc_obj_open_task_create(coh, oid, DAOS_OO_RO, oh, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -355,8 +336,8 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 int
 daos_oit_close(daos_handle_t oh, daos_event_t *ev)
 {
-	tse_task_t	*task;
-	int		 rc;
+	tse_task_t *task;
+	int         rc;
 
 	rc = dc_obj_close_task_create(oh, ev, NULL, &task);
 	if (rc)
@@ -367,20 +348,20 @@ daos_oit_close(daos_handle_t oh, daos_event_t *ev)
 
 /* OI table enumeration args */
 struct oit_args {
-	daos_key_desc_t		*oa_kds;
-	d_sg_list_t		 oa_sgl;
-	daos_key_t		 oa_dkey;
+	daos_key_desc_t *oa_kds;
+	d_sg_list_t      oa_sgl;
+	daos_key_t       oa_dkey;
 	/* A bucket is just an integer dkey for OI object, the current
 	 * implementation only has one bucket (dkey).
 	 */
-	uint32_t		 oa_bucket;
-	int			 oa_nr;
+	uint32_t         oa_bucket;
+	int              oa_nr;
 };
 
 static int
 oit_list_cb(tse_task_t *task, void *args)
 {
-	struct oit_args	*oa = *(struct oit_args **)args;
+	struct oit_args *oa = *(struct oit_args **)args;
 
 	d_sgl_fini(&oa->oa_sgl, false);
 	D_FREE(oa->oa_kds);
@@ -389,16 +370,15 @@ oit_list_cb(tse_task_t *task, void *args)
 }
 
 int
-daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
-	      daos_anchor_t *anchor, daos_event_t *ev)
+daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr, daos_anchor_t *anchor,
+	      daos_event_t *ev)
 {
-	struct oit_args	*oa;
-	tse_task_t	*task;
-	int		 i;
-	int		 rc;
+	struct oit_args *oa;
+	tse_task_t      *task;
+	int              i;
+	int              rc;
 
-	if (daos_handle_is_inval(oh) ||
-	    oids == NULL || oids_nr == NULL || *oids_nr <= 0 || !anchor)
+	if (daos_handle_is_inval(oh) || oids == NULL || oids_nr == NULL || *oids_nr <= 0 || !anchor)
 		return -DER_INVAL;
 
 	D_ALLOC_PTR(oa);
@@ -419,9 +399,8 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 
 	/* all OIDs are stored under one dkey for now */
 	d_iov_set(&oa->oa_dkey, &oa->oa_bucket, sizeof(oa->oa_bucket));
-	rc = dc_obj_list_akey_task_create(oh, DAOS_TX_NONE, &oa->oa_dkey,
-					  oids_nr, oa->oa_kds, &oa->oa_sgl,
-					  anchor, ev, NULL, &task);
+	rc = dc_obj_list_akey_task_create(oh, DAOS_TX_NONE, &oa->oa_dkey, oids_nr, oa->oa_kds,
+					  &oa->oa_sgl, anchor, ev, NULL, &task);
 	if (rc)
 		D_GOTO(failed, rc);
 

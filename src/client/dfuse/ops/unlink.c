@@ -17,10 +17,10 @@ void
 dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
 		   struct dfuse_inode_entry *parent, const char *name)
 {
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
-	int				rc;
-	fuse_ino_t			ino;
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+	int                       rc;
+	fuse_ino_t                ino;
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
@@ -54,13 +54,12 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	 * for cases where the kernel knows which file it deleted.
 	 */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'",
-				ie->ie_parent, ie->ie_name);
+	    (strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
+		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'", ie->ie_parent,
+				ie->ie_name);
 
-		rc = fuse_lowlevel_notify_delete(fs_handle->dpi_info->di_session,
-						 ie->ie_parent, ino,
-						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+		rc = fuse_lowlevel_notify_delete(fs_handle->dpi_info->di_session, ie->ie_parent,
+						 ino, ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 		if (rc && rc != -ENOENT)
 			DFUSE_TRA_ERROR(ie, "notify_delete returned %d: %s", rc, strerror(-rc));
 	}
@@ -72,9 +71,9 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 void
 dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
-	struct dfuse_projection_info	*fs_handle;
-	int				rc;
-	daos_obj_id_t			oid = {};
+	struct dfuse_projection_info *fs_handle;
+	int                           rc;
+	daos_obj_id_t                 oid = {};
 
 	fs_handle = fuse_req_userdata(req);
 

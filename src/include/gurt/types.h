@@ -34,21 +34,21 @@
 #if defined(__cplusplus)
 extern "C" {
 #else
-#define d_is_uuid(var)								\
-	(__builtin_types_compatible_p(__typeof__(var), uuid_t) ||			\
-	 __builtin_types_compatible_p(__typeof__(var), unsigned char *) ||		\
-	 __builtin_types_compatible_p(__typeof__(var), const unsigned char *) ||	\
+#define d_is_uuid(var)                                                                             \
+	(__builtin_types_compatible_p(__typeof__(var), uuid_t) ||                                  \
+	 __builtin_types_compatible_p(__typeof__(var), unsigned char *) ||                         \
+	 __builtin_types_compatible_p(__typeof__(var), const unsigned char *) ||                   \
 	 __builtin_types_compatible_p(__typeof__(var), const uuid_t))
-#define d_is_string(var)						\
-	(__builtin_types_compatible_p(__typeof__(var), char *) ||		\
-	 __builtin_types_compatible_p(__typeof__(var), const char *) ||	\
-	 __builtin_types_compatible_p(__typeof__(var), const char []) ||	\
-	 __builtin_types_compatible_p(__typeof__(var), char []))
+#define d_is_string(var)                                                                           \
+	(__builtin_types_compatible_p(__typeof__(var), char *) ||                                  \
+	 __builtin_types_compatible_p(__typeof__(var), const char *) ||                            \
+	 __builtin_types_compatible_p(__typeof__(var), const char[]) ||                            \
+	 __builtin_types_compatible_p(__typeof__(var), char[]))
 #endif
 
 #if defined(__has_warning)
-#define D_HAS_WARNING(gcc_version, warning)	__has_warning(warning)
-#else  /* !defined(__has_warning) */
+#define D_HAS_WARNING(gcc_version, warning) __has_warning(warning)
+#else /* !defined(__has_warning) */
 #define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
 #endif /* defined(__has_warning) */
 
@@ -56,49 +56,49 @@ extern "C" {
  * hide the dark secret that uuid_t is an array not a structure.
  */
 struct d_uuid {
-	uuid_t		uuid;
+	uuid_t uuid;
 };
 
 /** iovec for memory buffer */
 typedef struct {
 	/** buffer address */
-	void		*iov_buf;
+	void  *iov_buf;
 	/** buffer length */
-	size_t		iov_buf_len;
+	size_t iov_buf_len;
 	/** data length */
-	size_t		iov_len;
+	size_t iov_len;
 } d_iov_t;
 
 /** Server identification */
-typedef uint32_t	d_rank_t;
+typedef uint32_t d_rank_t;
 
 typedef struct {
 	/** list of ranks */
-	d_rank_t	*rl_ranks;
+	d_rank_t *rl_ranks;
 	/** number of ranks */
-	uint32_t	rl_nr;
+	uint32_t  rl_nr;
 } d_rank_list_t;
 
-typedef d_rank_list_t	*d_rank_list_ptr_t;
+typedef d_rank_list_t *d_rank_list_ptr_t;
 
 typedef struct {
-	d_rank_t	lo;
-	d_rank_t	hi;
+	d_rank_t lo;
+	d_rank_t hi;
 } d_rank_range_t;
 
 typedef struct {
 	d_rank_range_t *rrl_ranges;
-	uint32_t	rrl_nr;
+	uint32_t        rrl_nr;
 } d_rank_range_list_t;
 
-typedef char		*d_string_t;
-typedef const char	*d_const_string_t;
+typedef char       *d_string_t;
+typedef const char *d_const_string_t;
 
 /** Scatter/gather list for memory buffers */
 typedef struct {
-	uint32_t	sg_nr;
-	uint32_t	sg_nr_out;
-	d_iov_t		*sg_iovs;
+	uint32_t sg_nr;
+	uint32_t sg_nr_out;
+	d_iov_t *sg_iovs;
 } d_sg_list_t;
 
 /**
@@ -106,13 +106,13 @@ typedef struct {
  */
 struct d_string_buffer_t {
 	/** c string status */
-	int	status;
+	int    status;
 	/** c string size */
-	size_t	str_size;
+	size_t str_size;
 	/** buffer size */
-	size_t	buf_size;
+	size_t buf_size;
 	/** c string buffer address */
-	char	*str;
+	char  *str;
 };
 
 static inline void

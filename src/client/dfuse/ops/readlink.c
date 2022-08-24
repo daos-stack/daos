@@ -10,12 +10,12 @@
 void
 dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	struct dfuse_projection_info	*fsh = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	char				*buf = NULL;
-	size_t				size = 0;
-	int				rc;
+	struct dfuse_projection_info *fsh = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *inode;
+	d_list_t                     *rlink;
+	char                         *buf  = NULL;
+	size_t                        size = 0;
+	int                           rc;
 
 	rlink = d_hash_rec_find(&fsh->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {

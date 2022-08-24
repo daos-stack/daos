@@ -18,19 +18,18 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 }
 
 void
-dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
-	       off_t position, struct fuse_file_info *fi)
+dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t position,
+	       struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx		*fc = fuse_req_ctx(req);
-	int				rc;
-	struct dfuse_event		*ev;
-	size_t				len = fuse_buf_size(bufv);
-	struct fuse_bufvec		ibuf = FUSE_BUFVEC_INIT(len);
+	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
+	int                           rc;
+	struct dfuse_event           *ev;
+	size_t                        len  = fuse_buf_size(bufv);
+	struct fuse_bufvec            ibuf = FUSE_BUFVEC_INIT(len);
 
-	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d",
-			position, position + len - 1,
+	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
 
 	D_ALLOC_PTR(ev);
@@ -59,8 +58,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
-	ev->de_req = req;
-	ev->de_len = len;
+	ev->de_req         = req;
+	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	ev->de_sgl.sg_nr = 1;
@@ -72,10 +71,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	 * flag rather than two here
 	 */
 	if (oh->doh_ie->ie_truncated) {
-		if (oh->doh_ie->ie_start_off == 0 &&
-		    oh->doh_ie->ie_end_off == 0) {
+		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
 			oh->doh_ie->ie_start_off = position;
-			oh->doh_ie->ie_end_off = position + len;
+			oh->doh_ie->ie_end_off   = position + len;
 		} else {
 			if (oh->doh_ie->ie_start_off > position)
 				oh->doh_ie->ie_start_off = position;
@@ -87,8 +85,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
-		       position, &ev->de_ev);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
 	if (rc != 0)
 		D_GOTO(err, rc);
 

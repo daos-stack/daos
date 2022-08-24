@@ -25,8 +25,8 @@
 int
 _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mode)
 {
-	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-	mode_t mode = *_mode;
+	const struct fuse_ctx *ctx  = fuse_req_ctx(req);
+	mode_t                 mode = *_mode;
 
 	/* First check the UID, if this is different then copy the mode bits from user to group */
 	if (ctx->uid != parent->ie_stat.st_uid) {
@@ -43,18 +43,18 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 	 * bits from user to other
 	 */
 	if (ctx->gid != parent->ie_stat.st_gid) {
-		int gcount;
-		int gsize;
+		int   gcount;
+		int   gsize;
 		gid_t glist[START_GROUP_SIZE];
-		bool have_group_match = false;
-		int i;
+		bool  have_group_match = false;
+		int   i;
 
 		DFUSE_TRA_DEBUG(parent, "create with mismatched GID");
 
 		gcount = fuse_req_getgroups(req, START_GROUP_SIZE, glist);
-		gsize = min(2, gcount);
+		gsize  = min(2, gcount);
 
-		for (i = 0 ; i < gsize; i++)
+		for (i = 0; i < gsize; i++)
 			if (glist[i] == parent->ie_stat.st_gid)
 				have_group_match = true;
 
@@ -68,7 +68,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 			gsize = fuse_req_getgroups(req, gcount, garray);
 			gsize = min(gsize, gcount);
 
-			for (i = 0 ; i < gsize; i++)
+			for (i = 0; i < gsize; i++)
 				if (glist[i] == parent->ie_stat.st_gid)
 					have_group_match = true;
 
@@ -98,16 +98,16 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 }
 
 void
-dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name, mode_t mode, struct fuse_file_info *fi)
+dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode,
+		struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
-	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_obj_hdl		*oh = NULL;
-	struct fuse_file_info		fi_out = {0};
-	struct dfuse_cont		*dfs = parent->ie_dfs;
-	int				rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx        *ctx       = fuse_req_ctx(req);
+	struct dfuse_inode_entry     *ie        = NULL;
+	struct dfuse_obj_hdl         *oh        = NULL;
+	struct fuse_file_info         fi_out    = {0};
+	struct dfuse_cont            *dfs       = parent->ie_dfs;
+	int                           rc;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
@@ -130,7 +130,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * enabled so the kernel can do read-modify-write
 	 */
 	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
-		(fi->flags & O_ACCMODE) == O_WRONLY) {
+	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
@@ -192,7 +192,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	fi_out.fh = (uint64_t)oh;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_parent = parent->ie_stat.st_ino;
+	ie->ie_parent    = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 

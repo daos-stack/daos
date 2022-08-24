@@ -5,10 +5,10 @@
  */
 
 /* Those are gone from python3, replaced with new functions */
-#define PyInt_FromLong		PyLong_FromLong
-#define PyString_FromString	PyUnicode_FromString
+#define PyInt_FromLong             PyLong_FromLong
+#define PyString_FromString        PyUnicode_FromString
 #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
-#define PyString_AsString	PyBytes_AsString
+#define PyString_AsString          PyBytes_AsString
 
 #include <Python.h>
 
@@ -25,14 +25,14 @@
 #include <daos_uns.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A89
-#define MAX_OID_HI ((1UL << 32) - 1)
+#define MAX_OID_HI           ((1UL << 32) - 1)
 
 /** Durable format of entries in the root kv */
 struct pydaos_df {
-	daos_obj_id_t	oid;
-	uint32_t	otype;
-	uint32_t	res1;
-	uint64_t	res2[5];
+	daos_obj_id_t oid;
+	uint32_t      otype;
+	uint32_t      res1;
+	uint64_t      res2[5];
 };
 
 /** Object type, stored in pydaos_df::otype */
@@ -43,18 +43,18 @@ enum pydaos_otype {
 
 /** in-memory tracking of handles */
 struct open_handle {
-	daos_handle_t	poh;   /** pool handle */
-	daos_handle_t	coh;   /** container handle */
-	daos_handle_t	oh;    /** root object handle */
-	daos_obj_id_t	alloc; /** last allocated objid */
+	daos_handle_t poh;   /** pool handle */
+	daos_handle_t coh;   /** container handle */
+	daos_handle_t oh;    /** root object handle */
+	daos_obj_id_t alloc; /** last allocated objid */
 };
 
 static int
 __is_magic_valid(int input)
 {
 	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number does not match, expected %d got %d\n",
-			PY_SHIM_MAGIC_NUMBER, input);
+		D_ERROR("MAGIC number does not match, expected %d got %d\n", PY_SHIM_MAGIC_NUMBER,
+			input);
 		return 0;
 	}
 
@@ -62,36 +62,35 @@ __is_magic_valid(int input)
 }
 
 /* Macro that parses out magic value and verifies it */
-#define RETURN_NULL_IF_BAD_MAGIC(args)					\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i", &magic)) {			\
-		DEBUG_PRINT("Bad arguments passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
-
+#define RETURN_NULL_IF_BAD_MAGIC(args)                                                             \
+	do {                                                                                       \
+		int magic;                                                                         \
+		if (!PyArg_ParseTuple(args, "i", &magic)) {                                        \
+			DEBUG_PRINT("Bad arguments passed to %s", __func__);                       \
+			return NULL;                                                               \
+		}                                                                                  \
+                                                                                                   \
+		if (!__is_magic_valid(magic)) {                                                    \
+			return NULL;                                                               \
+		}                                                                                  \
+	} while (0)
 
 /* Parse arguments and magic number out*/
-#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)		\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i"format, &magic, x)) {		\
-		D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
+#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)                                         \
+	do {                                                                                       \
+		int magic;                                                                         \
+		if (!PyArg_ParseTuple(args, "i" format, &magic, x)) {                              \
+			D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);                        \
+			return NULL;                                                               \
+		}                                                                                  \
+                                                                                                   \
+		if (!__is_magic_valid(magic)) {                                                    \
+			return NULL;                                                               \
+		}                                                                                  \
+	} while (0)
 
-static daos_handle_t	glob_eq;
-static int		use_glob_eq;
+static daos_handle_t glob_eq;
+static int           use_glob_eq;
 
 /**
  * Implementations of baseline shim functions
@@ -100,8 +99,8 @@ static int		use_glob_eq;
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
-	int rc;
-	int ret;
+	int   rc;
+	int   ret;
 	char *override;
 
 	rc = daos_init();
@@ -109,9 +108,9 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 		override = getenv("PYDAOS_GLOB_EQ");
 		if ((override == NULL) || strcmp(override, "0")) {
 			use_glob_eq = 1;
-			ret = daos_eq_create(&glob_eq);
+			ret         = daos_eq_create(&glob_eq);
 			if (ret) {
-				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
+				D_ERROR("Failed to create global eq, " DF_RC "\n", DP_RC(ret));
 				use_glob_eq = 0;
 			}
 		}
@@ -126,9 +125,9 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 	int rc;
 
 	if (use_glob_eq) {
-		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
+		rc = daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
 		if (rc)
-			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Failed to destroy global eq, " DF_RC "\n", DP_RC(rc));
 		use_glob_eq = 0;
 	}
 
@@ -140,8 +139,8 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 static PyObject *
 __shim_handle__err_to_str(PyObject *self, PyObject *args)
 {
-	const char	*str;
-	int		 val;
+	const char *str;
+	int         val;
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &val);
@@ -162,15 +161,15 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
 static PyObject *
 cont_open(int ret, char *pool, char *cont, int flags)
 {
-	PyObject			*return_list;
-	struct open_handle		*hdl = NULL;
-	daos_handle_t			coh = {0};
-	daos_handle_t			poh = {0};
-	daos_handle_t			oh = {0};
-	daos_prop_t			*prop = NULL;
-	struct daos_prop_entry		*entry;
-	struct daos_prop_co_roots	*roots;
-	int				rc;
+	PyObject                  *return_list;
+	struct open_handle        *hdl  = NULL;
+	daos_handle_t              coh  = {0};
+	daos_handle_t              poh  = {0};
+	daos_handle_t              oh   = {0};
+	daos_prop_t               *prop = NULL;
+	struct daos_prop_entry    *entry;
+	struct daos_prop_co_roots *roots;
+	int                        rc;
 
 	if (ret != DER_SUCCESS) {
 		rc = ret;
@@ -178,8 +177,7 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh,
-			       NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -236,31 +234,31 @@ cont_open(int ret, char *pool, char *cont, int flags)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	hdl->poh	= poh;
-	hdl->coh	= coh;
-	hdl->oh		= oh;
-	hdl->alloc.lo	= 0;
-	hdl->alloc.hi	= MAX_OID_HI;
+	hdl->poh      = poh;
+	hdl->coh      = coh;
+	hdl->oh       = oh;
+	hdl->alloc.lo = 0;
+	hdl->alloc.hi = MAX_OID_HI;
 out:
 	if (prop)
 		daos_prop_free(prop);
 	if (rc) {
-		int	rc2;
+		int rc2;
 
 		if (daos_handle_is_valid(oh)) {
 			rc2 = daos_kv_close(oh, NULL);
 			if (rc2)
-				D_ERROR("daos_kv_close() Failed "DF_RC"\n", DP_RC(rc2));
+				D_ERROR("daos_kv_close() Failed " DF_RC "\n", DP_RC(rc2));
 		}
 		if (daos_handle_is_valid(coh)) {
 			rc2 = daos_cont_close(coh, NULL);
 			if (rc2)
-				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+				D_ERROR("daos_cont_close() Failed " DF_RC "\n", DP_RC(rc2));
 		}
 		if (daos_handle_is_valid(poh)) {
 			rc2 = daos_pool_disconnect(poh, NULL);
 			if (rc2)
-				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+				D_ERROR("daos_pool_disconnect() Failed " DF_RC "\n", DP_RC(rc2));
 		}
 	}
 
@@ -275,9 +273,9 @@ out:
 static PyObject *
 __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
-	char	*pool;
-	char	*cont;
-	int	 flags;
+	char *pool;
+	char *cont;
+	int   flags;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &pool, &cont, &flags);
@@ -288,11 +286,11 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
-	const char		*path;
-	PyObject		*obj;
-	int			 flags;
-	struct duns_attr_t	 attr = {0};
-	int			 rc;
+	const char        *path;
+	PyObject          *obj;
+	int                flags;
+	struct duns_attr_t attr = {0};
+	int                rc;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
@@ -310,14 +308,16 @@ out:
 static PyObject *
 __shim_handle__cont_get(PyObject *self, PyObject *args)
 {
-	PyObject		*return_list;
-	struct open_handle	*hdl;
-	char			*name;
-	struct pydaos_df	entry;
-	size_t			size = sizeof(entry);
-	daos_obj_id_t		oid = {0, };
-	unsigned int		otype = 0;
-	int			rc;
+	PyObject           *return_list;
+	struct open_handle *hdl;
+	char               *name;
+	struct pydaos_df    entry;
+	size_t              size = sizeof(entry);
+	daos_obj_id_t       oid  = {
+		   0,
+        };
+	unsigned int otype = 0;
+	int          rc;
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ks", &hdl, &name);
@@ -339,8 +339,8 @@ __shim_handle__cont_get(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	oid	= entry.oid;
-	otype	= entry.otype;
+	oid   = entry.oid;
+	otype = entry.otype;
 out:
 	/* Populate return list */
 	return_list = PyList_New(4);
@@ -355,14 +355,16 @@ out:
 static PyObject *
 __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 {
-	PyObject		*return_list;
-	struct open_handle	*hdl;
-	char			*name;
-	unsigned int		otype;
-	struct pydaos_df	entry;
-	daos_obj_id_t		oid = {0, };
-	enum daos_otype_t	type;
-	int			rc;
+	PyObject           *return_list;
+	struct open_handle *hdl;
+	char               *name;
+	unsigned int        otype;
+	struct pydaos_df    entry;
+	daos_obj_id_t       oid = {
+		  0,
+        };
+	enum daos_otype_t type;
+	int               rc;
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ksi", &hdl, &name, &otype);
@@ -371,8 +373,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	if (hdl->alloc.hi >= MAX_OID_HI) {
 		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_cont_alloc_oids() Failed " DF_RC "\n", DP_RC(rc));
 			goto out;
 		}
 		if (hdl->alloc.lo == 0)
@@ -399,10 +400,10 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	 * Insert name in root kv, use conditional insert to fail if already
 	 * exist
 	 */
-	entry.oid	= oid;
-	entry.otype	= otype;
-	rc = daos_kv_put(hdl->oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, name,
-			 sizeof(entry), &entry, NULL);
+	entry.oid   = oid;
+	entry.otype = otype;
+	rc = daos_kv_put(hdl->oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, name, sizeof(entry), &entry,
+			 NULL);
 	if (rc != -DER_SUCCESS)
 		goto out;
 
@@ -419,9 +420,9 @@ out:
 static PyObject *
 __shim_handle__cont_close(PyObject *self, PyObject *args)
 {
-	struct open_handle	*hdl;
-	int			rc = 0;
-	int			ret;
+	struct open_handle *hdl;
+	int                 rc = 0;
+	int                 ret;
 
 	/** Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "K", &hdl);
@@ -454,66 +455,64 @@ __shim_handle__cont_close(PyObject *self, PyObject *args)
 static void
 oc_define(PyObject *module)
 {
-#define DEFINE_OC(pref, suf) \
-	PyModule_AddIntConstant(module, "OC_" #pref #suf, OC_##pref##suf)
+#define DEFINE_OC(pref, suf) PyModule_AddIntConstant(module, "OC_" #pref #suf, OC_##pref##suf)
 
-	DEFINE_OC(RP_, XSF);		/** OC_RP_XSF */
+	DEFINE_OC(RP_, XSF); /** OC_RP_XSF */
 
-#define DEFINE_OC_PROT(prot)	\
-do {				\
-	DEFINE_OC(prot, TINY);	\
-	DEFINE_OC(prot, SMALL);	\
-	DEFINE_OC(prot, LARGE);	\
-	DEFINE_OC(prot, MAX);	\
-} while (0)
+#define DEFINE_OC_PROT(prot)                                                                       \
+	do {                                                                                       \
+		DEFINE_OC(prot, TINY);                                                             \
+		DEFINE_OC(prot, SMALL);                                                            \
+		DEFINE_OC(prot, LARGE);                                                            \
+		DEFINE_OC(prot, MAX);                                                              \
+	} while (0)
 
-	DEFINE_OC_PROT();		/** OC_TINY, OC_SMALL, ... */
-	DEFINE_OC_PROT(RP_);		/** OC_RP_TINY, OC_RP_SMALL, ... */
-	DEFINE_OC_PROT(RP_SF_);		/** OC_RP_SF_TINY, ... */
-	DEFINE_OC_PROT(EC_);		/** OC_EC_TINY, OC_EC_SMALL, ... */
+	DEFINE_OC_PROT();       /** OC_TINY, OC_SMALL, ... */
+	DEFINE_OC_PROT(RP_);    /** OC_RP_TINY, OC_RP_SMALL, ... */
+	DEFINE_OC_PROT(RP_SF_); /** OC_RP_SF_TINY, ... */
+	DEFINE_OC_PROT(EC_);    /** OC_EC_TINY, OC_EC_SMALL, ... */
 
-#define DEFINE_OC_EXPL(name)	\
-do {				\
-	DEFINE_OC(name, 1);	\
-	DEFINE_OC(name, 2);	\
-	DEFINE_OC(name, 4);	\
-	DEFINE_OC(name, 8);	\
-	DEFINE_OC(name, 16);	\
-	DEFINE_OC(name, 32);	\
-	DEFINE_OC(name, X);	\
-} while (0)
+#define DEFINE_OC_EXPL(name)                                                                       \
+	do {                                                                                       \
+		DEFINE_OC(name, 1);                                                                \
+		DEFINE_OC(name, 2);                                                                \
+		DEFINE_OC(name, 4);                                                                \
+		DEFINE_OC(name, 8);                                                                \
+		DEFINE_OC(name, 16);                                                               \
+		DEFINE_OC(name, 32);                                                               \
+		DEFINE_OC(name, X);                                                                \
+	} while (0)
 
-	DEFINE_OC_EXPL(S);		/** OC_S1, OC_S2, ... */
-	DEFINE_OC_EXPL(RP_2G);		/** OC_RP_2G1, OC_RP_2G2, ... */
-	DEFINE_OC_EXPL(RP_3G);		/** OC_RP_3G1, OC_RP_3G2, ... */
-	DEFINE_OC_EXPL(RP_4G);		/** OC_RP_4G1, OC_RP_4G2, ... */
-	DEFINE_OC_EXPL(RP_5G);		/** OC_RP_5G1, OC_RP_5G2, ... */
-	DEFINE_OC_EXPL(RP_6G);		/** OC_RP_6G1, OC_RP_5G2, ... */
-	DEFINE_OC_EXPL(EC_2P1G);	/** OC_EC_2P1G1, OC_EC_2P1G2, ... */
-	DEFINE_OC_EXPL(EC_2P2G);	/** OC_EC_2P2G1, OC_EC_2P2G2, ... */
-	DEFINE_OC_EXPL(EC_4P1G);	/** OC_EC_4P1G1, OC_EC_4P1G2, ... */
-	DEFINE_OC_EXPL(EC_4P2G);	/** OC_EC_4P2G1, OC_EC_4P2G2, ... */
-	DEFINE_OC_EXPL(EC_8P1G);	/** OC_EC_8P1G1, OC_EC_8P1G2, ... */
-	DEFINE_OC_EXPL(EC_8P2G);	/** OC_EC_8P2G1, OC_EC_8P2G2, ... */
-	DEFINE_OC_EXPL(EC_16P1G);	/** OC_EC_16P1G1, OC_EC_16P1G2, ... */
-	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
+	DEFINE_OC_EXPL(S);        /** OC_S1, OC_S2, ... */
+	DEFINE_OC_EXPL(RP_2G);    /** OC_RP_2G1, OC_RP_2G2, ... */
+	DEFINE_OC_EXPL(RP_3G);    /** OC_RP_3G1, OC_RP_3G2, ... */
+	DEFINE_OC_EXPL(RP_4G);    /** OC_RP_4G1, OC_RP_4G2, ... */
+	DEFINE_OC_EXPL(RP_5G);    /** OC_RP_5G1, OC_RP_5G2, ... */
+	DEFINE_OC_EXPL(RP_6G);    /** OC_RP_6G1, OC_RP_5G2, ... */
+	DEFINE_OC_EXPL(EC_2P1G);  /** OC_EC_2P1G1, OC_EC_2P1G2, ... */
+	DEFINE_OC_EXPL(EC_2P2G);  /** OC_EC_2P2G1, OC_EC_2P2G2, ... */
+	DEFINE_OC_EXPL(EC_4P1G);  /** OC_EC_4P1G1, OC_EC_4P1G2, ... */
+	DEFINE_OC_EXPL(EC_4P2G);  /** OC_EC_4P2G1, OC_EC_4P2G2, ... */
+	DEFINE_OC_EXPL(EC_8P1G);  /** OC_EC_8P1G1, OC_EC_8P1G2, ... */
+	DEFINE_OC_EXPL(EC_8P2G);  /** OC_EC_8P2G1, OC_EC_8P2G2, ... */
+	DEFINE_OC_EXPL(EC_16P1G); /** OC_EC_16P1G1, OC_EC_16P1G2, ... */
+	DEFINE_OC_EXPL(EC_16P2G); /** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 
-#define DEFINE_OC_INTERNAL(name)\
-do {				\
-	DEFINE_OC(name, 1);	\
-	DEFINE_OC(name, 2);	\
-	DEFINE_OC(name, 4);	\
-	DEFINE_OC(name, X);	\
-} while (0)
+#define DEFINE_OC_INTERNAL(name)                                                                   \
+	do {                                                                                       \
+		DEFINE_OC(name, 1);                                                                \
+		DEFINE_OC(name, 2);                                                                \
+		DEFINE_OC(name, 4);                                                                \
+		DEFINE_OC(name, X);                                                                \
+	} while (0)
 
-	DEFINE_OC_INTERNAL(RP_4G);          /** OC_RP_4G1, OC_RP_4G2, ... */
+	DEFINE_OC_INTERNAL(RP_4G); /** OC_RP_4G1, OC_RP_4G2, ... */
 }
 
 static void
 cont_prop_define(PyObject *module)
 {
-#define DEFINE_CONT(value) \
-	PyModule_AddIntConstant(module, "DAOS_PROP_" #value, DAOS_PROP_##value)
+#define DEFINE_CONT(value) PyModule_AddIntConstant(module, "DAOS_PROP_" #value, DAOS_PROP_##value)
 	DEFINE_CONT(CO_MIN);
 	DEFINE_CONT(CO_LABEL);
 	DEFINE_CONT(CO_LAYOUT_VER);
@@ -549,7 +548,7 @@ cont_prop_define(PyObject *module)
 static inline daos_anchor_t *
 capsule2anchor(PyObject *obj)
 {
-	daos_anchor_t	 *anchor;
+	daos_anchor_t *anchor;
 
 	anchor = (daos_anchor_t *)PyCapsule_GetPointer(obj, "daos_anchor");
 
@@ -559,7 +558,7 @@ capsule2anchor(PyObject *obj)
 static void
 anchor_destructor(PyObject *obj)
 {
-	daos_anchor_t	 *anchor;
+	daos_anchor_t *anchor;
 
 	anchor = capsule2anchor(obj);
 	if (anchor == NULL)
@@ -582,16 +581,15 @@ anchor2capsule(daos_anchor_t *anchor)
 static PyObject *
 __shim_handle__kv_open(PyObject *self, PyObject *args)
 {
-	PyObject		*return_list;
-	struct open_handle	*hdl;
-	daos_handle_t		oh;
-	daos_obj_id_t		oid;
-	int			flags;
-	int			rc;
+	PyObject           *return_list;
+	struct open_handle *hdl;
+	daos_handle_t       oh;
+	daos_obj_id_t       oid;
+	int                 flags;
+	int                 rc;
 
 	/** Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "KLLi", &hdl, &oid.hi,
-				       &oid.lo, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "KLLi", &hdl, &oid.hi, &oid.lo, &flags);
 
 	/** Open object */
 	rc = daos_kv_open(hdl->coh, oid, DAOS_OO_RW, &oh, NULL);
@@ -607,8 +605,8 @@ __shim_handle__kv_open(PyObject *self, PyObject *args)
 static PyObject *
 __shim_handle__kv_close(PyObject *self, PyObject *args)
 {
-	daos_handle_t	 oh;
-	int		 rc;
+	daos_handle_t oh;
+	int           rc;
 
 	/** Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "L", &oh.cookie);
@@ -627,19 +625,19 @@ __shim_handle__kv_close(PyObject *self, PyObject *args)
 #define MAX_INFLIGHT 16
 
 struct kv_op {
-	daos_event_t	 ev;
-	PyObject	*key_obj;
-	char		*key;
-	char		*buf;
-	daos_size_t	 size;
-	daos_size_t	buf_size;
+	daos_event_t ev;
+	PyObject    *key_obj;
+	char        *key;
+	char        *buf;
+	daos_size_t  size;
+	daos_size_t  buf_size;
 };
 
 static inline int
 kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 {
-	PyObject	*val;
-	int		 rc;
+	PyObject *val;
+	int       rc;
 
 	/** insert value in python dict */
 	if (op->size == 0) {
@@ -666,22 +664,21 @@ kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 static PyObject *
 __shim_handle__kv_get(PyObject *self, PyObject *args)
 {
-	PyObject	*daos_dict;
-	daos_handle_t	 oh;
-	PyObject	*key;
-	Py_ssize_t	 pos = 0;
-	daos_handle_t	 eq;
-	struct kv_op	*kv_array = NULL;
-	struct kv_op	*op;
-	daos_event_t	*evp;
-	int		 i = 0;
-	int		 rc = 0;
-	int		 ret;
-	size_t		 v_size;
+	PyObject     *daos_dict;
+	daos_handle_t oh;
+	PyObject     *key;
+	Py_ssize_t    pos = 0;
+	daos_handle_t eq;
+	struct kv_op *kv_array = NULL;
+	struct kv_op *op;
+	daos_event_t *evp;
+	int           i  = 0;
+	int           rc = 0;
+	int           ret;
+	size_t        v_size;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type,
-				       &daos_dict, &v_size);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type, &daos_dict, &v_size);
 
 	if (!use_glob_eq) {
 		rc = daos_eq_create(&eq);
@@ -700,13 +697,13 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	while (PyDict_Next(daos_dict, &pos, &key, NULL)) {
 		if (i < MAX_INFLIGHT) {
 			/** haven't reached max request in flight yet */
-			op = &kv_array[i];
+			op  = &kv_array[i];
 			evp = &op->ev;
-			rc = daos_event_init(evp, eq, NULL);
+			rc  = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
 			op->buf_size = v_size;
-			op->size = op->buf_size;
+			op->size     = op->buf_size;
 			D_ALLOC(op->buf, op->buf_size);
 			if (op->buf == NULL) {
 				rc = -DER_NOMEM;
@@ -736,7 +733,7 @@ rewait:
 				if (rc != DER_SUCCESS)
 					D_GOTO(err, rc);
 				/* Reset the size of the request */
-				op->size = op->buf_size;
+				op->size      = op->buf_size;
 				evp->ev_error = 0;
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
@@ -747,15 +744,15 @@ rewait:
 					break;
 				}
 				op->buf_size = op->size;
-				op->buf = new_buff;
+				op->buf      = new_buff;
 
 				daos_event_fini(evp);
 				rc = daos_event_init(evp, eq, NULL);
 				if (rc != -DER_SUCCESS)
 					break;
 
-				rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
-						&op->size, op->buf, evp);
+				rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size, op->buf,
+						 evp);
 				if (rc != -DER_SUCCESS)
 					break;
 				D_GOTO(rewait, rc);
@@ -775,8 +772,7 @@ rewait:
 		}
 		if (!op->key)
 			D_GOTO(err, rc = 0);
-		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
-				 op->buf, evp);
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size, op->buf, evp);
 		if (rc) {
 			break;
 		}
@@ -807,10 +803,10 @@ rewait:
 					D_GOTO(out, rc = -DER_NOMEM);
 
 				op->buf_size = op->size;
-				op->buf = new_buff;
+				op->buf      = new_buff;
 
-				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
-						&op->size, op->buf, evp);
+				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size, op->buf,
+						  evp);
 				if (rc2 != -DER_SUCCESS)
 					D_GOTO(out, rc = rc2);
 			} else {
@@ -855,21 +851,20 @@ err:
 static PyObject *
 __shim_handle__kv_put(PyObject *self, PyObject *args)
 {
-	PyObject	*daos_dict;
-	daos_handle_t	 oh;
-	PyObject	*key;
-	PyObject	*value;
-	Py_ssize_t	 pos = 0;
-	daos_handle_t	 eq;
-	daos_event_t	 ev_array[MAX_INFLIGHT];
-	daos_event_t	*evp;
-	int		 i = 0;
-	int		 rc = 0;
-	int		 ret;
+	PyObject     *daos_dict;
+	daos_handle_t oh;
+	PyObject     *key;
+	PyObject     *value;
+	Py_ssize_t    pos = 0;
+	daos_handle_t eq;
+	daos_event_t  ev_array[MAX_INFLIGHT];
+	daos_event_t *evp;
+	int           i  = 0;
+	int           rc = 0;
+	int           ret;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
-				       &PyDict_Type, &daos_dict);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie, &PyDict_Type, &daos_dict);
 
 	if (!use_glob_eq) {
 		rc = daos_eq_create(&eq);
@@ -880,14 +875,14 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	}
 
 	while (PyDict_Next(daos_dict, &pos, &key, &value)) {
-		char		*buf;
-		daos_size_t	 size;
-		char		*key_str;
+		char       *buf;
+		daos_size_t size;
+		char       *key_str;
 
 		if (i < MAX_INFLIGHT) {
 			/** haven't reached max request in flight yet */
 			evp = &ev_array[i];
-			rc = daos_event_init(evp, eq, NULL);
+			rc  = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
 			i++;
@@ -918,7 +913,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		} else if (PyUnicode_Check(value)) {
 			Py_ssize_t pysize = 0;
 
-			buf = (char *)PyUnicode_AsUTF8AndSize(value, &pysize);
+			buf  = (char *)PyUnicode_AsUTF8AndSize(value, &pysize);
 			size = pysize;
 		} else {
 			Py_ssize_t pysize = 0;
@@ -942,8 +937,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		if (size == 0)
 			rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, key_str, evp);
 		else
-			rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_str, size,
-					 buf, evp);
+			rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_str, size, buf, evp);
 		if (rc)
 			break;
 	}
@@ -975,26 +969,26 @@ err:
 static PyObject *
 __shim_handle__kv_iter(PyObject *self, PyObject *args)
 {
-	PyObject	*return_list;
-	PyObject	*entries;
-	uint32_t	 nr_req;
-	uint32_t	 nr;
-	daos_handle_t	 oh;
+	PyObject        *return_list;
+	PyObject        *entries;
+	uint32_t         nr_req;
+	uint32_t         nr;
+	daos_handle_t    oh;
 	daos_key_desc_t *kds = NULL;
-	d_iov_t		 iov;
-	d_sg_list_t	 sgl;
-	daos_anchor_t	*anchor;
-	PyObject	*anchor_cap;
-	char		*enum_buf = NULL;
-	daos_size_t	 size;
-	daos_size_t	 oldsize;
-	char		*ptr;
-	uint32_t	 i;
-	int		 rc = 0;
+	d_iov_t          iov;
+	d_sg_list_t      sgl;
+	daos_anchor_t   *anchor;
+	PyObject        *anchor_cap;
+	char            *enum_buf = NULL;
+	daos_size_t      size;
+	daos_size_t      oldsize;
+	char            *ptr;
+	uint32_t         i;
+	int              rc = 0;
 
 	/** Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LOiLO", &oh.cookie, &entries,
-				       &nr_req, &size, &anchor_cap);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LOiLO", &oh.cookie, &entries, &nr_req, &size,
+				       &anchor_cap);
 	if (nr_req == 0 || size < 16) {
 		rc = -DER_INVAL;
 		goto out;
@@ -1039,7 +1033,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 		goto out;
 	}
 
-	sgl.sg_nr = 1;
+	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	d_iov_set(&iov, (void *)enum_buf, size);
 	sgl.sg_iovs = &iov;
@@ -1052,9 +1046,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	 */
 	do {
 		sgl.sg_nr_out = 0;
-		nr = nr_req;
-		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, anchor,
-				  NULL);
+		nr            = nr_req;
+		rc            = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, anchor, NULL);
 
 		if (rc == -DER_KEY2BIG) {
 			char *new_buf;
@@ -1073,7 +1066,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			/** refresh daos structures to point at new buffer */
 			d_iov_set(&iov, (void *)new_buf, size);
 			enum_buf = new_buf;
-			nr = 0;
+			nr       = 0;
 			continue;
 		}
 
@@ -1085,9 +1078,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	for (ptr = enum_buf, i = 0; i < nr; i++) {
 		Py_ssize_t len = kds[i].kd_key_len;
 
-		rc = PyList_Append(entries,
-				   PyString_FromStringAndSize(ptr, len));
-		if (rc  < 0) {
+		rc = PyList_Append(entries, PyString_FromStringAndSize(ptr, len));
+		if (rc < 0) {
 			rc = -DER_IO;
 			break;
 		}
@@ -1101,8 +1093,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 		 * next time
 		 */
 		nr_req *= 2;
-	} else if (size < 1024 * 1024 && nr > 0 &&
-		   enum_buf + size - ptr < (ptr - enum_buf) / nr) {
+	} else if (size < 1024 * 1024 && nr > 0 && enum_buf + size - ptr < (ptr - enum_buf) / nr) {
 		/**
 		 * there might not have been enough room in the buffer to fit
 		 * another entry, bump buffer size ...
@@ -1140,38 +1131,34 @@ out:
 /**
  * Python shim module
  */
-#define EXPORT_PYTHON_METHOD(name)		\
-{						\
-	#name,					\
-	__shim_handle__##name,			\
-	METH_VARARGS | METH_KEYWORDS,		\
-	"text"					\
-}
+#define EXPORT_PYTHON_METHOD(name)                                                                 \
+	{                                                                                          \
+#name, __shim_handle__##name, METH_VARARGS | METH_KEYWORDS, "text"                 \
+	}
 
 static PyMethodDef daosMethods[] = {
-	/** Generic methods */
-	EXPORT_PYTHON_METHOD(daos_init),
-	EXPORT_PYTHON_METHOD(daos_fini),
-	EXPORT_PYTHON_METHOD(err_to_str),
+    /** Generic methods */
+    EXPORT_PYTHON_METHOD(daos_init),
+    EXPORT_PYTHON_METHOD(daos_fini),
+    EXPORT_PYTHON_METHOD(err_to_str),
 
-	/** Container operations */
-	EXPORT_PYTHON_METHOD(cont_open),
-	EXPORT_PYTHON_METHOD(cont_open_by_path),
-	EXPORT_PYTHON_METHOD(cont_get),
-	EXPORT_PYTHON_METHOD(cont_newobj),
-	EXPORT_PYTHON_METHOD(cont_close),
+    /** Container operations */
+    EXPORT_PYTHON_METHOD(cont_open),
+    EXPORT_PYTHON_METHOD(cont_open_by_path),
+    EXPORT_PYTHON_METHOD(cont_get),
+    EXPORT_PYTHON_METHOD(cont_newobj),
+    EXPORT_PYTHON_METHOD(cont_close),
 
-	/** KV operations */
-	EXPORT_PYTHON_METHOD(kv_open),
-	EXPORT_PYTHON_METHOD(kv_close),
-	EXPORT_PYTHON_METHOD(kv_get),
-	EXPORT_PYTHON_METHOD(kv_put),
-	EXPORT_PYTHON_METHOD(kv_iter),
+    /** KV operations */
+    EXPORT_PYTHON_METHOD(kv_open),
+    EXPORT_PYTHON_METHOD(kv_close),
+    EXPORT_PYTHON_METHOD(kv_get),
+    EXPORT_PYTHON_METHOD(kv_put),
+    EXPORT_PYTHON_METHOD(kv_iter),
 
-	/** Array operations */
+    /** Array operations */
 
-	{NULL, NULL}
-};
+    {NULL, NULL}};
 
 struct module_struct {
 	PyObject *error;
@@ -1192,27 +1179,19 @@ __daosbase_clear(PyObject *m)
 	return 0;
 }
 
-static struct PyModuleDef moduledef = {
-	PyModuleDef_HEAD_INIT,
-	"pydaos_shim",
-	NULL,
-	sizeof(struct module_struct),
-	daosMethods,
-	NULL,
-	__daosbase_traverse,
-	__daosbase_clear,
-	NULL
-};
+static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,        "pydaos_shim",    NULL,
+				       sizeof(struct module_struct), daosMethods,      NULL,
+				       __daosbase_traverse,          __daosbase_clear, NULL};
 
-PyMODINIT_FUNC PyInit_pydaos_shim(void)
+PyMODINIT_FUNC
+PyInit_pydaos_shim(void)
 
 {
 	PyObject *module;
 
 	module = PyModule_Create(&moduledef);
 
-#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
-	PyModule_AddIntConstant(module, ""#name, desc);
+#define DEFINE_PY_RETURN_CODE(name, desc, errstr) PyModule_AddIntConstant(module, "" #name, desc);
 
 	/** export return codes */
 	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);

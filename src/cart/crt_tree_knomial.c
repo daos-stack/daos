@@ -7,14 +7,14 @@
  * This file is part of CaRT. It gives out the knomial tree topo related
  * function implementation.
  */
-#define D_LOGFAC	DD_FAC(grp)
+#define D_LOGFAC DD_FAC(grp)
 
 #include "crt_internal.h"
 
 struct knomial_number {
-	uint32_t	digits[CRT_TREE_MAX_RATIO];
-	uint32_t	ndigits;
-	uint32_t	ratio;
+	uint32_t digits[CRT_TREE_MAX_RATIO];
+	uint32_t ndigits;
+	uint32_t ratio;
 };
 
 static uint32_t
@@ -40,7 +40,7 @@ knomial_number_2_int(struct knomial_number *n)
 static void
 int_2_knomial_number(uint32_t x, uint32_t ratio, struct knomial_number *n)
 {
-	n->ratio = ratio;
+	n->ratio   = ratio;
 	n->ndigits = 0;
 	memset((void *)n->digits, 0, sizeof(n->digits));
 
@@ -52,21 +52,20 @@ int_2_knomial_number(uint32_t x, uint32_t ratio, struct knomial_number *n)
 }
 
 static uint32_t
-knomial_get_children(uint32_t *children, uint32_t self, uint32_t size,
-		     uint32_t ratio)
+knomial_get_children(uint32_t *children, uint32_t self, uint32_t size, uint32_t ratio)
 {
-	struct knomial_number	n;
-	uint32_t		inc = 1;
-	uint32_t		nchildren = 0;
-	uint32_t		i, digit;
+	struct knomial_number n;
+	uint32_t              inc       = 1;
+	uint32_t              nchildren = 0;
+	uint32_t              i, digit;
 
 	D_ASSERT(self < size);
 
 	int_2_knomial_number(self, ratio, &n);
-	for (digit = 0; (digit < CRT_TREE_MAX_RATIO) &&
-		(digit > n.ndigits || n.digits[digit] == 0); digit++) {
+	for (digit = 0; (digit < CRT_TREE_MAX_RATIO) && (digit > n.ndigits || n.digits[digit] == 0);
+	     digit++) {
 		for (i = 1; i < ratio; i++) {
-			uint32_t child = self + i*inc;
+			uint32_t child = self + i * inc;
 
 			if (child >= size)
 				return nchildren;
@@ -84,8 +83,8 @@ knomial_get_children(uint32_t *children, uint32_t self, uint32_t size,
 static uint32_t
 knomial_get_parent(uint32_t self, uint32_t ratio)
 {
-	struct knomial_number	n;
-	uint32_t		i;
+	struct knomial_number n;
+	uint32_t              i;
 
 	int_2_knomial_number(self, ratio, &n);
 
@@ -100,60 +99,52 @@ knomial_get_parent(uint32_t self, uint32_t ratio)
 }
 
 int
-crt_knomial_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio,
-			     uint32_t grp_root, uint32_t grp_self,
-			     uint32_t *nchildren)
+crt_knomial_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
+			     uint32_t grp_self, uint32_t *nchildren)
 {
-	uint32_t	tree_self;
+	uint32_t tree_self;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(nchildren != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
-		 tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
 
-	*nchildren = knomial_get_children(NULL, tree_self, grp_size,
-					  tree_ratio);
+	*nchildren = knomial_get_children(NULL, tree_self, grp_size, tree_ratio);
 
 	return 0;
 }
 
 int
-crt_knomial_get_children(uint32_t grp_size, uint32_t tree_ratio,
-			 uint32_t grp_root, uint32_t grp_self,
-			 uint32_t *children)
+crt_knomial_get_children(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
+			 uint32_t grp_self, uint32_t *children)
 {
-	uint32_t	nchildren;
-	uint32_t	tree_self;
-	uint32_t	i;
+	uint32_t nchildren;
+	uint32_t tree_self;
+	uint32_t i;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(children != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
-		 tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
 
-	nchildren = knomial_get_children(children, tree_self, grp_size,
-					 tree_ratio);
+	nchildren = knomial_get_children(children, tree_self, grp_size, tree_ratio);
 	for (i = 0; i < nchildren; i++)
-		children[i] = crt_treerank_2_grprank(grp_size, grp_root,
-						     children[i]);
+		children[i] = crt_treerank_2_grprank(grp_size, grp_root, children[i]);
 
 	return 0;
 }
 
 int
-crt_knomial_get_parent(uint32_t grp_size, uint32_t tree_ratio,
-		       uint32_t grp_root, uint32_t grp_self, uint32_t *parent)
+crt_knomial_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root, uint32_t grp_self,
+		       uint32_t *parent)
 {
-	uint32_t	tree_self, tree_parent;
+	uint32_t tree_self, tree_parent;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(parent != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
-		 tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	if (grp_self == grp_root)
 		return -DER_INVAL;
@@ -168,8 +159,6 @@ crt_knomial_get_parent(uint32_t grp_size, uint32_t tree_ratio,
 	return 0;
 }
 
-struct crt_topo_ops crt_knomial_ops = {
-	.to_get_children_cnt	= crt_knomial_get_children_cnt,
-	.to_get_children	= crt_knomial_get_children,
-	.to_get_parent		= crt_knomial_get_parent
-};
+struct crt_topo_ops crt_knomial_ops = {.to_get_children_cnt = crt_knomial_get_children_cnt,
+				       .to_get_children     = crt_knomial_get_children,
+				       .to_get_parent       = crt_knomial_get_parent};

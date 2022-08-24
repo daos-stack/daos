@@ -24,21 +24,21 @@ extern "C" {
 #include <sys/stat.h>
 
 /** Maximum Name length */
-#define DFS_MAX_NAME		NAME_MAX
+#define DFS_MAX_NAME       NAME_MAX
 /** Maximum PATH length */
-#define DFS_MAX_PATH		PATH_MAX
+#define DFS_MAX_PATH       PATH_MAX
 /** Maximum file size */
-#define DFS_MAX_FSIZE		(~0ULL)
+#define DFS_MAX_FSIZE      (~0ULL)
 
 /** Maximum xattr name */
-#define DFS_MAX_XATTR_NAME	255
+#define DFS_MAX_XATTR_NAME 255
 /** Maximum xattr value */
-#define DFS_MAX_XATTR_LEN	65536
+#define DFS_MAX_XATTR_LEN  65536
 
 /** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
-typedef struct dfs dfs_t;
+typedef struct dfs     dfs_t;
 
 /*
  * Consistency modes of the DFS container. A container created with balanced
@@ -49,46 +49,46 @@ typedef struct dfs dfs_t;
  * for read / write access (O_RDONLY, O_RDRW).
  */
 /** DFS container balanced consistency mode. DFS operations using a DTX */
-#define DFS_BALANCED	4
+#define DFS_BALANCED 4
 /** DFS container relaxed consistency mode. DFS operations do not use a DTX (default mode) */
-#define DFS_RELAXED	0
+#define DFS_RELAXED  0
 /** read-only access */
-#define DFS_RDONLY	O_RDONLY
+#define DFS_RDONLY   O_RDONLY
 /** read/write access */
-#define DFS_RDWR	O_RDWR
+#define DFS_RDWR     O_RDWR
 
 /** struct holding attributes for a DFS container */
 typedef struct {
 	/** Optional user ID for DFS container. */
-	uint64_t		da_id;
+	uint64_t         da_id;
 	/** Default Chunk size for all files in container */
-	daos_size_t		da_chunk_size;
+	daos_size_t      da_chunk_size;
 	/** Default Object Class for all objects in the container */
-	daos_oclass_id_t	da_oclass_id;
+	daos_oclass_id_t da_oclass_id;
 	/** DAOS properties on the DFS container */
-	daos_prop_t		*da_props;
+	daos_prop_t     *da_props;
 	/**
 	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
 	 * If set to 0 or more generally not set to balanced explicitly, relaxed
 	 * mode will be used. In the future, Balanced mode will be the default.
 	 */
-	uint32_t		da_mode;
+	uint32_t         da_mode;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
 typedef struct {
 	/** Number of entries in dfs_rgs */
-	daos_size_t		iod_nr;
+	daos_size_t   iod_nr;
 	/** Array of ranges; each range defines a starting index and length. */
-	daos_range_t	       *iod_rgs;
+	daos_range_t *iod_rgs;
 } dfs_iod_t;
 
 /** DFS object information */
 typedef struct {
 	/** object class */
-	daos_oclass_id_t	doi_oclass_id;
+	daos_oclass_id_t doi_oclass_id;
 	/** chunk size */
-	daos_size_t		doi_chunk_size;
+	daos_size_t      doi_chunk_size;
 } dfs_obj_info_t;
 
 /**
@@ -184,8 +184,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
-			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr, uuid_t *uuid,
+			   daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -304,8 +304,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
-		 dfs_t **dfs);
+dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, dfs_t **dfs);
 
 /**
  * Convert a local dfs mount including the pool and container handles to global representation data
@@ -375,8 +374,8 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
-	   mode_t *mode, struct stat *stbuf);
+dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj, mode_t *mode,
+	   struct stat *stbuf);
 
 /**
  * Lookup an entry in the parent object and return the associated open object
@@ -398,8 +397,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
+dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **obj,
+	       mode_t *mode, struct stat *stbuf);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -426,9 +425,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
-	 const char *value, dfs_obj_t **obj);
+dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flags,
+	 daos_oclass_id_t cid, daos_size_t chunk_size, const char *value, dfs_obj_t **obj);
 
 /**
  * Duplicate the DFS object without any RPCs (locally) by using the existing
@@ -502,8 +500,8 @@ dfs_release(dfs_obj_t *obj);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
-	 daos_size_t *read_size, daos_event_t *ev);
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size_t *read_size,
+	 daos_event_t *ev);
 
 /**
  * Non-contiguous read interface to a DFS file.
@@ -521,8 +519,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	  daos_size_t *read_size, daos_event_t *ev);
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_size_t *read_size,
+	  daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -537,8 +535,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
-	  daos_event_t *ev);
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_event_t *ev);
 
 /**
  * Non-contiguous write interface to a DFS file.
@@ -553,8 +550,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	   daos_event_t *ev);
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Query size of file data.
@@ -602,14 +598,12 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, struct dirent *dirs);
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs);
 
 /**
  * User callback defined for dfs_readdir_size.
  */
-typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *arg);
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[], void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
@@ -632,8 +626,8 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
+dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, size_t size,
+	    dfs_filler_cb_t op, void *arg);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
@@ -685,8 +679,7 @@ dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	  daos_oclass_id_t cid);
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_oclass_id_t cid);
 
 /**
  * Remove an object from parent directory. If object is a directory and is
@@ -702,8 +695,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
-	   daos_obj_id_t *oid);
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid);
 
 /**
  * Move/rename an object.
@@ -794,8 +786,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
-		       daos_size_t csize);
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
@@ -880,8 +871,7 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
-	 struct stat *stbuf);
+dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf);
 
 /**
  * Same as dfs_stat but works directly on an open object.
@@ -896,17 +886,17 @@ int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
 /** Option to set the mode_t on an entry */
-#define DFS_SET_ATTR_MODE	(1 << 0)
+#define DFS_SET_ATTR_MODE  (1 << 0)
 /** Option to set the access time on an entry */
-#define DFS_SET_ATTR_ATIME	(1 << 1)
+#define DFS_SET_ATTR_ATIME (1 << 1)
 /** Option to set the modify time on an entry */
-#define DFS_SET_ATTR_MTIME	(1 << 2)
+#define DFS_SET_ATTR_MTIME (1 << 2)
 /** Option to set size of a file */
-#define DFS_SET_ATTR_SIZE	(1 << 3)
+#define DFS_SET_ATTR_SIZE  (1 << 3)
 /** Option to set uid of object */
-#define DFS_SET_ATTR_UID	(1 << 4)
+#define DFS_SET_ATTR_UID   (1 << 4)
 /** Option to set gid of object */
-#define DFS_SET_ATTR_GID	(1 << 5)
+#define DFS_SET_ATTR_GID   (1 << 5)
 
 /**
  * set stat attributes for a file and fetch new values.  If the object is a
@@ -1005,8 +995,8 @@ dfs_sync(dfs_t *dfs);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
-	     const void *value, daos_size_t size, int flags);
+dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, daos_size_t size,
+	     int flags);
 
 /**
  * Get extended attribute of an open object. If object is a symlink, the link
@@ -1022,8 +1012,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
-	     daos_size_t *size);
+dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_size_t *size);
 
 /**
  * Remove extended attribute of an open object. If object is a symlink, the link

@@ -7,7 +7,7 @@
  * This file is part of CaRT. It implements some miscellaneous functions which
  * not belong to other parts.
  */
-#define D_LOGFAC	DD_FAC(misc)
+#define D_LOGFAC DD_FAC(misc)
 
 #include <stdarg.h>
 #include <math.h>
@@ -65,8 +65,8 @@ d_strndup(const char *s, size_t n)
 int
 d_asprintf(char **strp, const char *fmt, ...)
 {
-	va_list	ap;
-	int	rc;
+	va_list ap;
+	int     rc;
 
 	va_start(ap, fmt);
 	rc = vasprintf(strp, fmt, ap);
@@ -90,8 +90,8 @@ d_aligned_alloc(size_t alignment, size_t size)
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 {
-	d_rank_list_t	*rank_list = NULL;
-	int		 rc = 0;
+	d_rank_list_t *rank_list = NULL;
+	int            rc        = 0;
 
 	if (dst == NULL) {
 		D_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
@@ -115,8 +115,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	memcpy(rank_list->rl_ranks, src->rl_ranks,
-		rank_list->rl_nr * sizeof(*rank_list->rl_ranks));
+	memcpy(rank_list->rl_ranks, src->rl_ranks, rank_list->rl_nr * sizeof(*rank_list->rl_ranks));
 
 out:
 	if (rc == 0)
@@ -127,15 +126,15 @@ out:
 int
 d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 {
-	d_rank_list_t		*rank_list;
-	d_rank_t		rank_tmp;
-	uint32_t		rank_num, identical_num;
-	int			i, j;
-	int			rc = 0;
+	d_rank_list_t *rank_list;
+	d_rank_t       rank_tmp;
+	uint32_t       rank_num, identical_num;
+	int            i, j;
+	int            rc = 0;
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup() failed, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
@@ -150,23 +149,23 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 	if (rank_num <= 1)
 		D_GOTO(out, 0);
 	identical_num = 0;
-	rank_tmp = rank_list->rl_ranks[0];
+	rank_tmp      = rank_list->rl_ranks[0];
 	for (i = 1; i < rank_num; i++) {
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)
-				rank_list->rl_ranks[j - 1] =
-					rank_list->rl_ranks[j];
-			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
-				rank_list, i, rank_tmp);
+				rank_list->rl_ranks[j - 1] = rank_list->rl_ranks[j];
+			D_DEBUG(DB_TRACE,
+				"%s:%d, rank_list %p, removed "
+				"identical rank[%d](%d).\n",
+				__FILE__, __LINE__, rank_list, i, rank_tmp);
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
 	if (identical_num != 0) {
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
-			__FILE__, __LINE__, rank_list, identical_num);
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n", __FILE__, __LINE__,
+			rank_list, identical_num);
 	}
 
 out:
@@ -182,12 +181,11 @@ out:
  *    from dst_set
  */
 void
-d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
-		   bool exclude)
+d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set, bool exclude)
 {
-	d_rank_t	rank;
-	uint32_t	rank_num, filter_num;
-	int		i, j;
+	d_rank_t rank;
+	uint32_t rank_num, filter_num;
+	int      i, j;
 
 	if (src_set == NULL || dst_set == NULL)
 		return;
@@ -205,30 +203,29 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			continue;
 		filter_num++;
 		for (j = i; j < rank_num - 1; j++)
-			dst_set->rl_ranks[j] =
-				dst_set->rl_ranks[j + 1];
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
-			__FILE__, __LINE__, dst_set, i, rank);
+			dst_set->rl_ranks[j] = dst_set->rl_ranks[j + 1];
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n", __FILE__, __LINE__,
+			dst_set, i, rank);
 		/* as dst_set moved one item ahead */
 		i--;
 	}
 	if (filter_num != 0) {
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
-			__FILE__, __LINE__, dst_set, filter_num);
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n", __FILE__, __LINE__,
+			dst_set, filter_num);
 	}
 }
 
 int
 d_rank_list_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 {
-	d_rank_t	*rs;
-	int		*indexes;
-	int		num = 0;
-	int		src_num;
-	int		i;
-	int		j;
-	int		rc = 0;
+	d_rank_t *rs;
+	int      *indexes;
+	int       num = 0;
+	int       src_num;
+	int       i;
+	int       j;
+	int       rc = 0;
 
 	D_ASSERT(src_ranks != NULL);
 	if (ranks_merge == NULL || ranks_merge->rl_nr == 0)
@@ -265,7 +262,7 @@ d_rank_list_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 	if (src_ranks->rl_ranks)
 		D_FREE(src_ranks->rl_ranks);
 
-	src_ranks->rl_nr = num + src_num;
+	src_ranks->rl_nr    = num + src_num;
 	src_ranks->rl_ranks = rs;
 
 free:
@@ -276,15 +273,15 @@ free:
 d_rank_list_t *
 d_rank_list_alloc(uint32_t size)
 {
-	d_rank_list_t		*rank_list;
-	int			 i;
+	d_rank_list_t *rank_list;
+	int            i;
 
 	D_ALLOC_PTR(rank_list);
 	if (rank_list == NULL)
 		return NULL;
 
 	if (size == 0) {
-		rank_list->rl_nr = 0;
+		rank_list->rl_nr    = 0;
 		rank_list->rl_ranks = NULL;
 		return rank_list;
 	}
@@ -316,7 +313,7 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
-		ptr->rl_nr = size;
+		ptr->rl_nr    = size;
 	} else {
 		ptr = NULL;
 	}
@@ -336,7 +333,7 @@ d_rank_list_free(d_rank_list_t *rank_list)
 int
 d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 {
-	int		rc = DER_SUCCESS;
+	int rc = DER_SUCCESS;
 
 	if (dst == NULL || src == NULL) {
 		D_ERROR("Nothing to do, dst: %p, src: %p.\n", dst, src);
@@ -360,8 +357,8 @@ out:
 static inline int
 rank_compare(const void *rank1, const void *rank2)
 {
-	const d_rank_t	*r1 = rank1;
-	const d_rank_t	*r2 = rank2;
+	const d_rank_t *r1 = rank1;
+	const d_rank_t *r2 = rank2;
 
 	D_ASSERT(r1 != NULL && r2 != NULL);
 	if (*r1 < *r2)
@@ -377,22 +374,21 @@ d_rank_list_sort(d_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
-	qsort(rank_list->rl_ranks, rank_list->rl_nr,
-	      sizeof(d_rank_t), rank_compare);
+	qsort(rank_list->rl_ranks, rank_list->rl_nr, sizeof(d_rank_t), rank_compare);
 }
 
 void
 d_rank_list_shuffle(d_rank_list_t *rank_list)
 {
-	uint32_t	i, j;
-	d_rank_t	tmp;
+	uint32_t i, j;
+	d_rank_t tmp;
 
 	if (rank_list == NULL)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
-		tmp = rank_list->rl_ranks[i];
+		j                      = rand() % rank_list->rl_nr;
+		tmp                    = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
 	}
@@ -426,12 +422,12 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 int
 d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t	 new_num;
-	uint32_t	 num_bytes;
-	void		*dest;
-	void		*src;
-	int		 idx;
-	int		 rc = 0;
+	uint32_t new_num;
+	uint32_t num_bytes;
+	void    *dest;
+	void    *src;
+	int      idx;
+	int      rc = 0;
 
 	if (rank_list == NULL) {
 		D_ERROR("rank_list cannot be NULL\n");
@@ -442,8 +438,8 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 		D_GOTO(out, 0);
 	}
 	new_num = rank_list->rl_nr - 1;
-	src = &rank_list->rl_ranks[idx + 1];
-	dest = &rank_list->rl_ranks[idx];
+	src     = &rank_list->rl_ranks[idx + 1];
+	dest    = &rank_list->rl_ranks[idx];
 	D_ASSERT(idx <= new_num);
 	num_bytes = (new_num - idx) * sizeof(d_rank_t);
 	memmove(dest, src, num_bytes);
@@ -459,9 +455,9 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num = rank_list->rl_nr;
-	d_rank_list_t		*new_rank_list;
-	int			 rc = 0;
+	uint32_t       old_num = rank_list->rl_nr;
+	d_rank_list_t *new_rank_list;
+	int            rc = 0;
 
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
@@ -503,7 +499,7 @@ d_rank_list_identical(d_rank_list_t *rank_list1, d_rank_list_t *rank_list2)
 bool
 d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t	rank_num, i;
+	uint32_t rank_num, i;
 
 	if (rank_list == NULL)
 		return false;
@@ -524,9 +520,9 @@ d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank)
 int
 d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 {
-	uint32_t	rank_num;
-	bool		found = false;
-	uint32_t	i;
+	uint32_t rank_num;
+	bool     found = false;
+	uint32_t i;
 
 	if (rank_list == NULL || idx == NULL)
 		return -DER_INVAL;
@@ -535,7 +531,7 @@ d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 	for (i = 0; i < rank_num; i++) {
 		if (rank_list->rl_ranks[i] == rank) {
 			found = true;
-			*idx = i;
+			*idx  = i;
 			break;
 		}
 	}
@@ -556,11 +552,11 @@ d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 int
 d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 {
-	int		 width;
-	char		*tmp_str;
-	int		 i;
-	int		 idx = 0;
-	int		 rc = 0;
+	int   width;
+	char *tmp_str;
+	int   i;
+	int   idx = 0;
+	int   rc  = 0;
 
 	width = strnlen(name, name_len + 1);
 	if (width > name_len) {
@@ -577,8 +573,7 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';
-	D_DEBUG(DB_TRACE, "%s, %d ranks: %s\n",
-		name, rank_list->rl_nr, tmp_str);
+	D_DEBUG(DB_TRACE, "%s, %d ranks: %s\n", name, rank_list->rl_nr, tmp_str);
 	D_FREE(tmp_str);
 
 out:
@@ -595,9 +590,9 @@ out:
 char *
 d_rank_list_to_str(d_rank_list_t *rank_list)
 {
-	char			*str;
-	bool			 truncated = false;
-	d_rank_range_list_t	*range_list;
+	char                *str;
+	bool                 truncated = false;
+	d_rank_range_list_t *range_list;
 
 	range_list = d_rank_range_list_create_from_ranks(rank_list);
 	if (range_list == NULL)
@@ -612,8 +607,8 @@ d_rank_list_to_str(d_rank_list_t *rank_list)
 d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {
-	d_rank_list_t	*result;
-	size_t		i;
+	d_rank_list_t *result;
+	size_t         i;
 
 	result = d_rank_list_alloc(len);
 	if (result == NULL)
@@ -645,14 +640,14 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 d_rank_range_list_t *
 d_rank_range_list_alloc(uint32_t size)
 {
-	d_rank_range_list_t    *range_list;
+	d_rank_range_list_t *range_list;
 
 	D_ALLOC_PTR(range_list);
 	if (range_list == NULL)
 		return NULL;
 
 	if (size == 0) {
-		range_list->rrl_nr = 0;
+		range_list->rrl_nr     = 0;
 		range_list->rrl_ranges = NULL;
 		return range_list;
 	}
@@ -670,7 +665,7 @@ d_rank_range_list_alloc(uint32_t size)
 d_rank_range_list_t *
 d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 {
-	d_rank_range_t		*new_ranges;
+	d_rank_range_t *new_ranges;
 
 	if (range_list == NULL)
 		return d_rank_range_list_alloc(size);
@@ -681,7 +676,7 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 	D_REALLOC_ARRAY(new_ranges, range_list->rrl_ranges, range_list->rrl_nr, size);
 	if (new_ranges != NULL) {
 		range_list->rrl_ranges = new_ranges;
-		range_list->rrl_nr = size;
+		range_list->rrl_nr     = size;
 	} else {
 		range_list = NULL;
 	}
@@ -693,31 +688,31 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 d_rank_range_list_t *
 d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 {
-	d_rank_range_list_t	       *range_list;
-	uint32_t			alloc_size;
-	uint32_t			nranges;
-	unsigned int			i;		/* rank index */
-	unsigned int			j;		/* rank range index */
+	d_rank_range_list_t *range_list;
+	uint32_t             alloc_size;
+	uint32_t             nranges;
+	unsigned int         i; /* rank index */
+	unsigned int         j; /* rank range index */
 
 	d_rank_list_sort(rank_list);
 	if ((rank_list == NULL) || (rank_list->rl_ranks == NULL) || (rank_list->rl_nr == 0))
 		return d_rank_range_list_alloc(0);
 
 	alloc_size = nranges = 1;
-	range_list = d_rank_range_list_alloc(alloc_size);
+	range_list           = d_rank_range_list_alloc(alloc_size);
 	if (range_list == NULL)
 		return NULL;
 
 	range_list->rrl_ranges[0].lo = rank_list->rl_ranks[0];
 	range_list->rrl_ranges[0].hi = rank_list->rl_ranks[0];
 	for (i = 1, j = 0; i < rank_list->rl_nr; i++) {
-		if (rank_list->rl_ranks[i] == (rank_list->rl_ranks[i-1] + 1)) {
+		if (rank_list->rl_ranks[i] == (rank_list->rl_ranks[i - 1] + 1)) {
 			/* rank range j continues */
 			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
 		} else {
 			/* New rank range found at position i in rank_list. */
 			j++;
-			nranges++;	/* j + 1 */
+			nranges++; /* j + 1 */
 			if (nranges > alloc_size) {
 				alloc_size *= 2;
 				range_list = d_rank_range_list_realloc(range_list, alloc_size);
@@ -728,7 +723,7 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 			}
 			range_list->rrl_ranges[j].lo = rank_list->rl_ranks[i];
 			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
-			range_list->rrl_nr = nranges;
+			range_list->rrl_nr           = nranges;
 		}
 	}
 
@@ -739,25 +734,25 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 char *
 d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 {
-	const size_t	MAXBYTES = 512;
-	char	       *line;
-	char	       *linepos;
-	int		ret = 0;
-	size_t		remaining = MAXBYTES - 2u;
-	int		i;
-	int		err = 0;
+	const size_t MAXBYTES = 512;
+	char        *line;
+	char        *linepos;
+	int          ret       = 0;
+	size_t       remaining = MAXBYTES - 2u;
+	int          i;
+	int          err = 0;
 
 	*truncated = false;
 	D_ALLOC(line, MAXBYTES);
 	if (line == NULL)
 		return NULL;
 
-	*line = '[';
+	*line   = '[';
 	linepos = line + 1;
 	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+		uint32_t lo        = list->rrl_ranges[i].lo;
+		uint32_t hi        = list->rrl_ranges[i].hi;
+		bool     lastrange = (i == (list->rrl_nr - 1));
 
 		if (lo == hi)
 			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
@@ -799,7 +794,7 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 static inline bool
 dis_integer_str(char *str)
 {
-	char	*p;
+	char *p;
 
 	p = str;
 	if (p == NULL || strlen(p) == 0)
@@ -856,8 +851,8 @@ d_getenv_bool(const char *env, bool *bool_val)
 void
 d_getenv_int(const char *env, unsigned *int_val)
 {
-	char		*env_val;
-	unsigned	 value;
+	char    *env_val;
+	unsigned value;
 
 	if (env == NULL || int_val == NULL)
 		return;
@@ -879,15 +874,15 @@ d_getenv_int(const char *env, unsigned *int_val)
 int
 d_getenv_uint64_t(const char *env, uint64_t *val)
 {
-	char		*env_val;
-	size_t		env_len;
-	int		matched;
-	uint64_t	new_val;
-	int		count;
+	char    *env_val;
+	size_t   env_len;
+	int      matched;
+	uint64_t new_val;
+	int      count;
 
 	env_val = getenv(env);
 	if (!env_val) {
-		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
+		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %" PRId64 "\n", env, *val);
 		return -DER_NONEXIST;
 	}
 
@@ -900,10 +895,10 @@ d_getenv_uint64_t(const char *env, uint64_t *val)
 	/* Now do scanf, check that the number was matched, and there are no extra unmatched
 	 * characters at the end.
 	 */
-	matched = sscanf(env_val, "%"PRId64"%n", &new_val, &count);
+	matched = sscanf(env_val, "%" PRId64 "%n", &new_val, &count);
 	if (matched == 1 && env_len == count) {
 		*val = new_val;
-		D_DEBUG(DB_TRACE, "ENV '%s' set to %"PRId64"\n", env, *val);
+		D_DEBUG(DB_TRACE, "ENV '%s' set to %" PRId64 "\n", env, *val);
 		return -DER_SUCCESS;
 	}
 
@@ -930,10 +925,10 @@ d_getenv_uint64_t(const char *env, uint64_t *val)
 int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 {
-	int	n;
-	int	size = 64;
-	char	*new_buf;
-	va_list	ap;
+	int     n;
+	int     size = 64;
+	char   *new_buf;
+	va_list ap;
 
 	if (buf == NULL || buf->status != 0) {
 		return -DER_NO_PERM;
@@ -952,7 +947,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 	while (1) {
 		va_start(ap, format);
 		size = buf->buf_size - buf->str_size;
-		n = vsnprintf(buf->str + buf->str_size, size, format, ap);
+		n    = vsnprintf(buf->str + buf->str_size, size, format, ap);
 		va_end(ap);
 
 		if (n < 0) {
@@ -973,7 +968,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 			return -DER_NOMEM;
 		}
 
-		buf->str = new_buf;
+		buf->str      = new_buf;
 		buf->buf_size = size;
 	}
 }
@@ -989,7 +984,7 @@ d_free_string(struct d_string_buffer_t *buf)
 {
 	if (buf->str != NULL) {
 		D_FREE(buf->str);
-		buf->status = 0;
+		buf->status   = 0;
 		buf->str_size = 0;
 		buf->buf_size = 0;
 	}
@@ -1026,17 +1021,17 @@ d_free_string(struct d_string_buffer_t *buf)
  * \param[in]	max	maximum backoff
  */
 int
-d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros, uint16_t factor,
-		   uint32_t next, uint32_t max)
+d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros, uint16_t factor, uint32_t next,
+		   uint32_t max)
 {
 	if (seq == NULL || factor == 0 || next == 0 || max == 0 || next > max)
 		return -DER_INVAL;
 
-	seq->bos_flags = 0;
+	seq->bos_flags  = 0;
 	seq->bos_nzeros = nzeros;
 	seq->bos_factor = factor;
-	seq->bos_next = next;
-	seq->bos_max = max;
+	seq->bos_next   = next;
+	seq->bos_max    = max;
 	return 0;
 }
 
@@ -1081,8 +1076,7 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 		 * If the new value overflows or is greater than the maximum,
 		 * set it to the maximum.
 		 */
-		if (seq->bos_next / seq->bos_factor != next ||
-		    seq->bos_next > seq->bos_max)
+		if (seq->bos_next / seq->bos_factor != next || seq->bos_next > seq->bos_max)
 			seq->bos_next = seq->bos_max;
 	}
 
@@ -1093,9 +1087,9 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 double
 d_stand_div(double *array, int nr)
 {
-	double		avg = 0;
-	double		std = 0;
-	int		i;
+	double avg = 0;
+	double std = 0;
+	int    i;
 
 	for (i = 0; i < nr; i++)
 		avg += array[i];

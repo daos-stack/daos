@@ -25,33 +25,33 @@ extern "C" {
 /**
  * Version of the ACL structure format
  */
-#define	DAOS_ACL_VERSION		(1)
+#define DAOS_ACL_VERSION               (1)
 
 /**
  * Maximum length of the `user@domain` principal string, not including null
  * terminator.
  */
-#define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+#define DAOS_ACL_MAX_PRINCIPAL_LEN     (255)
 /** DAOS_ACL_MAX_PRINCIPAL_LEN including NULL terminator */
-#define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
+#define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN (DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /** Special principal string value for owner */
-#define DAOS_ACL_PRINCIPAL_OWNER	"OWNER@"
+#define DAOS_ACL_PRINCIPAL_OWNER       "OWNER@"
 /** Special principal string value for group */
-#define DAOS_ACL_PRINCIPAL_OWNER_GRP	"GROUP@"
+#define DAOS_ACL_PRINCIPAL_OWNER_GRP   "GROUP@"
 /** Special principal string value for everyone */
-#define DAOS_ACL_PRINCIPAL_EVERYONE	"EVERYONE@"
+#define DAOS_ACL_PRINCIPAL_EVERYONE    "EVERYONE@"
 
 /**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
-#define DAOS_ACL_MAX_ACE_LEN		(65536)
+#define DAOS_ACL_MAX_ACE_LEN           (65536)
 
 /**
  * Maximum length of an ACE provided in colon-separated string format with four components:
  *	`<access>:<flags>:<principal>:<perms>`
  */
-#define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
+#define DAOS_ACL_MAX_ACE_STR_LEN       (DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
 
 /**
  * Header for the Access Control List, followed by the table of variable-length
@@ -61,13 +61,13 @@ extern "C" {
  */
 struct daos_acl {
 	/** Version of the table format */
-	uint16_t	dal_ver;
+	uint16_t dal_ver;
 	/** reserved for 64-bit alignment */
-	uint16_t	dal_reserv;
+	uint16_t dal_reserv;
 	/** length of entries list in bytes */
-	uint32_t	dal_len;
+	uint32_t dal_len;
 	/** table of variable-length Access Control Entries (struct daos_ace) */
-	uint8_t		dal_ace[];
+	uint8_t  dal_ace[];
 };
 
 /**
@@ -76,94 +76,84 @@ struct daos_acl {
  * a principal name string.
  */
 enum daos_acl_principal_type {
-	DAOS_ACL_OWNER,		/** Owner of the object */
-	DAOS_ACL_USER,		/** Individual user */
-	DAOS_ACL_OWNER_GROUP,	/** Owning group */
-	DAOS_ACL_GROUP,		/** Group */
-	DAOS_ACL_EVERYONE,	/** Anyone else */
+	DAOS_ACL_OWNER,       /** Owner of the object */
+	DAOS_ACL_USER,        /** Individual user */
+	DAOS_ACL_OWNER_GROUP, /** Owning group */
+	DAOS_ACL_GROUP,       /** Group */
+	DAOS_ACL_EVERYONE,    /** Anyone else */
 
-	NUM_DAOS_ACL_TYPES	/** Must be last */
+	NUM_DAOS_ACL_TYPES /** Must be last */
 };
 
 /**
  * Bits representing access types to set permissions for
  */
 enum daos_acl_access_type {
-	DAOS_ACL_ACCESS_ALLOW = (1U << 0),	/** allow access */
-	DAOS_ACL_ACCESS_AUDIT = (1U << 1),	/** log the access for review */
-	DAOS_ACL_ACCESS_ALARM = (1U << 2)	/** notify of the access */
+	DAOS_ACL_ACCESS_ALLOW = (1U << 0), /** allow access */
+	DAOS_ACL_ACCESS_AUDIT = (1U << 1), /** log the access for review */
+	DAOS_ACL_ACCESS_ALARM = (1U << 2)  /** notify of the access */
 };
 
 /**
  * Mask of all valid access bits
  */
-#define DAOS_ACL_ACCESS_ALL	(DAOS_ACL_ACCESS_ALLOW |		\
-				 DAOS_ACL_ACCESS_AUDIT |		\
-				 DAOS_ACL_ACCESS_ALARM)
+#define DAOS_ACL_ACCESS_ALL (DAOS_ACL_ACCESS_ALLOW | DAOS_ACL_ACCESS_AUDIT | DAOS_ACL_ACCESS_ALARM)
 
 /**
  * Bits representing access flags
  */
 enum daos_acl_flags {
 	/** This represents a group, not a user */
-	DAOS_ACL_FLAG_GROUP		= (1U << 0),
+	DAOS_ACL_FLAG_GROUP = (1U << 0),
 	/** Containers should inherit access controls from this pool */
-	DAOS_ACL_FLAG_POOL_INHERIT	= (1U << 1),
+	DAOS_ACL_FLAG_POOL_INHERIT = (1U << 1),
 	/** Audit/alarm should occur on failed access */
-	DAOS_ACL_FLAG_ACCESS_FAIL	= (1U << 2),
+	DAOS_ACL_FLAG_ACCESS_FAIL = (1U << 2),
 	/** Audit/alarm should occur on successful access */
-	DAOS_ACL_FLAG_ACCESS_SUCCESS	= (1U << 3)
+	DAOS_ACL_FLAG_ACCESS_SUCCESS = (1U << 3)
 };
 
 /**
  * Mask of all valid flag bits
  */
-#define DAOS_ACL_FLAG_ALL	(DAOS_ACL_FLAG_GROUP |			\
-				 DAOS_ACL_FLAG_POOL_INHERIT |		\
-				 DAOS_ACL_FLAG_ACCESS_FAIL |		\
-				 DAOS_ACL_FLAG_ACCESS_SUCCESS)
+#define DAOS_ACL_FLAG_ALL                                                                          \
+	(DAOS_ACL_FLAG_GROUP | DAOS_ACL_FLAG_POOL_INHERIT | DAOS_ACL_FLAG_ACCESS_FAIL |            \
+	 DAOS_ACL_FLAG_ACCESS_SUCCESS)
 
 /**
  * Bits representing the specific permissions that may be set
  */
 enum daos_acl_perm {
-	DAOS_ACL_PERM_READ		= (1U << 0),
-	DAOS_ACL_PERM_WRITE		= (1U << 1),
-	DAOS_ACL_PERM_CREATE_CONT	= (1U << 2),
-	DAOS_ACL_PERM_DEL_CONT		= (1U << 3),
-	DAOS_ACL_PERM_GET_PROP		= (1U << 4),
-	DAOS_ACL_PERM_SET_PROP		= (1U << 5),
-	DAOS_ACL_PERM_GET_ACL		= (1U << 6),
-	DAOS_ACL_PERM_SET_ACL		= (1U << 7),
-	DAOS_ACL_PERM_SET_OWNER		= (1U << 8),
+	DAOS_ACL_PERM_READ        = (1U << 0),
+	DAOS_ACL_PERM_WRITE       = (1U << 1),
+	DAOS_ACL_PERM_CREATE_CONT = (1U << 2),
+	DAOS_ACL_PERM_DEL_CONT    = (1U << 3),
+	DAOS_ACL_PERM_GET_PROP    = (1U << 4),
+	DAOS_ACL_PERM_SET_PROP    = (1U << 5),
+	DAOS_ACL_PERM_GET_ACL     = (1U << 6),
+	DAOS_ACL_PERM_SET_ACL     = (1U << 7),
+	DAOS_ACL_PERM_SET_OWNER   = (1U << 8),
 };
 
 /**
  * Mask of all valid permissions for DAOS pools
  */
-#define DAOS_ACL_PERM_POOL_ALL	(DAOS_ACL_PERM_READ |			\
-				 DAOS_ACL_PERM_GET_PROP |		\
-				 DAOS_ACL_PERM_WRITE |			\
-				 DAOS_ACL_PERM_CREATE_CONT |		\
-				 DAOS_ACL_PERM_DEL_CONT)
+#define DAOS_ACL_PERM_POOL_ALL                                                                     \
+	(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_WRITE |                       \
+	 DAOS_ACL_PERM_CREATE_CONT | DAOS_ACL_PERM_DEL_CONT)
 
 /**
  * Mask of all valid permissions for DAOS containers
  */
-#define DAOS_ACL_PERM_CONT_ALL	(DAOS_ACL_PERM_READ |			\
-				 DAOS_ACL_PERM_WRITE |			\
-				 DAOS_ACL_PERM_DEL_CONT |		\
-				 DAOS_ACL_PERM_GET_PROP |		\
-				 DAOS_ACL_PERM_SET_PROP |		\
-				 DAOS_ACL_PERM_GET_ACL |		\
-				 DAOS_ACL_PERM_SET_ACL |		\
-				 DAOS_ACL_PERM_SET_OWNER)
+#define DAOS_ACL_PERM_CONT_ALL                                                                     \
+	(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_DEL_CONT |                       \
+	 DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_SET_PROP | DAOS_ACL_PERM_GET_ACL |                 \
+	 DAOS_ACL_PERM_SET_ACL | DAOS_ACL_PERM_SET_OWNER)
 
 /**
  * Mask of all valid permission bits in DAOS
  */
-#define DAOS_ACL_PERM_ALL	(DAOS_ACL_PERM_POOL_ALL |		\
-				 DAOS_ACL_PERM_CONT_ALL)
+#define DAOS_ACL_PERM_ALL (DAOS_ACL_PERM_POOL_ALL | DAOS_ACL_PERM_CONT_ALL)
 
 /**
  * Access Control Entry for a given principal.
@@ -172,28 +162,28 @@ enum daos_acl_perm {
  */
 struct daos_ace {
 	/** Bitmap of daos_acl_access_type */
-	uint8_t		dae_access_types;
+	uint8_t  dae_access_types;
 	/** daos_acl_principal_type */
-	uint8_t		dae_principal_type;
+	uint8_t  dae_principal_type;
 	/** Length of the principal string */
-	uint16_t	dae_principal_len;
+	uint16_t dae_principal_len;
 	/** Bitmap of daos_acl_flags */
-	uint16_t	dae_access_flags;
+	uint16_t dae_access_flags;
 	/** Reserved for 64-bit alignment */
-	uint16_t	dae_reserv;
+	uint16_t dae_reserv;
 	/** Bitmap of daos_acl_perm for the ALLOW access */
-	uint64_t	dae_allow_perms;
+	uint64_t dae_allow_perms;
 	/** Bitmap of daos_acl_perm for AUDIT access */
-	uint64_t	dae_audit_perms;
+	uint64_t dae_audit_perms;
 	/** Bitmap of daos_acl_perm for ALARM access */
-	uint64_t	dae_alarm_perms;
+	uint64_t dae_alarm_perms;
 	/**
 	 * Null-terminated string representing the principal name for specific
 	 * user/group.
 	 * Actual bytes allocated MUST be rounded up for 64-bit alignment.
 	 * Empty for special principals OWNER, OWNER_GROUP, and EVERYONE.
 	 */
-	char		dae_principal[];
+	char     dae_principal[];
 };
 
 /**
@@ -266,8 +256,7 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
  *		-DER_NONEXIST	Matching ACE not found
  */
 int
-daos_acl_get_ace_for_principal(struct daos_acl *acl,
-			       enum daos_acl_principal_type type,
+daos_acl_get_ace_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 			       const char *principal, struct daos_ace **ace);
 
 /**
@@ -307,8 +296,7 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  *		-DER_NONEXIST	Requested ACE was not in the ACL
  */
 int
-daos_acl_remove_ace(struct daos_acl **acl,
-		    enum daos_acl_principal_type type,
+daos_acl_remove_ace(struct daos_acl **acl, enum daos_acl_principal_type type,
 		    const char *principal_name);
 
 /**
@@ -606,8 +594,7 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
  *		-DER_NOMEM	Could not allocate memory
  */
 int
-daos_acl_principal_from_str(const char *principal_str,
-			    enum daos_acl_principal_type *type,
+daos_acl_principal_from_str(const char *principal_str, enum daos_acl_principal_type *type,
 			    char **name);
 
 /**

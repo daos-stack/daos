@@ -12,7 +12,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry     *ie;
-	d_list_t		     *rlink;
+	d_list_t                     *rlink;
 	struct dfuse_obj_hdl         *oh     = NULL;
 	struct fuse_file_info         fi_out = {0};
 	int                           rc;

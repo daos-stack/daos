@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC DD_FAC(client)
 
 #include <daos/object.h>
 #include <daos/task.h>
@@ -11,22 +11,21 @@
 #include "task_internal.h"
 
 int
-daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
-	     daos_event_t *ev)
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags, daos_event_t *ev)
 {
-	daos_tx_open_t	*args;
-	tse_task_t	*task;
-	int		 rc;
+	daos_tx_open_t *args;
+	tse_task_t     *task;
+	int             rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_OPEN);
 	rc = dc_task_create(dc_tx_open, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->th	= th;
-	args->flags	= flags;
+	args        = dc_task_get_args(task);
+	args->coh   = coh;
+	args->th    = th;
+	args->flags = flags;
 
 	return dc_task_schedule(task, true);
 }
@@ -34,17 +33,17 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
 int
 daos_tx_close(daos_handle_t th, daos_event_t *ev)
 {
-	daos_tx_close_t		*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_close_t *args;
+	tse_task_t      *task;
+	int              rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_CLOSE);
 	rc = dc_task_create(dc_tx_close, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->th	= th;
+	args     = dc_task_get_args(task);
+	args->th = th;
 
 	return dc_task_schedule(task, true);
 }
@@ -52,18 +51,18 @@ daos_tx_close(daos_handle_t th, daos_event_t *ev)
 int
 daos_tx_commit(daos_handle_t th, daos_event_t *ev)
 {
-	daos_tx_commit_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_commit_t *args;
+	tse_task_t       *task;
+	int               rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_COMMIT);
 	rc = dc_task_create(dc_tx_commit, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->th	= th;
-	args->flags	= 0;
+	args        = dc_task_get_args(task);
+	args->th    = th;
+	args->flags = 0;
 
 	return dc_task_schedule(task, true);
 }
@@ -71,38 +70,37 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev)
 int
 daos_tx_abort(daos_handle_t th, daos_event_t *ev)
 {
-	daos_tx_abort_t		*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_abort_t *args;
+	tse_task_t      *task;
+	int              rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_ABORT);
 	rc = dc_task_create(dc_tx_abort, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->th	= th;
+	args     = dc_task_get_args(task);
+	args->th = th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
-		  daos_event_t *ev)
+daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th, daos_event_t *ev)
 {
-	daos_tx_open_snap_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_open_snap_t *args;
+	tse_task_t          *task;
+	int                  rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_OPEN_SNAP);
 	rc = dc_task_create(dc_tx_open_snap, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->epoch	= epoch;
-	args->th	= th;
+	args        = dc_task_get_args(task);
+	args->coh   = coh;
+	args->epoch = epoch;
+	args->th    = th;
 
 	return dc_task_schedule(task, true);
 }
@@ -110,17 +108,17 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 int
 daos_tx_restart(daos_handle_t th, daos_event_t *ev)
 {
-	daos_tx_restart_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_restart_t *args;
+	tse_task_t        *task;
+	int                rc;
 
 	DAOS_API_ARG_ASSERT(*args, TX_RESTART);
 	rc = dc_task_create(dc_tx_restart, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
-	args->th	= th;
+	args     = dc_task_get_args(task);
+	args->th = th;
 
 	return dc_task_schedule(task, true);
 }

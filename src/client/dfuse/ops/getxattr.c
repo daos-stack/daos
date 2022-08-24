@@ -13,8 +13,8 @@ static int
 _dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
 {
 	char *value;
-	char pool_str[37];
-	char cont_str[37];
+	char  pool_str[37];
+	char  cont_str[37];
 
 	uuid_unparse(pool, pool_str);
 	uuid_unparse(cont, cont_str);
@@ -31,12 +31,11 @@ _dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_siz
 }
 
 void
-dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
-		  const char *name, size_t size)
+dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *name, size_t size)
 {
 	size_t out_size = 0;
-	char *value = NULL;
-	int rc;
+	char  *value    = NULL;
+	int    rc;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
@@ -51,8 +50,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		}
 	}
 
-	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL,
-			  &out_size);
+	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL, &out_size);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
@@ -68,8 +66,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	if (!value)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  &out_size);
+	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value, &out_size);
 	if (rc != 0)
 		D_GOTO(free, rc);
 

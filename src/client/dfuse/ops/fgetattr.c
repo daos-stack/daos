@@ -10,8 +10,8 @@
 void
 dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
-	struct stat	attr = {};
-	int		rc;
+	struct stat attr = {};
+	int         rc;
 
 	if (ie->ie_unlinked) {
 		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");

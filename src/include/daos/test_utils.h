@@ -26,7 +26,8 @@
  *
  * \return	Newly allocated struct drpc
  */
-struct drpc *new_drpc_with_fd(int fd);
+struct drpc *
+new_drpc_with_fd(int fd);
 
 /**
  * Frees a drpc context and cleans up. Not tied to anything in the real file
@@ -34,28 +35,32 @@ struct drpc *new_drpc_with_fd(int fd);
  *
  * \param	ctx	drpc ctx to free
  */
-void free_drpc(struct drpc *ctx);
+void
+free_drpc(struct drpc *ctx);
 
 /**
  * Generates a valid Drpc__Call structure.
  *
  * \return	Newly allocated Drpc__Call
  */
-Drpc__Call *new_drpc_call(void);
+Drpc__Call *
+new_drpc_call(void);
 
 /**
  * Generates a valid Drpc__Call structure with a specific module ID.
  *
  * \return	Newly allocated Drpc__Call
  */
-Drpc__Call *new_drpc_call_with_module(int module_id);
+Drpc__Call *
+new_drpc_call_with_module(int module_id);
 
 /**
  * Generates a valid Drpc__Response structure.
  *
  * \return	Newly allocated Drpc__Response
  */
-Drpc__Response *new_drpc_response(void);
+Drpc__Response *
+new_drpc_response(void);
 
 /*
  * ACL unit test utilities
@@ -80,12 +85,15 @@ void
 free_all_aces(struct daos_ace *ace[], size_t num_aces);
 
 /* Mock to be used for the drpc->handler function pointer */
-void mock_drpc_handler_setup(void);
-void mock_drpc_handler_teardown(void);
-extern int mock_drpc_handler_call_count; /* how many times it was called */
-extern Drpc__Call *mock_drpc_handler_call; /* alloc copy of input param */
-extern void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
+void
+mock_drpc_handler_setup(void);
+void
+		       mock_drpc_handler_teardown(void);
+extern int             mock_drpc_handler_call_count;  /* how many times it was called */
+extern Drpc__Call     *mock_drpc_handler_call;        /* alloc copy of input param */
+extern void           *mock_drpc_handler_resp_ptr;    /* saved value of resp ptr */
 extern Drpc__Response *mock_drpc_handler_resp_return; /* returned in *resp */
-void mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp);
+void
+mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp);
 
 #endif /* __DAOS_TEST_UTILS_H__ */

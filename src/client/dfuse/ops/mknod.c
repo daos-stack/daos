@@ -10,10 +10,10 @@
 void
 dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
-	struct dfuse_inode_entry	*ie;
-	int				rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx        *ctx       = fuse_req_ctx(req);
+	struct dfuse_inode_entry     *ie;
+	int                           rc;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
@@ -38,8 +38,8 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 		D_GOTO(err, rc);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_parent = parent->ie_stat.st_ino;
-	ie->ie_dfs = parent->ie_dfs;
+	ie->ie_parent    = parent->ie_stat.st_ino;
+	ie->ie_dfs       = parent->ie_dfs;
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
