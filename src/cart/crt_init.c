@@ -30,8 +30,7 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"RDMAV_HUGEPAGES_SAFE", "UCX_LOG_LEVEL", "UCX_MEM_LOG_LEVEL",
-		"UCX_IB_FORK_INIT" };
+		"RDMAV_HUGEPAGES_SAFE"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -118,9 +117,6 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
-	if (crt_is_service())
-		setenv("UCX_IB_FORK_INIT", "n", 1);
-
 	dump_envariables();
 
 	/*
@@ -179,6 +175,10 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	}
+
+	/* Must be set on the server when using UCX, will not affect OFI */
+	if (server)
+		setenv("UCX_IB_FORK_INIT", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
