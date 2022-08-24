@@ -13,12 +13,12 @@
 #include <gurt/common.h>
 
 static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
-static int             d_log_refcount;
+static int d_log_refcount;
 
 D_FOREACH_GURT_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)
 
 /* An alternative assert function. Set with d_register_alt_assert() */
-void (*d_alt_assert)(const int, const char *, const char *, const int);
+void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 D_FOREACH_GURT_DB(D_LOG_INSTANTIATE_DB, D_NOOP)
 
@@ -34,66 +34,72 @@ static d_dbug_t DB_OPT8;
 static d_dbug_t DB_OPT9;
 static d_dbug_t DB_OPT10;
 
-#define DBG_ENV_MAX_LEN (128)
+#define DBG_ENV_MAX_LEN	(128)
 
-#define DBG_DICT_ENTRY(bit, name, longname)                                                        \
-	{                                                                                          \
-		.db_bit = bit, .db_name = name, .db_name_size = sizeof(name),                      \
-		.db_lname = longname, .db_lname_size = sizeof(longname)                            \
-	}
+#define DBG_DICT_ENTRY(bit, name, longname)				\
+	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\
+	  .db_lname = longname, .db_lname_size = sizeof(longname) }
 
-#define D_INIT_DB(bit, name, longname, mask, arg) DBG_DICT_ENTRY(&bit, #name, #longname),
+#define D_INIT_DB(bit, name, longname, mask, arg)	\
+	DBG_DICT_ENTRY(&bit, #name, #longname),
 
 struct d_debug_bit d_dbg_bit_dict[] = {
-    /* load common debug bits into dict */
-    D_FOREACH_GURT_DB(D_INIT_DB, D_NOOP)
-    /* set by d_log_dbg_bit_alloc() */
-    DBG_DICT_ENTRY(&DB_OPT1, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT2, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT3, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT4, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT5, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT6, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT7, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT8, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT9, NULL, NULL),
-    DBG_DICT_ENTRY(&DB_OPT10, NULL, NULL),
+	/* load common debug bits into dict */
+	D_FOREACH_GURT_DB(D_INIT_DB, D_NOOP)
+	/* set by d_log_dbg_bit_alloc() */
+	DBG_DICT_ENTRY(&DB_OPT1, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT2, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT3, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT4, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT5, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT6, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT7, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT8, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT9, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT10, NULL, NULL),
 };
 
-#define NUM_DBG_BIT_ENTRIES ARRAY_SIZE(d_dbg_bit_dict)
+#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
 
-#define DBG_GRP_DICT_ENTRY()                                                                       \
-	{                                                                                          \
-		.dg_mask = 0, .dg_name = NULL, .dg_name_size = 0                                   \
-	}
+#define DBG_GRP_DICT_ENTRY()					\
+	{ .dg_mask = 0, .dg_name = NULL, .dg_name_size = 0 }
 
 struct d_debug_grp d_dbg_grp_dict[] = {
-    DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(),
-    DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(),
-    DBG_GRP_DICT_ENTRY(), DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
 };
 
-#define NUM_DBG_GRP_ENTRIES ARRAY_SIZE(d_dbg_grp_dict)
+#define NUM_DBG_GRP_ENTRIES	ARRAY_SIZE(d_dbg_grp_dict)
 
-#define PRI_DICT_ENTRY(prio, name, longname, mask, arg)                                            \
-	{.dd_prio = prio, .dd_name = #name, .dd_name_size = sizeof(#name)},
+#define PRI_DICT_ENTRY(prio, name, longname, mask, arg)	\
+	{ .dd_prio = prio, .dd_name = #name, .dd_name_size = sizeof(#name) },
 
-static struct d_debug_priority d_dbg_prio_dict[] = {D_FOREACH_PRIO_MASK(PRI_DICT_ENTRY, D_NOOP)};
+static struct d_debug_priority d_dbg_prio_dict[] = {
+	D_FOREACH_PRIO_MASK(PRI_DICT_ENTRY, D_NOOP)
+};
 
-#define NUM_DBG_PRIO_ENTRIES ARRAY_SIZE(d_dbg_prio_dict)
+#define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
 
 struct d_debug_data d_dbglog_data = {
-    /* count of alloc'd debug bits */
-    .dbg_bit_cnt = 0,
-    /* count of alloc'd debug groups */
-    .dbg_grp_cnt = 0,
-    /* 0 means we should use the mask provided by facilities */
-    .dd_mask = 0,
-    /* optional priority output to stderr */
-    .dd_prio_err = 0,
+	/* count of alloc'd debug bits */
+	.dbg_bit_cnt		= 0,
+	/* count of alloc'd debug groups */
+	.dbg_grp_cnt		= 0,
+	/* 0 means we should use the mask provided by facilities */
+	.dd_mask		= 0,
+	/* optional priority output to stderr */
+	.dd_prio_err		= 0,
 };
 
-#define BIT_CNT_TO_BIT_MASK(cnt) (1 << (DLOG_DPRISHIFT + cnt))
+#define BIT_CNT_TO_BIT_MASK(cnt)	(1 << (DLOG_DPRISHIFT + cnt))
 
 /**
  * Reset optional debug bit
@@ -105,9 +111,9 @@ struct d_debug_data d_dbglog_data = {
 int
 d_log_dbg_bit_dealloc(char *name)
 {
-	struct d_debug_bit *d;
-	int                 i;
-	size_t              name_sz;
+	struct d_debug_bit	*d;
+	int			 i;
+	size_t			 name_sz;
 
 	if (name == NULL)
 		return -1;
@@ -118,11 +124,11 @@ d_log_dbg_bit_dealloc(char *name)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
 			if (strncasecmp(d->db_name, name, name_sz) == 0) {
-				d->db_name       = NULL;
-				d->db_lname      = NULL;
-				d->db_name_size  = 0;
+				d->db_name = NULL;
+				d->db_lname = NULL;
+				d->db_name_size = 0;
 				d->db_lname_size = 0;
-				*d->db_bit       = 0;
+				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_bit_cnt--;
@@ -149,10 +155,10 @@ d_log_dbg_bit_dealloc(char *name)
 int
 d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 {
-	size_t              name_sz;
-	size_t              lname_sz;
-	int                 i;
-	d_dbug_t            bit = 0;
+	size_t		   name_sz;
+	size_t		   lname_sz;
+	int		   i;
+	d_dbug_t	   bit = 0;
 	struct d_debug_bit *d;
 
 	if (name == NULL || dbgbit == NULL)
@@ -193,7 +199,8 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 			if (strncasecmp(d->db_name, name, name_sz) == 0) {
 				if (*d->db_bit == 0) {
 					/* DB_ALL = DLOG_DBG */
-					if (strncasecmp(name, DB_ALL_BITS, name_sz) == 0)
+					if (strncasecmp(name, DB_ALL_BITS,
+							name_sz) == 0)
 						*dbgbit = DLOG_DBG;
 					else
 						*dbgbit = bit;
@@ -202,13 +209,13 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 					*dbgbit = *d->db_bit;
 				return 0;
 			}
-			/* Allocate configurable debug bit along with name */
+		/* Allocate configurable debug bit along with name */
 		} else {
-			d->db_name       = name;
-			d->db_lname      = lname;
-			d->db_name_size  = name_sz;
+			d->db_name = name;
+			d->db_lname = lname;
+			d->db_name_size = name_sz;
 			d->db_lname_size = lname_sz;
-			*d->db_bit       = bit;
+			*d->db_bit = bit;
 
 			*dbgbit = bit;
 			return 0;
@@ -228,9 +235,9 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 int
 d_log_dbg_grp_dealloc(char *name)
 {
-	struct d_debug_grp *g;
-	int                 i;
-	size_t              name_sz;
+	struct d_debug_grp	*g;
+	int			 i;
+	size_t			 name_sz;
 
 	if (name == NULL)
 		return -1;
@@ -241,9 +248,9 @@ d_log_dbg_grp_dealloc(char *name)
 		g = &d_dbg_grp_dict[i];
 		if (g->dg_name != NULL) {
 			if (strncasecmp(g->dg_name, name, name_sz) == 0) {
-				g->dg_name      = NULL;
+				g->dg_name = NULL;
 				g->dg_name_size = 0;
-				g->dg_mask      = 0;
+				g->dg_mask = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_grp_cnt--;
@@ -261,11 +268,11 @@ d_log_dbg_grp_dealloc(char *name)
 static void
 debug_mask_load(const char *mask_name)
 {
-	char               *mask_str;
-	char               *cur;
-	int                 i;
-	struct d_debug_bit *d;
-	struct d_debug_grp *g;
+	char			*mask_str;
+	char			*cur;
+	int			 i;
+	struct d_debug_bit	*d;
+	struct d_debug_grp	*g;
 
 	/** Must not use D_ macros internally to avoid caching log mask
 	 *  during mask resync
@@ -276,18 +283,20 @@ debug_mask_load(const char *mask_name)
 		return;
 	}
 
-	cur                   = strtok(mask_str, DD_SEP);
+	cur = strtok(mask_str, DD_SEP);
 	d_dbglog_data.dd_mask = 0;
 	while (cur != NULL) {
 		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 			d = &d_dbg_bit_dict[i];
 			if (d->db_name != NULL &&
-			    strncasecmp(cur, d->db_name, d->db_name_size) == 0) {
+			    strncasecmp(cur, d->db_name,
+					d->db_name_size) == 0) {
 				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
 			if (d->db_lname != NULL &&
-			    strncasecmp(cur, d->db_lname, d->db_lname_size) == 0) {
+			    strncasecmp(cur, d->db_lname,
+					d->db_lname_size) == 0) {
 				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
@@ -296,7 +305,8 @@ debug_mask_load(const char *mask_name)
 		for (i = 0; i < NUM_DBG_GRP_ENTRIES; i++) {
 			g = &d_dbg_grp_dict[i];
 			if (g->dg_name != NULL &&
-			    strncasecmp(cur, g->dg_name, g->dg_name_size) == 0) {
+			    strncasecmp(cur, g->dg_name,
+					g->dg_name_size) == 0) {
 				d_dbglog_data.dd_mask |= g->dg_mask;
 				break;
 			}
@@ -323,15 +333,15 @@ debug_mask_load(const char *mask_name)
 int
 d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 {
-	int                 i;
-	size_t              name_sz;
-	struct d_debug_grp *g;
-	bool                set_as_default;
+	int			 i;
+	size_t			 name_sz;
+	struct d_debug_grp	*g;
+	bool			 set_as_default;
 
 	if (grpname == NULL || dbgmask == 0)
 		return -1;
 
-	name_sz        = strlen(grpname) + 1;
+	name_sz = strlen(grpname) + 1;
 	set_as_default = flags & D_LOG_SET_AS_DEFAULT;
 
 	/**
@@ -348,9 +358,9 @@ d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 	for (i = 0; i < NUM_DBG_GRP_ENTRIES; i++) {
 		g = &d_dbg_grp_dict[i];
 		if (g->dg_name == NULL) {
-			g->dg_name      = grpname;
+			g->dg_name = grpname;
 			g->dg_name_size = name_sz;
-			g->dg_mask      = dbgmask;
+			g->dg_mask = dbgmask;
 			if (set_as_default)
 				debug_mask_load(grpname);
 
@@ -366,8 +376,8 @@ d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 static void
 debug_prio_err_load_env(void)
 {
-	char *env;
-	int   i;
+	char	*env;
+	int	i;
 
 	env = getenv(DD_STDERR_ENV);
 	if (env == NULL)
@@ -375,8 +385,8 @@ debug_prio_err_load_env(void)
 
 	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&
-		    strncasecmp(env, d_dbg_prio_dict[i].dd_name, d_dbg_prio_dict[i].dd_name_size) ==
-			0) {
+		    strncasecmp(env, d_dbg_prio_dict[i].dd_name,
+				d_dbg_prio_dict[i].dd_name_size) == 0) {
 			d_dbglog_data.dd_prio_err = d_dbg_prio_dict[i].dd_prio;
 			break;
 		}
@@ -390,7 +400,7 @@ debug_prio_err_load_env(void)
 static void
 debug_mask_load_env(void)
 {
-	char *mask_env;
+	char	*mask_env;
 
 	mask_env = getenv(DD_MASK_ENV);
 	if (mask_env == NULL)
@@ -442,7 +452,7 @@ static void
 cleanup_dbg_namebit(void)
 {
 	struct d_debug_bit *d;
-	int                 i;
+	int		    i;
 
 	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 		d = &d_dbg_bit_dict[i];
@@ -451,7 +461,8 @@ cleanup_dbg_namebit(void)
 			 * DB_ALL is a special case, does not require a
 			 * specific bit, therefore is not considered in bit cnt.
 			 */
-			if (strncasecmp(d->db_name, DB_ALL_BITS, d->db_name_size) != 0) {
+			if (strncasecmp(d->db_name, DB_ALL_BITS,
+					d->db_name_size) != 0) {
 				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
@@ -470,9 +481,9 @@ static inline int
 setup_dbg_namebit(void)
 {
 	struct d_debug_bit *d;
-	d_dbug_t            allocd_dbg_bit;
-	int                 i;
-	int                 rc;
+	d_dbug_t	    allocd_dbg_bit;
+	int		    i;
+	int		    rc;
 
 	D_ASSERT(d_dbglog_data.dbg_bit_cnt == 0);
 
@@ -480,9 +491,11 @@ setup_dbg_namebit(void)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
 			/* register gurt debug bit masks */
-			rc = d_log_dbg_bit_alloc(&allocd_dbg_bit, d->db_name, d->db_lname);
+			rc = d_log_dbg_bit_alloc(&allocd_dbg_bit, d->db_name,
+						 d->db_lname);
 			if (rc < 0) {
-				D_PRINT_ERR("Debug bit for %s not allocated\n", d->db_name);
+				D_PRINT_ERR("Debug bit for %s not allocated\n",
+					    d->db_name);
 				return -DER_UNINIT;
 			}
 
@@ -494,8 +507,8 @@ setup_dbg_namebit(void)
 }
 
 int
-d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor, d_dbug_t def_mask,
-	       d_dbug_t err_mask, d_log_id_cb_t id_cb)
+d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
+	       d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb)
 {
 	int rc = 0;
 
@@ -511,7 +524,8 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor, d_dbug_t def_
 	if (d_dbglog_data.dd_prio_err != 0)
 		err_mask = d_dbglog_data.dd_prio_err;
 
-	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor, id_cb);
+	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor,
+			id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("d_log_open failed: %d\n", rc);
 		D_GOTO(out, rc = -DER_UNINIT);
@@ -536,9 +550,9 @@ out:
 int
 d_log_init(void)
 {
-	char *log_file;
-	int   flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
-	int   rc;
+	char	*log_file;
+	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
+	int	 rc;
 
 	log_file = getenv(D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
@@ -546,7 +560,8 @@ d_log_init(void)
 		log_file = NULL;
 	}
 
-	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG, NULL);
+	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
+			    NULL);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -557,8 +572,7 @@ out:
 	return rc;
 }
 
-void
-d_log_fini(void)
+void d_log_fini(void)
 {
 	D_ASSERT(d_log_refcount > 0);
 
@@ -580,11 +594,10 @@ d_log_fini(void)
  *
  * \return		0 on success, -1 on error
  */
-int
-d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
+int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 {
-	int                 i;
-	int                 num_dbg_bit_entries;
+	int		   i;
+	int		   num_dbg_bit_entries;
 	struct d_debug_bit *d;
 
 	if (bitname == NULL)
@@ -593,7 +606,8 @@ d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 	num_dbg_bit_entries = ARRAY_SIZE(d_dbg_bit_dict);
 	for (i = 0; i < num_dbg_bit_entries; i++) {
 		d = &d_dbg_bit_dict[i];
-		if (d->db_name != NULL && strncasecmp(bitname, d->db_name, d->db_name_size) == 0) {
+		if (d->db_name != NULL &&
+		    strncasecmp(bitname, d->db_name, d->db_name_size) == 0) {
 			*dbgbit = *d->db_bit;
 			return 0;
 		}
@@ -602,8 +616,8 @@ d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 	return -1;
 }
 
-int
-d_register_alt_assert(void (*alt_assert)(const int, const char *, const char *, const int))
+int d_register_alt_assert(void (*alt_assert)(const int, const char*,
+					     const char*, const int))
 {
 	if (alt_assert != NULL) {
 		d_alt_assert = alt_assert;

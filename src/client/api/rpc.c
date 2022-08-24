@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/rpc.h>
 #include <daos/event.h>
@@ -11,8 +11,8 @@
 static void
 daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	tse_task_t *task = cb_info->cci_arg;
-	int         rc   = cb_info->cci_rc;
+	tse_task_t	*task = cb_info->cci_arg;
+	int		rc = cb_info->cci_rc;
 
 	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */
@@ -80,8 +80,8 @@ daos_rpc_wait_cb(const struct crt_cb_info *cb_info)
 int
 daos_rpc_send_wait(crt_rpc_t *rpc)
 {
-	struct daos_rpc_status status = {0};
-	int                    rc;
+	struct daos_rpc_status status = { 0 };
+	int rc;
 
 	rc = crt_req_send(rpc, daos_rpc_wait_cb, &status);
 	if (rc != 0)

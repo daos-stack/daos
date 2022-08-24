@@ -21,22 +21,22 @@
 #include <string.h>
 #include <sys/utsname.h>
 
+
 /*
  * Mocks
  */
 
 static char *getenv_daos_jobid_return; /* value returned for DAOS_JOBID */
-static char *getenv_jobid_env_return;  /* value returned for DAOS_JOBID_ENV */
-static char *getenv_jobid_return;      /* value stored in location DAOS_JOBID_ENV */
-char *
-getenv(const char *name)
+static char *getenv_jobid_env_return; /* value returned for DAOS_JOBID_ENV */
+static char *getenv_jobid_return; /* value stored in location DAOS_JOBID_ENV */
+char *getenv(const char *name)
 {
 	if (strncmp(name, DEFAULT_JOBID_ENV, sizeof(DEFAULT_JOBID_ENV)) == 0) {
 		return getenv_daos_jobid_return;
 	} else if (strncmp(name, JOBID_ENV, sizeof(JOBID_ENV)) == 0) {
 		return getenv_jobid_env_return;
 	} else if (getenv_jobid_env_return &&
-		   strncmp(name, getenv_jobid_env_return, MAX_ENV_NAME) == 0) {
+		strncmp(name, getenv_jobid_env_return, MAX_ENV_NAME) == 0) {
 		return getenv_jobid_return;
 	} else {
 		return NULL;
@@ -44,16 +44,14 @@ getenv(const char *name)
 }
 
 static pid_t getpid_pid;
-pid_t
-getpid(void)
+pid_t getpid(void)
 {
 	return getpid_pid;
 }
 
-static int   uname_fail;
+static int uname_fail;
 static char *uname_nodename;
-int
-uname(struct utsname *buf)
+int uname(struct utsname *buf)
 {
 	if (uname_fail) {
 		errno = EFAULT;
@@ -74,11 +72,11 @@ setup_job_mocks(void **state)
 {
 	/* Initialize mock values to something sane */
 	getenv_daos_jobid_return = NULL;
-	getenv_jobid_env_return  = NULL;
-	getenv_jobid_return      = NULL;
-	getpid_pid               = 0;
-	uname_nodename           = NULL;
-	uname_fail               = 0;
+	getenv_jobid_env_return = NULL;
+	getenv_jobid_return = NULL;
+	getpid_pid = 0;
+	uname_nodename = NULL;
+	uname_fail = 0;
 	return 0;
 }
 
@@ -109,11 +107,11 @@ craft_jobid(char **jobid, char *nodename, pid_t pid)
 static void
 test_dc_job_init_no_env(void **state)
 {
-	int   ret           = 0;
-	char *default_jobid = NULL;
+	int	 ret = 0;
+	char	*default_jobid = NULL;
 
 	uname_nodename = "testhost";
-	getpid_pid     = 1000;
+	getpid_pid = 1000;
 
 	ret = craft_jobid(&default_jobid, uname_nodename, getpid_pid);
 	assert_return_code(ret, 0);
@@ -148,11 +146,11 @@ test_dc_job_init_with_jobid(void **state)
 static void
 test_dc_job_init_with_jobid_env(void **state)
 {
-	int   ret           = 0;
-	char *default_jobid = NULL;
+	int	 ret = 0;
+	char	*default_jobid = NULL;
 
-	uname_nodename          = "testhost";
-	getpid_pid              = 1000;
+	uname_nodename = "testhost";
+	getpid_pid = 1000;
 	getenv_jobid_env_return = "other-jobid-env";
 
 	ret = craft_jobid(&default_jobid, uname_nodename, getpid_pid);
@@ -174,7 +172,7 @@ static void
 test_dc_job_init_with_jobid_env_and_jobid(void **state)
 {
 	getenv_jobid_env_return = "other-jobid-env";
-	getenv_jobid_return     = "test-jobid";
+	getenv_jobid_return = "test-jobid";
 
 	dc_job_init();
 	/* Make sure we checked the right environment variable */
@@ -199,17 +197,24 @@ test_dc_job_init_with_uname_fail(void **state)
 }
 
 /* Convenience macro for declaring unit tests in this suite */
-#define JOB_UTEST(X) cmocka_unit_test_setup_teardown(X, setup_job_mocks, teardown_job_mocks)
+#define JOB_UTEST(X) \
+	cmocka_unit_test_setup_teardown(X, setup_job_mocks, \
+			teardown_job_mocks)
 
 int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-	    JOB_UTEST(test_dc_job_init_no_env),
-	    JOB_UTEST(test_dc_job_init_with_jobid),
-	    JOB_UTEST(test_dc_job_init_with_jobid_env),
-	    JOB_UTEST(test_dc_job_init_with_jobid_env_and_jobid),
-	    JOB_UTEST(test_dc_job_init_with_uname_fail),
+		JOB_UTEST(
+			test_dc_job_init_no_env),
+		JOB_UTEST(
+			test_dc_job_init_with_jobid),
+		JOB_UTEST(
+			test_dc_job_init_with_jobid_env),
+		JOB_UTEST(
+			test_dc_job_init_with_jobid_env_and_jobid),
+		JOB_UTEST(
+			test_dc_job_init_with_uname_fail),
 	};
 
 	d_register_alt_assert(mock_assert);

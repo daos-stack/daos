@@ -16,23 +16,28 @@ print_usage(const char *prog)
 	printf("\t-s <path>\tGenerate script for symbol checking\n");
 }
 
-#define LINK_SCRIPT_GEN(type, name, params)   fprintf(fp, "--wrap=" #name "\n");
+#define LINK_SCRIPT_GEN(type, name, params) \
+	fprintf(fp, "--wrap=" #name "\n");
 
-#define LINK_SCRIPT_GEN64(type, name, params) fprintf(fp, "--wrap=" #name "64\n");
+#define LINK_SCRIPT_GEN64(type, name, params) \
+	fprintf(fp, "--wrap=" #name "64\n");
 
-#define SYMBOL_GEN(type, name, params)        fprintf(fp, #name " ");
+#define SYMBOL_GEN(type, name, params) \
+	fprintf(fp, #name " ");
 
-#define SYMBOL_GEN64(type, name, params)      fprintf(fp, #name "64 ");
+#define SYMBOL_GEN64(type, name, params) \
+	fprintf(fp, #name "64 ");
 
-#define SYMBOL_GEN_IOF(type, name, params)    fprintf(fp, "dfuse_" #name " ");
+#define SYMBOL_GEN_IOF(type, name, params) \
+	fprintf(fp, "dfuse_" #name " ");
 
 int
 main(int argc, char **argv)
 {
-	FILE       *fp;
-	const char *path          = NULL;
-	bool        linker_script = false;
-	int         opt;
+	FILE *fp;
+	const char *path = NULL;
+	bool linker_script = false;
+	int opt;
 
 	for (;;) {
 		opt = getopt(argc, argv, "l:s:");
@@ -41,11 +46,11 @@ main(int argc, char **argv)
 		switch (opt) {
 		case 'l':
 			linker_script = true;
-			path          = optarg;
+			path = optarg;
 			break;
 		case 's':
 			linker_script = false;
-			path          = optarg;
+			path = optarg;
 			break;
 		default:
 			printf("Unknown option %c\n", opt);

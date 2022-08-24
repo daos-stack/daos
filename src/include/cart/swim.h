@@ -36,14 +36,14 @@ enum swim_member_status {
 
 /** SWIM state associated with each group member */
 struct swim_member_state {
-	uint64_t                sms_incarnation; /**< incarnation number */
-	enum swim_member_status sms_status;      /**< status of member */
-	uint32_t                sms_delay;       /**< SWIM message transfer
-						      network duration */
+	uint64_t		 sms_incarnation; /**< incarnation number */
+	enum swim_member_status	 sms_status;	  /**< status of member */
+	uint32_t		 sms_delay;	  /**< SWIM message transfer
+						       network duration */
 };
 
 struct swim_member_update {
-	uint64_t                 smu_id;
+	uint64_t		 smu_id;
 	struct swim_member_state smu_state;
 };
 
@@ -67,8 +67,9 @@ struct swim_ops {
 	 * @param[in]  nupds	the count of SWIM updates
 	 * @returns		0 on success, negative error ID otherwise
 	 */
-	int (*send_request)(struct swim_context *ctx, swim_id_t id, swim_id_t to,
-			    struct swim_member_update *upds, size_t nupds);
+	int (*send_request)(struct swim_context *ctx, swim_id_t id,
+			    swim_id_t to, struct swim_member_update *upds,
+			    size_t nupds);
 
 	/**
 	 * Send a SWIM reply to other group member.
@@ -80,8 +81,8 @@ struct swim_ops {
 	 * @param[in]  args	Additional arguments
 	 * @returns		0 on success, negative error ID otherwise
 	 */
-	int (*send_reply)(struct swim_context *ctx, swim_id_t from, swim_id_t to, int rc,
-			  void *args);
+	int (*send_reply)(struct swim_context *ctx, swim_id_t from,
+			  swim_id_t to, int rc, void *args);
 
 	/**
 	 * Retrieve a (non-dead) random group member from the group
@@ -114,8 +115,8 @@ struct swim_ops {
 	 * @param[out] state  pointer to given member's SWIM state
 	 * @returns           0 on success, negative error ID otherwise
 	 */
-	int (*get_member_state)(struct swim_context *ctx, swim_id_t id,
-				struct swim_member_state *state);
+	int (*get_member_state)(struct swim_context *ctx,
+				swim_id_t id, struct swim_member_state *state);
 
 	/**
 	 * Set the SWIM protocol state corresponding to a given member ID.
@@ -125,8 +126,8 @@ struct swim_ops {
 	 * @param[in]  state  pointer to given member's SWIM state
 	 * @returns           0 on success, negative error ID otherwise
 	 */
-	int (*set_member_state)(struct swim_context *ctx, swim_id_t id,
-				struct swim_member_state *state);
+	int (*set_member_state)(struct swim_context *ctx,
+				swim_id_t id, struct swim_member_state *state);
 
 	/**
 	 * Set new incarnation number of a given member.
@@ -135,8 +136,8 @@ struct swim_ops {
 	 * @param[in]  id     member ID
 	 * @param[in]  state  pointer to given member's SWIM state
 	 */
-	void (*new_incarnation)(struct swim_context *ctx, swim_id_t id,
-				struct swim_member_state *state);
+	void (*new_incarnation)(struct swim_context *ctx,
+				swim_id_t id, struct swim_member_state *state);
 };
 
 /**
@@ -147,16 +148,15 @@ struct swim_ops {
  * @param[in]  data      Private data which associated with group members
  * @returns              SWIM context pointer on success, NULL otherwise
  */
-struct swim_context *
-swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data);
+struct swim_context *swim_init(swim_id_t self_id, struct swim_ops *swim_ops,
+			       void *data);
 
 /**
  * Finalize the SWIM protocol.
  *
  * @param[in]  ctx  SWIM context pointer from swim_init()
  */
-void
-swim_fini(struct swim_context *ctx);
+void swim_fini(struct swim_context *ctx);
 
 /**
  * Get private data which associated with group members.
@@ -166,8 +166,7 @@ swim_fini(struct swim_context *ctx);
  * @returns         Private data which associated with group members,
  *                  NULL if not set
  */
-void *
-swim_data(struct swim_context *ctx);
+void *swim_data(struct swim_context *ctx);
 
 /**
  * Get self member ID.
@@ -176,8 +175,7 @@ swim_data(struct swim_context *ctx);
  * @returns         self ID,
  *                  SWIM_ID_INVALID if not set
  */
-swim_id_t
-swim_self_get(struct swim_context *ctx);
+swim_id_t swim_self_get(struct swim_context *ctx);
 
 /**
  * Set self member ID.
@@ -185,8 +183,7 @@ swim_self_get(struct swim_context *ctx);
  * @param[in]  ctx     SWIM context pointer from swim_init()
  * @param[in]  self_id Self member ID
  */
-void
-swim_self_set(struct swim_context *ctx, swim_id_t self_id);
+void swim_self_set(struct swim_context *ctx, swim_id_t self_id);
 
 /**
  * Parse a SWIM message from other group member.
@@ -197,9 +194,8 @@ swim_self_set(struct swim_context *ctx, swim_id_t self_id);
  * @param[in]  nupds	the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_updates_parse(struct swim_context *ctx, swim_id_t from, struct swim_member_update *upds,
-		   size_t nupds);
+int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
+			struct swim_member_update *upds, size_t nupds);
 
 /**
  * Prepare a SWIM message for other group member.
@@ -211,9 +207,8 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from, struct swim_member_
  * @param[out] pnupds	Pointer to the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
-		     struct swim_member_update **pupds, size_t *pnupds);
+int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
+			 struct swim_member_update **pupds, size_t *pnupds);
 
 /**
  * Send a SWIM message for other group member.
@@ -223,8 +218,7 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
  * @param[in]  to	IDs of message to send to
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
+int swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
 
 /**
  * Store information about ipinged member for subsequent reply or timeout
@@ -235,8 +229,8 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
  * @param[in]  args	the data passed to reply or timeout handler
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id, swim_id_t to_id, void *args);
+int swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id,
+			swim_id_t to_id, void *args);
 
 /**
  * Reply to stored member about status of iping
@@ -246,8 +240,7 @@ swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id, swim_id_t to_id
  * @param[in]  ret_rc	result of iping
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
+int swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
 
 /**
  * Progress the state machine of SWIM protocol.
@@ -259,8 +252,7 @@ swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
  *                     changes).
  * @returns            0 on success, negative error ID otherwise
  */
-int
-swim_progress(struct swim_context *ctx, int64_t timeout);
+int swim_progress(struct swim_context *ctx, int64_t timeout);
 
 /**
  * Update the state machine of SWIM protocol with unexpected network glitch.
@@ -271,8 +263,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout);
  *                   ALL timeouts will be shifted.
  * @returns          0 on success, negative error ID otherwise
  */
-int
-swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay);
+int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
+			   uint64_t delay);
 
 /**
  * Notify SWIM about new remote member.
@@ -281,8 +273,7 @@ swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay);
  * @param[in]  id	IDs of new member in inactive state
  * @returns		0 on success, negative error ID otherwise
  */
-int
-swim_member_new_remote(struct swim_context *ctx, swim_id_t id);
+int swim_member_new_remote(struct swim_context *ctx, swim_id_t id);
 
 /** @} */
 

@@ -14,10 +14,11 @@
 #include "dfuse_obj_da.h"
 #include "dfuse_vector.h"
 
-#define CAS(valuep, old, new) atomic_compare_exchange(valuep, old, new)
+#define CAS(valuep, old, new) \
+	atomic_compare_exchange(valuep, old, new)
 
 union ptr_lock {
-	void            *ptr;
+	void *ptr;
 	ATOMIC uintptr_t value;
 };
 
@@ -61,40 +62,41 @@ set_ptr_value(union ptr_lock *lock, void *new_value)
 }
 
 struct entry {
-	ATOMIC int refcount; /* vector entries that reference data */
+	ATOMIC int refcount;       /* vector entries that reference data */
 	union {
 		uint64_t align[0]; /* Align to 8 bytes */
-		char     data[0];  /* Actual user data */
+		char data[0];      /* Actual user data */
 	};
 };
 
 #define MAGIC 0xd3f211dc
 
 struct vector {
-	union ptr_lock   *data;        /* entries in vector */
-	obj_da_t          da;          /* Applocator of free entries */
-	pthread_rwlock_t  lock;        /* reader/writer lock for vector */
-	vector_destroy_cb destroy_cb;  /* Destroy callback */
-	int               magic;       /* Magic number for sanity */
-	unsigned int      entry_size;  /* Size of entries in vector */
-	unsigned int      num_entries; /* Current number of allocated entries */
-	unsigned int      max_entries; /* limit on size of vector */
+	union ptr_lock		*data;		/* entries in vector */
+	obj_da_t		da;		/* Applocator of free entries */
+	pthread_rwlock_t	lock;		/* reader/writer lock for vector */
+	vector_destroy_cb	destroy_cb;	/* Destroy callback */
+	int			magic;		/* Magic number for sanity */
+	unsigned int		entry_size;	/* Size of entries in vector */
+	unsigned int		num_entries;	/* Current number of allocated entries */
+	unsigned int		max_entries;	/* limit on size of vector */
 };
 
 _Static_assert(sizeof(struct vector) <= sizeof(vector_t),
 	       "vector_t must be large enough to contain struct vector");
 
-#define MIN_SIZE            1024
-#define ALLOC_SIZE_SHIFT    9 /* 512 */
-#define ALLOC_SIZE          (1 << ALLOC_SIZE_SHIFT)
-#define get_new_size(index) (((index + ALLOC_SIZE) >> ALLOC_SIZE_SHIFT) << ALLOC_SIZE_SHIFT)
+#define MIN_SIZE 1024
+#define ALLOC_SIZE_SHIFT 9 /* 512 */
+#define ALLOC_SIZE (1 << ALLOC_SIZE_SHIFT)
+#define get_new_size(index) \
+	(((index + ALLOC_SIZE) >> ALLOC_SIZE_SHIFT) << ALLOC_SIZE_SHIFT)
 
 /* Assumes new_index is in bounds of vector but not yet allocated */
 static int
 expand_vector(struct vector *vector, unsigned int new_index)
 {
 	unsigned int num_entries = get_new_size(new_index);
-	void        *data;
+	void *data;
 
 	if (num_entries < MIN_SIZE)
 		num_entries = MIN_SIZE;
@@ -102,7 +104,8 @@ expand_vector(struct vector *vector, unsigned int new_index)
 	if (num_entries > vector->max_entries)
 		num_entries = vector->max_entries;
 
-	D_REALLOC_ARRAY(data, vector->data, vector->num_entries, num_entries);
+	D_REALLOC_ARRAY(data, vector->data, vector->num_entries,
+			num_entries);
 	if (!data)
 		return -DER_NOMEM;
 	vector->data = data;
@@ -136,10 +139,11 @@ expand_if_needed(struct vector *vector, unsigned int index)
 }
 
 int
-vector_init(vector_t *vector, int sizeof_entry, int max_entries, vector_destroy_cb destroy_cb)
+vector_init(vector_t *vector, int sizeof_entry, int max_entries,
+	    vector_destroy_cb destroy_cb)
 {
 	struct vector *realv = (struct vector *)vector;
-	int            rc;
+	int rc;
 
 	if (vector == NULL || max_entries <= 0 || sizeof_entry <= 0) {
 		if (vector != NULL)
@@ -147,17 +151,18 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries, vector_destroy_
 		return -DER_INVAL;
 	}
 
-	realv->magic       = 0;
+	realv->magic = 0;
 	realv->max_entries = max_entries;
-	realv->entry_size  = sizeof_entry;
-	realv->data        = NULL;
+	realv->entry_size = sizeof_entry;
+	realv->data = NULL;
 	realv->num_entries = 0;
-	realv->destroy_cb  = destroy_cb;
+	realv->destroy_cb = destroy_cb;
 	/* TODO: Improve cleanup of the error paths in this function */
 	rc = pthread_rwlock_init(&realv->lock, NULL);
 	if (rc != 0)
 		return -DER_INVAL;
-	rc = obj_da_initialize(&realv->da, sizeof(struct entry) + sizeof_entry);
+	rc = obj_da_initialize(&realv->da,
+			       sizeof(struct entry) + sizeof_entry);
 	if (rc != -DER_SUCCESS)
 		return rc;
 	rc = expand_vector(realv, 0);
@@ -174,7 +179,7 @@ int
 vector_destroy(vector_t *vector)
 {
 	struct vector *realv = (struct vector *)vector;
-	int            rc;
+	int rc;
 
 	if (vector == NULL)
 		return -DER_INVAL;
@@ -198,8 +203,8 @@ int
 vector_get_(vector_t *vector, unsigned int index, void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
-	struct entry  *entry;
-	int            rc = -DER_SUCCESS;
+	struct entry *entry;
+	int rc = -DER_SUCCESS;
 
 	if (ptr == NULL)
 		return -DER_INVAL;
@@ -238,12 +243,13 @@ vector_get_(vector_t *vector, unsigned int index, void **ptr)
 }
 
 int
-vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx, void **ptr)
+vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
+	    void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
-	struct entry  *entry;
-	struct entry  *tmp;
-	int            rc = -DER_SUCCESS;
+	struct entry *entry;
+	struct entry *tmp;
+	int rc = -DER_SUCCESS;
 
 	if (ptr == NULL)
 		return -DER_INVAL;
@@ -298,8 +304,8 @@ int
 vector_decref(vector_t *vector, void *ptr)
 {
 	struct vector *realv = (struct vector *)vector;
-	struct entry  *entry;
-	int            old_value;
+	struct entry *entry;
+	int old_value;
 
 	if (vector == NULL || ptr == NULL)
 		return -DER_INVAL;
@@ -323,8 +329,8 @@ int
 vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
 {
 	struct vector *realv = (struct vector *)vector;
-	struct entry  *entry;
-	int            rc = -DER_SUCCESS;
+	struct entry *entry;
+	int rc = -DER_SUCCESS;
 
 	if (vector == NULL || ptr == NULL)
 		return -DER_INVAL;
@@ -351,9 +357,10 @@ vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
 			obj_da_put(&realv->da, entry);
 	}
 
-	rc = obj_da_get_(&realv->da, (void **)&entry, sizeof(*entry) + realv->entry_size);
+	rc = obj_da_get_(&realv->da, (void **)&entry,
+			 sizeof(*entry) + realv->entry_size);
 	if (rc != -DER_SUCCESS) {
-		rc    = -DER_NOMEM;
+		rc = -DER_NOMEM;
 		entry = NULL;
 		goto release;
 	}
@@ -374,8 +381,8 @@ int
 vector_remove_(vector_t *vector, unsigned int index, void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
-	struct entry  *entry;
-	int            rc = -DER_SUCCESS;
+	struct entry *entry;
+	int rc = -DER_SUCCESS;
 
 	if (ptr != NULL)
 		*ptr = NULL;

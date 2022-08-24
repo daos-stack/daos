@@ -12,19 +12,20 @@
 
 /* Lookup a pool */
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		  const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *ie        = NULL;
-	struct dfuse_cont            *dfc       = NULL;
-	struct dfuse_pool            *dfp       = NULL;
-	daos_prop_t                  *prop      = NULL;
-	struct daos_prop_entry       *prop_entry;
-	daos_pool_info_t              pool_info = {};
-	d_list_t                     *rlink;
-	int                           rc;
-	uuid_t                        pool;
-	uuid_t                        cont = {};
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_cont		*dfc = NULL;
+	struct dfuse_pool		*dfp = NULL;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*prop_entry;
+	daos_pool_info_t		pool_info = {};
+	d_list_t			*rlink;
+	int				rc;
+	uuid_t				pool;
+	uuid_t				cont = {};
 
 	/*
 	 * This code is only supposed to support one level of directory descent
@@ -46,7 +47,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 		return;
 	}
 
-	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(pool));
+	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID,
+			DP_UUID(pool));
 
 	rc = dfuse_pool_connect(fs_handle, &pool, &dfp);
 	if (rc != 0)
@@ -59,20 +61,23 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	/* Drop the reference on the pool */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &dfc->dfs_ino, sizeof(dfc->dfs_ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
+				&dfc->dfs_ino,
+				sizeof(dfc->dfs_ino));
 	if (rlink) {
-		struct fuse_entry_param entry = {0};
+		struct fuse_entry_param	entry = {0};
 
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		DFUSE_TRA_INFO(ie, "Reusing existing pool entry without reconnect");
+		DFUSE_TRA_INFO(ie,
+			       "Reusing existing pool entry without reconnect");
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
-		entry.attr          = ie->ie_stat;
-		entry.attr_timeout  = dfc->dfc_attr_timeout;
+		entry.attr = ie->ie_stat;
+		entry.attr_timeout = dfc->dfc_attr_timeout;
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
-		entry.generation    = 1;
-		entry.ino           = entry.attr.st_ino;
+		entry.generation = 1;
+		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 		return;
 	}
@@ -104,17 +109,22 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	/* Convert the owner information to uid/gid */
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
 	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &ie->ie_stat.st_uid);
+	rc = daos_acl_principal_to_uid(prop_entry->dpe_str,
+				       &ie->ie_stat.st_uid);
 	if (rc != 0) {
-		DFUSE_TRA_ERROR(dfp, "Unable to convert owner to uid: (%d)", rc);
+		DFUSE_TRA_ERROR(dfp, "Unable to convert owner to uid: (%d)",
+				rc);
 		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
 	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &ie->ie_stat.st_gid);
+	rc = daos_acl_principal_to_gid(prop_entry->dpe_str,
+				       &ie->ie_stat.st_gid);
 	if (rc != 0) {
-		DFUSE_TRA_ERROR(dfp, "Unable to convert owner-group to gid: (%d)", rc);
+		DFUSE_TRA_ERROR(dfp,
+				"Unable to convert owner-group to gid: (%d)",
+				rc);
 		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 

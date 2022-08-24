@@ -22,8 +22,8 @@ extern "C" {
 #endif
 
 struct d_fault_attr {
-	d_list_t              fa_link;
-	struct d_fault_attr_t fa_attr;
+	d_list_t		fa_link;
+	struct d_fault_attr_t	fa_attr;
 };
 
 #if defined(__cplusplus)

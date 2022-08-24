@@ -8,10 +8,10 @@
 #include "dfs_internal.h"
 
 /** protect against concurrent dfs_init/fini calls */
-static pthread_mutex_t      module_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times dfs_init has been called */
-static int                  module_initialized;
+static int		module_initialized;
 
 /** hashtable for pool open handles */
 static struct d_hash_table *poh_hash;
@@ -19,7 +19,7 @@ static struct d_hash_table *poh_hash;
 /** hashtable for container open handles */
 static struct d_hash_table *coh_hash;
 
-static inline struct dfs_mnt_hdls *
+static inline struct dfs_mnt_hdls*
 hdl_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct dfs_mnt_hdls, entry);
@@ -52,8 +52,8 @@ rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 static void
 rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfs_mnt_hdls *hdl = hdl_obj(rlink);
-	int                  rc;
+	struct dfs_mnt_hdls	*hdl = hdl_obj(rlink);
+	int			rc;
 
 	D_ASSERT(d_hash_rec_unlinked(&hdl->entry));
 	D_ASSERT(hdl->ref == 0);
@@ -61,11 +61,11 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	if (hdl->type == DFS_H_POOL) {
 		rc = daos_pool_disconnect(hdl->handle, NULL);
 		if (rc)
-			D_ERROR("daos_pool_connect() Failed " DF_RC "\n", DP_RC(rc));
+			D_ERROR("daos_pool_connect() Failed "DF_RC"\n", DP_RC(rc));
 	} else if (hdl->type == DFS_H_CONT) {
 		rc = daos_cont_close(hdl->handle, NULL);
 		if (rc)
-			D_ERROR("daos_cont_close() Failed " DF_RC "\n", DP_RC(rc));
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
 	} else {
 		D_ASSERT(0);
 	}
@@ -80,11 +80,13 @@ rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 	return d_hash_string_u32(hdl->value, strlen(hdl->value));
 }
 
-static d_hash_table_ops_t hdl_hash_ops = {.hop_key_cmp    = key_cmp,
-					  .hop_rec_addref = rec_addref,
-					  .hop_rec_decref = rec_decref,
-					  .hop_rec_free   = rec_free,
-					  .hop_rec_hash   = rec_hash};
+static d_hash_table_ops_t hdl_hash_ops = {
+	.hop_key_cmp = key_cmp,
+	.hop_rec_addref = rec_addref,
+	.hop_rec_decref = rec_decref,
+	.hop_rec_free = rec_free,
+	.hop_rec_hash = rec_hash
+};
 
 int
 dfs_is_init()
@@ -97,7 +99,7 @@ dfs_is_init()
 int
 dfs_init()
 {
-	int rc;
+	int	rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized > 0) {
@@ -113,14 +115,14 @@ dfs_init()
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_LRU, 4, NULL, &hdl_hash_ops,
 				 &poh_hash);
 	if (rc) {
-		D_ERROR("Failed to init pool handle hash " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to init pool handle hash "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_fini, rc = daos_der2errno(rc));
 	}
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_LRU, 4, NULL, &hdl_hash_ops,
 				 &coh_hash);
 	if (rc) {
-		D_ERROR("Failed to init container handle hash " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to init container handle hash "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_poh, rc = daos_der2errno(rc));
 	}
 
@@ -139,8 +141,8 @@ unlock:
 int
 dfs_fini(void)
 {
-	d_list_t *rlink;
-	int       rc;
+	d_list_t	*rlink;
+	int		rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized == 0) {
@@ -208,17 +210,17 @@ dfs_hdl_release(struct dfs_mnt_hdls *hdl)
 int
 dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl)
 {
-	struct dfs_mnt_hdls *hdl;
-	d_list_t            *rlink;
-	int                  rc = 0;
+	struct dfs_mnt_hdls	*hdl;
+	d_list_t		*rlink;
+	int			rc = 0;
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
 		return ENOMEM;
 
-	hdl->type          = type;
+	hdl->type = type;
 	hdl->handle.cookie = oh->cookie;
-	hdl->ref           = 2;
+	hdl->ref = 2;
 	strncpy(hdl->value, str, DAOS_PROP_LABEL_MAX_LEN + 1);
 	hdl->value[DAOS_PROP_LABEL_MAX_LEN] = 0;
 
@@ -231,7 +233,7 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 			if (rc)
 				D_GOTO(err_free, rc = daos_der2errno(rc));
 			D_FREE(hdl);
-			hdl        = container_of(rlink, struct dfs_mnt_hdls, entry);
+			hdl = container_of(rlink, struct dfs_mnt_hdls, entry);
 			oh->cookie = hdl->handle.cookie;
 		}
 	} else if (type == DFS_H_CONT) {
@@ -243,7 +245,7 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 			if (rc)
 				D_GOTO(err_free, rc = daos_der2errno(rc));
 			D_FREE(hdl);
-			hdl        = container_of(rlink, struct dfs_mnt_hdls, entry);
+			hdl = container_of(rlink, struct dfs_mnt_hdls, entry);
 			oh->cookie = hdl->handle.cookie;
 		}
 	} else {

@@ -27,7 +27,7 @@ extern "C" {
 
 /** Mount flags for dfs_sys_mount. By default, mount with caching and locking turned on. */
 #define DFS_SYS_NO_CACHE 1 /**< Turn off directory caching */
-#define DFS_SYS_NO_LOCK  2 /**< Turn off locking. Useful for single-threaded applications. */
+#define DFS_SYS_NO_LOCK 2  /**< Turn off locking. Useful for single-threaded applications. */
 
 /** struct holding attributes for the dfs_sys calls */
 typedef struct dfs_sys dfs_sys_t;
@@ -104,7 +104,8 @@ dfs_sys_global2local_all(int mflags, int sflags, d_iov_t glob, dfs_sys_t **dfs_s
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags, dfs_sys_t **dfs_sys);
+dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
+	      dfs_sys_t **dfs_sys);
 
 /**
  * Unmount a file system with dfs_mount.
@@ -145,8 +146,8 @@ dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob);
  * \param[out]	dfs_sys	Returned dfs_sys mount.
  */
 int
-dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags, d_iov_t glob,
-		     dfs_sys_t **dfs_sys);
+dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
+		     int sflags, d_iov_t glob, dfs_sys_t **dfs_sys);
 
 /**
  * Get the underlying dfs_t from the dfs_sys_t.
@@ -222,7 +223,8 @@ dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int fl
  * \return		0 on Success. errno code on Failure.
  */
 int
-dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf, int flags, int sflags);
+dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
+		int flags, int sflags);
 
 /**
  * Set atime and mtime of a path. This currently does not set
@@ -237,7 +239,8 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf, int fl
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path, const struct timespec times[2], int flags);
+dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path,
+		const struct timespec times[2], int flags);
 
 /**
  * stat attributes of an entry. By default, if object is a symlink,
@@ -260,7 +263,8 @@ dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path, const struct timespec time
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags, struct stat *stbuf);
+dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
+	     struct stat *stbuf);
 /**
  * Create a file or directory.
  *
@@ -278,8 +282,8 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags, struct stat *stbuf
  *			EEXIST	If path already exists.
  */
 int
-dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, daos_oclass_id_t cid,
-	      daos_size_t chunk_size);
+dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
+	      daos_oclass_id_t cid, daos_size_t chunk_size);
 
 /**
  * list extended attributes of a path and place them all in a buffer
@@ -299,7 +303,8 @@ dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, daos_oclass_id_
  *			ERANGE	If size is too small.
  */
 int
-dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list, daos_size_t *size, int flags);
+dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
+		  daos_size_t *size, int flags);
 
 /**
  * Get extended attribute of a path. By default, if path is a symlink,
@@ -317,8 +322,8 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list, daos_size_t 
  *			ERANGE	If size is too small.
  */
 int
-dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, void *value,
-		 daos_size_t *size, int flags);
+dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
+		 void *value, daos_size_t *size, int flags);
 
 /**
  * Set extended attribute on a path (file, dir, syml). By default, if path
@@ -337,8 +342,8 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, void *v
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, const void *value,
-		 daos_size_t size, int flags, int sflags);
+dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
+		 const void *value, daos_size_t size, int flags, int sflags);
 
 /**
  * Remove extended attribute of a path. By default, if path is a symlink,
@@ -353,7 +358,8 @@ dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name, const v
  */
 
 int
-dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name, int flags);
+dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
+		    int flags);
 
 /**
  * Retrieve Symlink value of path if it's a symlink. If the buffer size passed
@@ -371,7 +377,8 @@ dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name, int 
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf, daos_size_t *size);
+dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
+		 daos_size_t *size);
 
 /**
  * Create a symlink.
@@ -406,8 +413,9 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags, daos_oclass_id_t cid,
-	     daos_size_t chunk_size, const char *value, dfs_obj_t **obj);
+dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
+	     daos_oclass_id_t cid, daos_size_t chunk_size,
+	     const char *value, dfs_obj_t **obj);
 
 /**
  * Close/release open object.
@@ -436,8 +444,8 @@ dfs_sys_close(dfs_obj_t *obj);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off, daos_size_t *size,
-	     daos_event_t *ev);
+dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
+	     daos_size_t *size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -454,8 +462,8 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off, daos
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf, daos_off_t off,
-	      daos_size_t *size, daos_event_t *ev);
+dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
+	      daos_off_t off, daos_size_t *size, daos_event_t *ev);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to
@@ -471,7 +479,8 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf, daos_off_t of
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path, daos_off_t offset, daos_off_t len);
+dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
+	      daos_off_t offset, daos_off_t len);
 
 /**
  * Remove an object identified by path. If object is a directory and is
@@ -487,7 +496,8 @@ dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path, daos_off_t offset, daos_off_
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force, daos_obj_id_t *oid);
+dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force,
+	       daos_obj_id_t *oid);
 
 /**
  * Similar to dfs_sys_remove but optionally enforces a type check
@@ -503,8 +513,8 @@ dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force, daos_obj_id_t *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force, mode_t mode,
-		    daos_obj_id_t *oid);
+dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
+		    mode_t mode, daos_obj_id_t *oid);
 
 /**
  * Create a directory.
@@ -517,7 +527,8 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force, mode_t mod
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode, daos_oclass_id_t cid);
+dfs_sys_mkdir(dfs_sys_t *dfs_sys, const char *dir, mode_t mode,
+	      daos_oclass_id_t cid);
 
 /**
  * Open a directory.

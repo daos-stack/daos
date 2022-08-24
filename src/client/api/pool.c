@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/pool.h>
 #include <daos/pool_map.h>
@@ -16,24 +16,24 @@
  * Used by anyone including the daos_pool.h header file.
  */
 int
-daos_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		  daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
-	daos_pool_connect_t *args;
-	tse_task_t          *task;
-	int                  rc;
+	daos_pool_connect_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT);
 
 	rc = dc_task_create(dc_pool_connect, NULL, ev, &task);
 	if (rc)
 		return rc;
-	args        = dc_task_get_args(task);
-	args->pool  = pool;
-	args->grp   = sys;
-	args->flags = flags;
-	args->poh   = poh;
-	args->info  = info;
+	args = dc_task_get_args(task);
+	args->pool	= pool;
+	args->grp	= sys;
+	args->flags	= flags;
+	args->poh	= poh;
+	args->info	= info;
 	uuid_clear(args->uuid);
 
 	return dc_task_schedule(task, true);
@@ -41,23 +41,23 @@ daos_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_ha
 
 #undef daos_pool_connect
 int
-daos_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		  daos_pool_info_t *info, daos_event_t *ev)
-    __attribute__((weak, alias("daos_pool_connect2")));
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_pool_connect2")));
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	daos_pool_disconnect_t *args;
-	tse_task_t             *task;
-	int                     rc;
+	daos_pool_disconnect_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_DISCONNECT);
 	rc = dc_task_create(dc_pool_disconnect, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args      = dc_task_get_args(task);
+	args = dc_task_get_args(task);
 	args->poh = poh;
 
 	return dc_task_schedule(task, true);
@@ -79,9 +79,9 @@ int
 daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev)
 {
-	daos_pool_query_t *args;
-	tse_task_t        *task;
-	int                rc;
+	daos_pool_query_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
 
@@ -94,22 +94,22 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->poh   = poh;
-	args->ranks = ranks;
-	args->info  = info;
-	args->prop  = pool_prop;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->ranks	= ranks;
+	args->info	= info;
+	args->prop	= pool_prop;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_pool_query_target(daos_handle_t poh, uint32_t tgt_idx, d_rank_t rank, daos_target_info_t *info,
-		       daos_event_t *ev)
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt_idx, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev)
 {
-	daos_pool_query_target_t *args;
-	tse_task_t               *task;
-	int                       rc;
+	daos_pool_query_target_t	*args;
+	tse_task_t			*task;
+	int				 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY_INFO);
 
@@ -117,22 +117,23 @@ daos_pool_query_target(daos_handle_t poh, uint32_t tgt_idx, d_rank_t rank, daos_
 	if (rc)
 		return rc;
 
-	args          = dc_task_get_args(task);
-	args->poh     = poh;
-	args->tgt_idx = tgt_idx;
-	args->rank    = rank;
-	args->info    = info;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->tgt_idx	= tgt_idx;
+	args->rank	= rank;
+	args->info	= info;
 
 	return dc_task_schedule(task, true);
+
 }
 
 int
-daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont, struct daos_pool_cont_info *cbuf,
-		    daos_event_t *ev)
+daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
+		    struct daos_pool_cont_info *cbuf, daos_event_t *ev)
 {
-	daos_pool_list_cont_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_pool_list_cont_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_LIST_CONT);
 
@@ -145,20 +146,21 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont, struct daos_pool_cont
 	if (rc)
 		return rc;
 
-	args           = dc_task_get_args(task);
-	args->poh      = poh;
-	args->ncont    = ncont;
-	args->cont_buf = cbuf;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->ncont	= ncont;
+	args->cont_buf	= cbuf;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_pool_list_attr(daos_handle_t poh, char *buf, size_t *size, daos_event_t *ev)
+daos_pool_list_attr(daos_handle_t poh, char *buf, size_t *size,
+		    daos_event_t *ev)
 {
-	daos_pool_list_attr_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_pool_list_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_LIST_ATTR);
 
@@ -166,21 +168,21 @@ daos_pool_list_attr(daos_handle_t poh, char *buf, size_t *size, daos_event_t *ev
 	if (rc)
 		return rc;
 
-	args       = dc_task_get_args(task);
-	args->poh  = poh;
-	args->buf  = buf;
-	args->size = size;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->buf	= buf;
+	args->size	= size;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[], void *const values[],
-		   size_t sizes[], daos_event_t *ev)
+daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
+		   void *const values[], size_t sizes[], daos_event_t *ev)
 {
-	daos_pool_get_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_pool_get_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_GET_ATTR);
 
@@ -188,23 +190,24 @@ daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[], void *co
 	if (rc)
 		return rc;
 
-	args         = dc_task_get_args(task);
-	args->poh    = poh;
-	args->n      = n;
-	args->names  = names;
-	args->values = values;
-	args->sizes  = sizes;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[], void const *const values[],
-		   size_t const sizes[], daos_event_t *ev)
+daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
+		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev)
 {
-	daos_pool_set_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_pool_set_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_SET_ATTR);
 
@@ -212,22 +215,23 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[], void con
 	if (rc)
 		return rc;
 
-	args         = dc_task_get_args(task);
-	args->poh    = poh;
-	args->n      = n;
-	args->names  = names;
-	args->values = values;
-	args->sizes  = sizes;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[], daos_event_t *ev)
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
+		   daos_event_t *ev)
 {
-	daos_pool_del_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_pool_del_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_DEL_ATTR);
 
@@ -235,10 +239,10 @@ daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[], daos_eve
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->poh   = poh;
-	args->n     = n;
-	args->names = names;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
 
 	return dc_task_schedule(task, true);
 }
@@ -246,17 +250,17 @@ daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[], daos_eve
 int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 {
-	daos_pool_stop_svc_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_pool_stop_svc_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_STOP_SVC);
 	rc = dc_task_create(dc_pool_stop_svc, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args      = dc_task_get_args(task);
-	args->poh = poh;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
 
 	return dc_task_schedule(task, true);
 }

@@ -8,7 +8,7 @@
  *
  * client/task.c
  */
-#define D_LOGFAC DD_FAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
@@ -48,11 +48,12 @@ task_comp_event(tse_task_t *task, void *data)
  * dc_task_sched_ev(), otherwise the event will never be completed.
  */
 int
-dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev, tse_task_t **taskp)
+dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
+	       tse_task_t **taskp)
 {
 	struct daos_task_args *args;
-	tse_task_t            *task;
-	int                    rc;
+	tse_task_t	      *task;
+	int		       rc;
 
 	if (sched == NULL) {
 		if (ev == NULL) {
@@ -67,7 +68,7 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev, tse_t
 	if (rc)
 		return rc;
 
-	args           = task_ptr2args(task);
+	args = task_ptr2args(task);
 	args->ta_magic = DAOS_TASK_MAGIC;
 	if (ev) {
 		/** register a comp cb on the task to complete the event */
@@ -79,7 +80,7 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev, tse_t
 
 	*taskp = task;
 	return 0;
-failed:
+ failed:
 	tse_task_decref(task);
 	return rc;
 }
@@ -96,7 +97,7 @@ int
 dc_task_schedule(tse_task_t *task, bool instant)
 {
 	daos_event_t *ev;
-	int           rc;
+	int	      rc;
 
 	D_ASSERT(task_is_valid(task));
 
@@ -169,11 +170,11 @@ dc_task_get_opc(tse_task_t *task)
  * Create a new task for DAOS API
  */
 int
-daos_task_create(daos_opc_t opc, tse_sched_t *sched, unsigned int num_deps, tse_task_t *dep_tasks[],
-		 tse_task_t **taskp)
+daos_task_create(daos_opc_t opc, tse_sched_t *sched, unsigned int num_deps,
+		 tse_task_t *dep_tasks[], tse_task_t **taskp)
 {
-	tse_task_t *task;
-	int         rc;
+	tse_task_t	*task;
+	int		 rc;
 
 	if (dep_tasks && num_deps == 0)
 		return -DER_INVAL;
@@ -204,8 +205,8 @@ failed:
 int
 daos_task_reset(tse_task_t *task, daos_opc_t opc)
 {
-	struct daos_task_args *args;
-	int                    rc;
+	struct daos_task_args	*args;
+	int			rc;
 
 	if (DAOS_OPC_INVALID >= opc || DAOS_OPC_MAX <= opc)
 		return -DER_NOSYS;
@@ -215,7 +216,7 @@ daos_task_reset(tse_task_t *task, daos_opc_t opc)
 	if (rc)
 		return rc;
 
-	args           = task_ptr2args(task);
+	args = task_ptr2args(task);
 	args->ta_magic = DAOS_TASK_MAGIC;
 
 	return 0;
@@ -240,8 +241,8 @@ daos_task_set_priv(tse_task_t *task, void *priv)
 }
 
 struct daos_progress_args_t {
-	tse_sched_t *sched;
-	bool        *is_empty;
+	tse_sched_t	*sched;
+	bool		*is_empty;
 };
 
 static int
@@ -263,19 +264,20 @@ int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 {
 	struct daos_progress_args_t args;
-	int                         rc;
+	int rc;
 
 	*is_empty = false;
 	tse_sched_progress(sched);
 
-	args.sched    = sched;
+	args.sched = sched;
 	args.is_empty = is_empty;
 
-	rc = crt_progress_cond(sched->ds_udata ? (crt_context_t *)sched->ds_udata
-					       : daos_get_crt_ctx(),
-			       timeout, sched_progress_cb, &args);
+	rc = crt_progress_cond(sched->ds_udata ?
+			       (crt_context_t *)sched->ds_udata :
+			       daos_get_crt_ctx(), timeout, sched_progress_cb,
+			       &args);
 	if (rc != 0 && rc != -DER_TIMEDOUT)
-		D_ERROR("crt progress failed with " DF_RC "\n", DP_RC(rc));
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

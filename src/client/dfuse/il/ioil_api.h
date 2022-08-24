@@ -28,7 +28,6 @@ enum dfuse_bypass_status {
 /** Return a value indicating the status of the file with respect to
  *  IOF.  Possible values are defined in /p enum dfuse_bypass_status
  */
-DFUSE_PUBLIC int
-dfuse_get_bypass_status(int fd);
+DFUSE_PUBLIC int dfuse_get_bypass_status(int fd);
 
 #endif /* __IOIL_API_H__ */

@@ -9,15 +9,16 @@
 
 #include "daos_uns.h"
 
-#define ACL_ACCESS  "system.posix_acl_access"
-#define ACL_DEFAULT "system.posix_acl_default"
+#define ACL_ACCESS	"system.posix_acl_access"
+#define ACL_DEFAULT	"system.posix_acl_default"
 
 void
-dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *name,
-		  const char *value, size_t size, int flags)
+dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
+		  const char *name, const char *value, size_t size,
+		  int flags)
 {
-	int  rc;
-	bool duns_attr = false;
+	int	rc;
+	bool	duns_attr = false;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
@@ -59,7 +60,8 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 
 			fs_handle = fuse_req_userdata(req);
 			rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-							      inode->ie_parent, inode->ie_name,
+							      inode->ie_parent,
+							      inode->ie_name,
 							      strnlen(inode->ie_name, NAME_MAX));
 			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
 		}

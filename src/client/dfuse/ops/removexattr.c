@@ -8,7 +8,8 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *name)
+dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode,
+		     const char *name)
 {
 	int rc;
 

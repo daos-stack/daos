@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(client)
+#define D_LOGFAC       DD_FAC(client)
 
 #include <daos/container.h>
 #include <daos/task.h>
@@ -24,11 +24,12 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 }
 
 static int
-cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop, daos_prop_t **merged_prop)
+cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
+			daos_prop_t **merged_prop)
 {
-	struct daos_prop_entry *entry;
-	daos_prop_t            *redunc_prop;
-	int                     rf, rc = 0;
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*redunc_prop;
+	int			rf, rc = 0;
 
 	*merged_prop = NULL;
 	/* redunc factor specified, no need inherit from pool */
@@ -42,18 +43,18 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop, daos_prop_t *
 
 	redunc_prop = daos_prop_alloc(1);
 	if (redunc_prop == NULL) {
-		D_ERROR("failed to allocate redunc_prop " DF_RC "\n", DP_RC(-DER_NOMEM));
+		D_ERROR("failed to allocate redunc_prop "DF_RC"\n", DP_RC(-DER_NOMEM));
 		return -DER_NOMEM;
 	}
 	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	redunc_prop->dpp_entries[0].dpe_val  = rf;
+	redunc_prop->dpp_entries[0].dpe_val = rf;
 
 	if (cont_prop) {
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
 		daos_prop_free(redunc_prop);
 		if (*merged_prop == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("failed to merge cont_prop and redunc_prop " DF_RC "\n", DP_RC(rc));
+			D_ERROR("failed to merge cont_prop and redunc_prop "DF_RC"\n", DP_RC(rc));
 		}
 	} else {
 		*merged_prop = redunc_prop;
@@ -67,12 +68,13 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop, daos_prop_t *
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev)
 {
-	daos_cont_create_t *args;
-	tse_task_t         *task;
-	int                 rc;
-	daos_prop_t        *merged_props = NULL;
+	daos_cont_create_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+	daos_prop_t		*merged_props = NULL;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
@@ -94,11 +96,11 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_
 		return rc;
 	}
 
-	args      = dc_task_get_args(task);
-	args->poh = poh;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
 	uuid_clear(args->uuid);
-	args->prop  = merged_props ? merged_props : cont_prop;
-	args->cuuid = cuuid;
+	args->prop	= merged_props ? merged_props : cont_prop;
+	args->cuuid	= cuuid;
 
 	rc = dc_task_schedule(task, true);
 	if (merged_props)
@@ -109,16 +111,18 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_
 
 #undef daos_cont_create
 int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
-    __attribute__((weak, alias("daos_cont_create2")));
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev)
+		 __attribute__ ((weak, alias("daos_cont_create2")));
 
 int
-daos_cont_create_with_label(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
-			    uuid_t *uuid, daos_event_t *ev)
+daos_cont_create_with_label(daos_handle_t poh, const char *label,
+			    daos_prop_t *cont_prop, uuid_t *uuid,
+			    daos_event_t *ev)
 {
-	daos_prop_t *label_prop;
-	daos_prop_t *merged_props = NULL;
-	int          rc;
+	daos_prop_t		*label_prop;
+	daos_prop_t		*merged_props = NULL;
+	int			 rc;
 
 	label_prop = daos_prop_alloc(1);
 	if (label_prop == NULL) {
@@ -141,7 +145,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label, daos_prop_t *c
 
 	rc = daos_cont_create(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
-		D_ERROR("daos_cont_create label=%s failed, " DF_RC "\n", label, DP_RC(rc));
+		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
 		goto out_merged_props;
 	}
 
@@ -157,12 +161,12 @@ out_prop:
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
+		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
-	daos_cont_open_t *args;
-	tse_task_t       *task;
-	int               rc;
+	daos_cont_open_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
 
@@ -170,29 +174,29 @@ daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_han
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->poh   = poh;
-	args->flags = flags;
-	args->coh   = coh;
-	args->info  = info;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->flags	= flags;
+	args->coh	= coh;
+	args->info	= info;
 	uuid_clear(args->uuid);
-	args->cont = cont;
+	args->cont	= cont;
 
 	return dc_task_schedule(task, true);
 }
 
 #undef daos_cont_open
 int
-daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
-    __attribute__((weak, alias("daos_cont_open2")));
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
+	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
+	       __attribute__ ((weak, alias("daos_cont_open2")));
 
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
-	daos_cont_close_t *args;
-	tse_task_t        *task;
-	int                rc;
+	daos_cont_close_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CLOSE);
 
@@ -200,8 +204,8 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	if (rc)
 		return rc;
 
-	args      = dc_task_get_args(task);
-	args->coh = coh;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
 
 	return dc_task_schedule(task, true);
 }
@@ -211,11 +215,12 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
+		   daos_event_t *ev)
 {
-	daos_cont_destroy_t *args;
-	tse_task_t          *task;
-	int                  rc;
+	daos_cont_destroy_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
 
@@ -223,26 +228,28 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->poh   = poh;
-	args->force = force;
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->force	= force;
 	uuid_clear(args->uuid);
-	args->cont = cont;
+	args->cont	= cont;
 
 	return dc_task_schedule(task, true);
 }
 
 #undef daos_cont_destroy
 int
-daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
-    __attribute__((weak, alias("daos_cont_destroy2")));
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
+		  daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_cont_destroy2")));
 
 int
-daos_cont_query(daos_handle_t coh, daos_cont_info_t *info, daos_prop_t *cont_prop, daos_event_t *ev)
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
+		daos_prop_t *cont_prop, daos_event_t *ev)
 {
-	daos_cont_query_t *args;
-	tse_task_t        *task;
-	int                rc;
+	daos_cont_query_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_QUERY);
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, false)) {
@@ -254,10 +261,10 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info, daos_prop_t *cont_pro
 	if (rc)
 		return rc;
 
-	args       = dc_task_get_args(task);
-	args->coh  = coh;
-	args->info = info;
-	args->prop = cont_prop;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->info	= info;
+	args->prop	= cont_prop;
 
 	return dc_task_schedule(task, true);
 }
@@ -265,9 +272,9 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info, daos_prop_t *cont_pro
 int
 daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 {
-	daos_prop_t *prop;
-	const size_t nr_entries = 3;
-	int          rc;
+	daos_prop_t	*prop;
+	const size_t	nr_entries = 3;
+	int		rc;
 
 	if (acl_prop == NULL) {
 		D_ERROR("invalid acl_prop parameter\n");
@@ -294,9 +301,9 @@ daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 {
-	daos_cont_set_prop_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_cont_set_prop_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
 	if (prop != NULL && !daos_prop_valid(prop, false, true)) {
@@ -308,9 +315,9 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 	if (rc)
 		return rc;
 
-	args       = dc_task_get_args(task);
-	args->coh  = coh;
-	args->prop = prop;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->prop	= prop;
 
 	return dc_task_schedule(task, true);
 }
@@ -327,19 +334,20 @@ dcsc_prop_free(tse_task_t *task, void *data)
 int
 daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
 {
-	daos_cont_set_prop_t   *args;
-	daos_prop_t            *prop;
-	struct daos_prop_entry *entry;
-	tse_task_t             *task;
-	int                     rc;
+	daos_cont_set_prop_t	*args;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+	tse_task_t		*task;
+	int			 rc;
 
 	prop = daos_prop_alloc(1);
 	if (prop == NULL)
 		return -DER_NOMEM;
 
-	entry           = &prop->dpp_entries[0];
+	entry = &prop->dpp_entries[0];
 	entry->dpe_type = DAOS_PROP_CO_STATUS;
-	entry->dpe_val  = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CO_CLEAR, 0);
+	entry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+						 DAOS_PROP_CO_CLEAR, 0);
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
 	rc = dc_task_create(dc_cont_set_prop, NULL, ev, &task);
@@ -348,11 +356,12 @@ daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
 		return rc;
 	}
 
-	args       = dc_task_get_args(task);
-	args->coh  = coh;
-	args->prop = prop;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->prop	= prop;
 
-	rc = tse_task_register_comp_cb(task, dcsc_prop_free, &prop, sizeof(prop));
+	rc = tse_task_register_comp_cb(task, dcsc_prop_free, &prop,
+				       sizeof(prop));
 	if (rc) {
 		daos_prop_free(prop);
 		tse_task_complete(task, rc);
@@ -363,10 +372,11 @@ daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
 }
 
 int
-daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
+			daos_event_t *ev)
 {
-	daos_prop_t *prop;
-	int          rc;
+	daos_prop_t	*prop;
+	int		rc;
 
 	if (daos_acl_cont_validate(acl) != 0) {
 		D_ERROR("invalid acl parameter\n");
@@ -377,7 +387,7 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *e
 	if (prop == NULL)
 		return -DER_NOMEM;
 
-	prop->dpp_entries[0].dpe_type    = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
 
 	rc = daos_cont_set_prop(coh, prop, ev);
@@ -389,9 +399,9 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *e
 int
 daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
 {
-	daos_cont_update_acl_t *args;
-	tse_task_t             *task;
-	int                     rc;
+	daos_cont_update_acl_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_UPDATE_ACL);
 	if (daos_acl_validate(acl) != 0) {
@@ -403,20 +413,20 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
 	if (rc)
 		return rc;
 
-	args      = dc_task_get_args(task);
-	args->coh = coh;
-	args->acl = acl;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->acl	= acl;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type, d_string_t name,
-		     daos_event_t *ev)
+daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
+		     d_string_t name, daos_event_t *ev)
 {
-	daos_cont_delete_acl_t *args;
-	tse_task_t             *task;
-	int                     rc;
+	daos_cont_delete_acl_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DELETE_ACL);
 
@@ -424,21 +434,22 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type, d_str
 	if (rc)
 		return rc;
 
-	args       = dc_task_get_args(task);
-	args->coh  = coh;
-	args->type = (uint8_t)type;
-	args->name = name;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->type	= (uint8_t)type;
+	args->name	= name;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, daos_event_t *ev)
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
+		    daos_event_t *ev)
 {
-	daos_prop_t *prop;
-	uint32_t     nr = 0;
-	uint32_t     i  = 0;
-	int          rc;
+	daos_prop_t	*prop;
+	uint32_t	nr = 0;
+	uint32_t	i = 0;
+	int		rc;
 
 	if (user != NULL) {
 		if (!daos_acl_principal_is_valid(user)) {
@@ -469,13 +480,15 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, daos_e
 
 	if (user != NULL) {
 		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER;
-		D_STRNDUP(prop->dpp_entries[i].dpe_str, user, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		D_STRNDUP(prop->dpp_entries[i].dpe_str, user,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 		i++;
 	}
 
 	if (group != NULL) {
 		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-		D_STRNDUP(prop->dpp_entries[i].dpe_str, group, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		D_STRNDUP(prop->dpp_entries[i].dpe_str, group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 		i++;
 	}
 
@@ -488,18 +501,18 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, daos_e
 int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	daos_cont_aggregate_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_cont_aggregate_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_AGGREGATE);
 	rc = dc_task_create(dc_cont_aggregate, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->coh   = coh;
-	args->epoch = epoch;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
 
 	return dc_task_schedule(task, true);
 }
@@ -507,18 +520,18 @@ daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 int
 daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	daos_cont_rollback_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_cont_rollback_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_ROLLBACK);
 	rc = dc_task_create(dc_cont_rollback, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->coh   = coh;
-	args->epoch = epoch;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
 
 	return dc_task_schedule(task, true);
 }
@@ -526,28 +539,29 @@ daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 int
 daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev)
 {
-	daos_cont_subscribe_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_cont_subscribe_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SUBSCRIBE);
 	rc = dc_task_create(dc_cont_subscribe, NULL, ev, &task);
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->coh   = coh;
-	args->epoch = epoch;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid, daos_event_t *ev)
+daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
+		    daos_event_t *ev)
 {
-	daos_cont_alloc_oids_t *args;
-	tse_task_t             *task;
-	int                     rc;
+	daos_cont_alloc_oids_t	*args;
+	tse_task_t		*task;
+	int                      rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_ALLOC_OIDS);
 
@@ -555,20 +569,21 @@ daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid, dao
 	if (rc)
 		return rc;
 
-	args           = dc_task_get_args(task);
-	args->coh      = coh;
-	args->num_oids = num_oids;
-	args->oid      = oid;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->num_oids	= num_oids;
+	args->oid	= oid;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_list_attr(daos_handle_t coh, char *buf, size_t *size, daos_event_t *ev)
+daos_cont_list_attr(daos_handle_t coh, char *buf, size_t *size,
+		    daos_event_t *ev)
 {
-	daos_cont_list_attr_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_cont_list_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_LIST_ATTR);
 
@@ -576,21 +591,21 @@ daos_cont_list_attr(daos_handle_t coh, char *buf, size_t *size, daos_event_t *ev
 	if (rc)
 		return rc;
 
-	args       = dc_task_get_args(task);
-	args->coh  = coh;
-	args->buf  = buf;
-	args->size = size;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->buf	= buf;
+	args->size	= size;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[], void *const values[],
-		   size_t sizes[], daos_event_t *ev)
+daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
+		   void *const values[], size_t sizes[], daos_event_t *ev)
 {
-	daos_cont_get_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_cont_get_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_GET_ATTR);
 
@@ -598,23 +613,24 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[], void *co
 	if (rc)
 		return rc;
 
-	args         = dc_task_get_args(task);
-	args->coh    = coh;
-	args->n      = n;
-	args->names  = names;
-	args->values = values;
-	args->sizes  = sizes;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[], void const *const values[],
-		   size_t const sizes[], daos_event_t *ev)
+daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
+		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev)
 {
-	daos_cont_set_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_cont_set_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SET_ATTR);
 
@@ -622,22 +638,23 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[], void con
 	if (rc)
 		return rc;
 
-	args         = dc_task_get_args(task);
-	args->coh    = coh;
-	args->n      = n;
-	args->names  = names;
-	args->values = values;
-	args->sizes  = sizes;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[], daos_event_t *ev)
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
+		   daos_event_t *ev)
 {
-	daos_cont_del_attr_t *args;
-	tse_task_t           *task;
-	int                   rc;
+	daos_cont_del_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DEL_ATTR);
 
@@ -645,21 +662,21 @@ daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[], daos_eve
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->coh   = coh;
-	args->n     = n;
-	args->names = names;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->n		= n;
+	args->names	= names;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs, char **names,
-		    daos_anchor_t *anchor, daos_event_t *ev)
+daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
+		    char **names, daos_anchor_t *anchor, daos_event_t *ev)
 {
-	daos_cont_list_snap_t *args;
-	tse_task_t            *task;
-	int                    rc;
+	daos_cont_list_snap_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_LIST_SNAP);
 
@@ -667,12 +684,12 @@ daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs, char **nam
 	if (rc)
 		return rc;
 
-	args         = dc_task_get_args(task);
-	args->coh    = coh;
-	args->nr     = nr;
-	args->epochs = epochs;
-	args->names  = names;
-	args->anchor = anchor;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->nr	= nr;
+	args->epochs	= epochs;
+	args->names	= names;
+	args->anchor	= anchor;
 
 	return dc_task_schedule(task, true);
 }
@@ -681,9 +698,9 @@ int
 daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 			  enum daos_snapshot_opts opts, daos_event_t *ev)
 {
-	daos_cont_create_snap_t *args;
-	tse_task_t              *task;
-	int                      rc;
+	daos_cont_create_snap_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE_SNAP);
 
@@ -691,27 +708,30 @@ daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 	if (rc)
 		return rc;
 
-	args        = dc_task_get_args(task);
-	args->coh   = coh;
-	args->epoch = epoch;
-	args->name  = name;
-	args->opts  = opts;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
+	args->name	= name;
+	args->opts	= opts;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name, daos_event_t *ev)
+daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
+		      daos_event_t *ev)
 {
-	return daos_cont_create_snap_opt(coh, epoch, name, DAOS_SNAP_OPT_CR, ev);
+	return daos_cont_create_snap_opt(coh, epoch, name,
+					 DAOS_SNAP_OPT_CR, ev);
 }
 
 int
-daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr, daos_event_t *ev)
+daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
+		       daos_event_t *ev)
 {
-	daos_cont_destroy_snap_t *args;
-	tse_task_t               *task;
-	int                       rc;
+	daos_cont_destroy_snap_t	*args;
+	tse_task_t		*task;
+	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY_SNAP);
 
@@ -719,9 +739,9 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr, daos_event_t *
 	if (rc)
 		return rc;
 
-	args      = dc_task_get_args(task);
-	args->coh = coh;
-	args->epr = epr;
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epr	= epr;
 
 	return dc_task_schedule(task, true);
 }

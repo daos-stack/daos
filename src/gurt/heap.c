@@ -6,7 +6,7 @@
 /**
  * This file is part of gurt, it implements the gurt bin heap functions.
  */
-#define D_LOGFAC DD_FAC(mem)
+#define D_LOGFAC	DD_FAC(mem)
 
 #include <pthread.h>
 #include <gurt/common.h>
@@ -70,9 +70,9 @@ dbh_unlock(struct d_binheap *h, bool read_only)
 static int
 d_binheap_grow(struct d_binheap *h)
 {
-	struct d_binheap_node ***frag1 = NULL;
-	struct d_binheap_node  **frag2;
-	uint32_t                 hwm;
+	struct d_binheap_node		***frag1 = NULL;
+	struct d_binheap_node		 **frag2;
+	uint32_t			   hwm;
 
 	D_ASSERT(h != NULL);
 	hwm = h->d_bh_hwm;
@@ -149,16 +149,16 @@ d_binheap_grow(struct d_binheap *h)
 
 	frag1[(hwm >> DBH_SHIFT) & DBH_MASK] = frag2;
 
-out:
+ out:
 	h->d_bh_hwm += DBH_SIZE;
 	return 0;
 }
 
 int
-d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv, struct d_binheap_ops *ops,
-			 struct d_binheap *h)
+d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
+			 struct d_binheap_ops *ops, struct d_binheap *h)
 {
-	int rc;
+	int	rc;
 
 	if (ops == NULL || ops->hop_compare == NULL) {
 		D_ERROR("invalid parameter, should pass in valid ops table.\n");
@@ -169,16 +169,17 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv, struct d_bi
 		return -DER_INVAL;
 	}
 
-	h->d_bh_ops       = ops;
-	h->d_bh_nodes_cnt = 0;
-	h->d_bh_hwm       = 0;
-	h->d_bh_priv      = priv;
-	h->d_bh_feats     = feats;
+	h->d_bh_ops	  = ops;
+	h->d_bh_nodes_cnt  = 0;
+	h->d_bh_hwm	  = 0;
+	h->d_bh_priv	  = priv;
+	h->d_bh_feats	  = feats;
 
 	while (h->d_bh_hwm < count) { /* preallocate */
-		rc = d_binheap_grow(h);
+	rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			d_binheap_destroy_inplace(h);
 			return rc;
 		}
@@ -194,11 +195,11 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv, struct d_bi
 }
 
 int
-d_binheap_create(uint32_t feats, uint32_t count, void *priv, struct d_binheap_ops *ops,
-		 struct d_binheap **h)
+d_binheap_create(uint32_t feats, uint32_t count, void *priv,
+		 struct d_binheap_ops *ops, struct d_binheap **h)
 {
-	struct d_binheap *bh_created;
-	int               rc;
+	struct d_binheap	*bh_created;
+	int			 rc;
 
 	if (ops == NULL || ops->hop_compare == NULL) {
 		D_ERROR("invalid parameter, should pass in valid ops table.\n");
@@ -228,7 +229,7 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv, struct d_binheap_op
 void
 d_binheap_destroy_inplace(struct d_binheap *h)
 {
-	uint32_t idx0, idx1, n;
+	uint32_t	idx0, idx1, n;
 
 	if (h == NULL) {
 		D_ERROR("ignore invalid parameter of NULL heap.\n");
@@ -301,8 +302,9 @@ d_binheap_pointer(struct d_binheap *h, uint32_t idx)
 		return &h->d_bh_nodes2[idx >> DBH_SHIFT][idx & DBH_MASK];
 
 	idx -= DBH_SIZE * DBH_SIZE;
-	return &(
-	    h->d_bh_nodes3[idx >> (2 * DBH_SHIFT)][(idx >> DBH_SHIFT) & DBH_MASK][idx & DBH_MASK]);
+	return &(h->d_bh_nodes3[idx >> (2 * DBH_SHIFT)]
+				 [(idx >> DBH_SHIFT) & DBH_MASK]
+				 [idx & DBH_MASK]);
 }
 
 static struct d_binheap_node *
@@ -348,11 +350,11 @@ d_binheap_find(struct d_binheap *h, uint32_t idx)
 static int
 d_binheap_bubble(struct d_binheap *h, struct d_binheap_node *e)
 {
-	struct d_binheap_node **cur_ptr;
-	struct d_binheap_node **parent_ptr;
-	uint32_t                cur_idx;
-	uint32_t                parent_idx;
-	int                     did_sth = 0;
+	struct d_binheap_node		**cur_ptr;
+	struct d_binheap_node		**parent_ptr;
+	uint32_t			  cur_idx;
+	uint32_t			  parent_idx;
+	int				  did_sth = 0;
 
 	D_ASSERT(h != NULL && e != NULL);
 	cur_idx = e->chn_idx;
@@ -369,14 +371,14 @@ d_binheap_bubble(struct d_binheap *h, struct d_binheap_node *e)
 			break;
 
 		(*parent_ptr)->chn_idx = cur_idx;
-		*cur_ptr               = *parent_ptr;
-		cur_ptr                = parent_ptr;
-		cur_idx                = parent_idx;
-		did_sth                = 1;
+		*cur_ptr = *parent_ptr;
+		cur_ptr = parent_ptr;
+		cur_idx = parent_idx;
+		did_sth = 1;
 	}
 
 	e->chn_idx = cur_idx;
-	*cur_ptr   = e;
+	*cur_ptr = e;
 
 	return did_sth;
 }
@@ -394,20 +396,20 @@ d_binheap_bubble(struct d_binheap *h, struct d_binheap_node *e)
 static int
 d_binheap_sink(struct d_binheap *h, struct d_binheap_node *e)
 {
-	struct d_binheap_node **child_ptr;
-	struct d_binheap_node  *child;
-	struct d_binheap_node **child2_ptr;
-	struct d_binheap_node  *child2;
-	struct d_binheap_node **cur_ptr;
-	uint32_t                child2_idx;
-	uint32_t                child_idx;
-	uint32_t                cur_idx;
-	uint32_t                n;
-	int                     did_sth = 0;
+	struct d_binheap_node		**child_ptr;
+	struct d_binheap_node		 *child;
+	struct d_binheap_node		**child2_ptr;
+	struct d_binheap_node		  *child2;
+	struct d_binheap_node		**cur_ptr;
+	uint32_t			  child2_idx;
+	uint32_t			  child_idx;
+	uint32_t			  cur_idx;
+	uint32_t			  n;
+	int				  did_sth = 0;
 
 	D_ASSERT(h != NULL && e != NULL);
 
-	n       = h->d_bh_nodes_cnt;
+	n = h->d_bh_nodes_cnt;
 	cur_idx = e->chn_idx;
 	cur_ptr = d_binheap_pointer(h, cur_idx);
 	D_ASSERT(*cur_ptr == e);
@@ -418,17 +420,17 @@ d_binheap_sink(struct d_binheap *h, struct d_binheap_node *e)
 			break;
 
 		child_ptr = d_binheap_pointer(h, child_idx);
-		child     = *child_ptr;
+		child = *child_ptr;
 
 		child2_idx = child_idx + 1;
 		if (child2_idx < n) {
 			child2_ptr = d_binheap_pointer(h, child2_idx);
-			child2     = *child2_ptr;
+			child2 = *child2_ptr;
 
 			if (h->d_bh_ops->hop_compare(child2, child)) {
 				child_idx = child2_idx;
 				child_ptr = child2_ptr;
-				child     = child2;
+				child = child2;
 			}
 		}
 
@@ -438,14 +440,14 @@ d_binheap_sink(struct d_binheap *h, struct d_binheap_node *e)
 			break;
 
 		child->chn_idx = cur_idx;
-		*cur_ptr       = child;
-		cur_ptr        = child_ptr;
-		cur_idx        = child_idx;
-		did_sth        = 1;
+		*cur_ptr = child;
+		cur_ptr = child_ptr;
+		cur_idx = child_idx;
+		did_sth = 1;
 	}
 
 	e->chn_idx = cur_idx;
-	*cur_ptr   = e;
+	*cur_ptr = e;
 
 	return did_sth;
 }
@@ -453,9 +455,9 @@ d_binheap_sink(struct d_binheap *h, struct d_binheap_node *e)
 int
 d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 {
-	struct d_binheap_node **new_ptr;
-	uint32_t                new_idx;
-	int                     rc;
+	struct d_binheap_node		**new_ptr;
+	uint32_t			  new_idx;
+	int				  rc;
 
 	if (h == NULL || e == NULL) {
 		D_ERROR("invalid parameter of NULL h or e.\n");
@@ -469,7 +471,8 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (new_idx == h->d_bh_hwm) {
 		rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
@@ -478,14 +481,15 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (h->d_bh_ops->hop_enter) {
 		rc = h->d_bh_ops->hop_enter(h, e);
 		if (rc != 0) {
-			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
 	}
 
 	e->chn_idx = new_idx;
-	new_ptr    = d_binheap_pointer(h, new_idx);
+	new_ptr = d_binheap_pointer(h, new_idx);
 	h->d_bh_nodes_cnt++;
 	*new_ptr = e;
 
@@ -499,17 +503,17 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 static void
 d_binheap_remove_locked(struct d_binheap *h, struct d_binheap_node *e)
 {
-	struct d_binheap_node **cur_ptr;
-	struct d_binheap_node  *last;
-	uint32_t                cur_idx;
-	uint32_t                n;
+	struct d_binheap_node		**cur_ptr;
+	struct d_binheap_node		 *last;
+	uint32_t			  cur_idx;
+	uint32_t			  n;
 
 	if (h == NULL || e == NULL) {
 		D_ERROR("invalid parameter of NULL h or e.\n");
 		return;
 	}
 
-	n       = h->d_bh_nodes_cnt;
+	n = h->d_bh_nodes_cnt;
 	cur_idx = e->chn_idx;
 
 	D_ASSERT(cur_idx != DBH_POISON);
@@ -519,13 +523,13 @@ d_binheap_remove_locked(struct d_binheap *h, struct d_binheap_node *e)
 	D_ASSERT(*cur_ptr == e);
 
 	n--;
-	last              = *d_binheap_pointer(h, n);
+	last = *d_binheap_pointer(h, n);
 	h->d_bh_nodes_cnt = n;
 	if (last == e)
 		goto out;
 
 	last->chn_idx = cur_idx;
-	*cur_ptr      = last;
+	*cur_ptr = last;
 	if (!d_binheap_bubble(h, *cur_ptr))
 		d_binheap_sink(h, *cur_ptr);
 

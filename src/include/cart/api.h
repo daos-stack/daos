@@ -224,8 +224,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout);
  *                             negative value if internal and \a conb_cb error
  */
 int
-crt_progress_cond(crt_context_t crt_ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
-		  void *arg);
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Create an RPC request.
@@ -257,7 +257,8 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout, crt_progress_cond_cb_t
  *        called for this req before crt_req_send().
  */
 int
-crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, crt_rpc_t **req);
+crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+	       crt_rpc_t **req);
 
 /**
  * Set the endpoint for an RPC request.
@@ -716,200 +717,227 @@ crt_ep_abort(crt_endpoint_t *ep);
  # CRT_GEN_PROC_FUNC(struct, CRT_SEQ_MY_TYPE)
  *
  */
-#define CRT_VAR                 (0)
-#define CRT_PTR                 (1)
-#define CRT_ARRAY               (2)
-#define CRT_RAW                 (3)
+#define CRT_VAR		(0)
+#define CRT_PTR		(1)
+#define CRT_ARRAY	(2)
+#define CRT_RAW		(3)
 
-#define CRT_GEN_GET_TYPE(seq)   BOOST_PP_SEQ_ELEM(0, seq)
-#define CRT_GEN_GET_NAME(seq)   BOOST_PP_SEQ_ELEM(1, seq)
-#define CRT_GEN_GET_KIND(seq)   BOOST_PP_SEQ_ELEM(2, seq)
+#define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_ELEM(0, seq)
+#define CRT_GEN_GET_NAME(seq) BOOST_PP_SEQ_ELEM(1, seq)
+#define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_ELEM(2, seq)
 
 /* convert constructed name into proper name */
-#define crt_proc_struct         BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() crt_proc_struct_,
+#define crt_proc_struct BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() \
+	crt_proc_struct_,
 
-#define CRT_GEN_X(x)            x
-#define CRT_GEN_X2(x)           CRT_GEN_X BOOST_PP_LPAREN() crt_proc_##x BOOST_PP_RPAREN()
-#define CRT_GEN_GET_FUNC(seq)   CRT_GEN_X2 BOOST_PP_SEQ_FIRST_N(1, seq)
-#define CRT_GEN_X3(x)           CRT_GEN_X BOOST_PP_LPAREN() fail_##x BOOST_PP_RPAREN()
+#define CRT_GEN_X(x) x
+#define CRT_GEN_X2(x) CRT_GEN_X BOOST_PP_LPAREN() crt_proc_##x BOOST_PP_RPAREN()
+#define CRT_GEN_GET_FUNC(seq) CRT_GEN_X2 BOOST_PP_SEQ_FIRST_N(1, seq)
+#define CRT_GEN_X3(x) CRT_GEN_X BOOST_PP_LPAREN() fail_##x BOOST_PP_RPAREN()
 #define CRT_GEN_FAIL_LABEL(seq) CRT_GEN_X3 BOOST_PP_SEQ_TAIL(BOOST_PP_SEQ_FIRST_N(2, seq))
 
-#define CRT_GEN_STRUCT_FIELD(seq)                                                                  \
-	BOOST_PP_EXPAND(BOOST_PP_IF(                                                               \
-			    BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),            \
-			    struct {                                                               \
-				    uint64_t ca_count;                                             \
-				    CRT_GEN_GET_TYPE(seq) * ca_arrays;                             \
-			    },                                                                     \
-			    CRT_GEN_GET_TYPE(seq))                                                 \
-			    BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_PTR, CRT_GEN_GET_KIND(seq)),  \
-					*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));)
+#define CRT_GEN_STRUCT_FIELD(seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		struct {						\
+			uint64_t		 ca_count;		\
+			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
+		},							\
+		CRT_GEN_GET_TYPE(seq))					\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_PTR, CRT_GEN_GET_KIND(seq)), \
+		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));)
 
-#define CRT_GEN_STRUCT_FIELDS(z, n, seq) CRT_GEN_STRUCT_FIELD(BOOST_PP_SEQ_ELEM(n, seq))
+#define CRT_GEN_STRUCT_FIELDS(z, n, seq)				\
+	CRT_GEN_STRUCT_FIELD(BOOST_PP_SEQ_ELEM(n, seq))
 
-#define CRT_GEN_STRUCT(struct_type_name, seq)                                                      \
-	struct struct_type_name {                                                                  \
-		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq), CRT_GEN_STRUCT_FIELDS, seq)                \
+#define CRT_GEN_STRUCT(struct_type_name, seq)				\
+	struct struct_type_name {					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_STRUCT_FIELDS, seq)		\
 	};
 
-#define CRT_GEN_PROC_ARRAY(ptr, seq)                                                               \
-	do {                                                                                       \
-		CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;            \
-		CRT_GEN_GET_TYPE(seq) *e_ptr   = ptr->CRT_GEN_GET_NAME(seq).ca_arrays;             \
-		uint64_t count                 = ptr->CRT_GEN_GET_NAME(seq).ca_count;              \
-		uint64_t i;                                                                        \
-		if (proc_op == CRT_PROC_DECODE)                                                    \
-			*e_ptrp = NULL;                                                            \
-		/* process the count of array first */                                             \
-		rc = crt_proc_uint64_t(proc, proc_op, &count);                                     \
-		if (unlikely(rc))                                                                  \
-			goto CRT_GEN_FAIL_LABEL(seq);                                              \
-		ptr->CRT_GEN_GET_NAME(seq).ca_count = count;                                       \
-		if (unlikely(count == 0))                                                          \
-			break; /* goto next field */                                               \
-		if (proc_op == CRT_PROC_DECODE) {                                                  \
-			D_ALLOC_ARRAY(e_ptr, (int)count);                                          \
-			if (unlikely(e_ptr == NULL)) {                                             \
-				rc = -DER_NOMEM;                                                   \
-				goto CRT_GEN_FAIL_LABEL(seq);                                      \
-			}                                                                          \
-			*e_ptrp = e_ptr;                                                           \
-		}                                                                                  \
-		/* process the elements of array */                                                \
-		for (i = 0; i < count && e_ptr != NULL; i++) {                                     \
-			rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &e_ptr[i]);                      \
-			if (unlikely(rc)) {                                                        \
-				if (proc_op == CRT_PROC_DECODE)                                    \
-					ptr->CRT_GEN_GET_NAME(seq).ca_count = i;                   \
-				goto CRT_GEN_FAIL_LABEL(seq);                                      \
-			}                                                                          \
-		}                                                                                  \
-		if (proc_op == CRT_PROC_FREE)                                                      \
-			D_FREE(*e_ptrp);                                                           \
+#define CRT_GEN_PROC_ARRAY(ptr, seq)					\
+	do {								\
+	CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+	CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+	uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;		\
+	uint64_t i;							\
+	if (proc_op == CRT_PROC_DECODE)					\
+		*e_ptrp = NULL;						\
+	/* process the count of array first */				\
+	rc = crt_proc_uint64_t(proc, proc_op, &count);			\
+	if (unlikely(rc))						\
+		goto CRT_GEN_FAIL_LABEL(seq);				\
+	ptr->CRT_GEN_GET_NAME(seq).ca_count = count;			\
+	if (unlikely(count == 0))					\
+		break; /* goto next field */				\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		D_ALLOC_ARRAY(e_ptr, (int)count);			\
+		if (unlikely(e_ptr == NULL)) {				\
+			rc = -DER_NOMEM;				\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
+		}							\
+		*e_ptrp = e_ptr;					\
+	}								\
+	/* process the elements of array */				\
+	for (i = 0; i < count && e_ptr != NULL; i++) {			\
+		rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &e_ptr[i]);	\
+		if (unlikely(rc)) {					\
+			if (proc_op == CRT_PROC_DECODE)			\
+				ptr->CRT_GEN_GET_NAME(seq).ca_count = i;\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
+		}							\
+	}								\
+	if (proc_op == CRT_PROC_FREE)					\
+		D_FREE(*e_ptrp);					\
 	} while (0);
 
-#define CRT_GEN_FAIL_ARRAY(ptr, seq)                                                               \
-	CRT_GEN_FAIL_LABEL(seq) : if (proc_op == CRT_PROC_DECODE)                                  \
-	{                                                                                          \
-		CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;            \
-		CRT_GEN_GET_TYPE(seq) *e_ptr   = ptr->CRT_GEN_GET_NAME(seq).ca_arrays;             \
-		uint64_t count                 = ptr->CRT_GEN_GET_NAME(seq).ca_count;              \
-		uint64_t i;                                                                        \
-		/* process the elements of array */                                                \
-		for (i = 0; i < count && e_ptr != NULL; i++)                                       \
-			(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE, &e_ptr[i]);               \
-		D_FREE(*e_ptrp);                                                                   \
-		ptr->CRT_GEN_GET_NAME(seq).ca_count = 0;                                           \
+#define CRT_GEN_FAIL_ARRAY(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):					\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+		CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
+		uint64_t i;						\
+		/* process the elements of array */			\
+		for (i = 0; i < count && e_ptr != NULL; i++)		\
+			(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,\
+						    &e_ptr[i]);		\
+		D_FREE(*e_ptrp);					\
+		ptr->CRT_GEN_GET_NAME(seq).ca_count = 0;		\
 	}
 
-#define CRT_GEN_PROC_RAW(ptr, seq)                                                                 \
-	rc = crt_proc_memcpy(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq),                           \
-			     sizeof(CRT_GEN_GET_TYPE(seq)));                                       \
-	if (unlikely(rc))                                                                          \
+#define CRT_GEN_PROC_RAW(ptr, seq)					\
+	rc = crt_proc_memcpy(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq),\
+			     sizeof(CRT_GEN_GET_TYPE(seq)));		\
+	if (unlikely(rc))						\
 		goto CRT_GEN_FAIL_LABEL(seq);
 
-#define CRT_GEN_FAIL_RAW(ptr, seq) CRT_GEN_FAIL_LABEL(seq) :;
+#define CRT_GEN_FAIL_RAW(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):;
 
-#define CRT_GEN_PROC_ALL(ptr, seq)                                                                 \
-	rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq));                    \
-	if (unlikely(rc))                                                                          \
+#define CRT_GEN_PROC_ALL(ptr, seq)					\
+	rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op,			\
+				   &ptr->CRT_GEN_GET_NAME(seq));	\
+	if (unlikely(rc))						\
 		goto CRT_GEN_FAIL_LABEL(seq);
 
-#define CRT_GEN_FAIL_ALL(ptr, seq)                                                                 \
-	(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE, &ptr->CRT_GEN_GET_NAME(seq));             \
-	CRT_GEN_FAIL_LABEL(seq) :;
+#define CRT_GEN_FAIL_ALL(ptr, seq)					\
+	(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,		\
+				    &ptr->CRT_GEN_GET_NAME(seq));	\
+	CRT_GEN_FAIL_LABEL(seq):;
 
-#define CRT_GEN_PROC_FIELD(ptr, seq)                                                               \
-	BOOST_PP_EXPAND(                                                                           \
-	    BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),                \
-			CRT_GEN_PROC_ARRAY(ptr, seq),                                              \
-			BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)),      \
-				    CRT_GEN_PROC_RAW(ptr, seq), CRT_GEN_PROC_ALL(ptr, seq))))
+#define CRT_GEN_PROC_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_PROC_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_PROC_RAW(ptr, seq),				\
+		CRT_GEN_PROC_ALL(ptr, seq))))
 
-#define CRT_GEN_FAIL_FIELD(ptr, seq)                                                               \
-	BOOST_PP_EXPAND(                                                                           \
-	    BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),                \
-			CRT_GEN_FAIL_ARRAY(ptr, seq),                                              \
-			BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)),      \
-				    CRT_GEN_FAIL_RAW(ptr, seq), CRT_GEN_FAIL_ALL(ptr, seq))))
+#define CRT_GEN_FAIL_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_FAIL_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_FAIL_RAW(ptr, seq),				\
+		CRT_GEN_FAIL_ALL(ptr, seq))))
 
-#define CRT_GEN_PROC_FIELDS(z, n, seq) CRT_GEN_PROC_FIELD(ptr, BOOST_PP_SEQ_ELEM(n, seq))
+#define CRT_GEN_PROC_FIELDS(z, n, seq)					\
+	CRT_GEN_PROC_FIELD(ptr, BOOST_PP_SEQ_ELEM(n, seq))
 
-#define CRT_GEN_FAIL_FIELDS(z, n, seq)                                                             \
-	CRT_GEN_FAIL_FIELD(                                                                        \
-	    ptr, BOOST_PP_SEQ_ELEM(BOOST_PP_SUB(BOOST_PP_DEC(BOOST_PP_SEQ_SIZE(seq)), n), seq))
+#define CRT_GEN_FAIL_FIELDS(z, n, seq)					\
+	CRT_GEN_FAIL_FIELD(ptr, BOOST_PP_SEQ_ELEM(BOOST_PP_SUB(BOOST_PP_DEC(BOOST_PP_SEQ_SIZE(seq)), n), seq))
 
-#define CRT_GEN_PROC_FUNC(type_name, seq)                                                          \
-	static int crt_proc_##type_name(crt_proc_t proc, struct type_name *ptr)                    \
-	{                                                                                          \
-		crt_proc_op_t proc_op;                                                             \
-		int           rc;                                                                  \
-		if (unlikely(proc == NULL || ptr == NULL))                                         \
-			return -DER_INVAL;                                                         \
-		rc = crt_proc_get_op(proc, &proc_op);                                              \
-		if (unlikely(rc))                                                                  \
-			return rc;                                                                 \
-		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq), CRT_GEN_PROC_FIELDS, seq)                  \
-		if (unlikely(rc)) {                                                                \
-			BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq), CRT_GEN_FAIL_FIELDS, seq)          \
-		}                                                                                  \
-		return rc;                                                                         \
+#define CRT_GEN_PROC_FUNC(type_name, seq)				\
+	static int							\
+	crt_proc_##type_name(crt_proc_t proc, struct type_name *ptr) {	\
+		crt_proc_op_t proc_op;					\
+		int rc;							\
+		if (unlikely(proc == NULL || ptr == NULL))		\
+			return -DER_INVAL;				\
+		rc = crt_proc_get_op(proc, &proc_op);			\
+		if (unlikely(rc))					\
+			return rc;					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_PROC_FIELDS, seq)		\
+		if (unlikely(rc)) {					\
+			BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),		\
+					CRT_GEN_FAIL_FIELDS, seq)	\
+		}							\
+		return rc;						\
 	}
 
-#define POP_BACK(seq)       BOOST_PP_SEQ_HEAD(BOOST_PP_SEQ_REVERSE(seq))
-#define FOFFSET(sname, seq) offsetof(struct sname, CRT_GEN_GET_NAME(POP_BACK(seq)))
+#define POP_BACK(seq) BOOST_PP_SEQ_HEAD(BOOST_PP_SEQ_REVERSE(seq))
+#define FOFFSET(sname, seq)						\
+	offsetof(struct sname, CRT_GEN_GET_NAME(POP_BACK(seq)))
 
-#define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)                                           \
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in), CRT_GEN_STRUCT(rpc_name##_in, fields_in), )      \
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out), CRT_GEN_STRUCT(rpc_name##_out, fields_out), )   \
-	/* Generate a packed struct and assert use the offset of the */                            \
-	/* last field to assert that there are no holes */                                         \
-	_Pragma("pack(push, 1)") BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),                         \
-					     CRT_GEN_STRUCT(rpc_name##_in_packed, fields_in), )    \
-	    BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),                                             \
-			CRT_GEN_STRUCT(rpc_name##_out_packed, fields_out), ) _Pragma("pack(pop)")  \
-		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),                                         \
-			    static_assert(FOFFSET(rpc_name##_out_packed, ((_)(_)(_))fields_out) == \
-					      FOFFSET(rpc_name##_out, ((_)(_)(_))fields_out),      \
-					  #rpc_name " output struct has a hole");                  \
-			    , )                                                                    \
-		    BOOST_PP_IF(                                                                   \
-			BOOST_PP_SEQ_SIZE(fields_in),                                              \
-			static_assert(FOFFSET(rpc_name##_in_packed, ((_)(_)(_))fields_in) ==       \
-					  FOFFSET(rpc_name##_in, ((_)(_)(_))fields_in),            \
-				      #rpc_name " input struct has a hole");                       \
-			, ) extern struct crt_req_format CQF_##rpc_name;
+#define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		    CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		    CRT_GEN_STRUCT(rpc_name##_out, fields_out), )	\
+	/* Generate a packed struct and assert use the offset of the */	\
+	/* last field to assert that there are no holes */		\
+	_Pragma("pack(push, 1)")					\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		CRT_GEN_STRUCT(rpc_name##_in_packed, fields_in), )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		CRT_GEN_STRUCT(rpc_name##_out_packed, fields_out), )	\
+	_Pragma("pack(pop)")						\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		    static_assert(FOFFSET(rpc_name##_out_packed,	\
+					  ((_) (_) (_)) fields_out) ==	\
+				  FOFFSET(rpc_name##_out, ((_) (_) (_))	\
+					  fields_out), #rpc_name	\
+				  " output struct has a hole");, )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		    static_assert(FOFFSET(rpc_name##_in_packed,		\
+					  ((_) (_) (_)) fields_in) ==	\
+				  FOFFSET(rpc_name##_in, ((_) (_) (_))	\
+					  fields_in), #rpc_name		\
+				  " input struct has a hole");, )	\
+	extern struct crt_req_format CQF_##rpc_name;
 
 /* warning was introduced in version 8 of GCC */
 #if D_HAS_WARNING(8, "-Wsizeof-pointer-div")
-#define CRT_DISABLE_SIZEOF_POINTER_DIV _Pragma("GCC diagnostic ignored \"-Wsizeof-pointer-div\"")
+#define CRT_DISABLE_SIZEOF_POINTER_DIV					\
+	_Pragma("GCC diagnostic ignored \"-Wsizeof-pointer-div\"")
 #else /* warning not available */
 #define CRT_DISABLE_SIZEOF_POINTER_DIV
 #endif /* warning is available */
 
-#define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)                                            \
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in), CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )   \
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),                                                 \
-		    CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )                               \
-	_Pragma("GCC diagnostic push")                                                             \
-	    CRT_DISABLE_SIZEOF_POINTER_DIV struct crt_req_format CQF_##rpc_name = {                \
-		.crf_proc_in  = (crt_proc_cb_t)BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),           \
-							   crt_proc_##rpc_name##_in, NULL),        \
-		.crf_proc_out = (crt_proc_cb_t)BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),          \
-							   crt_proc_##rpc_name##_out, NULL),       \
-		.crf_size_in =                                                                     \
-		    BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in), sizeof(struct rpc_name##_in), 0),    \
-		.crf_size_out =                                                                    \
-		    BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out), sizeof(struct rpc_name##_out), 0)}; \
+#define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		    CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		    CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
+	_Pragma("GCC diagnostic push")					\
+	CRT_DISABLE_SIZEOF_POINTER_DIV					\
+	struct crt_req_format CQF_##rpc_name = {			\
+		.crf_proc_in  = (crt_proc_cb_t)				\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
+			crt_proc_##rpc_name##_in, NULL),		\
+		.crf_proc_out = (crt_proc_cb_t)				\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
+			crt_proc_##rpc_name##_out, NULL),		\
+		.crf_size_in  =						\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
+			sizeof(struct rpc_name##_in), 0),		\
+		.crf_size_out =						\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
+			sizeof(struct rpc_name##_out), 0)		\
+	};								\
 	_Pragma("GCC diagnostic pop")
 
-#define CRT_RPC_CORPC_REGISTER(opcode, rpc_name, rpc_handler, co_ops)                              \
+#define CRT_RPC_CORPC_REGISTER(opcode, rpc_name, rpc_handler, co_ops)	\
 	crt_corpc_register(opcode, &CQF_##rpc_name, rpc_handler, co_ops)
 
-#define CRT_RPC_SRV_REGISTER(opcode, flags, rpc_name, rpc_handler)                                 \
+#define CRT_RPC_SRV_REGISTER(opcode, flags, rpc_name, rpc_handler)	\
 	crt_rpc_srv_register(opcode, flags, &CQF_##rpc_name, rpc_handler)
 
-#define CRT_RPC_REGISTER(opcode, flags, rpc_name) crt_rpc_register(opcode, flags, &CQF_##rpc_name)
+#define CRT_RPC_REGISTER(opcode, flags, rpc_name)			\
+	crt_rpc_register(opcode, flags, &CQF_##rpc_name)
 
 /**
  * Dynamically register an RPC with features at client-side.
@@ -943,8 +971,8 @@ crt_rpc_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *drf);
  * \return                     0 for success, negative value if failed.
  *
  */
-typedef int (*crt_rpc_task_t)(crt_context_t *ctx, void *rpc_hdlr_arg, void (*rpc_hdlr)(void *),
-			      void *arg);
+typedef int (*crt_rpc_task_t) (crt_context_t *ctx, void *rpc_hdlr_arg,
+			       void (*rpc_hdlr)(void *), void *arg);
 /**
  * Register RPC process callback for all RPCs this context received.
  * This callback enables the thread to modify how the rpc callbacks are
@@ -984,7 +1012,8 @@ crt_context_register_rpc_task(crt_context_t crt_ctx, crt_rpc_task_t rpc_cb,
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_rpc_srv_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *crf,
+crt_rpc_srv_register(crt_opcode_t opc, uint32_t flags,
+		     struct crt_req_format *crf,
 		     crt_rpc_cb_t rpc_handler);
 
 /******************************************************************************
@@ -1002,8 +1031,8 @@ crt_rpc_srv_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *cr
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
-		crt_bulk_t *bulk_hdl);
+crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
+		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
  * Bind bulk handle to local context, to associate the origin address of the
@@ -1085,8 +1114,8 @@ crt_bulk_free(crt_bulk_t bulk_hdl);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
-		  crt_bulk_opid_t *opid);
+crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
+		  void *arg, crt_bulk_opid_t *opid);
 
 /**
  * Start a bulk transferring by using the remote bulk handle bound address
@@ -1106,7 +1135,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, vo
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
+crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
+		       crt_bulk_cb_t complete_cb, void *arg,
 		       crt_bulk_opid_t *opid);
 
 /**
@@ -1151,17 +1181,17 @@ crt_bulk_abort(crt_context_t crt_ctx, crt_bulk_opid_t opid);
 
 /* Types for tree topology */
 enum crt_tree_type {
-	CRT_TREE_INVALID = 0,
-	CRT_TREE_MIN     = 1,
-	CRT_TREE_FLAT    = 1,
-	CRT_TREE_KARY    = 2,
-	CRT_TREE_KNOMIAL = 3,
-	CRT_TREE_MAX     = 3,
+	CRT_TREE_INVALID	= 0,
+	CRT_TREE_MIN		= 1,
+	CRT_TREE_FLAT		= 1,
+	CRT_TREE_KARY		= 2,
+	CRT_TREE_KNOMIAL	= 3,
+	CRT_TREE_MAX		= 3,
 };
 
-#define CRT_TREE_TYPE_SHIFT (16U)
-#define CRT_TREE_MAX_RATIO  (64)
-#define CRT_TREE_MIN_RATIO  (2)
+#define CRT_TREE_TYPE_SHIFT	(16U)
+#define CRT_TREE_MAX_RATIO	(64)
+#define CRT_TREE_MIN_RATIO	(2)
 
 /*
  * Calculate the tree topology. Can only be called on the server side.
@@ -1276,7 +1306,8 @@ crt_group_lookup(crt_group_id_t grp_id);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb, void *arg);
+crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
+		  void *arg);
 
 /**
  * Attach to a primary service group.
@@ -1408,8 +1439,9 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp, d_rank_list_t *filter_ranks,
-		     crt_opcode_t opc, crt_bulk_t co_bulk_hdl, void *priv, uint32_t flags,
+crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
+		     d_rank_list_t *filter_ranks, crt_opcode_t opc,
+		     crt_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, crt_rpc_t **req);
 
 /**
@@ -1436,8 +1468,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp, d_rank_list_t *fil
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf, crt_rpc_cb_t rpc_handler,
-		   struct crt_corpc_ops *co_ops);
+crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
+		   crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops);
 
 /**
  * Query the caller's rank number within group.
@@ -1507,7 +1539,7 @@ typedef enum {
 #define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
 #define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
 
-#define crt_proc_raw      crt_proc_memcpy
+#define crt_proc_raw crt_proc_memcpy
 
 /**
  * Get the operation type associated to the proc processor.
@@ -1531,7 +1563,8 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_memcpy(crt_proc_t proc, crt_proc_op_t proc_op, void *data, size_t data_size);
+crt_proc_memcpy(crt_proc_t proc, crt_proc_op_t proc_op,
+		void *data, size_t data_size);
 
 /**
  * Generic processing routine.
@@ -1650,7 +1683,8 @@ crt_proc_bool(crt_proc_t proc, crt_proc_op_t proc_op, bool *data);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *bulk_hdl);
+crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
+		    crt_bulk_t *bulk_hdl);
 
 /**
  * Generic processing routine.
@@ -1674,7 +1708,8 @@ crt_proc_d_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_string_t *data);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_d_const_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_const_string_t *data);
+crt_proc_d_const_string_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			  d_const_string_t *data);
 
 /**
  * Generic processing routine.
@@ -1705,7 +1740,8 @@ crt_proc_uuid_t(crt_proc_t proc, crt_proc_op_t proc_op, uuid_t *data);
  *    function will internally free the memory when freeing the input or output.
  */
 int
-crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_rank_list_t **data);
+crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
+		       d_rank_list_t **data);
 
 /**
  * Generic processing routine.
@@ -1719,7 +1755,8 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_rank_list_t **d
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
-typedef int64_t (*crt_progress_cb)(crt_context_t ctx, int64_t timeout, void *arg);
+typedef int64_t
+(*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()
@@ -1757,8 +1794,9 @@ enum crt_event_type {
  * \param[in] arg              arg passed to crt_register_event_cb with this
  *                             callback
  */
-typedef void (*crt_event_cb)(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
-			     enum crt_event_type type, void *arg);
+typedef void
+(*crt_event_cb) (d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+		 enum crt_event_type type, void *arg);
 
 /**
  * This function registers an event handler for any changes in rank state.
@@ -1792,7 +1830,8 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
-typedef void (*crt_hlc_error_cb)(void *arg);
+typedef void
+(*crt_hlc_error_cb) (void *arg);
 
 /**
  * This function registers an event handler for hlc synchronization errors.
@@ -1912,8 +1951,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  *                             failure.
  */
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-		crt_proto_query_cb_t cb, void *arg);
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
+		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
 /**
  * query tgt_ep if it has registered base_opc with version using a user provided cart context.
@@ -1976,7 +2015,8 @@ crt_rank_uri_get(crt_group_t *grp, d_rank_t rank, int tag, char **uri);
  *                              failure.
  */
 int
-crt_rank_state_get(crt_group_t *grp, d_rank_t rank, struct swim_member_state *state);
+crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
+		   struct swim_member_state *state);
 
 /**
  * Remove specified rank from the group.
@@ -2003,8 +2043,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_self_uri_get(int tag, char **uri);
+int crt_self_uri_get(int tag, char **uri);
 
 /**
  * Retrieve incarnation of self.
@@ -2014,8 +2053,7 @@ crt_self_uri_get(int tag, char **uri);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_self_incarnation_get(uint64_t *incarnation);
+int crt_self_incarnation_get(uint64_t *incarnation);
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -2032,8 +2070,7 @@ crt_self_incarnation_get(uint64_t *incarnation);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
+int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
 
 /**
  * Sets group info (nodes and associated uris) baesd on passed
@@ -2045,8 +2082,7 @@ crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_info_set(d_iov_t *grp_info);
+int crt_group_info_set(d_iov_t *grp_info);
 
 /**
  * Retrieve list of ranks that belong to the specified group.
@@ -2057,8 +2093,7 @@ crt_group_info_set(d_iov_t *grp_info);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure
  */
-int
-crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
+int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
 
 /**
  * Create local group view and return a handle to a group.
@@ -2070,8 +2105,7 @@ crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure
  */
-int
-crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
+int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
 
 /**
  * Destroy group handle previously created by \a crt_Group_view_create
@@ -2082,8 +2116,7 @@ crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_view_destroy(crt_group_t *grp);
+int crt_group_view_destroy(crt_group_t *grp);
 
 /**
  * Specify rank to be a PSR for the provided group
@@ -2094,8 +2127,7 @@ crt_group_view_destroy(crt_group_t *grp);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
+int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
 
 /**
  * Specify list of ranks to be a PSRs for the provided group
@@ -2106,8 +2138,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
+int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
 
 /**
  * Add rank to the specified primary group.
@@ -2126,8 +2157,8 @@ crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp, d_rank_t primary_rank, char *uri);
+int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
+			d_rank_t primary_rank, char *uri);
 
 /**
  * Add rank to the specified secondary group.
@@ -2139,8 +2170,8 @@ crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp, d_rank_t primary
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int
-crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank, d_rank_t primary_rank);
+int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
+				d_rank_t primary_rank);
 /**
  * Create a secondary group.
  *
@@ -2153,9 +2184,9 @@ crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank, d_rank_t
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
-int
-crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp, d_rank_list_t *ranks,
-			   crt_group_t **ret_grp);
+int crt_group_secondary_create(crt_group_id_t grp_name,
+			crt_group_t *primary_grp, d_rank_list_t *ranks,
+			crt_group_t **ret_grp);
 
 /**
  * Enable auto-rank removal on secondary group. Only applicable for primary
@@ -2168,8 +2199,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp, d_
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
-int
-crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
+int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
 
 /**
  * Destroy a secondary group.
@@ -2179,8 +2209,7 @@ crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
-int
-crt_group_secondary_destroy(crt_group_t *grp);
+int crt_group_secondary_destroy(crt_group_t *grp);
 
 /**
  * Perform a primary group modification in an atomic fashion based on the
@@ -2223,9 +2252,9 @@ crt_group_secondary_destroy(crt_group_t *grp);
  * [uri0 for provider2 identified by ctx2]
  * etc...
  */
-int
-crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_rank_list_t *ranks,
-			 char **uris, crt_group_mod_op_t op, uint32_t version);
+int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
+			int num_ctxs, d_rank_list_t *ranks, char **uris,
+			crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the
@@ -2241,9 +2270,9 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
-int
-crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks, d_rank_list_t *prim_ranks,
-			   crt_group_mod_op_t op, uint32_t version);
+int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
+			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
+			uint32_t version);
 
 /**
  * Initialize swim on the specified context index.
@@ -2253,20 +2282,18 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks, d_rank_li
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
-int
-crt_swim_init(int crt_ctx_idx);
+int crt_swim_init(int crt_ctx_idx);
 
 /** Finalize swim.
  */
-void
-crt_swim_fini(void);
+void crt_swim_fini(void);
 
-#define crt_proc__Bool          crt_proc_bool
-#define crt_proc_d_rank_t       crt_proc_uint32_t
-#define crt_proc_int            crt_proc_int32_t
-#define crt_proc_crt_status_t   crt_proc_int32_t
-#define crt_proc_crt_group_id_t crt_proc_d_string_t
-#define crt_proc_crt_phy_addr_t crt_proc_d_string_t
+#define crt_proc__Bool			crt_proc_bool
+#define crt_proc_d_rank_t		crt_proc_uint32_t
+#define crt_proc_int			crt_proc_int32_t
+#define crt_proc_crt_status_t		crt_proc_int32_t
+#define crt_proc_crt_group_id_t		crt_proc_d_string_t
+#define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
 
 /**
  * \a err is an error that ought to be logged at a less serious level than ERR.

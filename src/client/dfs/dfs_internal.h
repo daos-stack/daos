@@ -27,11 +27,11 @@ enum {
 
 /** hash entry for open pool/container handles */
 struct dfs_mnt_hdls {
-	d_list_t      entry;
-	char          value[DAOS_PROP_LABEL_MAX_LEN + 1];
-	daos_handle_t handle;
-	int           ref;
-	int           type;
+	d_list_t	entry;
+	char		value[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	handle;
+	int		ref;
+	int		type;
 };
 
 struct dfs_mnt_hdls *
@@ -55,14 +55,14 @@ dfs_is_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count, int *dfs_entry_key_size,
-		  int *dfs_entry_size);
+dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
+		int *dfs_entry_key_size, int *dfs_entry_size);
 
 /*
  * Releases the memory allocated by the dfs_get_sb_layout() function.
  *
  * \param[in] iods DFS superblock A-keys
- */
+*/
 void
 dfs_free_sb_layout(daos_iod_t *iods[]);
 
@@ -72,14 +72,14 @@ dfs_free_sb_layout(daos_iod_t *iods[]);
  * otherwise read them from the calling process.
  */
 int
-dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flags,
-	      daos_oclass_id_t cid, daos_size_t chunk_size, const char *value, dfs_obj_t **obj,
-	      struct stat *stbuf);
+dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	      const char *value, dfs_obj_t **obj, struct stat *stbuf);
 
 int
-dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **obj,
-	    mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
-	    daos_size_t *xsizes);
+dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
+	    char *xnames[], void *xvals[], daos_size_t *xsizes);
 
 /* moid is moved oid, oid is clobbered file.
  * This isn't yet fully compatible with dfuse because we also want to pass in a flag for if the

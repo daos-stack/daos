@@ -9,11 +9,11 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define SHOW_FLAG(HANDLE, FLAGS, FLAG)                                                             \
-	do {                                                                                       \
-		DFUSE_TRA_INFO(HANDLE, "Flag " #FLAG " %s",                                        \
-			       (FLAGS & FLAG) ? "enabled" : "disabled");                           \
-		FLAGS &= ~FLAG;                                                                    \
+#define SHOW_FLAG(HANDLE, FLAGS, FLAG)					\
+	do {								\
+		DFUSE_TRA_INFO(HANDLE, "Flag " #FLAG " %s",		\
+			(FLAGS & FLAG) ? "enabled" : "disabled");	\
+		FLAGS &= ~FLAG;						\
 	} while (0)
 
 static void
@@ -64,7 +64,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 
-	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major, conn->proto_minor);
+	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
+		       conn->proto_minor);
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
@@ -76,7 +77,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
 #endif
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
+		       conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
@@ -92,25 +94,27 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->want);
 
-	conn->max_background       = 16;
+	conn->max_background = 16;
 	conn->congestion_threshold = 8;
 
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
-	DFUSE_TRA_INFO(fs_handle, "congestion_threshold %d", conn->congestion_threshold);
+	DFUSE_TRA_INFO(fs_handle,
+		       "congestion_threshold %d", conn->congestion_threshold);
 }
 
 void
-df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
-	     struct fuse_file_info *fi)
+df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+	     mode_t mode, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
+				parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
@@ -119,7 +123,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 	if (!parent_inode->ie_dfs->dfs_ops->create)
 		D_GOTO(err, rc = ENOTSUP);
 
-	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode, fi);
+	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
+					      fi);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -128,16 +133,18 @@ err:
 }
 
 void
-df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev)
+df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+	    mode_t mode, dev_t rdev)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
@@ -157,11 +164,11 @@ err:
 void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *handle    = NULL;
-	struct dfuse_inode_entry     *inode     = NULL;
-	d_list_t                     *rlink     = NULL;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*handle = NULL;
+	struct dfuse_inode_entry	*inode = NULL;
+	d_list_t			*rlink = NULL;
+	int rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
@@ -169,9 +176,11 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		inode = handle->doh_ie;
 	} else {
-		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
+					sizeof(ino));
 		if (!rlink) {
-			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
+					ino);
 			D_GOTO(err, rc = ENOENT);
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -191,14 +200,14 @@ err:
 }
 
 void
-df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
-	      struct fuse_file_info *fi)
+df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+	      int to_set, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *handle    = NULL;
-	struct dfuse_inode_entry     *inode     = NULL;
-	d_list_t                     *rlink     = NULL;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*handle = NULL;
+	struct dfuse_inode_entry	*inode = NULL;
+	d_list_t			*rlink = NULL;
+	int rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
@@ -208,7 +217,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
-			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
+					ino);
 			D_GOTO(out, rc = ENOENT);
 		}
 
@@ -233,10 +243,10 @@ out:
 static void
 df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
@@ -257,10 +267,10 @@ err:
 static void
 df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	struct dfuse_projection_info *fs_handle    = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode = NULL;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode = NULL;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
@@ -273,7 +283,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	if (!parent_inode->ie_dfs->dfs_ops->mknod)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode | S_IFDIR);
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name,
+					     mode | S_IFDIR);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -286,10 +297,10 @@ err:
 static void
 df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -315,10 +326,10 @@ err:
 static void
 df_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -345,14 +356,15 @@ err:
 static void
 df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
+				parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
@@ -376,10 +388,11 @@ err:
  * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
-df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct fuse_file_info *fi)
+df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+	      struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
@@ -393,8 +406,8 @@ static void
 df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
@@ -405,12 +418,13 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 }
 
 void
-df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
+df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+	      const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
@@ -434,16 +448,17 @@ err:
 }
 
 void
-df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size,
-	       int flags)
+df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+	       const char *value, size_t size, int flags)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	/* Don't allow setting of uid/gid extended attribute */
-	if (strncmp(name, DFUSE_XATTR_PREFIX, sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
 
@@ -471,10 +486,10 @@ err:
 void
 df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -500,16 +515,17 @@ err:
 void
 df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	/* Don't allow removing of dfuse extended attribute.  This will return
 	 * regardless of it the attribute exists or not, but the alternative
 	 * is a round-trip to check, so this seems like the best option here.
 	 */
-	if (strncmp(name, DFUSE_XATTR_PREFIX, sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
 
@@ -537,10 +553,10 @@ err:
 void
 df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -564,15 +580,15 @@ err:
 }
 
 static void
-df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t newparent,
-	     const char *newname, unsigned int flags)
+df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
+	     fuse_ino_t newparent, const char *newname, unsigned int flags)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *parent_inode;
-	struct dfuse_inode_entry     *newparent_inode = NULL;
-	d_list_t                     *rlink;
-	d_list_t                     *rlink2;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*newparent_inode = NULL;
+	d_list_t			*rlink;
+	d_list_t			*rlink2;
+	int rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
@@ -586,20 +602,23 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t new
 		D_GOTO(decref, rc = EXDEV);
 
 	if (parent != newparent) {
-		rlink2 = d_hash_rec_find(&fs_handle->dpi_iet, &newparent, sizeof(newparent));
+		rlink2 = d_hash_rec_find(&fs_handle->dpi_iet, &newparent,
+					 sizeof(newparent));
 		if (!rlink2) {
-			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", newparent);
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
+					newparent);
 			D_GOTO(decref, rc = ENOENT);
 		}
 
-		newparent_inode = container_of(rlink2, struct dfuse_inode_entry, ie_htl);
+		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
+					       ie_htl);
 
 		if (parent_inode->ie_dfs != newparent_inode->ie_dfs)
 			D_GOTO(decref_both, rc = EXDEV);
 	}
 
-	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name, newparent_inode, newname,
-					      flags);
+	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name,
+					      newparent_inode, newname, flags);
 	if (newparent_inode)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
 
@@ -616,10 +635,10 @@ err:
 static void
 df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *inode;
-	d_list_t                     *rlink;
-	int                           rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -644,71 +663,71 @@ err:
 
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
-    .lookup      = dfuse_cb_lookup,
-    .mknod       = dfuse_cb_mknod,
-    .opendir     = dfuse_cb_opendir,
-    .releasedir  = dfuse_cb_releasedir,
-    .getattr     = dfuse_cb_getattr,
-    .unlink      = dfuse_cb_unlink,
-    .create      = dfuse_cb_create,
-    .rename      = dfuse_cb_rename,
-    .symlink     = dfuse_cb_symlink,
-    .setxattr    = dfuse_cb_setxattr,
-    .getxattr    = dfuse_cb_getxattr,
-    .listxattr   = dfuse_cb_listxattr,
-    .removexattr = dfuse_cb_removexattr,
-    .setattr     = dfuse_cb_setattr,
-    .statfs      = dfuse_cb_statfs,
+	.lookup		= dfuse_cb_lookup,
+	.mknod		= dfuse_cb_mknod,
+	.opendir	= dfuse_cb_opendir,
+	.releasedir	= dfuse_cb_releasedir,
+	.getattr	= dfuse_cb_getattr,
+	.unlink		= dfuse_cb_unlink,
+	.create		= dfuse_cb_create,
+	.rename		= dfuse_cb_rename,
+	.symlink	= dfuse_cb_symlink,
+	.setxattr	= dfuse_cb_setxattr,
+	.getxattr	= dfuse_cb_getxattr,
+	.listxattr	= dfuse_cb_listxattr,
+	.removexattr	= dfuse_cb_removexattr,
+	.setattr	= dfuse_cb_setattr,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
-    .lookup = dfuse_cont_lookup,
-    .statfs = dfuse_cb_statfs,
+	.lookup		= dfuse_cont_lookup,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_pool_ops = {
-    .lookup = dfuse_pool_lookup,
-    .statfs = dfuse_cb_statfs,
+	.lookup		= dfuse_pool_lookup,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct fuse_lowlevel_ops dfuse_ops = {
-    /* Ops that support per-inode indirection */
-    .getattr     = df_ll_getattr,
-    .lookup      = df_ll_lookup,
-    .mkdir       = df_ll_mkdir,
-    .opendir     = df_ll_opendir,
-    .releasedir  = df_ll_releasedir,
-    .unlink      = df_ll_unlink,
-    .rmdir       = df_ll_unlink,
-    .readdir     = df_ll_readdir,
-    .readdirplus = df_ll_readdirplus,
-    .create      = df_ll_create,
-    .mknod       = df_ll_mknod,
-    .rename      = df_ll_rename,
-    .symlink     = df_ll_symlink,
-    .setxattr    = df_ll_setxattr,
-    .getxattr    = df_ll_getxattr,
-    .listxattr   = df_ll_listxattr,
-    .removexattr = df_ll_removexattr,
-    .setattr     = df_ll_setattr,
-    .statfs      = df_ll_statfs,
+	/* Ops that support per-inode indirection */
+	.getattr	= df_ll_getattr,
+	.lookup		= df_ll_lookup,
+	.mkdir		= df_ll_mkdir,
+	.opendir	= df_ll_opendir,
+	.releasedir	= df_ll_releasedir,
+	.unlink		= df_ll_unlink,
+	.rmdir		= df_ll_unlink,
+	.readdir	= df_ll_readdir,
+	.readdirplus	= df_ll_readdirplus,
+	.create		= df_ll_create,
+	.mknod		= df_ll_mknod,
+	.rename		= df_ll_rename,
+	.symlink	= df_ll_symlink,
+	.setxattr	= df_ll_setxattr,
+	.getxattr	= df_ll_getxattr,
+	.listxattr	= df_ll_listxattr,
+	.removexattr	= df_ll_removexattr,
+	.setattr	= df_ll_setattr,
+	.statfs		= df_ll_statfs,
 
-    /* Ops that do not need to support per-inode indirection */
-    .init         = dfuse_fuse_init,
-    .forget       = dfuse_cb_forget,
-    .forget_multi = dfuse_cb_forget_multi,
+	/* Ops that do not need to support per-inode indirection */
+	.init		 = dfuse_fuse_init,
+	.forget		 = dfuse_cb_forget,
+	.forget_multi	 = dfuse_cb_forget_multi,
 
-    /* Ops that do not support per-inode indirection
-     *
-     * Avoid the extra level of indirection here, as only dfs allows
-     * creation of files, so it should be the only place to see file
-     * operations.
-     *
-     */
-    .open      = dfuse_cb_open,
-    .release   = dfuse_cb_release,
-    .write_buf = dfuse_cb_write,
-    .read      = dfuse_cb_read,
-    .readlink  = dfuse_cb_readlink,
-    .ioctl     = dfuse_cb_ioctl,
+	/* Ops that do not support per-inode indirection
+	 *
+	 * Avoid the extra level of indirection here, as only dfs allows
+	 * creation of files, so it should be the only place to see file
+	 * operations.
+	 *
+	 */
+	.open		= dfuse_cb_open,
+	.release	= dfuse_cb_release,
+	.write_buf	= dfuse_cb_write,
+	.read		= dfuse_cb_read,
+	.readlink	= dfuse_cb_readlink,
+	.ioctl		= dfuse_cb_ioctl,
 };

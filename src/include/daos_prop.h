@@ -124,11 +124,11 @@ enum daos_pool_props {
 	DAOS_PROP_PO_MAX,
 };
 
-#define DAOS_PROP_PO_EC_CELL_SZ_MIN    (1UL << 10)
-#define DAOS_PROP_PO_EC_CELL_SZ_MAX    (1UL << 30)
+#define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
+#define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
-#define DAOS_PROP_PO_REDUN_FAC_MAX     4
-#define DAOS_PROP_PO_REDUN_FAC_DEFAULT 0
+#define DAOS_PROP_PO_REDUN_FAC_MAX	4
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)
@@ -142,23 +142,23 @@ daos_rf_is_valid(unsigned long long rf)
  * more than 3 replicas, DAOS will place three replicas within a PD
  * and switch to another PD.
  */
-#define DAOS_PROP_PO_RP_PDA_DEFAULT 3
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
 /**
  * the placement algorithm always tries to scatter shards of EC
  * object to different PDs.
  */
-#define DAOS_PROP_PO_EC_PDA_DEFAULT 1
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
 
 /** DAOS pool upgrade status */
 enum {
 	DAOS_UPGRADE_STATUS_NOT_STARTED = 0,
 	DAOS_UPGRADE_STATUS_IN_PROGRESS = 1,
-	DAOS_UPGRADE_STATUS_COMPLETED   = 2,
-	DAOS_UPGRADE_STATUS_FAILED      = 3,
+	DAOS_UPGRADE_STATUS_COMPLETED = 2,
+	DAOS_UPGRADE_STATUS_FAILED = 3,
 };
 
-#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX     4
-#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT 2
+#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX		4
+#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT	2
 
 static inline bool
 daos_svc_rf_is_valid(uint64_t svc_rf)
@@ -169,7 +169,7 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
 /**
  * Number of pool property types
  */
-#define DAOS_PROP_PO_NUM (DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {
@@ -185,15 +185,15 @@ enum {
  * It is expected that these stay contiguous.
  */
 enum {
-	DAOS_SCRUB_MODE_OFF     = 0,
-	DAOS_SCRUB_MODE_LAZY    = 1,
-	DAOS_SCRUB_MODE_TIMED   = 2,
+	DAOS_SCRUB_MODE_OFF = 0,
+	DAOS_SCRUB_MODE_LAZY = 1,
+	DAOS_SCRUB_MODE_TIMED = 2,
 	DAOS_SCRUB_MODE_INVALID = 3,
 };
 
 /** self healing strategy bits */
-#define DAOS_SELF_HEAL_AUTO_EXCLUDE (1U << 0)
-#define DAOS_SELF_HEAL_AUTO_REBUILD (1U << 1)
+#define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
+#define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
 
 /**
  * DAOS container property types
@@ -227,9 +227,9 @@ enum daos_cont_props {
 	 */
 	DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 	/**
-	 * Checksum verification on server. Value = ON/OFF
-	 * default = DAOS_PROP_CO_CSUM_SV_OFF
-	 */
+	* Checksum verification on server. Value = ON/OFF
+	* default = DAOS_PROP_CO_CSUM_SV_OFF
+	*/
 	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 	/**
 	 * Redundancy factor:
@@ -316,13 +316,13 @@ enum daos_cont_props {
 /** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
 	/** array that stores root, SB OIDs */
-	daos_obj_id_t cr_oids[4];
+	daos_obj_id_t	cr_oids[4];
 };
 
 /**
  * Number of container property types
  */
-#define DAOS_PROP_CO_NUM (DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+#define DAOS_PROP_CO_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 typedef uint16_t daos_cont_layout_t;
 
@@ -330,14 +330,14 @@ typedef uint16_t daos_cont_layout_t;
 enum {
 	DAOS_PROP_CO_LAYOUT_UNKNOWN,
 	DAOS_PROP_CO_LAYOUT_UNKOWN = DAOS_PROP_CO_LAYOUT_UNKNOWN,
-	DAOS_PROP_CO_LAYOUT_POSIX,    /** DFS/dfuse/MPI-IO */
-	DAOS_PROP_CO_LAYOUT_HDF5,     /** HDF5 DAOS VOL connector */
-	DAOS_PROP_CO_LAYOUT_PYTHON,   /** PyDAOS */
-	DAOS_PROP_CO_LAYOUT_SPARK,    /** Specific layout for Spark shuffle */
-	DAOS_PROP_CO_LAYOUT_DATABASE, /** SQL Database */
-	DAOS_PROP_CO_LAYOUT_ROOT,     /** ROOT/RNTuple format */
-	DAOS_PROP_CO_LAYOUT_SEISMIC,  /** Seismic Graph, aka SEGY */
-	DAOS_PROP_CO_LAYOUT_METEO,    /** Meteorology, aka Field Data Base */
+	DAOS_PROP_CO_LAYOUT_POSIX,	/** DFS/dfuse/MPI-IO */
+	DAOS_PROP_CO_LAYOUT_HDF5,	/** HDF5 DAOS VOL connector */
+	DAOS_PROP_CO_LAYOUT_PYTHON,	/** PyDAOS */
+	DAOS_PROP_CO_LAYOUT_SPARK,	/** Specific layout for Spark shuffle */
+	DAOS_PROP_CO_LAYOUT_DATABASE,	/** SQL Database */
+	DAOS_PROP_CO_LAYOUT_ROOT,	/** ROOT/RNTuple format */
+	DAOS_PROP_CO_LAYOUT_SEISMIC,	/** Seismic Graph, aka SEGY */
+	DAOS_PROP_CO_LAYOUT_METEO,	/** Meteorology, aka Field Data Base */
 	DAOS_PROP_CO_LAYOUT_MAX
 };
 
@@ -354,10 +354,17 @@ enum {
 };
 
 /** container checksum server verify */
-enum { DAOS_PROP_CO_CSUM_SV_OFF, DAOS_PROP_CO_CSUM_SV_ON };
+enum {
+	DAOS_PROP_CO_CSUM_SV_OFF,
+	DAOS_PROP_CO_CSUM_SV_ON
+};
 
 /** container deduplication */
-enum { DAOS_PROP_CO_DEDUP_OFF, DAOS_PROP_CO_DEDUP_MEMCMP, DAOS_PROP_CO_DEDUP_HASH };
+enum {
+	DAOS_PROP_CO_DEDUP_OFF,
+	DAOS_PROP_CO_DEDUP_MEMCMP,
+	DAOS_PROP_CO_DEDUP_HASH
+};
 
 /** container compression type */
 enum {
@@ -396,12 +403,12 @@ enum {
  * rank is hardcoded to 1, [2-254] are defined by the admin
  */
 enum {
-	DAOS_PROP_CO_REDUN_MIN = 1,
+	DAOS_PROP_CO_REDUN_MIN	= 1,
 	/* server rank (engine) level */
-	DAOS_PROP_CO_REDUN_RANK = 1,
+	DAOS_PROP_CO_REDUN_RANK	= 1,
 	/* server node level */
-	DAOS_PROP_CO_REDUN_NODE = 2,
-	DAOS_PROP_CO_REDUN_MAX  = 254,
+	DAOS_PROP_CO_REDUN_NODE	= 2,
+	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
 /** container status flag */
@@ -417,31 +424,34 @@ enum {
 };
 
 /** clear the UNCLEAN status */
-#define DAOS_PROP_CO_CLEAR (0x1)
+#define DAOS_PROP_CO_CLEAR	(0x1)
 /** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
-	uint16_t dcs_status;
+	uint16_t	dcs_status;
 	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
-	uint16_t dcs_flags;
+	uint16_t	dcs_flags;
 	/** pool map version when setting the dcs_status */
-	uint32_t dcs_pm_ver;
+	uint32_t	dcs_pm_ver;
 };
 
-#define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)                                              \
-	((((uint64_t)(flag)) << 48) | (((uint64_t)(status)&0xFFFF) << 32) | ((uint64_t)(pm_ver)))
+#define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)			\
+	((((uint64_t)(flag)) << 48)		|			\
+	 (((uint64_t)(status) & 0xFFFF) << 32)	|			\
+	 ((uint64_t)(pm_ver)))
 
 static inline uint64_t
 daos_prop_co_status_2_val(struct daos_co_status *co_status)
 {
-	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status, co_status->dcs_flags,
+	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
+				       co_status->dcs_flags,
 				       co_status->dcs_pm_ver);
 }
 
 static inline void
 daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 {
-	co_status->dcs_flags  = (uint16_t)(val >> 48);
+	co_status->dcs_flags = (uint16_t)(val >> 48);
 	co_status->dcs_status = (uint16_t)((val >> 32) & 0xFFFF);
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
@@ -453,29 +463,29 @@ enum {
 /** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
-	uint32_t dpe_type;
+	uint32_t		 dpe_type;
 	/** property flags, eg negative entry*/
-	uint16_t dpe_flags;
+	uint16_t		 dpe_flags;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint16_t dpe_reserv;
+	uint16_t		 dpe_reserv;
 	/**
 	 * value can be either a uint64_t, or a string, or any other type
 	 * data such as the struct daos_acl pointer.
 	 */
 	union {
-		uint64_t   dpe_val;
-		d_string_t dpe_str;
-		void      *dpe_val_ptr;
+		uint64_t	 dpe_val;
+		d_string_t	 dpe_str;
+		void		*dpe_val_ptr;
 	};
 };
 
 /** Allowed max number of property entries in daos_prop_t */
-#define DAOS_PROP_ENTRIES_MAX_NR    (128)
+#define DAOS_PROP_ENTRIES_MAX_NR	(128)
 
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
-#define DAOS_PROP_LABEL_MAX_LEN     (127)
+#define DAOS_PROP_LABEL_MAX_LEN		(127)
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
-#define DAOS_PROP_MAX_LABEL_BUF_LEN (DAOS_PROP_LABEL_MAX_LEN + 1)
+#define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
@@ -491,9 +501,9 @@ struct daos_prop_entry {
 static inline bool
 daos_label_is_valid(const char *label)
 {
-	int  len;
-	int  i;
-	bool maybe_uuid = false;
+	int	len;
+	int	i;
+	bool	maybe_uuid = false;
 
 	/** Label cannot be NULL */
 	if (label == NULL)
@@ -520,8 +530,8 @@ daos_label_is_valid(const char *label)
 
 	/** Check to see if it could be a valid UUID */
 	if (maybe_uuid && strnlen(label, 36) == 36) {
-		bool        is_uuid = true;
-		const char *p;
+		bool		is_uuid = true;
+		const char	*p;
 
 		/** Implement the check directly to avoid uuid_parse() overhead */
 		for (i = 0, p = label; i < 36; i++, p++) {
@@ -546,19 +556,19 @@ daos_label_is_valid(const char *label)
 }
 
 /** max length of the policy string */
-#define DAOS_PROP_POLICYSTR_MAX_LEN (127)
+#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
 
 /* default policy string */
-#define DAOS_PROP_POLICYSTR_DEFAULT "type=io_size"
+#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
 
 /** daos properties, for pool or container */
 typedef struct {
 	/** number of entries */
-	uint32_t                dpp_nr;
+	uint32_t		 dpp_nr;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t                dpp_reserv;
+	uint32_t		 dpp_reserv;
 	/** property entries array */
-	struct daos_prop_entry *dpp_entries;
+	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
 
 /**
@@ -689,8 +699,8 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
  *			-DER_NOMEM	Out of memory
  */
 int
-daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst, struct daos_prop_entry *entry_src,
-			size_t len);
+daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
+			struct daos_prop_entry *entry_src, size_t len);
 
 /**
  * Compare a pair of daos_prop_entry that contain ACLs.
@@ -702,7 +712,8 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst, struct daos_prop_entr
  *		-DER_MISMATCH	Entries do NOT match
  */
 int
-daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1, struct daos_prop_entry *entry2);
+daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
+			struct daos_prop_entry *entry2);
 
 /**
  * Duplicate container roots from one DAOS prop entry to another.
@@ -715,7 +726,8 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1, struct daos_prop_entry *
  *			-DER_NOMEM	Out of memory
  */
 int
-daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst, struct daos_prop_entry *src);
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src);
 
 /**
  * Check a DAOS prop entry for a string value.

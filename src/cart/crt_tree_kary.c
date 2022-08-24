@@ -7,15 +7,16 @@
  * This file is part of CaRT. It gives out the kary tree topo related
  * function implementation.
  */
-#define D_LOGFAC DD_FAC(grp)
+#define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
 
 static uint32_t
-kary_get_children(uint32_t *children, uint32_t self, uint32_t size, uint32_t ratio)
+kary_get_children(uint32_t *children, uint32_t self, uint32_t size,
+		  uint32_t ratio)
 {
-	uint32_t rank, nchildren = 0;
-	uint32_t i;
+	uint32_t	rank, nchildren = 0;
+	uint32_t	i;
 
 	D_ASSERT(self < size);
 
@@ -32,14 +33,16 @@ kary_get_children(uint32_t *children, uint32_t self, uint32_t size, uint32_t rat
 }
 
 int
-crt_kary_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
-			  uint32_t grp_self, uint32_t *nchildren)
+crt_kary_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio,
+			  uint32_t grp_root, uint32_t grp_self,
+			  uint32_t *nchildren)
 {
-	uint32_t tree_self;
+	uint32_t	tree_self;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(nchildren != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
 
@@ -49,36 +52,40 @@ crt_kary_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_r
 }
 
 int
-crt_kary_get_children(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root, uint32_t grp_self,
-		      uint32_t *children)
+crt_kary_get_children(uint32_t grp_size, uint32_t tree_ratio,
+		      uint32_t grp_root, uint32_t grp_self, uint32_t *children)
 {
-	uint32_t nchildren;
-	uint32_t tree_self;
-	uint32_t i;
+	uint32_t	nchildren;
+	uint32_t	tree_self;
+	uint32_t	i;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(children != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
 
-	nchildren = kary_get_children(children, tree_self, grp_size, tree_ratio);
+	nchildren = kary_get_children(children, tree_self, grp_size,
+				      tree_ratio);
 
 	for (i = 0; i < nchildren; i++)
-		children[i] = crt_treerank_2_grprank(grp_size, grp_root, children[i]);
+		children[i] = crt_treerank_2_grprank(grp_size, grp_root,
+						     children[i]);
 
 	return 0;
 }
 
 int
-crt_kary_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root, uint32_t grp_self,
-		    uint32_t *parent)
+crt_kary_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
+		    uint32_t grp_self, uint32_t *parent)
 {
-	uint32_t tree_self, tree_parent;
+	uint32_t	tree_self, tree_parent;
 
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(parent != NULL);
-	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO && tree_ratio <= CRT_TREE_MAX_RATIO);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	if (grp_self == grp_root)
 		return -DER_INVAL;
@@ -93,6 +100,8 @@ crt_kary_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root, u
 	return 0;
 }
 
-struct crt_topo_ops crt_kary_ops = {.to_get_children_cnt = crt_kary_get_children_cnt,
-				    .to_get_children     = crt_kary_get_children,
-				    .to_get_parent       = crt_kary_get_parent};
+struct crt_topo_ops crt_kary_ops = {
+	.to_get_children_cnt	= crt_kary_get_children_cnt,
+	.to_get_children	= crt_kary_get_children,
+	.to_get_parent		= crt_kary_get_parent
+};

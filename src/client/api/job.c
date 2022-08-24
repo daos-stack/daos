@@ -15,9 +15,9 @@ char *dc_jobid;
 static int
 craft_default_jobid(char **jobid)
 {
-	struct utsname name = {0};
-	pid_t          pid;
-	int            ret;
+	struct utsname	name = {0};
+	pid_t		pid;
+	int		ret;
 
 	ret = uname(&name);
 	if (ret) {
@@ -38,7 +38,7 @@ dc_job_init(void)
 {
 	char *jobid;
 	char *jobid_env = getenv(JOBID_ENV);
-	int   err       = 0;
+	int   err = 0;
 
 	if (jobid_env == NULL) {
 		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
