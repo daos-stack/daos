@@ -626,8 +626,11 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 	if (grp_size == 1) {
 		pos = grp_idx * obj_get_grp_size(obj);
 		shard = obj_get_shard(obj, pos);
-		if (shard->po_target == -1)
+		if (shard->po_target == -1) {
+			D_ERROR(DF_OID" grp_size 1, obj_get_shard failed\n",
+				DP_OID(obj->cob_md.omd_id));
 			return -DER_IO;
+		}
 
 		/*
 		 * Note that even though there's only one replica here, this
@@ -673,6 +676,8 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, unsigned 
 		rc = pos;
 	} else {
 		/* If all the replicas are failed or in-rebuilding, then EIO. */
+		D_ERROR(DF_OID" all the replicas are failed or in-rebuilding\n",
+			DP_OID(obj->cob_md.omd_id));
 		rc = -DER_IO;
 	}
 
@@ -1000,6 +1005,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	if (obj_auxi->cond_modify && (obj_shard->do_rebuilding || obj_shard->do_reintegrating))
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
+	if (obj_shard->do_reintegrating)
+		obj_auxi->reintegrating = 1;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -1108,10 +1115,17 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		grp_idx = shard_idx / obj_get_grp_size(obj);
 		grp_start = grp_idx * obj_get_grp_size(obj);
 		if (req_tgts->ort_srv_disp) {
-			leader_shard = obj_grp_leader_get(obj, grp_idx,
-							  obj_ec_dkey_hash_get(obj,
-									       obj_auxi->dkey_hash),
-							  obj_auxi->cond_modify, map_ver, bit_map);
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+				leader_shard = 0;
+			} else {
+				uint64_t	hash;
+
+				hash = obj_ec_dkey_hash_get(obj, obj_auxi->dkey_hash),
+				leader_shard = obj_grp_leader_get(obj, grp_idx, hash,
+								  obj_auxi->cond_modify,
+								  map_ver, bit_map);
+			}
 			if (leader_shard < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u: "DF_RC"\n",
@@ -1254,7 +1268,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc_pool_create_map_refresh_task(pool, map_ver, sched, &task);
+	rc = dc_pool_create_map_refresh_task(ph, map_ver, sched, &task);
 	if (rc != 0) {
 		dc_pool_put(pool);
 		return rc;
@@ -1611,6 +1625,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			D_GOTO(err, rc);
 		}
 		*io_task_reinited = true;
+		obj_auxi->retry_cnt++;
 	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
 		/* If the RPC sponsor specifies shard or group, we will NOT
 		 * reschedule the IO, but not prevent the pool map refresh.
@@ -2696,8 +2711,8 @@ shard_io_task(tse_task_t *task)
 	/*
 	 * If this task belongs to a TX, and if the epoch we got earlier
 	 * doesn't contain a "chosen" TX epoch, then we may need to reinit the
-	 * task. (See dc_tx_get_epoch.) Because tse_task_reinit is less
-	 * practical in the middle of a task, we do it here at the beginning of
+	 * task via dc_tx_get_epoch. Because tse_task_reinit is less practical
+	 * in the middle of a task, we do it here at the beginning of
 	 * shard_io_task.
 	 */
 	th = shard_auxi->obj_auxi->th;
@@ -2706,9 +2721,9 @@ shard_io_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	return shard_io(task, shard_auxi);
@@ -2800,19 +2815,21 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		}
 	}
 
+	/*
+	 * We mark the RPC as RESEND although @io_retry does not
+	 * guarantee that the RPC has ever been sent. It may cause
+	 * some overhead on server side, but no correctness issues.
+	 *
+	 * On the other hand, the client may resend the RPC to new
+	 * shard if leader switched. That is why the resend logic
+	 * is handled at object layer rather than shard layer.
+	 */
+	if (obj_auxi->io_retry)
+		obj_auxi->flags |= ORF_RESEND;
+
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
 	    !obj_auxi->new_shard_tasks) {
-		/* We mark the RPC as RESEND although @io_retry does not
-		 * guarantee that the RPC has ever been sent. It may cause
-		 * some overhead on server side, but no correctness issues.
-		 *
-		 * On the other hand, the client may resend the RPC to new
-		 * shard if leader switched. That is why the resend logic
-		 * is handled at object layer rather than shard layer.
-		 */
-		obj_auxi->flags |= ORF_RESEND;
-
 		/* if with shard task list, reuse it and re-schedule */
 		if (!d_list_empty(task_list)) {
 			struct shard_task_reset_arg reset_arg;
@@ -4379,6 +4396,45 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
+	if (unlikely(task->dt_result == -DER_TX_ID_REUSED)) {
+		D_ASSERT(daos_handle_is_inval(obj_auxi->th));
+
+		if (obj_auxi->retry_cnt != 0)
+			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
+			D_ASSERTF(0,
+				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
+				  obj_auxi->flags, task, obj_auxi->retry_cnt);
+
+		/* For non-retry case, restart TX with new TX ID. */
+		switch (obj_auxi->opc) {
+		case DAOS_OBJ_RPC_UPDATE: {
+			struct shard_rw_args	*rw_arg = &obj_auxi->rw_args;
+
+			D_INFO("DTX ID "DF_DTI" for update is reused, re-generate\n",
+			       DP_DTI(&rw_arg->dti));
+			daos_dti_gen(&rw_arg->dti, false);
+			obj_auxi->io_retry = 1;
+			break;
+		}
+		case DAOS_OBJ_RPC_PUNCH:
+			/* fall through */
+		case DAOS_OBJ_RPC_PUNCH_DKEYS:
+			/* fall through */
+		case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+			struct shard_punch_args	*punch_arg = &obj_auxi->p_args;
+
+			D_INFO("DTX ID "DF_DTI" for punch (%u) is reused, re-generate\n",
+			       DP_DTI(&punch_arg->pa_dti), obj_auxi->opc);
+			daos_dti_gen(&punch_arg->pa_dti, false);
+			obj_auxi->io_retry = 1;
+			break;
+		}
+		default:
+			D_ASSERTF(0, "Unexpected opc %u for '-DER_TX_ID_REUSED'\n", obj_auxi->opc);
+			break;
+		}
+	}
+
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
 	     (pm_stale || obj_auxi->io_retry)) {
 		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, &io_task_reinited);
@@ -4495,6 +4551,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
+	obj_auxi->reintegrating = 0;
 	shard_task_list_init(obj_auxi);
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;
@@ -4948,7 +5005,9 @@ obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_au
 	    daos_gettime_coarse() - obj->cob_time_fetch_leader[grp_idx])
 		to_leader = true;
 
-	if (to_leader)
+	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+		rc = obj->cob_shards_nr - 1;
+	else if (to_leader)
 		rc = obj_replica_leader_select(obj, grp_idx, map_ver);
 	else
 		rc = obj_grp_valid_shard_get(obj, grp_idx, map_ver, obj_auxi->failed_tgt_list);
@@ -6149,9 +6208,9 @@ shard_query_key_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
@@ -6581,9 +6640,10 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
+	struct cont_props	props;
 	int			rc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -6597,6 +6657,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
@@ -6639,7 +6701,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    uint32_t args)
 {
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
@@ -6675,10 +6737,11 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	uint64_t		rf_factor;
 	int			rc;
 	enum daos_obj_redun	ord;
+	struct cont_props	props;
 	uint32_t		nr_grp;
 
 	/** select the oclass */
@@ -6689,6 +6752,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	props = dc_cont_hdl2props(coh);
+	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);

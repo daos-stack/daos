@@ -425,13 +425,11 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
 
         if hexdigest != self.md5:
-            print("Removing existing file %s: md5 %s != %s" % (filename,
-                                                               self.md5,
-                                                               hexdigest))
+            print(f'Removing existing file {filename}: md5 {self.md5} != {hexdigest}')
             os.remove(filename)
             return False
 
-        print("File %s matches md5 %s" % (filename, self.md5))
+        print(f'File {filename} matches md5 {self.md5}')
         return True
 
     def download(self, basename):
@@ -439,7 +437,7 @@ class WebRetriever():
         initial_sleep = 1
         retries = 3
         # Retry download a few times if it fails
-        for i in range(0, retries + 1):
+        for idx in range(0, retries + 1):
             command = ['curl',
                        '-sSf',
                        '--location',
@@ -449,14 +447,14 @@ class WebRetriever():
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
                 if self.check_md5(basename):
-                    print("Successfully downloaded %s" % self.url)
+                    print(f'Successfully downloaded {self.url}')
                     return True
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (i + 1, self.url, failure_reason))
+            print(f'Try #{idx + 1} to get {self.url} failed: {failure_reason}')
 
-            if i != retries:
+            if idx != retries:
                 time.sleep(initial_sleep)
                 initial_sleep *= 2
 
@@ -570,13 +568,13 @@ def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
     if not os.path.exists(dirname):
         if dry_run:
-            print("Would create %s" % dry_run)
+            print(f'Would create {dry_run}')
             return
         try:
             os.makedirs(dirname)
-        except Exception as e:
+        except Exception as error:
             if not os.path.isdir(dirname):
-                raise e
+                raise error
 
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
@@ -705,6 +703,8 @@ class PreReqComponent():
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
+        self.add_opts(BoolVariable('STACK_MMAP',
+                                   'Allocate ABT ULTs stacks with mmap()', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -873,7 +873,19 @@ class PreReqComponent():
                         ['$CVS', '--add', '!**/src/vea/tests/'],
                         ['$CVS', '--add', '!**/src/vos/tests/'],
                         ['$CVS', '--add', '!**/src/engine/tests/'],
-                        ['$CVS', '--add', '!**/src/tests/']]
+                        ['$CVS', '--add', '!**/src/tests/'],
+                        ['$CVS', '--add', '!**/src/bio/smd/tests/'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test.h'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_client.c'],
+                        ['$CVS', '--add', '!**/src/cart/crt_self_test_service.c'],
+                        ['$CVS', '--add', '!**/src/client/api/tests/'],
+                        ['$CVS', '--add', '!**/src/client/dfuse/test/'],
+                        ['$CVS', '--add', '!**/src/gurt/examples/'],
+                        ['$CVS', '--add', '!**/src/utils/crt_launch/'],
+                        ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
+                        ['$CVS', '--add', '!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_dmg_helpers.c'],
+                        ['$CVS', '--add', '!**/src/common/tests_lib.c']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
@@ -1047,18 +1059,15 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def load_defaults(self, is_arm):
+    def load_defaults(self):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4']
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
-        if not is_arm:
-            server_reqs.extend(['spdk'])
-            common_reqs.extend(['isal', 'isal_crypto'])
         reqs = []
         if not self._build_targets:
             raise ValueError("Call init_build_targets before load_defaults")

@@ -545,6 +545,17 @@ int
 crt_hlc2timespec(uint64_t hlc, struct timespec *ts);
 
 /**
+ * Return HLC from timespec
+ *
+ * \param[in]	ts	timespec struct
+ * \param[out]	hlc	HLC timestamp
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+crt_timespec2hlc(struct timespec ts, uint64_t *hlc);
+
+/**
  * Return the HLC timestamp of unixnsec in hlc.
  *
  * \param[in] unixnsec         Unix nanosecond timestamp
@@ -2074,7 +2085,7 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
 int crt_group_info_set(d_iov_t *grp_info);
 
 /**
- * Retrieve list of ranks that belong to the specified gorup.
+ * Retrieve list of ranks that belong to the specified group.
  *
  * \param[in] group             Group identifier
  * \param[out] list             Rank list that gets filled with members

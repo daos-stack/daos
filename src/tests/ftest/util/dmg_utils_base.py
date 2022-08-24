@@ -6,6 +6,8 @@
 """
 from socket import gethostname
 
+from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import \
     FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand, YamlCommand
@@ -26,7 +28,7 @@ class DmgCommandBase(YamlCommand):
         super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
         # If running dmg on remote hosts, this list needs to include those hosts
-        self.temporary_file_hosts = gethostname().split(".")[0:1]
+        self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
@@ -60,10 +62,14 @@ class DmgCommandBase(YamlCommand):
             hostlist (string list): list of host addresses
         """
         if self.yaml:
-            if not isinstance(hostlist, list):
+            if isinstance(hostlist, NodeSet):
+                hostlist = list(hostlist)
+            elif not isinstance(hostlist, list):
                 hostlist = hostlist.split(",")
             self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:
+            if isinstance(hostlist, NodeSet):
+                hostlist = list(hostlist)
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
@@ -79,6 +85,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.StorageSubCommand()
         elif self.sub_command.value == "system":
             self.sub_command_class = self.SystemSubCommand()
+        elif self.sub_command.value == "server":
+            self.sub_command_class = self.ServerSubCommand()
         elif self.sub_command.value == "cont":
             self.sub_command_class = self.ContSubCommand()
         elif self.sub_command.value == "config":
@@ -288,6 +296,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = FormattedParameter("{}", None)
                 self.sys_name = FormattedParameter("--sys-name={}", None)
                 self.force = FormattedParameter("--force", False)
+                self.recursive = FormattedParameter("--recursive", False)
 
         class GetAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool get-acl command."""
@@ -561,6 +570,28 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system erase command object."""
                 super().__init__(
                     "/run/dmg/system/erase/*", "erase")
+
+    class ServerSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg server sub command."""
+
+        def __init__(self):
+            """Create a dmg server subcommand object."""
+            super().__init__("/run/dmg/server/*", "server")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg server sub command object."""
+            if self.sub_command.value == "set-logmasks":
+                self.sub_command_class = self.SetLogmasksSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class SetLogmasksSubCommand(CommandWithParameters):
+            """Defines an object for the dmg server set-logmasks command."""
+
+            def __init__(self):
+                """Create a dmg server set-logmasks command object."""
+                super().__init__("/run/dmg/server/set-logmasks/*", "set-logmasks")
 
     class TelemetrySubCommand(CommandWithSubCommand):
         """Defines an object for the dmg telemetry sub command."""

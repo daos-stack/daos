@@ -486,6 +486,51 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+#ifdef ULT_MMAP_STACK
+	FILE *fp;
+
+	/* read vm.max_map_count from /proc instead of using sysctl() API
+	 * as it seems the preferred way ...
+	 */
+	fp = fopen("/proc/sys/vm/max_map_count", "r");
+	if (fp == NULL) {
+		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
+			strerror(errno));
+	} else {
+		int n;
+
+		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
+		if (n == EOF) {
+			D_ERROR("Unable to read vm.max_map_count value: %s\n",
+				strerror(errno));
+			/* just in case, to ensure value can be later safely
+			 * compared and thus no ULT stack be mmap()'ed
+			 */
+			max_nb_mmap_stacks = 0;
+		} else {
+			/* need a minimum value to start mmap() ULT stacks */
+			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
+				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
+				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
+				max_nb_mmap_stacks = 0;
+			} else {
+				/* consider half can be used to mmap() ULT
+				 * stacks
+				 */
+				max_nb_mmap_stacks /= 2;
+				D_INFO("Will be able to mmap() %d ULT stacks\n",
+				       max_nb_mmap_stacks);
+			}
+		}
+	}
+
+	rc = ABT_key_create(free_stack, &stack_key);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT key for stack create failed: %d\n", rc);
+		ABT_finalize();
+		return dss_abterr2der(rc);
+	}
+#endif
 	dss_abt_init = true;
 
 	return 0;
@@ -494,6 +539,9 @@ abt_init(int argc, char *argv[])
 static void
 abt_fini(void)
 {
+#ifdef ULT_MMAP_STACK
+	ABT_key_free(&stack_key);
+#endif
 	dss_abt_init = false;
 	ABT_finalize();
 }
@@ -1025,23 +1073,26 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	return 0;
 }
 
+#define PRINT_ERROR(...)                                                                           \
+	do {                                                                                       \
+		fprintf(stderr, __VA_ARGS__);                                                      \
+		D_ERROR(__VA_ARGS__);                                                              \
+	} while (0)
+
+/** This should be safe on Linux since tls is allocated on thread creation */
+#define MAX_BT_ENTRIES 256
+static __thread void *bt[MAX_BT_ENTRIES];
+
 static void
 print_backtrace(int signo, siginfo_t *info, void *p)
 {
-	void	*bt[128];
-	int	 bt_size, i, rc;
+	int   bt_size, rc;
 
-	/* since we mainly handle fatal signals here, flush the log to not
-	 * risk losing any debug traces
-	 */
-	d_log_sync();
-
-	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
-		signo);
+	PRINT_ERROR("*** Process %d received signal %d ***\n", getpid(), signo);
 
 	if (info != NULL) {
-		fprintf(stderr, "Associated errno: %s (%d)\n",
-			strerror(info->si_errno), info->si_errno);
+		PRINT_ERROR("Associated errno: %s (%d)\n", strerror(info->si_errno),
+			    info->si_errno);
 
 		/* XXX we could get more signal/fault specific details from
 		 * info->si_code decode
@@ -1050,27 +1101,29 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		switch (signo) {
 		case SIGILL:
 		case SIGFPE:
-			fprintf(stderr, "Failing at address: %p\n",
-				info->si_addr);
+			PRINT_ERROR("Failing at address: %p\n", info->si_addr);
 			break;
 		case SIGSEGV:
 		case SIGBUS:
-			fprintf(stderr, "Failing for address: %p\n",
-				info->si_addr);
+			PRINT_ERROR("Failing for address: %p\n", info->si_addr);
 			break;
 		}
 	} else {
-		fprintf(stderr, "siginfo is NULL, additional information "
-			"unavailable\n");
+		PRINT_ERROR("siginfo is NULL, additional information unavailable\n");
 	}
 
-	bt_size = backtrace(bt, 128);
-	if (bt_size >= 128)
-		fprintf(stderr, "backtrace may have been truncated\n");
+	/* since we mainly handle fatal signals here, flush the log to not
+	 * risk losing any debug traces
+	 */
+	d_log_sync();
 
-	/* start at 1 to forget about me! */
-	for (i = 1; i < bt_size; i++)
-		backtrace_symbols_fd(&bt[i], 1, fileno(stderr));
+	bt_size = backtrace(bt, MAX_BT_ENTRIES);
+	if (bt_size == MAX_BT_ENTRIES)
+		fprintf(stderr, "backtrace may have been truncated\n");
+	if (bt_size > 1) /* start at 1 to ignore this frame */
+		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
+	else
+		fprintf(stderr, "No useful backtrace available");
 
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);

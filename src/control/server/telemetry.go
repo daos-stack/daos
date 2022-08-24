@@ -27,12 +27,7 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		return nil
 	}
 
-	opts := &promexp.CollectorOpts{
-		Ignores: []string{
-			`.*_ID_(\d+)_rank`,
-		},
-	}
-	c, err := promexp.NewCollector(log, opts)
+	c, err := promexp.NewCollector(log, &promexp.CollectorOpts{})
 	if err != nil {
 		return err
 	}
@@ -116,7 +111,7 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 		timedCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(timedCtx); err != nil {
-			log.Infof("HTTP server didn't shut down within timeout: %s", err.Error())
+			log.Noticef("HTTP server didn't shut down within timeout: %s", err.Error())
 		}
 	}, nil
 }

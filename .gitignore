@@ -60,4 +60,6 @@ docs/doxygen/
 venv
 .yamllint
 utils/githooks/*.d/*-user-*
+.prepare-commit-msg
+.pre-commit
 .vscode

@@ -133,7 +133,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     Args:
         self (obj): soak obj
         source_dir (str): Source directory to archive
-        dest_dir (str): Destinaton directory
+        dest_dir (str): Destination directory
         host_list (list): list of hosts
 
     Raises:
@@ -444,7 +444,7 @@ def launch_snapshot(self, pool, name):
         self.log.error("Snapshot failed", exc_info=error)
         status &= False
     if status:
-        self.log.info("Sanpshot Created")
+        self.log.info("Snapshot Created")
         # write more data to object
         data_pattern2 = get_random_bytes(500)
         datasize2 = len(data_pattern2) + 1
@@ -1293,7 +1293,7 @@ def build_job_script(self, commands, job, nodesperjob):
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
-            "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
+            "exclude": self.exclude_slurm_nodes,
             "error": str(error),
             "export": "ALL",
             "exclusive": None
