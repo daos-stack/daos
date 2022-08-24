@@ -9,10 +9,9 @@ package io.daos.fs.hadoop;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import com.google.common.collect.Lists;
 
 import io.daos.*;
 import io.daos.dfs.*;
@@ -591,7 +590,7 @@ public class DaosFileSystem extends FileSystem {
     }
     String path = getDaosRelativePath(f);
     DaosFile file = daos.getFile(path);
-    final List<FileStatus> result = Lists.newArrayList();
+    final List<FileStatus> result = new ArrayList<>();
     try {
       if (file.isDirectory()) {
         String[] children = file.listChildren();

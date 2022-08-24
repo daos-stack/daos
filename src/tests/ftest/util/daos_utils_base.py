@@ -465,7 +465,7 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonObjectSubCommand(CommandWithParameters):
+        class CommonObjectSubCommand(CommandWithPositionalParameters):
             """Defines an object for the common daos object sub-command."""
 
             def __init__(self, sub_command):
