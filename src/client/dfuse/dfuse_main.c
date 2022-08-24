@@ -25,10 +25,11 @@
  * is used to detect abnormal exit.
  */
 static void
-noop_handler(int arg) {
+noop_handler(int arg)
+{
 }
 
-static int bg_fd;
+static int                    bg_fd;
 static struct d_fault_attr_t *start_fault_attr;
 
 /* Send a message to the foreground thread */
@@ -90,14 +91,14 @@ dfuse_send_to_fg(int rc)
 static int
 dfuse_bg(struct dfuse_info *dfuse_info)
 {
-	sigset_t pset;
-	fd_set read_set = {};
-	int err;
+	sigset_t         pset;
+	fd_set           read_set = {};
+	int              err;
 	struct sigaction sa = {};
-	pid_t child_pid;
-	sigset_t sset;
-	int rc;
-	int di_spipe[2];
+	pid_t            child_pid;
+	sigset_t         sset;
+	int              rc;
+	int              di_spipe[2];
 
 	rc = pipe(&di_spipe[0]);
 	if (rc)
@@ -117,7 +118,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	}
 
 	sa.sa_handler = noop_handler;
-	sa.sa_flags = 0;
+	sa.sa_flags   = 0;
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGCHLD, &sa, NULL);
 
@@ -127,8 +128,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	FD_SET(di_spipe[0], &read_set);
 
 	errno = 0;
-	rc = pselect(di_spipe[0] + 1, &read_set, NULL, NULL, NULL, &pset);
-	err = errno;
+	rc    = pselect(di_spipe[0] + 1, &read_set, NULL, NULL, NULL, &pset);
+	err   = errno;
 
 	if (err == EINTR) {
 		printf("Child process died without reporting failure\n");
@@ -137,7 +138,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 
 	if (FD_ISSET(di_spipe[0], &read_set)) {
 		ssize_t b;
-		int child_ret;
+		int     child_ret;
 
 		b = read(di_spipe[0], &child_ret, sizeof(child_ret));
 		if (b != sizeof(child_ret)) {
@@ -145,8 +146,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting %d %s\n", child_ret,
-			       d_errstr(child_ret));
+			printf("Exiting %d %s\n", child_ret, d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -167,8 +167,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
 {
-	struct dfuse_info		*dfuse_info;
-	int				rc;
+	struct dfuse_info *dfuse_info;
+	int                rc;
 
 	dfuse_info = fs_handle->dpi_info;
 
@@ -187,7 +187,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	if (D_SHOULD_FAIL(start_fault_attr))
 		return -DER_SUCCESS;
 
-	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
+	rc = fuse_session_mount(dfuse_info->di_session, dfuse_info->di_mountpoint);
 	if (rc != 0) {
 		DFUSE_TRA_ERROR("Could not mount fuse");
 		return -DER_INVAL;
@@ -195,7 +195,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
+		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: " DF_RC, DP_RC(rc));
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
@@ -203,8 +203,8 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DFUSE_TRA_ERROR(dfuse_info, "Fuse loop exited with return code: %d (%s)", rc,
+				strerror(rc));
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -214,9 +214,8 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 static void
 show_version(char *name)
 {
-	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n",
-		name, DAOS_VERSION, DAOS_API_VERSION_MAJOR,
-		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
+		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
 #if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
@@ -226,94 +225,93 @@ show_version(char *name)
 static void
 show_help(char *name)
 {
-	printf("usage: %s -m mountpoint\n"
-		"Options:\n"
-		"\n"
-		"	-m --mountpoint=<path>	Mount point to use\n"
-		"\n"
-		"	   --pool=name		pool UUID/label\n"
-		"	   --container=name	container UUID/label\n"
-		"	   --path=<path>	Path to load UNS pool/container data\n"
-		"	   --sys-name=STR	DAOS system name context for servers\n"
-		"\n"
-		"	-S --singlethread	Single threaded\n"
-		"	-t --thread-count=count	Number of fuse threads to use\n"
-		"	-f --foreground		Run in foreground\n"
-		"	   --enable-caching	Enable all caching (default)\n"
-		"	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
-		"	   --disable-caching	Disable all caching\n"
-		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
-		"\n"
-		"	-h --help		Show this help\n"
-		"	-v --version		Show version\n"
-		"\n"
-		"Specifying pool and container are optional. If not set then dfuse can connect to\n"
-		"many using the uuids as leading components of the path.\n"
-		"Pools and containers can be specified using either uuids or labels.\n"
-		"\n"
-		"The path option can be use to set a filesystem path from which Namespace attributes\n"
-		"will be loaded, or if path is not set then the mount directory will also be\n"
-		"checked.  Only one way of setting pool and container data should be used.\n"
-		"\n"
-		"The default thread count is one per available core to allow maximum throughput,\n"
-		"this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
-		"One thread will be started for asynchronous I/O handling so at least two threads\n"
-		"must be specified in all cases.\n"
-		"Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
-		"threading logic in dfuse."
-		"\n"
-		"If dfuse is running in background mode (the default unless launched via mpirun)\n"
-		"then it will stay in the foreground until the mount is registered with the\n"
-		"kernel to allow appropriate error reporting.\n"
-		"\n"
-		"Caching is on by default with short metadata timeouts and write-back data cache,\n"
-		"this can be disabled entirely for the mount by the use of command line options.\n"
-		"Further settings can be set on a per-container basis via the use of container\n"
-		"attributes.  If the --disable-caching option is given then no caching will be\n"
-		"performed and the container attributes are not used, if --disable-wb-cache is\n"
-		"given the data caching for the whole mount is performed in write-back mode and\n"
-		"the container attributes are still used\n"
-		"\n"
-		"version: %s\n",
-		name, DAOS_VERSION);
+	printf(
+	    "usage: %s -m mountpoint\n"
+	    "Options:\n"
+	    "\n"
+	    "	-m --mountpoint=<path>	Mount point to use\n"
+	    "\n"
+	    "	   --pool=name		pool UUID/label\n"
+	    "	   --container=name	container UUID/label\n"
+	    "	   --path=<path>	Path to load UNS pool/container data\n"
+	    "	   --sys-name=STR	DAOS system name context for servers\n"
+	    "\n"
+	    "	-S --singlethread	Single threaded\n"
+	    "	-t --thread-count=count	Number of fuse threads to use\n"
+	    "	-f --foreground		Run in foreground\n"
+	    "	   --enable-caching	Enable all caching (default)\n"
+	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
+	    "	   --disable-caching	Disable all caching\n"
+	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
+	    "\n"
+	    "	-h --help		Show this help\n"
+	    "	-v --version		Show version\n"
+	    "\n"
+	    "Specifying pool and container are optional. If not set then dfuse can connect to\n"
+	    "many using the uuids as leading components of the path.\n"
+	    "Pools and containers can be specified using either uuids or labels.\n"
+	    "\n"
+	    "The path option can be use to set a filesystem path from which Namespace attributes\n"
+	    "will be loaded, or if path is not set then the mount directory will also be\n"
+	    "checked.  Only one way of setting pool and container data should be used.\n"
+	    "\n"
+	    "The default thread count is one per available core to allow maximum throughput,\n"
+	    "this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
+	    "One thread will be started for asynchronous I/O handling so at least two threads\n"
+	    "must be specified in all cases.\n"
+	    "Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
+	    "threading logic in dfuse."
+	    "\n"
+	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
+	    "then it will stay in the foreground until the mount is registered with the\n"
+	    "kernel to allow appropriate error reporting.\n"
+	    "\n"
+	    "Caching is on by default with short metadata timeouts and write-back data cache,\n"
+	    "this can be disabled entirely for the mount by the use of command line options.\n"
+	    "Further settings can be set on a per-container basis via the use of container\n"
+	    "attributes.  If the --disable-caching option is given then no caching will be\n"
+	    "performed and the container attributes are not used, if --disable-wb-cache is\n"
+	    "given the data caching for the whole mount is performed in write-back mode and\n"
+	    "the container attributes are still used\n"
+	    "\n"
+	    "version: %s\n",
+	    name, DAOS_VERSION);
 }
 
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info	*fs_handle = NULL;
-	struct dfuse_info	*dfuse_info = NULL;
-	struct dfuse_pool	*dfp = NULL;
-	struct dfuse_cont	*dfs = NULL;
-	struct duns_attr_t	path_attr = {};
-	struct duns_attr_t	duns_attr = {};
-	uuid_t			cont_uuid = {};
-	uuid_t			pool_uuid = {};
-	char			*pool_name = NULL;
-	char			*cont_name = NULL;
-	char			c;
-	int			rc;
-	int			rc2;
-	char			*path = NULL;
-	bool			have_thread_count = false;
+	struct dfuse_projection_info *fs_handle  = NULL;
+	struct dfuse_info            *dfuse_info = NULL;
+	struct dfuse_pool            *dfp        = NULL;
+	struct dfuse_cont            *dfs        = NULL;
+	struct duns_attr_t            path_attr  = {};
+	struct duns_attr_t            duns_attr  = {};
+	uuid_t                        cont_uuid  = {};
+	uuid_t                        pool_uuid  = {};
+	char                         *pool_name  = NULL;
+	char                         *cont_name  = NULL;
+	char                          c;
+	int                           rc;
+	int                           rc2;
+	char                         *path              = NULL;
+	bool                          have_thread_count = false;
 
-	struct option long_options[] = {
-		{"mountpoint",		required_argument, 0, 'm'},
-		{"path",		required_argument, 0, 'P'},
-		{"pool",		required_argument, 0, 'p'},
-		{"container",		required_argument, 0, 'c'},
-		{"sys-name",		required_argument, 0, 'G'},
-		{"singlethread",	no_argument,	   0, 'S'},
-		{"thread-count",	required_argument, 0, 't'},
-		{"foreground",		no_argument,	   0, 'f'},
-		{"enable-caching",	no_argument,	   0, 'E'},
-		{"enable-wb-cache",	no_argument,	   0, 'F'},
-		{"disable-caching",	no_argument,	   0, 'A'},
-		{"disable-wb-cache",	no_argument,	   0, 'B'},
-		{"version",		no_argument,	   0, 'v'},
-		{"help",		no_argument,	   0, 'h'},
-		{0, 0, 0, 0}
-	};
+	struct option                 long_options[] = {{"mountpoint", required_argument, 0, 'm'},
+							{"path", required_argument, 0, 'P'},
+							{"pool", required_argument, 0, 'p'},
+							{"container", required_argument, 0, 'c'},
+							{"sys-name", required_argument, 0, 'G'},
+							{"singlethread", no_argument, 0, 'S'},
+							{"thread-count", required_argument, 0, 't'},
+							{"foreground", no_argument, 0, 'f'},
+							{"enable-caching", no_argument, 0, 'E'},
+							{"enable-wb-cache", no_argument, 0, 'F'},
+							{"disable-caching", no_argument, 0, 'A'},
+							{"disable-wb-cache", no_argument, 0, 'B'},
+							{"version", no_argument, 0, 'v'},
+							{"help", no_argument, 0, 'h'},
+							{0, 0, 0, 0}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -324,12 +322,11 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
-	dfuse_info->di_caching = true;
+	dfuse_info->di_caching  = true;
 	dfuse_info->di_wb_cache = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "m:St:fhv",
-				long_options, NULL);
+		c = getopt_long(argc, argv, "m:St:fhv", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -345,14 +342,14 @@ main(int argc, char **argv)
 			dfuse_info->di_group = optarg;
 			break;
 		case 'E':
-			dfuse_info->di_caching = true;
+			dfuse_info->di_caching  = true;
 			dfuse_info->di_wb_cache = true;
 			break;
 		case 'F':
 			dfuse_info->di_wb_cache = true;
 			break;
 		case 'A':
-			dfuse_info->di_caching = false;
+			dfuse_info->di_caching  = false;
 			dfuse_info->di_wb_cache = false;
 			break;
 		case 'B':
@@ -368,12 +365,12 @@ main(int argc, char **argv)
 			/* Set it to be single threaded, but allow an extra one
 			 * for the event queue processing
 			 */
-			dfuse_info->di_threaded = false;
+			dfuse_info->di_threaded     = false;
 			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
-			have_thread_count = true;
+			have_thread_count           = true;
 			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
@@ -395,8 +392,7 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
-		DFUSE_TRA_WARNING(dfuse_info,
-				  "Not running in background under orterun");
+		DFUSE_TRA_WARNING(dfuse_info, "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
 	}
 
@@ -461,9 +457,9 @@ main(int argc, char **argv)
 		}
 
 		path_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
-		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
-			       rc, strerror(rc));
+		rc                 = duns_resolve_path(path, &path_attr);
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s", rc,
+			       strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -486,9 +482,9 @@ main(int argc, char **argv)
 	 * error so keep going.
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
-	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
-		       rc, strerror(rc));
+	rc                 = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s", rc,
+		       strerror(rc));
 	if (rc == 0) {
 		if (pool_name) {
 			printf("Pool specified multiple ways\n");
