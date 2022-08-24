@@ -1047,7 +1047,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 4;
+	args.argc = 5;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -1071,6 +1071,10 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argv[3] = strdup("-odefault_permissions");
 	if (!args.argv[3])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[4] = strdup("-onoatime");
+	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	/* Create the root inode and insert into table */
