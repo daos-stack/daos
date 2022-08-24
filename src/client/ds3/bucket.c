@@ -324,7 +324,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 	}
 
 	if (prefix != NULL) {
-		D_STRNDUP(prefix_copy, prefix, DS3_MAX_KEY - 1);
+		D_STRNDUP(prefix_copy, prefix, DS3_MAX_KEY_BUFF - 1);
 		if (prefix_copy == NULL) {
 			return -ENOMEM;
 		}
@@ -338,7 +338,7 @@ ds3_bucket_list_obj(uint32_t *nobj, struct ds3_object_info *objs, uint32_t *ncp,
 		prefix_rest = file_start + 1;
 	}
 
-	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+	D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY_BUFF);
 	if (lookup_path == NULL) {
 		rc = -ENOMEM;
 		goto err_prefix;

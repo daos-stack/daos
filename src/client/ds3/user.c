@@ -49,7 +49,7 @@ ds3_user_set(const char *name, struct ds3_user_info *info, struct ds3_user_info 
 	}
 
 	// Build user path
-	D_ALLOC_ARRAY(user_path, DS3_MAX_KEY);
+	D_ALLOC_ARRAY(user_path, DS3_MAX_KEY_BUFF);
 	strcpy(user_path, "../");
 	strcat(user_path, meta_dir_name(USERS_DIR));
 	strcat(user_path, "/");

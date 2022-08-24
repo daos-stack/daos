@@ -56,7 +56,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 	if (ds3o_tmp == NULL)
 		return -ENOMEM;
 
-	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
+	D_STRNDUP(path, key, DS3_MAX_KEY_BUFF - 1);
 	if (path == NULL) {
 		rc = ENOMEM;
 		goto err_ds3o;
@@ -128,7 +128,7 @@ ds3_obj_open(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		return -ENOMEM;
 
 	// TODO: cache open file handles
-	D_ALLOC_ARRAY(path, DS3_MAX_KEY);
+	D_ALLOC_ARRAY(path, DS3_MAX_KEY_BUFF);
 	if (path == NULL) {
 		rc = ENOMEM;
 		goto err_ds3o;
@@ -230,7 +230,7 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 	if (key == NULL || strnlen(key, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
-	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
+	D_STRNDUP(path, key, DS3_MAX_KEY_BUFF - 1);
 	if (path == NULL) {
 		return -ENOMEM;
 	}
@@ -244,7 +244,7 @@ ds3_obj_destroy(const char *key, ds3_bucket_t *ds3b)
 	}
 
 	if (parent_path != NULL) {
-		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY_BUFF);
 		if (lookup_path == NULL) {
 			rc = ENOMEM;
 			goto err_path;
@@ -313,7 +313,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		return -EINVAL;
 	}
 
-	D_STRNDUP(path, key, DS3_MAX_KEY - 1);
+	D_STRNDUP(path, key, DS3_MAX_KEY_BUFF - 1);
 	if (path == NULL) {
 		return -ENOMEM;
 	}
@@ -328,7 +328,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 
 	char *lookup_path = NULL;
 	if (parent_path != NULL) {
-		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY);
+		D_ALLOC_ARRAY(lookup_path, DS3_MAX_KEY_BUFF);
 		if (lookup_path == NULL) {
 			rc = ENOMEM;
 			goto err_path;
@@ -343,7 +343,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	}
 
 	// Build link name
-	D_ALLOC_ARRAY(link_name, DS3_MAX_KEY);
+	D_ALLOC_ARRAY(link_name, DS3_MAX_KEY_BUFF);
 	if (link_name == NULL) {
 		rc = ENOMEM;
 		goto err_parent;

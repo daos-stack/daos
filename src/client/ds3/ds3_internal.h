@@ -17,7 +17,7 @@
 
 #define METADATA_BUCKET        "_METADATA"
 #define MULTIPART_MAX_PARTS    10000
-#define LATEST_INSTANCE_SUFFIX "[latest]"
+#define LATEST_INSTANCE_SUFFIX "[" DS3_LATEST_INSTANCE "]"
 #define RGW_BUCKET_INFO        "rgw_info"
 #define RGW_DIR_ENTRY_XATTR    "rgw_entry"
 #define RGW_KEY_XATTR          "rgw_key"
@@ -37,7 +37,7 @@ enum meta_dir { METADATA_DIR_LIST METADATA_DIR_LAST };
 /** DAOS S3 Pool handle */
 struct ds3 {
 	/** Pool name */
-	char       pool[DAOS_PROP_MAX_LABEL_BUF_LEN];
+	char             pool[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	/** Pool handle */
 	daos_handle_t    poh;
 	/** Pool information */
@@ -51,7 +51,7 @@ struct ds3 {
 /** DAOS S3 Bucket handle */
 struct ds3_bucket {
 	/** DFS handle */
-	dfs_t           *dfs;
+	dfs_t *dfs;
 };
 
 /** DAOS S3 Object handle */

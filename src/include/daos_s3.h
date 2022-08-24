@@ -25,8 +25,11 @@ extern "C" {
 /** Maximum bucket name length */
 #define DS3_MAX_BUCKET_NAME DAOS_PROP_MAX_LABEL_BUF_LEN
 
-/** Maximum key length */
-#define DS3_MAX_KEY         DFS_MAX_PATH
+/** Maximum key length, allows adding [latest] */
+#define DS3_MAX_KEY         DFS_MAX_PATH - 8
+
+/** Maximum key buffer length */
+#define DS3_MAX_KEY_BUFF    DFS_MAX_PATH
 
 /** Maximum user info length */
 #define DS3_MAX_USER_NAME   DFS_MAX_NAME
@@ -81,7 +84,7 @@ struct ds3_bucket_info {
 /** S3 Object information */
 struct ds3_object_info {
 	/** Object key */
-	char   key[DS3_MAX_KEY];
+	char   key[DS3_MAX_KEY_BUFF];
 	/** Opaque encoded object info */
 	void  *encoded;
 	/** Length of encoded data */
@@ -91,7 +94,7 @@ struct ds3_object_info {
 /** S3 Common Prefix information */
 struct ds3_common_prefix_info {
 	/** Common Prefix */
-	char prefix[DS3_MAX_KEY];
+	char prefix[DS3_MAX_KEY_BUFF];
 };
 
 /** S3 Multipart Upload information */
@@ -99,7 +102,7 @@ struct ds3_multipart_upload_info {
 	/** Upload id */
 	char   upload_id[DS3_MAX_UPLOAD_ID];
 	/** Object key */
-	char   key[DS3_MAX_KEY];
+	char   key[DS3_MAX_KEY_BUFF];
 	/** Opaque encoded upload info */
 	void  *encoded;
 	/** Length of encoded data */

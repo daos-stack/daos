@@ -33,8 +33,8 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	struct dirent *dirents;
 	daos_anchor_t  anchor;
 	char          *key;
-	uint32_t       mpi = 0;
-	uint32_t       cpi = 0;
+	uint32_t       mpi;
+	uint32_t       cpi;
 	uint32_t       i;
 	int            prefix_length;
 	const char    *upload_id;
@@ -42,6 +42,10 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 	daos_size_t    size;
 
 	if (bucket_name == NULL || ds3 == NULL || nmp == NULL || ncp == NULL)
+		return -EINVAL;
+	if (prefix != NULL && strnlen(prefix, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
+		return -EINVAL;
+	if (delim != NULL && strnlen(delim, DS3_MAX_KEY) > DS3_MAX_KEY - 1)
 		return -EINVAL;
 
 	// End
@@ -78,12 +82,14 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		*is_truncated = !daos_anchor_is_eof(&anchor);
 	}
 
-	D_ALLOC_ARRAY(key, DS3_MAX_KEY);
+	D_ALLOC_ARRAY(key, DS3_MAX_KEY_BUFF);
 	if (key == NULL) {
 		rc = ENOMEM;
 		goto err_dirents;
 	}
 
+	mpi           = 0;
+	cpi           = 0;
 	prefix_length = strlen(prefix);
 	for (i = 0; i < *nmp; i++) {
 		upload_id = dirents[i].d_name;
