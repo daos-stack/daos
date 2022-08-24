@@ -102,6 +102,14 @@ func (db *Database) ResignLeadership(cause error) error {
 	return cause
 }
 
+// Barrier blocks until the raft implementation has persisted all
+// outstanding log entries.
+func (db *Database) Barrier() error {
+	return db.raft.withReadLock(func(svc raftService) error {
+		return svc.Barrier(0).Error()
+	})
+}
+
 // ShutdownRaft signals that the raft implementation should shut down
 // and release any resources it is holding. Blocks until the shutdown
 // is complete.
