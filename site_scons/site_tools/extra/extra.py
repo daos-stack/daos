@@ -133,6 +133,7 @@ def generate(env):
     """Setup the our custom tools"""
 
     indent = _find_indent()
+
     # pylint: disable-next=unused-argument
     def _pp_gen(source, target, env, for_signature):
         """generate commands for preprocessor builder"""
