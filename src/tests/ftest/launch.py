@@ -8,7 +8,6 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
-from dataclasses import dataclass
 from datetime import datetime
 from tempfile import TemporaryDirectory
 import errno
@@ -72,15 +71,25 @@ class LaunchException(Exception):
 class RemoteCommandResult():
     """Stores the command result from a Task object."""
 
-    @dataclass
     class ResultData():
+        # pylint: disable=too-few-public-methods
         """Command result data for the set of hosts."""
 
-        command: str
-        returncode: int
-        hosts: NodeSet
-        stdout: list
-        timeout: bool
+        def __init__(self, command, returncode, hosts, stdout, timeout):
+            """Initialize a ResultData object.
+
+            Args:
+                command (str): the executed command
+                returncode (int): the return code of the executed command
+                hosts (NodeSet): the host(s) on which the executed command yielded this result
+                stdout (list): the result of the executed command split by newlines
+                timeout (bool): indicator for a command timeout
+            """
+            self.command = command
+            self.returncode = returncode
+            self.hosts = hosts
+            self.stdout = stdout
+            self.timeout = timeout
 
     def __init__(self, command, task):
         """Create a RemoteCommandResult object.
@@ -134,8 +143,9 @@ class RemoteCommandResult():
                 stdout = []
                 for line in output.splitlines():
                     if isinstance(line, bytes):
-                        line.decode("utf-8")
-                    stdout.append(line)
+                        stdout.append(line.decode("utf-8"))
+                    else:
+                        stdout.append(line)
                 self.output.append(
                     self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
         if timed_out:
@@ -151,11 +161,11 @@ class RemoteCommandResult():
         for data in self.output:
             if data.timeout:
                 log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.output) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.output[0])
+            elif len(data.stdout) == 1:
+                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
             else:
                 log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.output:
+                for line in data.stdout:
                     log.debug("    %s", line)
 
 
@@ -268,46 +278,27 @@ def get_avocado_run_command(tag_filter, sparse, failfast):
     return command
 
 
-def get_logger(log_file):
-    """Get a logger that will dispaly info messages to the console and debug messages to a file.
+def get_local_host():
+    """Get the local host name.
+
+    Returns:
+        str: name of the local host
+    """
+    return socket.gethostname().split(".")[0]
+
+
+def add_file_handler(log, log_file):
+    """Add a logging.FileHandler to the specified logger.
 
     Args:
+        log (logger): logger to which to add the FileHandler
         log_file (str): file in which to log debug messages
-
-    Returns:
-        logger: the configured logger object
-
     """
-    # Set up logging info messages to the console
-    info_format = logging.Formatter("%(asctime)s: %(message)s")
-    info_handler = logging.StreamHandler()
-    info_handler.setLevel(logging.INFO)
-    info_handler.setFormatter(info_format)
-
-    # Log debug messages to a test file
-    debug_format = logging.Formatter("%(asctime)s %(levelname)-5s %(funcName)-15s: %(message)s")
-    debug_handler = logging.FileHandler(log_file, encoding='utf-8')
-    debug_handler.setLevel(logging.DEBUG)
-    debug_handler.setFormatter(debug_format)
-
-    logger = logging.getLogger(log_file)
-    logger.addHandler(info_handler)
-    logger.addHandler(debug_handler)
-    return logger
-
-
-def get_test_logger(test):
-    """Get a logger that displays debug messages to a launch.log co-located with the test results.
-
-    Args:
-        test (str): name of the test used to get the path to the test results
-
-    Returns:
-        logger: the configured logger object
-
-    """
-    log_file = os.path.join(get_avocado_directory(test), "launch.log")
-    return get_logger(log_file)
+    log_format = logging.Formatter("%(asctime)s %(levelname)-5s %(funcName)27s: %(message)s")
+    log_handler = logging.FileHandler(log_file, encoding='utf-8')
+    log_handler.setLevel(logging.DEBUG)
+    log_handler.setFormatter(log_format)
+    log.addHandler(log_handler)
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False):
@@ -337,14 +328,15 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
                 - stderr (not used; included in stdout)
 
     """
+    command_str = " ".join(command)
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
-    elif timeout:
-        log.info("Running locally with a %s timeout: %s", timeout, " ".join(command))
+    if timeout:
+        log.info("Running on %s with a %s timeout: %s", get_local_host(), timeout, command_str)
     else:
-        log.info("Running locally w/o a timeout: %s", " ".join(command))
+        log.info("Running on %s: %s", get_local_host(), command_str)
 
     try:
         # pylint: disable=subprocess-run-check
@@ -355,24 +347,24 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise LaunchException(f"Command '{' '.join(command)}' exceed {timeout}s timeout") from error
+        raise LaunchException(f"Command '{command_str}' exceed {timeout}s timeout") from error
 
     except subprocess.CalledProcessError as error:
         # Raised if command yields a non-zero return status with check=True
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise LaunchException(f"Command '{' '.join(command)}' returned non-zero status") from error
+        raise LaunchException(f"Command '{command_str}' returned non-zero status") from error
 
     except KeyboardInterrupt as error:
         # User Ctrl-C
-        message = f"Command '{' '.join(command)}' interrupted by user"
+        message = f"Command '{command_str}' interrupted by user"
         log.debug(message)
         raise LaunchException(message) from error
 
     except Exception as error:
         # Catch all
-        message = f"Command '{' '.join(command)}' encountered unknown error"
+        message = f"Command '{command_str}' encountered unknown error"
         log.debug(message)
         log.debug(str(error))
         raise LaunchException(message) from error
@@ -522,7 +514,8 @@ def set_test_environment(log, args):
 
     log.debug("ENVIRONMENT VARIABLES")
     for key in sorted(os.environ):
-        log.debug("  %s: %s", key, os.environ[key])
+        if not key.startswith("BASH_FUNC_"):
+            log.debug("  %s: %s", key, os.environ[key])
 
 
 def set_interface_environment(log, args):
@@ -1041,6 +1034,9 @@ def get_test_list(log, tags):
         log (logger): logger for the messages produced by this method
         tags (list): a list of tag or test file names
 
+    Raises:
+        LaunchException: if there is a problem listing tests
+
     Returns:
         (list, list): a tuple of an avocado tag filter list and lists of tests
 
@@ -1078,19 +1074,12 @@ def get_test_list(log, tags):
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
-        log.info("Running with Avocado %s.%s", MAJOR, MINOR)
         command = get_avocado_list_command()
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
-        try:
-            output = run_local(log, command, check=True)
-        except LaunchException as error:
-            log.error("Error detecting tests that match tags: %s", tags)
-            log.error(error)
-            sys.exit(1)
-
-        tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", output)
+        output = run_local(log, command, check=True)
+        tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", output.stdout)
         test_list = list(set(tagged_tests))
 
     return test_tags, test_list
@@ -1368,8 +1357,12 @@ def setup_test_directory(log, args, mode="all"):
             "chmod" = change the permissions of the directory (a+rw)
             "list"  = list the contents of the directory
             "all"  = execute all of the mode options
+
+    Raises:
+        LaunchException: if there is an error setting up the test directory
+
     """
-    all_hosts = NodeSet(socket.gethostname().split(".")[0])
+    all_hosts = NodeSet(get_local_host())
     all_hosts.update(args.test_clients)
     all_hosts.update(args.test_servers)
     test_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -1389,6 +1382,10 @@ def generate_certs(log):
 
     Args:
         log (logger): logger for the messages produced by this method
+
+    Raises:
+        LaunchException: if there is an error generating the certificates
+
     """
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
     certs_dir = os.path.join(daos_test_log_dir, "daosCA")
@@ -1417,7 +1414,6 @@ def run_tests(log, test_files, tag_filter, args):
     log.debug("Avocado logs stored in %s", avocado_logs_dir)
 
     # Create the base avocado run command
-    log.info("Running with Avocado version %s.%s", MAJOR, MINOR)
     command_list = get_avocado_run_command(tag_filter, args.sparse, args.failfast)
 
     # Run each test
@@ -1482,7 +1478,10 @@ def run_tests(log, test_files, tag_filter, args):
             return_code |= run_return_code
 
             # Get a logger for this test
-            test_log = get_test_logger("latest")
+            test_log = logging.getLogger(
+                ".".join([__name__, get_test_category(test_file["py"]), str(loop)]))
+            log.debug("Test post-processing log: %s", test_log)
+            add_file_handler(test_log, os.path.join(avocado_logs_dir, "latest", "launch.log"))
 
             # Stop any agents or servers running via systemd
             if not args.disable_stop_daos:
@@ -1505,7 +1504,7 @@ def run_tests(log, test_files, tag_filter, args):
                     test_log,
                     "local configuration files",
                     os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    NodeSet(socket.gethostname().split(".")[0]),
+                    NodeSet(get_local_host()),
                     os.path.join(
                         get_temporary_directory(args, get_build_environment(args)["PREFIX"]),
                         "*_*_*.yaml"),
@@ -1597,7 +1596,7 @@ def run_tests(log, test_files, tag_filter, args):
 
         if args.jenkinslog:
             # Archive bullseye coverage logs
-            hosts = NodeSet(socket.gethostname().split('.', 1)[0])
+            hosts = NodeSet(get_local_host())
             hosts.add(args.test_servers)
             return_code |= archive_files(
                 test_log,
@@ -1691,7 +1690,7 @@ def get_hosts_from_yaml(log, test_yaml, args, key_match=None):
 
     """
     log.debug("Extracting hosts from %s - matching key '%s'", test_yaml, key_match)
-    local_host = NodeSet(socket.gethostname().split(".")[0])
+    local_host = NodeSet(get_local_host())
     yaml_hosts = NodeSet()
     if args.include_localhost and key_match != YAML_KEYS["test_servers"]:
         yaml_hosts.add(local_host)
@@ -1778,7 +1777,7 @@ def compress_log_files(log, avocado_logs_dir, args):
         avocado_logs_dir (str): path to the avocado log files
     """
     log.debug("-" * 80)
-    log.info("Compressing files in %s", socket.gethostname().split(".")[0])
+    log.info("Compressing files on %s", get_local_host())
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
         get_remote_file_command(), "-z", "-x", f"-f {logs_dir}"]
@@ -1827,11 +1826,10 @@ def archive_files(log, description, destination, hosts, source_files, args,
         # files.
         display_disk_space(log, destination)
 
-        this_host = socket.gethostname().split(".")[0]
         command = [
             get_remote_file_command(),
             "-z",
-            f"-a \"{this_host}:{destination}\"",
+            f"-a \"{get_local_host()}:{destination}\"",
             f"-f \"{source_files}\"",
         ]
         if test_name is not None:
@@ -1844,7 +1842,7 @@ def archive_files(log, description, destination, hosts, source_files, args,
 
         # Determine if the command completed successfully across all the hosts
         if not result.passed:
-            log.error(f"Error: archiving files for {test_name} to {destination}")
+            log.error("Error: archiving files for %s to %s", test_name, destination)
             status |= 16
         if test_name is not None and args.logs_threshold:
             if not check_big_files(log, avocado_logs_dir, result, test_name, args):
@@ -1960,10 +1958,10 @@ def check_big_files(log, avocado_logs_dir, result, test_name, args):
     status = True
     hosts = NodeSet()
     cdata = []
-    for data in result:
-        hosts.update(data.hosts)
-        big_files = re.findall(r"Y:\s([0-9]+)", data.stdout)
+    for data in result.output:
+        big_files = re.findall(r"Y:\s([0-9]+)", "\n".join(data.stdout))
         if big_files:
+            hosts.update(data.hosts)
             cdata.append(
                 f"The following log files on {str(data.hosts)} exceeded the "
                 f"{args.logs_threshold} threshold")
@@ -2235,7 +2233,6 @@ def process_the_cores(log, avocado_logs_dir, test_yaml, args):
     import fnmatch  # pylint: disable=import-outside-toplevel
 
     return_status = True
-    this_host = socket.gethostname().split(".")[0]
     test_hosts = get_hosts_from_yaml(log, test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
 
@@ -2259,7 +2256,7 @@ def process_the_cores(log, avocado_logs_dir, test_yaml, args):
         "if [ ! -s $file ]",
         "then ((rc++))",
         "else if sudo chmod 644 $file && "
-        f"scp $file {this_host}:{daos_cores_dir}/${{file##*/}}-$(hostname -s)",
+        f"scp $file {get_local_host()}:{daos_cores_dir}/${{file##*/}}-$(hostname -s)",
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
@@ -2376,7 +2373,7 @@ def stop_daos_agent_services(log, test_file, args):
     """
     service = "daos_agent.service"
     hosts = get_hosts_from_yaml(log, test_file["yaml"], args, YAML_KEYS["test_clients"])
-    hosts.add(NodeSet(socket.gethostname().split('.', 1)[0]))
+    hosts.add(NodeSet(get_local_host()))
     log.debug("-" * 80)
     log.debug("Verifying %s on %s after running '%s'", service, hosts, test_file["py"])
     return stop_service(log, hosts, service)
@@ -2524,6 +2521,16 @@ def reset_server_storage(log, test_file, args):
 
 def main():
     """Launch DAOS functional tests."""
+    # Setup logging
+    # log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s"
+    # log_format = "%(message)s"
+    # console = logging.StreamHandler()
+    # console.setLevel(logging.DEBUG)
+    # console.setFormatter(logging.Formatter(log_format))
+    # logging.basicConfig(
+    #     format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG, handlers=[console])
+    # log = logging.getLogger(__name__)
+
     # Parse the command line arguments
     description = [
         "DAOS functional test launcher",
@@ -2716,13 +2723,33 @@ def main():
     args = parser.parse_args()
 
     # Setup the logger based upon the mode
-    log_file = os.path.expanduser(os.path.join("~", "avocado", "launch.log"))
-    if args.mode == "ci":
-        # Create an avocado job-result for the launch.py execution using the stage name
-        stage_name = os.environ.get("STAGE_NAME", "Functional Stage Unknown")
-        ftest_name = "_".join(stage_name.replace("Functional", "FTEST").split())
-        log_file = os.path.join(get_avocado_directory(ftest_name), "launch.log")
+    log_level = logging.INFO if args.mode == "ci" else logging.DEBUG
+    log_format = "%(message)s"
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter(log_format))
+    console.setLevel(log_level)
+    logging.basicConfig(
+        format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG, handlers=[console])
+    log = logging.getLogger(__name__)
+    log.info("-" * 80)
+    log.info("DAOS functional test launcher")
+    log.info("-" * 80)
+    log.info("Running with Avocado %s.%s", MAJOR, MINOR)
 
+    # Create an avocado job-result for the launch.py execution using the stage name
+    default_stage_name = "Functional Stage Unknown" if args.mode == "ci" else "Manual"
+    stage_name = os.environ.get("STAGE_NAME", default_stage_name)
+    ftest_name = "_".join(stage_name.replace("Functional", "FTEST").split())
+    log_file = os.path.join(get_avocado_directory(ftest_name), "launch.log")
+    rename_log = os.path.exists(log_file)
+    if rename_log:
+        os.rename(log_file, ".".join([log_file, "old"]))
+    add_file_handler(log, log_file)
+    log.info("Log file: %s", log_file)
+    if rename_log:
+        log.info("  Renaming existing log file to %s", ".".join([log_file, "old"]))
+
+    if args.mode == "ci":
         # Enforce CI mode default arguments
         args.archive = True
         args.clean = True
@@ -2731,9 +2758,12 @@ def main():
         args.process_cores = True
         args.rename = True
         args.sparse = True
+        if not args.logs_threshold:
+            args.logs_threshold = "1G"
 
-    log = get_logger(log_file)
-    log.debug("Arguments: %s", args)
+    log.debug("Arguments:")
+    for key in sorted(args.__dict__.keys()):
+        log.debug("  %s = %s", key, getattr(args, key))
 
     # Convert host specifications into NodeSets
     args.test_servers = NodeSet(args.test_servers)
@@ -2747,18 +2777,26 @@ def main():
     # Setup the user environment
     try:
         set_test_environment(log, args)
-    except LaunchException as error:
-        log.error(str(error))
+    except LaunchException:
+        log.exception("Error setting test environment")
         sys.exit(1)
 
     # Auto-detect nvme test yaml replacement values if requested
     if args.nvme and args.nvme.startswith("auto") and not args.list:
-        args.nvme = get_device_replacement(log, args)
+        try:
+            args.nvme = get_device_replacement(log, args)
+        except LaunchException:
+            log.exception("Error auto-detecting NVMe test yaml file replacement values")
+            sys.exit(1)
     elif args.nvme and args.nvme.startswith("vmd:"):
         args.nvme = args.nvme.replace("vmd:", "")
 
     # Process the tags argument to determine which tests to run
-    tag_filter, test_list = get_test_list(log, args.tags)
+    try:
+        tag_filter, test_list = get_test_list(log, args.tags)
+    except LaunchException:
+        log.exception("Error detecting tests that match tags: %s", args.tags)
+        sys.exit(1)
 
     # Verify at least one test was requested
     if not test_list:
