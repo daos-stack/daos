@@ -161,9 +161,9 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 		D_WARN("Failed to create scm_csum_calcs_last metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total,
-			    D_TM_COUNTER, "Total number of checksums calculated",
-			    NULL,
-			    DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
+			     D_TM_COUNTER, "Total number of checksums calculated",
+			     NULL,
+			     DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_csum_calcs_total metric: "DF_RC"\n", DP_RC(rc));
 
