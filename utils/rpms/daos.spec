@@ -571,7 +571,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thur Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
+* Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
 - Add dfuse unit-test binary to call from ftest.
 
 * Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-4
