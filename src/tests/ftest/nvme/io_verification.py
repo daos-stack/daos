@@ -9,6 +9,7 @@ import avocado
 from pydaos.raw import DaosApiError
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from test_utils_base import LabelGenerator
 
 
 class NvmeIoVerification(IorTestBase):
@@ -20,6 +21,17 @@ class NvmeIoVerification(IorTestBase):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up for test case."""
+        super().setUp()
+        self.ior_processes = self.params.get("np", '/run/ior/*')
+        self.ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
+        self.ior_block_size = self.ior_cmd.block_size.value
+        self.ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        self.ior_flag_write = self.params.get("write", '/run/ior/*/')
+        self.ior_flag_read = self.params.get("read", '/run/ior/*/')
+        self.ior_cont_label_generator = LabelGenerator('cont')
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_io_verification(self):
@@ -47,21 +59,15 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=hw,large
         :avocado: tags=daosio,nvme_io_verification
         """
-        # Test params
-        processes = self.params.get("np", '/run/ior/*')
-        transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
-        block_size = self.ior_cmd.block_size.value
-        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
-
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(self.ior_seq_pool_qty):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
 
-            for tsize in transfer_size:
+            for tsize in self.ior_transfer_size:
                 # Get the current pool sizes
                 size_before_ior = self.pool.info
 
@@ -72,9 +78,11 @@ class NvmeIoVerification(IorTestBase):
                 if tsize <= 1000:
                     self.ior_cmd.block_size.update(32000)
                 else:
-                    self.ior_cmd.block_size.update(block_size)
+                    self.ior_cmd.block_size.update(self.ior_block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_ior_job_manager_command(), processes)
+                job_manager = self.get_ior_job_manager_command()
+                job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
+                self.run_ior(job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
                 self.verify_pool_size(size_before_ior, self.processes)
@@ -105,34 +113,26 @@ class NvmeIoVerification(IorTestBase):
             created.
         :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
         """
-        # Test params
-        processes = self.params.get("np", '/run/ior/*')
-        transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
-        flag_write = self.params.get("write", '/run/ior/*/')
-        flag_read = self.params.get("read", '/run/ior/*/')
-        block_size = self.ior_cmd.block_size.value
-        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
-
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(self.ior_seq_pool_qty):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
 
-            for tsize in transfer_size:
+            for tsize in self.ior_transfer_size:
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
-                self.ior_cmd.flags.update(flag_write)
+                self.ior_cmd.flags.update(self.ior_flag_write)
                 # if transfer size is less thank 1K
                 # update block size to 32K to keep it small
                 if tsize <= 1000:
                     self.ior_cmd.block_size.update(32000)
                 else:
-                    self.ior_cmd.block_size.update(block_size)
+                    self.ior_cmd.block_size.update(self.ior_block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_ior_job_manager_command(), processes)
+                self.run_ior(self.get_ior_job_manager_command(), self.ior_processes)
 
                 # Stop all servers
                 self.get_dmg_command().system_stop(True)
@@ -146,8 +146,10 @@ class NvmeIoVerification(IorTestBase):
                     self.fail("One or more servers crashed")
 
                 # read all the data written before server restart
-                self.ior_cmd.flags.update(flag_read)
-                self.run_ior(self.get_ior_job_manager_command(), processes)
+                self.ior_cmd.flags.update(self.ior_flag_read)
+                job_manager = self.get_ior_job_manager_command()
+                job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
+                self.run_ior(job_manager, self.ior_processes)
 
             # destroy pool
             self.pool.destroy()
