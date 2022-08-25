@@ -240,13 +240,6 @@ configuration to the scheduler configuration file, like
 Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
 `capacity-scheduler.xml` to other nodes.
 
-#### Known Issues
-
-If you use Omni-Path PSM2 provider in DAOS, you'll get connection issue in
-Yarn container due to PSM2 resource not being released properly in time.
-The PSM2 provides has known issues with DAOS and is not supported in
-production environments.
-
 ### Tune More Configurations
 
 If your DAOS URI is the non-UNS, you can follow descriptions of each
@@ -287,9 +280,10 @@ value in `daos-site.xml` takes priority. If user sets Hadoop configuration
 before initializing Hadoop DAOS FileSystem, the user's configuration takes
 priority.
 
-### PSM2 Issue
+### Libfabric Signal Handling Issue
 
-For some libfabric providers, like PSM2, signal chaining should be enabled to
+For some libfabric providers, like the (unsupported) PSM2 provider,
+signal chaining should be enabled to
 better interoperate with DAOS and its dependencies which may install its own
 signal handlers. It ensures that signal calls are intercepted so that they do
 not actually replace the JVM's signal handlers if the handlers conflict with
