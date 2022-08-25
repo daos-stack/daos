@@ -59,6 +59,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
 			fi_out.keep_cache = 1;
 		}
+
+		if (fi_out.keep_cache)
+			oh->doh_keep_cache = true;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -107,7 +110,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	dfuse_cache_set_time(oh->doh_ie);
+	if (oh->doh_caching && !oh->doh_keep_cache)
+		dfuse_cache_set_time(oh->doh_ie);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);
