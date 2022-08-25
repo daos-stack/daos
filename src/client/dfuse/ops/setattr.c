@@ -63,7 +63,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		DFUSE_TRA_DEBUG(ie, "atime %#lx", attr->st_atime);
 		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
-		dfs_flags |= DFS_SET_ATTR_ATIME;
 	}
 
 	if (to_set & FUSE_SET_ATTR_MTIME) {
