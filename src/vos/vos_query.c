@@ -619,7 +619,7 @@ query_write:
 
 	query->qt_ts_set = NULL;
 
-	if (!max_write_only) {
+	if (max_write_only) {
 		cflags = VOS_TS_READ_OBJ;
 	} else {
 		if (flags & VOS_GET_DKEY) {
