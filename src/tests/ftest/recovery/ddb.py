@@ -4,21 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import ctypes
 import re
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from pydaos.raw import IORequest, DaosObjClass
-from general_utils import create_string_buffer, report_errors, run_pcmd, \
-    distribute_files, DaosTestError, get_clush_command, run_command
+from general_utils import report_errors, run_pcmd, insert_objects, \
+    distribute_files, DaosTestError, get_random_string, copy_remote_to_local
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
-
-
-SAMPLE_DKEY = "Sample dkey"
-SAMPLE_AKEY = "Sample akey"
-SAMPLE_DATA = "Sample data"
 
 
 class DdbTest(TestWithServers):
@@ -30,62 +23,15 @@ class DdbTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DdbTest object."""
         super().__init__(*args, **kwargs)
-        self.ioreqs = []
-        self.dkeys = []
-        self.akeys = []
-        self.data_list = []
-
-    def insert_objects(self, object_count, dkey_count, akey_count):
-        """Insert objects, dkeys, akeys, and data into the container.
-
-        Inserted objects: self.ioreqs
-        Inserted dkeys: self.dkeys
-        Inserted akeys: self.akeys
-        Inserted data: self.data_list
-
-        Args:
-            object_count (int): Number of objects to insert.
-            dkey_count (int): Number of dkeys to insert.
-            akey_count (int): Number of akeys to insert.
-        """
-        self.container.open()
-
-        for obj_index in range(object_count):
-            # Insert object.
-            self.ioreqs.append(IORequest(
-                context=self.context, container=self.container.container, obj=None,
-                objtype=DaosObjClass.OC_S1))
-
-            for dkey_index in range(dkey_count):
-                # Prepare the dkey to insert into the object.
-                dkey_str = " ".join(
-                    [SAMPLE_DKEY, str(obj_index), str(dkey_index)]).encode("utf-8")
-                self.dkeys.append(
-                    create_string_buffer(value=dkey_str, size=len(dkey_str)))
-
-                for akey_index in range(akey_count):
-                    # Prepare the akey to insert into the dkey.
-                    akey_str = " ".join(
-                        [SAMPLE_AKEY, str(obj_index), str(dkey_index),
-                         str(akey_index)]).encode("utf-8")
-                    self.akeys.append(
-                        create_string_buffer(value=akey_str, size=len(akey_str)))
-
-                    # Prepare the data to insert into the akey.
-                    data_str = " ".join(
-                        [SAMPLE_DATA, str(obj_index), str(dkey_index),
-                         str(akey_index)]).encode("utf-8")
-                    self.data_list.append(
-                        create_string_buffer(value=data_str, size=len(data_str)))
-                    c_size = ctypes.c_size_t(ctypes.sizeof(self.data_list[-1]))
-
-                    # Insert dkeys, akeys, and the data.
-                    self.ioreqs[-1].single_insert(
-                        dkey=self.dkeys[-1], akey=self.akeys[-1],
-                        value=self.data_list[-1], size=c_size)
+        # Generate random keys and data to insert into the object.
+        self.random_dkey = get_random_string(10)
+        self.random_akey = get_random_string(10)
+        self.random_data = get_random_string(10)
 
     def get_vos_file_path(self):
         """Get the VOS file path.
+
+        If there are multiple VOS files, returns the first file obtained by "ls".
 
         Returns:
             str: VOS file path such as /mnt/daos/<pool_uuid>/vos-0
@@ -96,50 +42,18 @@ class DdbTest(TestWithServers):
         command = " ".join(["sudo", "ls", vos_path])
         cmd_out = run_pcmd(hosts=hosts, command=command)
 
-        vos_file = None
+        # return vos_file
         for file in cmd_out[0]["stdout"]:
             # Assume the VOS file has "vos" in the file name.
             if "vos" in file:
-                vos_file = file
-                break
+                self.log.info("vos_file: %s", file)
+                return file
 
-        if not vos_file:
-            self.fail(
-                "vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
-        else:
-            self.log.info("vos_file: %s", vos_file)
+        self.fail("vos file wasn't found in /mnt/daos/{}".format(self.pool.uuid.lower()))
 
-        return vos_file
+        return None  # to appease pylint
 
-    def copy_remote_to_local(self, remote_file_path):
-        """Copy the given file from the server node to the local test node and retrieve
-        the original name.
-
-        Args:
-            remote_file_path (str): File path to copy to local.
-        """
-        # Use clush --rcopy to copy the file from the remote server node to the local test
-        # node. clush will append .<server_hostname> to the file when copying.
-        args = "--rcopy {} --dest {}".format(remote_file_path, self.test_dir)
-        clush_command = get_clush_command(hosts=self.hostlist_servers[0], args=args)
-        try:
-            run_command(command=clush_command)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Copying {} from {}: {}".format(
-                    remote_file_path, self.hostlist_servers[0], error)) from error
-
-        # Remove the appended .<server_hostname> from the copied file.
-        current_file_path = "".join([remote_file_path, ".", self.hostlist_servers[0]])
-        mv_command = "mv {} {}".format(current_file_path, remote_file_path)
-        try:
-            run_command(command=mv_command)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Moving {} to {}: {}".format(
-                    current_file_path, remote_file_path, error)) from error
-
-    def test_ls(self):
+    def test_recovery_ddb_ls(self):
         """Test ddb ls.
 
         1. Verify container UUID.
@@ -154,8 +68,8 @@ class DdbTest(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=cat_rec
-        :avocado: tags=ddb,ddb_ls
+        :avocado: tags=recovery
+        :avocado: tags=ddb,test_recovery_ddb_ls
         """
         # Create a pool and a container.
         self.add_pool()
@@ -170,11 +84,13 @@ class DdbTest(TestWithServers):
         errors = []
 
         # Insert objects with API.
-        object_count = self.params.get("object_count", "/run/*")
-        dkey_count = self.params.get("dkey_count", "/run/*")
-        akey_count = self.params.get("akey_count", "/run/*")
-        self.insert_objects(
-            object_count=object_count, dkey_count=dkey_count, akey_count=akey_count)
+        object_count = 5
+        dkey_count = 2
+        akey_count = 1
+        insert_objects(
+            context=self.context, container=self.container, object_count=5,
+            dkey_count=2, akey_count=1, base_dkey=self.random_dkey,
+            base_akey=self.random_akey, base_data=self.random_data)
 
         # Need to stop the server to use ddb.
         self.get_dmg_command().system_stop()
@@ -186,10 +102,10 @@ class DdbTest(TestWithServers):
         # stdout is a list which contains each line as separate element. Concatenate them
         # to single string so that we can apply regex.
         ls_out = "\n".join(cmd_result[0]["stdout"])
-        match = re.findall(r"(\[\d+\])\s+([a-f0-9\-]+)", ls_out)
-        self.log.info("List container match = %s", match)
+        match = re.search(r"\[\d+\]\s+([a-f0-9\-]+)", ls_out)
+        self.log.info("Container UUID from ddb ls = %s", match.group(1))
 
-        actual_uuid = match[0][1].lower()
+        actual_uuid = match.group(1).lower()
         expected_uuid = self.container.uuid.lower()
         if actual_uuid != expected_uuid:
             msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
@@ -236,12 +152,12 @@ class DdbTest(TestWithServers):
             actual_dkey_1 = " ".join(match[0][1].split())
             actual_dkey_2 = " ".join(match[1][1].split())
             # We're not testing the numbers in the string because it's not deterministic.
-            if SAMPLE_DKEY not in actual_dkey_1:
+            if self.random_dkey not in actual_dkey_1:
                 msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
-                       "Actual = {}").format(obj_index, SAMPLE_DKEY, actual_dkey_1)
-            if SAMPLE_DKEY not in actual_dkey_2:
+                       "Actual = {}").format(obj_index, self.random_dkey, actual_dkey_1)
+            if self.random_dkey not in actual_dkey_2:
                 msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
-                       "Actual = {}").format(obj_index, SAMPLE_DKEY, actual_dkey_2)
+                       "Actual = {}").format(obj_index, self.random_dkey, actual_dkey_2)
 
             # Verify the dkey size field.
             for dkey in match:
@@ -280,10 +196,10 @@ class DdbTest(TestWithServers):
 
                 # Verify akey string. As in dkey, ignore the numbers at the end.
                 actual_akey = " ".join(match[0][1].split())
-                if SAMPLE_AKEY not in actual_akey:
+                if self.random_akey not in actual_akey:
                     msg = ("Unexpected akey! obj_index = {}; dkey_index = {}; "
                            "Expected = {}; Actual = {}").format(
-                               obj_index, dkey_index, SAMPLE_AKEY, actual_akey)
+                               obj_index, dkey_index, self.random_akey, actual_akey)
                     errors.append(msg)
 
                 # Verify akey size.
@@ -314,7 +230,7 @@ class DdbTest(TestWithServers):
                 # [0] Single Value (Length: 17 bytes)
                 match = re.findall(r"Length:\s+(\d+)\s+bytes", ls_out)
                 data_length = int(match[0])
-                expected_data_length = len(SAMPLE_DATA) + 6
+                expected_data_length = len(self.random_data) + 6
                 if data_length != expected_data_length:
                     msg = "Wrong data length! {}; Expected = {}; Actual = {}".format(
                         path_stat, expected_data_length, data_length)
@@ -334,7 +250,7 @@ class DdbTest(TestWithServers):
         report_errors(test=self, errors=errors)
         self.log.info("##################")
 
-    def test_rm(self):
+    def test_recovery_ddb_rm(self):
         """Test rm.
 
         1. Create a pool and a container. Insert objects, dkeys, and akeys.
@@ -358,26 +274,32 @@ class DdbTest(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=cat_rec
-        :avocado: tags=ddb,ddb_rm
+        :avocado: tags=recovery
+        :avocado: tags=ddb,test_recovery_ddb_rm
         """
         # 1. Create a pool and a container. Insert objects, dkeys, and akeys.
         self.add_pool(connect=True)
         self.add_container(pool=self.pool)
 
-        # Insert one object with one dkey with API.
-        self.insert_objects(object_count=1, dkey_count=1, akey_count=2)
+        # Insert one object with one dkey and one akey with API.
+        obj_dataset = insert_objects(
+            context=self.context, container=self.container, object_count=1,
+            dkey_count=1, akey_count=2, base_dkey=self.random_dkey,
+            base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        dkeys_inserted = obj_dataset[1]
+        akeys_inserted = obj_dataset[2]
 
         # For debugging/reference, check that the dkey and the akey we just inserted are
         # returned from the API.
-        akeys = self.ioreqs[0].list_akey(dkey=self.dkeys[0])
-        self.log.info("akeys from API (before) = %s", akeys)
-        dkeys = self.ioreqs[0].list_dkey()
-        self.log.info("dkeys from API (before) = %s", dkeys)
+        akeys_api = ioreqs[0].list_akey(dkey=dkeys_inserted[0])
+        self.log.info("akeys from API (before) = %s", akeys_api)
+        dkeys_api = ioreqs[0].list_dkey()
+        self.log.info("dkeys from API (before) = %s", dkeys_api)
 
         # For debugging/reference, check that the object was inserted using daos command.
         list_obj_out = self.get_daos_command().container_list_objects(
-            pool=self.pool.uuid, cont=self.container.uuid)
+            pool=self.pool.identifier, cont=self.container.uuid)
         self.log.info("Object list (before) = %s", list_obj_out["response"])
 
         # 2. Need to stop the server to use ddb.
@@ -399,20 +321,20 @@ class DdbTest(TestWithServers):
         dmg_command.system_start()
 
         # 6. Reset the object, container, and pool to use the API after server restart.
-        self.ioreqs[0].obj.close()
+        ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()
         self.container.open()
-        self.ioreqs[0].obj.open()
+        ioreqs[0].obj.open()
 
         # 7. Call list_akey() in pydaos API to verify that the akey was removed.
-        akeys = self.ioreqs[0].list_akey(dkey=self.dkeys[0])
-        self.log.info("akeys from API (after) = %s", akeys)
+        akeys_api = ioreqs[0].list_akey(dkey=dkeys_inserted[0])
+        self.log.info("akeys from API (after) = %s", akeys_api)
 
         errors = []
-        expected_len = len(self.akeys) - 1
-        actual_len = len(akeys)
+        expected_len = len(akeys_inserted) - 1
+        actual_len = len(akeys_api)
         if actual_len != expected_len:
             msg = ("Unexpected number of akeys after ddb rm! "
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
@@ -429,19 +351,19 @@ class DdbTest(TestWithServers):
         dmg_command.system_start()
 
         # 11. Reset the object, container, and pool to use the API after server restart.
-        self.ioreqs[0].obj.close()
+        ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()
         self.container.open()
-        self.ioreqs[0].obj.open()
+        ioreqs[0].obj.open()
 
         # 12. Call list_dkey() in pydaos API to verify that the dkey was removed.
-        dkeys = self.ioreqs[0].list_dkey()
-        self.log.info("dkeys from API (after) = %s", dkeys)
+        dkeys_api = ioreqs[0].list_dkey()
+        self.log.info("dkeys from API (after) = %s", dkeys_api)
 
-        expected_len = len(self.dkeys) - 1
-        actual_len = len(dkeys)
+        expected_len = len(dkeys_inserted) - 1
+        actual_len = len(dkeys_api)
         if actual_len != expected_len:
             msg = ("Unexpected number of dkeys after ddb rm! "
                    "Expected = {}; Actual = {}").format(expected_len, actual_len)
@@ -466,11 +388,11 @@ class DdbTest(TestWithServers):
         # 17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that
         # the object was removed.
         list_obj_out = self.get_daos_command().container_list_objects(
-            pool=self.pool.uuid, cont=self.container.uuid)
+            pool=self.pool.identifier, cont=self.container.uuid)
         obj_list = list_obj_out["response"]
         self.log.info("Object list (after) = %s", obj_list)
 
-        expected_len = len(self.ioreqs) - 1
+        expected_len = len(ioreqs) - 1
         if obj_list:
             actual_len = len(obj_list)
         else:
@@ -484,7 +406,7 @@ class DdbTest(TestWithServers):
         report_errors(test=self, errors=errors)
         self.log.info("##################")
 
-    def test_load(self):
+    def test_recovery_ddb_load(self):
         """Test ddb load.
 
         1. Create a pool and a container.
@@ -498,22 +420,28 @@ class DdbTest(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=cat_rec
-        :avocado: tags=ddb,ddb_load
+        :avocado: tags=recovery
+        :avocado: tags=ddb,test_recovery_ddb_load
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
         self.add_container(pool=self.pool)
 
         # 2. Insert one object with one dkey with API.
-        self.insert_objects(object_count=1, dkey_count=1, akey_count=1)
+        obj_dataset = insert_objects(
+            context=self.context, container=self.container, object_count=1,
+            dkey_count=1, akey_count=1, base_dkey=self.random_dkey,
+            base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        dkeys_inserted = obj_dataset[1]
+        akeys_inserted = obj_dataset[2]
+        data_list = obj_dataset[3]
 
         # For debugging/reference, call single_fetch and get the data just inserted.
-        data_size = len(self.data_list[0])
-        # Pass in data_size + 1 to single_fetch to avoid the no-space error.
-        data_size += 1
-        data = self.ioreqs[0].single_fetch(
-            dkey=self.dkeys[0], akey=self.akeys[0], size=data_size)
+        # Pass in size + 1 to single_fetch to avoid the no-space error.
+        data_size = len(data_list[0]) + 1
+        data = ioreqs[0].single_fetch(
+            dkey=dkeys_inserted[0], akey=akeys_inserted[0], size=data_size)
         self.log.info("data (before) = %s", data.value.decode('utf-8'))
 
         # 3. Stop the server to use ddb.
@@ -550,18 +478,17 @@ class DdbTest(TestWithServers):
         dmg_command.system_start()
 
         # 7. Reset the object, container, and pool to use the API after server restart.
-        self.ioreqs[0].obj.close()
+        ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()
         self.container.open()
-        self.ioreqs[0].obj.open()
+        ioreqs[0].obj.open()
 
         # 8. Verify the data in the akey with single_fetch().
-        data_size = len(new_data)
-        data_size += 1
-        data = self.ioreqs[0].single_fetch(
-            dkey=self.dkeys[0], akey=self.akeys[0], size=data_size)
+        data_size = len(new_data) + 1
+        data = ioreqs[0].single_fetch(
+            dkey=dkeys_inserted[0], akey=akeys_inserted[0], size=data_size)
         actual_data = data.value.decode('utf-8')
         self.log.info("data (after) = %s", actual_data)
 
@@ -575,7 +502,7 @@ class DdbTest(TestWithServers):
         report_errors(test=self, errors=errors)
         self.log.info("##################")
 
-    def test_dump_value(self):
+    def test_recovery_ddb_dump_value(self):
         """Test ddb dump_value.
 
         1. Create a pool and a container.
@@ -589,15 +516,20 @@ class DdbTest(TestWithServers):
 
         :avocado: tags=all,weekly_regression
         :avocado: tags=vm
-        :avocado: tags=cat_rec
-        :avocado: tags=ddb,ddb_dump_value
+        :avocado: tags=recovery
+        :avocado: tags=ddb,test_recovery_ddb_dump_value
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
         self.add_container(pool=self.pool)
 
         # 2. Insert one object with one dkey with API.
-        self.insert_objects(object_count=1, dkey_count=1, akey_count=2)
+        obj_dataset = insert_objects(
+            context=self.context, container=self.container, object_count=1,
+            dkey_count=1, akey_count=2, base_dkey=self.random_dkey,
+            base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        data_list = obj_dataset[3]
 
         # 3. Stop the server to use ddb.
         dmg_command = self.get_dmg_command()
@@ -618,9 +550,13 @@ class DdbTest(TestWithServers):
         ddb_command.dump_value(
             component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
 
-        # Copy them from server node to test node.
-        self.copy_remote_to_local(remote_file_path=akey1_file_path)
-        self.copy_remote_to_local(remote_file_path=akey2_file_path)
+        # Copy them from remote server node to local test node.
+        copy_remote_to_local(
+            remote_file_path=akey1_file_path, test_dir=self.test_dir,
+            remote=self.hostlist_servers[0])
+        copy_remote_to_local(
+            remote_file_path=akey2_file_path, test_dir=self.test_dir,
+            remote=self.hostlist_servers[0])
 
         # 6. Verify the content of the files.
         actual_akey1_data = None
@@ -633,7 +569,7 @@ class DdbTest(TestWithServers):
         errors = []
         str_data_list = []
         # Convert the data to string.
-        for data in self.data_list:
+        for data in data_list:
             str_data_list.append(data.value.decode("utf-8"))
         # Verify that we were able to obtain the data and akey1 and akey2 aren't the same.
         if actual_akey1_data is None or actual_akey2_data is None or \
@@ -654,12 +590,12 @@ class DdbTest(TestWithServers):
         dmg_command.system_start()
 
         # 8. Reset the object, container, and pool to prepare for the cleanup.
-        self.ioreqs[0].obj.close()
+        ioreqs[0].obj.close()
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()
         self.container.open()
-        self.ioreqs[0].obj.open()
+        ioreqs[0].obj.open()
 
         self.log.info("##### Errors #####")
         report_errors(test=self, errors=errors)

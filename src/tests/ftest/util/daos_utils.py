@@ -608,8 +608,8 @@ class DaosCommand(DaosCommandBase):
         """Call daos container list-objects.
 
         Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
+            pool (str): Pool UUID or label
+            cont (str): Container UUID or label
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 

@@ -21,7 +21,3 @@ pool:
 
 container:
   control_method: API
-
-object_count: 5
-dkey_count: 2
-akey_count: 1
