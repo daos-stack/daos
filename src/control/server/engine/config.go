@@ -32,6 +32,10 @@ type FabricConfig struct {
 
 // Update fills in any missing fields from the provided FabricConfig.
 func (fc *FabricConfig) Update(other FabricConfig) {
+	if fc == nil {
+		return
+	}
+
 	if fc.Provider == "" {
 		fc.Provider = other.Provider
 	}
@@ -46,6 +50,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
+	}
+	if fc.DisableSRX == false {
+		fc.DisableSRX = other.DisableSRX
 	}
 }
 
@@ -357,6 +364,12 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	c.Fabric.InterfacePort = ifacePort
+	return c
+}
+
+// WithSrxDisabled disables or enables SRX.
+func (c *Config) WithSrxDisabled(disable bool) *Config {
+	c.Fabric.DisableSRX = disable
 	return c
 }
 

@@ -261,7 +261,7 @@ pipeline {
                             if (key.contains(' ')) {
                                 return
                             }
-                            pragmas[key.toLowerCase()] = value.toLowerCase()
+                            pragmas[key.toLowerCase()] = value
                         /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
                         } catch (ArrayIndexOutOfBoundsException ignored) {
                             // ignore and move on to the next line
@@ -311,7 +311,10 @@ pipeline {
             } // parallel
         } // stage('Check PR')
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
@@ -339,7 +342,7 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.h:' +
+                                                  '*.pb-c.[ch]:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
                                                   'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
                                                   /* groovylint-disable-next-line LineLength */
@@ -927,7 +930,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
+                           script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {

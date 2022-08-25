@@ -84,6 +84,14 @@ struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
 	char		ph_machine[MAXHOSTNAMELEN+1];
+	size_t		ph_cred_len;
+	char		ph_cred[];
+};
+
+/* old format (<= version 2.0) */
+struct pool_hdl_v0 {
+	uint64_t	ph_flags;
+	uint64_t	ph_sec_capas;
 };
 
 /*

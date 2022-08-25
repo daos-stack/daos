@@ -20,20 +20,20 @@ echo ::endgroup::
 echo ::group::Test client only debug build
 scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
        TARGET_TYPE=release -c install
-utils/check.sh -n /opt/daos/bin/dmg
+utils/ci/gha-file-check.sh -n /opt/daos/bin/dmg
 scons --jobs "$DEPS_JOBS" client install
-utils/check.sh -n /opt/daos/bin/daos_engine
-utils/check.sh -n /opt/daos/bin/vos_tests
-utils/check.sh /opt/daos/bin/dmg
+utils/ci/gha-file-check.sh -n /opt/daos/bin/daos_engine
+utils/ci/gha-file-check.sh -n /opt/daos/bin/vos_tests
+utils/ci/gha-file-check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
 echo ::group::Test server only debug build
 scons --jobs "$DEPS_JOBS" -c install
-utils/check.sh -n /opt/daos/bin/daos_engine
+utils/ci/gha-file-check.sh -n /opt/daos/bin/daos_engine
 scons --jobs "$DEPS_JOBS" server install
-utils/check.sh /opt/daos/bin/daos_engine
-utils/check.sh -n /opt/daos/bin/vos_tests
-utils/check.sh -n /opt/daos/bin/dmg
+utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
+utils/ci/gha-file-check.sh -n /opt/daos/bin/vos_tests
+utils/ci/gha-file-check.sh -n /opt/daos/bin/dmg
 echo ::endgroup::
 
 echo ::group::Test incremental debug build with test target
@@ -46,9 +46,9 @@ echo ::endgroup::
 
 echo ::group::Install debug
 scons install
-utils/check.sh /opt/daos/bin/daos_engine
-utils/check.sh /opt/daos/bin/vos_tests
-utils/check.sh /opt/daos/bin/dmg
+utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
+utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
+utils/ci/gha-file-check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
 echo ::group::Rebuild ofi in alternative location
@@ -60,9 +60,9 @@ echo ::endgroup::
 echo ::group::Rebuild mercury and daos with ofi from ALT_PREFIX
 scons install ALT_PREFIX=/opt/daos/dep/prereq/release/ofi PREFIX=/opt/daos --build-deps=yes \
       DEPS=all BUILD_TYPE=dev --jobs "$DEPS_JOBS"
-utils/check.sh /opt/daos/bin/daos_engine
-utils/check.sh /opt/daos/bin/vos_tests
-utils/check.sh /opt/daos/bin/dmg
+utils/ci/gha-file-check.sh /opt/daos/bin/daos_engine
+utils/ci/gha-file-check.sh /opt/daos/bin/vos_tests
+utils/ci/gha-file-check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
 echo ::group::Config file after ALT_PREFIX build

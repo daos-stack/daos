@@ -59,10 +59,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp := new(mgmtpb.GetAttachInfoResp)
 	if req.GetAllRanks() {
-		for rank, uri := range groupMap.RankURIs {
+		for rank, entry := range groupMap.RankEntries {
 			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank: rank.Uint32(),
-				Uri:  uri,
+				Uri:  entry.URI,
 			})
 		}
 	} else {
@@ -72,7 +72,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		for _, rank := range groupMap.MSRanks {
 			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank: rank.Uint32(),
-				Uri:  groupMap.RankURIs[rank],
+				Uri:  groupMap.RankEntries[rank].URI,
 			})
 		}
 	}
@@ -342,7 +342,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	if err != nil {
 		return err
 	}
-	if len(gm.RankURIs) == 0 {
+	if len(gm.RankEntries) == 0 {
 		return system.ErrEmptyGroupMap
 	}
 	if gm.Version == svc.lastMapVer {
@@ -357,10 +357,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 		MapVersion: gm.Version,
 	}
 	rankSet := &system.RankSet{}
-	for rank, uri := range gm.RankURIs {
+	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
-			Rank: rank.Uint32(),
-			Uri:  uri,
+			Rank:        rank.Uint32(),
+			Uri:         entry.URI,
+			Incarnation: entry.Incarnation,
 		})
 		rankSet.Add(rank)
 	}
@@ -976,10 +977,9 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 // SystemCleanup implements the method defined for the Management Service.
 //
-// Signal to the data plane to find all resources associted with a given machine
+// Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
-//
 func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanupReq) (*mgmtpb.SystemCleanupResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
