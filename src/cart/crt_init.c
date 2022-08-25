@@ -112,7 +112,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
-	char		ucx_ib_fork_init = 'u';
+	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -178,7 +178,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	/* Must be set on the server when using UCX, will not affect OFI */
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-	if (ucx_ib_fork_init != 'u') {
+	if (ucx_ib_fork_init) {
 		if (server) {
 			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
 		} else {
