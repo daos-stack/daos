@@ -1945,7 +1945,7 @@ bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 	     crt_bulk_t bulk_hdl, crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE, opcode,
-				    DAOS_POOL_VERSION, rpc, bulk_hdl, NULL);
+				    DAOS_POOL_VERSION, rpc, bulk_hdl, NULL, NULL);
 }
 
 /**
@@ -7184,4 +7184,10 @@ out_lock:
 	rdb_tx_end(&tx);
 out:
 	return rc;
+}
+
+struct ds_pool *
+ds_pool_svc2pool(struct ds_pool_svc *ds_svc)
+{
+	return pool_ds2svc(ds_svc)->ps_pool;
 }

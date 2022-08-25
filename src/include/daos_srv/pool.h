@@ -158,7 +158,7 @@ void ds_pool_child_put(struct ds_pool_child *child);
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
 			 uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-			 d_rank_list_t *excluded_list);
+			 d_rank_list_t *excluded_list, void *priv);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
@@ -271,6 +271,7 @@ int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
 int ds_pool_svc_update_label(struct ds_pool_svc *ds_svc, const char *label);
 int ds_pool_svc_evict_all(struct ds_pool_svc *ds_svc);
+struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 

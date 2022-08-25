@@ -154,6 +154,31 @@ chk_act_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct chk_cont_list_in		*in_source = crt_req_get(source);
+	struct chk_cont_list_out	*out_source = crt_reply_get(source);
+	struct chk_cont_list_out	*out_result = crt_reply_get(result);
+	struct chk_co_rpc_priv		*ccrp = priv;
+	int				 rc;
+
+	if (out_source->cclo_status < 0) {
+		D_ERROR("Failed to check cont list with gen "DF_X64": "DF_RC"\n",
+			in_source->ccli_gen, DP_RC(out_source->cclo_status));
+
+		if (out_result->cclo_child_status == 0)
+			out_result->cclo_child_status = out_source->cclo_status;
+	} else {
+		rc = ccrp->cb(ccrp->args, out_source->cclo_rank, 0, 0,
+			      out_source->cclo_conts.ca_arrays, out_source->cclo_conts.ca_count);
+		if (rc != 0 && out_result->cclo_child_status == 0)
+			out_result->cclo_child_status = rc;
+	}
+
+	return 0;
+}
+
 struct crt_corpc_ops chk_start_co_ops = {
 	.co_aggregate	= chk_start_aggregator,
 	.co_pre_forward	= NULL,
@@ -176,6 +201,11 @@ struct crt_corpc_ops chk_mark_co_ops = {
 
 struct crt_corpc_ops chk_act_co_ops = {
 	.co_aggregate	= chk_act_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+struct crt_corpc_ops chk_cont_list_co_ops = {
+	.co_aggregate	= chk_cont_list_aggregator,
 	.co_pre_forward	= NULL,
 };
 
@@ -414,7 +444,7 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u as dead for DAOS check with gen "DF_X64": "DF_RC"\n",
+		 "Mark rank %u as dead for DAOS check with gen "DF_X64": "DF_RC"\n",
 		 rank, gen, DP_RC(rc));
 
 	return rc;
@@ -457,6 +487,67 @@ out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u take action for DAOS check with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
 		 rank, gen, seq, DP_RC(rc));
+
+	return rc;
+}
+
+int
+chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args)
+{
+	struct chk_co_rpc_priv		 ccrp;
+	crt_rpc_t			*req;
+	struct chk_cont_list_in		*ccli;
+	struct chk_cont_list_out	*cclo;
+	int				 rc;
+
+	ccrp.cb = list_cb;
+	ccrp.args = args;
+	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_CHK_MODULE,
+				  CHK_CONT_LIST, DAOS_CHK_VERSION, &req, NULL, NULL, &ccrp);
+	if (rc != 0) {
+		D_ERROR("Failed to create RPC for check cont list for "DF_UUIDF": "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ccli = crt_req_get(req);
+	ccli->ccli_gen = gen;
+	uuid_copy(ccli->ccli_pool, pool->sp_uuid);
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	cclo = crt_reply_get(req);
+	if (cclo->cclo_child_status != 0) {
+		rc = cclo->cclo_child_status;
+
+		/*
+		 * XXX: The check engine and PS leader are on the same rank,
+		 *	release the buffer for conts. See ds_chk_cont_list_hdlr for detail.
+		 */
+		if (cclo->cclo_status >= 0)
+			chk_fini_conts(cclo->cclo_conts.ca_arrays, cclo->cclo_rank);
+	} else {
+		rc = cclo->cclo_status;
+
+		/*
+		 * XXX: The aggregator only aggregates the results from the pool shards,
+		 *	does not include the PS leader on the same rank as the PS leader
+		 *	resides. Let's aggregate it here.
+		 */
+		if (rc >= 0)
+			rc = list_cb(args, cclo->cclo_rank, 0, 0,
+				     cclo->cclo_conts.ca_arrays, cclo->cclo_conts.ca_count);
+	}
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Rank %u DAOS check cont list for "DF_UUIDF" with gen "DF_X64": "DF_RC"\n",
+		 dss_self_rank(), DP_UUID(pool->sp_uuid), gen, DP_RC(rc));
 
 	return rc;
 }
@@ -952,6 +1043,7 @@ CRT_RPC_DEFINE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
 CRT_RPC_DEFINE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 CRT_RPC_DEFINE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 CRT_RPC_DEFINE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
+CRT_RPC_DEFINE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST);
 CRT_RPC_DEFINE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 CRT_RPC_DEFINE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 CRT_RPC_DEFINE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
