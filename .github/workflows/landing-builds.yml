@@ -30,7 +30,7 @@ jobs:
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
     name: Create Docker images
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -83,7 +83,7 @@ jobs:
   Build-and-test:
     name: Run DAOS/NLT tests
     needs: Prepare
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         distro: [ubuntu]
@@ -139,7 +139,7 @@ jobs:
   Build:
     name: Build DAOS in image
     needs: Prepare
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -217,7 +217,7 @@ jobs:
 
   Build-branch:
     name: Build DAOS
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
