@@ -4144,7 +4144,7 @@ def test_alloc_fail_il_cp(server, conf):
     """
 
     pool = server.get_test_pool()
-    container = create_cont(conf, pool, ctype='POSIX', label='fault_inject')
+    container = create_cont(conf, pool, ctype='POSIX', label='il_cp')
 
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.use_valgrind = False
@@ -4156,7 +4156,7 @@ def test_alloc_fail_il_cp(server, conf):
         fd.write('Hello there')
 
     def get_cmd(loc):
-        return ['cp', target_file, f'test_{loc}']
+        return ['cp', target_file, join(dfuse.dir, f'test_{loc}')]
 
     test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
     test_cmd.use_il = True
