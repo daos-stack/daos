@@ -179,7 +179,7 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 	}
 
 	// Regardless of actionable state, remove any previously applied resource allocation goals.
-	if err := cr.deleteGoals(sockSelector); err != nil {
+	if err := cr.deleteGoals(sockAny); err != nil {
 		return nil, err
 	}
 
@@ -194,8 +194,10 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 	switch state {
 	case storage.ScmNoRegions:
 		// No regions exist, create interleaved AppDirect PMem regions.
+		// PMem mode should be changed for all sockets as changing just for a single socket
+		// can be determined as an incorrect configuration on some platforms.
 		cr.log.Info("Creating PMem regions...")
-		if err := cr.createRegions(sockSelector); err != nil {
+		if err := cr.createRegions(sockAny); err != nil {
 			return nil, errors.Wrap(err, "createRegions")
 		}
 		resp.RebootRequired = true
@@ -404,7 +406,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, sockState)
 
-	if err := cr.deleteGoals(sockSelector); err != nil {
+	if err := cr.deleteGoals(sockAny); err != nil {
 		return nil, err
 	}
 
@@ -430,7 +432,8 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	cr.log.Info("Resetting memory allocations to remove PMem regions...")
 
-	if err := cr.removeRegions(sockSelector); err != nil {
+	// Remove all regions to avoid unsupported config on some platforms.
+	if err := cr.removeRegions(sockAny); err != nil {
 		return nil, err
 	}
 
