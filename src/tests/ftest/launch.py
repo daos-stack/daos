@@ -65,7 +65,7 @@ PROVIDER_KEYS = OrderedDict(
 
 
 class LaunchException(Exception):
-    """Exception for laiunch.py execution."""
+    """Exception for launch.py execution."""
 
 
 class RemoteCommandResult():
@@ -106,11 +106,11 @@ class RemoteCommandResult():
         """Did the command pass on all the hosts.
 
         Returns:
-            bool: if the command was successfull on each host
+            bool: if the command was successful on each host
 
         """
-        timeout = all([data.timeout for data in self.output])
-        non_zero = any([data.returncode != 0 for data in self.output])
+        timeout = all(data.timeout for data in self.output)
+        non_zero = any(data.returncode != 0 for data in self.output)
         return not non_zero and not timeout
 
     @property
@@ -123,7 +123,7 @@ class RemoteCommandResult():
         return len(self.output) == 1
 
     def _process_task(self, task, command):
-        """Populate the output list and deteermine the passed result for the specified task.
+        """Populate the output list and determine the passed result for the specified task.
 
         Args:
             task (Task): a ClusterShell.Task.Task object for the executed command
@@ -178,7 +178,7 @@ def get_avocado_setting(section, key, default=None):
         default (object): default value to use if setting is undefined
 
     Returns:
-        object: value for the avocaod setting or None if not defined
+        object: value for the avocado setting or None if not defined
 
     """
     try:
@@ -238,10 +238,9 @@ def get_avocado_list_command():
     """
     if int(MAJOR) >= 83:
         return ["avocado", "list"]
-    elif int(MAJOR) >= 82:
+    if int(MAJOR) >= 82:
         return ["avocado", "--paginator=off", "list"]
-    else:
-        return ["avocado", "list", "--paginator=off"]
+    return ["avocado", "list", "--paginator=off"]
 
 
 def get_avocado_run_command(tag_filter, sparse, failfast):
@@ -307,7 +306,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
     Args:
         log (logger): logger for the messages produced by this method
         command (list): command from which to obtain the output
-        capture_output(bool, optional): whether or not to include the command ouput in the
+        capture_output(bool, optional): whether or not to include the command output in the
             subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to None.
@@ -322,7 +321,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
     Returns:
         subprocess.CompletedProcess: an object representing the result of the command execution with
             the following properties:
-                - args (the command arument)
+                - args (the command argument)
                 - returncode
                 - stdout (only set if capture_output=True)
                 - stderr (not used; included in stdout)
@@ -926,7 +925,7 @@ def get_vmd_address_backed_nvme(log, hosts, vmd_disks, vmd_controllers):
         raise LaunchException(f"Error issuing command '{command}'")
 
     # Collect a list of NVMe devices behind the same VMD addresses on each host.
-    log.debug("Checking for %s in command ouput", vmd_controllers)
+    log.debug("Checking for %s in command output", vmd_controllers)
     if result.passed:
         for data in result.output:
             for device in vmd_controllers:
@@ -1722,7 +1721,7 @@ def clean_logs(log, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    # Remove any log files and ABT infos/stacks dumps from the DAOS_TEST_LOG_DIR directory
+    # Remove any log files and ABT info/stack dumps from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     test_hosts = get_hosts_from_yaml(log, test_yaml, args)
     command = ["sudo", "rm", "-rf", os.path.join(logs_dir, "*.log*"), "/tmp/daos_dump*.txt*"]
@@ -1875,7 +1874,7 @@ def rename_logs(log, avocado_logs_dir, test_file, loop, args):
 
     if args.jenkinslog:
         if args.repeat > 1:
-            # When repeating tests ensure jenkins-style avocado log directories
+            # When repeating tests ensure Jenkins-style avocado log directories
             # are unique by including the loop count in the path
             new_test_logs_dir = os.path.join(
                 avocado_logs_dir, test_file, str(loop))
@@ -1907,7 +1906,7 @@ def rename_logs(log, avocado_logs_dir, test_file, loop, args):
             status |= 1024
             return status
 
-        # save it for the Launchable [de-]mangle
+        # Save it for the Launchable [de-]mangle
         org_xml_data = xml_data
 
         # First, mangle the in-place file for Jenkins to consume
@@ -2171,8 +2170,8 @@ def install_debuginfos(log):
     # else:
     #     # We're not using the yum API to install packages
     #     # See the comments below.
-    #     kwarg = {'name': 'gdb'}
-    #     yum_base.install(**kwarg)
+    #     kwargs = {'name': 'gdb'}
+    #     yum_base.install(**kwargs)
 
     # This is how you normally finish up a yum transaction, but
     # again, we need to employ sudo
@@ -2325,9 +2324,9 @@ def process_the_cores(log, avocado_logs_dir, test_yaml, args):
             ]
             stack_trace_file = os.path.join(daos_cores_dir, f"{corefile}.stacktrace")
             try:
-                outout = run_local(log, cmd, check=False)
+                output = run_local(log, cmd, check=False)
                 with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
-                    stack_trace.writelines(outout.stdout)
+                    stack_trace.writelines(output.stdout)
             except IOError as error:
                 log.debug("Error writing %s: %s", stack_trace_file, error)
                 return_status = False
