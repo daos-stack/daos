@@ -1531,11 +1531,6 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
                    base_akey, base_data):
     """Insert objects, dkeys, akeys, and data into the container.
 
-    Inserted objects: self.ioreqs
-    Inserted dkeys: self.dkeys
-    Inserted akeys: self.akeys
-    Inserted data: self.data_list
-
     Args:
         context (DaosContext):
         container (TestContainer): Container to insert objects.
