@@ -113,60 +113,97 @@ cont_is_stopping_cb(void *cont)
 static void
 sc_add_pool_metrics(struct scrub_ctx *ctx)
 {
-	d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count,
-			D_TM_COUNTER, "Number of full VOS tree scrubs",
-			NULL, DF_POOL_DIR"/scrubs_completed", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_start,
-			D_TM_TIMESTAMP,
-			"When the current scrubbing started", NULL,
-			DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "",
-			DF_POOL_DIR"/"M_ENDED, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
-			"How long waiting between checksum calculations", "ms",
-			DF_POOL_DIR"/sleep", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
-			D_TM_DURATION,
-			"How long the previous scrub took", "ms",
-			DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs,
-			D_TM_COUNTER, "Number of checksums calculated for "
-				      "current scan",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_last,
-			D_TM_COUNTER, "Number of checksums calculated in last "
-				      "scan", NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER_PREV,
-			DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total,
-			D_TM_COUNTER, "Total number of checksums calculated",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
+	int	rc;
 
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed,
-			D_TM_COUNTER, "Number of bytes scrubbed",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_last,
-			D_TM_COUNTER, "Number of bytes scrubbed in last scan",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED_PREV, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_total,
-			D_TM_COUNTER, "Total number of bytes scrubbed",
-			"bytes",
-			DF_POOL_DIR"/"M_BYTES_SCRUBBED_TOTAL, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_corruption,
-			D_TM_COUNTER, "Number of silent data corruption "
-				      "detected during current scan",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_corruption_total,
-			D_TM_COUNTER, "Total number of silent data corruption "
-				      "detected",
-			NULL,
-			DF_POOL_DIR"/"M_CSUM_CORRUPTION_TOTAL,
-			DP_POOL_DIR(ctx));
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count,
+			     D_TM_COUNTER, "Number of full VOS tree scrubs",
+			     NULL, DF_POOL_DIR"/scrubs_completed", DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_scrub_count metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_start,
+			     D_TM_TIMESTAMP,
+			     "When the current scrubbing started", NULL,
+			     DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_start timestamp metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "",
+			     DF_POOL_DIR"/"M_ENDED, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_end timestamp metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
+			     "How long waiting between checksum calculations", "ms",
+			     DF_POOL_DIR"/sleep", DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_pool_ult_wait_time metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
+			     D_TM_DURATION,
+			     "How long the previous scrub took", "ms",
+			     DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_last_duration metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs,
+			     D_TM_COUNTER, "Number of checksums calculated for "
+					   "current scan", NULL,
+			     DF_POOL_DIR"/"M_CSUM_COUNTER, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_csum_calcs metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_last,
+			     D_TM_COUNTER, "Number of checksums calculated in last "
+					   "scan", NULL,
+			     DF_POOL_DIR"/"M_CSUM_COUNTER_PREV, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_csum_calcs_last metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total,
+			    D_TM_COUNTER, "Total number of checksums calculated",
+			    NULL,
+			    DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_csum_calcs_total metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed,
+			     D_TM_COUNTER, "Number of bytes scrubbed",
+			     "bytes",
+			     DF_POOL_DIR"/"M_BYTES_SCRUBBED, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_bytes_scrubbed metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_last,
+			     D_TM_COUNTER, "Number of bytes scrubbed in last scan",
+			     "bytes",
+			     DF_POOL_DIR"/"M_BYTES_SCRUBBED_PREV, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_bytes_scrubbed_last metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_total,
+			     D_TM_COUNTER, "Total number of bytes scrubbed",
+			     "bytes",
+			     DF_POOL_DIR"/"M_BYTES_SCRUBBED_TOTAL, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_bytes_scrubbed_total metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_corruption,
+			     D_TM_COUNTER, "Number of silent data corruption "
+					   "detected during current scan",
+			     NULL,
+			     DF_POOL_DIR"/"M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_corruption metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_corruption_total,
+			     D_TM_COUNTER, "Total number of silent data corruption "
+					   "detected",
+			     NULL,
+			     DF_POOL_DIR"/"M_CSUM_CORRUPTION_TOTAL,
+			     DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_corruption_total metric: "DF_RC"\n", DP_RC(rc));
 }
 
 static int

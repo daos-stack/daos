@@ -936,6 +936,11 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
 				mst.log_file, strerror(errno));
 			close(mst.log_fd);
+			clog_unlock();
+			if (buffer)
+				free(buffer);
+			if (newtag)
+				free(newtag);
 			return -1;
 		}
 		close(mst.log_fd);
