@@ -25,8 +25,8 @@ import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
 
-from avocado.core.settings import settings
-from avocado.core.version import MAJOR, MINOR
+# from avocado.core.settings import settings
+# from avocado.core.version import MAJOR, MINOR
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -169,6 +169,55 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+class TestInfo():
+    # pylint: disable=too-few-public-methods
+    """Defines the python test file and its associated test yaml file."""
+
+    def __init__(self, test_file):
+        """Initialize a TestInfo object.
+
+        Args:
+            test_file (str): the test python file
+        """
+        base, _ = os.path.splitext(test_file)
+        self.test_file = test_file
+        self.yaml_file = ".".join([base, "yaml"])
+
+    def __str__(self):
+        """Get the test file as a string.
+
+        Returns:
+            str: the test file
+
+        """
+        return self.test_file
+
+
+def get_avocado_version():
+    """Get the avocado major and minor version.
+
+    Rasies:
+        LaunchException: if there is an error getting the version from the avocado command
+
+    Returns:
+        tuple: major and minor avocado versions as strings
+
+    """
+    try:
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.version import MAJOR, MINOR
+        return MAJOR, MINOR
+
+    except ModuleNotFoundError:
+        # Once lightweight runs are using python3-avocado, this can be removed
+        log = logging.getLogger(__name__)
+        result = run_local(log, ["avocado", "-v"], check=True)
+        try:
+            return re.findall(r"(\d+)\.(\d+)", result.stdout)[0]
+        except IndexError as error:
+            raise LaunchException("Error extracting avocado version from command") from error
+
+
 def get_avocado_setting(section, key, default=None):
     """Get the value for the specified avocado setting.
 
@@ -177,27 +226,43 @@ def get_avocado_setting(section, key, default=None):
         key (str): avocado setting key name
         default (object): default value to use if setting is undefined
 
+    Rasies:
+        LaunchException: if there is an error getting the setting from the avocado command
+
     Returns:
         object: value for the avocado setting or None if not defined
 
     """
     try:
-        # Newer versions of avocado use this approach
-        config = settings.as_dict()
-        return config.get(".".join([section, key]))
-
-    except AttributeError:
-        # Older version of avocado, like 69LTS, use a different method
-        # pylint: disable=no-member
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.settings import settings
         try:
-            return settings.get_value(section, key)
-        except settings.SettingsError:
+            # Newer versions of avocado use this approach
+            config = settings.as_dict()
+            return config.get(".".join([section, key]))
+
+        except AttributeError:
+            # Older version of avocado, like 69LTS, use a different method
+            # pylint: disable=no-member
+            try:
+                return settings.get_value(section, key)
+            except settings.SettingsError:
+                # Setting not found
+                pass
+
+        except KeyError:
             # Setting not found
             pass
 
-    except KeyError:
-        # Setting not found
-        pass
+    except ModuleNotFoundError:
+        # Once lightweight runs are using python3-avocado, this can be removed
+        log = logging.getLogger(__name__)
+        result = run_local(log, ["avocado", "config"], check=True)
+        try:
+            return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
+        except IndexError:
+            # Setting not found
+            pass
 
     return default
 
@@ -236,6 +301,7 @@ def get_avocado_list_command():
         list: avocado list command parts
 
     """
+    MAJOR, _ = get_avocado_version()    # pylint: disable=invalid-name
     if int(MAJOR) >= 83:
         return ["avocado", "list"]
     if int(MAJOR) >= 82:
@@ -243,10 +309,11 @@ def get_avocado_list_command():
     return ["avocado", "list", "--paginator=off"]
 
 
-def get_avocado_run_command(tag_filter, sparse, failfast):
+def get_avocado_run_command(test, tag_filter, sparse, failfast, extra_yaml):
     """Get the avocado run command for this version of avocado.
 
     Args:
+        test (TestInfo): the test script/yaml file
         tag_filter (str): _description_
         sparse (bool): _description_
         failfast (bool): _description_
@@ -255,6 +322,7 @@ def get_avocado_run_command(tag_filter, sparse, failfast):
         list: avocado run command
 
     """
+    MAJOR, _ = get_avocado_version()    # pylint: disable=invalid-name
     command = ["avocado"]
     if not sparse and int(MAJOR) >= 82:
         command.append("--show=test")
@@ -274,6 +342,10 @@ def get_avocado_run_command(tag_filter, sparse, failfast):
         command.extend(tag_filter)
     if failfast:
         command.extend(["--failfast", "on"])
+    command.extend(["--mux-yaml", test.yaml_file])
+    if extra_yaml:
+        command.append(extra_yaml)
+    command.extend(["--", str(test)])
     return command
 
 
@@ -333,9 +405,9 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
     if timeout:
-        log.info("Running on %s with a %s timeout: %s", get_local_host(), timeout, command_str)
+        log.debug("Running on %s with a %s timeout: %s", get_local_host(), timeout, command_str)
     else:
-        log.info("Running on %s: %s", get_local_host(), command_str)
+        log.debug("Running on %s: %s", get_local_host(), command_str)
 
     try:
         # pylint: disable=subprocess-run-check
@@ -957,8 +1029,8 @@ def find_pci_address(value):
         list: a list of all the PCI addresses found in the string
 
     """
-    # pylint: disable=consider-using-f-string
-    pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+    digit = "0-9a-fA-F"
+    pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
     return re.findall(pattern, str(value))
 
 
@@ -1079,44 +1151,33 @@ def get_test_list(log, tags):
         command.extend(test_list if test_list else ["./"])
         output = run_local(log, command, check=True)
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", output.stdout)
-        test_list = list(set(tagged_tests))
+        test_list = [TestInfo(match) for match in set(tagged_tests)]
 
     return test_tags, test_list
 
 
-def get_test_files(log, test_list, args, yaml_dir):
-    """Get a list of the test scripts to run and their yaml files.
+def setup_test_files(log, test_list, args, yaml_dir):
+    """Set up the test yaml files with any placeholder replacements.
 
     Args:
         log (logger): logger for the messages produced by this method
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-
-    Returns:
-        list: a list of dictionaries of each test script and yaml file; If
-            there was an issue replacing a yaml host placeholder the yaml
-            dictionary entry will be set to None.
-
     """
     # Replace any placeholders in the extra yaml file, if provided
     if args.extra_yaml:
         args.extra_yaml = replace_yaml_file(log, args.extra_yaml, args, yaml_dir)
 
-    test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
-    for test_file in test_files:
-        base, _ = os.path.splitext(test_file["py"])
-        yaml_file = replace_yaml_file(log, f"{base}.yaml", args, yaml_dir)
-        test_file["yaml"] = yaml_file
+    for test in test_list:
+        test.yaml_file = replace_yaml_file(log, test.yaml_file, args, yaml_dir)
 
         # Display the modified yaml file variants with debug
-        command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
+        command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
         if args.extra_yaml:
             command.append(args.extra_yaml)
         command.extend(["--summary", "3"])
         run_local(log, command, check=False)
-
-    return test_files
 
 
 def replace_yaml_file(log, yaml_file, args, yaml_dir):
@@ -1392,13 +1453,13 @@ def generate_certs(log):
     run_local(log, ["../../../../lib64/daos/certgen/gen_certificates.sh", daos_test_log_dir])
 
 
-def run_tests(log, test_files, tag_filter, args):
+def run_tests(log, test_list, tag_filter, args):
     # pylint: disable=too-many-branches
     """Run or display the test commands.
 
     Args:
         log (logger): logger for the messages produced by this method
-        test_files (dict): a list of dictionaries of each test script/yaml file
+        test_list (list): a list of TestInfo objects defining which tests to run
         tag_filter (list): the avocado tag filter command line argument
         args (argparse.Namespace): command line arguments for this program
 
@@ -1412,193 +1473,38 @@ def run_tests(log, test_files, tag_filter, args):
     avocado_logs_dir = get_avocado_logs_dir()
     log.debug("Avocado logs stored in %s", avocado_logs_dir)
 
-    # Create the base avocado run command
-    command_list = get_avocado_run_command(tag_filter, args.sparse, args.failfast)
-
-    # Run each test
-    skip_reason = None
+    # Run each test for as many repetitions as requested
     for loop in range(1, args.repeat + 1):
         log.debug("-" * 80)
-        log.debug("Starting loop %s/%s", loop, args.repeat)
-        for test_file in test_files:
-            if skip_reason is not None:
-                # An error was detected running clean_logs for a previous test.
-                # As this is typically an indication of a communication issue
-                # with one of the hosts, do not attempt to run subsequent tests.
-                if not report_skipped_test(log, test_file["py"], avocado_logs_dir, skip_reason):
-                    return_code |= 64
+        log.info("Starting loop %s/%s", loop, args.repeat)
+
+        skip_reason = None
+        for test in test_list:
+            # Prepare to run the test
+            test_return_code = prepare_test(log, test, avocado_logs_dir, skip_reason, args)
+            if test_return_code != 0:
+                return_code |= test_return_code
                 continue
 
-            if not isinstance(test_file["yaml"], str):
-                # The test was not run due to an error replacing host
-                # placeholders in the yaml file.  Treat this like a failed
-                # avocado command.
-                reason = "error replacing yaml file placeholders"
-                if not report_skipped_test(log, test_file["py"], avocado_logs_dir, reason):
-                    return_code |= 64
-                return_code |= 4
-                continue
-
-            # Optionally clean the log files before running this test on the
-            # servers and clients specified for this test
-            if args.clean:
-                if not clean_logs(log, test_file["yaml"], args):
-                    # Report errors for this skipped test
-                    skip_reason = (
-                        "host communication error attempting to clean out "
-                        "leftover logs from a previous test run prior to "
-                        "running this test")
-                    if not report_skipped_test(log, test_file["py"], avocado_logs_dir, skip_reason):
-                        return_code |= 64
-                    return_code |= 128
-                    continue
-
-            # Set the environment variable for each test.
-            for key in test_file["env"]:
-                os.environ[key] = test_file["env"][key]
-
-            # Execute this test
-            test_command_list = list(command_list)
-            test_command_list.extend(["--mux-yaml", test_file["yaml"]])
-            if args.extra_yaml:
-                test_command_list.append(args.extra_yaml)
-            test_command_list.extend(["--", test_file["py"]])
-            log.info("Running: %s", " ".join(test_command_list))
-            start_time = int(time.time())
-            try:
-                run_return_code = run_local(log, test_command_list, False).returncode
-            except LaunchException as error:
-                log.error("Error running %s: %s", test_file["py"], str(error))
-                run_return_code = 1
-            end_time = int(time.time())
-            log.info("Total test time: %ss", end_time - start_time)
-            if run_return_code != 0:
+            # Run the test
+            test_return_code = run_test(log, test, tag_filter, args)
+            if test_return_code != 0:
                 collect_crash_files(log, avocado_logs_dir)
-            return_code |= run_return_code
+                return_code |= test_return_code
+                continue
 
-            # Get a logger for this test
-            test_log = logging.getLogger(
-                ".".join([__name__, get_test_category(test_file["py"]), str(loop)]))
-            log.debug("Test post-processing log: %s", test_log)
-            add_file_handler(test_log, os.path.join(avocado_logs_dir, "latest", "launch.log"))
-
-            # Stop any agents or servers running via systemd
-            if not args.disable_stop_daos:
-                return_code |= stop_daos_agent_services(test_log, test_file, args)
-                return_code |= stop_daos_server_service(test_log, test_file, args)
-                return_code |= reset_server_storage(test_log, test_file, args)
-
-            # Optionally store all of the server and client config files
-            # and archive remote logs and report big log files, if any.
-            if args.archive:
-                test_hosts = get_hosts_from_yaml(test_log, test_file["yaml"], args)
-                test_servers = get_hosts_from_yaml(
-                    test_log, test_file["yaml"], args, YAML_KEYS["test_servers"])
-                test_clients = get_hosts_from_yaml(
-                    test_log, test_file["yaml"], args, YAML_KEYS["test_clients"])
-                test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-
-                # Archive local config files
-                return_code |= archive_files(
-                    test_log,
-                    "local configuration files",
-                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    NodeSet(get_local_host()),
-                    os.path.join(
-                        get_temporary_directory(args, get_build_environment(args)["PREFIX"]),
-                        "*_*_*.yaml"),
-                    args)
-
-                # Archive remote server configuration files
-                return_code |= archive_files(
-                    test_log,
-                    "remote server config files",
-                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    test_servers,
-                    os.path.join(os.sep, "etc", "daos", "daos_server*.yml"),
-                    args)
-
-                # Archive remote client configuration files
-                return_code |= archive_files(
-                    test_log,
-                    "remote client config files",
-                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                    test_clients,
-                    " ".join(
-                        [os.path.join(os.sep, "etc", "daos", "daos_agent*.yml"),
-                         os.path.join(os.sep, "etc", "daos", "daos_control*.yml")]
-                    ),
-                    args)
-
-                # Archive remote daos log files - use an extended timeout for potentially large logs
-                return_code |= archive_files(
-                    test_log,
-                    "daos log files",
-                    os.path.join(avocado_logs_dir, "latest", "daos_logs"),
-                    test_hosts,
-                    f"{test_log_dir}/*.log*",
-                    args,
-                    avocado_logs_dir,
-                    get_test_category(test_file["py"]),
-                    1800)
-
-                # Archive remote ULTs stacks dump files
-                return_code |= archive_files(
-                    test_log,
-                    "ULTs stacks dump files",
-                    os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
-                    test_servers,
-                    "/tmp/daos_dump*.txt*",
-                    args,
-                    avocado_logs_dir,
-                    get_test_category(test_file["py"]))
-
-                # Archive remote cart log files
-                return_code |= archive_files(
-                    test_log,
-                    "cart log files",
-                    os.path.join(avocado_logs_dir, "latest", "cart_logs"),
-                    test_hosts,
-                    os.path.join(test_log_dir, "*", "*log*"),
-                    args,
-                    avocado_logs_dir,
-                    get_test_category(test_file["py"]))
-
-                # Compress any log file that haven't been remotely compressed.
-                compress_log_files(test_log, avocado_logs_dir, args)
-
-                # Archive valgrind log files from shared dir
-                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
-                return_code |= archive_files(
-                    test_log,
-                    "valgrind log files",
-                    os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
-                    NodeSet(test_hosts[0]),
-                    os.path.join(valgrind_logs_dir, "valgrind*"),
-                    args,
-                    avocado_logs_dir)
-
-            # Optionally rename the test results directory for this test
-            if args.rename:
-                return_code |= rename_logs(
-                    test_log, avocado_logs_dir, test_file["py"], loop, args)
-
-            # Optionally process core files
-            if args.process_cores:
-                try:
-                    if not process_the_cores(test_log, avocado_logs_dir, test_file["yaml"], args):
-                        return_code |= 256
-                except Exception as error:  # pylint: disable=broad-except
-                    test_log.error(
-                        "Error: unhandled exception processing core files: %s", str(error))
-                    return_code |= 256
+            # Post-process the test
+            test_return_code = process_test(log, test, loop, avocado_logs_dir, args)
+            if test_return_code != 0:
+                return_code |= test_return_code
+                continue
 
         if args.jenkinslog:
             # Archive bullseye coverage logs
             hosts = NodeSet(get_local_host())
             hosts.add(args.test_servers)
             return_code |= archive_files(
-                test_log,
+                log,
                 "bullseye coverage logs",
                 os.path.join(avocado_logs_dir, "bullseye_coverage_logs"),
                 hosts,
@@ -1610,6 +1516,211 @@ def run_tests(log, test_files, tag_filter, args):
         # loop and not re-run the tests.
         if return_code != 0 and args.failfast:
             break
+
+    return return_code
+
+
+def prepare_test(log, test, avocado_logs_dir, skip_reason, args):
+    """Prepare the test to be executed.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        test (TestInfo): the test script/yaml file
+        avocado_logs_dir (str): path to the avocado log files.
+        skip_reason (str): message indicating the reason to skip the test
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: a return code which will be non-zero if there were an issues preparing this test
+
+    """
+    if skip_reason is not None:
+        # An error was detected running clean_logs for a previous test. As this is typically an
+        # indication of a communication issue with one of the hosts, do not attempt to run
+        # subsequent tests.
+        if not report_skipped_test(log, str(test), avocado_logs_dir, skip_reason):
+            return 64
+
+    if not isinstance(test.yaml_file, str):
+        # The test was not run due to an error replacing host placeholders in the yaml file.
+        # Treat this like a failed avocado command.
+        reason = "error replacing yaml file placeholders"
+        if not report_skipped_test(log, str(test), avocado_logs_dir, reason):
+            return 64
+        return 4
+
+    # Optionally clean the log files before running this test on the
+    # servers and clients specified for this test
+    if args.clean:
+        if not clean_logs(log, test.yaml_file, args):
+            # Report errors for this skipped test
+            skip_reason = (
+                "host communication error attempting to clean out leftover logs from a previous "
+                "test run prior to running this test")
+            if not report_skipped_test(log, str(test), avocado_logs_dir, skip_reason):
+                return 64
+            return 128
+
+    return 0
+
+
+def run_test(log, test, tag_filter, args):
+    """Run the specified test.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        test (TestInfo): the test script/yaml file
+        tag_filter (list): the avocado tag filter command line argument
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: the return code from the 'avocado run' command
+
+    """
+    command = get_avocado_run_command(test, tag_filter, args.sparse, args.failfast, args.extra_yaml)
+    start_time = int(time.time())
+
+    try:
+        return_code = run_local(log, command, False).returncode
+
+    except LaunchException as error:
+        log.error("Error running %s: %s", str(test), str(error))
+        return_code = 1
+
+    end_time = int(time.time())
+    log.info("Total test time: %ss", end_time - start_time)
+    return return_code
+
+
+def process_test(log, test, loop, avocado_logs_dir, args):
+    """Process the test result after the test has completed.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        test (TestInfo): the test script/yaml file
+        loop (int): the loop counter for running this test
+        avocado_logs_dir (str): path to the avocado log files.
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: a return code which will be non-zero if there were an issues processing this test
+
+    """
+    return_code = 0
+
+    # Get a logger for this test
+    test_log = logging.getLogger(".".join([__name__, get_test_category(str(test)), str(loop)]))
+    log.debug("Test post-processing log: %s", test_log)
+    add_file_handler(test_log, os.path.join(avocado_logs_dir, "latest", "launch.log"))
+
+    # Stop any agents or servers running via systemd
+    if not args.disable_stop_daos:
+        return_code |= stop_daos_agent_services(test_log, test, args)
+        return_code |= stop_daos_server_service(test_log, test, args)
+        return_code |= reset_server_storage(test_log, test, args)
+
+    # Optionally store all of the server and client config files
+    # and archive remote logs and report big log files, if any.
+    if args.archive:
+        test_hosts = get_hosts_from_yaml(test_log, test.yaml_file, args)
+        test_servers = get_hosts_from_yaml(
+            test_log, test.yaml_file, args, YAML_KEYS["test_servers"])
+        test_clients = get_hosts_from_yaml(
+            test_log, test.yaml_file, args, YAML_KEYS["test_clients"])
+        test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+
+        # Archive local config files
+        return_code |= archive_files(
+            test_log,
+            "local configuration files",
+            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+            NodeSet(get_local_host()),
+            os.path.join(
+                get_temporary_directory(args, get_build_environment(args)["PREFIX"]),
+                "*_*_*.yaml"),
+            args)
+
+        # Archive remote server configuration files
+        return_code |= archive_files(
+            test_log,
+            "remote server config files",
+            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+            test_servers,
+            os.path.join(os.sep, "etc", "daos", "daos_server*.yml"),
+            args)
+
+        # Archive remote client configuration files
+        return_code |= archive_files(
+            test_log,
+            "remote client config files",
+            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+            test_clients,
+            " ".join(
+                [os.path.join(os.sep, "etc", "daos", "daos_agent*.yml"),
+                    os.path.join(os.sep, "etc", "daos", "daos_control*.yml")]
+            ),
+            args)
+
+        # Archive remote daos log files - use an extended timeout for potentially large logs
+        return_code |= archive_files(
+            test_log,
+            "daos log files",
+            os.path.join(avocado_logs_dir, "latest", "daos_logs"),
+            test_hosts,
+            f"{test_log_dir}/*.log*",
+            args,
+            avocado_logs_dir,
+            get_test_category(str(test)),
+            1800)
+
+        # Archive remote ULTs stacks dump files
+        return_code |= archive_files(
+            test_log,
+            "ULTs stacks dump files",
+            os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
+            test_servers,
+            "/tmp/daos_dump*.txt*",
+            args,
+            avocado_logs_dir,
+            get_test_category(str(test)))
+
+        # Archive remote cart log files
+        return_code |= archive_files(
+            test_log,
+            "cart log files",
+            os.path.join(avocado_logs_dir, "latest", "cart_logs"),
+            test_hosts,
+            os.path.join(test_log_dir, "*", "*log*"),
+            args,
+            avocado_logs_dir,
+            get_test_category(str(test)))
+
+        # Compress any log file that haven't been remotely compressed.
+        compress_log_files(test_log, avocado_logs_dir, args)
+
+        # Archive valgrind log files from shared dir
+        valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
+        return_code |= archive_files(
+            test_log,
+            "valgrind log files",
+            os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
+            NodeSet(test_hosts[0]),
+            os.path.join(valgrind_logs_dir, "valgrind*"),
+            args,
+            avocado_logs_dir)
+
+    # Optionally rename the test results directory for this test
+    if args.rename:
+        return_code |= rename_logs(test_log, avocado_logs_dir, str(test), loop, args)
+
+    # Optionally process core files
+    if args.process_cores:
+        try:
+            if not process_the_cores(test_log, avocado_logs_dir, test.yaml_file, args):
+                return_code |= 256
+        except Exception as error:  # pylint: disable=broad-except
+            test_log.error("Error: unhandled exception processing core files: %s", str(error))
+            return_code |= 256
 
     return return_code
 
@@ -1926,7 +2037,7 @@ def rename_logs(log, avocado_logs_dir, test_file, loop, args):
         # another copy for Launchable
         xml_data = org_xml_data
         org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
-        new_name = r'\1\2\3 file="{}"'.format(test_file)   # pylint: disable=consider-using-f-string
+        new_name = rf'\1\2\3 file="{test_file}"'
         xml_data = re.sub(org_name, new_name, xml_data)
         xml_file = xml_file[0:-11] + "xunit1_results.xml"
 
@@ -2358,12 +2469,12 @@ def get_test_category(test_file):
     return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
-def stop_daos_agent_services(log, test_file, args):
+def stop_daos_agent_services(log, test, args):
     """Stop any daos_agent.service running on the hosts running servers.
 
     Args:
         log (logger): logger for the messages produced by this method
-        test_file (dict): a dictionary of the test script/yaml file
+        test (TestInfo): the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2371,19 +2482,19 @@ def stop_daos_agent_services(log, test_file, args):
 
     """
     service = "daos_agent.service"
-    hosts = get_hosts_from_yaml(log, test_file["yaml"], args, YAML_KEYS["test_clients"])
+    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_clients"])
     hosts.add(NodeSet(get_local_host()))
     log.debug("-" * 80)
-    log.debug("Verifying %s on %s after running '%s'", service, hosts, test_file["py"])
+    log.debug("Verifying %s on %s after running '%s'", service, hosts, str(test))
     return stop_service(log, hosts, service)
 
 
-def stop_daos_server_service(log, test_file, args):
+def stop_daos_server_service(log, test, args):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
         log (logger): logger for the messages produced by this method
-        test_file (dict): a dictionary of the test script/yaml file
+        test (TestInfo): the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -2391,9 +2502,9 @@ def stop_daos_server_service(log, test_file, args):
 
     """
     service = "daos_server.service"
-    hosts = get_hosts_from_yaml(log, test_file["yaml"], args, YAML_KEYS["test_servers"])
+    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_servers"])
     log.debug("-" * 80)
-    log.debug("Verifying %s on %s after running '%s'", service, hosts, test_file["py"])
+    log.debug("Verifying %s on %s after running '%s'", service, hosts, str(test))
     return stop_service(log, hosts, service)
 
 
@@ -2483,7 +2594,7 @@ def get_service_status(log, hosts, service):
     return status
 
 
-def reset_server_storage(log, test_file, args):
+def reset_server_storage(log, test, args):
     """Reset the server storage for the hosts that ran servers in the test.
 
     This is a workaround to enable binding devices back to nvme or vfio-pci after they are unbound
@@ -2492,14 +2603,14 @@ def reset_server_storage(log, test_file, args):
 
     Args:
         log (logger): logger for the messages produced by this method
-        test_file (dict): a dictionary of the test script/yaml file
+        test (TestInfo): the test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
-    hosts = get_hosts_from_yaml(log, test_file["yaml"], args, YAML_KEYS["test_servers"])
+    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_servers"])
     log.debug("-" * 80)
     if hosts:
         commands = [
@@ -2507,14 +2618,13 @@ def reset_server_storage(log, test_file, args):
             "then daos_server storage prepare -n --reset && "
             "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
             "fi"]
-        log.info("Resetting server storage on %s after running '%s'", hosts, test_file["py"])
+        log.info("Resetting server storage on %s after running '%s'", hosts, str(test))
         result = run_remote(log, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
         if not result.passed:
             log.debug("Ignoring any errors from these workaround commands")
     else:
         log.debug(
-            "Skipping resetting server storage after running '%s' - no server hosts",
-            test_file["py"])
+            "Skipping resetting server storage after running '%s' - no server hosts", str(test))
     return 0
 
 
@@ -2733,6 +2843,7 @@ def main():
     log.info("-" * 80)
     log.info("DAOS functional test launcher")
     log.info("-" * 80)
+    MAJOR, MINOR = get_avocado_version()    # pylint: disable=invalid-name
     log.info("Running with Avocado %s.%s", MAJOR, MINOR)
 
     # Create an avocado job-result for the launch.py execution using the stage name
@@ -2803,7 +2914,9 @@ def main():
         sys.exit(1)
 
     # Display a list of the tests matching the tags
-    log.info("Detected tests:  \n%s", "  \n".join(test_list))
+    log.info("Detected tests:")
+    for test in test_list:
+        log.info("  %s", test)
     if args.list and not args.modify:
         sys.exit(0)
 
@@ -2818,7 +2931,7 @@ def main():
             os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(log, test_list, args, yaml_dir)
+    setup_test_files(log, test_list, args, yaml_dir)
     if args.modify:
         sys.exit(0)
 
@@ -2829,7 +2942,7 @@ def main():
     generate_certs(log)
 
     # Run all the tests
-    status = run_tests(log, test_files, tag_filter, args)
+    status = run_tests(log, test_list, tag_filter, args)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
