@@ -23,6 +23,9 @@ The recommended procedure for the update is:
 
 - On all servers, admin nodes, and clients,
   perform the RPM update to the new DAOS fix level.
+  Set up the new DAOS repository, then run `yum update` (CentOS 7 or EL8),
+  `dnf update` (EL8), or `zypper update` (SLES/OpenSUSE)
+  to update the DAOS RPMs and their dependencies.
 
 - Start the `daos_server` daemons on all server nodes,
   for example by running `systemctl start daos_server` in a parallel shell.
