@@ -4063,6 +4063,7 @@ def test_dfuse_start(server, conf, wf):
     os.rmdir(mount_point)
     return rc
 
+
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -4079,23 +4080,21 @@ def test_alloc_fail_copy(server, conf, wf):
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     sub_dir = join(src_dir.name, 'new_dir')
     os.mkdir(sub_dir)
-    for f in range(5):
-        with open(join(sub_dir, 'file.{}'.format(f)), 'w') as ofd:
+    for idx in range(5):
+        with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
             ofd.write('hello')
 
     os.symlink('broken', join(sub_dir, 'broken_s'))
     os.symlink('file.0', join(sub_dir, 'link'))
 
-    def get_cmd():
-        container = str(uuid.uuid4())
-        cmd = [join(conf['PREFIX'], 'bin', 'daos'),
-               'filesystem',
-               'copy',
-               '--src',
-               src_dir.name,
-               '--dst',
-               'daos://{}/{}'.format(pool, container)]
-        return cmd
+    def get_cmd(loc):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'filesystem',
+                'copy',
+                '--src',
+                src_dir.name,
+                '--dst',
+                f'daos://{pool}/cont_{loc}']
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.skip_daos_init = False
