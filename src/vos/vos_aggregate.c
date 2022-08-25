@@ -151,7 +151,11 @@ struct vos_agg_credits {
 	uint32_t	vac_creds_merge;	/* # of merging operations */
 };
 
+#define EV_TRACE_MAX 256
 struct vos_agg_param {
+	vos_iter_entry_t        ap_evt_trace[EV_TRACE_MAX];
+	int                     ap_trace_start;
+	int                     ap_trace_count;
 	struct vos_agg_credits	ap_credits;
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
@@ -1359,10 +1363,40 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 	}
 }
 
-static int
-insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
-		bool last, unsigned int *acts)
+static void
+dump_trace(struct vos_agg_param *agg_param)
 {
+	vos_iter_entry_t *entry;
+	int               i;
+	int               last;
+
+	if (agg_param->ap_trace_count == 0)
+		return;
+
+	D_ERROR("Assertion will trigger, dumping the evt_trace\n");
+
+	if (agg_param->ap_trace_count <= EV_TRACE_MAX)
+		last = agg_param->ap_trace_count;
+	else
+		last = agg_param->ap_trace_start;
+
+	i = agg_param->ap_trace_start;
+	do {
+		entry = &agg_param->ap_evt_trace[i];
+		D_ERROR("  " DF_U64 " recs@" DF_U64 " (" DF_U64 " recs@ " DF_U64 ")@" DF_X64
+			".%d tx=%d hole=%d flg=%x rsz=" DF_U64 " gsz=" DF_U64 "\n",
+			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
+			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
+			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),
+			entry->ie_vis_flags, entry->ie_rsize, entry->ie_gsize);
+		i = (i + 1) % EV_TRACE_MAX;
+	} while (i != last);
+}
+
+static int
+insert_segments(daos_handle_t ih, struct vos_agg_param *agg_param, bool last, unsigned int *acts)
+{
+	struct agg_merge_window *mw    = &agg_param->ap_window;
 	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 	struct vos_object	*obj = oiter->it_obj;
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
@@ -1436,6 +1470,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERTF(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi, "phy_ent "DF_RECT" off="DF_X64"\n",
 			  DP_RECT(&phy_ent->pe_rect), phy_ent->pe_off);
+		if (!phy_ent->pe_remove && rect.rc_ex.ex_lo > mw->mw_ext.ex_hi)
+			dump_trace(agg_param);
 		D_ASSERTF(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi,
 			  "phy_ent->pe_remove=%d phy_ent->pe_off=" DF_X64 " rect=" DF_RECT
 			  " mw=" DF_EXT "\n",
@@ -1730,7 +1766,7 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	}
 
 	/* Replace the old logical records with new segments in EV tree */
-	rc = insert_segments(ih, mw, last, acts);
+	rc = insert_segments(ih, agg_param, last, acts);
 	if (rc) {
 		D_ERROR("Insert segments "DF_EXT" error: "DF_RC"\n",
 			DP_EXT(&mw->mw_ext), DP_RC(rc));
@@ -2156,11 +2192,21 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct evt_extent	 phy_ext, lgc_ext;
 	int			 rc = 0;
+	int                      next_idx;
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(acts != NULL);
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
+
+	if (agg_param->ap_trace_count == EV_TRACE_MAX) {
+		next_idx                  = agg_param->ap_trace_start;
+		agg_param->ap_trace_start = (agg_param->ap_trace_start + 1) % EV_TRACE_MAX;
+	} else {
+		next_idx = agg_param->ap_trace_start + agg_param->ap_trace_count;
+		agg_param->ap_trace_count++;
+	}
+	memcpy(&agg_param->ap_evt_trace[next_idx], entry, sizeof(*entry));
 
 	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
 
@@ -2239,6 +2285,8 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
+		agg_param->ap_trace_start = 0;
+		agg_param->ap_trace_count = 0;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
@@ -2336,6 +2384,8 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
+		agg_param->ap_trace_start = 0;
+		agg_param->ap_trace_count = 0;
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_SINGLE:
