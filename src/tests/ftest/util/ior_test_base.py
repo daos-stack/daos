@@ -55,12 +55,9 @@ class IorTestBase(DfuseTestBase):
         # Get the pool params and create a pool
         self.add_pool(connect=False)
 
-    def create_cont(self, chunk_size=None, properties=None):
+    def create_cont(self):
         """Create a TestContainer object to be used to create container.
 
-        Args:
-            chunk_size (str, optional): container chunk size. Defaults to None.
-            properties (str, optional): additional properties to append. Defaults to None.
         Returns:
             TestContainer: the created container.
 
@@ -71,24 +68,9 @@ class IorTestBase(DfuseTestBase):
         if self.ior_cmd.dfs_oclass:
             params["oclass"] = self.ior_cmd.dfs_oclass.value
 
-        # update container chunk size
-        if chunk_size is not None:
-            params["chunk_size"] = chunk_size
-
         # create container from params
-        self.container = self.get_container(self.pool, create=False, **params)
+        self.container = self.get_container(self.pool, **params)
 
-        # append container properties
-        if properties is not None:
-            current_properties = self.container.properties.value
-            if current_properties:
-                new_properties = current_properties + "," + properties
-            else:
-                new_properties = properties
-            self.container.properties.update(new_properties)
-
-        # create container
-        self.container.create()
         return self.container
 
     def display_pool_space(self, pool=None):
