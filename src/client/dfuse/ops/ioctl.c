@@ -60,8 +60,10 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		 * the inode as well
 		 */
 		old_calls = atomic_fetch_add_relaxed(&oh->doh_il_calls, 1);
-		if (old_calls == 0)
+		if (old_calls == 0) {
 			atomic_fetch_add_relaxed(&oh->doh_ie->ie_il_count, 1);
+			dfuse_cache_evict(oh->doh_ie);
+		}
 	}
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
@@ -324,7 +326,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
-	/* Check the IOCTl type is correct */
+	/* Check the IOCTL type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
 		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
 		D_GOTO(out_err, rc = ENOTSUP);
