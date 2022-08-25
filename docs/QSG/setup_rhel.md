@@ -296,7 +296,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 			cert: /etc/daos/certs/server.crt
 			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
-		nr_hugepages: 4096
 		control_log_mask: DEBUG
 		control_log_file: /tmp/daos_server.log
 		helper_log_file: /tmp/daos_admin.log
