@@ -126,11 +126,10 @@ class DdbTest(TestWithServers):
         self.log.info("List objects match = %s", match)
 
         actual_object_count = len(match)
-        expected_object_count = self.params.get("object_count", "/run/*")
-        if actual_object_count != expected_object_count:
+        if actual_object_count != object_count:
             errors.append(
                 "Unexpected object count! Expected = {}; Actual = {}".format(
-                    expected_object_count, actual_object_count))
+                    object_count, actual_object_count))
 
         # 3. Verify there are two dkeys for every object. Also verify the dkey string and
         # the size.
