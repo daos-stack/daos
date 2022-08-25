@@ -821,7 +821,6 @@ static inline bool
 dis_single_char_str(char *str)
 {
 	return strlen(str) == 1;
-
 }
 
 /**
