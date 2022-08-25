@@ -75,10 +75,15 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 
 		for (dir = strtok_r(parent_path, "/", &sptr); dir != NULL;
 		     dir = strtok_r(NULL, "/", &sptr)) {
-			/* Open or Create directory */
-			rc = dfs_open(ds3b->dfs, parent, dir, mode | S_IFDIR, O_RDWR | O_CREAT, 0,
-				      0, NULL, &dir_obj);
+			/* Create directory */
+			rc = dfs_mkdir(ds3b->dfs, parent, dir, mode, 0);
+
 			if (rc != 0 && rc != EEXIST)
+				goto err_parent;
+
+			/* Open directory */
+			rc = dfs_lookup_rel(ds3b->dfs, parent, dir, O_RDWR, &dir_obj, NULL, NULL);
+			if (rc != 0)
 				goto err_parent;
 
 			/* Next parent */
