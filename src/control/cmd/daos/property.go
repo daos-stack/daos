@@ -55,6 +55,8 @@ type propHdlr struct {
 	readOnly bool
 }
 
+type propDeprHdlrMap map[string]string
+
 // newTestPropEntry returns an initialized property entry for testing.
 // NB: The entry is initialized with Go-managed memory, so it is not
 // suitable for use when calling real C functions.
@@ -606,6 +608,12 @@ var propHdlrs = propHdlrMap{
 	},
 }
 
+// propDeprecatedHdlrs defines a map of the deprecated property names.
+var propDeprHdlrs = propDeprHdlrMap{
+	"rf":     "rd_fac",
+	"rf_lvl": "rd_lvl",
+}
+
 // NB: Most feature work should not require modification to the code
 // below.
 
@@ -806,6 +814,10 @@ func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*proper
 	cleanup = func() { C.daos_prop_free(props) }
 
 	for _, name := range names {
+		if newName, found := propDeprHdlrs[name]; found {
+			name = newName
+		}
+
 		var hdlr *propHdlr
 		hdlr, err = propHdlrs.get(name)
 		if err != nil {
@@ -910,6 +922,10 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 	}
 
 	for key, val := range f.ParsedProps {
+		if newKey, found := propDeprHdlrs[key]; found {
+			key = newKey
+		}
+
 		var hdlr *propHdlr
 		hdlr, err = propHdlrs.get(key)
 		if err != nil {
@@ -951,6 +967,12 @@ func (f *CreatePropertiesFlag) setWritableKeys() {
 		}
 	}
 	f.SettableKeys(keys...)
+
+	dprKeys := make([]string, 0, len(propDeprHdlrs))
+	for dprKey := range propDeprHdlrs {
+		dprKeys = append(dprKeys, dprKey)
+	}
+	f.SettableDeprecatedKeys(dprKeys...)
 }
 
 func (f *CreatePropertiesFlag) Complete(match string) []flags.Completion {

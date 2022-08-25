@@ -32,6 +32,10 @@
 #define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
 #define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
 
+/** DAOS deprecated property entry names keeped for backward compatibility */
+#define DAOS_PROP_ENTRY_REDUN_FAC_OLD	"rf"
+#define DAOS_PROP_ENTRY_REDUN_LVL_OLD	"rf_lvl"
+
 struct cont_props {
 	uint32_t	 dcp_chunksize;
 	uint32_t	 dcp_dedup_size;

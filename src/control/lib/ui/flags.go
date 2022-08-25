@@ -103,9 +103,10 @@ type CompletionMap map[string][]string
 
 // SetPropertiesFlag is used to hold a list of properties to set.
 type SetPropertiesFlag struct {
-	ParsedProps  map[string]string
-	settableKeys common.StringSet
-	completions  CompletionMap
+	ParsedProps            map[string]string
+	settableKeys           common.StringSet
+	settableDeprecatedKeys common.StringSet
+	completions            CompletionMap
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -113,6 +114,14 @@ func (f *SetPropertiesFlag) SettableKeys(keys ...string) {
 	f.settableKeys = make(common.StringSet)
 	for _, key := range keys {
 		f.settableKeys.Add(key)
+	}
+}
+
+// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
+func (f *SetPropertiesFlag) SettableDeprecatedKeys(keys ...string) {
+	f.settableDeprecatedKeys = make(common.StringSet)
+	for _, key := range keys {
+		f.settableDeprecatedKeys.Add(key)
 	}
 }
 
@@ -129,7 +138,15 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 		return true
 	}
 
-	_, isSettable := f.settableKeys[key]
+	if _, isSettable := f.settableKeys[key]; isSettable {
+		return true
+	}
+
+	if len(f.settableDeprecatedKeys) == 0 {
+		return false
+	}
+
+	_, isSettable := f.settableDeprecatedKeys[key]
 	return isSettable
 }
 
