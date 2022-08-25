@@ -1,4 +1,8 @@
+<<<<<<< HEAD:docs/release/upgrading.md
 # Upgrading to DAOS Version 2.2
+=======
+# Updating to DAOS Version 2.4
+>>>>>>> 59cb1b17f (DAOS-11242 doc: clarify updating command):docs/release/updating.md
 
 
 ## Upgrading DAOS from Version 2.2.x to Version 2.2.y
