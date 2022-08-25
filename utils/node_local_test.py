@@ -4018,7 +4018,7 @@ class AllocFailTest():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
         if callable(self.cmd):
-            cmd = self.cmd()
+            cmd = self.cmd(loc)
         else:
             cmd = self.cmd
 
@@ -4107,6 +4107,7 @@ def test_alloc_fail_copy(server, conf, wf):
     rc = test_cmd.launch()
     return rc
 
+
 def test_alloc_fail_cat(server, conf):
     """Run the Interception library with fault injection
 
@@ -4127,6 +4128,38 @@ def test_alloc_fail_cat(server, conf):
         fd.write('Hello there')
 
     test_cmd = AllocFailTest(conf, 'il-cat', ['cat', target_file])
+    test_cmd.use_il = True
+    test_cmd.check_stderr = False
+    test_cmd.wf = conf.wf
+
+    rc = test_cmd.launch()
+    dfuse.stop()
+    return rc
+
+
+def test_alloc_fail_il_cp(server, conf):
+    """Run the Interception library with fault injection
+
+    Start dfuse for this test, and do not do output checking on the command
+    itself yet.
+    """
+
+    pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='fault_inject')
+
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    target_file = join(dfuse.dir, 'test_file')
+
+    with open(target_file, 'w') as fd:
+        fd.write('Hello there')
+
+    def get_cmd(loc):
+        return ['cp', target_file, f'test_{loc}']
+
+    test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
     test_cmd.use_il = True
     test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
@@ -4371,6 +4404,9 @@ def run(wf, args):
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
+                # Copy (read/write) via IL, requires dfuse.
+                fatal_errors.add_result(test_alloc_fail_il_cp(server, conf))
 
             if args.perf_check:
                 check_readdir_perf(server, conf)
