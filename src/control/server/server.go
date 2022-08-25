@@ -439,6 +439,9 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 	}()
 	defer srv.grpcServer.Stop()
 
+	// noop on release builds
+	control.StartPProf(srv.log)
+
 	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 
@@ -497,6 +500,10 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 
 // Start is the entry point for a daos_server instance.
 func Start(log logging.Logger, cfg *config.Server) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())

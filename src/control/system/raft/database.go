@@ -44,6 +44,7 @@ type (
 		Leader() raft.ServerAddress
 		LeaderCh() <-chan bool
 		LeadershipTransfer() raft.Future
+		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
 		State() raft.RaftState
 	}
@@ -109,9 +110,15 @@ type (
 
 	// GroupMap represents a version of the system membership map.
 	GroupMap struct {
-		Version  uint32
-		RankURIs map[system.Rank]string
-		MSRanks  []system.Rank
+		Version     uint32
+		RankEntries map[system.Rank]RankEntry
+		MSRanks     []system.Rank
+	}
+
+	// RankEntry comprises the information about a rank in GroupMap.
+	RankEntry struct {
+		URI         string
+		Incarnation uint64
 	}
 )
 
@@ -471,6 +478,14 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
+			barrierStart := time.Now()
+			if err := db.Barrier(); err != nil {
+				db.log.Errorf("raft Barrier() failed: %s", err)
+				_ = db.ResignLeadership(err)
+				break
+			}
+			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
+
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
 			for _, fn := range db.onLeadershipGained {
@@ -481,7 +496,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					break
 				}
 			}
-
 		}
 	}
 }
@@ -497,8 +511,8 @@ func (db *Database) IncMapVer() error {
 
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
-		Version:  version,
-		RankURIs: make(map[system.Rank]string),
+		Version:     version,
+		RankEntries: make(map[system.Rank]RankEntry),
 	}
 }
 
@@ -525,13 +539,13 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
-		gm.RankURIs[srv.Rank] = srv.FabricURI
+		gm.RankEntries[srv.Rank] = RankEntry{URI: srv.FabricURI, Incarnation: srv.Incarnation}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
 	}
 
-	if len(gm.RankURIs) == 0 {
+	if len(gm.RankEntries) == 0 {
 		return nil, system.ErrEmptyGroupMap
 	}
 
