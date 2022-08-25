@@ -225,7 +225,7 @@ fi
 
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
-    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
+    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES[*]:8:22}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
@@ -258,7 +258,7 @@ export WITH_VALGRIND
 export STAGE_NAME
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
-                 -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+                 -ts "${TEST_NODES[*]:0:7}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0

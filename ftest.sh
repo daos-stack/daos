@@ -53,7 +53,7 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
+TEST_NODES=$(IFS=","; echo "${nodes[*]:1:23}")
 
 # Optional arguments for launch.py
 LAUNCH_OPT_ARGS="${3:-}"
