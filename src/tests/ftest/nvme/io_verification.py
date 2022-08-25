@@ -132,7 +132,9 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_ior_job_manager_command(), self.ior_processes)
+                job_manager = self.get_ior_job_manager_command()
+                job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
+                self.run_ior(job_manager, self.ior_processes)
 
                 # Stop all servers
                 self.get_dmg_command().system_stop(True)
@@ -147,8 +149,6 @@ class NvmeIoVerification(IorTestBase):
 
                 # read all the data written before server restart
                 self.ior_cmd.flags.update(self.ior_flag_read)
-                job_manager = self.get_ior_job_manager_command()
-                job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
                 self.run_ior(job_manager, self.ior_processes)
 
             # destroy pool
