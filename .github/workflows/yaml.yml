@@ -14,8 +14,8 @@ on:
 
 jobs:
   yaml-lint:
-    runs-on: ubuntu-latest
-    name: Lint
+    runs-on: ubuntu-22.04
+    name: Yamllint check
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2
