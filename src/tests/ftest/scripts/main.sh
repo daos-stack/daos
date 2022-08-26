@@ -264,7 +264,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware Xlarge" ]; then
     # launch.py arguments to ensure these hosts are not used for unintended role
     IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
     launch_node_agrs = "-ts \"${test_node_list[*]:0:8}\" -tc \"${test_node_list[*]:8}\""
-
+fi
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  "${launch_node_args}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
