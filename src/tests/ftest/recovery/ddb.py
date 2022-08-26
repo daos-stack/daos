@@ -88,8 +88,8 @@ class DdbTest(TestWithServers):
         dkey_count = 2
         akey_count = 1
         insert_objects(
-            context=self.context, container=self.container, object_count=5,
-            dkey_count=2, akey_count=1, base_dkey=self.random_dkey,
+            context=self.context, container=self.container, object_count=object_count,
+            dkey_count=dkey_count, akey_count=akey_count, base_dkey=self.random_dkey,
             base_akey=self.random_akey, base_data=self.random_data)
 
         # Need to stop the server to use ddb.
