@@ -491,12 +491,6 @@ dc_cont_hdl_link(struct dc_cont *dc)
 }
 
 void
-dc_cont_hdl_unlink(struct dc_cont *dc)
-{
-	daos_hhash_link_delete(&dc->dc_hlink);
-}
-
-void
 dc_cont_free(struct dc_cont *dc)
 {
 	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));

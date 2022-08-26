@@ -1310,13 +1310,13 @@ d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink)
 void
 d_hhash_link_getref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 void
 d_hhash_link_putref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	ch_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 bool
