@@ -151,7 +151,7 @@ struct vos_agg_credits {
 	uint32_t	vac_creds_merge;	/* # of merging operations */
 };
 
-#define EV_TRACE_MAX 256
+#define EV_TRACE_MAX 1024
 struct vos_agg_param {
 	vos_iter_entry_t        ap_evt_trace[EV_TRACE_MAX];
 	int                     ap_trace_start;
