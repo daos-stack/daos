@@ -28,7 +28,7 @@ the following steps are needed:
    Refer to the [DAOS Support Matrix](../release/support_matrix)
    for information about supported MLNX\_OFED releases.
 
-*  The `mercury-ux` RPM package needs to be **manually** selected for
+*  The `mercury-ucx` RPM package needs to be **manually** selected for
    installation: For the technology preview, the `mercury` package is
    provided in two different versions, which are mutually exclusive:
 
