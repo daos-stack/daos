@@ -84,6 +84,9 @@ pipeline {
         booleanParam(name: 'CI_xlarge_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Xlarge test stage')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repos to add to the build and test ndoes')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
