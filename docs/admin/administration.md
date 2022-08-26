@@ -653,11 +653,11 @@ the system (this can be checked with `dmg system query -v`).
     said, existing pools won't be automatically extended to use the new servers.
     Please see the pool operation section for how to extend the pool membership.
 
-## Software Upgrade
+## Software Update
 
 The DAOS v2.0 wire protocol and persistent layout is not compatible with
 previous DAOS versions and would require a reformat and all client and server
-nodes to be upgraded to a 2.x version.
+nodes to be updated to a 2.x version.
 
 !!! warning
     Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
@@ -670,4 +670,4 @@ persistent layout with any future v2.x versions. That being said, it is
 required that all engines in the same system run the same DAOS version.
 
 !!! warning
-    Rolling upgrade is not supporting at this time.
+    Rolling update is not supporting at this time.
