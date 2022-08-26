@@ -33,7 +33,6 @@ class NvmeIoVerification(IorTestBase):
         self.ior_flag_read = self.params.get("read", '/run/ior/*/')
         self.ior_cont_label_generator = LabelGenerator('cont')
         self.job_manager = self.get_ior_job_manager_command()
-        self.job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_io_verification(self):
@@ -82,6 +81,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
+                self.job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
@@ -132,6 +132,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
+                self.job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Stop all servers
