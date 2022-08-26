@@ -745,7 +745,7 @@ VMD-enabled host, set `disable_vmd: true` in the global section of the config to
 physical NVMe devices only.
 
 !!! warning
-    If upgrading from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
+    If updating from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
     parameter is no longer honoured and instead should be removed (or replaced by
     `disable_vmd: true` if VMD is to be explicitly disabled).
 
