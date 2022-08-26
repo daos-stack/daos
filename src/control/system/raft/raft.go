@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
+	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -203,7 +204,12 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 		return nil, errors.Wrap(err, "failed to init snapshot store")
 	}
 
-	boltDB, err := boltdb.NewBoltStore(dbCfg.DBFilePath())
+	boltDB, err := boltdb.New(boltdb.Options{
+		Path: dbCfg.DBFilePath(),
+		BoltOptions: &bbolt.Options{
+			ReadOnly: dbCfg.ReadOnly,
+		},
+	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to init boltdb at %s", dbCfg.DBFilePath())
 	}

@@ -18,9 +18,15 @@ import (
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
+	"go.etcd.io/bbolt"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	snapshotMetaFile = "meta.json"
+	snapshotDataFile = "state.bin"
 )
 
 // GetRaftConfiguration returns the current raft configuration.
@@ -212,7 +218,13 @@ var (
 // GetLogEntries returns the log entries from the raft log via a channel which
 // is closed when there are no more entries to be read.
 func GetLogEntries(log logging.Logger, cfg *DatabaseConfig, maxEntries ...uint64) (<-chan *LogEntryDetails, error) {
-	boltDB, err := boltdb.NewBoltStore(cfg.DBFilePath())
+	boltOpts := boltdb.Options{
+		Path: cfg.DBFilePath(),
+		BoltOptions: &bbolt.Options{
+			ReadOnly: true,
+		},
+	}
+	boltDB, err := boltdb.New(boltOpts)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to open boltdb at %s", cfg.DBFilePath())
 	}
@@ -248,10 +260,12 @@ func GetLogEntries(log logging.Logger, cfg *DatabaseConfig, maxEntries ...uint64
 			}
 			log.Debugf("read log: %+v", details.Log)
 
-			if err := details.DecodeLog(); err != nil {
-				log.Errorf("failed to decode log entry %d: %s", li, err)
-				close(entries)
-				return
+			if details.Log.Type == raft.LogCommand {
+				if err := details.DecodeLog(); err != nil {
+					log.Errorf("failed to decode log entry %d: %s", li, err)
+					close(entries)
+					return
+				}
 			}
 
 			entries <- details
@@ -282,6 +296,7 @@ func GetLastLogEntry(log logging.Logger, cfg *DatabaseConfig) (*LogEntryDetails,
 // of the snapshot data in database format.
 type SnapshotDetails struct {
 	Metadata      *raft.SnapshotMeta
+	Path          string
 	Version       uint
 	MapVersion    uint
 	SchemaVersion uint
@@ -326,6 +341,7 @@ func (sd *SnapshotDetails) DecodeSnapshot(data []byte) error {
 	for _, p := range from.Pools.Uuids {
 		sd.Pools = append(sd.Pools, p.PoolLabel)
 	}
+	sort.Strings(sd.Pools)
 
 	return nil
 }
@@ -348,25 +364,16 @@ func GetSnapshotInfo(log logging.Logger, cfg *DatabaseConfig) ([]*SnapshotDetail
 
 	details := make([]*SnapshotDetails, len(snaps))
 	for i, snap := range snaps {
-		_, data, err := store.Open(snap.ID)
+		snapPath := filepath.Join(cfg.RaftDir, "snapshots", snap.ID)
+		details[i], err = ReadSnapshotInfo(snapPath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to open snapshot %s", snap.ID)
-		}
-		defer data.Close()
-
-		buf, err := ioutil.ReadAll(data)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to read snapshot %s", snap.ID)
-		}
-
-		details[i] = &SnapshotDetails{
-			Metadata: snap,
-		}
-
-		if err := details[i].DecodeSnapshot(buf); err != nil {
-			return nil, errors.Wrapf(err, "failed to decode snapshot %s", snap.ID)
+			return nil, errors.Wrapf(err, "failed to read snapshot %s", snapPath)
 		}
 	}
+
+	sort.Slice(details, func(i, j int) bool {
+		return details[i].Metadata.Index < details[j].Metadata.Index
+	})
 
 	return details, nil
 }
@@ -378,25 +385,21 @@ func GetLatestSnapshot(log logging.Logger, cfg *DatabaseConfig) (*SnapshotDetail
 		return nil, err
 	}
 
-	sort.Slice(snaps, func(i, j int) bool {
-		return snaps[i].Metadata.Index > snaps[j].Metadata.Index
-	})
-
 	return snaps[len(snaps)-1], nil
 }
 
 func readSnapshotMeta(path string, meta *raft.SnapshotMeta) error {
-	metaPath := filepath.Join(path, "meta.json")
+	metaPath := filepath.Join(path, snapshotMetaFile)
 	data, err := ioutil.ReadFile(metaPath)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read snapshot metadata from %q", metaPath)
 	}
 
-	return json.Unmarshal(data, meta)
+	return errors.Wrapf(json.Unmarshal(data, meta), "failed to parse snapshot metadata from %q", metaPath)
 }
 
 func readSnapshotData(path string) ([]byte, error) {
-	dataPath := filepath.Join(path, "state.bin")
+	dataPath := filepath.Join(path, snapshotDataFile)
 	data, err := ioutil.ReadFile(dataPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read snapshot data from %q", dataPath)
@@ -407,8 +410,10 @@ func readSnapshotData(path string) ([]byte, error) {
 
 // ReadSnapshotInfo reads the snapshot metadata and data from the given path.
 func ReadSnapshotInfo(path string) (*SnapshotDetails, error) {
-	details := new(SnapshotDetails)
-	details.Metadata = new(raft.SnapshotMeta)
+	details := &SnapshotDetails{
+		Path:     path,
+		Metadata: new(raft.SnapshotMeta),
+	}
 	if err := readSnapshotMeta(path, details.Metadata); err != nil {
 		return nil, err
 	}
@@ -418,5 +423,5 @@ func ReadSnapshotInfo(path string) (*SnapshotDetails, error) {
 		return nil, err
 	}
 
-	return details, details.DecodeSnapshot(data)
+	return details, errors.Wrapf(details.DecodeSnapshot(data), "failed to decode snapshot data in %s", path)
 }

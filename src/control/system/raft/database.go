@@ -97,10 +97,12 @@ type (
 
 	// DatabaseConfig defines the configuration for the system database.
 	DatabaseConfig struct {
-		Replicas   []*net.TCPAddr
-		RaftDir    string
-		SystemName string
-		ReadOnly   bool
+		Replicas              []*net.TCPAddr
+		RaftDir               string
+		RaftSnapshotThreshold uint64
+		RaftSnapshotInterval  time.Duration
+		SystemName            string
+		ReadOnly              bool
 	}
 
 	// GroupMap represents a version of the system membership map.
