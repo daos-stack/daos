@@ -888,4 +888,4 @@ persistent layout with any future v2.x versions. That being said, it is
 required that all engines in the same system run the same DAOS version.
 
 !!! warning
-    Rolling update is not supporting at this time.
+    Rolling update is not supported at this time.
