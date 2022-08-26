@@ -257,13 +257,13 @@ fi
 export WITH_VALGRIND
 export STAGE_NAME
 
-launch_node_args="-ts \"${TEST_NODES}\""
+launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware Xlarge" ]; then
     # Currently the 'Functional Hardware Xlarge' uses a cluster that has 8 hosts configured to run
     # daos engines and the remaining hosts are configured to be clients. Use separate -ts and -tc
     # launch.py arguments to ensure these hosts are not used for unintended role
     IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
-    launch_node_args="-ts \"${test_node_list[*]:0:8}\" -tc \"${test_node_list[*]:8}\""
+    launch_node_args="-ts ${test_node_list[*]:0:8} -tc ${test_node_list[*]:8}"
 fi
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
