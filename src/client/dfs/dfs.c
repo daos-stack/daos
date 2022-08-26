@@ -1210,7 +1210,7 @@ restart:
 		/** this generates the OID and opens the object */
 		rc = create_dir(dfs, parent, cid, dir);
 		if (rc)
-			return rc;
+			D_GOTO(out, rc);
 
 		entry->oid = dir->oid;
 		entry->mode = dir->mode;
@@ -1218,7 +1218,7 @@ restart:
 		if (rc) {
 			rc = errno;
 			daos_obj_close(dir->oh, NULL);
-			return rc;
+			D_GOTO(out, rc);
 		}
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
@@ -1257,11 +1257,11 @@ restart:
 dopen:
 	/* Check that the opened object is the type that's expected. */
 	if (!S_ISDIR(entry->mode))
-		return ENOTDIR;
+		D_GOTO(out, rc = ENOTDIR);
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
-		return EINVAL;
+		D_GOTO(out, rc = EINVAL);
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
