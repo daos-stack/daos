@@ -1,27 +1,12 @@
 # IO500 Example
 
-This example leverages another example [daos_cluster](../daos_cluster)
-to provision a DAOS cluster and configure the clients so that an IO500 benchmark
-may be run.
+This example leverages the [terraform/examples/daos_cluster](../daos_cluster) example to provision a DAOS cluster and configure the clients so that an [IO500 benchmark](https://github.com/IO500/io500) may be run.
 
-The default configuration is a very small DAOS cluster consisting of 1 DAOS
-server and 1 DAOS client.
+If you have not done so already, please follow the instructions in the [Pre-Deployment Guide](../../../docs/pre-deployment_guide.md)
 
-Different configurations can be used to deploy larger DAOS clusters.
-See [Configuration](#configuration) below.
-
-## Dependencies
-
-If this is the first time you are running this example in your GCP project, there
-are some things you will need to do.
-
-Refer to the [images/README.md](../../../images/README.md) for instructions.
-
-After you have followed those instructions you will be ready to run this example.
 
 ## Running the example
 
-The example is intended to be run from a Linux system that has access to GCP.
 
 ### Deploying the DAOS Cluster
 

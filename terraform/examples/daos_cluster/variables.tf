@@ -249,7 +249,7 @@ variable "client_instance_base_name" {
 
 variable "client_number_of_instances" {
   description = "Number of daos clients to bring up"
-  default     = 4
+  default     = 16
   type        = number
 }
 
