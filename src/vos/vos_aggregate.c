@@ -1794,8 +1794,6 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 out:
 	cleanup_segments(ih, mw, rc);
 
-	dump_trace(mw);
-
 	return rc;
 }
 
