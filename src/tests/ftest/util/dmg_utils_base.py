@@ -374,7 +374,9 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg storage sub command object."""
-            if self.sub_command.value == "format":
+            if self.sub_command.value == "identify":
+                self.sub_command_class = self.IdentifySubCommand()
+            elif self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -384,6 +386,27 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.SetSubCommand()
             else:
                 self.sub_command_class = None
+
+        class IdentifySubCommand(CommandWithSubCommand):
+            def __init__(self):
+                """Create a dmg storage format command object."""
+                super().__init__("/run/dmg/storage/identify/*", "identify")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg storage query sub command object."""
+                if self.sub_command.value == "vmd":
+                    self.sub_command_class = self.VMDIdentifySubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class VMDIdentifySubCommand(CommandWithParameters):
+                def __init__(self):
+                     """Create a dmg storage format command object."""
+                     super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
+                     self.verbose = FormattedParameter("--verbose", False)
+                     self.uuid = FormattedParameter("--uuid {}", None)
+
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""

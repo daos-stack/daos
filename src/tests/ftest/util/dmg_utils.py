@@ -320,6 +320,27 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
+    def storage_identify_device(self, uuid=None,  verbose=False):
+        """Get the result of the 'dmg storage query list-pools' command.
+
+        Args:
+            uuid (str): Device UUID to query. Defaults to None.
+            rank (int, optional): Limit response to pools on this rank.
+                Defaults to None.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(
+            ("storage", "identify", "vmd" ), uuid=uuid,
+            verbose=verbose)
+
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
 
