@@ -10,8 +10,8 @@ on:
 
 jobs:
   flake8-lint:
-    runs-on: ubuntu-latest
-    name: Lint
+    runs-on: ubuntu-22.04
+    name: Flake8 check
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2

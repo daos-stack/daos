@@ -387,12 +387,11 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			iov_idx++;
 			cached_bulk = true;
 
-			/* Check if following IOVs are sharing same bulk handle */
+			/* Check if following IOVs are contiguous and from same bulk handle */
 			while (iov_idx < sgl->sg_nr_out &&
 			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
-			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
-						&tmp_off) == local_bulk) {
-				D_ASSERT(tmp_off == 0);
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &tmp_off) == local_bulk &&
+			       tmp_off == local_off) {
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
 			};
@@ -3883,10 +3882,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			rc = 0;
 
 		if (rc != 0) {
-			D_ERROR("Failed to set read TS for obj "DF_UOID
-				", DTX "DF_DTI": "DF_RC"\n",
-				DP_UOID(dcsr->dcsr_oid),
-				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			D_CDEBUG(rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+				 DLOG_ERR, DB_IO, "Failed to set read TS for obj "
+				 DF_UOID", DTX "DF_DTI": "DF_RC"\n", DP_UOID(dcsr->dcsr_oid),
+				 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 			goto out;
 		}
 	}

@@ -576,7 +576,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	/**
 	 * Firstly write upgrading global version, so resuming could figure
 	 * out what is target global version of upgrading, use this to reject
-	 * resuming pool uprading if DAOS software upgraded again.
+	 * resuming pool upgrading if DAOS software upgraded again.
 	 */
 	d_iov_set(&value, &upgrade_global_version, sizeof(upgrade_global_version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_upgrade_global_version, &value);

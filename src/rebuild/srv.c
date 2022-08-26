@@ -104,7 +104,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
 	if (daos_handle_is_valid(tls->rebuild_tree_hdl))
-		obj_tree_destroy(tls->rebuild_tree_hdl);
+		rebuild_obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
 	D_FREE(tls);
 }
@@ -676,7 +676,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		}
 
 		now = ABT_get_wtime();
-		/* print something at least for each 10 secons */
+		/* print something at least for each 10 seconds */
 		if (now - last_print > 10) {
 			last_print = now;
 			D_PRINT("%s", sbuf);
@@ -962,7 +962,7 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	} else {
 		/* If initial rebuild/reintegration failed, the retry will keep
 		 * the same stable epoch to make sure reclaim only delete the data
-		 * before stable epoch, but keep the inflight data.
+		 * before stable epoch, but keep the in-flight data.
 		 */
 		D_ASSERTF(rgt->rgt_stable_epoch <= rso->rso_stable_epoch,
 			  "stable epoch "DF_X64" > collect epoch "DF_X64"\n",
@@ -1212,7 +1212,8 @@ static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt)
 {
-	int rc;
+	int rc = 0;
+	int rc1;
 
 	if (rgt == NULL) {
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
@@ -1220,8 +1221,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		return rc;
 	}
 
-	/* If current job failed */
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
+		/* If current job failed */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		if (task->dst_rebuild_op == RB_OP_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
@@ -1230,34 +1231,35 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			return rc;
 		}
 
-		/* Schedule reclaim to clean up current op */
+		/* Schedule reclaim to clean up current op. Let's keep go ahead to retry even if
+		 * reclaim the current rebuilding fails.
+		 */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_stable_epoch, &task->dst_tgts, RB_OP_RECLAIM, 5);
 		if (rc)
-			return rc;
+			D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
+				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
 
 		/* Then retry */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_stable_epoch, &task->dst_tgts,
 					 task->dst_rebuild_op, 5);
-		return rc;
-	}
-
-	/* Schedule reclaim for reintegrate/extend/upgrade to cleanup stale object */
-	if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
+	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
+		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
 					 rgt->rgt_stable_epoch, &task->dst_tgts, RB_OP_RECLAIM, 5);
-		if (rc != 0)
-			D_ERROR("reschedule reclaim, "DF_UUID" failed: "DF_RC"\n",
-				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
 	}
 
-	/* Update the rebuild complete status. */
-	rc = rebuild_status_completed_update(task->dst_pool_uuid, &rgt->rgt_status);
-	if (rc != 0)
+
+	/* Update the rebuild complete status for pool query */
+	rc1 = rebuild_status_completed_update(task->dst_pool_uuid, &rgt->rgt_status);
+	if (rc1 != 0) {
 		D_ERROR("rebuild_status_completed_update, "DF_UUID" failed: "DF_RC"\n",
-			DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+			DP_UUID(task->dst_pool_uuid), DP_RC(rc1));
+		if (rc == 0)
+			rc = rc1;
+	}
 
 	return rc;
 }
@@ -1455,7 +1457,7 @@ rebuild_ults(void *arg)
 
 		if (d_list_empty(&rebuild_gst.rg_queue_list) ||
 		    rebuild_gst.rg_inflight >= REBUILD_MAX_INFLIGHT) {
-			D_DEBUG(DB_REBUILD, "inflight rebuild %u\n",
+			D_DEBUG(DB_REBUILD, "in-flight rebuild %u\n",
 				rebuild_gst.rg_inflight);
 			dss_sleep(5000);
 			continue;

@@ -197,7 +197,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		roots->cr_oids[0].hi = 0;
 		rf = daos_cont_prop2redunfac(prop_in);
 		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
-						 0, 0, 0);
+						 0, 0, 0, daos_cont_prop2redunlvl(prop_in));
 		if (rc) {
 			D_ERROR("Failed to generate root OID "DF_RC"\n",
 				DP_RC(rc));
@@ -653,7 +653,7 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_pool_create_map_refresh_task(pool, pm_ver, sched, &ptask);
+	rc = dc_pool_create_map_refresh_task(poh, pm_ver, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
@@ -1777,8 +1777,8 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		unsigned int map_version = out->coao_op.co_map_version;
 
 		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(pool, map_version, sched,
-						     &ptask);
+		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
+						     sched, &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
