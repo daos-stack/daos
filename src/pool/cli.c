@@ -24,6 +24,11 @@
 #include "cli_internal.h"
 #include "rpc.h"
 
+/* Per thread handle cache */
+#define DC_POOL_CACHE_NR	4
+static __thread struct dc_pool *dc_pool_local[DC_POOL_CACHE_NR];
+static __thread uint64_t	dc_pool_cookie[DC_POOL_CACHE_NR];
+
 /** Replicated Service client state (used by Management API) */
 struct rsvc_client_state {
 	struct rsvc_client  scs_client;
@@ -218,12 +223,31 @@ struct dc_pool *
 dc_hdl2pool(daos_handle_t poh)
 {
 	struct d_hlink *hlink;
+	struct dc_pool *dc_pool;
+	int i;
+	int insert_i = 0;
+
+	for (i = 0; i < DC_POOL_CACHE_NR; i++) {
+		if (dc_pool_cookie[i] && poh.cookie == dc_pool_cookie[i]) {
+			dc_pool_get(dc_pool_local[i]);
+
+			return dc_pool_local[i];
+		}
+
+		if (dc_pool_cookie[i] == 0)
+			insert_i = i;
+	}
 
 	hlink = daos_hhash_link_lookup(poh.cookie);
 	if (hlink == NULL)
 		return NULL;
 
-	return container_of(hlink, struct dc_pool, dp_hlink);
+	dc_pool = container_of(hlink, struct dc_pool, dp_hlink);
+	/* if there is no free slot, we replace first one to cache now*/
+	dc_pool_local[insert_i] = dc_pool;
+	dc_pool_cookie[insert_i] = poh.cookie;
+
+	return dc_pool;
 }
 
 void
@@ -235,7 +259,15 @@ dc_pool_hdl_link(struct dc_pool *pool)
 void
 dc_pool_hdl_unlink(struct dc_pool *pool)
 {
+	int i;
+
 	daos_hhash_link_delete(&pool->dp_hlink);
+	for (i = 0; i < DC_POOL_CACHE_NR; i++) {
+		if (dc_pool_local[i] == pool) {
+			dc_pool_local[i] = NULL;
+			dc_pool_cookie[i] = 0;
+		}
+	}
 }
 
 static inline int
