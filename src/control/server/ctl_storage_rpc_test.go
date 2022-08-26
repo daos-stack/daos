@@ -1685,7 +1685,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)
-				ei.storage.SetBdevCache(*nvmeScanResp)
+				ei.storage.SetBdevCache(nvmeScanResp)
 
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {

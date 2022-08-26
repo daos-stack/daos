@@ -470,14 +470,15 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadTelemetryPort,
 		},
-		"different number of ssds": {
+		"different number of bdevs": {
 			extraConfig: func(c *Server) *Server {
 				// add multiple bdevs for engine 0 to create mismatch
 				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
 					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
 				return c
 			},
-			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
+			// No failure because validation now occurs on server start-up.
+			// expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
 		},
 		"different number of targets": {
 			extraConfig: func(c *Server) *Server {

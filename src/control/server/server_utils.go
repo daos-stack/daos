@@ -303,6 +303,59 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	return nvmeScanResp, nil
 }
 
+func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, lastEngineIdx, lastBdevCount *int) error {
+	badInput := ""
+	switch {
+	case engine == nil:
+		badInput = "engine"
+	case scanResp == nil:
+		badInput = "scanResp"
+	case lastEngineIdx == nil:
+		badInput = "lastEngineIdx"
+	case lastBdevCount == nil:
+		badInput = "lastBdevCount"
+	}
+	if badInput != "" {
+		return errors.New("nil input param: " + badInput)
+	}
+
+	bdevCache := *scanResp
+	if err := engine.storage.SetBdevCache(&bdevCache); err != nil {
+		return errors.Wrap(err, "setting engine storage bdev cache")
+	}
+
+	// After engine's bdev cache has been set, the cache will only contain details of bdevs
+	// identified in the relevant engine config and device addresses will have been verified
+	// against NVMe scan results. As any VMD endpoint addresses will have been replaced with
+	// backing device addresses, device counts will reflect the number of physical (as opposed
+	// to logical) bdevs and engine bdev counts can be accurately compared.
+
+	eIdx := engine.Index()
+	newNrBdevs := len(bdevCache.Controllers)
+
+	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",
+		*lastEngineIdx, *lastBdevCount, eIdx, newNrBdevs)
+
+	// Update last recorded counters if this is the first update or if the number of bdevs is
+	// unchanged. If bdev count differs between engines, return fault.
+	switch {
+	case *lastEngineIdx < 0:
+		if *lastBdevCount >= 0 {
+			return errors.New("expecting both lastEngineIdx and lastBdevCount to be unset")
+		}
+		*lastEngineIdx = int(eIdx)
+		*lastBdevCount = newNrBdevs
+	case *lastBdevCount < 0:
+		return errors.New("expecting both lastEngineIdx and lastBdevCount to be set")
+	case newNrBdevs == *lastBdevCount:
+		*lastEngineIdx = int(eIdx)
+	default:
+		return config.FaultConfigBdevCountMismatch(int(eIdx), newNrBdevs, *lastEngineIdx, *lastBdevCount)
+	}
+
+	return nil
+}
+
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
 		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
