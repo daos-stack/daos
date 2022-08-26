@@ -78,6 +78,10 @@ func (mrs *mockRaftService) State() raft.RaftState {
 	return mrs.cfg.State
 }
 
+func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
+	return &mockRaftFuture{}
+}
+
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
 	if cfg == nil {
 		cfg = &mockRaftServiceConfig{
