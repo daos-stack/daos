@@ -197,7 +197,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		roots->cr_oids[0].hi = 0;
 		rf = daos_cont_prop2redunfac(prop_in);
 		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
-						 0, 0, 0);
+						 0, 0, 0, daos_cont_prop2redunlvl(prop_in));
 		if (rc) {
 			D_ERROR("Failed to generate root OID "DF_RC"\n",
 				DP_RC(rc));
