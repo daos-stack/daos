@@ -267,7 +267,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware Xlarge" ]; then
 fi
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
-                 "${launch_node_args}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+                 ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
