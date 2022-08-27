@@ -538,7 +538,8 @@ obj_bulk_update_latency(uint32_t opc, uint64_t start_time, uint64_t io_size)
 		lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
 		break;
 	default:
-		D_ASSERTF(0, "invalid opc %u\n", opc);
+		/* Only record update/fetch bulk latency */
+		return;
 	}
 	d_tm_set_gauge(lat, time);
 }
