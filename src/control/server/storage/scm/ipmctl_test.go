@@ -228,8 +228,7 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals + " -socket 1",
-				fmt.Sprintf(cmdCreateRegions, " -socket 1 "),
+				cmdDeleteGoals, fmt.Sprintf(cmdCreateRegions, " "),
 			},
 		},
 		"no regions; delete goals fails": {
@@ -663,7 +662,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions + " -socket 1",
-				cmdDeleteGoals + " -socket 1",
+				cmdDeleteGoals,
 			},
 		},
 		"remove regions; without namespaces": {
