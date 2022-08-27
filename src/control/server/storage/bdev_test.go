@@ -105,7 +105,7 @@ func Test_VmdLedState(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expStr, tc.state.String(),
+			test.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 		})
 	}
