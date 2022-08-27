@@ -127,9 +127,6 @@ func (m MgmtMethod) String() string {
 		MethodPingRank:             "PingRank",
 		MethodSetRank:              "SetRank",
 		MethodSetLogMasks:          "SetLogMasks",
-		MethodCreateMS:             "CreateMS",
-		MethodStartMS:              "StartMS",
-		MethodJoin:                 "Join",
 		MethodGetAttachInfo:        "GetAttachInfo",
 		MethodPoolCreate:           "PoolCreate",
 		MethodPoolDestroy:          "PoolDestroy",
@@ -143,7 +140,6 @@ func (m MgmtMethod) String() string {
 		MethodSmdDevs:              "SmdDevs",
 		MethodSmdPools:             "SmdPools",
 		MethodPoolGetACL:           "PoolGetACL",
-		MethodListPools:            "ListPools",
 		MethodPoolOverwriteACL:     "PoolOverwriteACL",
 		MethodPoolUpdateACL:        "PoolUpdateACL",
 		MethodPoolDeleteACL:        "PoolDeleteACL",
@@ -191,12 +187,6 @@ const (
 	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodSetLogMasks is a ModuleMgmt method
 	MethodSetLogMasks MgmtMethod = C.DRPC_METHOD_MGMT_SET_LOG_MASKS
-	// MethodCreateMS is a ModuleMgmt method
-	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
-	// MethodStartMS is a ModuleMgmt method
-	MethodStartMS MgmtMethod = C.DRPC_METHOD_MGMT_START_MS
-	// MethodJoin is a ModuleMgmt method
-	MethodJoin MgmtMethod = C.DRPC_METHOD_MGMT_JOIN
 	// MethodGetAttachInfo is a ModuleMgmt method
 	MethodGetAttachInfo MgmtMethod = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	// MethodPoolCreate is a ModuleMgmt method
@@ -223,8 +213,6 @@ const (
 	MethodSmdPools MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
 	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
-	// MethodListPools is a ModuleMgmt method
-	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
