@@ -6764,7 +6764,7 @@ int
 daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    daos_obj_id_t *oid, enum daos_otype_t type,
 			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
-			    uint32_t args)
+			    uint32_t args, uint32_t pa_domain)
 {
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr = {0};
@@ -6775,9 +6775,15 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	if (!daos_otype_t_is_valid(type))
 		return -DER_INVAL;
 
+	if (pa_domain == 0)
+		pa_domain = DAOS_PROP_CO_REDUN_DEFAULT;
+	else if (!daos_pa_domain_is_valid(pa_domain))
+		return -DER_INVAL;
+
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
 
+	attr.pa_domain = pa_domain;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
