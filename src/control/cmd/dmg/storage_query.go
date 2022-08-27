@@ -114,7 +114,7 @@ func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 
 	mask := storage.NvmeDevState(0)
 	if cmd.EvictedOnly {
-		mask = storage.NvmeStateFaulty
+		mask = storage.NvmeFlagFaulty
 	}
 
 	req := &control.SmdQueryReq{

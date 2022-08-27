@@ -106,7 +106,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			printRequest(t, &control.SmdQueryReq{
 				Rank:      system.NilRank,
 				OmitPools: true,
-				StateMask: storage.NvmeStateFaulty,
+				StateMask: storage.NvmeFlagFaulty,
 			}),
 			nil,
 		},
@@ -116,7 +116,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			printRequest(t, &control.SmdQueryReq{
 				Rank:      system.NilRank,
 				OmitPools: true,
-				StateMask: storage.NvmeStateFaulty,
+				StateMask: storage.NvmeFlagFaulty,
 			}),
 			nil,
 		},

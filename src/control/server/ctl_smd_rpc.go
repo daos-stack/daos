@@ -33,7 +33,7 @@ func queryRank(reqRank uint32, engineRank system.Rank) bool {
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, ei := range svc.harness.Instances() {
 		if !ei.IsReady() {
-			svc.log.Debugf("skipping not-ready instance")
+			svc.log.Debugf("skipping not-ready instance %d", ei.Index())
 			continue
 		}
 
@@ -97,19 +97,26 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		for _, dev := range rResp.Devices {
 			state := storage.NvmeDevStateFromString(dev.DevState)
 
+			svc.log.Debugf("mask %s, state %s", req.StateMask, state)
 			if req.StateMask != 0 && req.StateMask&state.Uint32() == 0 {
 				continue // skip device completely if mask doesn't match
 			}
 
-			// skip health query if the device is in "NEW" state
-			if req.IncludeBioHealth && !state.IsNew() {
-				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-					DevUuid: dev.Uuid,
-				})
-				if err != nil {
-					return errors.Wrapf(err, "device %s, states %q", dev, state.States())
+			// skip health query if the device is not in a normal or faulty state
+			if req.IncludeBioHealth {
+				if state == storage.NvmeStateNormal || state == storage.NvmeStateFaulty {
+					health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+						DevUuid: dev.Uuid,
+					})
+					if err != nil {
+						return errors.Wrapf(err, "device %q, states %q",
+							dev, state.States())
+					}
+					dev.Health = health
+				} else {
+					svc.log.Debugf("skip fetching health stats on device %q, states %q",
+						dev, state.States())
 				}
-				dev.Health = health
 			}
 
 			if req.StateMask != 0 {
@@ -406,7 +413,7 @@ func (svc *ControlService) smdResetLED(ctx context.Context, req *ctlpb.SmdQueryR
 	}
 
 	if drr.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdResetLED failed")
+		return nil, errors.Wrap(daos.Status(drr.Status), "smdResetLED failed")
 	}
 
 	return &ctlpb.SmdQueryResp{
@@ -458,7 +465,7 @@ func (svc *ControlService) smdGetLEDState(ctx context.Context, req *ctlpb.SmdQue
 	}
 
 	if drr.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdGetLEDState failed")
+		return nil, errors.Wrap(daos.Status(drr.Status), "smdGetLEDState failed")
 	}
 
 	return &ctlpb.SmdQueryResp{

@@ -63,26 +63,23 @@ type NvmeDevState uint32
 
 // NvmeDevState values representing individual bit-flags.
 const (
-	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
-	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
-	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
-	NvmeStateUnknown  NvmeDevState = C.NVME_DEV_STATE_INVALID
+	NvmeFlagPlugged NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	NvmeFlagInUse   NvmeDevState = C.NVME_DEV_FL_INUSE
+	NvmeFlagFaulty  NvmeDevState = C.NVME_DEV_FL_FAULTY
+	NvmeFlagInvalid NvmeDevState = C.NVME_DEV_FL_INVALID
 )
 
-// IsNew returns true if SSD is not in use by DAOS.
-func (bs NvmeDevState) IsNew() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateInUse == 0
-}
+// NvmeDevState values representing bit-flags combinations. Assume faulty state is only applicable
+// when in-use flag is set.
+const (
+	NvmeStateNormal NvmeDevState = C.NVME_DEV_STATE_NORMAL
+	NvmeStateNew    NvmeDevState = C.NVME_DEV_STATE_NEW
+	NvmeStateFaulty NvmeDevState = C.NVME_DEV_STATE_NORMAL_FAULTY
+)
 
-// IsNormal returns true if SSD is in a normal, non-faulty state.
-func (bs NvmeDevState) IsNormal() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse != 0
-}
-
-// IsFaulty returns true if SSD is in a faulty state.
-func (bs NvmeDevState) IsFaulty() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
+// IsInvalid returns true if SSD is in an invalid state.
+func (bs NvmeDevState) IsInvalid() bool {
+	return bs >= NvmeFlagInvalid
 }
 
 func (bs NvmeDevState) String() string {
@@ -91,9 +88,9 @@ func (bs NvmeDevState) String() string {
 
 // States lists each flag in state bitset.
 func (bs NvmeDevState) States() string {
-	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
+	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, invalid: %v",
 		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
-		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
+		bs&C.NVME_DEV_FL_FAULTY != 0, bs.IsInvalid())
 }
 
 // Uint32 returns uint32 representation of BIO device state.
@@ -107,38 +104,27 @@ func NvmeDevStateFromString(status string) NvmeDevState {
 	defer C.free(unsafe.Pointer(cStr))
 
 	return NvmeDevState(C.nvme_str2state(cStr))
-
 }
 
 // VmdLedState represents the LED state of VMD device.
-type VmdLedState uint32
+type VmdLedState string
 
 // VmdLedState values representing individual bit-flags.
 const (
-	VmdStateOff      VmdLedState = C.VMD_LED_STATE_OFF
-	VmdStateIdentify VmdLedState = C.VMD_LED_STATE_IDENTIFY
-	VmdStateFault    VmdLedState = C.VMD_LED_STATE_FAULT
-	VmdStateInvalid  VmdLedState = C.VMD_LED_STATE_INVALID
-	VmdStateNA       VmdLedState = C.VMD_LED_STATE_NA
+	LedStateNormal   VmdLedState = C.DAOS_LED_STATE_OFF
+	LedStateIdentify VmdLedState = C.DAOS_LED_STATE_IDENTIFY
+	LedStateFaulty   VmdLedState = C.DAOS_LED_STATE_FAULT
+	LedStateUnknown  VmdLedState = C.DAOS_LED_STATE_UNKNOWN
 )
 
-func (bs VmdLedState) String() string {
-	return C.GoString(C.led_state2str(C.int(bs)))
-}
-
-// Uint32 returns uint32 representation of LED state.
-func (bs VmdLedState) Uint32() uint32 {
-	return uint32(bs)
-}
-
-// VmdLedStateFromString converts a status string into a state bitset.
-func VmdLedStateFromString(status string) (VmdLedState, error) {
-	cStr := C.CString(status)
-	defer C.free(unsafe.Pointer(cStr))
-
-	cState := C.led_str2state(cStr)
-
-	return VmdLedState(cState), nil
+// String method provides conversion to state display strings from internal values.
+func (vls VmdLedState) String() string {
+	return map[VmdLedState]string{
+		LedStateNormal:   "OFF",
+		LedStateIdentify: "QUICK-BLINK",
+		LedStateFaulty:   "ON",
+		LedStateUnknown:  "NA",
+	}[vls]
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -213,7 +199,7 @@ type SmdDevice struct {
 	UUID        string       `json:"uuid"`
 	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
 	NvmeState   NvmeDevState `json:"-"`
-	VmdState    VmdLedState  `json:"-"`
+	LedState    VmdLedState  `json:"led_state"`
 	Rank        system.Rank  `json:"rank"`
 	TotalBytes  uint64       `json:"total_bytes"`
 	AvailBytes  uint64       `json:"avail_bytes"`
@@ -233,11 +219,9 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
 		NvmeStateStr string `json:"dev_state"`
-		VmdStateStr  string `json:"led_state"`
 		*toJSON
 	}{
 		NvmeStateStr: sd.NvmeState.String(),
-		VmdStateStr:  sd.VmdState.String(),
 		toJSON:       (*toJSON)(sd),
 	})
 }
@@ -253,7 +237,6 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	type fromJSON SmdDevice
 	from := &struct {
 		NvmeStateStr string `json:"dev_state"`
-		VmdStateStr  string `json:"led_state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -264,14 +247,18 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	}
 
 	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
-
-	led, err := VmdLedStateFromString(from.VmdStateStr)
-	if err != nil {
-		return err
+	if from.LedState == "" {
+		sd.LedState = LedStateUnknown
 	}
-	sd.VmdState = led
 
 	return nil
+}
+
+func (sd *SmdDevice) String() string {
+	if sd == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%+v", *sd)
 }
 
 // NvmeController represents a NVMe device controller which includes health

@@ -18,61 +18,58 @@ import (
 
 func Test_NvmeDevState(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state       NvmeDevState
-		expIsNew    bool
-		expIsNormal bool
-		expIsFaulty bool
-		expStr      string
+		state        NvmeDevState
+		expIsInUse   bool
+		expIsPlugged bool
+		expIsFaulty  bool
+		expIsInvalid bool
+		expStr       string
 	}{
 		"new state": {
-			state:    NvmeStatePlugged,
-			expIsNew: true,
-			expStr:   "NEW",
+			state:        NvmeStateNew,
+			expIsPlugged: true,
+			expStr:       "NEW",
 		},
 		"normal state": {
-			state:       NvmeStatePlugged | NvmeStateInUse,
-			expIsNormal: true,
-			expStr:      "NORMAL",
+			state:        NvmeStateNormal,
+			expIsPlugged: true,
+			expIsInUse:   true,
+			expStr:       "NORMAL",
 		},
 		"faulty state": {
-			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateFaulty,
-			expIsFaulty: true,
-			expStr:      "EVICTED",
+			state:        NvmeStateFaulty,
+			expIsPlugged: true,
+			expIsInUse:   true,
+			expIsFaulty:  true,
+			expStr:       "EVICTED",
 		},
-		"new and faulty state": {
-			state:       NvmeStatePlugged | NvmeStateFaulty,
-			expIsNew:    true,
-			expIsFaulty: true,
-			expStr:      "EVICTED",
+		// Although this should not be returned, worth testing just in case.
+		"plugged and faulty flags; not in use": {
+			state:        NvmeFlagPlugged | NvmeFlagFaulty,
+			expIsPlugged: true,
+			expIsFaulty:  true,
+			expStr:       "EVICTED",
 		},
-		"unplugged, new and faulty": {
-			state:  NvmeStateFaulty,
+		"unplugged; no flags": {
+			state:  0,
 			expStr: "UNPLUGGED",
 		},
-		"new and identify state": {
-			state:    NvmeStatePlugged | NvmeStateIdentify,
-			expIsNew: true,
-			expStr:   "NEW|IDENTIFY",
-		},
-		"new, faulty and identify state": {
-			state:       NvmeStatePlugged | NvmeStateFaulty | NvmeStateIdentify,
-			expIsNew:    true,
-			expIsFaulty: true,
-			expStr:      "EVICTED|IDENTIFY",
-		},
-		"normal and identify state": {
-			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateIdentify,
-			expIsNormal: true,
-			expStr:      "NORMAL|IDENTIFY",
+		"invalid flag": {
+			state:        NvmeFlagInvalid,
+			expIsInvalid: true,
+			expStr:       "INVALID",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
-				"unexpected IsNew() result")
-			test.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
-				"unexpected IsNormal() result")
-			test.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
-				"unexpected IsFaulty() result")
+			test.AssertEqual(t, tc.expIsInUse, tc.state&NvmeFlagInUse != 0,
+				"unexpected IsInUse check")
+			test.AssertEqual(t, tc.expIsFaulty, tc.state&NvmeFlagFaulty != 0,
+				"unexpected IsFaulty check")
+			test.AssertEqual(t, tc.expIsPlugged, tc.state&NvmeFlagPlugged != 0,
+				"unexpected IsPlugged check")
+			test.AssertEqual(t, tc.expIsInvalid, tc.state.IsInvalid(),
+				"unexpected IsInvalid() result")
+
 			test.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 
@@ -85,27 +82,31 @@ func Test_NvmeDevState(t *testing.T) {
 	}
 }
 
-func Test_NvmeDevStateFromString_invalid(t *testing.T) {
+func Test_VmdLedState(t *testing.T) {
 	for name, tc := range map[string]struct {
-		inStr    string
-		expState NvmeDevState
-		expStr   string
+		state  VmdLedState
+		expStr string
 	}{
-		"empty string": {
-			expState: NvmeStateUnknown,
-			expStr:   "UNKNOWN",
+		"normal state": {
+			state:  LedStateNormal,
+			expStr: "OFF",
 		},
-		"unrecognized string": {
-			inStr:    "BAD",
-			expState: NvmeStateUnknown,
-			expStr:   "UNKNOWN",
+		"faulty state": {
+			state:  LedStateFaulty,
+			expStr: "ON",
+		},
+		"identify state": {
+			state:  LedStateIdentify,
+			expStr: "QUICK-BLINK",
+		},
+		"unknown and unsupported state": {
+			state:  LedStateUnknown,
+			expStr: "NA",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			state := NvmeDevStateFromString(tc.inStr)
-
-			test.AssertEqual(t, tc.expState, state, "unexpected state")
-			test.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
+			common.AssertEqual(t, tc.expStr, tc.state.String(),
+				"unexpected status string")
 		})
 	}
 }
@@ -177,48 +178,6 @@ func Test_filterBdevScanResponse(t *testing.T) {
 			if diff := cmp.Diff(expAddrStr, tc.scanResp.Controllers.String()); diff != "" {
 				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
 			}
-		})
-	}
-}
-
-func Test_VmdLedState(t *testing.T) {
-	for name, tc := range map[string]struct {
-		state  VmdLedState
-		expStr string
-	}{
-		"normal state": {
-			state:  VmdStateOff,
-			expStr: "OFF",
-		},
-		"faulty state": {
-			state:  VmdStateFault,
-			expStr: "ON",
-		},
-		"identify state": {
-			state:  VmdStateIdentify,
-			expStr: "QUICK-BLINK",
-		},
-		"unknown and unsupported state": {
-			state:  VmdStateInvalid,
-			expStr: "INVALID",
-		},
-		"not a VMD device": {
-			state:  VmdStateNA,
-			expStr: "NA",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expStr, tc.state.String(),
-				"unexpected status string")
-
-			stateNew, err := VmdLedStateFromString(tc.state.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			common.AssertEqual(t, tc.state.String(), stateNew.String(),
-				fmt.Sprintf("expected string %s to yield state %s",
-					tc.state.String(), stateNew.String()))
 		})
 	}
 }

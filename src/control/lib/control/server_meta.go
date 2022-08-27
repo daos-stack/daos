@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -72,6 +73,10 @@ func (si *SmdInfo) addRankPools(rank system.Rank, pools []*SmdPool) {
 		pool.Rank = rank
 		si.Pools[pool.UUID] = append(si.Pools[pool.UUID], pool)
 	}
+}
+
+func (si *SmdInfo) String() string {
+	return fmt.Sprintf("[Devices: %v, Pools: %v]", si.Devices, si.Pools)
 }
 
 func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {

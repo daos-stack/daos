@@ -5,8 +5,8 @@
  */
 
 /**
- * Primitives to share between data and control planes.
- */
+* Primitives to share between data and control planes.
+*/
 
 #ifndef __CONTROL_H__
 #define __CONTROL_H__
@@ -18,31 +18,32 @@
 #include <daos/common.h>
 
 /**
- * Space separated string of CLI options to pass to DPDK when started during
- * spdk_env_init(). These options will override the DPDK defaults.
- */
+* Space separated string of CLI options to pass to DPDK when started during
+* spdk_env_init(). These options will override the DPDK defaults.
+*/
 extern const char *
 dpdk_cli_override_opts;
 
 /** Device state flags */
-#define NVME_DEV_FL_PLUGGED	(1 << 0)
+#define NVME_DEV_FL_PLUGGED	(1 << 0) /* Device is present in slot */
 #define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
-#define NVME_DEV_FL_FAULTY	(1 << 2)
+#define NVME_DEV_FL_FAULTY	(1 << 2) /* Faulty state has been assigned */
+#define NVME_DEV_FL_INVALID	(1 << 3) /* State combination is invalid */
 
 /** Device state combinations */
-#define NVME_DEV_STATE_NORMAL	(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
-#define NVME_DEV_STATE_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
-#define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
-#define NVME_DEV_STATE_INVALID	(1 << 4) /* Unsupported device or LED state */
+#define NVME_DEV_STATE_NORMAL		(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
+#define NVME_DEV_STATE_NORMAL_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
+#define NVME_DEV_STATE_NEW		NVME_DEV_FL_PLUGGED
+#define NVME_DEV_STATE_NEW_FAULTY	(NVME_DEV_STATE_NEW | NVME_DEV_FL_FAULTY)
 
-/** VMD LED Device States */
+/** VMD LED device states */
 #define DAOS_LED_STATE_OFF	"off"		/* SPDK_VMD_LED_STATE_OFF */
-#define DAOS_LED_STATE_IDENTIFY	"identify"	/* SPDK_VMD_LED_STATE_IDENTIFY (4kHz blink) */
-#define DAOS_LED_STATE_FAULT	"fault"		/* SPDK_VMD_LED_STATE_FAULT (solid on) */
-#define DAOS_LED_STATE_REBUILD	"rebuild"	/* SPDK_VMD_LED_STATE_REBUILD (1kHz blink) */
-#define DAOS_LED_STATE_UNKNOWN	"unknown"	/* SPDK_VMD_LED_STATE_UNKNOWN (not supported) */
+#define DAOS_LED_STATE_IDENTIFY	"identify"	/* SPDK_VMD_LED_STATE_IDENTIFY	(4kHz blink) */
+#define DAOS_LED_STATE_FAULT	"fault"		/* SPDK_VMD_LED_STATE_FAULT	(solid on) */
+#define DAOS_LED_STATE_REBUILD	"rebuild"	/* SPDK_VMD_LED_STATE_REBUILD	(1kHz blink) */
+#define DAOS_LED_STATE_UNKNOWN	"unknown"	/* SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled) */
 
-/** VMD LED Device Actions */
+/** VMD LED device actions */
 #define DAOS_LED_ACT_SET	"set"		/* Set LED state */
 #define DAOS_LED_ACT_GET	"get"		/* Get LED state */
 #define DAOS_LED_ACT_RESET	"reset"		/* Reset LED state */
@@ -76,52 +77,29 @@ dpdk_cli_override_opts;
 static inline char *
 nvme_state2str(int state)
 {
-	if (state == NVME_DEV_STATE_INVALID)
-		return "UNKNOWN";
-
-	/** Otherwise, if unplugged, return early */
+	if (state >= NVME_DEV_FL_INVALID)
+		return "INVALID";
 	if (!CHK_FLAG(state, NVME_DEV_FL_PLUGGED))
 		return "UNPLUGGED";
-
-	/** If identify is set, return combination with faulty taking precedence over new */
-	if (CHK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
-		if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
-			return "EVICTED|IDENTIFY";
-		if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
-			return "NEW|IDENTIFY";
-		return "NORMAL|IDENTIFY";
-	}
-
-	/** Otherwise, return single state with faulty taking precedence over new */
 	if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
 		return "EVICTED";
 	if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
 		return "NEW";
-
 	return "NORMAL";
 }
 
 static inline int
 nvme_str2state(char *state)
 {
-	/** NVMe device states */
 	if STR_EQ(state, "NORMAL")
 		return NVME_DEV_STATE_NORMAL;
 	if STR_EQ(state, "NEW")
 		return NVME_DEV_STATE_NEW;
 	if STR_EQ(state, "EVICTED")
-		return NVME_DEV_STATE_FAULTY;
-	if STR_EQ(state, "NORMAL|IDENTIFY")
-		return (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_IDENTIFY);
-	if STR_EQ(state, "NEW|IDENTIFY")
-		return (NVME_DEV_STATE_NEW | NVME_DEV_FL_IDENTIFY);
-	if STR_EQ(state, "EVICTED|IDENTIFY")
-		return (NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY);
+		return NVME_DEV_STATE_NORMAL_FAULTY;
 	if STR_EQ(state, "UNPLUGGED")
 		return 0;
-
-	/** not a valid state */
-	return NVME_DEV_STATE_INVALID;
+	return NVME_DEV_FL_INVALID;
 }
 
 //static inline char *

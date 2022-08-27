@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -1273,7 +1274,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
-				if !smdDevice.NvmeState.IsNormal() {
+				if smdDevice.NvmeState != storage.NvmeStateNormal {
 					log.Noticef("SMD device %s (instance %d, ctrlr %s) "+
 						"not usable (device state %q)",
 						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,

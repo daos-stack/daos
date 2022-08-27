@@ -26,14 +26,13 @@ import (
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	stateUnplugged := storage.NvmeDevState(0).String()
-	stateNew := storage.MockNvmeStateNew.String()
-	stateNormal := storage.MockNvmeStateNormal.String()
-	stateFaulty := storage.MockNvmeStateEvicted.String()
-	stateIdentify := storage.MockNvmeStateIdentify.String()
-	ledStateIdentify := storage.MockVmdStateIdentify.String()
-	ledStateNormal := storage.MockVmdStateNormal.String()
-	ledStateFault := storage.MockVmdStateFault.String()
-	ledStateInvalid := storage.MockVmdStateInvalid.String()
+	stateNew := storage.NvmeStateNew.String()
+	stateNormal := storage.NvmeStateNormal.String()
+	stateFaulty := storage.NvmeStateFaulty.String()
+	ledStateIdentify := storage.LedStateIdentify.String()
+	ledStateNormal := storage.LedStateNormal.String()
+	ledStateFault := storage.LedStateFaulty.String()
+	ledStateUnknown := storage.LedStateUnknown.String()
 
 	pbNormDev := &ctlpb.SmdDevResp_Device{
 		Uuid:     test.MockUUID(),
@@ -47,7 +46,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	}
 	pbIdentifyQueryDev := &ctlpb.SmdQueryResp_Device{
 		Uuid:     test.MockUUID(),
-		DevState: stateIdentify,
+		DevState: stateNormal,
 		LedState: ledStateIdentify,
 	}
 
@@ -143,7 +142,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Message: &ctlpb.DevIdentifyResp{
 							DevUuid:  test.MockUUID(),
-							DevState: stateIdentify,
+							DevState: stateNormal,
 							LedState: ledStateIdentify,
 						},
 					},
@@ -172,7 +171,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Message: &ctlpb.DevGetLEDStateResp{
 							DevUuid:  test.MockUUID(),
-							DevState: stateIdentify,
+							DevState: stateNormal,
 							LedState: ledStateIdentify,
 						},
 					},
@@ -201,7 +200,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Message: &ctlpb.DevResetLEDResp{
 							DevUuid:  test.MockUUID(),
-							DevState: stateIdentify,
+							DevState: stateNormal,
 							LedState: ledStateIdentify,
 						},
 					},
@@ -384,13 +383,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateUnplugged,
-									LedState: ledStateInvalid,
+									LedState: ledStateUnknown,
 								},
 								{
 									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateIdentify,
+									DevState: stateNormal,
 									LedState: ledStateIdentify,
 								},
 							},
@@ -426,13 +425,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 								TrAddr:   "0000:da:00.0",
 								TgtIds:   []int32{0, 1, 2},
 								DevState: stateUnplugged,
-								LedState: ledStateInvalid,
+								LedState: ledStateUnknown,
 							},
 							{
 								Uuid:     test.MockUUID(3),
 								TrAddr:   "0000:db:00.0",
 								TgtIds:   []int32{3, 4, 5},
-								DevState: stateIdentify,
+								DevState: stateNormal,
 								LedState: ledStateIdentify,
 							},
 						},
@@ -480,7 +479,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
 				Rank:      uint32(system.NilRank),
-				StateMask: storage.NvmeStateFaulty.Uint32(),
+				StateMask: storage.NvmeFlagFaulty.Uint32(),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -514,13 +513,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateUnplugged,
-									LedState: ledStateInvalid,
+									LedState: ledStateUnknown,
 								},
 								{
 									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateIdentify,
+									DevState: stateNormal,
 									LedState: ledStateIdentify,
 								},
 							},
@@ -770,8 +769,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:     test.MockUUID(1),
-								DevState: storage.MockNvmeStateNew.String(),
-								LedState: storage.MockVmdStateNormal.String(),
+								DevState: storage.NvmeStateNew.String(),
+								LedState: storage.LedStateNormal.String(),
 							},
 						},
 					},

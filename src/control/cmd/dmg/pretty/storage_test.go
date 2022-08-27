@@ -1399,16 +1399,16 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateNormal,
-									VmdState:  storage.MockVmdStateNormal,
+									NvmeState: storage.NvmeStateNew,
+									LedState:  storage.LedStateNormal,
 								},
 								{
 									UUID:      test.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateEvicted,
-									VmdState:  storage.MockVmdStateFault,
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateFaulty,
 								},
 								{
 									UUID:      test.MockUUID(2),
@@ -1416,15 +1416,15 @@ host1
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
 									NvmeState: storage.NvmeDevState(0),
-									VmdState:  storage.VmdLedState(0),
+									LedState:  storage.LedStateUnknown,
 								},
 								{
 									UUID:      test.MockUUID(3),
 									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.MockNvmeStateIdentify,
-									VmdState:  storage.MockVmdStateIdentify,
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateIdentify,
 								},
 							},
 						},
@@ -1437,13 +1437,13 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
+      Targets:[0 1 2] Rank:0 State:NEW LED:OFF
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
       Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
       Targets:[0 1 2] Rank:1 State:UNPLUGGED LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY LED:QUICK-BLINK
+      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK-BLINK
 `,
 		},
 		"list-devices (none found)": {
@@ -1479,8 +1479,8 @@ host1
 									UUID:      test.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateNormal,
-									VmdState:  storage.MockVmdStateNormal,
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
