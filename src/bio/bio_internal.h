@@ -501,6 +501,12 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
+enum led_action {
+	LED_ACTION_SET,
+	LED_ACTION_GET,
+	LED_ACTION_RESET,
+};
+
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
@@ -577,6 +583,7 @@ int bulk_cache_create(struct bio_dma_buffer *bdb);
 void bulk_cache_destroy(struct bio_dma_buffer *bdb);
 int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 		       struct bio_bulk_group *ex_grp);
+
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
@@ -595,7 +602,8 @@ int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
-void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
+int bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, int led_action,
+		   int *led_state);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */

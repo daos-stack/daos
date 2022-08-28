@@ -1569,7 +1569,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev         *d_bdev;
+	struct bio_bdev		*d_bdev;
+	int			 state;
 
 	/*
 	 * Check VMD_LED_PERIOD environment variable, if not set use default
@@ -1584,14 +1585,9 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
-//	state = SPDK_VMD_LED_STATE_OFF;
-//	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, LED_ACTION_RESET, &state);
-//	if (rc != 0)
-//		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-//			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
-//			 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
-			if (bio_led_manage(ctxt, d_bdev->bb_uuid, NULL,
-					      true/*reset*/) != 0)
+			/* LED will be reset to the original saved state */
+			state = d_bdev->bb_led_state;
+			if (bio_led_manage(ctxt, d_bdev->bb_uuid, LED_ACTION_SET, &state) != 0)
 				D_ERROR("Failed resetting LED state\n");
 		}
 	}
