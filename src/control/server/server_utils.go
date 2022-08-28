@@ -319,8 +319,7 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 		return errors.New("nil input param: " + badInput)
 	}
 
-	bdevCache := *scanResp
-	if err := engine.storage.SetBdevCache(&bdevCache); err != nil {
+	if err := engine.storage.SetBdevCache(*scanResp); err != nil {
 		return errors.Wrap(err, "setting engine storage bdev cache")
 	}
 
@@ -331,6 +330,7 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 	// to logical) bdevs and engine bdev counts can be accurately compared.
 
 	eIdx := engine.Index()
+	bdevCache := engine.storage.GetBdevCache()
 	newNrBdevs := len(bdevCache.Controllers)
 
 	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",

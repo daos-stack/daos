@@ -513,23 +513,27 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
-// SetBdevCache stores given scan response in provider bdev cache.
-func (p *Provider) SetBdevCache(resp *BdevScanResponse) error {
-	if resp == nil {
-		return nil
-	}
+func (p *Provider) GetBdevCache() BdevScanResponse {
+	p.RLock()
+	defer p.RUnlock()
 
+	return p.bdevCache
+}
+
+// SetBdevCache stores given scan response in provider bdev cache.
+func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	p.Lock()
 	defer p.Unlock()
 
-	// Filter out any controllers not configured in provider's engine storage config.
-	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), resp); err != nil {
+	// Enumerate scan results and filter out any controllers not specified in provider's engine
+	// storage config.
+	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp); err != nil {
 		return errors.Wrap(err, "filtering scan response before caching")
 	}
 
 	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
 		resp.Controllers)
-	p.bdevCache = *resp
+	p.bdevCache = resp
 	p.vmdEnabled = resp.VMDEnabled
 
 	return nil

@@ -541,26 +541,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		"engine up; scan bdev basic; vmd enabled": {
-			req: &ctlpb.StorageScanReq{
-				Scm:  new(ctlpb.ScanScmReq),
-				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
-			},
-			csCtrlrs: &storage.NvmeControllers{
-				&storage.NvmeController{PciAddr: "050505:01:00.0"},
-			},
-			expResp: &ctlpb.StorageScanResp{
-				Nvme: &ctlpb.ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{
-						&ctlpb.NvmeController{PciAddr: "050505:01:00.0"},
-					},
-					State: new(ctlpb.ResponseState),
-				},
-				Scm: &ctlpb.ScanScmResp{
-					State: new(ctlpb.ResponseState),
-				},
-			},
-		},
 		"engine up; scan bdev health": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
@@ -1732,7 +1712,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)
-				ei.storage.SetBdevCache(nvmeScanResp)
+				ei.storage.SetBdevCache(*nvmeScanResp)
 
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {

@@ -478,7 +478,6 @@ func TestServerConfig_Validation(t *testing.T) {
 				return c
 			},
 			// No failure because validation now occurs on server start-up.
-			// expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
 		},
 		"different number of targets": {
 			extraConfig: func(c *Server) *Server {
