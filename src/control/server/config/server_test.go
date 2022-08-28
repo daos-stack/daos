@@ -820,9 +820,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
-			return nil, err
-		}
+		CopyFile(t, legacyConfig, testLegacyConfigFile)
 
 		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
 	}
