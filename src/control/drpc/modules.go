@@ -143,7 +143,6 @@ func (m MgmtMethod) String() string {
 		MethodPoolOverwriteACL:     "PoolOverwriteACL",
 		MethodPoolUpdateACL:        "PoolUpdateACL",
 		MethodPoolDeleteACL:        "PoolDeleteACL",
-		MethodDevStateQuery:        "DevStateQuery",
 		MethodSetFaultyState:       "SetFaultyState",
 		MethodReplaceStorage:       "ReplaceStorage",
 		MethodListContainers:       "ListContainers",
@@ -219,8 +218,6 @@ const (
 	MethodPoolUpdateACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
-	// MethodDevStateQuery is a ModuleMgmt method
-	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 	// MethodReplaceStorage is a ModuleMgmt method
