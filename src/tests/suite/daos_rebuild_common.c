@@ -974,8 +974,10 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	uint32_t		grp_idx;
 	uint32_t		idx;
 	uint32_t		tgt_idx;
+	int			rc;
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
 	tgt_idx = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_tgt_idx;
