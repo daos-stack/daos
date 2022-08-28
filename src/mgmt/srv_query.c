@@ -546,7 +546,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_dev_set_fault(bxc);
+	rc = bio_dev_set_faulty(bxc);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -556,11 +556,11 @@ bio_faulty_state_set(void *arg)
 int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
-	enum spdk_vmd_led_state		 led_state = SPDK_VMD_LED_STATE_FAULT;
 	struct bio_led_manage_info	 led_info = { 0 };
 	struct smd_dev_info		*dev_info;
 	ABT_thread			 thread;
 	char				*state_str;
+	int				 led_state;
 	int				 tgt_id;
 	int				 buflen;
 	int				 rc = 0;
@@ -610,6 +610,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 
 	uuid_copy(led_info.dev_uuid, dev_uuid);
 	led_info.action = LED_ACTION_SET;
+	led_state = SPDK_VMD_LED_STATE_FAULT;
 	led_info.state = &led_state;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
@@ -631,7 +632,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
-	state_str = led_state2str(VMD_LED_STATE_FAULT);
+	state_str = DAOS_LED_STATE_FAULT;
 	buflen = strlen(state_str) + 1;
 	D_ALLOC(resp->led_state, buflen);
 	if (resp->led_state == NULL) {
@@ -791,27 +792,14 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
-	state_str = led_state2str(VMD_LED_STATE_OFF);
-	buflen = strlen(state_str) + 1;
-	D_ALLOC(resp->led_state, buflen);
-	if (resp->led_state == NULL) {
-		D_ERROR("Failed to allocate led state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	strncpy(resp->led_state, state_str, buflen);
-
 out:
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
 			D_FREE(resp->dev_state);
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
 	}
 
 	return rc;
 }
-

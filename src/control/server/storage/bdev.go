@@ -109,22 +109,46 @@ func NvmeDevStateFromString(status string) NvmeDevState {
 // VmdLedState represents the LED state of VMD device.
 type VmdLedState string
 
-// VmdLedState values representing individual bit-flags.
+// VmdLedState values representing the LED state.
 const (
-	LedStateNormal   VmdLedState = C.DAOS_LED_STATE_OFF
-	LedStateIdentify VmdLedState = C.DAOS_LED_STATE_IDENTIFY
-	LedStateFaulty   VmdLedState = C.DAOS_LED_STATE_FAULT
-	LedStateUnknown  VmdLedState = C.DAOS_LED_STATE_UNKNOWN
+	LedStateNormal   VmdLedState = "OFF"
+	LedStateIdentify VmdLedState = "QUICK-BLINK"
+	LedStateFaulty   VmdLedState = "ON"
+	LedStateUnknown  VmdLedState = "NA"
 )
 
-// String method provides conversion to state display strings from internal values.
 func (vls VmdLedState) String() string {
-	return map[VmdLedState]string{
-		LedStateNormal:   "OFF",
-		LedStateIdentify: "QUICK-BLINK",
-		LedStateFaulty:   "ON",
-		LedStateUnknown:  "NA",
+	return string(vls)
+}
+
+func (vls VmdLedState) ToInt() int {
+	i, exists := map[VmdLedState]int{
+		LedStateNormal:   C.DAOS_LED_ST_OFF,
+		LedStateIdentify: C.DAOS_LED_ST_IDENTIFY,
+		LedStateFaulty:   C.DAOS_LED_ST_FAULT,
+		LedStateUnknown:  C.DAOS_LED_ST_UNKNOWN,
 	}[vls]
+
+	if exists {
+		return i
+	}
+
+	return C.DAOS_LED_ST_UNKNOWN
+}
+
+func LedStateFromInt(i int) VmdLedState {
+	s, exists := map[int]VmdLedState{
+		C.DAOS_LED_ST_OFF:      LedStateNormal,
+		C.DAOS_LED_ST_IDENTIFY: LedStateIdentify,
+		C.DAOS_LED_ST_FAULT:    LedStateFaulty,
+		C.DAOS_LED_ST_UNKNOWN:  LedStateUnknown,
+	}[i]
+
+	if exists {
+		return s
+	}
+
+	return LedStateUnknown
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -199,7 +223,7 @@ type SmdDevice struct {
 	UUID        string       `json:"uuid"`
 	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
 	NvmeState   NvmeDevState `json:"-"`
-	LedState    VmdLedState  `json:"led_state"`
+	LedStateStr VmdLedState  `json:"led_state_str"`
 	Rank        system.Rank  `json:"rank"`
 	TotalBytes  uint64       `json:"total_bytes"`
 	AvailBytes  uint64       `json:"avail_bytes"`
@@ -219,9 +243,11 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
 		NvmeStateStr string `json:"dev_state"`
+		LedState     int    `json:"led_state"`
 		*toJSON
 	}{
 		NvmeStateStr: sd.NvmeState.String(),
+		LedState:     sd.LedStateStr.ToInt(),
 		toJSON:       (*toJSON)(sd),
 	})
 }
@@ -237,6 +263,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	type fromJSON SmdDevice
 	from := &struct {
 		NvmeStateStr string `json:"dev_state"`
+		LedState     int    `json:"led_state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -247,8 +274,9 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	}
 
 	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
-	if from.LedState == "" {
-		sd.LedState = LedStateUnknown
+	// If led_state_str is empty, convert led_state enum into string representation.
+	if from.LedStateStr == "" {
+		sd.LedStateStr = LedStateFromInt(from.LedState)
 	}
 
 	return nil

@@ -15,26 +15,26 @@
 #include <spdk/vmd.h>
 
 static const char *g_led_actions[] = {
-	[LED_ACTION_SET]	= DAOS_LED_ACT_SET,
-	[LED_ACTION_GET]	= DAOS_LED_ACT_GET,
-	[LED_ACTION_RESET]	= DAOS_LED_ACT_RESET,
+	[DAOS_LED_ACT_GET]		= "get",
+	[DAOS_LED_ACT_SET]		= "set",
+	[DAOS_LED_ACT_RESET]		= "reset",
 };
 
 static const char *g_led_states[] = {
-	[SPDK_VMD_LED_STATE_OFF]	= DAOS_LED_STATE_OFF,
-	[SPDK_VMD_LED_STATE_IDENTIFY]	= DAOS_LED_STATE_IDENTIFY,
-	[SPDK_VMD_LED_STATE_FAULT]	= DAOS_LED_STATE_FAULT,
-	[SPDK_VMD_LED_STATE_REBUILD]	= DAOS_LED_STATE_REBUILD,
-	[SPDK_VMD_LED_STATE_UNKNOWN]	= DAOS_LED_STATE_UNKNOWN,
+	[DAOS_LED_ST_OFF]		= "off",
+	[DAOS_LED_ST_IDENTIFY]	= "identify",
+	[DAOS_LED_ST_FAULT]		= "fault",
+	[DAOS_LED_ST_REBUILD]	= "rebuild",
+	[DAOS_LED_ST_UNKNOWN]	= "unknown",
 };
 
 struct led_opts {
-	struct spdk_pci_addr	pci_addr;
-	bool			all_devices;
-	bool			finished;
-	enum led_action		action;
-	enum spdk_vmd_led_state	led_state;
-	int			status;
+	struct spdk_pci_addr		pci_addr;
+	bool				all_devices;
+	bool				finished;
+	int				action;
+	int				led_state;
+	int				status;
 };
 
 static int
@@ -65,8 +65,8 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	state = (int)SPDK_VMD_LED_STATE_OFF;
-	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, LED_ACTION_SET, &state);
+	state = DAOS_LED_ST_OFF;
+	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, DAOS_LED_ACT_SET, &state);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
 			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
@@ -739,17 +739,17 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		g_led_states[opts->led_state]);
 
 	switch (opts->action) {
-	case LED_ACTION_GET:
+	case DAOS_LED_ACT_GET:
 		/* Return early with current device state set */
 		opts->led_state = cur_led_state;
 		return;
-	case LED_ACTION_SET:
+	case DAOS_LED_ACT_SET:
 		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
 			g_led_states[opts->led_state]);
 		break;
-	case LED_ACTION_RESET:
+	case DAOS_LED_ACT_RESET:
 		/* If the current state of a device is FAULTY we do not want to reset */
-		if (cur_led_state == SPDK_VMD_LED_STATE_FAULT) {
+		if (cur_led_state == DAOS_LED_ST_FAULT) {
 			D_DEBUG(DB_MGMT, "ignoring LED reset on %s as state is %s\n",
 				addr_buf, g_led_states[cur_led_state]);
 			opts->led_state = cur_led_state;
@@ -810,17 +810,17 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, int ac
 	/* Init context to be used by led_device_action() */
 	opts.all_devices = false;
 	opts.finished = false;
-	opts.led_state = SPDK_VMD_LED_STATE_UNKNOWN;
+	opts.led_state = DAOS_LED_ST_UNKNOWN;
 	opts.status = 0;
 	opts.pci_addr = pci_addr;
 
 	opts.action = action;
 	switch (action) {
-	case LED_ACTION_RESET:
+	case DAOS_LED_ACT_RESET:
 		break;
-	case LED_ACTION_GET:
+	case DAOS_LED_ACT_GET:
 		break;
-	case LED_ACTION_SET:
+	case DAOS_LED_ACT_SET:
 		opts.led_state = *state;
 		break;
 	default:

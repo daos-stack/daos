@@ -25,10 +25,10 @@ extern const char *
 dpdk_cli_override_opts;
 
 /** Device state flags */
-#define NVME_DEV_FL_PLUGGED	(1 << 0) /* Device is present in slot */
-#define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
-#define NVME_DEV_FL_FAULTY	(1 << 2) /* Faulty state has been assigned */
-#define NVME_DEV_FL_INVALID	(1 << 3) /* State combination is invalid */
+#define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
+#define NVME_DEV_FL_INUSE	(1 << 1)	/* Used by DAOS (present in SMD) */
+#define NVME_DEV_FL_FAULTY	(1 << 2)	/* Faulty state has been assigned */
+#define NVME_DEV_FL_INVALID	(1 << 3)	/* State combination is invalid */
 
 /** Device state combinations */
 #define NVME_DEV_STATE_NORMAL		(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
@@ -37,16 +37,21 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_NEW_FAULTY	(NVME_DEV_STATE_NEW | NVME_DEV_FL_FAULTY)
 
 /** VMD LED device states */
-#define DAOS_LED_STATE_OFF	"off"		/* SPDK_VMD_LED_STATE_OFF */
-#define DAOS_LED_STATE_IDENTIFY	"identify"	/* SPDK_VMD_LED_STATE_IDENTIFY	(4kHz blink) */
-#define DAOS_LED_STATE_FAULT	"fault"		/* SPDK_VMD_LED_STATE_FAULT	(solid on) */
-#define DAOS_LED_STATE_REBUILD	"rebuild"	/* SPDK_VMD_LED_STATE_REBUILD	(1kHz blink) */
-#define DAOS_LED_STATE_UNKNOWN	"unknown"	/* SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled) */
+#define DAOS_LED_ST_OFF		0	/* SPDK_VMD_LED_STATE_OFF */
+#define DAOS_LED_ST_IDENTIFY	1	/* SPDK_VMD_LED_STATE_IDENTIFY	(4kHz blink) */
+#define DAOS_LED_ST_FAULT	2	/* SPDK_VMD_LED_STATE_FAULT	(solid on) */
+#define DAOS_LED_ST_REBUILD	3	/* SPDK_VMD_LED_STATE_REBUILD	(1kHz blink) */
+#define DAOS_LED_ST_UNKNOWN	4	/* SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled) */
+
+typedef enum {
+	NONE = 0,
+	ONE = 1,
+} numbers;
 
 /** VMD LED device actions */
-#define DAOS_LED_ACT_SET	"set"		/* Set LED state */
-#define DAOS_LED_ACT_GET	"get"		/* Get LED state */
-#define DAOS_LED_ACT_RESET	"reset"		/* Reset LED state */
+#define DAOS_LED_ACT_GET	0	/* Get LED state */
+#define DAOS_LED_ACT_SET	1	/* Set LED state */
+#define DAOS_LED_ACT_RESET	2	/* Reset LED state */
 
 /** Env defining the size of a metadata pmem pool/file in MiBs */
 #define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
@@ -106,16 +111,16 @@ nvme_str2state(char *state)
 //led_state2str(int state)
 //{
 //	/** VMD LED states */
-//	if (BIT_SET(state, VMD_LED_STATE_OFF))
+//	if (BIT_SET(state, VMD_LED_ST_OFF))
 //		return "OFF";
 //
-//	if (BIT_SET(state, VMD_LED_STATE_IDENTIFY))
+//	if (BIT_SET(state, VMD_LED_ST_IDENTIFY))
 //		return "QUICK-BLINK";
 //
-//	if (BIT_SET(state, VMD_LED_STATE_FAULT))
+//	if (BIT_SET(state, VMD_LED_ST_FAULT))
 //		return "ON";
 //
-//	if (BIT_SET(state, VMD_LED_STATE_INVALID))
+//	if (BIT_SET(state, VMD_LED_ST_INVALID))
 //		return "INVALID";
 //
 //	/* LED not supported, not a VMD device */
@@ -127,16 +132,16 @@ nvme_str2state(char *state)
 //{
 //	/** VMD LED states */
 //	if STR_EQ(state, "OFF")
-//		return VMD_LED_STATE_OFF;
+//		return VMD_LED_ST_OFF;
 //	if STR_EQ(state, "QUICK-BLINK")
-//		return VMD_LED_STATE_IDENTIFY;
+//		return VMD_LED_ST_IDENTIFY;
 //	if STR_EQ(state, "ON")
-//		return VMD_LED_STATE_FAULT;
+//		return VMD_LED_ST_FAULT;
 //	if STR_EQ(state, "INVALID")
-//		return VMD_LED_STATE_INVALID;
+//		return VMD_LED_ST_INVALID;
 //
 //	/** not a valid state */
-//	return VMD_LED_STATE_NA;
+//	return VMD_LED_ST_NA;
 //}
 
 /**

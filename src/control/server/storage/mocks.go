@@ -98,11 +98,11 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	idx := test.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
 	return &SmdDevice{
-		UUID:      test.MockUUID(idx),
-		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: NvmeStateNormal,
-		LedState:  LedStateNormal,
-		TrAddr:    parentTrAddr,
+		UUID:        test.MockUUID(idx),
+		TargetIDs:   []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
+		NvmeState:   NvmeStateNormal,
+		LedStateStr: LedStateNormal,
+		TrAddr:      parentTrAddr,
 	}
 }
 

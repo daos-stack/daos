@@ -501,12 +501,6 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
-enum led_action {
-	LED_ACTION_SET,
-	LED_ACTION_GET,
-	LED_ACTION_RESET,
-};
-
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
