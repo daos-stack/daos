@@ -72,12 +72,20 @@ message BioHealthResp {
 	uint64 cluster_size = 46; // blobstore cluster size in bytes
 }
 
+enum VmdLedState {
+	OFF = 0; // Equivalent to SPDK_VMD_LED_STATE_OFF
+	QUICKBLINK = 1; // Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
+	ON = 2; // Equivalent to SPDK_VMD_LED_STATE_FAULT
+	SLOWBLINK = 3; // Equivalent to SPDK_VMD_LED_STATE_REBUILD
+	NA = 4; // Equivalent to SPDK_VMD_LED_STATE_UNKNOWN
+}
+
 message SmdDevice {
 	string uuid = 1; // UUID of blobstore
 	repeated int32 tgt_ids = 2; // VOS target IDs
 	string tr_addr = 3; // Transport address of blobstore
 	string dev_state = 4; // NVMe device state
-	int32 led_state = 5; // VMD LED state
+	VmdLedState led_state = 5; // VMD LED state
 }
 
 message SmdDevReq {}
@@ -103,12 +111,12 @@ message DevManageReq {
 	repeated string tr_addrs = 1;
 	repeated string dev_uuids = 2;
 	int32 led_action = 3;
-	int32 led_state = 4;
-}
+	VmdLedState led_state = 4; }
 
 message DevManageResp {
 	int32 status = 1;
-	message Result {
+	message
+	Result {
 		SmdDevice device = 1;
 		int32 status = 2;
 	}

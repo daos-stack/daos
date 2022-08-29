@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
@@ -18,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -107,48 +109,53 @@ func NvmeDevStateFromString(status string) NvmeDevState {
 }
 
 // VmdLedState represents the LED state of VMD device.
-type VmdLedState string
+type VmdLedState int32
 
-// VmdLedState values representing the LED state.
+// VmdLedState values representing the VMD LED state (see include/spdk/vmd.h).
 const (
-	LedStateNormal   VmdLedState = "OFF"
-	LedStateIdentify VmdLedState = "QUICK-BLINK"
-	LedStateFaulty   VmdLedState = "ON"
-	LedStateUnknown  VmdLedState = "NA"
+	LedStateNormal VmdLedState = iota
+	LedStateIdentify
+	LedStateFaulty
+	LedStateRebuild
+	LedStateUnknown
 )
 
 func (vls VmdLedState) String() string {
-	return string(vls)
+	vlss, ok := ctlpb.VmdLedState_name[int32(vls)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(vlss)
 }
 
-func (vls VmdLedState) ToInt() int {
-	i, exists := map[VmdLedState]int{
-		LedStateNormal:   C.DAOS_LED_ST_OFF,
-		LedStateIdentify: C.DAOS_LED_ST_IDENTIFY,
-		LedStateFaulty:   C.DAOS_LED_ST_FAULT,
-		LedStateUnknown:  C.DAOS_LED_ST_UNKNOWN,
-	}[vls]
-
-	if exists {
-		return i
+func (vls VmdLedState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.VmdLedState_name[int32(vls)]
+	if !ok {
+		return nil, errors.Errorf("invalid vmd led state %d", vls)
 	}
-
-	return C.DAOS_LED_ST_UNKNOWN
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
 }
 
-func LedStateFromInt(i int) VmdLedState {
-	s, exists := map[int]VmdLedState{
-		C.DAOS_LED_ST_OFF:      LedStateNormal,
-		C.DAOS_LED_ST_IDENTIFY: LedStateIdentify,
-		C.DAOS_LED_ST_FAULT:    LedStateFaulty,
-		C.DAOS_LED_ST_UNKNOWN:  LedStateUnknown,
-	}[i]
+func (vls *VmdLedState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
 
-	if exists {
-		return s
+	state, ok := ctlpb.VmdLedState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid vmd led state number parse %q", stateStr)
+		}
+
+		if _, ok = ctlpb.VmdLedState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid vmd led state name lookup %q", stateStr)
+		}
+		state = int32(si)
 	}
+	*vls = VmdLedState(state)
 
-	return LedStateUnknown
+	return nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -223,7 +230,7 @@ type SmdDevice struct {
 	UUID        string       `json:"uuid"`
 	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
 	NvmeState   NvmeDevState `json:"-"`
-	LedStateStr VmdLedState  `json:"led_state_str"`
+	LedState    VmdLedState  `json:"led_state"`
 	Rank        system.Rank  `json:"rank"`
 	TotalBytes  uint64       `json:"total_bytes"`
 	AvailBytes  uint64       `json:"avail_bytes"`
@@ -243,11 +250,9 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
 		NvmeStateStr string `json:"dev_state"`
-		LedState     int    `json:"led_state"`
 		*toJSON
 	}{
 		NvmeStateStr: sd.NvmeState.String(),
-		LedState:     sd.LedStateStr.ToInt(),
 		toJSON:       (*toJSON)(sd),
 	})
 }
@@ -263,7 +268,6 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	type fromJSON SmdDevice
 	from := &struct {
 		NvmeStateStr string `json:"dev_state"`
-		LedState     int    `json:"led_state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -274,10 +278,6 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	}
 
 	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
-	// If led_state_str is empty, convert led_state enum into string representation.
-	if from.LedStateStr == "" {
-		sd.LedStateStr = LedStateFromInt(from.LedState)
-	}
 
 	return nil
 }

@@ -12,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
@@ -84,30 +87,71 @@ func Test_NvmeDevState(t *testing.T) {
 
 func Test_VmdLedState(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state  VmdLedState
-		expStr string
+		nativeState VmdLedState
+		protoState  ctlpb.VmdLedState
+		expStr      string
+		expErr      error
 	}{
 		"normal state": {
-			state:  LedStateNormal,
-			expStr: "OFF",
-		},
-		"faulty state": {
-			state:  LedStateFaulty,
-			expStr: "ON",
+			nativeState: LedStateNormal,
+			expStr:      "off",
 		},
 		"identify state": {
-			state:  LedStateIdentify,
-			expStr: "QUICK-BLINK",
+			nativeState: LedStateIdentify,
+			expStr:      "quickblink",
 		},
-		"unknown and unsupported state": {
-			state:  LedStateUnknown,
-			expStr: "NA",
+		"faulty state": {
+			nativeState: LedStateFaulty,
+			expStr:      "on",
+		},
+		"rebuild state": {
+			nativeState: LedStateRebuild,
+			expStr:      "slowblink",
+		},
+		"unsupported state": {
+			nativeState: LedStateUnknown,
+			expStr:      "na",
+		},
+		"unexpected state": {
+			nativeState: VmdLedState(99),
+			expErr:      errors.New("invalid vmd led state 99"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expStr, tc.state.String(),
-				"unexpected status string")
+			spb := new(ctlpb.VmdLedState)
+			gotErr := convert.Types(tc.nativeState, spb)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			ns := new(VmdLedState)
+			if err := convert.Types(spb, ns); err != nil {
+				t.Fatal(err)
+			}
+
+			test.AssertEqual(t, tc.nativeState, *ns, "unexpected conversion result")
+			test.AssertEqual(t, tc.expStr, ns.String(), "unexpected status string")
+
 		})
+	}
+}
+
+func Test_Convert_SmdDevice(t *testing.T) {
+	native := MockSmdDevice(test.MockPCIAddr(1))
+
+	s := new(ctlpb.SmdDevice)
+	if err := convert.Types(native, s); err != nil {
+		t.Fatal(err)
+	}
+
+	convertedNative := new(SmdDevice)
+	if err := convert.Types(s, convertedNative); err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(native, convertedNative); diff != "" {
+		t.Fatalf("expected converted device to match original (-want, +got):\n%s\n", diff)
 	}
 }
 

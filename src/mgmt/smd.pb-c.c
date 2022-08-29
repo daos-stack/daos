@@ -1312,10 +1312,10 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[5] =
     "led_state",
     5,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdDevice, led_state),
-    NULL,
+    &ctl__vmd_led_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1592,10 +1592,10 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
     "led_state",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevManageReq, led_state),
-    NULL,
+    &ctl__vmd_led_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -2268,4 +2268,38 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor =
   1,  ctl__smd_query_resp__number_ranges,
   (ProtobufCMessageInit) ctl__smd_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCEnumValue ctl__vmd_led_state__enum_values_by_number[5] =
+{
+  { "OFF", "CTL__VMD_LED_STATE__OFF", 0 },
+  { "QUICKBLINK", "CTL__VMD_LED_STATE__QUICKBLINK", 1 },
+  { "ON", "CTL__VMD_LED_STATE__ON", 2 },
+  { "SLOWBLINK", "CTL__VMD_LED_STATE__SLOWBLINK", 3 },
+  { "NA", "CTL__VMD_LED_STATE__NA", 4 },
+};
+static const ProtobufCIntRange ctl__vmd_led_state__value_ranges[] = {
+{0, 0},{0, 5}
+};
+static const ProtobufCEnumValueIndex ctl__vmd_led_state__enum_values_by_name[5] =
+{
+  { "NA", 4 },
+  { "OFF", 0 },
+  { "ON", 2 },
+  { "QUICKBLINK", 1 },
+  { "SLOWBLINK", 3 },
+};
+const ProtobufCEnumDescriptor ctl__vmd_led_state__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "ctl.VmdLedState",
+  "VmdLedState",
+  "Ctl__VmdLedState",
+  "ctl",
+  5,
+  ctl__vmd_led_state__enum_values_by_number,
+  5,
+  ctl__vmd_led_state__enum_values_by_name,
+  1,
+  ctl__vmd_led_state__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

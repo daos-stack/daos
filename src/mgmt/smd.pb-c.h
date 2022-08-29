@@ -37,6 +37,29 @@ typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
 
 /* --- enums --- */
 
+typedef enum _Ctl__VmdLedState {
+  /*
+   * Equivalent to SPDK_VMD_LED_STATE_OFF
+   */
+  CTL__VMD_LED_STATE__OFF = 0,
+  /*
+   * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
+   */
+  CTL__VMD_LED_STATE__QUICKBLINK = 1,
+  /*
+   * Equivalent to SPDK_VMD_LED_STATE_FAULT
+   */
+  CTL__VMD_LED_STATE__ON = 2,
+  /*
+   * Equivalent to SPDK_VMD_LED_STATE_REBUILD
+   */
+  CTL__VMD_LED_STATE__SLOWBLINK = 3,
+  /*
+   * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN
+   */
+  CTL__VMD_LED_STATE__NA = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__VMD_LED_STATE)
+} Ctl__VmdLedState;
 
 /* --- messages --- */
 
@@ -174,11 +197,11 @@ struct  _Ctl__SmdDevice
   /*
    * VMD LED state
    */
-  int32_t led_state;
+  Ctl__VmdLedState led_state;
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, CTL__VMD_LED_STATE__OFF }
 
 
 struct  _Ctl__SmdDevReq
@@ -254,11 +277,11 @@ struct  _Ctl__DevManageReq
   size_t n_dev_uuids;
   char **dev_uuids;
   int32_t led_action;
-  int32_t led_state;
+  Ctl__VmdLedState led_state;
 };
 #define CTL__DEV_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , 0,NULL, 0,NULL, 0, 0 }
+    , 0,NULL, 0,NULL, 0, CTL__VMD_LED_STATE__OFF }
 
 
 struct  _Ctl__DevManageResp__Result
@@ -785,6 +808,7 @@ typedef void (*Ctl__SmdQueryResp_Closure)
 
 /* --- descriptors --- */
 
+extern const ProtobufCEnumDescriptor    ctl__vmd_led_state__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_device__descriptor;

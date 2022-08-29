@@ -155,6 +155,7 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 		if err != nil {
 			return nil, err
 		}
+		// TODO: Doesn't this apply to all SmdQuery requests?
 		if len(reqHosts) > 1 {
 			return nil, errors.New("cannot perform SetFaulty operation on > 1 host")
 		}
