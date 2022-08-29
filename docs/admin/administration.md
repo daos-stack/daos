@@ -37,6 +37,12 @@ engine:
 &&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.hpdd.intel.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
 ```
 
+!!! note
+    An incarnation of an engine (engine is identified by a rank) is an internal sequence number used to
+    order aliveness events related to this engine. It is increased (but usually not incremented just
+    by one, since it's implemented with an HLC timestamp) whenever the engine stops and starts as well
+    as when the engine learns that others are suspecting its aliveness (i.e., SWIM protocol activity).
+
 ### Event List
 
 The following table lists supported DAOS RAS events, including IDs, type,
