@@ -1428,7 +1428,8 @@ def run_tests(test_files, tag_filter, args):
 
 
 def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
+    """Get the contents of a yaml file as a dictionary, removing any mux tags and ignoring any
+    other tags present.
 
     Removes any mux tags and ignores any other tags present.
 
@@ -1460,8 +1461,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
-                file_data = open_file.read()
-                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
                 log("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)
