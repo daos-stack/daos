@@ -71,6 +71,8 @@ type MgmtSvcClient interface {
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
+	// Exclude DAOS ranks
+	SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -336,6 +338,15 @@ func (c *mgmtSvcClient) SystemStart(ctx context.Context, in *SystemStartReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error) {
+	out := new(SystemExcludeResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemExclude", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error) {
 	out := new(SystemEraseResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemErase", in, out, opts...)
@@ -526,6 +537,8 @@ type MgmtSvcServer interface {
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
+	// Exclude DAOS ranks
+	SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -637,6 +650,9 @@ func (UnimplementedMgmtSvcServer) SystemStop(context.Context, *SystemStopReq) (*
 }
 func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemStart not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemExclude not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
@@ -1146,6 +1162,24 @@ func _MgmtSvc_SystemStart_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemExclude_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemExcludeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemExclude(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemExclude",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemExclude(ctx, req.(*SystemExcludeReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemEraseReq)
 	if err := dec(in); err != nil {
@@ -1522,6 +1556,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemStart",
 			Handler:    _MgmtSvc_SystemStart_Handler,
+		},
+		{
+			MethodName: "SystemExclude",
+			Handler:    _MgmtSvc_SystemExclude_Handler,
 		},
 		{
 			MethodName: "SystemErase",

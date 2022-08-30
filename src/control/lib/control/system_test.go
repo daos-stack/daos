@@ -1044,6 +1044,85 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 	}
 }
 
+func TestControl_SystemExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *SystemExcludeReq
+		uErr    error
+		uResp   *UnaryResponse
+		expResp *SystemExcludeResp
+		expErr  error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemExcludeReq request"),
+		},
+		"local failure": {
+			req:    new(SystemExcludeReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemExcludeReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"dual host dual rank": {
+			req: new(SystemExcludeReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil,
+				&mgmtpb.SystemExcludeResp{
+					Results: []*sharedpb.RankResult{
+						{
+							Rank:  1,
+							State: system.MemberStateReady.String(),
+						},
+						{
+							Rank:  2,
+							State: system.MemberStateReady.String(),
+						},
+						{
+							Rank:  0,
+							State: system.MemberStateStopped.String(),
+						},
+						{
+							Rank:  3,
+							State: system.MemberStateStopped.String(),
+						},
+					},
+				},
+			),
+			expResp: &SystemExcludeResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(1, nil, system.MemberStateReady),
+					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(0, nil, system.MemberStateStopped),
+					system.NewMemberResult(3, nil, system.MemberStateStopped),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemExclude(context.TODO(), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemExcludeResp{}, system.MemberResult{})}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestDmg_System_checkSystemErase(t *testing.T) {
 	for name, tc := range map[string]struct {
 		uErr, expErr error

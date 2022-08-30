@@ -139,11 +139,23 @@ func (svc *mgmtSvc) restartSystemRanks(ctx context.Context, sys string) error {
 		return errors.Wrap(err, "failed to stop all ranks")
 	}
 
+	// Use the group membership to determine the set of ranks
+	// that are available to be started.
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return errors.Wrap(err, "failed to get group map")
+	}
+	availRanks := system.NewRankSet()
+	for rank := range gm.RankEntries {
+		availRanks.Add(rank)
+	}
+
 	// Finally, restart all of the ranks so that they join in
 	// checker mode.
 	startReq := &mgmtpb.SystemStartReq{
 		Sys:       sys,
 		CheckMode: svc.checkerIsEnabled(),
+		Ranks:     availRanks.String(),
 	}
 	if _, err := svc.SystemStart(ctx, startReq); err != nil {
 		return errors.Wrap(err, "failed to start all ranks")

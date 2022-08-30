@@ -210,6 +210,7 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 type dbLeader interface {
 	IsLeader() bool
 	ShutdownRaft() error
+	ResignLeadership(error) error
 }
 
 // Start starts harness by setting up and starting dRPC before initiating
@@ -250,11 +251,10 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		}
 
 		// If we cannot service a dRPC request on this node,
-		// we should shutdown the raft service in order
-		// to force a new leader to step up and also to exclude
-		// this replica from participating in the quorum.
-		if err := db.ShutdownRaft(); err != nil {
-			h.log.Errorf("raft shutdown failed after dRPC failure: %s", err)
+		// we should resign as leader in order to force a new
+		// leader election.
+		if err := db.ResignLeadership(err); err != nil {
+			h.log.Errorf("failed to resign leadership after dRPC failure: %s", err)
 		}
 	})
 

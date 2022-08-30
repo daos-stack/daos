@@ -30,7 +30,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -217,9 +217,8 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		// modules loaded.
 		if !ready.GetCheckMode() {
 			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
-			go func() { ei.requestStart(context.Background()) }()
+			go ei.requestStart(context.Background())
 			ei.SetCheckerMode(true)
-			ei.Stop(os.Kill)
 			return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
 		}
 	}
