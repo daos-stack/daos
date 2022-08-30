@@ -263,7 +263,9 @@ if [ "${STAGE_NAME}" == "Functional Hardware Xlarge" ]; then
     # daos engines and the remaining hosts are configured to be clients. Use separate -ts and -tc
     # launch.py arguments to ensure these hosts are not used for unintended role
     IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
-    launch_node_args="-ts ${test_node_list[*]:0:8} -tc ${test_node_list[*]:8}"
+    server_nodes="$(IFS=','; echo ${test_node_list[*]:0:8})"
+    client_nodes="$(IFS=','; echo ${test_node_list[*]:8})"
+    launch_node_args="-ts ${server_nodes} -tc ${client_node[*]:8}"
 fi
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
