@@ -112,6 +112,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
+	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -174,6 +175,18 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	}
+
+	/* Must be set on the server when using UCX, will not affect OFI */
+	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
+	if (ucx_ib_fork_init) {
+		if (server) {
+			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
+		} else {
+			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
+		}
+	}
+	if (server)
+		setenv("UCX_IB_FORK_INIT", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);

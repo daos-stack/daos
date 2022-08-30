@@ -500,6 +500,10 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 
 // Start is the entry point for a daos_server instance.
 func Start(log logging.Logger, cfg *config.Server) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
