@@ -21,7 +21,7 @@ descriptions of mandatory and optional fields.
 | PID               | Optional             | Identifier of the process involved in the RAS event      |
 | TID               | Optional             | Identifier of the thread involved in the RAS event.      |
 | Rank              | Optional             | DAOS rank involved in the event.                         |
-| Incarnation (inc) | Optional             | Incarnation version of DAOS rank involved in the event.  |
+| Incarnation (inc) | Optional             | Incarnation version of DAOS rank involved in the event. An incarnation of an engine (engine is identified by a rank) is an internal sequence number used to order aliveness events related to an engine.           |
 | HWID              | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
 | JOBID             | Optional             | Identifier of the job involved in the RAS event.         |
 | PUUID (pool)      | Optional             | Pool UUID involved in the event, if any.                 |
@@ -36,12 +36,6 @@ engine:
 ```
 &&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.hpdd.intel.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
 ```
-
-!!! note
-    An incarnation of an engine (engine is identified by a rank) is an internal sequence number used to
-    order aliveness events related to this engine. It is increased (but usually not incremented just
-    by one, since it's implemented with an HLC timestamp) whenever the engine stops and starts as well
-    as when the engine learns that others are suspecting its aliveness (i.e., SWIM protocol activity).
 
 ### Event List
 
