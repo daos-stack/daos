@@ -36,23 +36,6 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_NEW		NVME_DEV_FL_PLUGGED
 #define NVME_DEV_STATE_NEW_FAULTY	(NVME_DEV_STATE_NEW | NVME_DEV_FL_FAULTY)
 
-/** VMD LED device states */
-#define DAOS_LED_ST_OFF		0	/* SPDK_VMD_LED_STATE_OFF */
-#define DAOS_LED_ST_IDENTIFY	1	/* SPDK_VMD_LED_STATE_IDENTIFY	(4kHz blink) */
-#define DAOS_LED_ST_FAULT	2	/* SPDK_VMD_LED_STATE_FAULT	(solid on) */
-#define DAOS_LED_ST_REBUILD	3	/* SPDK_VMD_LED_STATE_REBUILD	(1kHz blink) */
-#define DAOS_LED_ST_UNKNOWN	4	/* SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled) */
-
-typedef enum {
-	NONE = 0,
-	ONE = 1,
-} numbers;
-
-/** VMD LED device actions */
-#define DAOS_LED_ACT_GET	0	/* Get LED state */
-#define DAOS_LED_ACT_SET	1	/* Set LED state */
-#define DAOS_LED_ACT_RESET	2	/* Reset LED state */
-
 /** Env defining the size of a metadata pmem pool/file in MiBs */
 #define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
 /** Default size of a metadata pmem pool/file (128 MiB) */
@@ -106,43 +89,6 @@ nvme_str2state(char *state)
 		return 0;
 	return NVME_DEV_FL_INVALID;
 }
-
-//static inline char *
-//led_state2str(int state)
-//{
-//	/** VMD LED states */
-//	if (BIT_SET(state, VMD_LED_ST_OFF))
-//		return "OFF";
-//
-//	if (BIT_SET(state, VMD_LED_ST_IDENTIFY))
-//		return "QUICK-BLINK";
-//
-//	if (BIT_SET(state, VMD_LED_ST_FAULT))
-//		return "ON";
-//
-//	if (BIT_SET(state, VMD_LED_ST_INVALID))
-//		return "INVALID";
-//
-//	/* LED not supported, not a VMD device */
-//	return "NA";
-//}
-//
-//static inline int
-//led_str2state(char *state)
-//{
-//	/** VMD LED states */
-//	if STR_EQ(state, "OFF")
-//		return VMD_LED_ST_OFF;
-//	if STR_EQ(state, "QUICK-BLINK")
-//		return VMD_LED_ST_IDENTIFY;
-//	if STR_EQ(state, "ON")
-//		return VMD_LED_ST_FAULT;
-//	if STR_EQ(state, "INVALID")
-//		return VMD_LED_ST_INVALID;
-//
-//	/** not a valid state */
-//	return VMD_LED_ST_NA;
-//}
 
 /**
  * Current device health state (health statistics). Periodically updated in
