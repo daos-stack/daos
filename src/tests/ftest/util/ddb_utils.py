@@ -5,11 +5,11 @@
 """
 import os
 
-from command_utils_base import PositionalParameter, CommandWithParameters
+from command_utils_base import PositionalParameter, CommandWithPositionalParameters
 from general_utils import run_pcmd
 
 
-class DdbCommandBase(CommandWithParameters):
+class DdbCommandBase(CommandWithPositionalParameters):
     """Defines the basic structures of ddb command."""
 
     def __init__(self, server_host, path, verbose=True, timeout=None, sudo=True):
