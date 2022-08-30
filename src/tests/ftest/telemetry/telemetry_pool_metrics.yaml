@@ -17,10 +17,10 @@ container:
   control_method: daos
   replication: !mux
     rf0:
-      properties: rf:0
+      properties: rd_fac:0
       oclass: SX
     rf2:
-      properties: rf:2
+      properties: rd_fac:2
       oclass: RP_3GX
 telemetry_metrics:
   # remove this variable and it's use from the code,
