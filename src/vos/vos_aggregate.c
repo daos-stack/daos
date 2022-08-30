@@ -1380,7 +1380,8 @@ dump_trace(struct agg_merge_window *mw)
 		last = agg_param->ap_trace_count;
 	} else {
 		D_ERROR("Assertion will trigger, dumping the last %d of %d total evt_trace"
-			" entries\n", EV_TRACE_MAX, agg_param->ap_trace_count);
+			" entries\n",
+			EV_TRACE_MAX, agg_param->ap_trace_count);
 		last = agg_param->ap_trace_start;
 	}
 
