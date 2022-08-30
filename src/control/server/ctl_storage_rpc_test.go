@@ -412,7 +412,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		if len(smdIndexes) == 0 {
 			smdIndexes = append(smdIndexes, ctrlrIdx)
 		}
-		smdDevRespDevices := make([]*ctlpb.SmdDevResp_Device, len(smdIndexes))
+		smdDevRespDevices := make([]*ctlpb.SmdDevice, len(smdIndexes))
 		ctrlr.SmdDevices = make([]*ctlpb.NvmeController_SmdDevice, len(smdIndexes))
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
@@ -422,7 +422,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			sd.TrAddr = ctrlr.PciAddr
 			ctrlr.SmdDevices[i] = sd
 
-			smdPB := new(ctlpb.SmdDevResp_Device)
+			smdPB := new(ctlpb.SmdDevice)
 			if err := convert.Types(sd, smdPB); err != nil {
 				t.Fatal(err)
 			}

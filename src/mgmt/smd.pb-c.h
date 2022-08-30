@@ -37,6 +37,12 @@ typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
 
 /* --- enums --- */
 
+typedef enum _Ctl__DevManageReq__Action {
+  CTL__DEV_MANAGE_REQ__ACTION__GET = 0,
+  CTL__DEV_MANAGE_REQ__ACTION__SET = 1,
+  CTL__DEV_MANAGE_REQ__ACTION__RESET = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__DEV_MANAGE_REQ__ACTION)
+} Ctl__DevManageReq__Action;
 typedef enum _Ctl__VmdLedState {
   /*
    * Equivalent to SPDK_VMD_LED_STATE_OFF
@@ -45,7 +51,7 @@ typedef enum _Ctl__VmdLedState {
   /*
    * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
    */
-  CTL__VMD_LED_STATE__QUICKBLINK = 1,
+  CTL__VMD_LED_STATE__QUICK_BLINK = 1,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_FAULT
    */
@@ -53,7 +59,7 @@ typedef enum _Ctl__VmdLedState {
   /*
    * Equivalent to SPDK_VMD_LED_STATE_REBUILD
    */
-  CTL__VMD_LED_STATE__SLOWBLINK = 3,
+  CTL__VMD_LED_STATE__SLOW_BLINK = 3,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN
    */
@@ -276,23 +282,23 @@ struct  _Ctl__DevManageReq
   char **tr_addrs;
   size_t n_dev_uuids;
   char **dev_uuids;
-  int32_t led_action;
+  Ctl__DevManageReq__Action led_action;
   Ctl__VmdLedState led_state;
 };
 #define CTL__DEV_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , 0,NULL, 0,NULL, 0, CTL__VMD_LED_STATE__OFF }
+    , 0,NULL, 0,NULL, CTL__DEV_MANAGE_REQ__ACTION__GET, CTL__VMD_LED_STATE__OFF }
 
 
 struct  _Ctl__DevManageResp__Result
 {
   ProtobufCMessage base;
-  Ctl__SmdDevice *device;
   int32_t status;
+  Ctl__SmdDevice *device;
 };
 #define CTL__DEV_MANAGE_RESP__RESULT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_resp__result__descriptor) \
-    , NULL, 0 }
+    , 0, NULL }
 
 
 struct  _Ctl__DevManageResp
@@ -409,6 +415,10 @@ struct  _Ctl__SmdQueryReq
 struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
 {
   ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
   Ctl__SmdDevice *details;
   /*
    * optional BIO health
@@ -417,7 +427,7 @@ struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
 };
 #define CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__smd_device_with_health__descriptor) \
-    , NULL, NULL }
+    , 0, NULL, NULL }
 
 
 struct  _Ctl__SmdQueryResp__Pool
@@ -818,6 +828,7 @@ extern const ProtobufCMessageDescriptor ctl__smd_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor;
+extern const ProtobufCEnumDescriptor    ctl__dev_manage_req__action__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__result__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor;

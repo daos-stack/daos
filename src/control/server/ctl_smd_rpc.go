@@ -53,8 +53,17 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			return errors.Wrapf(err, "rank %d", engineRank)
 		}
 
-		if err := convert.Types(listDevsResp.Devices, &rResp.Devices); err != nil {
-			return errors.Wrap(err, "failed to convert device list")
+		if len(listDevsResp.Devices) == 0 {
+			rResp.Devices = nil
+			resp.Ranks = append(resp.Ranks, rResp)
+			continue
+		}
+
+		// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
+		for _, sd := range listDevsResp.Devices {
+			rResp.Devices = append(rResp.Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+				Details: sd,
+			})
 		}
 		resp.Ranks = append(resp.Ranks, rResp)
 
@@ -97,7 +106,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		for _, dev := range rResp.Devices {
 			state := storage.NvmeDevStateFromString(dev.Details.DevState)
 
-			svc.log.Debugf("mask %s, state %s", req.StateMask, state)
+			svc.log.Debugf("mask %d, state %s", req.StateMask, state)
 			if req.StateMask != 0 && req.StateMask&state.Uint32() == 0 {
 				continue // skip device completely if mask doesn't match
 			}
@@ -193,15 +202,15 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 	return nil
 }
 
-func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQueryReq) (system.Rank, *ctlpb.SmdQueryResp_SmdDeviceWithHealth, error) {
+func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQueryReq) (*system.Rank, *ctlpb.SmdQueryResp_SmdDeviceWithHealth, error) {
 	rank := system.NilRank
 	if req.Uuid == "" {
-		return rank, nil, errors.New("empty UUID in device query")
+		return nil, nil, errors.New("empty UUID in device query")
 	}
 
 	resp := new(ctlpb.SmdQueryResp)
 	if err := svc.querySmdDevices(ctx, req, resp); err != nil {
-		return rank, nil, err
+		return nil, nil, err
 	}
 
 	for _, rr := range resp.Ranks {
@@ -209,20 +218,27 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 		case 0:
 			continue
 		case 1:
+			dev := rr.Devices[0]
+			if dev == nil {
+				return nil, nil, errors.New("nil device in smd query resp")
+			}
+			if dev.Details == nil {
+				return nil, nil, errors.New("device with nil details in smd query resp")
+			}
 			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
 				rr.Rank, rr.Devices[0].Details.DevState)
 			rank = system.Rank(rr.Rank)
 
-			return rank, rr.Devices[0], nil
+			return &rank, rr.Devices[0], nil
 		default:
-			return rank, nil, errors.Errorf("device query on %s matched multiple devices", req.Uuid)
+			return nil, nil, errors.Errorf("device query on %s matched multiple devices", req.Uuid)
 		}
 	}
 
-	return rank, nil, nil
+	return &rank, nil, nil
 }
 
-func (svc *ControlService) smdGetEngine(ctx context.Context, req *ctlpb.SmdQueryReq) (*system.Rank, *engine.Instance, error) {
+func (svc *ControlService) smdGetEngine(ctx context.Context, req *ctlpb.SmdQueryReq) (*system.Rank, *Engine, error) {
 	req.Rank = uint32(system.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
@@ -232,15 +248,17 @@ func (svc *ControlService) smdGetEngine(ctx context.Context, req *ctlpb.SmdQuery
 		return nil, nil, errors.Errorf("%s did not match any devices", req.Uuid)
 	}
 
-	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	svc.log.Debugf("looking for rank %d", rank.Uint32())
+
+	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank.Uint32()))
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(eis) == 0 {
-		return nil, nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+		return nil, nil, errors.Errorf("failed to retrieve instance for rank %d", rank.Uint32())
 	}
 
-	return rank, eis, nil
+	return rank, &eis[0], nil
 }
 
 func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
@@ -249,205 +267,59 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 		return nil, errors.Wrap(err, "deriving target engine for smd manage drpc")
 	}
 
-	svc.log.Debugf("calling smd manage drpc on rank %d for %s", rank, req.Uuid)
+	svc.log.Debugf("calling smd manage drpc on rank %d for %s", rank.Uint32(), req.Uuid)
 
 	// TODO: Enable batching of requests for multiple devices.
-	req := &ctlpb.DevManageReq{
+	dreq := &ctlpb.DevManageReq{
 		DevUuids: []string{req.Uuid},
-		LedState: storage.LedStateUnknown,
+		LedState: ctlpb.VmdLedState_NA,
 	}
 	meth := drpc.MethodLedManage
 
 	switch {
+	case req.GetLed:
+		dreq.LedAction = ctlpb.DevManageReq_GET
 	case req.SetFaulty:
+		// LED action and target state will be populated in handler.
 		meth = drpc.MethodSetFaultyState
-		req.LedState: storage.LedStateUnknown,
+	case req.Identify:
+		dreq.LedState = ctlpb.VmdLedState_QUICK_BLINK
+		dreq.LedAction = ctlpb.DevManageReq_SET
+	case req.ResetLed:
+		dreq.LedAction = ctlpb.DevManageReq_RESET
+	default:
+		return nil, errors.New("smd manage called without modifier set in request")
 	}
 
-	dresp, err := eis[0].CallDrpc(ctx, meth, 
+	dresp, err := (*eis).CallDrpc(ctx, meth, dreq)
 	if err != nil {
 		return nil, err
 	}
 
-	dsr := &ctlpb.SmdDevResp{}
-	if err = proto.Unmarshal(dresp.Body, dsr); err != nil {
-		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
+	dmr := &ctlpb.DevManageResp{}
+	if err = proto.Unmarshal(dresp.Body, dmr); err != nil {
+		return nil, errors.Wrapf(err, "unmarshal %T response", dmr)
 	}
-	if dsr.Status != 0 {
-		return nil, errors.Wrap(daos.Status(dsr.Status), "smdSetFaulty failed")
-	}
-	if len(dsr.Devices) != 1 {
-		return nil, errors.Errorf("unexpected number of devices in SmdDevResp, want 1 got %d",
-			len(dsr.Devices))
-	}
-	dev := dsr.Devices[0]
-	if dev == nil {
-		return nil, errors.New("nil device pointer in SmdDevResp")
+	if dmr.Status != 0 {
+		return nil, errors.Wrapf(daos.Status(dmr.Status), "%T failed", meth)
 	}
 
-	return &ctlpb.SmdQueryResp{
+	sqr := &ctlpb.SmdQueryResp{
 		Ranks: []*ctlpb.SmdQueryResp_RankResp{
 			{
 				Rank:    rank.Uint32(),
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{{Details: dev}},
+				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{},
 			},
 		},
-	}, nil
-}
-
-func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
-	rank, device, err := svc.smdQueryDevice(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if device == nil {
-		return nil, errors.Errorf("smdIdentify on %s did not match any devices", req.Uuid)
 	}
 
-	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
-	if err != nil {
-		return nil, err
-	}
-	if len(eis) == 0 {
-		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+	for _, r := range dmr.Results {
+		sqr.Ranks[0].Devices = append(sqr.Ranks[0].Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+			Status: r.Status, Details: r.Device,
+		})
 	}
 
-	svc.log.Debugf("calling storage identify on rank %d for %s", rank, req.Uuid)
-
-	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &ctlpb.DevIdentifyReq{
-		DevUuid: req.Uuid,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	drr := &ctlpb.DevIdentifyResp{}
-	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
-		return nil, errors.Wrap(err, "unmarshal StorageIdentify response")
-	}
-	if drr.Status != 0 {
-		return nil, errors.Wrap(daos.Status(drr.Status), "smdIdentify failed")
-	}
-
-	return &ctlpb.SmdQueryResp{
-		Ranks: []*ctlpb.SmdQueryResp_RankResp{
-			{
-				Rank: rank.Uint32(),
-				Devices: []*ctlpb.SmdQueryResp_Device{
-					{
-						Uuid:     drr.DevUuid,
-						LedState: drr.LedState,
-						DevState: drr.DevState,
-					},
-				},
-			},
-		},
-	}, nil
-}
-
-func (svc *ControlService) smdResetLED(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
-	rank, device, err := svc.smdQueryDevice(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if device == nil {
-		return nil, errors.Errorf("smdResetLED on %s did not match any devices", req.Uuid)
-	}
-
-	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
-	if err != nil {
-		return nil, err
-	}
-	if len(eis) == 0 {
-		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
-	}
-
-	svc.log.Debugf("calling storage led-manage reset on rank %d for %s", rank, req.Uuid)
-
-	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodResetLED, &ctlpb.DevResetLEDReq{
-		DevUuid: req.Uuid,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	drr := &ctlpb.DevResetLEDResp{}
-	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
-		return nil, errors.Wrap(err, "unmarshal ResetLED response")
-	}
-
-	if drr.Status != 0 {
-		return nil, errors.Wrap(daos.Status(drr.Status), "smdResetLED failed")
-	}
-
-	return &ctlpb.SmdQueryResp{
-		Ranks: []*ctlpb.SmdQueryResp_RankResp{
-			{
-				Rank: rank.Uint32(),
-				Devices: []*ctlpb.SmdQueryResp_Device{
-					{
-						Uuid:     drr.DevUuid,
-						LedState: drr.LedState,
-						DevState: drr.DevState,
-					},
-				},
-			},
-		},
-	}, nil
-}
-
-func (svc *ControlService) smdGetLEDState(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
-	rank, device, err := svc.smdQueryDevice(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if device == nil {
-		return nil, errors.Errorf("smdGetLEDState on %s did not match any devices", req.Uuid)
-	}
-
-	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
-	if err != nil {
-		return nil, err
-	}
-	if len(eis) == 0 {
-		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
-	}
-
-	svc.log.Debugf("calling storage led-manage get-state on rank %d for %s", rank, req.Uuid)
-
-	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodGetLEDState, &ctlpb.DevGetLEDStateReq{
-		DevUuid: req.Uuid,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	drr := &ctlpb.DevGetLEDStateResp{}
-	if err = proto.Unmarshal(dresp.Body, drr); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetLEDState response")
-	}
-
-	if drr.Status != 0 {
-		return nil, errors.Wrap(daos.Status(drr.Status), "smdGetLEDState failed")
-	}
-
-	return &ctlpb.SmdQueryResp{
-		Ranks: []*ctlpb.SmdQueryResp_RankResp{
-			{
-				Rank: rank.Uint32(),
-				Devices: []*ctlpb.SmdQueryResp_Device{
-					{
-						Uuid:     drr.DevUuid,
-						LedState: drr.LedState,
-						DevState: drr.DevState,
-					},
-				},
-			},
-		},
-	}, nil
+	return sqr, nil
 }
 
 func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
@@ -460,15 +332,15 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 		return nil, errors.Errorf("smdReplace on %s did not match any devices", req.Uuid)
 	}
 
-	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank.Uint32()))
 	if err != nil {
 		return nil, err
 	}
 	if len(eis) == 0 {
-		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank.Uint32())
 	}
 
-	svc.log.Debugf("calling storage replace on rank %d for %s", rank, req.Uuid)
+	svc.log.Debugf("calling storage replace on rank %d for %s", rank.Uint32(), req.Uuid)
 
 	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,

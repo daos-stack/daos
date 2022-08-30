@@ -1443,7 +1443,7 @@ host1
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
       Targets:[0 1 2] Rank:1 State:UNPLUGGED LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK-BLINK
+      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
 		"list-devices (none found)": {

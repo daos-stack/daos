@@ -94,23 +94,23 @@ func Test_VmdLedState(t *testing.T) {
 	}{
 		"normal state": {
 			nativeState: LedStateNormal,
-			expStr:      "off",
+			expStr:      "OFF",
 		},
 		"identify state": {
 			nativeState: LedStateIdentify,
-			expStr:      "quickblink",
+			expStr:      "QUICK_BLINK",
 		},
 		"faulty state": {
 			nativeState: LedStateFaulty,
-			expStr:      "on",
+			expStr:      "ON",
 		},
 		"rebuild state": {
 			nativeState: LedStateRebuild,
-			expStr:      "slowblink",
+			expStr:      "SLOW_BLINK",
 		},
 		"unsupported state": {
 			nativeState: LedStateUnknown,
-			expStr:      "na",
+			expStr:      "NA",
 		},
 		"unexpected state": {
 			nativeState: VmdLedState(99),

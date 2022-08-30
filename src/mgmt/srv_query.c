@@ -690,24 +690,13 @@ ds_mgmt_dev_manage_led(enum led_action act, uuid_t dev_uuid, enum spdk_vmd_led_s
 	}
 
 	if (rc == -DER_NOSYS)
-		state_str = g_led_states[SPDK_VMD_LED_STATE_UNKNOWN];
+		resp->state = (int32_t)SPDK_VMD_LED_STATE_UNKNOWN;
 	else
-		state_str = g_led_states[led_state];
-
-	buflen = strlen(state_str) + 1;
-	D_ALLOC(resp->led_state, buflen);
-	if (resp->led_state == NULL) {
-		D_ERROR("Failed to allocate led state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	strncpy(resp->led_state, state_str, buflen);
+		resp->state = (int32_t)led_state;
 
 out:
 
 	if (rc != 0) {
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}

@@ -74,9 +74,9 @@ message BioHealthResp {
 
 enum VmdLedState {
 	OFF = 0; // Equivalent to SPDK_VMD_LED_STATE_OFF
-	QUICKBLINK = 1; // Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
+	QUICK_BLINK = 1; // Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
 	ON = 2; // Equivalent to SPDK_VMD_LED_STATE_FAULT
-	SLOWBLINK = 3; // Equivalent to SPDK_VMD_LED_STATE_REBUILD
+	SLOW_BLINK = 3; // Equivalent to SPDK_VMD_LED_STATE_REBUILD
 	NA = 4; // Equivalent to SPDK_VMD_LED_STATE_UNKNOWN
 }
 
@@ -110,15 +110,20 @@ message SmdPoolResp {
 message DevManageReq {
 	repeated string tr_addrs = 1;
 	repeated string dev_uuids = 2;
-	int32 led_action = 3;
+	enum Action {
+		GET = 0;
+		SET = 1;
+		RESET = 2;
+	}
+	Action led_action = 3;
 	VmdLedState led_state = 4; }
 
 message DevManageResp {
 	int32 status = 1;
 	message
 	Result {
-		SmdDevice device = 1;
-		int32 status = 2;
+		int32 status = 1;
+		SmdDevice device = 2;
 	}
 	repeated Result results = 2;
 }
@@ -155,8 +160,9 @@ message SmdQueryReq {
 
 message SmdQueryResp {
 	message SmdDeviceWithHealth {
-		SmdDevice details = 1;
-		BioHealthResp health = 2; // optional BIO health
+		int32 status = 1; // DAOS error code
+		SmdDevice details = 2;
+		BioHealthResp health = 3; // optional BIO health
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool

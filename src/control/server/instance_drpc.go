@@ -200,7 +200,7 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	return resp, nil
 }
 
-func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.SmdDevice, error) {
+func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevice, error) {
 	smdDev := new(storage.SmdDevice)
 	if err := convert.Types(smd, smdDev); err != nil {
 		return nil, errors.Wrap(err, "convert smd")

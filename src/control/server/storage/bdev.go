@@ -123,9 +123,9 @@ const (
 func (vls VmdLedState) String() string {
 	vlss, ok := ctlpb.VmdLedState_name[int32(vls)]
 	if !ok {
-		return "unknown"
+		return "UNKNOWN"
 	}
-	return strings.ToLower(vlss)
+	return strings.ToUpper(vlss)
 }
 
 func (vls VmdLedState) MarshalJSON() ([]byte, error) {
@@ -133,7 +133,7 @@ func (vls VmdLedState) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid vmd led state %d", vls)
 	}
-	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
 func (vls *VmdLedState) UnmarshalJSON(data []byte) error {

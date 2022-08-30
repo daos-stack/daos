@@ -25,28 +25,28 @@ import (
 )
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
-	stateUnplugged := storage.NvmeDevState(0).String()
-	stateNew := storage.NvmeStateNew.String()
-	stateNormal := storage.NvmeStateNormal.String()
-	stateFaulty := storage.NvmeStateFaulty.String()
-	ledStateIdentify := storage.LedStateIdentify.String()
-	ledStateNormal := storage.LedStateNormal.String()
-	ledStateFault := storage.LedStateFaulty.String()
-	ledStateUnknown := storage.LedStateUnknown.String()
+	devStateUnplugged := storage.NvmeDevState(0).String()
+	devStateNew := storage.NvmeStateNew.String()
+	devStateNormal := storage.NvmeStateNormal.String()
+	devStateFaulty := storage.NvmeStateFaulty.String()
+	ledStateIdentify := ctlpb.VmdLedState_QUICK_BLINK
+	ledStateNormal := ctlpb.VmdLedState_OFF
+	ledStateFault := ctlpb.VmdLedState_ON
+	ledStateUnknown := ctlpb.VmdLedState_NA
 
-	pbNormDev := &ctlpb.SmdDevResp_Device{
+	pbNormDev := &ctlpb.SmdDevice{
 		Uuid:     test.MockUUID(),
-		DevState: stateNormal,
+		DevState: devStateNormal,
 		LedState: ledStateNormal,
 	}
-	pbFaultyQueryDev := &ctlpb.SmdQueryResp_Device{
+	pbFaultyQueryDev := &ctlpb.SmdDevice{
 		Uuid:     test.MockUUID(),
-		DevState: stateFaulty,
+		DevState: devStateFaulty,
 		LedState: ledStateFault,
 	}
-	pbIdentifyQueryDev := &ctlpb.SmdQueryResp_Device{
+	pbIdentifyQueryDev := &ctlpb.SmdDevice{
 		Uuid:     test.MockUUID(),
-		DevState: stateNormal,
+		DevState: devStateNormal,
 		LedState: ledStateIdentify,
 	}
 
@@ -86,14 +86,20 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
 						},
 					},
 					{
-						Message: &ctlpb.DevStateResp{
-							DevUuid:  test.MockUUID(),
-							DevState: stateFaulty,
-							LedState: ledStateFault,
+						Message: &ctlpb.DevManageResp{
+							Results: []*ctlpb.DevManageResp_Result{
+								{
+									Device: &ctlpb.SmdDevice{
+										Uuid:     test.MockUUID(),
+										DevState: devStateFaulty,
+										LedState: ledStateFault,
+									},
+								},
+							},
 						},
 					},
 				},
@@ -101,7 +107,9 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{pbFaultyQueryDev},
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{Details: pbFaultyQueryDev},
+						},
 					},
 				},
 			},
@@ -115,11 +123,11 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
 						},
 					},
 					{
-						Message: &ctlpb.DevStateResp{
+						Message: &ctlpb.DevManageResp{
 							Status: int32(daos.InvalidInput),
 						},
 					},
@@ -136,14 +144,20 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
 						},
 					},
 					{
-						Message: &ctlpb.DevIdentifyResp{
-							DevUuid:  test.MockUUID(),
-							DevState: stateNormal,
-							LedState: ledStateIdentify,
+						Message: &ctlpb.DevManageResp{
+							Results: []*ctlpb.DevManageResp_Result{
+								{
+									Device: &ctlpb.SmdDevice{
+										Uuid:     test.MockUUID(),
+										DevState: devStateNormal,
+										LedState: ledStateIdentify,
+									},
+								},
+							},
 						},
 					},
 				},
@@ -151,7 +165,9 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{pbIdentifyQueryDev},
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{Details: pbIdentifyQueryDev},
+						},
 					},
 				},
 			},
@@ -165,14 +181,20 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
 						},
 					},
 					{
-						Message: &ctlpb.DevGetLEDStateResp{
-							DevUuid:  test.MockUUID(),
-							DevState: stateNormal,
-							LedState: ledStateIdentify,
+						Message: &ctlpb.DevManageResp{
+							Results: []*ctlpb.DevManageResp_Result{
+								{
+									Device: &ctlpb.SmdDevice{
+										Uuid:     test.MockUUID(),
+										DevState: devStateNormal,
+										LedState: ledStateIdentify,
+									},
+								},
+							},
 						},
 					},
 				},
@@ -180,7 +202,9 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{pbIdentifyQueryDev},
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{Details: pbIdentifyQueryDev},
+						},
 					},
 				},
 			},
@@ -194,14 +218,20 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{pbNormDev},
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
 						},
 					},
 					{
-						Message: &ctlpb.DevResetLEDResp{
-							DevUuid:  test.MockUUID(),
-							DevState: stateNormal,
-							LedState: ledStateIdentify,
+						Message: &ctlpb.DevManageResp{
+							Results: []*ctlpb.DevManageResp_Result{
+								{
+									Device: &ctlpb.SmdDevice{
+										Uuid:     test.MockUUID(),
+										DevState: devStateNormal,
+										LedState: ledStateNormal,
+									},
+								},
+							},
 						},
 					},
 				},
@@ -209,7 +239,9 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{pbIdentifyQueryDev},
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{Details: pbNormDev},
+						},
 					},
 				},
 			},
@@ -355,19 +387,19 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
 									TrAddr:   "0000:8a:00.0",
 									TgtIds:   []int32{0, 1, 2},
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 								{
 									Uuid:     test.MockUUID(1),
 									TrAddr:   "0000:80:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -377,19 +409,19 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(2),
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
-									DevState: stateUnplugged,
+									DevState: devStateUnplugged,
 									LedState: ledStateUnknown,
 								},
 								{
 									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateIdentify,
 								},
 							},
@@ -400,39 +432,47 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(0),
-								TrAddr:   "0000:8a:00.0",
-								TgtIds:   []int32{0, 1, 2},
-								DevState: stateNormal,
-								LedState: ledStateNormal,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(0),
+									TrAddr:   "0000:8a:00.0",
+									TgtIds:   []int32{0, 1, 2},
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
+								},
 							},
 							{
-								Uuid:     test.MockUUID(1),
-								TrAddr:   "0000:80:00.0",
-								TgtIds:   []int32{3, 4, 5},
-								DevState: stateFaulty,
-								LedState: ledStateFault,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									TrAddr:   "0000:80:00.0",
+									TgtIds:   []int32{3, 4, 5},
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 							},
 						},
 						Rank: uint32(0),
 					},
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(2),
-								TrAddr:   "0000:da:00.0",
-								TgtIds:   []int32{0, 1, 2},
-								DevState: stateUnplugged,
-								LedState: ledStateUnknown,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(2),
+									TrAddr:   "0000:da:00.0",
+									TgtIds:   []int32{0, 1, 2},
+									DevState: devStateUnplugged,
+									LedState: ledStateUnknown,
+								},
 							},
 							{
-								Uuid:     test.MockUUID(3),
-								TrAddr:   "0000:db:00.0",
-								TgtIds:   []int32{3, 4, 5},
-								DevState: stateNormal,
-								LedState: ledStateIdentify,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(3),
+									TrAddr:   "0000:db:00.0",
+									TgtIds:   []int32{3, 4, 5},
+									DevState: devStateNormal,
+									LedState: ledStateIdentify,
+								},
 							},
 						},
 						Rank: uint32(1),
@@ -449,7 +489,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:   test.MockUUID(0),
 									TrAddr: "0000:8a:00.0",
@@ -463,11 +503,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:   test.MockUUID(0),
-								TrAddr: "0000:8a:00.0",
-								TgtIds: []int32{0, 1, 2},
+								Details: &ctlpb.SmdDevice{
+									Uuid:   test.MockUUID(0),
+									TrAddr: "0000:8a:00.0",
+									TgtIds: []int32{0, 1, 2},
+								},
 							},
 						},
 						Rank: uint32(0),
@@ -485,19 +527,19 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
 									TrAddr:   "0000:8a:00.0",
 									TgtIds:   []int32{0, 1, 2},
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 								{
 									Uuid:     test.MockUUID(1),
 									TrAddr:   "0000:8b:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -507,19 +549,19 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(2),
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
-									DevState: stateUnplugged,
+									DevState: devStateUnplugged,
 									LedState: ledStateUnknown,
 								},
 								{
 									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateIdentify,
 								},
 							},
@@ -530,13 +572,15 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								TrAddr:   "0000:8b:00.0",
-								TgtIds:   []int32{3, 4, 5},
-								DevState: stateFaulty,
-								LedState: ledStateFault,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									TrAddr:   "0000:8b:00.0",
+									TgtIds:   []int32{3, 4, 5},
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 							},
 						},
 						Rank: uint32(0),
@@ -556,10 +600,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -569,10 +613,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},
@@ -584,11 +628,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								DevState: stateNormal,
-								LedState: ledStateNormal,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
+								},
 							},
 						},
 					},
@@ -605,10 +651,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},
@@ -618,10 +664,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -634,11 +680,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								DevState: stateFaulty,
-								LedState: ledStateFault,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 							},
 						},
 					},
@@ -672,7 +720,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid: test.MockUUID(0),
 								},
@@ -683,10 +731,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -705,11 +753,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								DevState: stateFaulty,
-								LedState: ledStateFault,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
@@ -731,10 +781,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateNew,
+									DevState: devStateNew,
 									LedState: ledStateNormal,
 								},
 							},
@@ -744,10 +794,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
-									DevState: stateNew,
+									DevState: devStateNew,
 									LedState: ledStateNormal,
 								},
 							},
@@ -766,11 +816,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								DevState: storage.NvmeStateNew.String(),
-								LedState: storage.LedStateNormal.String(),
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateNew,
+									LedState: ledStateNormal,
+								},
 							},
 						},
 					},
@@ -788,10 +840,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -801,10 +853,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -830,10 +882,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -843,11 +895,11 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				1: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(1),
 									TgtIds:   []int32{0},
-									DevState: stateFaulty,
+									DevState: devStateFaulty,
 									LedState: ledStateFault,
 								},
 							},
@@ -865,12 +917,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_Device{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 							{
-								Uuid:     test.MockUUID(1),
-								TgtIds:   []int32{0},
-								DevState: stateFaulty,
-								LedState: ledStateFault,
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									TgtIds:   []int32{0},
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
@@ -892,10 +946,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevResp_Device{
+							Devices: []*ctlpb.SmdDevice{
 								{
 									Uuid:     test.MockUUID(0),
-									DevState: stateNormal,
+									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},

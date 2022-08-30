@@ -1550,6 +1550,36 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCEnumValue ctl__dev_manage_req__action__enum_values_by_number[3] =
+{
+  { "GET", "CTL__DEV_MANAGE_REQ__ACTION__GET", 0 },
+  { "SET", "CTL__DEV_MANAGE_REQ__ACTION__SET", 1 },
+  { "RESET", "CTL__DEV_MANAGE_REQ__ACTION__RESET", 2 },
+};
+static const ProtobufCIntRange ctl__dev_manage_req__action__value_ranges[] = {
+{0, 0},{0, 3}
+};
+static const ProtobufCEnumValueIndex ctl__dev_manage_req__action__enum_values_by_name[3] =
+{
+  { "GET", 0 },
+  { "RESET", 2 },
+  { "SET", 1 },
+};
+const ProtobufCEnumDescriptor ctl__dev_manage_req__action__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "ctl.DevManageReq.Action",
+  "Action",
+  "Ctl__DevManageReq__Action",
+  "ctl",
+  3,
+  ctl__dev_manage_req__action__enum_values_by_number,
+  3,
+  ctl__dev_manage_req__action__enum_values_by_name,
+  1,
+  ctl__dev_manage_req__action__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
 static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] =
 {
   {
@@ -1580,10 +1610,10 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
     "led_action",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevManageReq, led_action),
-    NULL,
+    &ctl__dev_manage_req__action__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1630,20 +1660,8 @@ const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor =
 static const ProtobufCFieldDescriptor ctl__dev_manage_resp__result__field_descriptors[2] =
 {
   {
-    "device",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageResp__Result, device),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "status",
-    2,
+    1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -1653,10 +1671,22 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_resp__result__field_descri
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "device",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevManageResp__Result, device),
+    &ctl__smd_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__dev_manage_resp__result__field_indices_by_name[] = {
-  0,   /* field[0] = device */
-  1,   /* field[1] = status */
+  1,   /* field[1] = device */
+  0,   /* field[0] = status */
 };
 static const ProtobufCIntRange ctl__dev_manage_resp__result__number_ranges[1 + 1] =
 {
@@ -2039,11 +2069,23 @@ const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
   (ProtobufCMessageInit) ctl__smd_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[2] =
+static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[3] =
 {
   {
-    "details",
+    "status",
     1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "details",
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -2055,7 +2097,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_healt
   },
   {
     "health",
-    2,
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -2067,13 +2109,14 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_healt
   },
 };
 static const unsigned ctl__smd_query_resp__smd_device_with_health__field_indices_by_name[] = {
-  0,   /* field[0] = details */
-  1,   /* field[1] = health */
+  1,   /* field[1] = details */
+  2,   /* field[2] = health */
+  0,   /* field[0] = status */
 };
 static const ProtobufCIntRange ctl__smd_query_resp__smd_device_with_health__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor =
 {
@@ -2083,7 +2126,7 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__de
   "Ctl__SmdQueryResp__SmdDeviceWithHealth",
   "ctl",
   sizeof(Ctl__SmdQueryResp__SmdDeviceWithHealth),
-  2,
+  3,
   ctl__smd_query_resp__smd_device_with_health__field_descriptors,
   ctl__smd_query_resp__smd_device_with_health__field_indices_by_name,
   1,  ctl__smd_query_resp__smd_device_with_health__number_ranges,
@@ -2272,9 +2315,9 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor =
 static const ProtobufCEnumValue ctl__vmd_led_state__enum_values_by_number[5] =
 {
   { "OFF", "CTL__VMD_LED_STATE__OFF", 0 },
-  { "QUICKBLINK", "CTL__VMD_LED_STATE__QUICKBLINK", 1 },
+  { "QUICK_BLINK", "CTL__VMD_LED_STATE__QUICK_BLINK", 1 },
   { "ON", "CTL__VMD_LED_STATE__ON", 2 },
-  { "SLOWBLINK", "CTL__VMD_LED_STATE__SLOWBLINK", 3 },
+  { "SLOW_BLINK", "CTL__VMD_LED_STATE__SLOW_BLINK", 3 },
   { "NA", "CTL__VMD_LED_STATE__NA", 4 },
 };
 static const ProtobufCIntRange ctl__vmd_led_state__value_ranges[] = {
@@ -2285,8 +2328,8 @@ static const ProtobufCEnumValueIndex ctl__vmd_led_state__enum_values_by_name[5] 
   { "NA", 4 },
   { "OFF", 0 },
   { "ON", 2 },
-  { "QUICKBLINK", 1 },
-  { "SLOWBLINK", 3 },
+  { "QUICK_BLINK", 1 },
+  { "SLOW_BLINK", 3 },
 };
 const ProtobufCEnumDescriptor ctl__vmd_led_state__descriptor =
 {
