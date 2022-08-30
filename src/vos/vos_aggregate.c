@@ -1374,13 +1374,15 @@ dump_trace(struct agg_merge_window *mw)
 	if (agg_param->ap_trace_count == 0)
 		return;
 
-	D_ERROR("Assertion will trigger, dumping the %d evt_trace entries\n",
-		agg_param->ap_trace_count);
-
-	if (agg_param->ap_trace_count < EV_TRACE_MAX)
+	if (agg_param->ap_trace_count < EV_TRACE_MAX) {
+		D_ERROR("Assertion will trigger, dumping all %d evt_trace entries\n",
+			agg_param->ap_trace_count);
 		last = agg_param->ap_trace_count;
-	else
+	} else {
+		D_ERROR("Assertion will trigger, dumping the last %d of %d total evt_trace"
+			" entries\n", EV_TRACE_MAX, agg_param->ap_trace_count);
 		last = agg_param->ap_trace_start;
+	}
 
 	i = agg_param->ap_trace_start;
 	do {
@@ -2230,13 +2232,13 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
 
-	if (agg_param->ap_trace_count == EV_TRACE_MAX) {
+	if (agg_param->ap_trace_count >= EV_TRACE_MAX) {
 		next_idx                  = agg_param->ap_trace_start;
 		agg_param->ap_trace_start = (agg_param->ap_trace_start + 1) % EV_TRACE_MAX;
 	} else {
 		next_idx = agg_param->ap_trace_start + agg_param->ap_trace_count;
-		agg_param->ap_trace_count++;
 	}
+	agg_param->ap_trace_count++;
 	memcpy(&agg_param->ap_evt_trace[next_idx], entry, sizeof(*entry));
 
 	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
