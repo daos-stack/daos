@@ -79,7 +79,7 @@ func (si *SmdInfo) String() string {
 	return fmt.Sprintf("[Devices: %v, Pools: %v]", si.Devices, si.Pools)
 }
 
-func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
+func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) error {
 	pbResp, ok := hr.Message.(*ctlpb.SmdQueryResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -93,18 +93,32 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 	for _, rResp := range pbResp.GetRanks() {
 		rank := system.Rank(rResp.Rank)
 
-		rDevices := make([]*storage.SmdDevice, len(rResp.GetDevices()))
-		if err = convert.Types(rResp.GetDevices(), &rDevices); err != nil {
-			return
+		pbDevs := rResp.GetDevices()
+		respDevs := make([]*storage.SmdDevice, len(pbDevs))
+
+		for idx, pbDev := range pbDevs {
+			respDevs[idx] = new(storage.SmdDevice)
+			sd := respDevs[idx]
+
+			if err := convert.Types(pbDev.Details, sd); err != nil {
+				return errors.Wrapf(err, "converting %T to %T", pbDev.Details, sd)
+			}
+			sd.Rank = rank
+
+			if pbDev.Health == nil {
+				continue
+			}
+
+			sd.Health = new(storage.NvmeHealth)
+			if err := convert.Types(pbDev.Health, sd.Health); err != nil {
+				return errors.Wrapf(err, "converting %T to %T", pbDev.Health, sd.Health)
+			}
 		}
-		for _, dev := range rDevices {
-			dev.Rank = rank
-			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, dev)
-		}
+		hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, respDevs...)
 
 		rPools := make([]*SmdPool, len(rResp.GetPools()))
-		if err = convert.Types(rResp.GetPools(), &rPools); err != nil {
-			return
+		if err := convert.Types(rResp.GetPools(), &rPools); err != nil {
+			return errors.Wrapf(err, "converting %T to %T", rResp.Pools, &rPools)
 		}
 		hs.SmdInfo.addRankPools(rank, rPools)
 
@@ -117,7 +131,7 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 		return err
 	}
 
-	return
+	return nil
 }
 
 // SmdQuery concurrently performs per-server metadata operations across all
