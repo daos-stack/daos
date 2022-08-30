@@ -1491,6 +1491,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	char			str[37];
 	struct daos_prop_co_roots roots;
 	int			rc;
+	int			rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
 	uint32_t		pa_domain;
@@ -1658,7 +1659,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 err_super:
 	daos_obj_close(super_oh, NULL);
 err_close:
-	daos_cont_close(coh, NULL);
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc2)
+		D_ERROR("daos_cont_close() at err_close failed "DF_RC"\n", DP_RC(rc));
 err_destroy:
 	/*
 	 * DAOS container create returns success even if container exists -
