@@ -75,9 +75,12 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: 'full_regression,soak',
                description: 'Test-tag to use for the Functional Hardware Xlarge stage of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestNvme',
+               defaultValue: 'auto',
+               description: 'Test-nvme to use for the Functional test stages of this run (i.e. auto:-3DNAND, auto, 0000:81:00.0, etc.)')
         string(name: 'TestProvider',
                defaultValue: 'ofi+verbs',
-               description: 'Provider to use for the Functional Xlarge stages of this run (i.e. ofi+tcp, ofi_verbs, ucx+dc_x)')
+               description: 'Provider to use for the Functional test stages of this run (i.e. ofi+tcp, ofi_verbs, ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
