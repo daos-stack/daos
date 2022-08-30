@@ -784,9 +784,9 @@ access_points: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
+  pinned_numa_node: 0         # run 1st engine on CPU 0
   targets: 16                 # number of I/O service threads per-engine
-  first_core: 0               # offset of the first core to bind service threads
-  nr_xs_helpers: 0            # count of I/O offload threads
+  nr_xs_helpers: 4            # count of I/O offload threads
   fabric_iface: eth0          # network interface to use for this engine
   fabric_iface_port: 31416    # network port
   log_mask: ERR               # debug level to start with the engine with
@@ -800,9 +800,9 @@ engines:
     class: nvme               # type of second storage tier (NVMe)
     bdev_list: ["0000:87:00.0"] # <----- updated
 -
+  pinned_numa_node: 1
   targets: 16
-  first_core: 0
-  nr_xs_helpers: 0
+  nr_xs_helpers: 4
   fabric_iface: eth0
   fabric_iface_port: 32416
   log_mask: ERR
@@ -978,10 +978,12 @@ an integer multiple of the number of NVMe disks that are configured in the
 * To obtain the maximum SCM performance, a certain number of targets is needed.
 This is device- and workload-dependent, but around 16 targets usually work well.
 
-While not required, it is recommended to also specify a number of
-I/O offloading threads with the `nr_xs_helpers:` setting. These threads can
+It is recommended to also specify a number of I/O offloading threads with the
+`nr_xs_helpers:` setting. These threads can
 improve performance by offloading activities like checksum calculation and
 the dispatching of server-side RPCs from the main I/O service threads.
+When using EC, it is recommended to configure roughly one offloading thread
+per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
