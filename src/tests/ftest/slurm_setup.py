@@ -51,7 +51,7 @@ def update_config_cmdlist(args):
     """Create the command lines to update slurmd.conf file.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     Returns:
         cmd_list: list of cmdlines to update config file
@@ -115,7 +115,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     Args:
         nodes (NodeSet): nodes on which to execute the commands
         cmdlist ([type]): list of cmdlines to execute
-        sudo (str, optional): Execute cmd with sudo privs. Defaults to false.
+        sudo (str, optional): Execute cmd with sudo privileges. Defaults to false.
 
      Returns:
         ret_code: returns error code if pcmd fails;
@@ -136,7 +136,7 @@ def configuring_packages(args, action):
     """Install required slurm and munge packages.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
         action (str):  install or remove
 
     """
@@ -153,7 +153,7 @@ def start_munge(args):
     """Start munge service on all nodes.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     """
     sudo = "sudo" if args.sudo else ""
@@ -212,7 +212,7 @@ def start_slurm(args):
     """Start the slurm services on all nodes.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     """
     # Setting up slurm on all nodes
