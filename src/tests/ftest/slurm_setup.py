@@ -15,7 +15,7 @@ import re
 import socket
 import sys
 from ClusterShell.NodeSet import NodeSet
-from util.general_utils import pcmd, run_task
+from util.general_utils import pcmd, run_task, get_clush_command, run_command, DaosTestError
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
@@ -184,11 +184,17 @@ def start_munge(args):
     if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
         return 1
     # remove any existing key from other nodes
-    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo),
-                "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
-                    args.control)]
+    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo)]
     if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
         return 1
+
+    # copy munge.key to all hosts
+    command = "{0} --copy {1} --dest {1}".format(get_clush_command(nodes), "/etc/munge/munge.key")
+    try:
+        run_command(command)
+    except DaosTestError:
+        return 1
+
     # set the protection back to defaults
     cmd_list = [
         "{} chmod 400 /etc/munge/munge.key".format(sudo),
