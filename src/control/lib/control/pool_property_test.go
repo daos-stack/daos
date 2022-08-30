@@ -129,14 +129,14 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
-		"rf-valid": {
-			name:    "rf",
+		"rd_fac-valid": {
+			name:    "rd_fac",
 			value:   "1",
-			expStr:  "rf:1",
-			expJson: []byte(`{"name":"rf","description":"Pool redundancy factor","value":1}`),
+			expStr:  "rd_fac:1",
+			expJson: []byte(`{"name":"rd_fac","description":"Pool redundancy factor","value":1}`),
 		},
-		"rf-invalid": {
-			name:   "rf",
+		"rd_fac-invalid": {
+			name:   "rd_fac",
 			value:  "100",
 			expErr: errors.New("invalid"),
 		},
