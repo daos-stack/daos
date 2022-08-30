@@ -117,7 +117,7 @@ func PoolProperties() PoolPropertyMap {
 				jsonNumeric: true,
 			},
 		},
-		"rf": {
+		"rd_fac": {
 			Property: PoolProperty{
 				Number:      daos.PoolPropertyRedunFac,
 				Description: "Pool redundancy factor",

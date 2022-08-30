@@ -338,7 +338,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_FAC,
 		"Redundancy Factor",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf", v)
+			vh, err := h.valHdlrs.get("rd_fac", v)
 			if err != nil {
 				return err
 			}
@@ -358,15 +358,15 @@ var propHdlrs = propHdlrMap{
 			}
 			switch C.get_dpe_val(e) {
 			case C.DAOS_PROP_CO_REDUN_RF0:
-				return "rf0"
+				return "rd_fac0"
 			case C.DAOS_PROP_CO_REDUN_RF1:
-				return "rf1"
+				return "rd_fac1"
 			case C.DAOS_PROP_CO_REDUN_RF2:
-				return "rf2"
+				return "rd_fac2"
 			case C.DAOS_PROP_CO_REDUN_RF3:
-				return "rf3"
+				return "rd_fac3"
 			case C.DAOS_PROP_CO_REDUN_RF4:
-				return "rf4"
+				return "rd_fac4"
 			default:
 				return propInvalidValue(e, name)
 			}
@@ -531,7 +531,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf_lvl", v)
+			vh, err := h.valHdlrs.get("rd_lvl", v)
 			if err != nil {
 				return err
 			}
