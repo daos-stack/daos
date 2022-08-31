@@ -554,7 +554,8 @@ pipeline {
                         sconsBuild parallel_build: true,
                                    build_deps: 'no',
                                    scons_args: sconsFaultsArgs() +
-                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release\n' +
+                                               'ls'
                         sh '''tar -cf opt-daos.tar /opt/daos/'''
                         stash name: 'el8-gcc-build-vars', includes: '.build_vars.*'
                         stash name: 'el8-gcc-install', includes: 'opt-daos.tar'
@@ -682,7 +683,7 @@ pipeline {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
-                                 stashes: ['el8-gcc-install', 'el8-gcc-build-vars'],
+                                 // stashes: ['el8-gcc-install', 'el8-gcc-build-vars'],
                                  inst_rpms: unitPackages()
                     }
                     post {
