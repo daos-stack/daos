@@ -24,7 +24,7 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test')
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test', 'md')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -32,10 +32,6 @@ VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
-
-# Excluded values for Status.  Tickets which are closed should not be being worked on, and tickets
-# which are Open or Reopened should be set to In Progress when being worked on.
-STATUS_VALUES_NOT_ALLOWED = ('Open', 'Reopened', 'To Do', 'Resolved')
 
 # Labels in GitHub which this script will set/clear based on the logic below.
 MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
@@ -93,10 +89,13 @@ def main():
     parts = ticket_number.split('-', maxsplit=1)
     if parts[0] not in VALID_TICKET_PREFIX:
         errors.append('Ticket number prefix incorrect')
+    link = 'https://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Comments'
     try:
         int(parts[1])
     except ValueError:
-        errors.append('Ticket number suffix is not a number')
+        errors.append(f'Ticket number suffix is not a number. See {link}')
+    except IndexError:
+        errors.append(f'PR title is malformatted. See {link}')
 
     try:
         ticket = server.issue(ticket_number, fields=FIELDS)
@@ -108,8 +107,6 @@ def main():
         return
     print(ticket.fields.summary)
     print(ticket.fields.status)
-    if str(ticket.fields.status) in STATUS_VALUES_NOT_ALLOWED:
-        errors.append('Ticket status value not as expected')
 
     # Highest priority, tickets with "Approved to Merge" set.
     if ticket.fields.customfield_10044:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
@@ -93,7 +92,7 @@ class LogRaw():
         return self.line
 
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class LogLine():
     """Class for parsing CaRT log lines
 
@@ -212,6 +211,7 @@ class LogLine():
         # These can then be fed back as source-level comments to the source-code
         # without creating too much output.
 
+        # pylint: disable=invalid-name
         fields = []
         for entry in self._fields[2:]:
             field = None
@@ -273,7 +273,7 @@ class LogLine():
 
         # Check that the contents of two arrays are equal, using text as is and
         # selecting only the correct entries of the fields array.
-        return text == self._fields[base:base+len(text)]
+        return text == self._fields[base:base + len(text)]
 
     def is_new(self):
         """Returns True if line is new descriptor"""
@@ -434,8 +434,7 @@ class StateIter():
         if line.is_new() or line.is_new_rpc():
             if line.descriptor in self.reuse_table:
                 self.reuse_table[line.descriptor] += 1
-                line.pdesc = '{}_{}'.format(line.descriptor,
-                                            self.reuse_table[line.descriptor])
+                line.pdesc = '{}_{}'.format(line.descriptor, self.reuse_table[line.descriptor])
             else:
                 self.reuse_table[line.descriptor] = 0
                 line.pdesc = line.descriptor
@@ -466,15 +465,10 @@ class StateIter():
                 line.pdesc = line.descriptor
                 line.rpc = False
 
-            if (line.is_dereg() or line.is_dereg_rpc()) and \
-               line.descriptor in self.active_desc:
+            if (line.is_dereg() or line.is_dereg_rpc()) and line.descriptor in self.active_desc:
                 del self.active_desc[line.descriptor]
 
         return line
-
-    def next(self):
-        """Python2/3 compat function"""
-        return self.__next__()
 
 # pylint: disable=too-many-branches
 
@@ -507,8 +501,8 @@ class LogIter():
         self.bz2 = False
 
         # Force check encoding for smaller files.
-        i = os.stat(fname)
-        if i.st_size < (1024*1024*5):
+        stbuf = os.stat(fname)
+        if stbuf.st_size < (1024 * 1024 * 5):
             check_encoding = True
 
         if fname.endswith('.bz2'):
@@ -540,8 +534,8 @@ class LogIter():
         self.fname = fname
         self._data = []
 
-        i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*100)) or self.bz2
+        stbuf = os.fstat(self._fd.fileno())
+        self.__from_file = bool(stbuf.st_size > (1024 * 1024 * 100)) or self.bz2
 
         if self.__from_file:
             self._load_pids()
@@ -578,8 +572,7 @@ class LogIter():
                 if l_pid in pids:
                     pids[l_pid]['line_count'] += 1
                 else:
-                    pids[l_pid] = {'line_count': 1,
-                                   'first_index': index}
+                    pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
         self._pids = pids
 
@@ -602,18 +595,12 @@ class LogIter():
             if l_pid in pids:
                 pids[l_pid]['line_count'] += 1
             else:
-                pids[l_pid] = {'line_count': 1,
-                               'file_pos': position,
-                               'first_index': index}
+                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
             pids[l_pid]['last_index'] = index
             position += len(line)
         self._pids = pids
 
-    def new_iter(self,
-                 pid=None,
-                 stateful=False,
-                 trace_only=False,
-                 raw=False):
+    def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
         """Rewind file iterator, and set options
 
         If pid is set the the iterator will only return lines matching the pid
@@ -632,8 +619,8 @@ class LogIter():
                 if self.bz2:
                     self._iter_last_index = self._iter_pid['last_index']
                 else:
-                    self._iter_last_index = self._iter_pid['last_index'] - \
-                                            self._iter_pid['first_index'] + 1
+                    self._iter_last_index = \
+                        self._iter_pid['last_index'] - self._iter_pid['first_index'] + 1
             else:
                 self._iter_last_index = self._iter_pid['last_index']
 
@@ -688,8 +675,7 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid is not None and \
-               self._iter_index > self._iter_last_index:
+            if self._pid is not None and self._iter_index > self._iter_last_index:
                 assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
@@ -710,10 +696,6 @@ class LogIter():
 
             self._iter_count += 1
             return line
-
-    def next(self):
-        """Python2/3 compat function"""
-        return self.__next__()
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""

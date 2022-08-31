@@ -42,9 +42,10 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ * \param exist		[IN]	Related DTX entry exists or not.
  */
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist);
 
 /**
  * Detach the DTX entry from the DTX handle.

@@ -569,12 +569,13 @@ class DaosServer():
             if os.path.exists(log.name):
                 log_test(self.conf, log.name)
         try:
+            os.unlink(join(self.agent_dir, 'nlt_agent.yaml'))
             os.rmdir(self.agent_dir)
         except OSError as error:
             print(os.listdir(self.agent_dir))
             raise error
 
-    def _add_test_case(self, op, failure=None, duration=None):
+    def _add_test_case(self, name, failure=None, duration=None):
         """Add a test case to the server instance
 
         Simply wrapper to automatically add the class
@@ -582,17 +583,14 @@ class DaosServer():
         if not self._test_class:
             return
 
-        self.conf.wf.add_test_case(op,
-                                   failure=failure,
-                                   duration=duration,
+        self.conf.wf.add_test_case(name, failure=failure, duration=duration,
                                    test_class=self._test_class)
 
-    def _check_timing(self, op, start, max_time):
+    def _check_timing(self, name, start, max_time):
         elapsed = time.time() - start
         if elapsed > max_time:
-            res = '{} failed after {:.2f}s (max {:.2f}s)'.format(op, elapsed,
-                                                                 max_time)
-            self._add_test_case(op, duration=elapsed, failure=res)
+            res = f'{name} failed after {elapsed:.2f}s (max {max_time:.2f}s)'
+            self._add_test_case(name, duration=elapsed, failure=res)
             raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
@@ -677,11 +675,11 @@ class DaosServer():
         scyaml['socket_dir'] = self.agent_dir
 
         for (key, value) in server_env.items():
-            scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
+            scyaml['engines'][0]['env_vars'].append(f'{key}={value}')
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['storage'][0]['scm_size'] = int(ref_engine['storage'][0]['scm_size'] /
-                                                   self.engines)
+        ref_engine['storage'][0]['scm_size'] = int(
+            ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
         # Leave some cores for dfuse, and start the daos server after these.
         if self.dfuse_cores:
@@ -696,14 +694,13 @@ class DaosServer():
             engine['log_file'] = self.server_logs[idx].name
             engine['first_core'] = first_core + (ref_engine['targets'] * idx)
             engine['fabric_iface_port'] += server_port_count * idx
-            engine['storage'][0]['scm_mount'] = '{}_{}'.format(
-                ref_engine['storage'][0]['scm_mount'], idx)
+            engine['storage'][0]['scm_mount'] = f'{ref_engine["storage"][0]["scm_mount"]}_{idx}'
             scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
-        cmd = [daos_server, '--config={}'.format(self._yaml_file.name), 'start', '--insecure']
+        cmd = [daos_server, f'--config={self._yaml_file.name}', 'start', '--insecure']
 
         if self.conf.args.no_root:
             cmd.append('--recreate-superblocks')
@@ -711,7 +708,10 @@ class DaosServer():
         # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=plain_env)
 
-        agent_config = join(self_dir, 'nlt_agent.yaml')
+        agent_config = join(self.agent_dir, 'nlt_agent.yaml')
+        with open(agent_config, 'w') as fd:
+            agent_data = {'access_points': scyaml['access_points']}
+            json.dump(agent_data, fd)
 
         agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
@@ -937,16 +937,11 @@ class DaosServer():
         # If running as a small system with tmpfs already mounted then this is likely a docker
         # container so restricted in size.
         if self.conf.args.no_root:
-            size = 1024*2
+            size = 1024 * 2
         else:
-            size = 1024*4
+            size = 1024 * 4
 
-        rc = self.run_dmg(['pool',
-                           'create',
-                           '--label',
-                           'NLT',
-                           '--scm-size',
-                           '{}M'.format(size)])
+        rc = self.run_dmg(['pool', 'create', '--label', 'NLT', '--scm-size', f'{size}M'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
@@ -2675,7 +2670,7 @@ class posix_tests():
         assert check_dfs_tool_output(output, 'S1', '1048576')
 
         # run same command using pool, container, dfs-path, and dfs-prefix
-        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', dir1,
+        cmd = ['fs', 'get-attr', pool, uns_container, '--dfs-path', dir1,
                '--dfs-prefix', uns_path]
         print('get-attr of d1')
         rc = run_daos_cmd(conf, cmd)
@@ -2685,7 +2680,7 @@ class posix_tests():
         assert check_dfs_tool_output(output, 'S1', '1048576')
 
         # run same command using pool, container, dfs-path
-        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', '/d1']
+        cmd = ['fs', 'get-attr', pool, uns_container, '--dfs-path', '/d1']
         print('get-attr of d1')
         rc = run_daos_cmd(conf, cmd)
         assert rc.returncode == 0

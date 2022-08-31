@@ -7,8 +7,8 @@ on:
 
 jobs:
   pylint:
-    name: Run pylint
-    runs-on: ubuntu-20.04
+    name: Pylint check
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -19,12 +19,10 @@ jobs:
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Install enchant
-        run: sudo apt-get update && sudo apt-get -y install enchant
+        run: sudo apt-get update && sudo apt-get -y install python3-enchant
       - name: Pull via git
         run: git fetch origin ${{ github.event.pull_request.base.sha }}
-      - name: See git diff
-        run: git diff ${{ github.event.pull_request.base.sha }} -U10
       - name: Run pylint check.
         run: >
-          git diff ${{ github.event.pull_request.base.sha }} -U10 |
+          git diff ${{ github.event.pull_request.base.sha }} -U5 |
             ./utils/cq/daos_pylint.py --git --format github --diff

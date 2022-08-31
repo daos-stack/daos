@@ -454,7 +454,6 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 
 // StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
 //
-//
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
 	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
