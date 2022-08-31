@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import FormattedParameter, CommandWithParameters,\
-    PositionalParameter
+    CommandWithPositionalParameters, PositionalParameter
 from command_utils import CommandWithSubCommand
 
 
@@ -64,7 +64,7 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonPoolSubCommand(CommandWithParameters):
+        class CommonPoolSubCommand(CommandWithPositionalParameters):
             """Defines an object for the common daos pool sub-command.
 
             Use PositionalParameter for positional parameter subcommands. The
@@ -200,7 +200,7 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonContainerSubCommand(CommandWithParameters):
+        class CommonContainerSubCommand(CommandWithPositionalParameters):
             """Defines an object for the common daos container sub-command."""
 
             def __init__(self, sub_command):
@@ -347,7 +347,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("get-prop")
                 self.prop = FormattedParameter("--properties={}")
 
-        class ListSubCommand(CommandWithParameters):
+        class ListSubCommand(CommandWithPositionalParameters):
             """Defines an object for the daos container list command."""
 
             def __init__(self):

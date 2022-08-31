@@ -68,7 +68,7 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 			D_GOTO(out_root, rc = -DER_IO);
 		}
 
-		if (memcmp(DAOS_PROP_NO_PO_LABEL, value.iov_buf, value.iov_len) == 0) {
+		if (strncmp(DAOS_PROP_NO_PO_LABEL, value.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0) {
 			clue_out->pc_label_len = 0;
 		} else {
 			D_ALLOC(clue_out->pc_label, value.iov_len + 1);

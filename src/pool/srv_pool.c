@@ -7191,3 +7191,9 @@ ds_pool_svc2pool(struct ds_pool_svc *ds_svc)
 {
 	return pool_ds2svc(ds_svc)->ps_pool;
 }
+
+struct cont_svc *
+ds_pool_ps2cs(struct ds_pool_svc *ds_svc)
+{
+	return pool_ds2svc(ds_svc)->ps_cont_svc;
+}
