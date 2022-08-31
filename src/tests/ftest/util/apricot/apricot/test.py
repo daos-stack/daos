@@ -715,7 +715,7 @@ class TestWithServers(TestWithoutServers):
                 "Excluding any %s servers from the current client list: %s",
                 self.hostlist_servers, self.hostlist_clients)
             new_client_list = self.hostlist_clients.difference(self.hostlist_servers)
-            self.slurm_exclude_nodes = self.hostfile_clients.difference(new_client_list)
+            self.slurm_exclude_nodes = self.hostlist_clients.difference(new_client_list)
             self.hostlist_clients = new_client_list
 
         # # Find a configuration that meets the test requirements
