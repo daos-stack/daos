@@ -20,6 +20,9 @@ sudo ln -sF "$(readlink -f build)/install" "$DAOS_BASE"
 
 cd build
 
+cp opt-daos /opt/daos/
+find /opt/daos
+
 # Setup daos admin etc.
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 
