@@ -1293,7 +1293,7 @@ def build_job_script(self, commands, job, nodesperjob):
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
-            "exclude": self.exclude_slurm_nodes,
+            "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
             "exclusive": None
