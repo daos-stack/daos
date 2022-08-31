@@ -13,6 +13,7 @@ from general_utils import report_errors, run_pcmd
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from network_utils import update_network_interface
+from dmg_utils import check_system_query_status
 
 
 class NetworkFailureTest(IorTestBase):
@@ -408,6 +409,21 @@ class NetworkFailureTest(IorTestBase):
             command = "sudo ip link set {} {}".format(self.interface, "up")
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
+
+        # Some ranks may be excluded after bringing up the network interface, so wait
+        # until they are up (joined).
+        server_crashed = True
+        for _ in range(6):
+            time.sleep(10)
+            if check_system_query_status(self.get_dmg_command().system_query()):
+                self.log.info("All ranks are joined after bringing up the interface.")
+                server_crashed = False
+                break
+            self.log.info("One or more servers crashed. Check system query again.")
+
+        if server_crashed:
+            msg = "One or more servers crashed after bringing up the network interface!"
+            errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)
