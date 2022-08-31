@@ -556,8 +556,9 @@ pipeline {
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
                         sh '''cp -a /opt/daos opt-daos'''
+                        sh '''find .'''
                         stash name: 'el8-gcc-build-vars', includes: '.build_vars.*'
-                        stash name: 'el8-gcc-install', includes: 'opt-daos'
+                        stash name: 'el8-gcc-install', includes: 'opt-daos/**'
                     }
                     post {
                         unsuccessful {
