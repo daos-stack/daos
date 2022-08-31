@@ -296,6 +296,10 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_resent;
 	/** Total number of retry update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_partial;
 };
 
 struct obj_tls {
