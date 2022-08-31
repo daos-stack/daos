@@ -14,7 +14,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-
 @Library(value="pipeline-lib@mjean/DAOS-11269") _
 
 // Should try to figure this out automatically
@@ -34,6 +33,7 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('weekly-testing') &&
      !env.BRANCH_NAME.startsWith('soak-testing') &&
      !env.BRANCH_NAME.startsWith('release/') &&
+     !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
    currentBuild.result = 'SUCCESS'
    return
@@ -75,7 +75,7 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: 'soak_stress_48h',
-               description: 'Test-tag to use for the Functional Hardware Xlarge stage of this run (i.e. pr, daily_regression, full_regression, etc.)')
+               description: 'Test-tag to use for the Functional Hardware 24 stage of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestNvme',
                defaultValue: 'auto',
                description: 'Test-nvme to use for the Functional test stages of this run (i.e. auto:-3DNAND, auto, 0000:81:00.0, etc.)')
@@ -85,12 +85,12 @@ pipeline {
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
-        booleanParam(name: 'CI_xlarge_TEST',
+        booleanParam(name: 'CI_24_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Xlarge test stage')
+                     description: 'Run the CI Functional Hardware 24 test stage')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
-               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2, 2.3.100-21.8558.gbe929991')
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
                description: 'Repos to add to the build and test ndoes')
@@ -99,7 +99,7 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_NVME_24_LABEL',
                defaultValue: 'ci_soak24',
-               description: 'Label to use for 24 node Functional Hardware Xlarge stage')
+               description: 'Label to use for 24 node Functional Hardware 24 stage')
     }
 
     stages {
@@ -123,7 +123,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Xlarge') {
+                stage('Functional Hardware 24') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -146,7 +146,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Xlarge')
+                } // stage('Functional Hardware 24')
             } // parallel
         } // stage('Test')
     } //stages
