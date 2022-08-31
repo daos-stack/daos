@@ -638,21 +638,19 @@ class DaosServer():
             if not os.path.exists(suppression_file):
                 suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
 
-            valgrind_args.append('--suppressions={}'.format(
-                os.path.realpath(suppression_file)))
+            valgrind_args.append(f'--suppressions={os.path.realpath(suppression_file)}')
 
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
             with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
-                fd.write('export PATH={}:$PATH\n'.format(join(self.conf['PREFIX'], 'bin')))
-                fd.write('exec valgrind {} daos_engine "$@"\n'.format(' '.join(valgrind_args)))
+                fd.write(f"export PATH={join(self.conf['PREFIX'],'bin')}:$PATH\n")
+                fd.write('exec valgrind {" "".join(valgrind_args)} daos_engine "$@"\n')
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
-            plain_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
-                                               plain_env['PATH'])
+            plain_env['PATH'] = f'{self._io_server_dir.name}:{plain_env["PATH"]}'
             self.max_start_time = 300
             self.max_stop_time = 300
             self.stop_sleep_time = 10
@@ -764,7 +762,7 @@ class DaosServer():
             self._check_timing('format', start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('format', duration=duration)
-        print('Format completion in {:.2f} seconds'.format(duration))
+        print(f'Format completion in {duration:.2f} seconds')
         self.running = True
 
         # Now wait until the system is up, basically the format to happen.
@@ -780,7 +778,7 @@ class DaosServer():
             self._check_timing("start", start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('start', duration=duration)
-        print('Server started in {:.2f} seconds'.format(duration))
+        print(f'Server started in {duration:.2f} seconds')
         self.fetch_pools()
 
     def _stop_agent(self):
@@ -870,11 +868,11 @@ class DaosServer():
 
         duration = time.time() - start
         self._add_test_case('stop', duration=duration)
-        print('Server stopped in {:.2f} seconds'.format(duration))
+        print(f'Server stopped in {duration:.2f} seconds')
 
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
-        print('rc from server is {}'.format(ret))
+        print(f'rc from server is {ret}')
 
         self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
@@ -3435,6 +3433,7 @@ def run_in_fg(server, conf):
     except KeyboardInterrupt:
         pass
     dfuse = None
+
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
