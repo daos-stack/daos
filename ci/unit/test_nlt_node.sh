@@ -12,13 +12,9 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     sudo sysctl vm.max_map_count=1000000
 fi
 
-sudo mkdir /opt/daos
-sudo chmod 777 /opt/daos
-
 cd build
 
-ls
-cp -a opt-daos /opt/daos/
+sudo mv opt-daos /opt/daos
 find /opt/daos
 
 # Setup daos admin etc.
