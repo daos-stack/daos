@@ -21,6 +21,7 @@ import (
 )
 
 // ScmState represents the probed state of PMem modules on the system.
+//
 //go:generate stringer -type=ScmState
 type ScmState int
 
