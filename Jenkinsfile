@@ -556,8 +556,6 @@ pipeline {
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
                         stash name: 'el8-gcc-build-vars', includes: '.build_vars.*'
-                        String test_files = readFile "ci/test_files_to_stash.txt"
-                        stash name: 'el8-gcc-tests', includes: test_files
                     }
                     post {
                         unsuccessful {
