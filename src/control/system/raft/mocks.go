@@ -106,7 +106,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	}
 
 	db := MockDatabaseWithCfg(t, log, dbCfg)
-	db.replicaAddr.Addr = addr
+	db.replicaAddr = addr
 	return db
 }
 
@@ -151,7 +151,7 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, db.raftTransport = raft.NewInmemTransport(raft.ServerAddress(db.replicaAddr.String()))
+	_, db.raftTransport = raft.NewInmemTransport(db.serverAddress())
 
 	return db, cleanup
 }
