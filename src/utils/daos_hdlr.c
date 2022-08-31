@@ -1686,37 +1686,42 @@ static int
 dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *props,
 		     char *preserve_props)
 {
-	int	rc = 0;
+	int	rc = 0, rc2;
 	int	num_attrs = 0;
 	char	**names = NULL;
 	void	**buffers = NULL;
 	size_t	*sizes = NULL;
 	void	*handle = NULL;
-	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
+	int	(*serialize_fptr)(char *, daos_prop_t *props, int, char **, char **, size_t *);
+
+	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
+	if (handle == NULL) {
+		DH_PERROR_DER(ap, -DER_INVAL, "libdaos_serialize.so not found");
+		return -DER_INVAL;
+	}
 
 	/* Get all user attributes if any exist */
 	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
-		D_GOTO(out, rc);
+		D_GOTO(out_dl, rc);
 	}
-	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
-	if (handle == NULL) {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc);
+
+	*(void **)(&serialize_fptr) = dlsym(handle, "daos_cont_serialize_md");
+	if (serialize_fptr == NULL)  {
+		DH_PERROR_DER(ap, -DER_INVAL, "Failed to lookup daos_cont_serialize_md");
+		D_GOTO(out_attr, rc = -DER_INVAL);
 	}
-	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
-	if (daos_cont_serialize_md == NULL)  {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
-		D_GOTO(out, rc);
-	}
-	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
-out:
-	if (num_attrs > 0) {
+	(*serialize_fptr)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
+out_attr:
+	if (num_attrs > 0)
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
-	}
+out_dl:
+	rc2 = dlclose(handle);
+	if (rc2)
+		DH_PERROR_SYS(ap, rc2, "failed to close DL handle");
+	if (rc == 0)
+		rc = daos_errno2der(rc2);
 	return rc;
 }
 
@@ -1724,61 +1729,70 @@ static int
 dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props,
 		       daos_prop_t **props)
 {
-	int		rc = 0;
-	void		*handle = NULL;
-	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
+	int	rc = 0, rc2;
+	void	*handle = NULL;
+	int	(*deserialize_fptr)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, -DER_INVAL, "libdaos_serialize.so not found");
+		return -DER_INVAL;
 	}
-	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
-	if (daos_cont_deserialize_props == NULL)  {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
-		D_GOTO(out, rc);
+
+	*(void **)(&deserialize_fptr) = dlsym(handle, "daos_cont_deserialize_props");
+	if (deserialize_fptr == NULL)  {
+		DH_PERROR_DER(ap, -DER_INVAL, "Failed to lookup daos_cont_deserialize_props");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
+	(*deserialize_fptr)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
+	rc2 = dlclose(handle);
+	if (rc2)
+		DH_PERROR_SYS(ap, rc2, "failed to close DL handle");
+	if (rc == 0)
+		rc = daos_errno2der(rc2);
 	return rc;
 }
 
 static int
 dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props)
 {
-	int		rc = 0;
+	int		rc = 0, rc2;
 	uint64_t	num_attrs = 0;
 	char		**names = NULL;
 	void		**buffers = NULL;
 	size_t		*sizes = NULL;
 	void		*handle = NULL;
-	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
+	int		(*deserialize_fptr)(char *, uint64_t *, char ***, void ***, size_t **);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, -DER_INVAL, "libdaos_serialize.so not found");
+		return -DER_INVAL;
 	}
-	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
-	if (daos_cont_deserialize_attrs == NULL)  {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
-		D_GOTO(out, rc);
+
+	*(void **)(&deserialize_fptr) = dlsym(handle, "daos_cont_deserialize_attrs");
+	if (deserialize_fptr == NULL)  {
+		DH_PERROR_DER(ap, -DER_INVAL, "Failed to lookup daos_cont_deserialize_attrs");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
+
+	(*deserialize_fptr)(preserve_props, &num_attrs, &names, &buffers, &sizes);
 	if (num_attrs > 0) {
 		rc = daos_cont_set_attr(ca->dst_coh, num_attrs, (const char * const*)names,
 					(const void * const*)buffers, sizes, NULL);
+		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to set user attributes");
 			D_GOTO(out, rc);
 		}
-		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
 out:
+	rc2 = dlclose(handle);
+	if (rc2)
+		DH_PERROR_SYS(ap, rc2, "failed to close DL handle");
+	if (rc == 0)
+		rc = daos_errno2der(rc2);
 	return rc;
 }
 
