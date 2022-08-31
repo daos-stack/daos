@@ -53,7 +53,7 @@ class MultipleContainerDelete(IorTestBase):
             self.run_ior_with_pool(create_cont=False)
             self.container.destroy()
             scm_fs, ssd_fs = self.get_pool_space()
-            out.append("iter = {}, scm = {}, ssd = {}".format(loop+1, scm_fs, ssd_fs))
+            out.append("iter = {}, scm = {}, ssd = {}".format(loop + 1, scm_fs, ssd_fs))
 
         self.log.info("Initial Free Space")
         self.log.info("SCM = %d, NVMe = %d", initial_scm_fs, initial_ssd_fs)
