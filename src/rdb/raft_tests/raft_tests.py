@@ -14,7 +14,7 @@ import os
 import json
 
 TEST_NOT_RUN = -1
-DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')
+DIR = os.path.join(os.path.dirname(os.path.relpath(os.path.dirname(__file__))), 'raft')
 
 
 def number_of_failures():
@@ -31,7 +31,9 @@ def number_of_failures():
         ofh = open(json_file, "r")
         conf = json.load(ofh)
         ofh.close()
+        print(f"DIR={DIR}")
         path = os.path.join(conf["BUILD_DIR"], DIR, "src")
+    print(f"path={path}")
     if not os.path.exists(path):
         try:
             res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
