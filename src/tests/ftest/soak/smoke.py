@@ -25,7 +25,7 @@ class SoakSmoke(SoakTestBase):
         20 min
 
         :avocado: tags=manual
-        :avocado: tags=hw,large,xlarge
+        :avocado: tags=hw,large,24
         :avocado: tags=soak,soak_smoke
         :avocado: tags=test_soak_smoke
         """

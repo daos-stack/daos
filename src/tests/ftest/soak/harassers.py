@@ -25,7 +25,7 @@ class SoakHarassers(SoakTestBase):
         /run/test_timeout.
 
         :avocado: tags=manual
-        :avocado: tags=hw,xlarge
+        :avocado: tags=hw,24
         :avocado: tags=soak,soak_harassers
         :avocado: tags=test_soak_harassers
         """

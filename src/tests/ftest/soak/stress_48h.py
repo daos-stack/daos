@@ -23,7 +23,7 @@ class SoakStress(SoakTestBase):
         This test will run soak_stress for 48 hours.
 
         :avocado: tags=manual
-        :avocado: tags=hw,xlarge
+        :avocado: tags=hw,24
         :avocado: tags=soak,soak_stress
         :avocado: tags=soak_stress_48h,test_soak_stress_48h
         """

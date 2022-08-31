@@ -25,7 +25,7 @@ class SoakFaultInject(SoakTestBase):
         the soak_faults config file.
 
         :avocado: tags=manual
-        :avocado: tags=hw,xlarge
+        :avocado: tags=hw,24
         :avocado: tags=soak,soak_harassers
         :avocado: tags=test_soak_faults
         """
