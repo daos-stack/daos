@@ -190,8 +190,8 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 					svc.log.Errorf("sync GroupUpdate failed: %s", err)
 					continue
 				}
+				groupUpdateNeeded = false
 			}
-			groupUpdateNeeded = false
 		case <-groupUpdateTimer.C:
 			if !groupUpdateNeeded {
 				continue
@@ -362,6 +362,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 			Uri:  uri,
 		})
 		rankSet.Add(rank)
+	}
+
+	// Final check to make sure we're still leader.
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
@@ -970,7 +975,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 // SystemCleanup implements the method defined for the Management Service.
 //
-// Signal to the data plane to find all resources associted with a given machine
+// Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
 //

@@ -1,10 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-A
+  test_servers: 3
+  test_clients: 1
 
 timeout: 300
 daos_server:

@@ -205,7 +205,7 @@ daos_cont_prop2encrypt(daos_prop_t *props)
 	return prop == NULL ? false : prop->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF;
 }
 
-/** Get the redundancy factor from a containers properites. */
+/** Get the redundancy factor from a containers properties. */
 uint32_t
 daos_cont_prop2redunfac(daos_prop_t *props)
 {
@@ -215,7 +215,7 @@ daos_cont_prop2redunfac(daos_prop_t *props)
 	return prop == NULL ? DAOS_PROP_CO_REDUN_RF0 : (uint32_t)prop->dpe_val;
 }
 
-/** Get the redundancy level from a containers properites. */
+/** Get the redundancy level from a containers properties. */
 uint32_t
 daos_cont_prop2redunlvl(daos_prop_t *props)
 {
@@ -225,7 +225,7 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
 	return prop == NULL ? DAOS_PROP_CO_REDUN_RANK : (uint32_t)prop->dpe_val;
 }
 
-/** Get the EC cell size from a containers properites. */
+/** Get the EC cell size from a containers properties. */
 uint32_t
 daos_cont_prop2ec_cell_sz(daos_prop_t *props)
 {

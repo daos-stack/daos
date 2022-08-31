@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -45,6 +44,15 @@ class BasicParameter():
 
         """
         return str(self.value) if self.value is not None else ""
+
+    def __repr__(self):
+        """Convert this BasicParameter into a string representation.
+
+        Returns:
+            str: raw string representation of the parameter's value
+
+        """
+        return str(self._value) if self._value is not None else ""
 
     @property
     def value(self):
@@ -243,6 +251,39 @@ class LogParameter(FormattedParameter):
         super().update(value, name, append)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
+
+
+class MappedParameter(BasicParameter):
+    """A class for parameters whose values are read from a yaml file."""
+
+    def __init__(self, value, default=None, yaml_key=None, mapping=None):
+        """Create a MappedParameter object.
+
+        In addition to BasicParameter usage, a mapping can be supplied to replace
+        values from the yaml. This is useful, for example, when the value is a python reference.
+
+        Args:
+            value (object): initial value for the parameter
+            default (object, optional): default value. Defaults to None.
+            yaml_key (str, optional): the yaml key name to use when finding the
+                value to assign from the test yaml file. Default is None which
+                will use the object's variable name as the yaml key.
+            mapping (dict, optional): dict of values to replace. Default is None,
+                which replaces nothing.
+        """
+        super().__init__(value, default, yaml_key)
+        self._mapping = mapping or {}
+
+    @BasicParameter.value.getter
+    def value(self):
+        # pylint: disable=invalid-overridden-method
+        """Get the value of this parameter.
+
+        Returns:
+            object: mapped value currently assigned to the parameter
+
+        """
+        return self._mapping.get(self._value, super().value)
 
 
 class ObjectWithParameters():
@@ -631,6 +672,59 @@ class CommonConfig(YamlParameters):
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
 
+    @classmethod
+    def from_list(cls, kv_list):
+        """Initialize from a list of key=value strings.
+
+        Compatible with output from EnvironmentVariables.to_list.
+
+        Args:
+            kv_list (list):  list of environment variable assignment (key=value) strings
+
+        Returns:
+            EnvironmentVariables: new object.
+        """
+        env = cls()
+        env.update_from_list(kv_list)
+        return env
+
+    def to_list(self):
+        """Convert to a list of environment variable assignments.
+
+        Returns:
+            list: a list of environment variable assignment (key=value) strings
+        """
+        return [
+            key if value is None else "{}={}".format(key, value)
+            for key, value in list(self.items())
+        ]
+
+    def update_from_list(self, kv_list):
+        """Update from a list of key=value strings.
+
+        Args:
+            kv_list (list):  list of environment variable assignment (key=value) strings
+        """
+        for kv in kv_list:
+            key, *value = kv.split('=')
+            self[key] = value[0] if value else None
+
+    def to_export_str(self, separator=";"):
+        """Convert to a command to export all the environment variables.
+
+        Args:
+            separator (str, optional): export command separator.
+                Defaults to ";".
+
+        Returns:
+            str: a string of export commands for each environment variable
+        """
+        export_list = ["export {}".format(export) for export in self.to_list()]
+        export_str = separator.join(export_list)
+        if export_str:
+            export_str = "".join([export_str, separator])
+        return export_str
+
     def copy(self):
         """Return a copy of this object.
 
@@ -639,35 +733,6 @@ class EnvironmentVariables(dict):
 
         """
         return EnvironmentVariables(self)
-
-    def get_list(self):
-        """Get a list of environment variable assignments.
-
-        Returns:
-            list: a list of environment variable assignment (key=value) strings
-
-        """
-        return [
-            key if value is None else "{}={}".format(key, value)
-            for key, value in list(self.items())
-        ]
-
-    def get_export_str(self, separator=";"):
-        """Get the command to export all of the environment variables.
-
-        Args:
-            separator (str, optional): export command separator.
-                Defaults to ";".
-
-        Returns:
-            str: a string of export commands for each environment variable
-
-        """
-        export_list = ["export {}".format(export) for export in self.get_list()]
-        export_str = separator.join(export_list)
-        if export_str:
-            export_str = "".join([export_str, separator])
-        return export_str
 
 
 class PositionalParameter(BasicParameter):

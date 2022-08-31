@@ -6,6 +6,8 @@
 """
 from socket import gethostname
 
+from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import \
     FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand, YamlCommand
@@ -26,7 +28,7 @@ class DmgCommandBase(YamlCommand):
         super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
         # If running dmg on remote hosts, this list needs to include those hosts
-        self.temporary_file_hosts = gethostname().split(".")[0:1]
+        self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
@@ -60,10 +62,14 @@ class DmgCommandBase(YamlCommand):
             hostlist (string list): list of host addresses
         """
         if self.yaml:
-            if not isinstance(hostlist, list):
+            if isinstance(hostlist, NodeSet):
+                hostlist = list(hostlist)
+            elif not isinstance(hostlist, list):
                 hostlist = hostlist.split(",")
             self.yaml.hostlist.update(hostlist, "dmg.yaml.hostlist")
         else:
+            if isinstance(hostlist, NodeSet):
+                hostlist = list(hostlist)
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")

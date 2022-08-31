@@ -1153,7 +1153,7 @@ shard_open:
 				shard_tgt->st_rank = DAOS_TGT_IGNORE;
 				rc = 0;
 			} else {
-				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
+				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH && !obj_auxi->spec_shard)
 					ec_degrade = true;
 				else
 					shard_tgt->st_rank = DAOS_TGT_IGNORE;
@@ -1566,7 +1566,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc_pool_create_map_refresh_task(pool, map_ver, sched, &task);
+	rc = dc_pool_create_map_refresh_task(ph, map_ver, sched, &task);
 	if (rc != 0) {
 		dc_pool_put(pool);
 		return rc;
@@ -3079,8 +3079,8 @@ shard_io_task(tse_task_t *task)
 	/*
 	 * If this task belongs to a TX, and if the epoch we got earlier
 	 * doesn't contain a "chosen" TX epoch, then we may need to reinit the
-	 * task. (See dc_tx_get_epoch.) Because tse_task_reinit is less
-	 * practical in the middle of a task, we do it here at the beginning of
+	 * task via dc_tx_get_epoch. Because tse_task_reinit is less practical
+	 * in the middle of a task, we do it here at the beginning of
 	 * shard_io_task.
 	 */
 	th = shard_auxi->obj_auxi->th;
@@ -3089,9 +3089,9 @@ shard_io_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	return shard_io(task, shard_auxi);
@@ -4528,12 +4528,12 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 		D_ASSERT(obj_auxi->reasb_req.orr_uiods != NULL);
 		obj_auxi->reasb_req.orr_args->iods = obj_auxi->reasb_req.orr_uiods;
 		obj_auxi->reasb_req.orr_args->sgls = obj_auxi->reasb_req.orr_usgls;
-		obj_auxi->req_reasbed = false;
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
 	obj_update_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
+	obj_auxi->req_reasbed = false;
 
 	if (!retry) {
 		/* zero it as user might reuse/resched the task, for example dac_array_set_size() */
@@ -6269,9 +6269,9 @@ shard_query_key_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
+		} else if (rc == DC_TX_GE_REINITED) {
+			return 0;
 		}
-		if (rc == DC_TX_GE_REINIT)
-			return tse_task_reinit(task);
 	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,

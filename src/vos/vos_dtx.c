@@ -186,9 +186,10 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 out:
 	D_DEBUG(DB_IO,
 		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
-		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
-		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
+		"ver %u/%u, may need %s retry.\n", hit_again ? "Repeat" : "First",
+		DP_DTI(&DAE_XID(dae)), pos, dth, dth != NULL && dth->dth_dist ? "yes" : "no",
+		DAE_LID(dae), DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), DAE_VER(dae),
+		dth != NULL ? dth->dth_ver : 0, s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -1229,15 +1230,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	/* For rebuild fetch, if hit non-committed DTX, has to ask the
-	 * sponsor to wait and retry, otherwise, the new in-rebuilding
-	 * target may miss some data.
-	 * Under such case, DTX resync on related leader server is not
-	 * finished yet. The DTX entry may be stale, need refresh with
-	 * the leader.
+	/*
+	 * Up layer rebuild logic guarantees that the rebuild scan will not be
+	 * triggered until DTX resync has been done on all related targets. So
+	 * here, if rebuild logic hits non-committed DTX entry, it must be for
+	 * new IO that version is not older than rebuild, then it is invisible
+	 * to rebuild. Related new IO corresponding to such non-committed DTX
+	 * has already been sent to the in-rebuilding target.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, dth, false, true, 6);
+		return ALB_UNAVAILABLE;
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||

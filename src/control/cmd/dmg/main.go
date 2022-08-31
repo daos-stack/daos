@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -95,10 +95,12 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		Status   int         `json:"status"`
 	}{in, errStr, status}, "", "  ")
 	if err != nil {
+		fmt.Fprintf(out, "unable to marshal json: %s\n", err.Error())
 		return err
 	}
 
 	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
+		fmt.Fprintf(out, "unable to write json: %s\n", err.Error())
 		return err
 	}
 
@@ -158,6 +160,7 @@ type cliOptions struct {
 	HostList       string         `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
 	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
+	LogFile        string         `long:"log-file" description:"Log command output to the specified file"`
 	JSON           bool           `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool           `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string         `short:"o" long:"config-path" description:"Client config file path"`
@@ -215,6 +218,24 @@ and access control settings, along with system wide operations.`
 
 		if !opts.AllowProxy {
 			common.ScrubProxyVariables()
+		}
+
+		if opts.LogFile != "" {
+			f, err := common.AppendFile(opts.LogFile)
+			if err != nil {
+				return errors.WithMessage(err, "create log file")
+			}
+			defer f.Close()
+
+			log.Debugf("%s logging to file %s",
+				os.Args[0], opts.LogFile)
+
+			// Create an additional set of loggers which append everything
+			// to the specified file.
+			log = log.
+				WithErrorLogger(logging.NewErrorLogger("dmg", f)).
+				WithInfoLogger(logging.NewInfoLogger("dmg", f)).
+				WithDebugLogger(logging.NewDebugLogger(f))
 		}
 
 		if opts.Debug {

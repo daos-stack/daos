@@ -1,25 +1,22 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-  test_clients:
-    - client-H
-timeout: 500
+  test_servers: 7
+  test_clients: 1
+timeout: 1200
 server_config:
   name: daos_server
+  crt_timeout: 60
   servers:
     targets: 8
     bdev_class: nvme
     bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+    env_vars:
+      - SWIM_PROTOCOL_PERIOD_LEN=2000
+      - SWIM_SUSPECT_TIMEOUT=19000
+      - SWIM_PING_TIMEOUT=1900
 testparams:
   ranks:
     rank_to_kill:
@@ -31,10 +28,10 @@ pool:
   name: daos_server
   scm_size: 10G
   nvme_size: 60G
-  svcn: 1
+  svcn: 5
   control_method: dmg
-  rebuild_timeout: 120
-  pool_query_timeout: 30
+  rebuild_timeout: 240
+  pool_query_timeout: 60
 container:
   type: POSIX
   control_method: daos

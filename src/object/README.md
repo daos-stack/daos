@@ -19,33 +19,71 @@ update) or a <b>byte array</b> (i.e. arbitrary extent fetch/update).
 
 ## Object Class
 
-To avoid scaling problems and overhead common to traditional storage stack,
-DAOS objects are intentionally very simple. No default object metadata beyond
-the object class is provided. This means that the system does not maintain
-time, size, owner, permissions and opener tracking attributes.
+The DAOS <b>object class</b> describes the object distribution and protection
+methods. An <b>object class</b> is represented by a unique 8-bit class ID
+defining the data protection scheme (e.g. 2-way replication or erasure code 8+2,
+see enum daos\_obj\_redun) combined with a 16-bit integer encoding the number
+of groups (also called shards) over which the dkeys are distributed.
 
-The DAOS <b>object class</b> describes the definitions for object types, data
-protection methods, and data distribution strategies. An <b>object class</b> has
-a unique class ID, which is a 16-bit value, and can represent a category of
-objects that use the same schema(data protection, distribution). DAOS provides
-some pre-defined object class for the most common use (see `daos_obj_classes`).
-In addition user can register customized object class by
-`daos_obj_register_class()` (not implemented yet). A successfully registered
-object class is stored as container metadata; it is valid in the lifetime of the
-container.
+The DAOS API provides some pre-defined identifiers for the most common object
+class. For instance, OC\_S1 can be used for object without data protection
+distributed across a single target. OC\_S2 for two targets and OC\_SX for a
+distribution across all the available targets in the pool. OC\_RP\_2G1 for
+2-way replication over one target and OC\_RP\_5GX for 5-way replication over all
+the available targets. Similarly, OC\_EC\_2P1G1 can be used for 2+1 Reed-Solomon
+erasure code over one target and OC\_EC\_16P2GX for 16+2 over all the available
+targets. See the full list in [daos_obj_class.h](/src/include/daos_obj_class.h)
+for more information.
 
-The object class ID is embedded in object ID. By `daos_obj_generate_oid()` user
-can generate an object ID for the specific object class ID. DAOS uses this class
-ID to find the corresponding object class, and then distribute and protect
-object data based on algorithm descriptions of this class.
+### Object class naming conventions
 
-Users can select the object class manually when generating the oid from the list of all object
-classes in [/src/include/daos_obj_class.h]. However manually selecting the object class is not
-encouraged for regular users and should be done by advanced users only who understand all the
-different object classes and the redundancy factor of the container. For most users, passing an
-OC_UNKNOWN (0) object class to `daos_obj_generate_oid()` would allow DAOS to automatically select an
-object class based on the container properties where that object is being accessed such as the
-redundancy factor (RF), the number of domain (server engines) of the pool, and on the type of object
+DAOS object supports two data protection methods: replication(RP) and Erasure Code(EC).
+A set of replicated shard, or a set of data and parity shards belonging to the same parity group
+is called redundancy group. An object can be chunked into multiple redundancy groups, which spread
+across many storage targets, in order to achieve higher I/O concurrency for better performance and
+large capacity. Targets for placing shards of a same redundancy group are selected from different
+fault domains, the default fault domain is "engine", it can be set to other domain like "node" or
+"rack" in future releases.
+
+DAOS has over a hundred pre-defined object classes and specific naming conventions for these
+classes:
+- OC: Object Class
+- RP: Replication, the number after underscore is number of replicas. For example: OC_RP_2GX
+  represents two replicas
+- EC: Erasure Code, the number before P is number of data shards, the number after P is number of
+  parity shards in a parity group. For example, OC_EC_4P2G1 represents EC(4+2).
+- G: Redundancy Group, a redundancy group can either be a set of replicated shards or a parity
+  group of EC. The number after G is number of redundancy groups, "X" means the object should
+  spread across as many engines as possible.
+- If there is no RP or EC in the class name, the class has no data protection, in this case the
+  postfix of class name is S{n}, the number after S is the number of object shards. similarly,
+  a sharded object can horizontally scale I/O performance and capacity of the object.
+
+### Maximum layout and limitations
+
+DAOS has a few object classes with SX or GX as postfix, for example: OC_SX, OC_RP_2GX.
+"X" represents maximum and SX/GX means the object should be placed in possibly maximum number
+of targets in the storage pool.
+
+The caveat is that DAOS will encode the actual number of shards or redundancy groups in the object
+ID generated by API `daos_obj_generate_oid()`. It means that even if the pool size horizontally
+grows by adding more storage target, the already existent objects cannot be redistributed to
+more engines than the original.
+
+### Object ID and class selection
+
+As described above, the object class ID and number of groups are embedded in object ID.
+By `daos_obj_generate_oid()` user can generate an object ID for the specific object
+class. DAOS uses this encoded information to generate the object layout that
+describes on what targets the object is effectively stored.
+
+Users can select the object class manually when generating the oid.
+However manually selecting the object class is not encouraged for regular users and
+should be done by advanced users only who understand all the trade-offs.
+For most users, passing an OC_UNKNOWN (0) object class to `daos_obj_generate_oid()`
+would allow DAOS to automatically select an object class based on the container
+properties where that object is being accessed such as the redundancy factor (RF),
+the number of domain (server engines) of the pool, and on the type of object
 being accessed (determined by the feats flag).
 
 The following details how the object class is chosen when no default or hints are provided:

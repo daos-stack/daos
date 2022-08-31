@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -147,7 +146,7 @@ class JobManager(ExecutableCommand):
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            hosts (list): list of hosts to specify on the command line
+            hosts (NodeSet): hosts to specify on the command line
             path (str, optional): path to use when specifying the hosts through
                 a hostfile. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
@@ -305,13 +304,13 @@ class Orterun(JobManager):
         """Assign the hosts to use with the command (--hostfile).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
-        kwargs = {"hostlist": self._hosts, "slots": slots}
+        self._hosts = hosts.copy()
+        kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -339,14 +338,12 @@ class Orterun(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a list for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.export.value})
+            original = EnvironmentVariables.from_list(self.export.value)
             original.update(env_vars)
-            self.export.value = original.get_list()
+            self.export.value = original.to_list()
         else:
             # Overwrite the environmental variable assignment
-            self.export.value = env_vars.get_list()
+            self.export.value = env_vars.to_list()
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -355,7 +352,7 @@ class Orterun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.export.update_default(env_vars.get_list())
+        self.export.update_default(env_vars.to_list())
 
     def run(self):
         """Run the orterun command.
@@ -415,13 +412,13 @@ class Mpirun(JobManager):
         """Assign the hosts to use with the command (-f).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
-        kwargs = {"hostlist": self._hosts, "slots": slots}
+        self._hosts = hosts.copy()
+        kwargs = {"hosts": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
@@ -446,10 +443,10 @@ class Mpirun(JobManager):
         # Pass the environment variables via the process.run method env argument
         if append and self.env is not None:
             # Update the existing dictionary with the new values
-            self.genv.update(env_vars.get_list())
+            self.genv.update(env_vars.to_list())
         else:
             # Overwrite/create the dictionary of environment variables
-            self.genv.update((EnvironmentVariables(env_vars)).get_list())
+            self.genv.update((EnvironmentVariables(env_vars)).to_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -458,7 +455,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.genv.update_default(env_vars.get_list())
+        self.genv.update_default(env_vars.to_list())
 
     def run(self):
         """Run the mpirun command.
@@ -505,13 +502,13 @@ class Srun(JobManager):
         """Assign the hosts to use with the command (-f).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
-        kwargs = {"hostlist": self._hosts, "slots": None}
+        self._hosts = hosts.copy()
+        kwargs = {"hosts": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
         self.nodefile.value = write_host_file(**kwargs)
@@ -541,14 +538,12 @@ class Srun(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a string for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.export.value.split(",")})
+            original = EnvironmentVariables.from_list(self.export.value.split(","))
             original.update(env_vars)
-            self.export.value = ",".join(original.get_list())
+            self.export.value = ",".join(original.to_list())
         else:
             # Overwrite the environmental variable assignment
-            self.export.value = ",".join(env_vars.get_list())
+            self.export.value = ",".join(env_vars.to_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -557,7 +552,7 @@ class Srun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.export.update_default(env_vars.get_list())
+        self.export.update_default(env_vars.to_list())
 
 
 class Systemctl(JobManager):
@@ -680,13 +675,13 @@ class Systemctl(JobManager):
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            hosts (list): list of hosts to specify on the command line
+            hosts (NodeSet): hosts to specify on the command line
             path (str, optional): path to use when specifying the hosts through
                 a hostfile. Defaults to None. Not used.
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None. Not used.
         """
-        self._hosts = NodeSet.fromlist(hosts)
+        self._hosts = hosts.copy()
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -741,19 +736,19 @@ class Systemctl(JobManager):
         """
         self._systemctl.unit_command.value = command
         self.timestamps[command] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        result = pcmd(self._hosts, self.__str__(), self.verbose, self.timeout)
+        result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
         if 255 in result:
             raise CommandFailure(
                 "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    self.__str__(), self.timeout, NodeSet.fromlist(result[255])))
+                    str(self), self.timeout, NodeSet.fromlist(result[255])))
 
         if 0 not in result or len(result) > 1:
             failed = []
             for item, value in list(result.items()):
                 if item != 0:
                     failed.extend(value)
-            raise CommandFailure("Error occurred running '{}' on {}".format(
-                self.__str__(), NodeSet.fromlist(failed)))
+            raise CommandFailure(
+                "Error occurred running '{}' on {}".format(str(self), NodeSet.fromlist(failed)))
         return result
 
     def _report_unit_command(self, command):
@@ -859,8 +854,7 @@ class Systemctl(JobManager):
         states = {}
         valid_states = ["active", "activating"]
         self._systemctl.unit_command.value = "is-active"
-        results = run_pcmd(
-            self._hosts, self.__str__(), False, self.timeout, None)
+        results = run_pcmd(self._hosts, str(self), False, self.timeout, None)
         for result in results:
             if result["interrupted"]:
                 states["timeout"] = result["hosts"]
@@ -915,7 +909,7 @@ class Systemctl(JobManager):
             time, respectively.
 
         Args:
-            hosts (list): list of hosts from which to gather log data.
+            hosts (NodeSet): hosts from which to gather log data.
             since (str): show log entries from this date.
             until (str, optional): show log entries up to this date. Defaults
                 to None, in which case it is not utilized.
@@ -1107,7 +1101,7 @@ class Systemctl(JobManager):
         """Display the journalctl log data since detecting server start.
 
         Args:
-            hosts (list, optional): list of hosts from which to display the
+            hosts (NodeSet, optional): hosts from which to display the
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """

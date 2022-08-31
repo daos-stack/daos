@@ -3,6 +3,8 @@
 
 import os
 import sys
+import json
+import urllib
 import jira
 
 # Script to improve interaction with Jenkins, GitHub and Jira.  This is intended to work in several
@@ -22,15 +24,14 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'test')
+VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test')
+
+# Expected ticket prefix.
+VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
-
-# Expected values for Status.  Tickets which are closed should not be being worked on, and tickets
-# which are Open or Reopened should be set to In Progress when being worked on.
-STATUS_VALUES_ALLOWED = ('In Review', 'In Progress')
 
 # Labels in GitHub which this script will set/clear based on the logic below.
 MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
@@ -41,7 +42,7 @@ def set_output(key, value):
 
     clean_value = value.replace('\n', '%0A')
     print(f'::set-output name={key}::{clean_value}')
-    print(value)
+    print(f'{key}:{value}')
 
 
 # pylint: disable=too-many-branches
@@ -86,7 +87,7 @@ def main():
 
     # Check format of ticket_number.
     parts = ticket_number.split('-', maxsplit=1)
-    if parts[0] not in ('DAOS', 'CORCI'):
+    if parts[0] not in VALID_TICKET_PREFIX:
         errors.append('Ticket number prefix incorrect')
     try:
         int(parts[1])
@@ -103,8 +104,6 @@ def main():
         return
     print(ticket.fields.summary)
     print(ticket.fields.status)
-    if str(ticket.fields.status) not in STATUS_VALUES_ALLOWED:
-        errors.append('Ticket status value not as expected')
 
     # Highest priority, tickets with "Approved to Merge" set.
     if ticket.fields.customfield_10044:
@@ -162,11 +161,28 @@ def main():
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
-    to_remove = list(MANAGED_LABELS)
-    for label in gh_label:
-        to_remove.remove(label)
-    if to_remove:
-        set_output('label-clear', '\n'.join(to_remove))
+    github_repo = os.getenv('GITHUB_REPOSITORY')
+
+    if github_repo:
+
+        pr_number = os.getenv('PR_NUMBER')
+
+        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
+        print(gh_url)
+        with urllib.request.urlopen(gh_url) as gh_label_data:  # nosec
+            gh_labels = json.loads(gh_label_data.read())
+
+        # Remove all managed labels which are not to be set.
+        to_remove = []
+        for label in gh_labels:
+            name = label['name']
+            if name in MANAGED_LABELS and name not in gh_label:
+                to_remove.append(name)
+        if to_remove:
+            set_output('label-clear', '\n'.join(to_remove))
+
+        # Could possibly query/verify more data using this URL however no use-case for this yet.
+        # gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
     if errors:
         sys.exit(1)
