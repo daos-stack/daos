@@ -12,11 +12,8 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     sudo sysctl vm.max_map_count=1000000
 fi
 
-# Create the directory path as root, then replace the actual directory itself
-# with a symlink back to the data.  This avoids a copy, and allows the remote
-# node to pull from a known location.
-sudo mkdir -p "$DAOS_BASE"
-sudo ln -sF "$(readlink -f build)/install" "$DAOS_BASE"
+sudo mkdir /opt/daos
+sudo chmod 777 /opt/daos
 
 cd build
 
