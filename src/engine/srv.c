@@ -1052,6 +1052,14 @@ out:
 	return rc;
 }
 
+void
+dss_xstreams_lock_xd_mutex(bool lock)
+{
+	if (lock)
+		ABT_mutex_lock(xstream_data.xd_mutex);
+	else
+		ABT_mutex_unlock(xstream_data.xd_mutex);
+}
 /**
  * Global TLS
  */

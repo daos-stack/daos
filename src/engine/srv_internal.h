@@ -150,7 +150,7 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
-
+void dss_xstreams_lock_xd_mutex(bool lock);
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);
 int dss_engine_metrics_fini(void);
@@ -209,8 +209,9 @@ void sched_stop(struct dss_xstream *dx);
 
 
 static inline bool
-sched_xstream_stopping(struct dss_xstream *dx)
+sched_xstream_stopping(void)
 {
+	struct dss_xstream	*dx = dss_current_xstream();
 	ABT_bool		 state;
 	int			 rc;
 
@@ -218,10 +219,10 @@ sched_xstream_stopping(struct dss_xstream *dx)
 	if (dx == NULL)
 		return false;
 
-	ABT_mutex_lock(dx->xd_mutex);
+	dss_xstreams_lock_xd_mutex(true);
 	rc = ABT_future_test(dx->dx_stopping, &state);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-	ABT_mutex_unlock(dx->xd_mutex);
+	dss_xstreams_lock_xd_mutex(false);
 
 	return state == ABT_TRUE;
 }
@@ -234,7 +235,7 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	if (sched_xstream_stopping(dx))
+	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
 
 	/* Avoid bumping busy ts for internal periodically created tasks */
@@ -279,7 +280,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		cur_dx = dx;
 #endif
 
-	if (sched_xstream_stopping(dx))
+	if (sched_xstream_stopping())
 		return -DER_SHUTDOWN;
 
 	/* Avoid bumping busy ts for internal periodically created ULTs */
