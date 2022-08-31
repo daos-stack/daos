@@ -192,7 +192,7 @@ out:
 	if (rc < 0) {
 		rc2 = dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
 		if (rc2)
-			D_DEBUG(DB_TRACE, "failed to create rebuild tree: "DF_RC"\n", DP_RC(rc2));
+			D_WARN("failed to delete tree: "DF_RC"\n", DP_RC(rc2));
 	}
 	return rc;
 }
