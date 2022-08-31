@@ -658,8 +658,10 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint8
 	 * If no parity node is available, then handle related task that has conditional
 	 * modification via distributed tranasaction.
 	 */
-	if (cond_modify)
+	if (cond_modify) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_NEED_TX;
+	}
 
 	shard = -1;
 	tgt_idx = 0;
