@@ -161,7 +161,7 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 	struct umem_attr	uma;
 	struct tree_cache_root	root = { 0 };
 	struct tree_cache_root	*tmp_root;
-	int			rc;
+	int			rc, rc2;
 
 	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, &root, sizeof(root));
@@ -187,8 +187,11 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 
 	*rootp = tmp_root;
 out:
-	if (rc < 0)
-		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+	if (rc < 0) {
+		rc2 = dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+		if (rc2)
+			D_WARN("failed to delete tree: "DF_RC"\n", DP_RC(rc2));
+	}
 	return rc;
 }
 
