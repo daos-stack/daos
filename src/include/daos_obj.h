@@ -15,6 +15,7 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_event.h>
 #include <daos_obj_class.h>
+#include <daos_prop.h>
 
 #define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
@@ -111,6 +112,12 @@ static inline bool
 daos_otype_t_is_valid(enum daos_otype_t type)
 {
 	return type <= DAOS_OT_MAX;
+}
+
+static inline bool
+daos_pa_domain_is_valid(uint32_t pa_domain)
+{
+	return pa_domain == DAOS_PROP_CO_REDUN_NODE || pa_domain == DAOS_PROP_CO_REDUN_RANK;
 }
 
 static inline enum daos_otype_t
@@ -253,26 +260,26 @@ daos_is_kv(daos_obj_id_t oid)
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
-	DAOS_COND_PUNCH		= (1 << 0),
+	DAOS_COND_PUNCH = (1 << 0),
 	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	DAOS_COND_DKEY_INSERT	= (1 << 1),
+	DAOS_COND_DKEY_INSERT = (1 << 1),
 	/* Conditional Op: Update dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_UPDATE	= (1 << 2),
+	DAOS_COND_DKEY_UPDATE = (1 << 2),
 	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_FETCH	= (1 << 3),
+	DAOS_COND_DKEY_FETCH = (1 << 3),
 	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	DAOS_COND_AKEY_INSERT	= (1 << 4),
+	DAOS_COND_AKEY_INSERT = (1 << 4),
 	/* Conditional Op: Update akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_UPDATE	= (1 << 5),
+	DAOS_COND_AKEY_UPDATE = (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_FETCH	= (1 << 6),
-	/* Inidication of per akey conditional ops.  If set, the global
+	DAOS_COND_AKEY_FETCH = (1 << 6),
+	/* Indication of per akey conditional ops.  If set, the global
 	 * flag should not have any akey conditional ops specified. The
 	 * per akey flags will be read from the iod_flags field.
 	 */
-	DAOS_COND_PER_AKEY	= (1 << 7),
+	DAOS_COND_PER_AKEY = (1 << 7),
 	/** Mask for convenience */
-	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
+	DAOS_COND_MASK = ((1 << IO_FLAGS_COND_BITS) - 1),
 };
 
 /**

@@ -24,9 +24,35 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-const (
-	defaultConfigFile = "daos_server.yml"
-)
+const defaultConfigFile = "daos_server.yml"
+
+// helperLogCmd is an embeddable type that extends a command with
+// helper privileged binary logging capabilities.
+type helperLogCmd struct {
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+}
+
+func (hlc *helperLogCmd) setHelperLogFile() error {
+	filename := hlc.HelperLogFile
+	if filename == "" {
+		return nil
+	}
+
+	return errors.Wrap(os.Setenv(pbin.DaosAdminLogFileEnvVar, filename),
+		"unable to configure privileged helper logging")
+}
+
+type iommuChecker interface {
+	setIOMMUChecker(func() (bool, error))
+}
+
+type iommuCheckerCmd struct {
+	isIOMMUEnabled func() (bool, error)
+}
+
+func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
+	icc.isIOMMUEnabled = isIOMMUEnabled
+}
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -39,11 +65,13 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	Storage  storageCmd             `command:"storage" description:"Perform tasks related to locally-attached storage"`
-	Start    startCmd               `command:"start" description:"Start daos_server"`
-	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version  versionCmd             `command:"version" description:"Print daos_server version"`
-	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	SCM           scmCmd                 `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe          nvmeCmd                `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
+	Start         startCmd               `command:"start" description:"Start daos_server"`
+	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version       versionCmd             `command:"version" description:"Print daos_server version"`
+	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 
 type versionCmd struct{}
@@ -110,6 +138,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		} else if opts.ConfigPath != "" {
 			return errors.Errorf("DAOS Server config filepath has been supplied but " +
 				"this command will not use it")
+		}
+
+		if iccCmd, ok := cmd.(iommuChecker); ok {
+			iccCmd.setIOMMUChecker(func() (bool, error) {
+				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
+				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
+			})
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

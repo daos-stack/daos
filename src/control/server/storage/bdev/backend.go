@@ -42,7 +42,7 @@ type (
 	statFn      func(string) (os.FileInfo, error)
 	removeFn    func(string) error
 	vmdDetectFn func() (*hardware.PCIAddressSet, error)
-	hpCleanFn   func(string) (uint, error)
+	hpCleanFn   func(logging.Logger, string) (uint, error)
 	writeConfFn func(logging.Logger, *storage.BdevWriteConfigRequest) error
 	restoreFn   func()
 )
@@ -126,7 +126,7 @@ func isPIDActive(pidStr string, stat statFn) (bool, error) {
 
 // createHugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
 // name begins with prefix and encoded pid is inactive.
-func createHugePageWalkFunc(hugePageDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
+func createHugePageWalkFunc(log logging.Logger, hugePageDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
 	re := regexp.MustCompile(spdkHugepagePattern)
 
 	return func(path string, info os.FileInfo, err error) error {
@@ -136,6 +136,7 @@ func createHugePageWalkFunc(hugePageDir string, stat statFn, remove removeFn, co
 		case info == nil:
 			return errors.New("nil fileinfo")
 		case info.IsDir():
+			log.Debugf("walk func: dir %s", path)
 			if path == hugePageDir {
 				return nil
 			}
@@ -144,14 +145,17 @@ func createHugePageWalkFunc(hugePageDir string, stat statFn, remove removeFn, co
 
 		matches := re.FindStringSubmatch(info.Name())
 		if len(matches) != 2 {
+			log.Debugf("walk func: unexpected name, skipping %s", path)
 			return nil // skip files not matching expected pattern
 		}
 		// PID string will be the first submatch at index 1 of the match results.
 
 		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
+			log.Debugf("walk func: active owner proc, skipping %s", path)
 			return err // skip files created by an existing process (isActive == true)
 		}
 
+		log.Debugf("walk func: removing %s", path)
 		if err := remove(path); err != nil {
 			return err
 		}
@@ -163,9 +167,9 @@ func createHugePageWalkFunc(hugePageDir string, stat statFn, remove removeFn, co
 
 // cleanHugePages removes hugepage files with pathPrefix that are owned by the user with username
 // tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir string) (count uint, _ error) {
+func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error) {
 	return count, filepath.Walk(hugePageDir,
-		createHugePageWalkFunc(hugePageDir, os.Stat, os.Remove, &count))
+		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
 }
 
 // prepare receives function pointers for external interfaces.
@@ -174,7 +178,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 
 	if req.CleanHugePagesOnly {
 		// Remove hugepages created by an inactive SPDK process.
-		nrRemoved, err := hpClean(hugePageDir)
+		nrRemoved, err := hpClean(sb.log, hugePageDir)
 		if err != nil {
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
 		}
@@ -215,15 +219,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 		return errors.Wrapf(err, "update prepare request")
 	}
 
-	if req.EnableVMD {
-		// First run with VMD addresses in allow list and then without to reset backing SSDs.
-		if err := sb.script.Reset(&req); err != nil {
-			return errors.Wrap(err, "unbinding vmd endpoints from userspace drivers")
-		}
-		req.PCIAllowList = ""
-	}
-
-	return errors.Wrap(sb.script.Reset(&req), "unbinding ssds from userspace drivers")
+	return errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
