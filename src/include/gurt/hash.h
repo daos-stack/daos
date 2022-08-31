@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,6 @@
 
 #include <gurt/list.h>
 #include <gurt/types.h>
-#include <gurt/atomic.h>
 
 /**
  * Hash table keeps and prints extra debugging information
@@ -197,19 +196,13 @@ enum d_hash_feats {
 	 * The found in bucket item is moved on top of the list.
 	 * So, next search for it will be much faster.
 	 */
-	D_HASH_FT_LRU			= (1 << 4),
-
-	/**
-	 * Need not take lock for ch_key_init.
-	 * Only valid when without D_HASH_FT_NOLOCK feat bit set.
-	 */
-	D_HASH_FT_NO_KEYINIT_LOCK	= (1 << 5),
+	D_HASH_FT_LRU		= (1 << 4),
 
 	/**
 	 * Use Global Table Lock instead of per bucket locking.
 	 * TODO: should be removed when all will use per bucket locking.
 	 */
-	D_HASH_FT_GLOCK			= (1 << 15),
+	D_HASH_FT_GLOCK		= (1 << 15),
 };
 
 union d_hash_lock {
@@ -546,7 +539,7 @@ struct d_hlink_ops {
 
 struct d_rlink {
 	d_list_t		rl_link;
-	ATOMIC uint32_t		rl_ref;
+	uint32_t		rl_ref;
 	uint32_t		rl_initialized:1;
 };
 

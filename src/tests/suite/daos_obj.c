@@ -4753,39 +4753,6 @@ io_tx_convert(void **state)
 	ioreq_fini(&req);
 }
 
-static void
-obj_open_perf(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	daos_handle_t	*oh;
-	uint64_t	start_usec, end_usec;
-	float		opens_per_sec;
-	int		i, nr, rc;
-
-	nr = 10000;
-	D_ALLOC_ARRAY(oh, nr);
-	assert_non_null(oh);
-
-	start_usec = daos_getutime();
-	for (i = 0; i < nr; i++) {
-		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-		rc = daos_obj_open(arg->coh, oid, 0, &oh[i], NULL);
-		assert_rc_equal(rc, 0);
-	}
-	end_usec = daos_getutime();
-	opens_per_sec = (nr * 1000.0 * 1000) / (end_usec - start_usec);
-
-	print_message("opens per second %.2f (total #obj_opens %d)\n", opens_per_sec, nr);
-
-	for (i = 0; i < nr; i++) {
-		rc = daos_obj_close(oh[i], NULL);
-		assert_rc_equal(rc, 0);
-	}
-
-	D_FREE(oh);
-}
-
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4881,7 +4848,6 @@ static const struct CMUnitTest io_tests[] = {
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 	{ "IO46: tx convert",
 	  io_tx_convert, async_disable, test_case_teardown},
-	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 };
 
 int
