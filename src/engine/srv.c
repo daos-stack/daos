@@ -800,10 +800,8 @@ dss_xstreams_fini(bool force)
 	bool			 started = false;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
-	dss_xstreams_open_barrier();
-	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
-	D_ASSERT(rc == 0);
 
+	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* Notify all xstreams to reject new ULT creation first */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
@@ -811,6 +809,11 @@ dss_xstreams_fini(bool force)
 			continue;
 		ABT_future_set(dx->dx_stopping, dx);
 	}
+	ABT_cond_broadcast(xstream_data.xd_ult_barrier);
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+
+	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
+	D_ASSERT(rc == 0);
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
