@@ -711,9 +711,9 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  *					replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		   const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		   daos_prop_t *prop, d_rank_list_t **svc_addrs)
+ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+			daos_prop_t *prop, d_rank_list_t **svc_addrs)
 {
 	struct daos_prop_entry *svc_rf_entry;
 	d_rank_list_t	       *ranks;
@@ -817,18 +817,24 @@ out:
 	return rc;
 }
 
+/** Stop any local PS replica for \a pool_uuid. */
 int
-ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_pool_svc_stop(uuid_t pool_uuid)
 {
-	d_iov_t		psid;
-	int		rc;
+	d_iov_t	id;
+	int	rc;
 
-	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, svc_ranks,
-			       NULL /* excluded */, true /* destroy */);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
+	d_iov_set(&id, pool_uuid, sizeof(uuid_t));
+
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, false /* destroy */);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MD, DF_UUID": pool service replica already stopped\n",
+			DP_UUID(pool_uuid));
+		rc = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to stop pool service replica: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
+	}
 
 	return rc;
 }
