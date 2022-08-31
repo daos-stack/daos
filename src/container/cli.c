@@ -23,6 +23,79 @@
 #include "cli_internal.h"
 #include "rpc.h"
 
+/* Per thread handle cache */
+#define DC_CONT_CACHE_NR		4
+static __thread struct dc_cont *dc_cont_local[DC_CONT_CACHE_NR];
+static __thread uint64_t	dc_cont_cookie[DC_CONT_CACHE_NR];
+
+/* global container handle cache */
+D_LIST_HEAD(dc_cont_global_list);
+/** serialize operations on dc_cont_global list */
+static pthread_spinlock_t	dc_cont_cache_lock;
+struct dc_cont_handle_cache {
+	struct d_hlink *dchc_hlink;
+	d_list_t	dchc_link;
+};
+
+struct dc_cont *
+dc_hdl2cont(daos_handle_t coh)
+{
+	struct d_hlink *hlink;
+	struct dc_cont *dc_cont;
+	int i;
+	int insert_i = 0;
+	struct dc_cont_handle_cache *dchc;
+
+	for (i = 0; i < DC_CONT_CACHE_NR; i++) {
+		if (dc_cont_cookie[i] && coh.cookie == dc_cont_cookie[i]) {
+			daos_hhash_link_getref(&dc_cont_local[i]->dc_hlink);
+
+			return dc_cont_local[i];
+		}
+		if (dc_cont_cookie[i] == 0)
+			insert_i = i;
+	}
+
+	hlink = daos_hhash_link_lookup(coh.cookie);
+	if (hlink == NULL)
+		return NULL;
+
+	dc_cont = container_of(hlink, struct dc_cont, dc_hlink);
+	/* run out of cache */
+	if (insert_i == 0 && dc_cont_cookie[0] != 0)
+		return dc_cont;
+
+	D_ALLOC_PTR(dchc);
+	if (dchc) {
+		dc_cont_local[insert_i] = dc_cont;
+		dc_cont_cookie[insert_i] = coh.cookie;
+		dchc->dchc_hlink = &dc_cont->dc_hlink;
+		D_SPIN_LOCK(&dc_cont_cache_lock);
+		d_list_add(&dchc->dchc_link, &dc_cont_global_list);
+		D_SPIN_UNLOCK(&dc_cont_cache_lock);
+		daos_hhash_link_getref(&dc_cont_local[insert_i]->dc_hlink);
+	}
+
+	return dc_cont;
+}
+
+void dc_cont_handle_cache_fini(void)
+{
+	struct dc_cont_handle_cache *dchc;
+	struct dc_cont_handle_cache *tmp;
+
+	D_SPIN_LOCK(&dc_cont_cache_lock);
+	d_list_for_each_entry_safe(dchc, tmp, &dc_cont_global_list, dchc_link) {
+		d_list_del(&dchc->dchc_link);
+		daos_hhash_link_putref(dchc->dchc_hlink);
+		D_FREE(dchc);
+	}
+	D_SPIN_UNLOCK(&dc_cont_cache_lock);
+
+	D_SPIN_DESTROY(&dc_cont_cache_lock);
+}
+
+
 /**
  * Initialize container interface
  */
@@ -31,10 +104,20 @@ dc_cont_init(void)
 {
 	int rc;
 
+	rc = D_SPIN_INIT(&dc_cont_cache_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0) {
+		D_ERROR("failed to init dc_cont_cache_lock: "DF_RC"\n", DP_RC(rc));
+
+		return rc;
+	}
+
 	rc = daos_rpc_register(&cont_proto_fmt, CONT_PROTO_CLI_COUNT,
 				NULL, DAOS_CONT_MODULE);
 	if (rc != 0)
 		D_ERROR("failed to register cont RPCs: "DF_RC"\n", DP_RC(rc));
+
+	if (rc)
+		D_SPIN_DESTROY(&dc_cont_cache_lock);
 
 	return rc;
 }
@@ -46,6 +129,8 @@ void
 dc_cont_fini(void)
 {
 	int rc;
+
+	dc_cont_handle_cache_fini();
 
 	rc = daos_rpc_unregister(&cont_proto_fmt);
 	if (rc != 0)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,40 +34,7 @@ struct dc_cont {
 				dc_slave:1; /* generated via g2l */
 };
 
-/* Per thread handle cache */
-#define DC_CONT_CACHE_NR		4
-static __thread struct dc_cont *dc_cont_local[DC_CONT_CACHE_NR];
-static __thread uint64_t	dc_cont_cookie[DC_CONT_CACHE_NR];
-
-static inline struct dc_cont *
-dc_hdl2cont(daos_handle_t coh)
-{
-	struct d_hlink *hlink;
-	struct dc_cont *dc_cont;
-	int i;
-	int insert_i = 0;
-
-	for (i = 0; i < DC_CONT_CACHE_NR; i++) {
-		if (dc_cont_cookie[i] && coh.cookie == dc_cont_cookie[i]) {
-			daos_hhash_link_getref(&dc_cont_local[i]->dc_hlink);
-
-			return dc_cont_local[i];
-		}
-		if (dc_cont_cookie[i] == 0)
-			insert_i = i;
-	}
-
-	hlink = daos_hhash_link_lookup(coh.cookie);
-	if (hlink == NULL)
-		return NULL;
-
-	dc_cont = container_of(hlink, struct dc_cont, dc_hlink);
-	/* if there is no free slot, we replace first one to cache now*/
-	dc_cont_local[insert_i] = dc_cont;
-	dc_cont_cookie[insert_i] = coh.cookie;
-
-	return dc_cont;
-}
+struct dc_cont *dc_hdl2cont(daos_handle_t coh);
 
 static inline void
 dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
@@ -76,19 +43,9 @@ dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
 	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
-void
-dc_cont_hdl_unlink(struct dc_cont *dc)
+void dc_cont_hdl_unlink(struct dc_cont *dc)
 {
-	int i;
-
 	daos_hhash_link_delete(&dc->dc_hlink);
-	for (i = 0; i < DC_CONT_CACHE_NR; i++) {
-		if (dc == dc_cont_local[i]) {
-			dc_cont_local[i] = NULL;
-			dc_cont_cookie[i] = 0;
-		}
-
-	}
 }
 
 void dc_cont_hdl_link(struct dc_cont *dc);

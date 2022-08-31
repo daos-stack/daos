@@ -29,6 +29,15 @@
 static __thread struct dc_pool *dc_pool_local[DC_POOL_CACHE_NR];
 static __thread uint64_t	dc_pool_cookie[DC_POOL_CACHE_NR];
 
+/* global pool handle cache */
+D_LIST_HEAD(dc_pool_global_list);
+/** serialize operations on dc_pool_global list */
+static pthread_spinlock_t	dc_pool_cache_lock;
+struct dc_pool_handle_cache {
+	struct dc_pool	*dphc_pool;
+	d_list_t	 dphc_link;
+};
+
 /** Replicated Service client state (used by Management API) */
 struct rsvc_client_state {
 	struct rsvc_client  scs_client;
@@ -90,10 +99,16 @@ dc_pool_init(void)
 
 	dc_pool_proto_version = 0;
 
+	rc = D_SPIN_INIT(&dc_pool_cache_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc) {
+		D_ERROR("failed to init dc_pool_cache_lock rc "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
-		return rc;
+		D_GOTO(out_lock, rc);
 	}
 
 	D_ALLOC_PTR(pproto);
@@ -161,24 +176,10 @@ out_free:
 	D_FREE(pproto);
 out_detach:
 	dc_mgmt_sys_detach(sys);
+out_lock:
+	D_SPIN_DESTROY(&dc_pool_cache_lock);
 
 	return rc;
-}
-
-/**
- * Finalize pool interface
- */
-void
-dc_pool_fini(void)
-{
-	int rc;
-
-	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1)
-		rc = daos_rpc_unregister(&pool_proto_fmt_v4);
-	else
-		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
-	if (rc != 0)
-		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 static void
@@ -226,6 +227,7 @@ dc_hdl2pool(daos_handle_t poh)
 	struct dc_pool *dc_pool;
 	int i;
 	int insert_i = 0;
+	struct dc_pool_handle_cache *dphc;
 
 	for (i = 0; i < DC_POOL_CACHE_NR; i++) {
 		if (dc_pool_cookie[i] && poh.cookie == dc_pool_cookie[i]) {
@@ -243,9 +245,21 @@ dc_hdl2pool(daos_handle_t poh)
 		return NULL;
 
 	dc_pool = container_of(hlink, struct dc_pool, dp_hlink);
-	/* if there is no free slot, we replace first one to cache now*/
-	dc_pool_local[insert_i] = dc_pool;
-	dc_pool_cookie[insert_i] = poh.cookie;
+	/* run out of cache */
+	if (insert_i == 0 && dc_pool_cookie[0] != 0)
+		return dc_pool;
+
+	D_ALLOC_PTR(dphc);
+	if (dphc) {
+		dc_pool_local[insert_i] = dc_pool;
+		dc_pool_cookie[insert_i] = poh.cookie;
+		dphc->dphc_pool = dc_pool;
+		D_SPIN_LOCK(&dc_pool_cache_lock);
+		d_list_add_tail(&dphc->dphc_link, &dc_pool_global_list);
+		D_SPIN_UNLOCK(&dc_pool_cache_lock);
+		/* extra ref for cache */
+		dc_pool_get(dc_pool);
+	}
 
 	return dc_pool;
 }
@@ -259,16 +273,43 @@ dc_pool_hdl_link(struct dc_pool *pool)
 void
 dc_pool_hdl_unlink(struct dc_pool *pool)
 {
-	int i;
-
 	daos_hhash_link_delete(&pool->dp_hlink);
-	for (i = 0; i < DC_POOL_CACHE_NR; i++) {
-		if (dc_pool_local[i] == pool) {
-			dc_pool_local[i] = NULL;
-			dc_pool_cookie[i] = 0;
-		}
-	}
 }
+
+static void dc_pool_handle_cache_fini(void)
+{
+	struct dc_pool_handle_cache *dphc;
+	struct dc_pool_handle_cache *tmp;
+
+	D_SPIN_LOCK(&dc_pool_cache_lock);
+	d_list_for_each_entry_safe(dphc, tmp, &dc_pool_global_list, dphc_link) {
+		d_list_del(&dphc->dphc_link);
+		dc_pool_put(dphc->dphc_pool);
+		D_FREE(dphc);
+	}
+	D_SPIN_UNLOCK(&dc_pool_cache_lock);
+
+	D_SPIN_DESTROY(&dc_pool_cache_lock);
+}
+
+/**
+ * Finalize pool interface
+ */
+void
+dc_pool_fini(void)
+{
+	int rc;
+
+	dc_pool_handle_cache_fini();
+
+	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1)
+		rc = daos_rpc_unregister(&pool_proto_fmt_v4);
+	else
+		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
+	if (rc != 0)
+		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
+}
+
 
 static inline int
 flags_are_valid(unsigned int flags)
