@@ -34,7 +34,6 @@ pool:
   mode: 146
   name: daos_server
   size: 95%
-  svcn: 1
   control_method: dmg
 container:
   type: POSIX
@@ -50,8 +49,8 @@ mdtest:
   dfs_dir_oclass: RP_3GX
   num_of_files_dirs: 500 # total 16K files and 16K dirs for dcp
   mdtest_flags:
-    - "-C"
-    - "-E"
+    - "-C -G 27"
+    - "-E -X -G 27"
   depth: 4
   branching_factor: 4
   bytes: 4096
