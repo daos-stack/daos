@@ -682,7 +682,7 @@ pipeline {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
-                                 stashes: ['el8-gcc-install', 'el8-gcc-build-vars']
+                                 stashes: ['el8-gcc-install', 'el8-gcc-build-vars'],
                                  inst_rpms: unitPackages()
                     }
                     post {
