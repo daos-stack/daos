@@ -1512,9 +1512,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
 		if (rc) {
-			D_ERROR("failed to copy properties (%d)\n", rc);
-			rc = daos_der2errno(rc);
-			D_GOTO(err_prop, rc);
+			D_ERROR("failed to copy properties "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
 		}
 	}
 
