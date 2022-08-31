@@ -13,9 +13,9 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
 fi
 
 cd build
-
-sudo mv opt-daos /opt/daos
-find /opt/daos
+tar -xf opt-daos.tar
+ls
+sudo mv opt/daos /opt/
 
 # Setup daos admin etc.
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
