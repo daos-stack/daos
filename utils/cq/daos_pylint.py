@@ -586,12 +586,16 @@ def main():
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                try:
-                    (post_start, post_len) = parts[2][1:].split(',')
-                except ValueError:
-                    print(f'Unable to split parts[2] ("{parts[2]}") from line "{line.rstrip()}" '
-                          'on line number {lineno}')
-                    raise
+                if parts[2] == '+1':
+                    post_start = 1
+                    post_len = 1
+                else:
+                    try:
+                        (post_start, post_len) = parts[2][1:].split(',')
+                    except ValueError:
+                        print(f'Unable to split parts[2] ("{parts[2]}") from line'
+                              ' "{line.rstrip()}" on line number {lineno}')
+                        raise
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:

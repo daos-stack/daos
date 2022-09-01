@@ -1779,41 +1779,38 @@ class posix_tests():
     @needs_dfuse
     def test_readdir_25(self):
         """Test reading a directory with 25 entries"""
-        self.readdir_test(25, test_all=True)
+        self.readdir_test(25)
 
-    # Works, but is very slow so needs to be run without debugging.
-    #@needs_dfuse
-    #def test_readdir_300(self):
-    #    self.readdir_test(300, test_all=False)
+    def test_readdir_300(self):
+        """Test reading a directory with 25 entries"""
+        self.readdir_test(300, test_all=True)
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
 
         wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
-        if count == 0:
-            files = os.listdir(wide_dir)
-            assert len(files) == 0
-            return
         start = time.time()
         for idx in range(count):
-            with open(join(wide_dir, str(idx)), 'w'):
+            with open(join(wide_dir, f'file_{idx}'), 'w'):
                 pass
             if test_all:
                 files = os.listdir(wide_dir)
                 assert len(files) == idx + 1
         duration = time.time() - start
-        rate = count / duration
-        print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
-                                                                      duration,
-                                                                      rate))
+        print(f'Created {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
         print('Listing dir contents')
         start = time.time()
         files = os.listdir(wide_dir)
         duration = time.time() - start
-        rate = count / duration
-        print('Listed {} files in {:.1f} seconds rate {:.1f}'.format(count,
-                                                                     duration,
-                                                                     rate))
+        print(f'Listed {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+        print('Listing dir contents again')
+        start = time.time()
+        files = os.listdir(wide_dir)
+        duration = time.time() - start
+        print(f'Listed {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
         print(files)
         print(len(files))
         assert len(files) == count

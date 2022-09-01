@@ -22,11 +22,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	dfuse_open_handle_init(oh, ie);
 
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc);
-
 	fi_out.fh = (uint64_t)oh;
 
 #if HAVE_CACHE_READDIR
@@ -54,7 +49,6 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
-	int                   rc;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -73,11 +67,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		dfuse_cache_set_time(oh->doh_ie);
 	}
 
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(oh, req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	DFUSE_REPLY_ZERO(oh, req);
 	D_FREE(oh->doh_dre);
 	D_FREE(oh);
 };
