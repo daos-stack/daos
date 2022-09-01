@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -33,9 +33,7 @@ def number_of_failures():
     if os.path.exists(json_file):
         with open(json_file, "r") as ofh:
             conf = json.load(ofh)
-        print(f"DIR={DIR}")
         path = os.path.join(conf["BUILD_DIR"], DIR, "src")
-    print(f"path={path}")
     if not os.path.exists(path):
         try:
             res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
