@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+       Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License. See accompanying LICENSE file.
+-->
+
+<!-- Please merge these properties with your hadoop core-site.xml -->
+
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>daos://Pool1/Cont1</value>
+	<description>Your DAOS URI. "Pool1" is DAOS pool label. "Cont1" is DAOS POSIX container label. Required.</description>
+  </property>
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>file:///tmp/hadoop</value>
+    <description>A base for other temporary directories. Configure it to local file system if you don't want hadoop temporary file
+	to be written to DAOS. Suggested.</description>
+  </property>
+  <property>
+    <name>fs.checkpoint.period</name>
+    <value>1800</value>
+    <description>The number of seconds between two periodic checkpoints. Optional.</description>
+  </property>
+  <property>
+    <name>fs.checkpoint.size</name>
+    <value>10485760</value>
+	<description>Hadoop filesystem checkpoint size. Optional.</description>
+  </property>
+  <property>
+    <name>fs.AbstractFileSystem.daos.impl</name>
+    <value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
+	<description>DAOS impl. of abstract file system. Required.</description>
+  </property>
+  <property>
+    <name>fs.automatic.close</name>
+    <value>false</value>
+	<description>Set it to false to prevent closing underlying shared DAOS Container session. Required.</description>
+  </property>
+</configuration>
+

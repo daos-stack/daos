@@ -58,11 +58,11 @@ class ListVerboseTest(IorTestBase):
             "svc_reps": pool.svc_ranks,
             "targets_total": targets_total,
             "targets_disabled": targets_disabled,
-            "pool_layout_ver": 1,
+            "pool_layout_ver": 2,
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
-            "upgrade_layout_ver": 1,
+            "upgrade_layout_ver": 2,
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -335,7 +335,7 @@ class ListVerboseTest(IorTestBase):
         actual_pools_after = self.verify_pool_lists(
             targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
 
-        # Obtain the new free and imblanace.
+        # Obtain the new free and imbalance.
         free_after, imbalance_after = self.get_free_imbalance(
             actual_pools_after[0], storage)
 

@@ -78,6 +78,10 @@ func (mrs *mockRaftService) State() raft.RaftState {
 	return mrs.cfg.State
 }
 
+func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
+	return &mockRaftFuture{}
+}
+
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
 	if cfg == nil {
 		cfg = &mockRaftServiceConfig{
@@ -102,7 +106,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	}
 
 	db := MockDatabaseWithCfg(t, log, dbCfg)
-	db.replicaAddr.Addr = addr
+	db.replicaAddr = addr
 	return db
 }
 
@@ -147,7 +151,7 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, db.raftTransport = raft.NewInmemTransport(raft.ServerAddress(db.replicaAddr.String()))
+	_, db.raftTransport = raft.NewInmemTransport(db.serverAddress())
 
 	return db, cleanup
 }

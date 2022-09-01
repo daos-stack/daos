@@ -77,6 +77,8 @@ struct dc_tx {
 	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
 				 tx_retry:1, /** Retry the commit RPC. */
 				 tx_set_resend:1, /** Set 'resend' flag. */
+				 tx_for_convert:1,
+				 tx_has_cond:1,
 				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -228,6 +230,12 @@ static void
 dc_tx_decref(struct dc_tx *tx)
 {
 	daos_hhash_link_putref(&tx->tx_hlink);
+}
+
+static void
+dc_tx_addref(struct dc_tx *tx)
+{
+	daos_hhash_link_getref(&tx->tx_hlink);
 }
 
 static struct dc_tx *
@@ -736,7 +744,7 @@ complete_epoch_task(tse_task_t *task, void *arg)
  * \retval DC_TX_GE_CHOOSING	\a task shall call dc_tx_set_epoch, if a TX
  *				epoch is chosen, in a completion callback
  *				registered after this function returns
- * \retval DC_TX_GE_REINIT	\a task must reinit itself
+ * \retval DC_TX_GE_REINITED	\a task has been reinitialized
  */
 int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
@@ -786,16 +794,21 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * already choosing it. We'll "wait" for that "epoch task" to
 		 * complete.
 		 */
-		tse_disable_propagate(task);
 		D_DEBUG(DB_IO, DF_X64"/%p: waiting for epoch task %p\n",
 			th.cookie, task, tx->tx_epoch_task);
+		tse_disable_propagate(task);
 		rc = tse_task_register_deps(task, 1, &tx->tx_epoch_task);
 		if (rc != 0) {
 			D_ERROR("cannot depend on task %p: "DF_RC"\n",
 				tx->tx_epoch_task, DP_RC(rc));
 			goto out;
 		}
-		rc = DC_TX_GE_REINIT;
+		rc = tse_task_reinit(task);
+		if (rc != 0) {
+			D_ERROR("cannot reinitialize task %p: "DF_RC"\n", task, DP_RC(rc));
+			goto out;
+		}
+		rc = DC_TX_GE_REINITED;
 	}
 
 out:
@@ -1158,13 +1171,16 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr	*oca;
 	struct daos_cpd_update	*dcu = NULL;
 	struct obj_reasb_req	*reasb_req = NULL;
+	uint64_t		dkey_hash = 0;
 	uint32_t		 size;
+	uint32_t		 start_tgt;
 	int			 skipped_parity = 0;
 	int			 handled = 0;
-	int			 start;
+	int			 grp_start;
 	int			 rc = 0;
 	int			 idx;
 	uint8_t			 tgt_flags = 0;
+	int			 i;
 
 	if (d_list_empty(dtr_list))
 		leader_dtr = NULL;
@@ -1178,7 +1194,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (dtr == NULL)
 		return -DER_NOMEM;
 
-	start = grp_idx * obj->cob_grp_size;
+	grp_start = grp_idx * obj->cob_grp_size;
 	dcsr->dcsr_ec_tgt_nr = 0;
 
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
@@ -1189,24 +1205,30 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			dcu->dcu_start_shard = start;
+			dcu->dcu_start_shard = grp_start;
 			if (dcu->dcu_iod_array.oia_oiods != NULL)
 				tgt_flags = DTF_REASSEMBLE_REQ;
 		}
 	}
 
+	if (daos_oclass_is_ec(oca)) {
+		dkey_hash = obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash);
+		start_tgt = obj_ec_shard_idx(dkey_hash, oca, obj_get_grp_size(obj) - 1);
+	} else {
+		start_tgt = obj_get_grp_size(obj) - 1;
+	}
 	/* Descending order to guarantee that EC parity is handled firstly. */
-	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
+	for (i = 0, idx = start_tgt; i < obj_get_grp_size(obj);
+	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj))) {
 		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
-		    isclr(reasb_req->tgt_bitmap, idx - start))
+		    isclr(reasb_req->tgt_bitmap, idx))
 			continue;
 
-		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
+		rc = obj_shard_open(obj, idx + grp_start, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
-				if (idx >= start + obj->cob_grp_size -
-							oca->u.ec.e_p)
+				if (is_ec_parity_shard(idx, dkey_hash, oca))
 					skipped_parity++;
 
 				if (skipped_parity > oca->u.ec.e_p) {
@@ -1881,6 +1903,14 @@ out:
 		tx->tx_status = TX_FAILED;
 	else if (rc != 0)
 		tx->tx_status = TX_ABORTED;
+
+	/* Unlock for dc_tx_commit held. */
+	D_MUTEX_UNLOCK(&tx->tx_lock);
+	/* -1 for dc_tx_commit() held */
+	dc_tx_decref(tx);
+
+	tse_task_complete(task, rc);
+
 	return rc;
 }
 
@@ -1923,10 +1953,7 @@ dc_tx_commit(tse_task_t *task)
 		D_GOTO(out_tx, rc = 0);
 	}
 
-	rc = dc_tx_commit_trigger(task, tx, args);
-	if (rc)
-		D_GOTO(out_tx, rc);
-	return rc;
+	return dc_tx_commit_trigger(task, tx, args);
 
 out_tx:
 	D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -2564,10 +2591,13 @@ fail:
 	return rc;
 }
 
+static int dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int result);
+
 struct dc_tx_check_existence_cb_args {
 	enum obj_rpc_opc	opc;
 	struct dc_tx		*tx;
 	daos_handle_t		oh;
+	tse_task_t		*task;
 	uint64_t		flags;
 	daos_key_t		*dkey;
 	uint64_t		nr;
@@ -2634,6 +2664,9 @@ dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
 		obj_decref(obj);
 	}
 
+	if (tx->tx_for_convert)
+		rc = dc_tx_convert_post(tx, args->task, args->opc, rc);
+
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
 
@@ -2695,6 +2728,9 @@ out:
 		D_FREE(args->tmp_iods);
 	}
 
+	if (tx->tx_for_convert)
+		rc = dc_tx_convert_post(tx, args->task, args->opc, rc);
+
 	/* The errno will be auto propagated to the dependent task. */
 	task->dt_result = rc;
 
@@ -2722,9 +2758,13 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 
 	D_INIT_LIST_HEAD(&task_list);
 
+	if (nr == 0 || iods_or_akeys == NULL)
+		D_GOTO(fail, rc = -DER_INVAL);
+
 	cb_args.opc		= opc;
 	cb_args.tx		= tx;
 	cb_args.oh		= oh;
+	cb_args.task		= parent;
 	cb_args.flags		= flags;
 	cb_args.dkey		= dkey;
 	cb_args.nr		= nr;
@@ -2760,13 +2800,21 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 		if (rc != 0)
 			goto out;
 
+		iods = NULL;
+
 		/* decref and delete from head at shard_task_remove */
 		tse_task_addref(task);
 		tse_task_list_add(task, &task_list);
 
-		iods = NULL;
-
 		rc = dc_task_depend(parent, 1, &task);
+
+		/*
+		 * The task is in the task_list, then even if to be aborted, it will be handled
+		 * via tse_task_list_traverse(shard_task_abort), do NOT need to explicitly call
+		 * tse_task_complete()/dc_task_decref(), so reset it as NULL before "goto out".
+		 */
+		task = NULL;
+
 		if (rc != 0)
 			goto out;
 	}
@@ -2781,6 +2829,9 @@ out:
 			rc = dc_tx_add_update(tx, &obj, flags, dkey, nr, iods_or_akeys, sgls);
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 			obj_decref(obj);
+
+			if (tx->tx_for_convert)
+				rc = dc_tx_convert_post(tx, parent, opc, rc);
 
 			/* Drop the reference that is held via dc_tx_attach(). */
 			dc_tx_decref(tx);
@@ -2799,17 +2850,18 @@ out:
 			rc = 1;
 		}
 	} else {
-		if (iods != NULL) {
-			if (task != NULL)
-				dc_task_decref(task);
+		if (task != NULL)
+			tse_task_complete(task, rc);
 
+		if (iods != NULL) {
 			daos_iov_free(&iods->iod_name);
 			D_FREE(iods);
 		}
 
 fail:
 		tse_task_list_traverse(&task_list, shard_task_abort, &rc);
-		parent->dt_result = rc;
+		if (tx->tx_for_convert)
+			rc = dc_tx_convert_post(tx, parent, opc, rc);
 
 		/* Drop the reference that is held via dc_tx_attach(). */
 		dc_tx_decref(tx);
@@ -2834,6 +2886,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 	cb_args.opc		= opc;
 	cb_args.tx		= tx;
 	cb_args.oh		= oh;
+	cb_args.task		= parent;
 	cb_args.flags		= flags;
 	cb_args.dkey		= dkey;
 	cb_args.nr		= nr;
@@ -2908,7 +2961,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 
 out:
 	if (task != NULL)
-		dc_task_decref(task);
+		tse_task_complete(task, rc);
 
 	if (iods != NULL && iods != iods_or_akeys) {
 		for (i = 0; i < nr; i++)
@@ -2916,6 +2969,9 @@ out:
 
 		D_FREE(iods);
 	}
+
+	if (tx->tx_for_convert)
+		rc = dc_tx_convert_post(tx, parent, opc, rc);
 
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
@@ -2932,7 +2988,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 
 	rc = dc_tx_check(th, obj_is_modification_opc(opc) ? true : false, &tx);
 	if (rc != 0)
-		goto out;
+		goto out_obj;
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE: {
@@ -2942,6 +2998,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 				 DAOS_COND_DKEY_UPDATE |
 				 DAOS_COND_AKEY_INSERT |
 				 DAOS_COND_AKEY_UPDATE)) {
+			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 
 			if (obj != NULL)
@@ -2953,10 +3010,8 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		}
 
 		if (up->flags & DAOS_COND_PER_AKEY) {
+			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-
-			if (up->nr == 0 || up->iods == NULL)
-				D_GOTO(out, rc = -DER_INVAL);
 
 			if (obj != NULL)
 				obj_decref(obj);
@@ -2983,6 +3038,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
+			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 
 			if (obj != NULL)
@@ -3000,6 +3056,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
+			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 
 			if (obj != NULL)
@@ -3063,9 +3120,11 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 	}
 
 	D_MUTEX_UNLOCK(&tx->tx_lock);
+
+	/* -1 for dc_tx_check() held */
 	dc_tx_decref(tx);
 
-out:
+out_obj:
 	if (obj != NULL)
 		obj_decref(obj);
 
@@ -3172,77 +3231,83 @@ out:
 	return rc;
 }
 
+static int
+dc_tx_convert_post(struct dc_tx *tx, tse_task_t *task, enum obj_rpc_opc opc, int result)
+{
+	struct tx_convert_cb_args	 conv_args = { .conv_tx = tx,
+						       .conv_task = task,
+						       .conv_opc = opc };
+	daos_tx_commit_t		*cmt_args;
+	tse_task_t			*cmt_task = NULL;
+	int				 rc = 0;
+
+	if (result != 0)
+		D_GOTO(out, rc = result);
+
+	rc = dc_task_create(dc_tx_commit, tse_task2sched(task), NULL, &cmt_task);
+	if (rc != 0) {
+		D_ERROR("Fail to create tx convert commit task for opc %u: "DF_RC"\n",
+			opc, DP_RC(rc));
+		goto out;
+	}
+
+	cmt_args = dc_task_get_args(cmt_task);
+	cmt_args->th = dc_tx_ptr2hdl(tx);
+	cmt_args->flags = 0;
+
+	rc = tse_task_register_comp_cb(cmt_task, dc_tx_convert_cb, &conv_args, sizeof(conv_args));
+	if (rc != 0) {
+		D_ERROR("Fail to add CB for TX convert task commit: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = dc_task_depend(task, 1, &cmt_task);
+	if (rc != 0) {
+		D_ERROR("Fail to add dep for TX convert task on commit: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	return dc_task_schedule(cmt_task, true);
+
+out:
+	if (cmt_task != NULL)
+		tse_task_complete(cmt_task, rc);
+
+	tse_task_complete(task, rc);
+	dc_tx_close_internal(tx);
+
+	return rc;
+}
+
 int
 dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 {
-	struct tx_convert_cb_args	 conv = { 0 };
-	daos_tx_commit_t		*args;
-	tse_task_t			*tx_task = NULL;
-	struct dc_tx			*tx = NULL;
-	int				 rc = 0;
+	struct dc_tx	*tx = NULL;
+	int		 rc = 0;
 
 	D_ASSERT(obj != NULL);
+	D_ASSERTF(task->dt_result == 0, "Unexpected initial task result %d\n", task->dt_result);
 
 	rc = dc_tx_alloc(obj->cob_coh, 0, DAOS_TF_ZERO_COPY, &tx);
 	if (rc != 0) {
-		D_ERROR("Fail to open TX for opc %u: "DF_RC"\n",
-			opc, DP_RC(rc));
+		D_ERROR("Fail to open convert TX for opc %u: "DF_RC"\n", opc, DP_RC(rc));
 		goto out;
 	}
 
+	/* Hold another reference on TX to avoid being freed duing dc_tx_attach(). */
+	dc_tx_addref(tx);
+	tx->tx_for_convert = 1;
 	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task);
-	obj = NULL;
-	if (rc < 0) {
-		D_ERROR("Fail to attach TX for opc %u: "DF_RC"\n",
-			opc, DP_RC(rc));
-		goto out;
-	}
 
-	rc = dc_task_create(dc_tx_commit, tse_task2sched(task), NULL, &tx_task);
-	if (rc != 0) {
-		D_ERROR("Fail to create tx convert task for opc %u: "DF_RC"\n",
-			opc, DP_RC(rc));
-		goto out;
-	}
-
-	args = dc_task_get_args(tx_task);
-	args->th = dc_tx_ptr2hdl(tx);
-	args->flags = 0;
-
-	rc = dc_task_depend(task, 1, &tx_task);
-	if (rc != 0) {
-		D_ERROR("Fail to add dep on TX convert task: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
-
-	conv.conv_tx = tx;
-	conv.conv_task = task;
-	conv.conv_opc = opc;
-	task = NULL;
-
-	rc = tse_task_register_comp_cb(tx_task, dc_tx_convert_cb, &conv,
-				       sizeof(conv));
-	if (rc != 0) {
-		D_ERROR("Fail to add CB for TX convert task: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
-
-	return dc_task_schedule(tx_task, true);
+	if (!tx->tx_has_cond)
+		rc = dc_tx_convert_post(tx, task, opc, rc);
 
 out:
-	if (tx_task != NULL)
-		tse_task_complete(tx_task, rc);
-
-	if (task != NULL)
-		tse_task_complete(task, rc);
-
 	if (tx != NULL)
-		dc_tx_close_internal(tx);
-
-	if (obj != NULL)
-		obj_decref(obj);
+		/* -1 for above dc_tx_addref(). */
+		dc_tx_decref(tx);
+	else
+		tse_task_complete(task, rc);
 
 	return rc;
 }

@@ -94,11 +94,27 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		strcpy(str, "UNKNOWN");
 		return -1;
 	}
-	if (nr_grps == oc->oc_grp_nr)
+	if (nr_grps == oc->oc_grp_nr) {
 		strcpy(str, oc->oc_name);
-	else
-	/* update oc_name according to nr_grps */
-		strcpy(str, "UNKNOWN");
+	} else {
+		/** update oclass name with group number */
+		char *p = oc->oc_name;
+		int i = 0;
+
+		while (p[i] != 'G') {
+			str[i] = p[i];
+			i++;
+		}
+		str[i++] = 'G';
+		p = &str[i];
+		str[i++] = 0;
+		i = snprintf(p, MAX_OBJ_CLASS_NAME_LEN - strlen(str), "%u", nr_grps);
+		if (i < 0) {
+			D_ERROR("Failed to encode object class name\n");
+			strcpy(str, "UNKNOWN");
+			return -1;
+		}
+	}
 	return 0;
 }
 
@@ -107,9 +123,13 @@ daos_oclass_name2id(const char *name)
 {
 	struct daos_obj_class	*oc;
 
+	if (strnlen(name, MAX_OBJ_CLASS_NAME_LEN + 1) > MAX_OBJ_CLASS_NAME_LEN)
+		return OC_UNKNOWN;
+
 	/* slow search path, it's for tool and not performance sensitive. */
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
+		if (strlen(oc->oc_name) == strnlen(name, MAX_OBJ_CLASS_NAME_LEN) &&
+		    strcmp(oc->oc_name, name) == 0)
 			return oc->oc_id;
 	}
 
