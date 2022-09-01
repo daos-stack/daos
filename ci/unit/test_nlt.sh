@@ -13,7 +13,7 @@ ln -s ../../../../../../../../src/control \
   "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 DAOS_BASE=${SL_PREFIX%/install*}
 # Remove any logs from a previous run
-rm -rf dnt*.memcheck.xml vm_test/
+rm -rf dnt.*.memcheck.xml vm_test/
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
