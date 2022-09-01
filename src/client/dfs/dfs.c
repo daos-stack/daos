@@ -1480,7 +1480,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	dfs_attr_t		dattr;
 	char			str[37];
 	struct daos_prop_co_roots roots;
-	int			rc;
+	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
 
@@ -1646,7 +1646,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 err_super:
 	daos_obj_close(super_oh, NULL);
 err_close:
-	daos_cont_close(coh, NULL);
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc2)
+		D_ERROR("daos_cont_close failed "DF_RC"\n", DP_RC(rc));
 err_destroy:
 	/*
 	 * DAOS container create returns success even if container exists -
@@ -1654,8 +1656,11 @@ err_destroy:
 	 * the SB creation, so do not destroy the container, since another
 	 * process might have created it.
 	 */
-	if (rc != EEXIST)
-		daos_cont_destroy(poh, str, 1, NULL);
+	if (rc != EEXIST) {
+		rc2 = daos_cont_destroy(poh, str, 1, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_destroy failed "DF_RC"\n", DP_RC(rc));
+	}
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -3511,6 +3516,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		break;
 	case S_IFLNK:
 		if (flags & O_NOFOLLOW) {
+			if (entry.value == NULL) {
+				D_ERROR("Symlink entry found with no value\n");
+				D_GOTO(err_obj, rc = EIO);
+			}
 			/* Create a truncated version of the string */
 			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 			D_FREE(entry.value);
@@ -4468,10 +4477,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
@@ -4589,10 +4598,10 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	if (uid == -1 && gid == -1)
 		D_GOTO(out, rc = 0);
