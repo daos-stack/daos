@@ -74,7 +74,7 @@ struct dfuse_readdir_entry {
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
 	dfs_t                           *doh_dfs;
-	/** the DFS object handle */
+	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                       *doh_obj;
 	/** the inode entry for the file */
 	struct dfuse_inode_entry        *doh_ie;
