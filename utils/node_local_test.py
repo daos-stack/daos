@@ -1844,6 +1844,32 @@ class posix_tests():
         print(len(files2))
         assert len(files2) == count
 
+    @needs_dfuse
+    def test_readdir_hard(self):
+        """Run a parallel readdir test.
+
+        Open a directory twice, read from the 1st one once, then read the entire directory from
+        the second handle.  This tests dfuse in-memory caching.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        for idx in range(30):
+            with open(join(test_dir, f'file_{idx}'), 'w'):
+                pass
+
+        files = []
+        files2 = []
+        with os.scandir(test_dir) as entries:
+            with os.scandir(test_dir) as second:
+                files2.append(next(second).name)
+                for entry in entries:
+                    files.append(entry.name)
+                for entry in second:
+                    files2.append(entry.name)
+
+        print(files)
+        print(files2)
+
     @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
         """Test single-threaded mode"""
