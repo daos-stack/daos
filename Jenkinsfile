@@ -551,6 +551,7 @@ pipeline {
                         }
                     }
                     steps {
+                        sh '''mkdir install && touch install/file'''
                         sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'no',
