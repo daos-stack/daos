@@ -439,7 +439,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self.env = env.copy()
+        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):
