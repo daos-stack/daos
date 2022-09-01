@@ -2686,8 +2686,10 @@ out:
 
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
 	obj_ec_split_req_fini(split_req);
-	D_FREE(mbs);
-	D_FREE(dti_cos);
+	if (mbs)
+		D_FREE(mbs);
+	if (dti_cos)
+		D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
 }
 

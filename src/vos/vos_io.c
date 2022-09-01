@@ -522,7 +522,8 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
-	D_FREE(ioc->ic_umoffs);
+	if (ioc->ic_umoffs)
+		D_FREE(ioc->ic_umoffs);
 }
 
 static int
@@ -588,7 +589,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
 	vos_cont_decref(ioc->ic_cont);
-	vos_ts_set_free(ioc->ic_ts_set);
+	if (ioc->ic_ts_set)
+		vos_ts_set_free(ioc->ic_ts_set);
 	D_FREE(ioc);
 }
 
@@ -2417,8 +2419,10 @@ abort:
 
 	if (size != NULL && err == 0)
 		*size = ioc->ic_io_size;
-	D_FREE(daes);
-	D_FREE(dces);
+	if (daes)
+		D_FREE(daes);
+	if (dces)
+		D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
 
 	return err;

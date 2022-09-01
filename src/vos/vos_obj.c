@@ -547,8 +547,10 @@ reset:
 			vos_ts_set_wupdate(ts_set, epr.epr_hi);
 	}
 
-	D_FREE(daes);
-	D_FREE(dces);
+	if (daes)
+		D_FREE(daes);
+	if (dces)
+		D_FREE(dces);
 	vos_ts_set_free(ts_set);
 
 	return rc;

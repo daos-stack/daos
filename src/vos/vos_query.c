@@ -786,7 +786,8 @@ out:
 	if (rc == 0 || rc == -DER_NONEXIST)
 		vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi);
 
-	vos_ts_set_free(query->qt_ts_set);
+	if (query->qt_ts_set)
+		vos_ts_set_free(query->qt_ts_set);
 free_query:
 	vos_dth_set(NULL);
 	D_FREE(query);

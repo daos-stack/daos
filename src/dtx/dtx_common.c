@@ -1414,7 +1414,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	vos_dtx_detach(dth);
 
 out:
-	D_FREE(dth->dth_oid_array);
+	if (dth->dth_oid_array)
+		D_FREE(dth->dth_oid_array);
 	D_FREE(dth);
 
 	return result;

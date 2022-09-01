@@ -1185,7 +1185,8 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 out:
 	if (base_addr)
 		*uri_exists = true;
-	D_FREE(uri);
+	if (uri)
+		D_FREE(uri);
 	return rc;
 }
 
