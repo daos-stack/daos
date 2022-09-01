@@ -551,13 +551,12 @@ pipeline {
                         }
                     }
                     steps {
-                        sh '''mkdir install && touch install/file'''
                         sconsBuild parallel_build: true,
-                                   stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'no',
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
                         sh '''tar -cf opt-daos.tar /opt/daos/'''
+                        stash name: 'el8-gcc-build-vars', includes: '.build_vars.*'
                         stash name: 'el8-gcc-opt-tar', includes: 'opt-daos.tar'
                     }
                     post {

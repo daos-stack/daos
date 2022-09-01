@@ -5,12 +5,6 @@ set -uex
 
 rm -rf nlt_logs
 
-# shellcheck disable=SC1091
-source ./.build_vars.sh
-rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
-mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
-ln -s ../../../../../../../../src/control \
-  "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 # Remove any logs from a previous run
 rm -rf dnt.*.memcheck.xml vm_test/
 NODE=${NODELIST%%,*}
