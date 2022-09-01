@@ -76,20 +76,6 @@ def get_local_host():
     return socket.gethostname().split(".")[0]
 
 
-def get_file_handler(log_file):
-    """Get a logging file handler.
-
-    Args:
-        log (logger): logger to which to add the FileHandler
-        log_file (str): file in which to log debug messages
-    """
-    log_format = logging.Formatter("%(asctime)s %(levelname)-5s %(funcName)27s: %(message)s")
-    log_handler = logging.FileHandler(log_file, encoding='utf-8')
-    log_handler.setLevel(logging.DEBUG)
-    log_handler.setFormatter(log_format)
-    return log_handler
-
-
 def run_local(log, command, capture_output=True, timeout=None, check=False):
     """Run the command locally.
 
@@ -2076,10 +2062,10 @@ class TestInfo():
             test_file (str): the test python file
         """
         self.test_file = test_file
-        test_path, test_filename = os.path.split(self.test_file)
-        _, test_dir = os.path.split(test_path)
-        test_filename_root, _ = os.path.splitext(test_filename)
-        self.class_name = ".".join(["FTEST_launch", test_dir, test_filename_root])
+        test_path, self.python_file = os.path.split(self.test_file)
+        _, self.directory = os.path.split(test_path)
+        filename_root, _ = os.path.splitext(self.python_file)
+        self.class_name = ".".join(["FTEST_launch", self.directory, filename_root])
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.hosts = self.HostInfo()
         self.loop = 1
@@ -2356,7 +2342,7 @@ class LaunchJob():
             format=console_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG,
             handlers=[console])
         self.log = logging.getLogger(__name__)
-        self.log.addHandler(get_file_handler(self.logfile))
+        self.log.addHandler(self._get_file_handler(self.logfile))
         self._start_logging(renamed_log_dir)
 
         # Setup results tracking
@@ -2368,7 +2354,8 @@ class LaunchJob():
         self.config = {
             "job.run.result.xunit.enabled": "on",
             "job.run.result.xunit.output": None,
-            "job.run.result.xunit.max_test_log_chars": 1000,
+            "job.run.result.xunit.max_test_log_chars": self.avocado.get_setting(
+                "job.run.result.xunit", "max_test_log_chars"),
             "job.run.result.xunit.job_name": name,
         }
 
@@ -2392,6 +2379,20 @@ class LaunchJob():
 
         return old_launch_log_dir
 
+    @staticmethod
+    def _get_file_handler(log_file):
+        """Get a logging file handler.
+
+        Args:
+            log (logger): logger to which to add the FileHandler
+            log_file (str): file in which to log debug messages
+        """
+        log_format = logging.Formatter("%(asctime)s %(levelname)-5s %(funcName)27s: %(message)s")
+        log_handler = logging.FileHandler(log_file, encoding='utf-8')
+        log_handler.setLevel(logging.DEBUG)
+        log_handler.setFormatter(log_format)
+        return log_handler
+
     def _start_logging(self, renamed_log_dir=None):
         """Log the information to the start of the log file.
 
@@ -2404,7 +2405,7 @@ class LaunchJob():
         self.log.info("Running with %s", self.avocado)
         self.log.info("Logging launch results to: %s", self.logdir)
         if renamed_log_dir:
-            self.log.info("  Renaming existing launch log directory to %s", renamed_log_dir)
+            self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
         self.log.info("Launch log file: %s", self.logfile)
         self.log.info("-" * 80)
 
@@ -2507,7 +2508,7 @@ class LaunchJob():
                     self.avocado.get_directory("launch"), test.get_log_file(loop))
                 self.log.info(
                     "Logging launch loop %s running of %s in %s", loop, test, test_log_file)
-                test_file_handler = get_file_handler(test_log_file)
+                test_file_handler = self._get_file_handler(test_log_file)
                 self.log.addHandler(test_file_handler)
 
                 # Mark the start of this test and prepare the hosts to run the tests
@@ -2723,11 +2724,17 @@ class LaunchJob():
             for directory, data in remote_files.items():
                 try:
                     self._archive_files(
-                        data["summary"], data["hosts"], directory, data["pattern"],
+                        data["summary"], data["hosts"].copy(), directory, data["pattern"],
                         data["destination"])
 
                 except LaunchException as error:
                     message = f"Error archiving {data['summary']}"
+                    self.log.exception(message)
+                    self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                    return_code |= 16
+
+                except Exception as error:      # pylint: disable=broad-except
+                    message = f"Unexpected error archiving {data['summary']}"
                     self.log.exception(message)
                     self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
                     return_code |= 16
@@ -2772,53 +2779,51 @@ class LaunchJob():
 
         """
         self.log.debug("Archiving %s from %s", summary, hosts)
-        base_find_command = f"find {directory} -type f"
+        find_command = f"find {directory}"
+        remote_hosts = hosts.difference(self.local_host)
+        local_host = hosts.union(self.local_host)
 
         # Remove any remote 0 length files
         self.log.debug("Removing any zero-length files in %s on %s", directory, hosts)
-        command = " ".join([base_find_command, "-empty -print -delete"])
+        command = f"{find_command} -type f -empty -print -delete"
         run_remote(self.log, hosts, command)
 
         # Get a list of remote files and their sizes
         self.log.debug("Detecting any %s files in %s on %s", pattern, directory, hosts)
-        command = " ".join([base_find_command, f"-name {pattern} -printf \"%p %k KB \n\""])
+        command = f"{find_command} -type f -name '{pattern}' -printf '%p %k KB\n'"
         run_remote(self.log, hosts, command)
 
         # Run cart_logtest
         cart_logtest = os.path.join(os.curdir, "cart", "cart_logtest.py")
         self.log.debug(
             "Running %s on any %s files in %s on %s", cart_logtest, pattern, directory, hosts)
-        command = " ".join(
-            [base_find_command,
-             f"-name {pattern} -print0 | xargs -r0 -I '[]' {cart_logtest} '[]' > '[]'.cart_logtest"]
-        )
+        command = (
+            f"{find_command} -type f -name '{pattern}' -print0 | xargs -r0 -I '[]' {cart_logtest} "
+            "'[]' > '[]'.cart_logtest")
         run_remote(self.log, hosts, command)
 
-        # Remotely compress any files larger than 1 MB
-        remote_hosts = hosts.difference(self.local_host)
-        local_host = hosts.union(self.local_host)
+        # Compress any files larger than 1 MB
+        command = (
+            f"{find_command} -maxdepth 0 -type f -name '{pattern}' -size +1M -print0 | "
+            "sudo xargs -r0 lbzip2 -v")
         if remote_hosts:
             self.log.debug(
                 "Compressing (remotely) any %s files in %s on %s", pattern, directory, remote_hosts)
-            command = " ".join(
-                [base_find_command, "-maxdepth 0 -size +1M -print0 | sudo xargs -r0 lbzip2 -v"])
             run_remote(self.log, remote_hosts, command)
-
-            # Copy the files back to this host
-            self.log.debug("Moving files from %s to %s on %s", directory, destination, remote_hosts)
-            command = f"clush -v -w {remote_hosts} --rcopy {directory} --dest {destination}"
-            run_remote(self.log, remote_hosts, command)
-
-        # Locally compress any files larger than 1 MB
         if local_host:
             self.log.debug(
                 "Compressing (locally) any %s files in %s on %s", pattern, directory, local_host)
-            command = base_find_command.split(" ") + ["-maxdepth", "0", "-size", "+1M", "-print0"]
-            command.extend(["|", "sudo", "xargs", "-r0", "lbzip2", "-v"])
-            run_local(self.log, command, check=True)
+            run_local(self.log, command.split(" "), check=True)
 
-            # Move the files on this host
-            self.log.debug("Moving files from %s to %s on %s", directory, destination, local_host)
+        # Move the test files to the test-results directory on this host
+        if remote_hosts:
+            self.log.debug(
+                "Moving (remotely) files from %s to %s on %s", directory, destination, remote_hosts)
+            command = f"clush -v -w {remote_hosts} --rcopy {directory} --dest {destination}"
+            run_remote(self.log, remote_hosts, command)
+        if local_host:
+            self.log.debug(
+                "Moving (locally) files from %s to %s on %s", directory, destination, local_host)
             for source in os.listdir(directory):
                 name = ".".join([os.path.basename(source), str(hosts)])
                 destination = os.path.join(destination, name)
@@ -2850,21 +2855,23 @@ class LaunchJob():
         self.log.debug("-" * 80)
         self.log.info("Renaming the avocado job-results directory")
 
+        # Create the new avocado job-results test directory name
+        new_test_logs_dir = "-".join([test_logs_dir, test_name])
         if jenkinslog:
             if self.repeat > 1:
                 # When repeating tests ensure Jenkins-style avocado log directories
                 # are unique by including the loop count in the path
-                new_test_logs_dir = os.path.join(avocado_logs_dir, test.test_file, str(loop))
+                new_test_logs_dir = os.path.join(
+                    avocado_logs_dir, test.directory, test.python_file, str(loop))
             else:
-                new_test_logs_dir = os.path.join(avocado_logs_dir, test.test_file)
+                new_test_logs_dir = os.path.join(avocado_logs_dir, test.directory, test.python_file)
             try:
                 os.makedirs(new_test_logs_dir)
             except OSError as error:
                 self.log.exception(error)
                 raise LaunchException(f"Error creating {new_test_logs_dir}") from error
-        else:
-            new_test_logs_dir = "-".join([test_logs_dir, test_name])
 
+        # Rename the avocado job-results test directory and update the 'latest' symlink
         try:
             os.rename(test_logs_dir, new_test_logs_dir)
             os.remove(test_logs_lnk)
@@ -2875,6 +2882,7 @@ class LaunchJob():
             raise LaunchException(
                 f"Error renaming {test_logs_dir} to {new_test_logs_dir}") from error
 
+        # Update the results.xml file with the new functional test class name
         if jenkinslog:
             xml_file = os.path.join(new_test_logs_dir, "results.xml")
             try:
@@ -2888,9 +2896,8 @@ class LaunchJob():
             org_xml_data = xml_data
 
             # First, mangle the in-place file for Jenkins to consume
-            test_dir = os.path.split(os.path.dirname(test.test_file))[-1]
             org_class = "classname=\""
-            new_class = f"{org_class}FTEST_{test_dir}."
+            new_class = f"{org_class}FTEST_{test.directory}."
             xml_data = re.sub(org_class, new_class, xml_data)
 
             try:
