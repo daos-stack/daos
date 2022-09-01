@@ -93,6 +93,7 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
+	var cfgLoaded = true
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
@@ -127,9 +128,16 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
+				if ( len(args) == 2 && args[0] == "network" && args[1] == "scan" ) {
+					cfgLoaded = false
+				} else {
+					return errors.Wrapf(err, "failed to load config from %s",
+							    cfgCmd.configPath())
+				}
 			}
-			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			if cfgLoaded {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			}
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {
