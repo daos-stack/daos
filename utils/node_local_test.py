@@ -1777,9 +1777,9 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse
-    def test_readdir_25(self):
+    def test_readdir_30(self):
         """Test reading a directory with 25 entries"""
-        self.readdir_test(25)
+        self.readdir_test(30)
 
     # @needs_dfuse
     # def test_readdir_300(self):
@@ -1815,6 +1815,34 @@ class posix_tests():
         print(files)
         print(len(files))
         assert len(files) == count
+        files = []
+        start = time.time()
+        with os.scandir(wide_dir) as entries:
+            for entry in entries:
+                files.append(entry.name)
+        duration = time.time() - start
+        print(f'Scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+
+        files = []
+        files2 = []
+        start = time.time()
+        with os.scandir(wide_dir) as entries:
+            with os.scandir(wide_dir) as second:
+                for entry in entries:
+                    files.append(entry.name)
+                for entry in second:
+                    files2.append(entry.name)
+        duration = time.time() - start
+        print(f'Double scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+        print(files2)
+        print(len(files2))
+        assert len(files2) == count
 
     @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
