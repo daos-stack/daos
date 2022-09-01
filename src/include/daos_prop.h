@@ -411,6 +411,9 @@ enum {
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
+/** default fault domain level */
+#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
+
 /** container status flag */
 enum {
 	/* in healthy status, data protection work as expected */

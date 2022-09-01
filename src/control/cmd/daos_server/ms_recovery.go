@@ -9,10 +9,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -25,49 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 	sdb "github.com/daos-stack/daos/src/control/system/raft"
 )
-
-func checkForDupeProcess() error {
-	selfPid := os.Getpid()
-	selfExe, err := os.Readlink("/proc/" + strconv.Itoa(selfPid) + "/exe")
-	if err != nil {
-		return errors.Wrap(err, "failed to read self executable path")
-	}
-	selfName := filepath.Base(selfExe)
-
-	allProcs, err := filepath.Glob("/proc/*/status")
-	if err != nil {
-		return errors.Wrap(err, "failed to read process list")
-	}
-	for _, proc := range allProcs {
-		data, err := ioutil.ReadFile(proc)
-		if err != nil {
-			return errors.Wrap(err, "failed to read process command line")
-		}
-		lines := strings.Split(string(data), "\n")
-		if len(lines) == 0 {
-			return errors.Errorf("invalid process status file: %s", proc)
-		}
-		namePair := strings.SplitN(lines[0], ":", 2)
-		if len(namePair) < 2 {
-			return errors.Errorf("invalid process status file: %s", proc)
-		}
-		if strings.TrimSpace(namePair[1]) != selfName {
-			continue
-		}
-
-		pid, err := strconv.Atoi(filepath.Base(filepath.Dir(proc)))
-		if err != nil {
-			continue
-		}
-		if pid == selfPid {
-			continue
-		}
-
-		return errors.Errorf("another %s process is already running (pid: %d)", selfName, pid)
-	}
-
-	return nil
-}
 
 type msCmdRoot struct {
 	Status  msStatusCmd   `command:"status" description:"Show status of the local management service replica"`
@@ -124,7 +77,7 @@ type msStatusCmd struct {
 }
 
 func (cmd *msStatusCmd) Execute([]string) error {
-	if err := checkForDupeProcess(); err != nil {
+	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
 
@@ -198,7 +151,7 @@ type msRecoveryCmd struct {
 }
 
 func (cmd *msRecoveryCmd) Execute([]string) error {
-	if err := checkForDupeProcess(); err != nil {
+	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
 
@@ -261,7 +214,7 @@ type msRestoreCmd struct {
 }
 
 func (cmd *msRestoreCmd) Execute([]string) error {
-	if err := checkForDupeProcess(); err != nil {
+	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
 

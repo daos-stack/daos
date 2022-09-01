@@ -1171,13 +1171,16 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr	*oca;
 	struct daos_cpd_update	*dcu = NULL;
 	struct obj_reasb_req	*reasb_req = NULL;
+	uint64_t		dkey_hash = 0;
 	uint32_t		 size;
+	uint32_t		 start_tgt;
 	int			 skipped_parity = 0;
 	int			 handled = 0;
-	int			 start;
+	int			 grp_start;
 	int			 rc = 0;
 	int			 idx;
 	uint8_t			 tgt_flags = 0;
+	int			 i;
 
 	if (d_list_empty(dtr_list))
 		leader_dtr = NULL;
@@ -1191,7 +1194,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (dtr == NULL)
 		return -DER_NOMEM;
 
-	start = grp_idx * obj->cob_grp_size;
+	grp_start = grp_idx * obj->cob_grp_size;
 	dcsr->dcsr_ec_tgt_nr = 0;
 
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
@@ -1202,24 +1205,30 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			dcu->dcu_start_shard = start;
+			dcu->dcu_start_shard = grp_start;
 			if (dcu->dcu_iod_array.oia_oiods != NULL)
 				tgt_flags = DTF_REASSEMBLE_REQ;
 		}
 	}
 
+	if (daos_oclass_is_ec(oca)) {
+		dkey_hash = obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash);
+		start_tgt = obj_ec_shard_idx(dkey_hash, oca, obj_get_grp_size(obj) - 1);
+	} else {
+		start_tgt = obj_get_grp_size(obj) - 1;
+	}
 	/* Descending order to guarantee that EC parity is handled firstly. */
-	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
+	for (i = 0, idx = start_tgt; i < obj_get_grp_size(obj);
+	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj))) {
 		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
-		    isclr(reasb_req->tgt_bitmap, idx - start))
+		    isclr(reasb_req->tgt_bitmap, idx))
 			continue;
 
-		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
+		rc = obj_shard_open(obj, idx + grp_start, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
-				if (idx >= start + obj->cob_grp_size -
-							oca->u.ec.e_p)
+				if (is_ec_parity_shard(idx, dkey_hash, oca))
 					skipped_parity++;
 
 				if (skipped_parity > oca->u.ec.e_p) {
