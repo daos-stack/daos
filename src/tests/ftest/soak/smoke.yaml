@@ -177,7 +177,7 @@ vpic_smoke:
         - 1
     taskspernode:
         - 1
-    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    cmdline: "/scratch/soak/apps/vpic-install/bin/harris.Linux"
     posix: True
     workdir: "/tmp/daos_dfuse/vpic/"
     module: "mpi/latest"
@@ -191,7 +191,7 @@ lammps_smoke:
         - 1
     taskspernode:
         - 1
-    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj.smoke"
+    cmdline: "/scratch/soak/apps/lammps/src/lmp_mpi -i /scratch/soak/apps/lammps/bench/in.lj.smoke"
     posix: True
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
