@@ -200,12 +200,17 @@ enum d_hash_feats {
 	D_HASH_FT_LRU = (1 << 4),
 
 	/**
+	 * Need not take lock for ch_key_init.
+	 * Only valid when without D_HASH_FT_NOLOCK feat bit set.
+	 */
+	D_HASH_FT_NO_KEYINIT_LOCK = (1 << 5),
+
+	/**
 	 * On an EPHEMERAL hash table then decref will not cause a delete, if this happens
 	 * then the code will assert.  decref calls which could potentially be dropping the
 	 * last reference should call ndecref().
 	 */
-	D_HASH_FT_EPHEMERAL_RO_DEC = (1 << 5),
-
+	D_HASH_FT_EPHEMERAL_RO_DEC = (1 << 6),
 
 	/**
 	 * Use Global Table Lock instead of per bucket locking.
