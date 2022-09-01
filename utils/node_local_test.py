@@ -4124,7 +4124,7 @@ def test_alloc_fail_cat(server, conf):
     target_file = join(dfuse.dir, 'test_file')
 
     with open(target_file, 'w') as fd:
-        fd.write('Some raw test data that spans over at least two targets and possibly more.')
+        fd.write('Hello there')
 
     test_cmd = AllocFailTest(conf, 'il-cat', ['cat', target_file])
     test_cmd.use_il = True
@@ -4154,7 +4154,7 @@ def test_alloc_fail_il_cp(server, conf):
 
     os.mkdir(test_dir)
 
-    cmd = ['fs', 'set-attr', '--path', test_dir, '--oclass', 'S2', '--chunk-size', '8']
+    cmd = ['fs', 'set-attr', '--path', test_dir, '--oclass', 'S4', '--chunk-size', '8']
 
     rc = run_daos_cmd(conf, cmd)
     print(rc)
@@ -4162,7 +4162,7 @@ def test_alloc_fail_il_cp(server, conf):
     src_file = join(test_dir, 'src_file')
 
     with open(src_file, 'w') as fd:
-        fd.write('Hello there')
+        fd.write('Some raw test data that spans over at least two targets and possibly more.')
 
     def get_cmd(loc):
         return ['cp', src_file, join(test_dir, f'test_{loc}')]
