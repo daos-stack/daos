@@ -458,7 +458,7 @@ agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
 		uint64_t elen, unsigned int k, uint64_t len,
 		uint64_t stripenum, unsigned int *full_cell_cnt)
 {
-	uint64_t 	i;
+	uint64_t	i;
 	unsigned int	cell_cnt = 0;
 
 	for (i = 0; i < k; i++) {
