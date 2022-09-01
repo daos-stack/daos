@@ -1781,9 +1781,10 @@ class posix_tests():
         """Test reading a directory with 25 entries"""
         self.readdir_test(25)
 
-    def test_readdir_300(self):
-        """Test reading a directory with 25 entries"""
-        self.readdir_test(300, test_all=True)
+    # @needs_dfuse
+    # def test_readdir_300(self):
+    #    """Test reading a directory with 300 entries"""
+    #    self.readdir_test(300, test_all=True)
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
