@@ -605,7 +605,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("CORRPC to secondary group finished\n");
 
 	/* Send shutdown RPC to all nodes except for self */
-	DBG_PRINT("Senidng shutdown to all nodes\n");
+	DBG_PRINT("Sending shutdown to all nodes\n");
 
 	/* Note rank at i=1 corresponds to 'self' */
 	for (i = 0; i < rank_list->rl_nr; i++) {
