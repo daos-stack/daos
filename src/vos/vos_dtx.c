@@ -186,9 +186,10 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 out:
 	D_DEBUG(DB_IO,
 		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
-		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
-		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
+		"ver %u/%u, may need %s retry.\n", hit_again ? "Repeat" : "First",
+		DP_DTI(&DAE_XID(dae)), pos, dth, dth != NULL && dth->dth_dist ? "yes" : "no",
+		DAE_LID(dae), DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), DAE_VER(dae),
+		dth != NULL ? dth->dth_ver : 0, s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -1229,15 +1230,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	/* For rebuild fetch, if hit non-committed DTX, has to ask the
-	 * sponsor to wait and retry, otherwise, the new in-rebuilding
-	 * target may miss some data.
-	 * Under such case, DTX resync on related leader server is not
-	 * finished yet. The DTX entry may be stale, need refresh with
-	 * the leader.
+	/*
+	 * Up layer rebuild logic guarantees that the rebuild scan will not be
+	 * triggered until DTX resync has been done on all related targets. So
+	 * here, if rebuild logic hits non-committed DTX entry, it must be for
+	 * new IO that version is not older than rebuild, then it is invisible
+	 * to rebuild. Related new IO corresponding to such non-committed DTX
+	 * has already been sent to the in-rebuilding target.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, dth, false, true, 6);
+		return ALB_UNAVAILABLE;
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
@@ -1402,7 +1404,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		return 0;
 	}
 
-	if (dth->dth_pinned && !dth->dth_verified) {
+	if (dth->dth_need_validation && !dth->dth_verified) {
 		rc = vos_dtx_validation(dth);
 		switch (rc) {
 		case DTX_ST_INITED:
@@ -1793,7 +1795,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (mbs != NULL)
 			dae->dae_maybe_shared = 1;
 
-		if (dae->dae_dbd == NULL)
+		if (dae->dae_dbd == NULL || dae->dae_dth != NULL)
 			return -DER_INPROGRESS;
 
 		if (epoch != NULL) {
@@ -2758,27 +2760,47 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 }
 
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent)
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 {
 	struct vos_container	*cont;
 	struct umem_instance	*umm = NULL;
 	struct vos_dtx_blob_df	*dbd = NULL;
 	struct vos_dtx_cmt_ent	*dce = NULL;
+	struct vos_dtx_act_ent	*dae;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	bool			 began = false;
 	int			 rc = 0;
 
 	if (!dtx_is_valid_handle(dth))
 		return 0;
 
+	cont = vos_hdl2cont(dth->dth_coh);
+	D_ASSERT(cont != NULL);
+
 	if (dth->dth_ent != NULL) {
 		if (!persistent || dth->dth_active)
 			return 0;
 	} else {
 		D_ASSERT(dth->dth_pinned == 0);
-	}
 
-	cont = vos_hdl2cont(dth->dth_coh);
-	D_ASSERT(cont != NULL);
+		if (exist) {
+			d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+			d_iov_set(&riov, NULL, 0);
+			rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+			if (rc != 0)
+				goto out;
+
+			dae = riov.iov_buf;
+			if (dae->dae_dth == NULL)
+				dae->dae_dth = dth;
+			else
+				D_ASSERT(dae->dae_dth == dth);
+
+			dth->dth_ent = dae;
+			dth->dth_need_validation = dae->dae_need_validation;
+		}
+	}
 
 	if (persistent) {
 		struct vos_cont_df	*cont_df;
@@ -2804,16 +2826,16 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent)
 	if (dth->dth_ent == NULL) {
 		rc = vos_dtx_alloc(dbd, dth);
 	} else if (dbd != NULL) {
-		struct vos_dtx_act_ent	*dae = dth->dth_ent;
-
 		D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
 
+		dae = dth->dth_ent;
 		dae->dae_df_off = cont->vc_cont_df->cd_dtx_active_tail +
 			offsetof(struct vos_dtx_blob_df, dbd_active_data) +
 			sizeof(struct vos_dtx_act_ent_df) * dbd->dbd_index;
 		dae->dae_dbd = dbd;
 	}
 
+out:
 	if (rc == 0) {
 		if (persistent) {
 			dth->dth_active = 1;
@@ -2821,10 +2843,7 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent)
 		} else {
 			dth->dth_pinned = 1;
 		}
-	}
-
-out:
-	if (rc != 0) {
+	} else {
 		if (dth->dth_ent != NULL) {
 			dth->dth_pinned = 0;
 			vos_dtx_cleanup_internal(dth);
@@ -2837,8 +2856,7 @@ out:
 	if (began) {
 		rc = umem_tx_end(umm, rc);
 		if (dce != NULL) {
-			struct vos_dtx_act_ent	*dae = dth->dth_ent;
-
+			dae = dth->dth_ent;
 			vos_dtx_post_handle(cont, &dae, &dce, 1,
 					    false, rc != 0 ? true : false);
 			dth->dth_ent = NULL;

@@ -19,6 +19,7 @@
 
 #include <gurt/list.h>
 #include <gurt/types.h>
+#include <gurt/atomic.h>
 
 /**
  * Hash table keeps and prints extra debugging information
@@ -204,6 +205,7 @@ enum d_hash_feats {
 	 * last reference should call ndecref().
 	 */
 	D_HASH_FT_EPHEMERAL_RO_DEC = (1 << 5),
+
 
 	/**
 	 * Use Global Table Lock instead of per bucket locking.
@@ -570,7 +572,7 @@ struct d_hlink_ops {
 
 struct d_rlink {
 	d_list_t		rl_link;
-	uint32_t		rl_ref;
+	ATOMIC uint32_t		rl_ref;
 	uint32_t		rl_initialized:1;
 };
 
