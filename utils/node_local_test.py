@@ -1853,7 +1853,8 @@ class posix_tests():
         """
         test_dir = join(self.dfuse.dir, 'test_dir')
         os.mkdir(test_dir)
-        for idx in range(30):
+        count = 30
+        for idx in range(count):
             with open(join(test_dir, f'file_{idx}'), 'w'):
                 pass
 
@@ -1869,6 +1870,8 @@ class posix_tests():
 
         print(files)
         print(files2)
+        assert files == files2
+        assert len(files) == count
 
     @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
