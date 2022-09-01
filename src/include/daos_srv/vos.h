@@ -294,13 +294,13 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 
 /** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param int	[IN]	pool version
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
  *
  * \return	0 on success, error otherwise
  */
 int
-vos_pool_upgrade(daos_handle_t poh, uint32_t feats);
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
