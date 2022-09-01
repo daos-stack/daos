@@ -2455,7 +2455,7 @@ class LaunchJob():
         # Find all the test files that contain tests matching the tags
         self.log.info("Detecting tests matching tags: %s", " ".join(command))
         output = run_local(self.log, command, check=True)
-        for test_file in re.findall(r"INSTRUMENTED\s+(.*):", output.stdout):
+        for test_file in set(re.findall(r"INSTRUMENTED\s+(.*):", output.stdout)):
             self.tests.append(TestInfo(test_file))
             self.log.info("  %s", self.tests[-1])
 
