@@ -261,7 +261,8 @@ obj_alloc(void)
 void
 obj_decref(struct dc_object *obj)
 {
-	daos_hhash_link_putref(&obj->cob_hlink);
+	if (obj != NULL)
+		daos_hhash_link_putref(&obj->cob_hlink);
 }
 
 void
