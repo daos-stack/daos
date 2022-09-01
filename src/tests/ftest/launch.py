@@ -22,6 +22,7 @@ import sys
 import time
 from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
+
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
 
@@ -62,135 +63,6 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-
-
-class LaunchException(Exception):
-    """Exception for launch.py execution."""
-
-
-class RemoteCommandResult():
-    """Stores the command result from a Task object."""
-
-    class ResultData():
-        # pylint: disable=too-few-public-methods
-        """Command result data for the set of hosts."""
-
-        def __init__(self, command, returncode, hosts, stdout, timeout):
-            """Initialize a ResultData object.
-
-            Args:
-                command (str): the executed command
-                returncode (int): the return code of the executed command
-                hosts (NodeSet): the host(s) on which the executed command yielded this result
-                stdout (list): the result of the executed command split by newlines
-                timeout (bool): indicator for a command timeout
-            """
-            self.command = command
-            self.returncode = returncode
-            self.hosts = hosts
-            self.stdout = stdout
-            self.timeout = timeout
-
-    def __init__(self, command, task):
-        """Create a RemoteCommandResult object.
-
-        Args:
-            command (str): command executed
-            task (Task): object containing the results from an executed clush command
-        """
-        self.output = []
-        self._process_task(task, command)
-
-    @property
-    def passed(self):
-        """Did the command pass on all the hosts.
-
-        Returns:
-            bool: if the command was successful on each host
-
-        """
-        timeout = all(data.timeout for data in self.output)
-        non_zero = any(data.returncode != 0 for data in self.output)
-        return not non_zero and not timeout
-
-    @property
-    def homogeneous(self):
-        """Did all the hosts produce the same output.
-
-        Returns:
-            bool: if all the hosts produced the same output
-        """
-        return len(self.output) == 1
-
-    def _process_task(self, task, command):
-        """Populate the output list and determine the passed result for the specified task.
-
-        Args:
-            task (Task): a ClusterShell.Task.Task object for the executed command
-        """
-        # Get a dictionary of host list values for each unique return code key
-        results = dict(task.iter_retcodes())
-
-        # Get a list of any hosts that timed out
-        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-
-        # Populate the a list of unique output for each NodeSet
-        for code in sorted(results):
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-            for output, output_hosts in output_data:
-                stdout = []
-                for line in output.splitlines():
-                    if isinstance(line, bytes):
-                        stdout.append(line.decode("utf-8"))
-                    else:
-                        stdout.append(line)
-                self.output.append(
-                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
-        if timed_out:
-            self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
-
-    def log_output(self, log):
-        """Log the command result.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
-        for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.stdout:
-                    log.debug("    %s", line)
-
-
-class TestInfo():
-    # pylint: disable=too-few-public-methods
-    """Defines the python test file and its associated test yaml file."""
-
-    def __init__(self, test_file):
-        """Initialize a TestInfo object.
-
-        Args:
-            test_file (str): the test python file
-        """
-        base, _ = os.path.splitext(test_file)
-        self.test_file = test_file
-        self.yaml_file = ".".join([base, "yaml"])
-
-    def __str__(self):
-        """Get the test file as a string.
-
-        Returns:
-            str: the test file
-
-        """
-        return self.test_file
 
 
 def get_avocado_version():
@@ -274,7 +146,7 @@ def get_avocado_logs_dir():
         str: the directory used by avocado to log test results
 
     """
-    default_base_dir = os.path.expanduser(os.path.join("~", "avocaod", "job-results"))
+    default_base_dir = os.path.expanduser(os.path.join("~", "avocado", "job-results"))
     return get_avocado_setting("datadir.paths", "logs_dir", default_base_dir)
 
 
@@ -309,12 +181,12 @@ def get_avocado_list_command():
     return ["avocado", "list", "--paginator=off"]
 
 
-def get_avocado_run_command(test, tag_filter, sparse, failfast, extra_yaml):
+def get_avocado_run_command(test, tag_filters, sparse, failfast, extra_yaml):
     """Get the avocado run command for this version of avocado.
 
     Args:
-        test (TestInfo): the test script/yaml file
-        tag_filter (str): _description_
+        test (TestInfo): the test information
+        tag_filters (list): optional '--filter-by-tags' arguments
         sparse (bool): _description_
         failfast (bool): _description_
 
@@ -338,8 +210,8 @@ def get_avocado_run_command(test, tag_filter, sparse, failfast, extra_yaml):
         command.extend(["--tap-job-result", "off"])
     if not sparse and int(MAJOR) < 82:
         command.append("--show-job-log")
-    if tag_filter:
-        command.extend(tag_filter)
+    if tag_filters:
+        command.extend(tag_filters)
     if failfast:
         command.extend(["--failfast", "on"])
     command.extend(["--mux-yaml", test.yaml_file])
@@ -358,8 +230,8 @@ def get_local_host():
     return socket.gethostname().split(".")[0]
 
 
-def add_file_handler(log, log_file):
-    """Add a logging.FileHandler to the specified logger.
+def get_file_handler(log_file):
+    """Get a logging.FileHandler.
 
     Args:
         log (logger): logger to which to add the FileHandler
@@ -369,7 +241,7 @@ def add_file_handler(log, log_file):
     log_handler = logging.FileHandler(log_file, encoding='utf-8')
     log_handler.setLevel(logging.DEBUG)
     log_handler.setFormatter(log_format)
-    log.addHandler(log_handler)
+    return log_handler
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False):
@@ -606,12 +478,13 @@ def set_interface_environment(log, args):
         LaunchException: if there is a problem obtaining the default interface
 
     """
+    log.debug("-" * 80)
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
     if interface is None:
         # Find all the /sys/class/net interfaces on the launch node
         # (excluding lo)
-        log.info("Detecting network devices - OFI_INTERFACE not set")
+        log.debug("Detecting network devices - OFI_INTERFACE not set")
         available_interfaces = get_available_interfaces(log, args)
         try:
             # Select the fastest active interface available by sorting
@@ -623,7 +496,7 @@ def set_interface_environment(log, args):
     # Update env definitions
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-    log.info("Testing with '%s' as the default interface", interface)
+    log.info("Testing with interface:   %s", interface)
     for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
         try:
             log.debug("Testing with %s=%s", name, os.environ[name])
@@ -736,13 +609,14 @@ def set_provider_environment(log, interface, args):
         LaunchException: if there is a problem finding a provider for the interface
 
     """
+    log.debug("-" * 80)
     # Use the detected provider if one is not set
     if args.provider:
         provider = args.provider
     else:
         provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
-        log.info("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
+        log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
 
         # Check for a Omni-Path interface
         log.debug("Checking for Omni-Path devices")
@@ -792,7 +666,7 @@ def set_provider_environment(log, interface, args):
 
     # Update env definitions
     os.environ["CRT_PHY_ADDR_STR"] = provider
-    log.info("Testing with '%s' as the provider", provider)
+    log.info("Testing with provider:    %s", provider)
     log.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
 
 
@@ -802,6 +676,7 @@ def set_python_environment(log):
     Args:
         log (logger): logger for the messages produced by this method
     """
+    log.debug("-" * 80)
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
@@ -864,6 +739,8 @@ def get_device_replacement(log, args):
              test servers
 
     """
+    log.debug("-" * 80)
+    log.debug("Detecting devices that match: %s", args.nvme)
     devices = []
     device_types = []
 
@@ -899,8 +776,9 @@ def get_device_replacement(log, args):
         raise LaunchException(
             f"Error: Unable to auto-detect devices for the '--nvme {args.nvme}' argument")
 
-    log.info(
+    log.debug(
         "Auto-detected %s devices on %s: %s", " & ".join(device_types), args.test_servers, devices)
+    log.info("Testing with %s devices: %s", " & ".join(device_types), devices)
     return ",".join(devices)
 
 
@@ -1098,64 +976,6 @@ def find_values(obj, keys, key=None, val_type=str):
     return matches
 
 
-def get_test_list(log, tags):
-    """Generate a list of tests and avocado tag filter from a list of tags.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        tags (list): a list of tag or test file names
-
-    Raises:
-        LaunchException: if there is a problem listing tests
-
-    Returns:
-        (list, list): a tuple of an avocado tag filter list and lists of tests
-
-    """
-    test_tags = []
-    test_list = []
-
-    # Check if fault injection is enabled ( 0 return status)
-    log.debug("Checking for fault injection enablement via 'fault_status':")
-    fault_tag = "-faults"
-    fault_filter = f"--filter-by-tags={fault_tag}"
-    try:
-        run_local(log, ["fault_status"], check=True)
-        log.debug("  Fault injection is enabled")
-        faults_enabled = True
-    except LaunchException:
-        # Command failed or yielded a non-zero return status
-        log.debug("  Fault injection is disabled")
-        faults_enabled = False
-
-    for tag in tags:
-        if os.path.isfile(tag):
-            # Assume an existing file is a test and just add it to the list
-            test_list.append(tag)
-            if not faults_enabled and fault_filter not in test_tags:
-                test_tags.append(fault_filter)
-        else:
-            # Otherwise it is assumed that this is a tag
-            if not faults_enabled:
-                tag = ",".join((tag, fault_tag))
-            test_tags.append(f"--filter-by-tags={tag}")
-
-    # Update the list of tests with any test that match the specified tags.
-    # Exclude any specified tests that do not match the specified tags.  If no
-    # tags and no specific tests have been specified then all of the functional
-    # tests will be added.
-    if test_tags or not test_list:
-        command = get_avocado_list_command()
-        for test_tag in test_tags:
-            command.append(str(test_tag))
-        command.extend(test_list if test_list else ["./"])
-        output = run_local(log, command, check=True)
-        tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", output.stdout)
-        test_list = [TestInfo(match) for match in set(tagged_tests)]
-
-    return test_tags, test_list
-
-
 def setup_test_files(log, test_list, args, yaml_dir):
     """Set up the test yaml files with any placeholder replacements.
 
@@ -1178,6 +998,17 @@ def setup_test_files(log, test_list, args, yaml_dir):
             command.append(args.extra_yaml)
         command.extend(["--summary", "3"])
         run_local(log, command, check=False)
+
+        # Collect the host information from the updated test yaml
+        test.set_host_info(log, args.include_localhost)
+
+    # Log the test information
+    log.debug("-" * 80)
+    log.debug("Test information:")
+    for test in test_list:
+        log.debug(
+            "  test: %-40s, yaml: %-40s, servers: %-20s, clients: %-20s",
+            test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
 
 
 def replace_yaml_file(log, yaml_file, args, yaml_dir):
@@ -1217,6 +1048,7 @@ def replace_yaml_file(log, yaml_file, args, yaml_dir):
             w/o replacements
 
     """
+    log.debug("-" * 80)
     replacements = {}
 
     if args.test_servers or args.nvme or args.timeout_multiplier:
@@ -1403,14 +1235,32 @@ def replace_yaml_file(log, yaml_file, args, yaml_dir):
     return yaml_file
 
 
-def setup_test_directory(log, args, mode="all"):
+def generate_certs(log):
+    """Generate the certificates for the test.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+
+    Raises:
+        LaunchException: if there is an error generating the certificates
+
+    """
+    log.debug("-" * 80)
+    log.debug("Generating certificates")
+    daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    certs_dir = os.path.join(daos_test_log_dir, "daosCA")
+    run_local(log, ["/usr/bin/rm", "-rf", certs_dir])
+    run_local(log, ["../../../../lib64/daos/certgen/gen_certificates.sh", daos_test_log_dir])
+
+
+def setup_test_directory(log, test, mode="all"):
     """Set up the common test directory on all hosts.
 
     Ensure the common test directory exists on each possible test node.
 
     Args:
         log (logger): logger for the messages produced by this method
-        args (argparse.Namespace): command line arguments for this program
+        test (TestInfo): the test information
         mode (str, optional): setup mode. Defaults to "all".
             "rm"    = remove the directory
             "mkdir" = create the directory
@@ -1422,307 +1272,17 @@ def setup_test_directory(log, args, mode="all"):
         LaunchException: if there is an error setting up the test directory
 
     """
-    all_hosts = NodeSet(get_local_host())
-    all_hosts.update(args.test_clients)
-    all_hosts.update(args.test_servers)
+    log.debug("-" * 80)
     test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    log.debug("Setting up '%s' on %s:", test_dir, all_hosts)
+    log.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
     if mode in ["all", "rm"]:
-        run_remote(log, all_hosts, f"sudo rm -fr {test_dir}")
+        run_remote(log, test.hosts.all, f"sudo rm -fr {test_dir}")
     if mode in ["all", "mkdir"]:
-        run_remote(log, all_hosts, f"mkdir -p {test_dir}")
+        run_remote(log, test.hosts.all, f"mkdir -p {test_dir}")
     if mode in ["all", "chmod"]:
-        run_remote(log, all_hosts, f"chmod a+wr {test_dir}")
+        run_remote(log, test.hosts.all, f"chmod a+wr {test_dir}")
     if mode in ["all", "list"]:
-        run_remote(log, all_hosts, f"ls -al {test_dir}")
-
-
-def generate_certs(log):
-    """Generate the certificates for the test.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-
-    Raises:
-        LaunchException: if there is an error generating the certificates
-
-    """
-    daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    certs_dir = os.path.join(daos_test_log_dir, "daosCA")
-    run_local(log, ["/usr/bin/rm", "-rf", certs_dir])
-    run_local(log, ["../../../../lib64/daos/certgen/gen_certificates.sh", daos_test_log_dir])
-
-
-def run_tests(log, test_list, tag_filter, args):
-    # pylint: disable=too-many-branches
-    """Run or display the test commands.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_list (list): a list of TestInfo objects defining which tests to run
-        tag_filter (list): the avocado tag filter command line argument
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: a bitwise-or of all the return codes of each 'avocado run' command
-
-    """
-    return_code = 0
-
-    # Determine the location of the avocado logs for archiving or renaming
-    avocado_logs_dir = get_avocado_logs_dir()
-    log.debug("Avocado logs stored in %s", avocado_logs_dir)
-
-    # Run each test for as many repetitions as requested
-    for loop in range(1, args.repeat + 1):
-        log.debug("-" * 80)
-        log.info("Starting loop %s/%s", loop, args.repeat)
-
-        skip_reason = None
-        for test in test_list:
-            # Prepare to run the test
-            test_return_code = prepare_test(log, test, avocado_logs_dir, skip_reason, args)
-            if test_return_code != 0:
-                return_code |= test_return_code
-                continue
-
-            # Run the test
-            test_return_code = run_test(log, test, tag_filter, args)
-            if test_return_code != 0:
-                collect_crash_files(log, avocado_logs_dir)
-                return_code |= test_return_code
-                continue
-
-            # Post-process the test
-            test_return_code = process_test(log, test, loop, avocado_logs_dir, args)
-            if test_return_code != 0:
-                return_code |= test_return_code
-                continue
-
-        if args.jenkinslog:
-            # Archive bullseye coverage logs
-            hosts = NodeSet(get_local_host())
-            hosts.add(args.test_servers)
-            return_code |= archive_files(
-                log,
-                "bullseye coverage logs",
-                os.path.join(avocado_logs_dir, "bullseye_coverage_logs"),
-                hosts,
-                "/tmp/test.cov*",
-                args)
-
-        # If the test failed and the user requested that testing should
-        # stop after the first failure, then we should break out of the
-        # loop and not re-run the tests.
-        if return_code != 0 and args.failfast:
-            break
-
-    return return_code
-
-
-def prepare_test(log, test, avocado_logs_dir, skip_reason, args):
-    """Prepare the test to be executed.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        avocado_logs_dir (str): path to the avocado log files.
-        skip_reason (str): message indicating the reason to skip the test
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: a return code which will be non-zero if there were an issues preparing this test
-
-    """
-    if skip_reason is not None:
-        # An error was detected running clean_logs for a previous test. As this is typically an
-        # indication of a communication issue with one of the hosts, do not attempt to run
-        # subsequent tests.
-        if not report_skipped_test(log, str(test), avocado_logs_dir, skip_reason):
-            return 64
-
-    if not isinstance(test.yaml_file, str):
-        # The test was not run due to an error replacing host placeholders in the yaml file.
-        # Treat this like a failed avocado command.
-        reason = "error replacing yaml file placeholders"
-        if not report_skipped_test(log, str(test), avocado_logs_dir, reason):
-            return 64
-        return 4
-
-    # Optionally clean the log files before running this test on the
-    # servers and clients specified for this test
-    if args.clean:
-        if not clean_logs(log, test.yaml_file, args):
-            # Report errors for this skipped test
-            skip_reason = (
-                "host communication error attempting to clean out leftover logs from a previous "
-                "test run prior to running this test")
-            if not report_skipped_test(log, str(test), avocado_logs_dir, skip_reason):
-                return 64
-            return 128
-
-    return 0
-
-
-def run_test(log, test, tag_filter, args):
-    """Run the specified test.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        tag_filter (list): the avocado tag filter command line argument
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: the return code from the 'avocado run' command
-
-    """
-    command = get_avocado_run_command(test, tag_filter, args.sparse, args.failfast, args.extra_yaml)
-    start_time = int(time.time())
-
-    try:
-        return_code = run_local(log, command, False).returncode
-
-    except LaunchException as error:
-        log.error("Error running %s: %s", str(test), str(error))
-        return_code = 1
-
-    end_time = int(time.time())
-    log.info("Total test time: %ss", end_time - start_time)
-    return return_code
-
-
-def process_test(log, test, loop, avocado_logs_dir, args):
-    """Process the test result after the test has completed.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        loop (int): the loop counter for running this test
-        avocado_logs_dir (str): path to the avocado log files.
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: a return code which will be non-zero if there were an issues processing this test
-
-    """
-    return_code = 0
-
-    # Get a logger for this test
-    test_log = logging.getLogger(".".join([__name__, get_test_category(str(test)), str(loop)]))
-    log.debug("Test post-processing log: %s", test_log)
-    add_file_handler(test_log, os.path.join(avocado_logs_dir, "latest", "launch.log"))
-
-    # Stop any agents or servers running via systemd
-    if not args.disable_stop_daos:
-        return_code |= stop_daos_agent_services(test_log, test, args)
-        return_code |= stop_daos_server_service(test_log, test, args)
-        return_code |= reset_server_storage(test_log, test, args)
-
-    # Optionally store all of the server and client config files
-    # and archive remote logs and report big log files, if any.
-    if args.archive:
-        test_hosts = get_hosts_from_yaml(test_log, test.yaml_file, args)
-        test_servers = get_hosts_from_yaml(
-            test_log, test.yaml_file, args, YAML_KEYS["test_servers"])
-        test_clients = get_hosts_from_yaml(
-            test_log, test.yaml_file, args, YAML_KEYS["test_clients"])
-        test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-
-        # Archive local config files
-        return_code |= archive_files(
-            test_log,
-            "local configuration files",
-            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-            NodeSet(get_local_host()),
-            os.path.join(
-                get_temporary_directory(args, get_build_environment(args)["PREFIX"]),
-                "*_*_*.yaml"),
-            args)
-
-        # Archive remote server configuration files
-        return_code |= archive_files(
-            test_log,
-            "remote server config files",
-            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-            test_servers,
-            os.path.join(os.sep, "etc", "daos", "daos_server*.yml"),
-            args)
-
-        # Archive remote client configuration files
-        return_code |= archive_files(
-            test_log,
-            "remote client config files",
-            os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-            test_clients,
-            " ".join(
-                [os.path.join(os.sep, "etc", "daos", "daos_agent*.yml"),
-                    os.path.join(os.sep, "etc", "daos", "daos_control*.yml")]
-            ),
-            args)
-
-        # Archive remote daos log files - use an extended timeout for potentially large logs
-        return_code |= archive_files(
-            test_log,
-            "daos log files",
-            os.path.join(avocado_logs_dir, "latest", "daos_logs"),
-            test_hosts,
-            f"{test_log_dir}/*.log*",
-            args,
-            avocado_logs_dir,
-            get_test_category(str(test)),
-            1800)
-
-        # Archive remote ULTs stacks dump files
-        return_code |= archive_files(
-            test_log,
-            "ULTs stacks dump files",
-            os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
-            test_servers,
-            "/tmp/daos_dump*.txt*",
-            args,
-            avocado_logs_dir,
-            get_test_category(str(test)))
-
-        # Archive remote cart log files
-        return_code |= archive_files(
-            test_log,
-            "cart log files",
-            os.path.join(avocado_logs_dir, "latest", "cart_logs"),
-            test_hosts,
-            os.path.join(test_log_dir, "*", "*log*"),
-            args,
-            avocado_logs_dir,
-            get_test_category(str(test)))
-
-        # Compress any log file that haven't been remotely compressed.
-        compress_log_files(test_log, avocado_logs_dir, args)
-
-        # Archive valgrind log files from shared dir
-        valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
-        return_code |= archive_files(
-            test_log,
-            "valgrind log files",
-            os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
-            NodeSet(test_hosts[0]),
-            os.path.join(valgrind_logs_dir, "valgrind*"),
-            args,
-            avocado_logs_dir)
-
-    # Optionally rename the test results directory for this test
-    if args.rename:
-        return_code |= rename_logs(test_log, avocado_logs_dir, str(test), loop, args)
-
-    # Optionally process core files
-    if args.process_cores:
-        try:
-            if not process_the_cores(test_log, avocado_logs_dir, test.yaml_file, args):
-                return_code |= 256
-        except Exception as error:  # pylint: disable=broad-except
-            test_log.error("Error: unhandled exception processing core files: %s", str(error))
-            return_code |= 256
-
-    return return_code
+        run_remote(log, test.hosts.all, f"ls -al {test_dir}")
 
 
 def get_yaml_data(log, yaml_file):
@@ -1766,288 +1326,26 @@ def get_yaml_data(log, yaml_file):
     return yaml_data
 
 
-def find_yaml_hosts(log, test_yaml):
-    """Find the all the host values in the specified yaml file.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_yaml (str): test yaml file
-
-    Returns:
-        dict: a dictionary of each host key and its host values
-
-    """
-    return find_values(
-        get_yaml_data(log, test_yaml),
-        [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+# def get_remote_file_command():
+#     """Get path to get_remote_files.sh script."""
+#     return os.path.join(os.path.abspath(os.getcwd()), "get_remote_files.sh")
 
 
-def get_hosts_from_yaml(log, test_yaml, args, key_match=None):
-    """Extract the list of hosts from the test yaml file.
+# def compress_log_files(log, avocado_logs_dir, args):
+#     """Compress log files.
 
-    This host will be included in the list if no clients are explicitly called
-    out in the test's yaml file.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_yaml (str): test yaml file
-        args (argparse.Namespace): command line arguments for this program
-        key_match (str, optional): test yaml key used to filter which hosts to
-            find.  Defaults to None which will match all keys.
-
-    Returns:
-        NodeSet: hosts specified in the test's yaml file
-
-    """
-    log.debug("Extracting hosts from %s - matching key '%s'", test_yaml, key_match)
-    local_host = NodeSet(get_local_host())
-    yaml_hosts = NodeSet()
-    if args.include_localhost and key_match != YAML_KEYS["test_servers"]:
-        yaml_hosts.add(local_host)
-    found_client_key = False
-    for key, value in list(find_yaml_hosts(log, test_yaml).items()):
-        log.debug("  Found %s: %s", key, value)
-        if key_match is None or key == key_match:
-            log.debug("    Adding %s", value)
-            if isinstance(value, list):
-                yaml_hosts.add(NodeSet.fromlist(value))
-            else:
-                yaml_hosts.add(NodeSet(value))
-        if key in YAML_KEYS["test_clients"]:
-            found_client_key = True
-
-    # Include this host as a client if no clients are specified
-    if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-        log.debug("    Adding the localhost: %s", local_host)
-        yaml_hosts.add(local_host)
-
-    return yaml_hosts
-
-
-def clean_logs(log, test_yaml, args):
-    """Remove the test log files on each test host.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_yaml (str): yaml file containing host names
-        args (argparse.Namespace): command line arguments for this program
-    """
-    # Remove any log files and ABT info/stack dumps from the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    test_hosts = get_hosts_from_yaml(log, test_yaml, args)
-    command = ["sudo", "rm", "-rf", os.path.join(logs_dir, "*.log*"), "/tmp/daos_dump*.txt*"]
-    log.debug("-" * 80)
-    log.info("Cleaning logs on %s", test_hosts)
-    result = run_remote(log, test_hosts, " ".join(command))
-    if not result.passed:
-        log.error("Error cleaning logs, aborting")
-    return result.passed
-
-
-def collect_crash_files(log, avocado_logs_dir):
-    """Move any avocado crash files into job-results/latest/crashes.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        avocado_logs_dir (str): path to the avocado log files.
-
-    Raises:
-        RuntimeError: if there was an error creating directories for the crash files
-    """
-    data_dir = avocado_logs_dir.replace("job-results", "data")
-    crash_dir = os.path.join(data_dir, "crashes")
-    if os.path.isdir(crash_dir):
-        crash_files = [
-            os.path.join(crash_dir, crash_file)
-            for crash_file in os.listdir(crash_dir)
-            if os.path.isfile(os.path.join(crash_dir, crash_file))]
-        if crash_files:
-            latest_dir = os.path.join(avocado_logs_dir, "latest")
-            latest_crash_dir = os.path.join(latest_dir, "crashes")
-            try:
-                run_local(log, ["mkdir", latest_crash_dir], check=True)
-                for crash_file in crash_files:
-                    run_local(log, ["mv", crash_file, latest_crash_dir], check=True)
-            except LaunchException:
-                pass
-        else:
-            log.debug("No avocado crash files found in %s", crash_dir)
-
-
-def get_remote_file_command():
-    """Get path to get_remote_files.sh script."""
-    return os.path.join(os.path.abspath(os.getcwd()), "get_remote_files.sh")
-
-
-def compress_log_files(log, avocado_logs_dir, args):
-    """Compress log files.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        avocado_logs_dir (str): path to the avocado log files
-    """
-    log.debug("-" * 80)
-    log.info("Compressing files on %s", get_local_host())
-    logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    command = [
-        get_remote_file_command(), "-z", "-x", f"-f {logs_dir}"]
-    if args.verbose > 1:
-        command.append("-v")
-    run_local(log, command, check=False)
-
-
-def archive_files(log, description, destination, hosts, source_files, args,
-                  avocado_logs_dir=None, test_name=None, timeout=900):
-    """Archive all of the remote files to a local directory.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        description (str): string identifying the archiving operation
-        destination (str): path in which to archive files
-        hosts (NodeSet): hosts from which to archive files
-        source_files (str): remote files to archive
-        args (argparse.Namespace): command line arguments for this program
-        avocado_logs_dir (optional, str): path to the avocado log files.
-            Required for checking for large log files - see 'test_name'.
-            Defaults to None.
-        test_name (optional, str): current running testname. If specified the
-            cart_logtest.py will be run against each log file and the size of
-            each log file will be checked against the threshold (if enabled).
-            Defaults to None.
-        timeout (int, optional): number of seconds to wait for the archiving
-            operation to complete. Defaults to 900 seconds.
-
-    Returns:
-        int: status of archiving the files
-
-    """
-    status = 0
-    if hosts:
-        log.debug("-" * 80)
-        log.info("Archiving %s from %s in %s", description, hosts, destination)
-
-        # Create the destination directory
-        if not os.path.exists(destination):
-            os.makedirs(destination, exist_ok=True)
-
-        # Display available disk space prior to copy.  Allow commands to fail
-        # w/o exiting this program.  Any disk space issues preventing the
-        # creation of a directory will be caught in the archiving of the source
-        # files.
-        display_disk_space(log, destination)
-
-        command = [
-            get_remote_file_command(),
-            "-z",
-            f"-a \"{get_local_host()}:{destination}\"",
-            f"-f \"{source_files}\"",
-        ]
-        if test_name is not None:
-            command.append("-c")
-        if args.logs_threshold:
-            command.append(f"-t \"{args.logs_threshold}\"")
-        if args.verbose > 1:
-            command.append("-v")
-        result = run_remote(log, hosts, " ".join(command), timeout)
-
-        # Determine if the command completed successfully across all the hosts
-        if not result.passed:
-            log.error("Error: archiving files for %s to %s", test_name, destination)
-            status |= 16
-        if test_name is not None and args.logs_threshold:
-            if not check_big_files(log, avocado_logs_dir, result, test_name, args):
-                status |= 32
-
-    return status
-
-
-def rename_logs(log, avocado_logs_dir, test_file, loop, args):
-    """Append the test name to its avocado job-results directory name.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        avocado_logs_dir (str): avocado job-results directory
-        test_file (str): the test python file
-        loop (int): test execution loop count
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status of renaming the avocado job-results directory name
-
-    """
-    status = 0
-    test_name = get_test_category(test_file)
-    test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
-    test_logs_dir = os.path.realpath(test_logs_lnk)
-
-    log.debug("-" * 80)
-    log.info("Renaming the avocado job-results directory")
-
-    if args.jenkinslog:
-        if args.repeat > 1:
-            # When repeating tests ensure Jenkins-style avocado log directories
-            # are unique by including the loop count in the path
-            new_test_logs_dir = os.path.join(
-                avocado_logs_dir, test_file, str(loop))
-        else:
-            new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
-        try:
-            os.makedirs(new_test_logs_dir)
-        except OSError as error:
-            log.error("Error mkdir %s: %s", new_test_logs_dir, error)
-            status |= 1024
-    else:
-        new_test_logs_dir = "-".join([test_logs_dir, test_name])
-
-    try:
-        os.rename(test_logs_dir, new_test_logs_dir)
-        os.remove(test_logs_lnk)
-        os.symlink(new_test_logs_dir, test_logs_lnk)
-        log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
-    except OSError as error:
-        log.error("Error renaming %s to %s: %s", test_logs_dir, new_test_logs_dir, str(error))
-
-    if args.jenkinslog:
-        xml_file = os.path.join(new_test_logs_dir, "results.xml")
-        try:
-            with open(xml_file, encoding="utf-8") as xml_buffer:
-                xml_data = xml_buffer.read()
-        except OSError as error:
-            log.error("Error reading %s : %s", xml_file, str(error))
-            status |= 1024
-            return status
-
-        # Save it for the Launchable [de-]mangle
-        org_xml_data = xml_data
-
-        # First, mangle the in-place file for Jenkins to consume
-        test_dir = os.path.split(os.path.dirname(test_file))[-1]
-        org_class = "classname=\""
-        new_class = f"{org_class}FTEST_{test_dir}."
-        xml_data = re.sub(org_class, new_class, xml_data)
-
-        try:
-            with open(xml_file, "w", encoding="utf-8") as xml_buffer:
-                xml_buffer.write(xml_data)
-        except OSError as error:
-            log.error("Error writing %s: %s", xml_file, str(error))
-            status |= 1024
-
-        # Now mangle (or rather unmangle back to canonical xunit1 format)
-        # another copy for Launchable
-        xml_data = org_xml_data
-        org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
-        new_name = rf'\1\2\3 file="{test_file}"'
-        xml_data = re.sub(org_name, new_name, xml_data)
-        xml_file = xml_file[0:-11] + "xunit1_results.xml"
-
-        try:
-            with open(xml_file, "w", encoding="utf-8") as xml_buffer:
-                xml_buffer.write(xml_data)
-        except OSError as error:
-            log.error("Error writing %s: %s", xml_file, str(error))
-            status |= 1024
-    return status
+#     Args:
+#         log (logger): logger for the messages produced by this method
+#         avocado_logs_dir (str): path to the avocado log files
+#     """
+#     log.debug("-" * 80)
+#     log.info("Compressing files on %s", get_local_host())
+#     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
+#     command = [
+#         get_remote_file_command(), "-z", "-x", f"-f {logs_dir}"]
+#     if args.verbose > 1:
+#         command.append("-v")
+#     run_local(log, command, check=False)
 
 
 def check_big_files(log, avocado_logs_dir, result, test_name, args):
@@ -2326,14 +1624,13 @@ def install_debuginfos(log):
                 break
 
 
-def process_the_cores(log, avocado_logs_dir, test_yaml, args):
+def process_the_cores(log, avocado_logs_dir, test_hosts):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
         log (logger): logger for the messages produced by this method
         avocado_logs_dir (str): location of the avocado job logs
-        test_yaml (str): yaml file containing host names
-        args (argparse.Namespace): command line arguments for this program
+        test_hosts (NodeSet): hosts from which to collect core files
 
     Returns:
         bool: True if everything was done as expected, False if there were
@@ -2343,7 +1640,6 @@ def process_the_cores(log, avocado_logs_dir, test_yaml, args):
     import fnmatch  # pylint: disable=import-outside-toplevel
 
     return_status = True
-    test_hosts = get_hosts_from_yaml(log, test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
 
     # Create a subdirectory in the avocado logs directory for this test
@@ -2469,42 +1765,39 @@ def get_test_category(test_file):
     return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
-def stop_daos_agent_services(log, test, args):
+def stop_daos_agent_services(log, test):
     """Stop any daos_agent.service running on the hosts running servers.
 
     Args:
         log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
+        test (TestInfo): the test information
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
     service = "daos_agent.service"
-    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_clients"])
-    hosts.add(NodeSet(get_local_host()))
+    hosts = test.hosts.clients_with_localhost
     log.debug("-" * 80)
-    log.debug("Verifying %s on %s after running '%s'", service, hosts, str(test))
+    log.debug("Verifying %s after running '%s'", service, test)
     return stop_service(log, hosts, service)
 
 
-def stop_daos_server_service(log, test, args):
+def stop_daos_server_service(log, test):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
         log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
+        test (TestInfo): the test information
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
     service = "daos_server.service"
-    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_servers"])
+    hosts = test.hosts.servers
     log.debug("-" * 80)
-    log.debug("Verifying %s on %s after running '%s'", service, hosts, str(test))
+    log.debug("Verifying %s after running '%s'", service, test)
     return stop_service(log, hosts, service)
 
 
@@ -2521,32 +1814,36 @@ def stop_service(log, hosts, service):
 
     """
     result = {"status": 0}
-    status_keys = ["reset-failed", "stop", "disable"]
-    mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-    check_hosts = NodeSet(hosts)
-    loop = 1
-    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
-    # has been resolved
-    max_loops = 3
-    while check_hosts:
-        # Check the status of the service on each host
-        result = get_service_status(log, check_hosts, service)
-        check_hosts = NodeSet()
-        for key in status_keys:
-            if result[key]:
-                if loop == max_loops:
-                    # Exit the while loop if the service is still running
-                    log.error(" - Error %s still %s on %s", service, mapping[key], result[key])
-                    result["status"] = 512
-                else:
-                    # Issue the appropriate systemctl command to remedy the
-                    # detected state, e.g. 'stop' for 'active'.
-                    command = ["sudo", "systemctl", key, service]
-                    run_remote(log, result[key], " ".join(command))
+    if hosts:
+        status_keys = ["reset-failed", "stop", "disable"]
+        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+        check_hosts = NodeSet(hosts)
+        loop = 1
+        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+        # has been resolved
+        max_loops = 3
+        while check_hosts:
+            # Check the status of the service on each host
+            result = get_service_status(log, check_hosts, service)
+            check_hosts = NodeSet()
+            for key in status_keys:
+                if result[key]:
+                    if loop == max_loops:
+                        # Exit the while loop if the service is still running
+                        log.error(" - Error %s still %s on %s", service, mapping[key], result[key])
+                        result["status"] = 512
+                    else:
+                        # Issue the appropriate systemctl command to remedy the
+                        # detected state, e.g. 'stop' for 'active'.
+                        command = ["sudo", "systemctl", key, service]
+                        run_remote(log, result[key], " ".join(command))
 
-                    # Run the status check again on this group of hosts
-                    check_hosts.add(result[key])
-        loop += 1
+                        # Run the status check again on this group of hosts
+                        check_hosts.add(result[key])
+            loop += 1
+    else:
+        log.debug("  Skipping stopping %s service - no hosts", service)
+
     return result["status"]
 
 
@@ -2585,7 +1882,7 @@ def get_service_status(log, hosts, service):
             status["reset-failed"].add(data.hosts)
             log.debug("  %s: TIMEOUT", data.hosts)
             break
-        log.debug(" %s: %s", data.hosts, "\n".join(data.stdout))
+        # log.debug(" %s: %s", data.hosts, "\n".join(data.stdout))
         for key, state_list in status_states.items():
             for line in data.stdout:
                 if line in state_list:
@@ -2594,7 +1891,7 @@ def get_service_status(log, hosts, service):
     return status
 
 
-def reset_server_storage(log, test, args):
+def reset_server_storage(log, test):
     """Reset the server storage for the hosts that ran servers in the test.
 
     This is a workaround to enable binding devices back to nvme or vfio-pci after they are unbound
@@ -2603,43 +1900,1021 @@ def reset_server_storage(log, test, args):
 
     Args:
         log (logger): logger for the messages produced by this method
-        test (TestInfo): the test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
+        test (TestInfo): the test information
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
-    hosts = get_hosts_from_yaml(log, test.yaml_file, args, YAML_KEYS["test_servers"])
+    hosts = test.hosts.servers
     log.debug("-" * 80)
+    log.debug("Resetting server storage after running %s", test)
     if hosts:
         commands = [
             "if lspci | grep -i nvme",
             "then daos_server storage prepare -n --reset && "
             "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
             "fi"]
-        log.info("Resetting server storage on %s after running '%s'", hosts, str(test))
+        log.info("Resetting server storage on %s after running '%s'", hosts, test)
         result = run_remote(log, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
         if not result.passed:
             log.debug("Ignoring any errors from these workaround commands")
     else:
-        log.debug(
-            "Skipping resetting server storage after running '%s' - no server hosts", str(test))
+        log.debug("  Skipping resetting server storage - no server hosts")
     return 0
+
+
+class LaunchException(Exception):
+    """Exception for launch.py execution."""
+
+
+class RemoteCommandResult():
+    """Stores the command result from a Task object."""
+
+    class ResultData():
+        # pylint: disable=too-few-public-methods
+        """Command result data for the set of hosts."""
+
+        def __init__(self, command, returncode, hosts, stdout, timeout):
+            """Initialize a ResultData object.
+
+            Args:
+                command (str): the executed command
+                returncode (int): the return code of the executed command
+                hosts (NodeSet): the host(s) on which the executed command yielded this result
+                stdout (list): the result of the executed command split by newlines
+                timeout (bool): indicator for a command timeout
+            """
+            self.command = command
+            self.returncode = returncode
+            self.hosts = hosts
+            self.stdout = stdout
+            self.timeout = timeout
+
+    def __init__(self, command, task):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            task (Task): object containing the results from an executed clush command
+        """
+        self.output = []
+        self._process_task(task, command)
+
+    @property
+    def passed(self):
+        """Did the command pass on all the hosts.
+
+        Returns:
+            bool: if the command was successful on each host
+
+        """
+        timeout = all(data.timeout for data in self.output)
+        non_zero = any(data.returncode != 0 for data in self.output)
+        return not non_zero and not timeout
+
+    @property
+    def homogeneous(self):
+        """Did all the hosts produce the same output.
+
+        Returns:
+            bool: if all the hosts produced the same output
+        """
+        return len(self.output) == 1
+
+    def _process_task(self, task, command):
+        """Populate the output list and determine the passed result for the specified task.
+
+        Args:
+            task (Task): a ClusterShell.Task.Task object for the executed command
+        """
+        # Get a dictionary of host list values for each unique return code key
+        results = dict(task.iter_retcodes())
+
+        # Get a list of any hosts that timed out
+        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+
+        # Populate the a list of unique output for each NodeSet
+        for code in sorted(results):
+            output_data = list(task.iter_buffers(results[code]))
+            if not output_data:
+                output_data = [["<NONE>", results[code]]]
+            for output, output_hosts in output_data:
+                stdout = []
+                for line in output.splitlines():
+                    if isinstance(line, bytes):
+                        stdout.append(line.decode("utf-8"))
+                    else:
+                        stdout.append(line)
+                self.output.append(
+                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
+        if timed_out:
+            self.output.append(
+                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+
+    def log_output(self, log):
+        """Log the command result.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+        """
+        for data in self.output:
+            if data.timeout:
+                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
+            elif len(data.stdout) == 1:
+                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
+            else:
+                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
+                for line in data.stdout:
+                    log.debug("    %s", line)
+
+
+class TestInfo():
+    """Defines the python test file and its associated test yaml file."""
+
+    class HostInfo():
+        # pylint: disable=too-few-public-methods
+        """Defines the hosts being utilized by the test."""
+
+        def __init__(self):
+            """Initialize a HostInfo object."""
+            self.all = NodeSet()
+            self.servers = NodeSet()
+            self.clients = NodeSet()
+
+        @property
+        def clients_with_localhost(self):
+            """Get the test clients including the localhost.
+
+            Returns:
+                NodeSet: _description_
+            """
+            clients = self.clients.copy()
+            clients.update(get_local_host())
+            return clients
+
+        @property
+        def all_remote(self):
+            """Get the test clients including the localhost.
+
+            Returns:
+                NodeSet: _description_
+            """
+            local_host = NodeSet(get_local_host())
+            return self.all.difference(local_host)
+
+    def __init__(self, test_file):
+        """Initialize a TestInfo object.
+
+        Args:
+            test_file (str): the test python file
+        """
+        self.test_file = test_file
+        test_path, test_filename = os.path.split(self.test_file)
+        _, test_dir = os.path.split(test_path)
+        test_filename_root, _ = os.path.splitext(test_filename)
+        self.class_name = ".".join(["FTEST_launch", test_dir, test_filename_root])
+        self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
+        self.hosts = self.HostInfo()
+        self.loop = 1
+
+    def __str__(self):
+        """Get the test file as a string.
+
+        Returns:
+            str: the test file
+
+        """
+        return self.test_file
+
+    @property
+    def name(self):
+        """Get the name for this TestInfo object.
+
+        Used to populate the 'name' field of the results.xml file.  It includes the current loop
+        number, which should be updated before using this object to define a new TestResult.
+
+        Returns:
+            str: name for this TestInfo object
+
+        """
+        return f"loop{self.loop}-{self.test_file}"
+
+    def set_host_info(self, log, include_localhost=False):
+        """Set the test host information using the test yaml file.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            include_localhost (bool, optional): should the local host be included in the list of
+                client matches. Defaults to False.
+        """
+        self.hosts.all.clear()
+        self.hosts.all.update(self._get_hosts_from_yaml(log, include_localhost))
+
+        self.hosts.servers.clear()
+        self.hosts.servers.update(
+            self._get_hosts_from_yaml(log, include_localhost, YAML_KEYS["test_servers"]))
+
+        self.hosts.clients.clear()
+        self.hosts.clients.update(
+            self._get_hosts_from_yaml(log, include_localhost, YAML_KEYS["test_clients"]))
+
+    def _get_hosts_from_yaml(self, log, include_localhost=False, key_match=None):
+        """Extract the list of hosts from the test yaml file.
+
+        This host will be included in the list if no clients are explicitly called
+        out in the test's yaml file.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            test_yaml (str): test yaml file
+            include_localhost (bool, optional): should the local host be included in the list of
+                client matches. Defaults to False.
+            key_match (str, optional): test yaml key used to filter which hosts to
+                find.  Defaults to None which will match all keys.
+
+        Returns:
+            NodeSet: hosts specified in the test's yaml file
+
+        """
+        log.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
+        local_host = NodeSet(get_local_host())
+        yaml_hosts = NodeSet()
+        if include_localhost and key_match != YAML_KEYS["test_servers"]:
+            yaml_hosts.add(local_host)
+        found_client_key = False
+        for key, value in list(self._find_yaml_hosts(log).items()):
+            log.debug("  Found %s: %s", key, value)
+            if key_match is None or key == key_match:
+                log.debug("    Adding %s", value)
+                if isinstance(value, list):
+                    yaml_hosts.add(NodeSet.fromlist(value))
+                else:
+                    yaml_hosts.add(NodeSet(value))
+            if key in YAML_KEYS["test_clients"]:
+                found_client_key = True
+
+        # Include this host as a client if no clients are specified
+        if not found_client_key and key_match != YAML_KEYS["test_servers"]:
+            log.debug("    Adding the localhost: %s", local_host)
+            yaml_hosts.add(local_host)
+
+        return yaml_hosts
+
+    def _find_yaml_hosts(self, log):
+        """Find the all the host values in the specified yaml file.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+
+        Returns:
+            dict: a dictionary of each host key and its host values
+
+        """
+        return find_values(
+            get_yaml_data(log, self.yaml_file),
+            [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+
+    def get_log_file(self, loop=None):
+        """Get the test log file name.
+
+        Args:
+            loop (int, optional): loop count. Defaults to None.
+
+        Returns:
+            str: a test log file name composed of the test class, name, and optional loop count
+
+        """
+        loop_info = ["launch"]
+        if loop is not None:
+            loop_info.extend(["loop", str(loop)])
+        return "_".join(loop_info + self.test_file.split(os.path.sep)[1:]) + ".log"
+
+    def report(self, log):
+        """_summary_.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+        """
+        log.debug(
+            "  test: %40s  yaml: %40s  servers: %20s  clients: %20s",
+            self.test_file, self.yaml_file, self.hosts.servers, self.hosts.clients)
+
+
+class BaseResult():
+    """Object to keep track of the start, end, and elapsed time of a test."""
+
+    PASS = "PASS"
+    WARN = "WARN"
+    SKIP = "SKIP"
+    FAIL = "FAIL"
+    ERROR = "ERROR"
+    CANCEL = "CANCEL"
+    INTERRUPT = "INTERRUPT"
+
+    def __init__(self):
+        """Initialize a TimedResult object."""
+        self.time_start = -1
+        self.time_end = -1
+        self.time_elapsed = -1
+        self.status = None
+
+    def get(self, name, default=None):
+        """Get the value of the attribute name.
+
+        Args:
+            name (str): TimedResult attribute name to get
+            default (object, optional): value to return if name is not defined. Defaults to None.
+
+        Returns:
+            object: the attribute value or default if not defined
+
+        """
+        return getattr(self, name, default)
+
+    def start(self):
+        """Mark the start of the test."""
+        if self.time_start == -1:
+            self.time_start = time.time()
+
+    def end(self):
+        """Mark the end of the test."""
+        self.time_end = time.time()
+        self.time_elapsed = self.time_end - self.time_start
+
+
+class TestResult(BaseResult):
+    """Object to keep track of the running of a test."""
+
+    def __init__(self, class_name, test_name, logfile, loop):
+        """_summary_.
+
+        Args:
+            class_name (_type_): _description_
+            test_name (_type_): _description_
+            logfile (_type_): _description_
+            loop (_type_): _description_
+        """
+        super().__init__()
+        self.class_name = class_name
+        self.name = test_name
+        self.logfile = logfile
+        self.fail_class = None
+        self.fail_reason = None
+        self.traceback = None
+        self.loop = loop
+
+    def set_status(self, status, fail_class=None, fail_reason=None, traceback=None):
+        """Set the status information for this test result.
+
+        Args:
+            status (str): test status
+            fail_class (str, optional): failure category. Defaults to None.
+            fail_reason (str, optional): failure desrciption. Defaults to None.
+            traceback (Exception, optional): exception linked to the failure. Defaults to None.
+        """
+        self.status = status
+        self.fail_class = fail_class
+        self.fail_reason = fail_reason
+        self.traceback = traceback
+
+
+class LaunchResult(BaseResult):
+    """Object to keep track of a test result."""
+
+    def __init__(self, log_file):
+        """Initialize a TestResult object.
+
+        Args:
+            log_file (str): file used to log the testing being reported in this result
+        """
+        super().__init__()
+        self.logfile = log_file
+        self.tests = []
+        self.tests_total_time = 0
+        self.tests_total = 0
+        self.errors = 0
+        self.interrupted = 0
+        self.failed = 0
+        self.skipped = 0
+        self.cancelled = 0
+
+    def start(self):
+        """Mark the start of launch and the current test."""
+        super().start()
+        self.tests[-1].start()
+        self.tests_total += 1
+
+    def end(self):
+        """Mark the end of launch and the current test."""
+        super().end()
+        self.tests[-1].end()
+        self.tests_total_time += self.tests[-1].time_elapsed
+        if self.tests[-1].status == self.ERROR:
+            self.errors += 1
+        elif self.tests[-1].status == self.SKIP:
+            self.skipped += 1
+        elif self.tests[-1].status == self.FAIL:
+            self.failed += 1
+        elif self.tests[-1].status == self.CANCEL:
+            self.cancelled += 1
+        elif self.tests[-1].status == self.INTERRUPT:
+            self.interrupted += 1
+
+
+class LaunchJob():
+    """Simulate an avocado.core.job.Job."""
+
+    def __init__(self, name, repeat):
+        """Initialize a LaunchJob object.
+
+        Args:
+            name (str): launch job name
+            repeat (_type_): _description_
+        """
+        self.name = name
+        self.repeat = repeat
+        self.logdir = get_avocado_directory("launch")
+        self.logfile = os.path.join(self.logdir, "job.log")
+        self.tests = []
+        self.tag_filters = []
+
+        # Setup a logger
+        renamed_log_dir = self._rename_old_log_dir()
+        console_format = "%(message)s"
+        console = logging.StreamHandler()
+        console.setFormatter(logging.Formatter(console_format))
+        console.setLevel(logging.INFO)
+        logging.basicConfig(
+            format=console_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG,
+            handlers=[console])
+        self.log = logging.getLogger(__name__)
+        self.log.addHandler(get_file_handler(self.logfile))
+        self._start_logging(renamed_log_dir)
+
+        # Setup results tracking
+        self.job_results_dir = get_avocado_logs_dir()
+        self.result = LaunchResult(self.logfile)
+        self.local_host = NodeSet(get_local_host())
+
+        # Configuration information used by avocado.plugins.xunit.XUnitResult
+        self.config = {
+            "job.run.result.xunit.enabled": "on",
+            "job.run.result.xunit.output": None,
+            "job.run.result.xunit.max_test_log_chars": 1000,
+            "job.run.result.xunit.job_name": name,
+        }
+
+    def _rename_old_log_dir(self):
+        """Rename the log directory if one already exists.
+
+        Returns:
+            str: name of the old log directory if renamed, otherwise None
+
+        """
+        # When running manually save the previous log if one exists
+        old_launch_log_dir = None
+        if os.path.exists(self.logdir):
+            old_launch_log_dir = "_".join([self.logdir, "old"])
+            if os.path.exists(old_launch_log_dir):
+                for file in os.listdir(old_launch_log_dir):
+                    os.remove(os.path.join(old_launch_log_dir, file))
+                os.rmdir(old_launch_log_dir)
+            os.rename(self.logdir, old_launch_log_dir)
+            os.makedirs(self.logdir)
+
+        return old_launch_log_dir
+
+    def _start_logging(self, renamed_log_dir=None):
+        """Log the information to the start of the log file.
+
+        Args:
+            renamed_log_dir (str, optional): name of the renamed log directory. Defaults to None.
+        """
+        self.log.info("-" * 80)
+        self.log.info("DAOS functional test launcher")
+        self.log.info("")
+        MAJOR, MINOR = get_avocado_version()    # pylint: disable=invalid-name
+        self.log.info("Running with Avocado %s.%s", MAJOR, MINOR)
+        self.log.info("Logging launch results to: %s", self.logdir)
+        if renamed_log_dir:
+            self.log.info("  Renaming existing launch log directory to %s", renamed_log_dir)
+        self.log.info("Launch log file: %s", self.logfile)
+        self.log.info("-" * 80)
+
+    def set_test_list(self, tags):
+        """Generate a list of tests and avocado tag filter from a list of tags.
+
+        Args:
+            tags (list): a list of tag or test file names
+
+        Raises:
+            LaunchException: if there is a problem listing tests
+
+        Returns:
+            (list, list): a tuple of an avocado tag filter list and lists of tests
+
+        """
+        self.log.debug("-" * 80)
+        self.tests = []
+        self.tag_filters = []
+
+        # Determine if fault injection is enabled
+        fault_tag = "-faults"
+        fault_filter = f"--filter-by-tags={fault_tag}"
+        faults_enabled = self._faults_enabled()
+
+        # Determine if each tag list entry is a tag or file specification
+        test_files = []
+        for tag in tags:
+            if os.path.isfile(tag):
+                # Assume an existing file is a test and add it to the list of tests
+                test_files.append(tag)
+                # self.test_list.append(TestInfo(tag))
+                if not faults_enabled and fault_filter not in self.tag_filters:
+                    self.tag_filters.append(fault_filter)
+            else:
+                # Otherwise it is assumed that this is a tag
+                if not faults_enabled:
+                    tag = ",".join((tag, fault_tag))
+                self.tag_filters.append(f"--filter-by-tags={tag}")
+
+        # Get the avocado list command to find all the tests that match the specified files and tags
+        command = get_avocado_list_command()
+        command.extend(self.tag_filters)
+        command.extend(test_files)
+        if not test_files:
+            command.append("./")
+
+        # Find all the test files that contain tests matching the tags
+        self.log.info("Detecting tests matching tags: %s", " ".join(command))
+        output = run_local(self.log, command, check=True)
+        for test_file in re.findall(r"INSTRUMENTED\s+(.*):", output.stdout):
+            self.tests.append(TestInfo(test_file))
+            self.log.info("  %s", self.tests[-1])
+
+    def _faults_enabled(self):
+        """Determine if fault injection is enabled.
+
+        Returns:
+            bool: whether or not fault injection is enabled
+
+        """
+        self.log.debug("Checking for fault injection enablement via 'fault_status':")
+        try:
+            run_local(self.log, ["fault_status"], check=True)
+            self.log.debug("  Fault injection is enabled")
+            return True
+        except LaunchException:
+            # Command failed or yielded a non-zero return status
+            self.log.debug("  Fault injection is disabled")
+        return False
+
+    def run(self, sparse, fail_fast, extra_yaml, disable_stop, archive, rename, jenkinslog,
+            process_cores):
+        """Run all the tests.
+
+        Args:
+            sparse (bool): _description_
+            fail_fast (bool): _description_
+            extra_yaml (list): _description_
+            disable_stop (bool): _description_
+            archive (bool): _description_
+            rename (bool): _description_
+            jenkinslog (bool): _description_
+            process_cores (bool): _description_
+        """
+        return_code = 0
+
+        # Determine the location of the avocado logs for archiving or renaming
+        self.log.info("Avocado logs stored in %s", self.job_results_dir)
+
+        # Run each test for as many repetitions as requested
+        for loop in range(1, self.repeat + 1):
+            self.log.info("-" * 80)
+            self.log.info("Starting loop %s/%s", loop, self.repeat)
+            # loop_sub_dir = os.path.join("launch", f"loop_{loop}")
+
+            for test in self.tests:
+                # Define a log for the execution of this test in this loop
+                test_log_file = os.path.join(
+                    get_avocado_directory("launch"), test.get_log_file(loop))
+                self.log.info(
+                    "Logging launch loop %s running of %s in %s", loop, test, test_log_file)
+                test_file_handler = get_file_handler(test_log_file)
+                self.log.addHandler(test_file_handler)
+
+                # Mark the start of this test and prepare the hosts to run the tests
+                step_status = self.prepare(test, loop, test_log_file)
+                if step_status:
+                    return_code |= step_status
+                    continue
+
+                # Run the test with avocado
+                step_status = self.execute(test, loop, sparse, fail_fast, extra_yaml)
+                if step_status:
+                    return_code |= step_status
+
+                # Archive the test results
+                try:
+                    self.process(
+                        test, loop, disable_stop, archive, rename, jenkinslog, process_cores)
+                except LaunchException:
+                    self.log.exception("Error processing results for %s", test)
+                    self.result.tests[-1].status = TestResult.ERROR
+
+                # Mark the execution of the test as passed if nothing went wrong
+                if self.result.tests[-1].status is None:
+                    self.result.tests[-1].status = TestResult.PASS
+
+                # Update the launch execution status
+                self.result.end()
+
+                # Stop logging to the test log file
+                self.log.removeHandler(test_file_handler)
+
+        # Generate a results.xml for the this run
+        # pylint: disable=import-outside-toplevel
+        from avocado.plugins.xunit import XUnitResult
+        result_xml = XUnitResult()
+        result_xml.render(self.result, self)
+
+        return return_code
+
+    def prepare(self, test, loop, test_log_file):
+        """Prepare the test for execution.
+
+        Args:
+            test (TestInfo): the test information
+            loop (int): the repeat loop number
+            test_log_file (_type_): _description_
+
+        Returns:
+            int: status code: 0 = success, 4 = failure
+
+        """
+        self.log.debug("=" * 80)
+        self.log.info("Preparing to run the %s test on loop %s/%s", test, loop, self.repeat)
+
+        # Create a new TestResult for this test - including the current loop in the test name
+        test.loop = loop
+        self.result.tests.append(TestResult(test.class_name, test.name, test_log_file, loop))
+        self.result.start()
+
+        # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
+        try:
+            setup_test_directory(self.log, test)
+        except LaunchException as error:
+            message = "Error setting up test directories"
+            self.log.exception(message)
+            self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
+            return 4
+
+        # Generate certificate files for the test
+        try:
+            generate_certs(self.log)
+        except LaunchException as error:
+            message = "Error generating certificates"
+            self.log.exception(message)
+            self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
+            return 4
+
+        return 0
+
+    def execute(self, test, loop, sparse, fail_fast, extra_yaml):
+        """Run the specified test.
+
+        Args:
+            test (TestInfo): the test information
+            loop (int): the repeat loop number
+            sparse (bool): _description_
+            fail_fast(bool): _description_
+            extra_yaml (list): _description_
+
+        Returns:
+            int: status code: 0 = success, >0 = failure
+
+        """
+        self.log.debug("-" * 80)
+        command = get_avocado_run_command(test, self.tag_filters, sparse, fail_fast, extra_yaml)
+        self.log.info(
+            "Running the %s test on loop %s/%s: %s", test, loop, self.repeat, " ".join(command))
+        start_time = int(time.time())
+
+        try:
+            return_code = run_local(self.log, command, False).returncode
+            if return_code:
+                self._collect_crash_files()
+
+        except LaunchException as error:
+            message = f"Error executing {test} on loop {loop}"
+            self.log.exception(message)
+            self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
+            return_code = 1
+
+        end_time = int(time.time())
+        self.log.info("Total test time: %ss", end_time - start_time)
+        return return_code
+
+    def _collect_crash_files(self):
+        """Move any avocado crash files into job-results/latest/crashes.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            avocado_logs_dir (str): path to the avocado log files.
+        """
+        avocado_logs_dir = get_avocado_logs_dir()
+        data_dir = avocado_logs_dir.replace("job-results", "data")
+        crash_dir = os.path.join(data_dir, "crashes")
+        if os.path.isdir(crash_dir):
+            crash_files = [
+                os.path.join(crash_dir, crash_file)
+                for crash_file in os.listdir(crash_dir)
+                if os.path.isfile(os.path.join(crash_dir, crash_file))]
+
+            if crash_files:
+                latest_dir = os.path.join(avocado_logs_dir, "latest")
+                latest_crash_dir = os.path.join(latest_dir, "crashes")
+                try:
+                    run_local(self.log, ["mkdir", latest_crash_dir], check=True)
+                    for crash_file in crash_files:
+                        run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
+                except LaunchException as error:
+                    message = "Error collecting crash files"
+                    self.log.exception(message)
+                    self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
+            else:
+                self.log.debug("No avocado crash files found in %s", crash_dir)
+
+    def process(self, test, loop, disable_stop, archive, rename, jenkinslog, process_cores):
+        """Process the test results.
+
+        This may include (depending upon argument values):
+            - Stopping any running servers or agents
+            - Resettting the server storage
+            - Archiving any files generated by the test and including them with the test results
+            - Renaming the test results directory and results.xml entries
+            - Processing any core files generated by the test
+
+        Args:
+            test (TestInfo): the test information
+            loop (int): the repeat loop number
+            disable_stop (bool): _description_
+            archive (bool): _description_
+            rename (bool): _description_
+            process_cores (bool): _description_
+
+        Raises:
+            LaunchException: _description_
+
+        Returns:
+            int: status code: 0 = success, >0 = failure
+
+        """
+        return_code = 0
+        self.log.debug("-" * 80)
+        self.log.info("Processing the %s test after the run on loop %s/%s", test, loop, self.repeat)
+
+        # Stop any agents or servers running via systemd
+        if not disable_stop:
+            return_code |= stop_daos_agent_services(self.log, test)
+            return_code |= stop_daos_server_service(self.log, test)
+            return_code |= reset_server_storage(self.log, test)
+
+        # Optionally store all of the server and client config files
+        # and archive remote logs and report big log files, if any.
+        if archive:
+            # test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+            # test_tmp_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
+            # test_shared_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
+
+            remote_files = OrderedDict()
+            remote_files[os.getenv("DAOS_TEST_LOG_DIR", "/tmp")] = {
+                "summary": "local configuration files",
+                "hosts": self.local_host,
+                "pattern": "*_*_*.yaml",
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+            }
+            remote_files[os.path.join(os.sep, "etc", "daos")] = {
+                "summary": "remote configuration files",
+                "hosts": test.hosts.all_remote,
+                "pattern": "daos_*.yml",
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+            }
+            remote_files[os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)] = {
+                "summary": "daos/cart log files",
+                "hosts": test.hosts.all,
+                "pattern": "*log*",
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+            }
+            remote_files[os.path.join(os.sep, "tmp")] = {
+                "summary": "ULTs stacks dump files",
+                "hosts": test.hosts.servers,
+                "pattern": "daos_dump*.txt*",
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
+            }
+            remote_files[os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])] = {
+                "summary": "valgrind log files",
+                "hosts": test.hosts.servers,
+                "pattern": "valgrind*",
+                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+            }
+            for directory, data in remote_files.items():
+                try:
+                    self._archive_files(
+                        data["summary"], data["hosts"], directory, data["pattern"],
+                        data["destination"])
+
+                except LaunchException as error:
+                    message = f"Error archiving {data['summary']}"
+                    self.log.exception(message)
+                    self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                    return_code |= 16
+
+            # # Compress any log file that haven't been remotely compressed.
+            # compress_log_files(log, avocado_logs_dir, args)
+
+        # Optionally rename the test results directory for this test
+        if rename:
+            try:
+                self._rename_avocado_test_dir(test, loop, jenkinslog)
+            except LaunchException as error:
+                message = "Error renaming test results"
+                self.log.exception(message)
+                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                return_code |= 1024
+
+        # Optionally process core files
+        if process_cores:
+            # try:
+            #     if not process_the_cores(log, avocado_logs_dir, test.hosts.all):
+            #         return_code |= 256
+            # except Exception as error:  # pylint: disable=broad-except
+            #     log.error("Error: unhandled exception processing core files: %s", str(error))
+            #     return_code |= 256
+            pass
+
+    def _archive_files(self, summary, hosts, directory, pattern, destination):
+        """_summary_.
+
+        Args:
+            summary (_type_): _description_
+            hosts (_type_): _description_
+            directory (_type_): _description_
+            pattern (_type_): _description_
+            destination (_type_): _description_
+
+        Raises:
+            LaunchException: _description_
+
+        """
+        self.log.debug("Archiving %s from %s", summary, hosts)
+        base_find_command = f"find {directory} -type f"
+
+        # Remove any remote 0 length files
+        self.log.debug("Removing any zero-length files in %s on %s", directory, hosts)
+        command = " ".join([base_find_command, "-empty -print -delete"])
+        run_remote(self.log, hosts, command)
+
+        # Get a list of remote files and their sizes
+        self.log.debug("Detecting any %s files in %s on %s", pattern, directory, hosts)
+        command = " ".join([base_find_command, f"-name {pattern} -printf \"%p %k KB \n\""])
+        run_remote(self.log, hosts, command)
+
+        # Run cart_logtest
+        cart_logtest = os.path.join(os.curdir, "cart", "cart_logtest.py")
+        self.log.debug(
+            "Running %s on any %s files in %s on %s", cart_logtest, pattern, directory, hosts)
+        command = " ".join(
+            [base_find_command,
+             f"-name {pattern} -print0 | xargs -r0 -I '[]' {cart_logtest} '[]' > '[]'.cart_logtest"]
+        )
+        run_remote(self.log, hosts, command)
+
+        # Remotely compress any files larger than 1 MB
+        remote_hosts = hosts.difference(self.local_host)
+        local_host = hosts.union(self.local_host)
+        if remote_hosts:
+            self.log.debug(
+                "Compressing (remotely) any %s files in %s on %s", pattern, directory, remote_hosts)
+            command = " ".join(
+                [base_find_command, "-maxdepth 0 -size +1M -print0 | sudo xargs -r0 lbzip2 -v"])
+            run_remote(self.log, remote_hosts, command)
+
+            # Copy the files back to this host
+            self.log.debug("Moving files from %s to %s on %s", directory, destination, remote_hosts)
+            command = f"clush -v -w {remote_hosts} --rcopy {directory} --dest {destination}"
+            run_remote(self.log, remote_hosts, command)
+
+        # Locally compress any files larger than 1 MB
+        if local_host:
+            self.log.debug(
+                "Compressing (locally) any %s files in %s on %s", pattern, directory, local_host)
+            command = base_find_command.split(" ") + ["-maxdepth", "0", "-size", "+1M", "-print0"]
+            command.extend(["|", "sudo", "xargs", "-r0", "lbzip2", "-v"])
+            run_local(self.log, command, check=True)
+
+            # Move the files on this host
+            self.log.debug("Moving files from %s to %s on %s", directory, destination, local_host)
+            for source in os.listdir(directory):
+                name = ".".join([os.path.basename(source), str(hosts)])
+                destination = os.path.join(destination, name)
+                self.log.debug("  Moving %s to %s", source, destination)
+                os.rename(source, destination)
+
+    def _rename_avocado_test_dir(self, test, loop, jenkinslog):
+        """Append the test name to its avocado job-results directory name.
+
+        Args:
+            test (TestInfo): the test information
+            loop (int): the repeat loop number
+
+            log (logger): logger for the messages produced by this method
+            avocado_logs_dir (str): avocado job-results directory
+            test_file (str): the test python file
+            loop (int): test execution loop count
+            args (argparse.Namespace): command line arguments for this program
+
+        Raises:
+            LaunchException: if there is an error renaming the avocado test directory
+
+        """
+        avocado_logs_dir = get_avocado_logs_dir()
+        test_name = get_test_category(test.test_file)
+        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
+        test_logs_dir = os.path.realpath(test_logs_lnk)
+
+        self.log.debug("-" * 80)
+        self.log.info("Renaming the avocado job-results directory")
+
+        if jenkinslog:
+            if self.repeat > 1:
+                # When repeating tests ensure Jenkins-style avocado log directories
+                # are unique by including the loop count in the path
+                new_test_logs_dir = os.path.join(avocado_logs_dir, test.test_file, str(loop))
+            else:
+                new_test_logs_dir = os.path.join(avocado_logs_dir, test.test_file)
+            try:
+                os.makedirs(new_test_logs_dir)
+            except OSError as error:
+                self.log.exception(error)
+                raise LaunchException(f"Error creating {new_test_logs_dir}") from error
+        else:
+            new_test_logs_dir = "-".join([test_logs_dir, test_name])
+
+        try:
+            os.rename(test_logs_dir, new_test_logs_dir)
+            os.remove(test_logs_lnk)
+            os.symlink(new_test_logs_dir, test_logs_lnk)
+            self.log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
+        except OSError as error:
+            self.log.exception(error)
+            raise LaunchException(
+                f"Error renaming {test_logs_dir} to {new_test_logs_dir}") from error
+
+        if jenkinslog:
+            xml_file = os.path.join(new_test_logs_dir, "results.xml")
+            try:
+                with open(xml_file, encoding="utf-8") as xml_buffer:
+                    xml_data = xml_buffer.read()
+            except OSError as error:
+                self.log.exception(error)
+                raise LaunchException(f"Error reading {xml_file}") from error
+
+            # Save it for the Launchable [de-]mangle
+            org_xml_data = xml_data
+
+            # First, mangle the in-place file for Jenkins to consume
+            test_dir = os.path.split(os.path.dirname(test.test_file))[-1]
+            org_class = "classname=\""
+            new_class = f"{org_class}FTEST_{test_dir}."
+            xml_data = re.sub(org_class, new_class, xml_data)
+
+            try:
+                with open(xml_file, "w", encoding="utf-8") as xml_buffer:
+                    xml_buffer.write(xml_data)
+            except OSError as error:
+                self.log.exception(error)
+                raise LaunchException(f"Error writing {xml_file}") from error
+
+            # Now mangle (or rather unmangle back to canonical xunit1 format)
+            # another copy for Launchable
+            xml_data = org_xml_data
+            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            new_name = rf'\1\2\3 file="{test.test_file}"'
+            xml_data = re.sub(org_name, new_name, xml_data)
+            xml_file = xml_file[0:-11] + "xunit1_results.xml"
+
+            try:
+                with open(xml_file, "w", encoding="utf-8") as xml_buffer:
+                    xml_buffer.write(xml_data)
+            except OSError as error:
+                self.log.exception(error)
+                raise LaunchException(f"Error writing {xml_file}") from error
 
 
 def main():
     """Launch DAOS functional tests."""
-    # Setup logging
-    # log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s"
-    # log_format = "%(message)s"
-    # console = logging.StreamHandler()
-    # console.setLevel(logging.DEBUG)
-    # console.setFormatter(logging.Formatter(log_format))
-    # logging.basicConfig(
-    #     format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG, handlers=[console])
-    # log = logging.getLogger(__name__)
-
     # Parse the command line arguments
     description = [
         "DAOS functional test launcher",
@@ -2744,6 +3019,13 @@ def main():
              "any of the tests failed. 'manual' is where the return code is "
              "non-zero if any of the tests as part of launch.py failed.")
     parser.add_argument(
+        "-na", "--name",
+        action="store",
+        default="_".join(os.environ.get("STAGE_NAME", "Functional Stage Unknown").split()),
+        type=str,
+        help="avocado job-results directory name in which to place the launch log files."
+             "If a directory with this name already exists it will be renamed with a '_old' suffix")
+    parser.add_argument(
         "-n", "--nvme",
         action="store",
         help="comma-separated list of NVMe device PCI addresses to use as "
@@ -2831,36 +3113,11 @@ def main():
              "command - is used by default.")
     args = parser.parse_args()
 
-    # Setup the logger based upon the mode
-    log_level = logging.INFO if args.mode == "ci" else logging.DEBUG
-    log_format = "%(message)s"
-    console = logging.StreamHandler()
-    console.setFormatter(logging.Formatter(log_format))
-    console.setLevel(log_level)
-    logging.basicConfig(
-        format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG, handlers=[console])
-    log = logging.getLogger(__name__)
-    log.info("-" * 80)
-    log.info("DAOS functional test launcher")
-    log.info("-" * 80)
-    MAJOR, MINOR = get_avocado_version()    # pylint: disable=invalid-name
-    log.info("Running with Avocado %s.%s", MAJOR, MINOR)
+    # Setup the LaunchJob
+    launch = LaunchJob(args.name, args.repeat)
 
-    # Create an avocado job-result for the launch.py execution using the stage name
-    default_stage_name = "Functional Stage Unknown" if args.mode == "ci" else "Manual"
-    stage_name = os.environ.get("STAGE_NAME", default_stage_name)
-    ftest_name = "_".join(stage_name.replace("Functional", "FTEST").split())
-    log_file = os.path.join(get_avocado_directory(ftest_name), "launch.log")
-    rename_log = os.path.exists(log_file)
-    if rename_log:
-        os.rename(log_file, ".".join([log_file, "old"]))
-    add_file_handler(log, log_file)
-    log.info("Log file: %s", log_file)
-    if rename_log:
-        log.info("  Renaming existing log file to %s", ".".join([log_file, "old"]))
-
+    # Override arguments via the mode
     if args.mode == "ci":
-        # Enforce CI mode default arguments
         args.archive = True
         args.clean = True
         args.include_localhost = True
@@ -2871,9 +3128,10 @@ def main():
         if not args.logs_threshold:
             args.logs_threshold = "1G"
 
-    log.debug("Arguments:")
+    # Record the command line arguments
+    launch.log.debug("Arguments:")
     for key in sorted(args.__dict__.keys()):
-        log.debug("  %s = %s", key, getattr(args, key))
+        launch.log.debug("  %s = %s", key, getattr(args, key))
 
     # Convert host specifications into NodeSets
     args.test_servers = NodeSet(args.test_servers)
@@ -2881,42 +3139,39 @@ def main():
 
     # A list of server hosts is required
     if not args.test_servers and not args.list:
-        log.error("Error: Missing a required '--test_servers' argument.")
+        launch.log.error("Error: Missing a required '--test_servers' argument.")
         sys.exit(1)
 
     # Setup the user environment
     try:
-        set_test_environment(log, args)
+        set_test_environment(launch.log, args)
     except LaunchException:
-        log.exception("Error setting test environment")
+        launch.log.exception("Error setting test environment")
         sys.exit(1)
 
     # Auto-detect nvme test yaml replacement values if requested
     if args.nvme and args.nvme.startswith("auto") and not args.list:
         try:
-            args.nvme = get_device_replacement(log, args)
+            args.nvme = get_device_replacement(launch.log, args)
         except LaunchException:
-            log.exception("Error auto-detecting NVMe test yaml file replacement values")
+            launch.log.exception("Error auto-detecting NVMe test yaml file replacement values")
             sys.exit(1)
     elif args.nvme and args.nvme.startswith("vmd:"):
         args.nvme = args.nvme.replace("vmd:", "")
 
     # Process the tags argument to determine which tests to run
     try:
-        tag_filter, test_list = get_test_list(log, args.tags)
+        launch.set_test_list(args.tags)
     except LaunchException:
-        log.exception("Error detecting tests that match tags: %s", args.tags)
+        launch.log.exception("Error detecting tests that match tags: %s", args.tags)
         sys.exit(1)
 
     # Verify at least one test was requested
-    if not test_list:
-        log.error("Error: No tests or tags found via %s", args.tags)
+    if not launch.tests:
+        launch.log.error("Error: No tests or tags found for '%s'", " ".join(args.tags))
         sys.exit(1)
 
-    # Display a list of the tests matching the tags
-    log.info("Detected tests:")
-    for test in test_list:
-        log.info("  %s", test)
+    # Done if just listing tests matching the tags
     if args.list and not args.modify:
         sys.exit(0)
 
@@ -2931,60 +3186,55 @@ def main():
             os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    setup_test_files(log, test_list, args, yaml_dir)
+    setup_test_files(launch.log, launch.tests, args, yaml_dir)
     if args.modify:
         sys.exit(0)
 
-    # Setup (clean/create/list) the common test directory
-    setup_test_directory(log, args)
-
-    # Generate certificate files
-    generate_certs(log)
-
-    # Run all the tests
-    status = run_tests(log, test_list, tag_filter, args)
+    # Execute the tests
+    ret_code = launch.run(
+        args.sparse, args.failfast, args.extra_yaml, args.disable_stop_daos, args.archive,
+        args.rename, args.jenkinslog, args.process_cores)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
-    ret_code = 0
-    if status == 0:
-        log.info("All avocado tests passed!")
-    else:
-        if status & 1 == 1:
-            log.info("Detected one or more avocado test failures!")
-            if args.mode == 'manual':
-                ret_code = 1
-        if status & 8 == 8:
-            log.info("Detected one or more interrupted avocado jobs!")
-        if status & 2 == 2:
-            log.info("ERROR: Detected one or more avocado job failures!")
-            ret_code = 1
-        if status & 4 == 4:
-            log.info("ERROR: Detected one or more failed avocado commands!")
-            ret_code = 1
-        if status & 16 == 16:
-            log.info("ERROR: Detected one or more tests that failed archiving!")
-            ret_code = 1
-        if status & 32 == 32:
-            log.info("ERROR: Detected one or more tests with unreported big logs!")
-            ret_code = 1
-        if status & 64 == 64:
-            log.info("ERROR: Failed to create a junit xml test error file!")
-        if status & 128 == 128:
-            log.info("ERROR: Failed to clean logs in preparation for test run!")
-            ret_code = 1
-        if status & 256 == 256:
-            log.info("ERROR: Detected one or more tests with a failure processing core files!")
-            ret_code = 1
-        if status & 512 == 512:
-            log.info("ERROR: Detected stopping daos_server.service after one or more tests!")
-            ret_code = 1
-        if status & 1024 == 1024:
-            log.info(
-                "ERROR: Detected one or more failures in renaming logs and results for Jenkins!")
-            ret_code = 1
-    if args.mode == 'ci':
-        ret_code = 0
+    # if status == 0:
+    #     log.info("All avocado tests passed!")
+    # else:
+    #     if status & 1 == 1:
+    #         log.info("Detected one or more avocado test failures!")
+    #         if args.mode == 'manual':
+    #             ret_code = 1
+    #     if status & 8 == 8:
+    #         log.info("Detected one or more interrupted avocado jobs!")
+    #     if status & 2 == 2:
+    #         log.info("ERROR: Detected one or more avocado job failures!")
+    #         ret_code = 1
+    #     if status & 4 == 4:
+    #         log.info("ERROR: Detected one or more failed avocado commands!")
+    #         ret_code = 1
+    #     if status & 16 == 16:
+    #         log.info("ERROR: Detected one or more tests that failed archiving!")
+    #         ret_code = 1
+    #     if status & 32 == 32:
+    #         log.info("ERROR: Detected one or more tests with unreported big logs!")
+    #         ret_code = 1
+    #     if status & 64 == 64:
+    #         log.info("ERROR: Failed to create a junit xml test error file!")
+    #     if status & 128 == 128:
+    #         log.info("ERROR: Failed to clean logs in preparation for test run!")
+    #         ret_code = 1
+    #     if status & 256 == 256:
+    #         log.info("ERROR: Detected one or more tests with a failure processing core files!")
+    #         ret_code = 1
+    #     if status & 512 == 512:
+    #         log.info("ERROR: Detected stopping daos_server.service after one or more tests!")
+    #         ret_code = 1
+    #     if status & 1024 == 1024:
+    #         log.info(
+    #             "ERROR: Detected one or more failures in renaming logs and results for Jenkins!")
+    #         ret_code = 1
+    # if args.mode == 'ci':
+    #     ret_code = 0
     sys.exit(ret_code)
 
 
