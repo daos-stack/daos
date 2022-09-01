@@ -684,7 +684,6 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 		 const uint32_t *domains, d_rank_list_t **ranksp)
 {
 	int			nreplicas = ds_pool_svc_rf_to_nreplicas(svc_rf);
-	int			i_rank_zero = -1;
 	int			selectable;
 	d_rank_list_t		*rnd_tgts;
 	d_rank_list_t		*ranks;
@@ -704,15 +703,6 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 
 	/* Determine the number of selectable targets. */
 	selectable = rnd_tgts->rl_nr;
-	if (daos_rank_list_find((d_rank_list_t *)rnd_tgts, 0 /* rank */,
-				&i_rank_zero)) {
-		/*
-		 * Unless it is the only target available, we don't select rank
-		 * 0 for now to avoid losing orterun stdout.
-		 */
-		if (selectable > 1)
-			selectable -= 1 /* rank 0 */;
-	}
 
 	if (nreplicas > selectable)
 		nreplicas = selectable;
@@ -725,9 +715,6 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 	for (i = 0; i < rnd_tgts->rl_nr; i++) {
 		if (j == ranks->rl_nr)
 			break;
-		if (i == i_rank_zero && selectable > 1)
-			/* This is rank 0 and it's not the only rank. */
-			continue;
 		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, rnd_tgts->rl_ranks[i]);
 		ranks->rl_ranks[j] = rnd_tgts->rl_ranks[i];
 		j++;
