@@ -67,162 +67,6 @@ PROVIDER_KEYS = OrderedDict(
 )
 
 
-def get_avocado_version():
-    """Get the avocado major and minor version.
-
-    Raises:
-        LaunchException: if there is an error getting the version from the avocado command
-
-    Returns:
-        tuple: major and minor avocado versions as strings
-
-    """
-    try:
-        # pylint: disable=import-outside-toplevel
-        from avocado.core.version import MAJOR, MINOR
-        return MAJOR, MINOR
-
-    except ModuleNotFoundError:
-        # Once lightweight runs are using python3-avocado, this can be removed
-        log = logging.getLogger(__name__)
-        result = run_local(log, ["avocado", "-v"], check=True)
-        try:
-            return re.findall(r"(\d+)\.(\d+)", result.stdout)[0]
-        except IndexError as error:
-            raise LaunchException("Error extracting avocado version from command") from error
-
-
-def get_avocado_setting(section, key, default=None):
-    """Get the value for the specified avocado setting.
-
-    Args:
-        section (str): avocado setting section name
-        key (str): avocado setting key name
-        default (object): default value to use if setting is undefined
-
-    Raises:
-        LaunchException: if there is an error getting the setting from the avocado command
-
-    Returns:
-        object: value for the avocado setting or None if not defined
-
-    """
-    try:
-        # pylint: disable=import-outside-toplevel
-        from avocado.core.settings import settings
-        try:
-            # Newer versions of avocado use this approach
-            config = settings.as_dict()
-            return config.get(".".join([section, key]))
-
-        except AttributeError:
-            # Older version of avocado, like 69LTS, use a different method
-            # pylint: disable=no-member
-            try:
-                return settings.get_value(section, key)
-            except settings.SettingsError:
-                # Setting not found
-                pass
-
-        except KeyError:
-            # Setting not found
-            pass
-
-    except ModuleNotFoundError:
-        # Once lightweight runs are using python3-avocado, this can be removed
-        log = logging.getLogger(__name__)
-        result = run_local(log, ["avocado", "config"], check=True)
-        try:
-            return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
-        except IndexError:
-            # Setting not found
-            pass
-
-    return default
-
-
-def get_avocado_logs_dir():
-    """Get the avocado directory in which the test results are stored.
-
-    Returns:
-        str: the directory used by avocado to log test results
-
-    """
-    default_base_dir = os.path.expanduser(os.path.join("~", "avocado", "job-results"))
-    return get_avocado_setting("datadir.paths", "logs_dir", default_base_dir)
-
-
-def get_avocado_directory(test):
-    """Get the avocado test directory for the test.
-
-    Args:
-        test (str): name of the test (file)
-
-    Returns:
-        str: the directory used by avocado to log test results
-
-    """
-    logs_dir = get_avocado_logs_dir()
-    test_dir = os.path.join(logs_dir, test)
-    os.makedirs(test_dir, exist_ok=True)
-    return test_dir
-
-
-def get_avocado_list_command():
-    """Get the avocado list command for this version of avocado.
-
-    Returns:
-        list: avocado list command parts
-
-    """
-    MAJOR, _ = get_avocado_version()    # pylint: disable=invalid-name
-    if int(MAJOR) >= 83:
-        return ["avocado", "list"]
-    if int(MAJOR) >= 82:
-        return ["avocado", "--paginator=off", "list"]
-    return ["avocado", "list", "--paginator=off"]
-
-
-def get_avocado_run_command(test, tag_filters, sparse, failfast, extra_yaml):
-    """Get the avocado run command for this version of avocado.
-
-    Args:
-        test (TestInfo): the test information
-        tag_filters (list): optional '--filter-by-tags' arguments
-        sparse (bool): _description_
-        failfast (bool): _description_
-
-    Returns:
-        list: avocado run command
-
-    """
-    MAJOR, _ = get_avocado_version()    # pylint: disable=invalid-name
-    command = ["avocado"]
-    if not sparse and int(MAJOR) >= 82:
-        command.append("--show=test")
-    command.append("run")
-    if int(MAJOR) >= 82:
-        command.append("--ignore-missing-references")
-    else:
-        command.extend(["--ignore-missing-references", "on"])
-    if int(MAJOR) >= 83:
-        command.append("--disable-tap-job-result")
-    else:
-        command.extend(["--html-job-result", "on"])
-        command.extend(["--tap-job-result", "off"])
-    if not sparse and int(MAJOR) < 82:
-        command.append("--show-job-log")
-    if tag_filters:
-        command.extend(tag_filters)
-    if failfast:
-        command.extend(["--failfast", "on"])
-    command.extend(["--mux-yaml", test.yaml_file])
-    if extra_yaml:
-        command.append(extra_yaml)
-    command.extend(["--", str(test)])
-    return command
-
-
 def get_local_host():
     """Get the local host name.
 
@@ -316,7 +160,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
 
     if capture_output:
         # Log the output of the command
-        log.debug("Command '%s' (rc=%s):", result.returncode)
+        log.debug("Command '%s' (rc=%s):", command_str, result.returncode)
         if result.stdout:
             for line in result.stdout.splitlines():
                 log.debug("  %s", line)
@@ -1930,6 +1774,166 @@ class LaunchException(Exception):
     """Exception for launch.py execution."""
 
 
+class AvocadoInfo():
+    """Information about this version of avocado."""
+
+    def __init__(self):
+        """Initialize an AvocadoInfo object.
+
+        Raises:
+            LaunchException: _description_
+        """
+        try:
+            # pylint: disable=import-outside-toplevel
+            from avocado.core.version import MAJOR, MINOR
+            self.major = int(MAJOR)
+            self.minor = int(MINOR)
+
+        except ModuleNotFoundError:
+            # Once lightweight runs are using python3-avocado, this can be removed
+            log = logging.getLogger(__name__)
+            result = run_local(log, ["avocado", "-v"], check=True)
+            try:
+                version = re.findall(r"(\d+)\.(\d+)", result.stdout)[0]
+                self.major = int(version[0])
+                self.minor = int(version[1])
+            except IndexError as error:
+                raise LaunchException("Error extracting avocado version from command") from error
+
+    def __str__(self):
+        """Get the avocado version as a string.
+
+        Returns:
+            str: the avocado version
+
+        """
+        return f"Avocado {str(self.major)}.{str(self.minor)}"
+
+    def get_setting(self, section, key, default=None):
+        """Get the value for the specified avocado setting.
+
+        Args:
+            section (str): avocado setting section name
+            key (str): avocado setting key name
+            default (object): default value to use if setting is undefined
+
+        Raises:
+            LaunchException: if there is an error getting the setting from the avocado command
+
+        Returns:
+            object: value for the avocado setting or None if not defined
+
+        """
+        try:
+            # pylint: disable=import-outside-toplevel
+            from avocado.core.settings import settings
+            try:
+                # Newer versions of avocado use this approach
+                config = settings.as_dict()
+                return config.get(".".join([section, key]))
+
+            except AttributeError:
+                # Older version of avocado, like 69LTS, use a different method
+                # pylint: disable=no-member
+                try:
+                    return settings.get_value(section, key)
+                except settings.SettingsError:
+                    # Setting not found
+                    pass
+
+            except KeyError:
+                # Setting not found
+                pass
+
+        except ModuleNotFoundError:
+            # Once lightweight runs are using python3-avocado, this can be removed
+            log = logging.getLogger(__name__)
+            result = run_local(log, ["avocado", "config"], check=True)
+            try:
+                return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
+            except IndexError:
+                # Setting not found
+                pass
+
+        return default
+
+    def get_logs_dir(self):
+        """Get the avocado directory in which the test results are stored.
+
+        Returns:
+            str: the directory used by avocado to log test results
+
+        """
+        default_base_dir = os.path.expanduser(os.path.join("~", "avocado", "job-results"))
+        return self.get_setting("datadir.paths", "logs_dir", default_base_dir)
+
+    def get_directory(self, test):
+        """Get the avocado test directory for the test.
+
+        Args:
+            test (str): name of the test (file)
+
+        Returns:
+            str: the directory used by avocado to log test results
+
+        """
+        logs_dir = self.get_logs_dir()
+        test_dir = os.path.join(logs_dir, test)
+        os.makedirs(test_dir, exist_ok=True)
+        return test_dir
+
+    def get_list_command(self):
+        """Get the avocado list command for this version of avocado.
+
+        Returns:
+            list: avocado list command parts
+
+        """
+        if self.major >= 83:
+            return ["avocado", "list"]
+        if self.major >= 82:
+            return ["avocado", "--paginator=off", "list"]
+        return ["avocado", "list", "--paginator=off"]
+
+    def get_run_command(self, test, tag_filters, sparse, failfast, extra_yaml):
+        """Get the avocado run command for this version of avocado.
+
+        Args:
+            test (TestInfo): the test information
+            tag_filters (list): optional '--filter-by-tags' arguments
+            sparse (bool): _description_
+            failfast (bool): _description_
+
+        Returns:
+            list: avocado run command
+
+        """
+        command = ["avocado"]
+        if not sparse and self.major >= 82:
+            command.append("--show=test")
+        command.append("run")
+        if self.major >= 82:
+            command.append("--ignore-missing-references")
+        else:
+            command.extend(["--ignore-missing-references", "on"])
+        if self.major >= 83:
+            command.append("--disable-tap-job-result")
+        else:
+            command.extend(["--html-job-result", "on"])
+            command.extend(["--tap-job-result", "off"])
+        if not sparse and self.major < 82:
+            command.append("--show-job-log")
+        if tag_filters:
+            command.extend(tag_filters)
+        if failfast:
+            command.extend(["--failfast", "on"])
+        command.extend(["--mux-yaml", test.yaml_file])
+        if extra_yaml:
+            command.append(extra_yaml)
+        command.extend(["--", str(test)])
+        return command
+
+
 class RemoteCommandResult():
     """Stores the command result from a Task object."""
 
@@ -2334,9 +2338,10 @@ class LaunchJob():
             name (str): launch job name
             repeat (_type_): _description_
         """
+        self.avocado = AvocadoInfo()
         self.name = name
         self.repeat = repeat
-        self.logdir = get_avocado_directory("launch")
+        self.logdir = self.avocado.get_directory("launch")
         self.logfile = os.path.join(self.logdir, "job.log")
         self.tests = []
         self.tag_filters = []
@@ -2355,7 +2360,7 @@ class LaunchJob():
         self._start_logging(renamed_log_dir)
 
         # Setup results tracking
-        self.job_results_dir = get_avocado_logs_dir()
+        self.job_results_dir = self.avocado.get_logs_dir()
         self.result = LaunchResult(self.logfile)
         self.local_host = NodeSet(get_local_host())
 
@@ -2396,8 +2401,7 @@ class LaunchJob():
         self.log.info("-" * 80)
         self.log.info("DAOS functional test launcher")
         self.log.info("")
-        MAJOR, MINOR = get_avocado_version()    # pylint: disable=invalid-name
-        self.log.info("Running with Avocado %s.%s", MAJOR, MINOR)
+        self.log.info("Running with %s", self.avocado)
         self.log.info("Logging launch results to: %s", self.logdir)
         if renamed_log_dir:
             self.log.info("  Renaming existing launch log directory to %s", renamed_log_dir)
@@ -2442,7 +2446,7 @@ class LaunchJob():
                 self.tag_filters.append(f"--filter-by-tags={tag}")
 
         # Get the avocado list command to find all the tests that match the specified files and tags
-        command = get_avocado_list_command()
+        command = self.avocado.get_list_command()
         command.extend(self.tag_filters)
         command.extend(test_files)
         if not test_files:
@@ -2500,7 +2504,7 @@ class LaunchJob():
             for test in self.tests:
                 # Define a log for the execution of this test in this loop
                 test_log_file = os.path.join(
-                    get_avocado_directory("launch"), test.get_log_file(loop))
+                    self.avocado.get_directory("launch"), test.get_log_file(loop))
                 self.log.info(
                     "Logging launch loop %s running of %s in %s", loop, test, test_log_file)
                 test_file_handler = get_file_handler(test_log_file)
@@ -2592,7 +2596,8 @@ class LaunchJob():
 
         """
         self.log.debug("-" * 80)
-        command = get_avocado_run_command(test, self.tag_filters, sparse, fail_fast, extra_yaml)
+        command = self.avocado.get_run_command(
+            test, self.tag_filters, sparse, fail_fast, extra_yaml)
         self.log.info(
             "Running the %s test on loop %s/%s: %s", test, loop, self.repeat, " ".join(command))
         start_time = int(time.time())
@@ -2619,7 +2624,7 @@ class LaunchJob():
             log (logger): logger for the messages produced by this method
             avocado_logs_dir (str): path to the avocado log files.
         """
-        avocado_logs_dir = get_avocado_logs_dir()
+        avocado_logs_dir = self.avocado.get_logs_dir()
         data_dir = avocado_logs_dir.replace("job-results", "data")
         crash_dir = os.path.join(data_dir, "crashes")
         if os.path.isdir(crash_dir):
@@ -2837,7 +2842,7 @@ class LaunchJob():
             LaunchException: if there is an error renaming the avocado test directory
 
         """
-        avocado_logs_dir = get_avocado_logs_dir()
+        avocado_logs_dir = self.avocado.get_logs_dir()
         test_name = get_test_category(test.test_file)
         test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
         test_logs_dir = os.path.realpath(test_logs_lnk)
