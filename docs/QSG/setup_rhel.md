@@ -302,8 +302,9 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 		helper_log_file: /tmp/daos_admin.log
 		engines:
 		-
+			pinned_numa_node: 0
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib0
 			fabric_iface_port: 31316
 			log_mask: INFO
@@ -316,19 +317,20 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 			bdev_class: nvme
 			bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 		-
+			pinned_numa_node: 1
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib1
 			fabric_iface_port: 31416
 			log_mask: INFO
 			log_file: /tmp/daos_engine_1.log
 			env_vars:
 				- CRT_TIMEOUT=30
-		 	scm_mount: /mnt/daos1
-		 	scm_class: dcpm
-		 	scm_list: [/dev/pmem1]
-		 	bdev_class: nvme
-		 	bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
+			scm_mount: /mnt/daos1
+			scm_class: dcpm
+			scm_list: [/dev/pmem1]
+			bdev_class: nvme
+			bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
 
 3. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
