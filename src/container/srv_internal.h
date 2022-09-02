@@ -178,7 +178,8 @@ struct cont_iv_key {
 };
 
 /* srv_container.c */
-void ds_cont_op_handler(crt_rpc_t *rpc);
+void ds_cont_op_handler_v7(crt_rpc_t *rpc);
+void ds_cont_op_handler_v6(crt_rpc_t *rpc);
 void ds_cont_set_prop_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
