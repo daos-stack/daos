@@ -252,11 +252,10 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 }
 
 static int
-dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
+dfuse_start_fs(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args = {0};
-	struct dfuse_inode_entry *ie   = NULL;
-	int                       rc;
+	struct fuse_args args = {0};
+	int              rc;
 
 	args.argc = 5;
 
@@ -288,38 +287,13 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	/* Create the root inode and insert into table */
-	D_ALLOC_PTR(ie);
-	if (!ie)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
-
-	ie->ie_dfs    = dfs;
-	ie->ie_root   = true;
-	ie->ie_parent = 1;
-	atomic_store_relaxed(&ie->ie_ref, 1);
-	ie->ie_stat.st_ino  = 1;
-	ie->ie_stat.st_uid  = geteuid();
-	ie->ie_stat.st_gid  = getegid();
-	ie->ie_stat.st_mode = 0700 | S_IFDIR;
-	dfs->dfs_ino        = ie->ie_stat.st_ino;
-
-	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
-		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
-			D_GOTO(err, rc = daos_errno2der(rc));
-		}
-	}
-
-	rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino),
-			       &ie->ie_htl, false);
-	D_ASSERT(rc == -DER_SUCCESS);
+	rc = dfuse_fs_start(fs_handle, dfs);
+	if (rc)
+		D_GOTO(err, rc);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+		D_GOTO(err, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
@@ -327,13 +301,9 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	fuse_opt_free_args(&args);
 	if (rc == -DER_SUCCESS)
 		return rc;
-
-err_ie_remove:
-	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
-	D_FREE(ie);
 	return rc;
 }
 
@@ -663,14 +633,14 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_fs_start(fs_handle, dfs);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, rc);
-
 	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
 	 * initial one.
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+
+	rc = dfuse_start_fs(fs_handle, dfs);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out_cont, rc);
 
 	rc = dfuse_fs_stop(fs_handle);
 

@@ -1056,6 +1056,46 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	D_FREE(ie);
 }
 
+int
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
+{
+	struct dfuse_inode_entry *ie;
+	int                       rc;
+
+	/* Create the root inode and insert into table */
+	D_ALLOC_PTR(ie);
+	if (!ie)
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
+
+	ie->ie_dfs          = dfs;
+	ie->ie_root         = true;
+	ie->ie_parent       = 1;
+	ie->ie_stat.st_ino  = 1;
+	ie->ie_stat.st_uid  = geteuid();
+	ie->ie_stat.st_gid  = getegid();
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
+	atomic_store_relaxed(&ie->ie_ref, 1);
+	dfs->dfs_ino = ie->ie_stat.st_ino;
+
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
+			D_GOTO(err, rc = daos_errno2der(rc));
+		}
+	}
+
+	rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino),
+			       &ie->ie_htl, false);
+	D_ASSERT(rc == -DER_SUCCESS);
+
+err:
+	D_FREE(ie);
+	return rc;
+}
+
 static int
 ino_flush(d_list_t *rlink, void *arg)
 {

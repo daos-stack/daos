@@ -265,6 +265,9 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 	      struct dfuse_projection_info **fsh);
 
 int
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+
+int
 dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
 
 /* Drain and free resources used by a projection */
