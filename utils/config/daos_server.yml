@@ -290,9 +290,14 @@
 #  # Immutable after running "dmg storage format".
 #  #
 #  # Helper threads to accelerate checksum and server-side RPC dispatch.
+#  # When using EC, it is recommended to configure helper threads in
+#  # roughly a 1:4 ratio to the number of target threads. For example,
+#  # when using 16 targets it is recommended to set nr_xs_helpers to 4.
 #  #
 #  # The server should have sufficiently many physical cores to support the
 #  # number of helper threads, plus the number of targets.
+#  #
+#  # default: 0 (using existing target threads for this task)
 #
 #  nr_xs_helpers: 4
 #
