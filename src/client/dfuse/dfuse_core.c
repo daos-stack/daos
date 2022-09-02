@@ -1104,7 +1104,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 4;
+	args.argc = 6;
 
 	if (fs_handle->dpi_info->di_multi_user)
 		args.argc++;
@@ -1133,9 +1133,13 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
+	args.argv[4] = strdup("-onoatime");
+	if (!args.argv[4])
+		D_GOTO(err, rc = -DER_NOMEM);
+
 	if (fs_handle->dpi_info->di_multi_user) {
-		args.argv[4] = strdup("-oallow_other");
-		if (!args.argv[4])
+		args.argv[5] = strdup("-oallow_other");
+		if (!args.argv[5])
 			D_GOTO(err, rc = -DER_NOMEM);
 	}
 

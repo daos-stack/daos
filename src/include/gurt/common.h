@@ -440,6 +440,7 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 }
 
 void d_getenv_bool(const char *env, bool *bool_val);
+void d_getenv_char(const char *env, char *char_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
