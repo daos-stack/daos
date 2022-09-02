@@ -147,7 +147,8 @@ obj_alloc(void)
 void
 obj_decref(struct dc_object *obj)
 {
-	daos_hhash_link_putref(&obj->cob_hlink);
+	if (obj != NULL)
+		daos_hhash_link_putref(&obj->cob_hlink);
 }
 
 void
@@ -1113,7 +1114,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	shard_idx = start_shard;
 	for (i = 0; i < grp_nr; i++) {
 		struct daos_shard_tgt	*head;
-		uint32_t		leader_shard = 0;
+		int			leader_shard = 0;
 		uint32_t		grp_start;
 		uint32_t		grp_idx;
 		uint32_t		cur_grp_size;
@@ -1742,6 +1743,9 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
 	int			rc = 0;
 
 	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
 	grp_idx = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
 	if (grp_idx < 0)
 		D_GOTO(out_put, rc = grp_idx);
