@@ -23,8 +23,6 @@ The backend code is entirely written in C and for the moment is organized in the
   * daos_dfs_hdlr.c
   * daos_hdlr.c
 
-Note that the daos.c file contains frontend code for the C-only implementation, and its contents are not available to be utilized from Go.
-
 Longer-term, it would probably make sense to move the source files for `daos_cmd_hdlrs` under src/control/cmd/daos so that they live alongside the frontend code and can be compiled directly into the new daos binary in order to remove the need for the shared library. We could also consider implementing more of the backend logic in Go, but this may not necessarily make sense in many cases (e.g. data mover).
 
 ## Adding New Features
