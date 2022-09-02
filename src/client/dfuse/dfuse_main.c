@@ -633,14 +633,14 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
+	rc = dfuse_start_fs(fs_handle, dfs);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out_cont, rc);
+
 	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
 	 * initial one.
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
-
-	rc = dfuse_start_fs(fs_handle, dfs);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, rc);
 
 	rc = dfuse_fs_stop(fs_handle);
 
