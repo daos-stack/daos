@@ -165,7 +165,8 @@ def run_remote(log, hosts, command, timeout=120):
             Defaults to 120 seconds.
 
     Returns:
-        RemoteCommandResult: _description_
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
 
     """
     task = task_self()
@@ -1853,19 +1854,22 @@ class AvocadoInfo():
         default_base_dir = os.path.expanduser(os.path.join("~", "avocado", "job-results"))
         return self.get_setting("datadir.paths", "logs_dir", default_base_dir)
 
-    def get_directory(self, test):
+    def get_directory(self, directory, create=True):
         """Get the avocado test directory for the test.
 
         Args:
-            test (str): name of the test (file)
+            directory (str): name of the sub directory to add to the logs directory
+            create (bool, optional): whether or not to create the directory if it doesn't exist.
+                Defaults to True.
 
         Returns:
             str: the directory used by avocado to log test results
 
         """
         logs_dir = self.get_logs_dir()
-        test_dir = os.path.join(logs_dir, test)
-        os.makedirs(test_dir, exist_ok=True)
+        test_dir = os.path.join(logs_dir, directory)
+        if create:
+            os.makedirs(test_dir, exist_ok=True)
         return test_dir
 
     def get_list_command(self):
@@ -2042,7 +2046,7 @@ class TestInfo():
                 NodeSet: _description_
             """
             clients = self.clients.copy()
-            clients.update(get_local_host())
+            clients.update(NodeSet(get_local_host()))
             return clients
 
         @property
@@ -2167,20 +2171,24 @@ class TestInfo():
             get_yaml_data(log, self.yaml_file),
             [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
-    def get_log_file(self, loop=None):
+    def get_log_file(self, logs_dir, repeat, loop, index):
         """Get the test log file name.
 
         Args:
-            loop (int, optional): loop count. Defaults to None.
+            logs_dir (str): _description_
+            repeat (int): _description_
+            loop (int): loop count. Defaults to None.
+            index (int): _description_
 
         Returns:
             str: a test log file name composed of the test class, name, and optional loop count
 
         """
-        loop_info = ["launch"]
-        if loop is not None:
-            loop_info.extend(["loop", str(loop)])
-        return "_".join(loop_info + self.test_file.split(os.path.sep)[1:]) + ".log"
+        log_file = f"{index}-launch-{'_'.join(self.test_file.split(os.path.sep)[1:])}.log"
+        if repeat > 1:
+            os.makedirs(os.path.join(logs_dir, str(loop)))
+            return os.path.join(logs_dir, str(loop), log_file)
+        return os.path.join(logs_dir, log_file)
 
     def report(self, log):
         """_summary_.
@@ -2327,13 +2335,13 @@ class LaunchJob():
         self.avocado = AvocadoInfo()
         self.name = name
         self.repeat = repeat
-        self.logdir = self.avocado.get_directory("launch")
+        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
         self.tests = []
         self.tag_filters = []
 
         # Setup a logger
-        renamed_log_dir = self._rename_old_log_dir()
+        renamed_log_dir = self._create_log_dir()
         console_format = "%(message)s"
         console = logging.StreamHandler()
         console.setFormatter(logging.Formatter(console_format))
@@ -2359,25 +2367,12 @@ class LaunchJob():
             "job.run.result.xunit.job_name": name,
         }
 
-    def _rename_old_log_dir(self):
-        """Rename the log directory if one already exists.
-
-        Returns:
-            str: name of the old log directory if renamed, otherwise None
-
-        """
-        # When running manually save the previous log if one exists
-        old_launch_log_dir = None
-        if os.path.exists(self.logdir):
-            old_launch_log_dir = "_".join([self.logdir, "old"])
-            if os.path.exists(old_launch_log_dir):
-                for file in os.listdir(old_launch_log_dir):
-                    os.remove(os.path.join(old_launch_log_dir, file))
-                os.rmdir(old_launch_log_dir)
-            os.rename(self.logdir, old_launch_log_dir)
-            os.makedirs(self.logdir)
-
-        return old_launch_log_dir
+        # Attribute for avocado_result_html.HTMLResult
+        self.status = "RUNNING"
+        self.config["job.run.result.html.enabled"] = "on"
+        self.config["job.run.result.html.open_browser"] = False
+        self.config["job.run.result.html.output"] = None
+        self.config["stdout_claimed_by"] = None
 
     @staticmethod
     def _get_file_handler(log_file):
@@ -2393,6 +2388,32 @@ class LaunchJob():
         log_handler.setFormatter(log_format)
         return log_handler
 
+    def _create_log_dir(self):
+        """Create the log directory and rename it if it already exists.
+
+        Returns:
+            str: name of the old log directory if renamed, otherwise None
+
+        """
+        # When running manually save the previous log if one exists
+        old_launch_log_dir = None
+        if os.path.exists(self.logdir):
+            old_launch_log_dir = "_".join([self.logdir, "old"])
+            if os.path.exists(old_launch_log_dir):
+                for file in os.listdir(old_launch_log_dir):
+                    rm_file = os.path.join(old_launch_log_dir, file)
+                    if os.path.isdir(rm_file):
+                        for file2 in os.listdir(rm_file):
+                            os.remove(os.path.join(rm_file, file2))
+                        os.rmdir(rm_file)
+                    else:
+                        os.remove(rm_file)
+                os.rmdir(old_launch_log_dir)
+            os.rename(self.logdir, old_launch_log_dir)
+        os.makedirs(self.logdir)
+
+        return old_launch_log_dir
+
     def _start_logging(self, renamed_log_dir=None):
         """Log the information to the start of the log file.
 
@@ -2404,7 +2425,7 @@ class LaunchJob():
         self.log.info("")
         self.log.info("Running with %s", self.avocado)
         self.log.info("Logging launch results to: %s", self.logdir)
-        if renamed_log_dir:
+        if renamed_log_dir is not None:
             self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
         self.log.info("Launch log file: %s", self.logfile)
         self.log.info("-" * 80)
@@ -2478,7 +2499,7 @@ class LaunchJob():
         return False
 
     def run(self, sparse, fail_fast, extra_yaml, disable_stop, archive, rename, jenkinslog,
-            process_cores):
+            core_files, threshold):
         """Run all the tests.
 
         Args:
@@ -2489,7 +2510,8 @@ class LaunchJob():
             archive (bool): _description_
             rename (bool): _description_
             jenkinslog (bool): _description_
-            process_cores (bool): _description_
+            core_files (bool): _description_
+            threshold (str): optional upper size limit for test log files
         """
         return_code = 0
 
@@ -2500,12 +2522,10 @@ class LaunchJob():
         for loop in range(1, self.repeat + 1):
             self.log.info("-" * 80)
             self.log.info("Starting loop %s/%s", loop, self.repeat)
-            # loop_sub_dir = os.path.join("launch", f"loop_{loop}")
 
-            for test in self.tests:
+            for index, test in enumerate(self.tests):
                 # Define a log for the execution of this test in this loop
-                test_log_file = os.path.join(
-                    self.avocado.get_directory("launch"), test.get_log_file(loop))
+                test_log_file = test.get_log_file(self.logdir, self.repeat, loop, index + 1)
                 self.log.info(
                     "Logging launch loop %s running of %s in %s", loop, test, test_log_file)
                 test_file_handler = self._get_file_handler(test_log_file)
@@ -2522,7 +2542,7 @@ class LaunchJob():
 
                 # Archive the test results
                 return_code |= self.process(
-                    test, loop, disable_stop, archive, rename, jenkinslog, process_cores)
+                    test, loop, disable_stop, archive, rename, jenkinslog, core_files, threshold)
 
                 # Mark the execution of the test as passed if nothing went wrong
                 if self.result.tests[-1].status is None:
@@ -2534,11 +2554,8 @@ class LaunchJob():
                 # Stop logging to the test log file
                 self.log.removeHandler(test_file_handler)
 
-        # Generate a results.xml for the this run
-        # pylint: disable=import-outside-toplevel
-        from avocado.plugins.xunit import XUnitResult
-        result_xml = XUnitResult()
-        result_xml.render(self.result, self)
+        # Generate results
+        self._generate_results()
 
         return return_code
 
@@ -2567,7 +2584,7 @@ class LaunchJob():
             setup_test_directory(self.log, test)
         except LaunchException as error:
             message = "Error setting up test directories"
-            self.log.exception(message)
+            self.log.debug(message, exc_info=True)
             self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
             return 4
 
@@ -2576,7 +2593,7 @@ class LaunchJob():
             generate_certs(self.log)
         except LaunchException as error:
             message = "Error generating certificates"
-            self.log.exception(message)
+            self.log.debug(message, exc_info=True)
             self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
             return 4
 
@@ -2588,9 +2605,9 @@ class LaunchJob():
         Args:
             test (TestInfo): the test information
             loop (int): the repeat loop number
-            sparse (bool): _description_
-            fail_fast(bool): _description_
-            extra_yaml (list): _description_
+            sparse (bool): whether to use avocado sparse output
+            fail_fast(bool): whether to use the avocado fail fast option
+            extra_yaml (list): whether to use an exta yaml file with the avocado run command
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -2604,13 +2621,13 @@ class LaunchJob():
         start_time = int(time.time())
 
         try:
-            return_code = run_local(self.log, command, False).returncode
+            return_code = run_local(self.log, command, capture_output=False, check=False).returncode
             if return_code:
                 self._collect_crash_files()
 
         except LaunchException as error:
             message = f"Error executing {test} on loop {loop}"
-            self.log.exception(message)
+            self.log.debug(message, exc_info=True)
             self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
             return_code = 1
 
@@ -2643,12 +2660,12 @@ class LaunchJob():
                         run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
                 except LaunchException as error:
                     message = "Error collecting crash files"
-                    self.log.exception(message)
+                    self.log.debug(message, exc_info=True)
                     self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
             else:
                 self.log.debug("No avocado crash files found in %s", crash_dir)
 
-    def process(self, test, loop, disable_stop, archive, rename, jenkinslog, process_cores):
+    def process(self, test, loop, disable_stop, archive, rename, jenkinslog, core_files, threshold):
         """Process the test results.
 
         This may include (depending upon argument values):
@@ -2664,7 +2681,8 @@ class LaunchJob():
             disable_stop (bool): _description_
             archive (bool): _description_
             rename (bool): _description_
-            process_cores (bool): _description_
+            core_files (bool): _description_
+            threshold (str): optional upper size limit for test log files
 
         Raises:
             LaunchException: _description_
@@ -2683,59 +2701,66 @@ class LaunchJob():
             return_code |= stop_daos_server_service(self.log, test)
             return_code |= reset_server_storage(self.log, test)
 
-        # Optionally store all of the server and client config files
-        # and archive remote logs and report big log files, if any.
+        # Optionally store all of the server and client config files and remote logs along with
+        # this test's results. Also report an error if the test generated any log files with a
+        # size exceeding the threshold.
         if archive:
-            # test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-            # test_tmp_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-            # test_shared_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
-
             remote_files = OrderedDict()
-            remote_files[os.getenv("DAOS_TEST_LOG_DIR", "/tmp")] = {
-                "summary": "local configuration files",
-                "hosts": self.local_host,
-                "pattern": "*_*_*.yaml",
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
-            }
-            remote_files[os.path.join(os.sep, "etc", "daos")] = {
-                "summary": "remote configuration files",
-                "hosts": test.hosts.all_remote,
-                "pattern": "daos_*.yml",
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
-            }
-            remote_files[os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)] = {
-                "summary": "daos/cart log files",
-                "hosts": test.hosts.all,
-                "pattern": "*log*",
+            # remote_files["local configuration files"] = {
+            #     "source": os.getenv("DAOS_TEST_LOG_DIR", "/tmp"),
+            #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+            #     "pattern": "*_*_*.yaml",
+            #     "hosts": self.local_host,
+            # }
+            # remote_files["remote configuration files"] = {
+            #     "source": os.path.join(os.sep, "etc", "daos"),
+            #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+            #     "pattern": "daos_*.yml",
+            #     "hosts": test.hosts.all_remote,
+            # }
+            remote_files["daos log files"] = {
+                "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+                "pattern": "*log*",
+                "hosts": test.hosts.all,
             }
-            remote_files[os.path.join(os.sep, "tmp")] = {
-                "summary": "ULTs stacks dump files",
-                "hosts": test.hosts.servers,
-                "pattern": "daos_dump*.txt*",
+            remote_files["cart log files"] = {
+                "source": os.path.join(
+                    os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR), "*"),
+                "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
+                "pattern": "*log*",
+                "hosts": test.hosts.all,
+
+            }
+            remote_files["ULTs stacks dump files"] = {
+                "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
-            }
-            remote_files[os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])] = {
-                "summary": "valgrind log files",
+                "pattern": "daos_dump*.txt*",
                 "hosts": test.hosts.servers,
-                "pattern": "valgrind*",
-                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
             }
-            for directory, data in remote_files.items():
+            remote_files["valgrind log files"] = {
+                "source": os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME']),
+                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+                "pattern": "valgrind*",
+                "hosts": test.hosts.servers,
+            }
+            for summary, data in remote_files.items():
+                if not data["hosts"]:
+                    continue
                 try:
                     self._archive_files(
-                        data["summary"], data["hosts"].copy(), directory, data["pattern"],
-                        data["destination"])
+                        summary, data["hosts"].copy(), data["source"], data["pattern"],
+                        data["destination"], threshold)
 
                 except LaunchException as error:
-                    message = f"Error archiving {data['summary']}"
-                    self.log.exception(message)
+                    message = f"Error archiving {summary}"
+                    self.log.debug(message, exc_info=True)
                     self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
                     return_code |= 16
 
                 except Exception as error:      # pylint: disable=broad-except
-                    message = f"Unexpected error archiving {data['summary']}"
-                    self.log.exception(message)
+                    message = f"Unexpected error archiving {summary}"
+                    self.log.debug(message, exc_info=True)
                     self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
                     return_code |= 16
 
@@ -2748,12 +2773,12 @@ class LaunchJob():
                 self._rename_avocado_test_dir(test, loop, jenkinslog)
             except LaunchException as error:
                 message = "Error renaming test results"
-                self.log.exception(message)
+                self.log.debug(message, exc_info=True)
                 self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
                 return_code |= 1024
 
         # Optionally process core files
-        if process_cores:
+        if core_files:
             # try:
             #     if not process_the_cores(log, avocado_logs_dir, test.hosts.all):
             #         return_code |= 256
@@ -2764,43 +2789,67 @@ class LaunchJob():
 
         return return_code
 
-    def _archive_files(self, summary, hosts, directory, pattern, destination):
+    def _archive_files(self, summary, hosts, source, pattern, destination, threshold):
         """_summary_.
 
         Args:
             summary (_type_): _description_
             hosts (_type_): _description_
-            directory (_type_): _description_
+            source (_type_): _description_
             pattern (_type_): _description_
             destination (_type_): _description_
+            threshold (str): optional upper size limit for test log files
 
         Raises:
             LaunchException: _description_
 
         """
-        self.log.debug("Archiving %s from %s", summary, hosts)
-        find_command = f"find {directory}"
+        errors = []
+        find_command = f"find {source}"
         remote_hosts = hosts.difference(self.local_host)
-        local_host = hosts.union(self.local_host)
-
-        # Remove any remote 0 length files
-        self.log.debug("Removing any zero-length files in %s on %s", directory, hosts)
-        command = f"{find_command} -type f -empty -print -delete"
-        run_remote(self.log, hosts, command)
+        local_host = hosts.intersection(self.local_host)
+        self.log.debug("-" * 80)
+        self.log.debug(
+            "Archiving %s from %s (remote: %s, local: %s)",
+            summary, hosts, remote_hosts, local_host)
 
         # Get a list of remote files and their sizes
-        self.log.debug("Detecting any %s files in %s on %s", pattern, directory, hosts)
+        self.log.debug("Detecting any %s files in %s on %s", pattern, source, hosts)
         command = f"{find_command} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        run_remote(self.log, hosts, command)
+        if not run_remote(self.log, hosts, command).passed:
+            errors.append("listing files")
+
+        # Report an error if any files sizes exceed the threshold
+        if threshold:
+            self.log.debug(
+                "Checking for any %s files in %s exceeding %s on %s",
+                pattern, source, threshold, hosts)
+            command = (
+                f"{find_command} -type f -name '{pattern}' -size +{threshold} -printf '%p %k KB\n'")
+            result = run_remote(self.log, hosts, command)
+            if result.passed:
+                for data in result.output:
+                    if source in "\n".join(data.stdout):
+                        errors.append(f"test file sizes exceed {threshold} threshold")
+                        break
+            else:
+                errors.append(f"listing files for {threshold} threshold check")
 
         # Run cart_logtest
         cart_logtest = os.path.join(os.curdir, "cart", "cart_logtest.py")
         self.log.debug(
-            "Running %s on any %s files in %s on %s", cart_logtest, pattern, directory, hosts)
+            "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
         command = (
             f"{find_command} -type f -name '{pattern}' -print0 | xargs -r0 -I '[]' {cart_logtest} "
             "'[]' > '[]'.cart_logtest")
-        run_remote(self.log, hosts, command)
+        if not run_remote(self.log, hosts, command).passed:
+            errors.append("running cart_logtest")
+
+        # Remove any remote 0 length files
+        self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
+        command = f"{find_command} -type f -name '{pattern}' -empty -print -delete"
+        if not run_remote(self.log, hosts, command).passed:
+            errors.append("removing zero-length files")
 
         # Compress any files larger than 1 MB
         command = (
@@ -2808,27 +2857,73 @@ class LaunchJob():
             "sudo xargs -r0 lbzip2 -v")
         if remote_hosts:
             self.log.debug(
-                "Compressing (remotely) any %s files in %s on %s", pattern, directory, remote_hosts)
-            run_remote(self.log, remote_hosts, command)
-        if local_host:
-            self.log.debug(
-                "Compressing (locally) any %s files in %s on %s", pattern, directory, local_host)
-            run_local(self.log, command.split(" "), check=True)
+                "Compressing (remotely) any %s files in %s on %s", pattern, source, remote_hosts)
+            if not run_remote(self.log, remote_hosts, command).passed:
+                errors.append("compressing files remotely")
+        #
+        # ** PIPE NOT WORKING WITH RUN_LOCAL **
+        #
+        # if local_host:
+        #     self.log.debug(
+        #         "Compressing (locally) any %s files in %s on %s", pattern, source, local_host)
+        #     try:
+        #         run_local(self.log, command.split(" "), check=True)
+        #     except LaunchException:
+        #         self.log.debug("Error compressing files locally on %s", local_host, exc_info=True)
+        #         errors.append("compressing files locally")
 
         # Move the test files to the test-results directory on this host
         if remote_hosts:
             self.log.debug(
-                "Moving (remotely) files from %s to %s on %s", directory, destination, remote_hosts)
-            command = f"clush -v -w {remote_hosts} --rcopy {directory} --dest {destination}"
-            run_remote(self.log, remote_hosts, command)
+                "Moving (remotely) files from %s to %s on %s", source, destination, remote_hosts)
+            try:
+                self._move_remote_files(remote_hosts, source, pattern, destination)
+            except LaunchException:
+                self.log.debug(
+                    "Error copying remote files to %s on %s",
+                    destination, local_host, exc_info=True)
+                errors.append("copying remote files")
         if local_host:
             self.log.debug(
-                "Moving (locally) files from %s to %s on %s", directory, destination, local_host)
-            for source in os.listdir(directory):
+                "Moving (locally) files from %s to %s on %s", source, destination, local_host)
+            for source in os.listdir(source):
                 name = ".".join([os.path.basename(source), str(hosts)])
                 destination = os.path.join(destination, name)
                 self.log.debug("  Moving %s to %s", source, destination)
                 os.rename(source, destination)
+
+        # Report any errors
+        if errors:
+            raise LaunchException(f"Errors archiving: {', '.join(errors)}")
+
+    def _move_remote_files(self, hosts, source, pattern, destination):
+        """Move remote files back to this host.
+
+        Args:
+            hosts (NodeSet): _description_
+            source (str): _description_
+            pattern (str): _description_
+            destination (str): _description_
+
+        Raises:
+            LaunchException: _description_
+
+        """
+        # Create a temporary remote directory
+        tmp_copy_dir = os.path.join(source, "launch_tmp_copy_dir")
+        command = f"mkdir {tmp_copy_dir}"
+        if not run_remote(self.log, hosts, command).passed:
+            raise LaunchException(f"Error creating temporary remote copy directory {tmp_copy_dir}")
+
+        # Move the requested files into this temporary directory
+        command = f"mv {os.path.join(source, pattern)} {tmp_copy_dir}"
+        if not run_remote(self.log, hosts, command).passed:
+            raise LaunchException(
+                f"Error moving files to temporary remote copy directory {tmp_copy_dir}")
+
+        # Clush -rcopy the temporary remote directory to this host
+        command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", destination]
+        run_local(self.log, command, check=True)
 
     def _rename_avocado_test_dir(self, test, loop, jenkinslog):
         """Append the test name to its avocado job-results directory name.
@@ -2868,8 +2963,9 @@ class LaunchJob():
             try:
                 os.makedirs(new_test_logs_dir)
             except OSError as error:
-                self.log.exception(error)
-                raise LaunchException(f"Error creating {new_test_logs_dir}") from error
+                message = f"Error creating {new_test_logs_dir}"
+                self.log.debug(message, exc_info=True)
+                raise LaunchException(message) from error
 
         # Rename the avocado job-results test directory and update the 'latest' symlink
         try:
@@ -2878,9 +2974,9 @@ class LaunchJob():
             os.symlink(new_test_logs_dir, test_logs_lnk)
             self.log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
         except OSError as error:
-            self.log.exception(error)
-            raise LaunchException(
-                f"Error renaming {test_logs_dir} to {new_test_logs_dir}") from error
+            message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
+            self.log.debug(message, exc_info=True)
+            raise LaunchException(message) from error
 
         # Update the results.xml file with the new functional test class name
         if jenkinslog:
@@ -2889,8 +2985,9 @@ class LaunchJob():
                 with open(xml_file, encoding="utf-8") as xml_buffer:
                     xml_data = xml_buffer.read()
             except OSError as error:
-                self.log.exception(error)
-                raise LaunchException(f"Error reading {xml_file}") from error
+                message = f"Error reading {xml_file}"
+                self.log.debug(message, exc_info=True)
+                raise LaunchException(message) from error
 
             # Save it for the Launchable [de-]mangle
             org_xml_data = xml_data
@@ -2904,8 +3001,9 @@ class LaunchJob():
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
             except OSError as error:
-                self.log.exception(error)
-                raise LaunchException(f"Error writing {xml_file}") from error
+                message = f"Error writing {xml_file}"
+                self.log.debug(message, exc_info=True)
+                raise LaunchException(message) from error
 
             # Now mangle (or rather unmangle back to canonical xunit1 format)
             # another copy for Launchable
@@ -2919,8 +3017,23 @@ class LaunchJob():
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
             except OSError as error:
-                self.log.exception(error)
-                raise LaunchException(f"Error writing {xml_file}") from error
+                message = f"Error writing {xml_file}"
+                self.log.debug(message, exc_info=True)
+                raise LaunchException(message) from error
+
+    def _generate_results(self):
+        """Generate results for this job."""
+        # pylint: disable=import-outside-toplevel
+
+        # Generate a results.xml for the this run
+        from avocado.plugins.xunit import XUnitResult
+        result_xml = XUnitResult()
+        result_xml.render(self.result, self)
+
+        # Generate a results.html for the this run
+        from avocado_result_html import HTMLResult
+        result_html = HTMLResult()
+        result_html.render(self.result, self)
 
 
 def main():
@@ -3031,7 +3144,7 @@ def main():
     parser.add_argument(
         "-na", "--name",
         action="store",
-        default="_".join(os.environ.get("STAGE_NAME", "Functional Stage Unknown").split()),
+        default="_".join(os.environ.get("STAGE_NAME", "Functional Manual").split()),
         type=str,
         help="avocado job-results directory name in which to place the launch log files."
              "If a directory with this name already exists it will be renamed with a '_old' suffix")
@@ -3156,7 +3269,7 @@ def main():
     try:
         set_test_environment(launch.log, args)
     except LaunchException:
-        launch.log.exception("Error setting test environment")
+        launch.log.error("Error setting test environment", exc_info=True)
         sys.exit(1)
 
     # Auto-detect nvme test yaml replacement values if requested
@@ -3164,7 +3277,8 @@ def main():
         try:
             args.nvme = get_device_replacement(launch.log, args)
         except LaunchException:
-            launch.log.exception("Error auto-detecting NVMe test yaml file replacement values")
+            launch.log.error(
+                "Error auto-detecting NVMe test yaml file replacement values", exc_info=True)
             sys.exit(1)
     elif args.nvme and args.nvme.startswith("vmd:"):
         args.nvme = args.nvme.replace("vmd:", "")
@@ -3173,12 +3287,12 @@ def main():
     try:
         launch.set_test_list(args.tags)
     except LaunchException:
-        launch.log.exception("Error detecting tests that match tags: %s", args.tags)
+        launch.log.error("Error detecting tests that match tags: %s", args.tags, exc_info=True)
         sys.exit(1)
 
     # Verify at least one test was requested
     if not launch.tests:
-        launch.log.error("Error: No tests or tags found for '%s'", " ".join(args.tags))
+        launch.log.error("Error: No tests found for tags '%s'", " ".join(args.tags), exc_info=True)
         sys.exit(1)
 
     # Done if just listing tests matching the tags
@@ -3203,7 +3317,7 @@ def main():
     # Execute the tests
     ret_code = launch.run(
         args.sparse, args.failfast, args.extra_yaml, args.disable_stop_daos, args.archive,
-        args.rename, args.jenkinslog, args.process_cores)
+        args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
