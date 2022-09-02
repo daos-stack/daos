@@ -249,7 +249,7 @@ out:
 		else
 			vos_ts_set_update(ts_set, dth->dth_epoch);
 	}
-	if (rc != 0 && te_set)
+	if (rc != 0 && ts_set)
 		vos_ts_set_free(ts_set);
 	return rc;
 }
