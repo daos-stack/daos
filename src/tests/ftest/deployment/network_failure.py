@@ -6,6 +6,7 @@
 import os
 import time
 from ClusterShell.NodeSet import NodeSet
+from collections import defaultdict
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -112,7 +113,37 @@ class NetworkFailureTest(IorTestBase):
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
+        ip_to_host = {}
+        for result in results:
+            ips_str = result["stdout"][0]
+            # There may be multiple IP addresses for one host.
+            ip_addresses = ips_str.split()
+            for ip_address in ip_addresses:
+                ip_to_host[ip_address] = NodeSet(str(result["hosts"]))
+
+        return ip_to_host
+
+    def create_host_to_ranks(self, ip_to_host, system_query_members):
+        """Create a dictionary of hostname to ranks.
+
+        Args:
+            ip_to_host (dict): create_ip_to_host output.
+            system_query_members (dict): Contents of dmg system query accessed with
+                ["response"]["members"].
+
+        Returns:
+            dict: Hostname to ranks mapping. Hostname (key) is string. Ranks (value) is
+                list of int.
+
+        """
+        host_to_ranks = defaultdict(list)
+        for member in system_query_members:
+            ip_addr = member["addr"].split(":")[0]
+            host = str(ip_to_host[ip_addr])
+            rank = member["rank"]
+            host_to_ranks[host].append(rank)
+
+        return host_to_ranks
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
@@ -124,7 +155,7 @@ class NetworkFailureTest(IorTestBase):
         Aurora.
         3. Run IOR with given object class.
         4. Bring up the network interface.
-        5. Restart DAOS with dmg.
+        5. Restart DAOS with dmg system stop and start.
         6. Call dmg pool query -b to find the disabled ranks.
         7. Call dmg pool reintegrate --rank=<rank> one rank at a time to enable all
         ranks. Wait for rebuild after calling the command.
@@ -284,8 +315,8 @@ class NetworkFailureTest(IorTestBase):
         Verify that network failure in a node where pool isn't created doesn't affect the
         connection.
 
-        1. Determine the two ranks to create the pool and an interface to take down.
-        2. Create a pool across two ranks on the same node.
+        1. Determine the four ranks to create the pool and an interface to take down.
+        2. Create a pool across the four ranks on the two nodes.
         3. Create a container without redundancy factor.
         4. Take down the interface where the pool isn't created. This will simulate the
         case where there’s a network failure, but doesn’t affect the user because their
@@ -303,43 +334,36 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=deployment,network_failure
         :avocado: tags=network_failure_isolation
         """
-        # 1. Determine the two ranks to create the pool and an interface to take down.
-        # We'll create a pool on rank 0 and the other rank that's on the same node. Find
-        # hostname of rank 0.
-        rank_0_ip = None
+        # 1. Determine the four ranks to create the pool and an interface to take down.
+        # We'll create a pool on two ranks in hostlist_servers[0] and two ranks in
+        # hostlist_servers[1].
+        # There's no way to determine the mapping of hostname to ranks, but there's IP
+        # address to rank mapping and IP address to hostname mapping, so we'll combine
+        # them.
+        # Call dmg system query, which contains IP address - Rank mapping.
         output = self.get_dmg_command().system_query()
         members = output["response"]["members"]
-        for member in members:
-            if member["rank"] == 0:
-                rank_0_ip = member["addr"].split(":")[0]
-                break
-        self.log.info("rank 0 IP = %s", rank_0_ip)
 
-        # Find the other rank that's on the same node as in rank 0. Call it rank_r.
-        rank_r = None
-        for member in members:
-            if member["addr"].split(":")[0] == rank_0_ip and member["rank"] != 0:
-                rank_r = member["rank"]
-                break
-        self.log.info("rank_r = %s", rank_r)
-
-        # Find the hostname that's different from rank_0_ip. We'll take down the
-        # interface on it.
-        # dmg system query output gives IP address, but run_pcmd doesn't work with IP in
-        # CI. In addition, in Aurora, it's easier to determine where to run the ip link
-        # command if we know the hostname, so create the IP - hostname mapping.
+        # Create IP address - Hostname mapping by calling "hostname -i" on every server
+        # node.
         ip_to_host = self.create_ip_to_host()
-        for member in members:
-            ip_addr = member["addr"].split(":")[0]
-            if rank_0_ip != ip_addr:
-                self.network_down_host = ip_to_host[ip_addr]
-                break
+        # Using dmg system query output and ip_to_host, create Hostname - Ranks mapping.
+        host_to_ranks = self.create_host_to_ranks(
+            ip_to_host=ip_to_host, system_query_members=members)
+        # Create a pool on the two ranks on two of the server nodes.
+        target_list = []
+        target_list.extend(host_to_ranks[self.hostlist_servers[0]])
+        target_list.extend(host_to_ranks[self.hostlist_servers[1]])
+        self.log.info("Ranks to create pool = %s", target_list)
+
+        # We'll take down network on the last server node where the pool isn't created.
+        self.network_down_host = self.hostlist_servers[2]
         self.log.info("network_down_host = %s", self.network_down_host)
 
-        # 2. Create a pool across two ranks on the same node; 0 and rank_r. We have to
-        # provide the size because we're using --ranks.
+        # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
+        # to provide the size because we're using --ranks.
         self.add_pool(namespace="/run/pool_size_value/*", create=False)
-        self.pool.target_list.update([0, rank_r])
+        self.pool.target_list.update(target_list)
         self.pool.create()
 
         # 3. Create a container without redundancy factor.
@@ -349,8 +373,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 4. Take down the interface where the pool isn't created.
         errors = []
-        self.interface = self.params.get(
-            "fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.params.get("fabric_iface", "/run/server_config/servers/0/*")
 
         # wolf
         if self.test_env == "ci":
