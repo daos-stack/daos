@@ -74,16 +74,10 @@ class AutoOCSelectionTest(TestWithServers):
             oclass = prop_oclass[1]
             failure_expected = prop_oclass[2]
 
-            self.container.append(
-                self.get_container(pool=self.pool, create=False))
-            self.container[-1].properties.update(properties)
-            self.container[-1].oclass.update(oclass)
-
             try:
-                self.log.info(
-                    "Create container with RF = %s, OC = %s", properties,
-                    oclass)
-                self.container[-1].create()
+                self.log.info("Creating container with RF = %s, OC = %s", properties, oclass)
+                self.container.append(
+                    self.get_container(pool=self.pool, properties=properties, oclass=oclass))
                 if failure_expected:
                     msg = ("Container create succeeded with invalid RF-OC "
                            "pair! RF = {}, OC = {}".format(properties, oclass))
