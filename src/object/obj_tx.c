@@ -1205,7 +1205,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			dcu->dcu_start_shard = grp_start;
+			dcu->dcu_start_shard = grp_idx * daos_oclass_grp_size(oca);
 			if (dcu->dcu_iod_array.oia_oiods != NULL)
 				tgt_flags = DTF_REASSEMBLE_REQ;
 		}
