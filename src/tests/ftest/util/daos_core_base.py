@@ -152,8 +152,8 @@ class DaosCoreBase(TestWithServers):
         })
 
         # Assign the test to run
-        job_cmd = ExecutableCommand(
-            namespace=None, command=cmd, check_results=["*** Process received signal ***"])
+        bad_words = ["Process received signal", "stack smashing detected", "End of error message"]
+        job_cmd = ExecutableCommand(namespace=None, command=cmd, check_results=bad_words)
         job = get_job_manager(self, "Orterun", job_cmd, mpi_type="openmpi")
         job.assign_hosts(self.hostlist_clients, self.workdir, None)
         job.assign_processes(num_clients)
