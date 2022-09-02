@@ -1,6 +1,6 @@
 # DAOS CLI
 
-The source files in this directory are used to build the command-line interface for DAOS ($PREFIX/bin/daos). This utility is intended to be used by both admin and unprivileged users. It leverages the <a href="../../client/api/README.md">libdaos client library</a> in order to communicate with DAOS Data Plane servers via the storage fabric.
+The source files in this directory are used to build the command-line interface for DAOS ($PREFIX/bin/daos). This utility is intended to be used by both admin and unprivileged users. It leverages the <a href="../../../client/api/README.md">libdaos client library</a> in order to communicate with DAOS Data Plane servers via the storage fabric.
 
 ## Implementation Details
 
