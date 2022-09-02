@@ -443,6 +443,13 @@ int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
 		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
+
+static inline bool
+daos_iov_empty(d_iov_t *iov)
+{
+	return iov == NULL || iov->iov_buf == NULL || iov->iov_len == 0;
+}
+
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 int daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full);
 void daos_iov_free(d_iov_t *iov);

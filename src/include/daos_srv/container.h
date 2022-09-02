@@ -261,4 +261,8 @@ int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **pro
 
 int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
 
+int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
+
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in, bool for_svc);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */
