@@ -61,6 +61,8 @@ def check_aggregation_status(pool, quick_check=True, attempt=20):
                 # Return immediately once aggregation starts for quick check
                 if quick_check:
                     return agg_status
+            else:
+                initial_usage[storage_type] = current_usage[storage_type]
         time.sleep(5)
     return agg_status
 

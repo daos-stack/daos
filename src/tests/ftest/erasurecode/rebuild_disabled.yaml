@@ -71,7 +71,7 @@ ior:
   chunk_block_transfer_sizes:
    # [ChunkSize, BlocksSize, TransferSize]
    - [32M, 128M, 8M]       # Full Striped
-   - [32M, 128M, 2K]       # Partial Striped
+   - [32M, 32M, 4K]       # Partial Striped
   objectclass:
    dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
