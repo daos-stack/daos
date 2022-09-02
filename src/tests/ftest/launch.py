@@ -448,7 +448,7 @@ def set_provider_environment(log, interface, args):
         provider = args.provider
     else:
         provider = os.environ.get("CRT_PHY_ADDR_STR")
-    if provider is None:
+    if provider is None:    # pylint: disable=too-many-nested-blocks
         log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
 
         # Check for a Omni-Path interface
@@ -1157,65 +1157,6 @@ def get_yaml_data(log, yaml_file):
                 log.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
     return yaml_data
-
-
-# def get_remote_file_command():
-#     """Get path to get_remote_files.sh script."""
-#     return os.path.join(os.path.abspath(os.getcwd()), "get_remote_files.sh")
-
-
-# def compress_log_files(log, avocado_logs_dir, args):
-#     """Compress log files.
-
-#     Args:
-#         log (logger): logger for the messages produced by this method
-#         avocado_logs_dir (str): path to the avocado log files
-#     """
-#     log.debug("-" * 80)
-#     log.info("Compressing files on %s", get_local_host())
-#     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-#     command = [
-#         get_remote_file_command(), "-z", "-x", f"-f {logs_dir}"]
-#     if args.verbose > 1:
-#         command.append("-v")
-#     run_local(log, command, check=False)
-
-
-def check_big_files(log, avocado_logs_dir, result, test_name, args):
-    """Check the contents of the task object, tag big files, create junit xml.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        avocado_logs_dir (str): path to the avocado log files.
-        result (RemoteCommandResult): a RemoteCommandResult object containing the command result
-        test_name (str): current running testname
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        bool: True if no errors occurred checking and creating junit file.
-            False, otherwise.
-
-    """
-    status = True
-    hosts = NodeSet()
-    cdata = []
-    for data in result.output:
-        big_files = re.findall(r"Y:\s([0-9]+)", "\n".join(data.stdout))
-        if big_files:
-            hosts.update(data.hosts)
-            cdata.append(
-                f"The following log files on {str(data.hosts)} exceeded the "
-                f"{args.logs_threshold} threshold")
-            cdata.extend([f"  {big_file}" for big_file in big_files])
-    if cdata:
-        log.debug("One or more log files found exceeding %s", args.logs_threshold)
-        destination = os.path.join(avocado_logs_dir, "latest")
-        message = f"Log size has exceed threshold for this test on: {str(hosts)}"
-        status = create_results_xml(log, message, test_name, "\n".join(cdata), destination)
-    else:
-        log.debug("No log files found exceeding %s", args.logs_threshold)
-
-    return status
 
 
 def report_skipped_test(log, test_file, avocado_logs_dir, reason):
@@ -2025,6 +1966,29 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+class TestName():
+    """Define the name for a test thats compatible with avocado's result render classes."""
+
+    def __init__(self, name, uid="0"):
+        """Initialize a TestName object.
+
+        Args:
+            name (str): test name
+            uid (str): unique identifier for the test. Defaults to "0".
+        """
+        self.name = name
+        self.uid = uid
+
+    def __str__(self):
+        """Get the test name as a string.
+
+        Returns:
+            str: combination of the uid and name
+
+        """
+        return f"{self.uid}-{self.name}"
+
+
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
@@ -2065,6 +2029,7 @@ class TestInfo():
         Args:
             test_file (str): the test python file
         """
+        self.name = TestName(test_file)
         self.test_file = test_file
         test_path, self.python_file = os.path.split(self.test_file)
         _, self.directory = os.path.split(test_path)
@@ -2082,19 +2047,6 @@ class TestInfo():
 
         """
         return self.test_file
-
-    @property
-    def name(self):
-        """Get the name for this TestInfo object.
-
-        Used to populate the 'name' field of the results.xml file.  It includes the current loop
-        number, which should be updated before using this object to define a new TestResult.
-
-        Returns:
-            str: name for this TestInfo object
-
-        """
-        return f"loop{self.loop}-{self.test_file}"
 
     def set_host_info(self, log, include_localhost=False):
         """Set the test host information using the test yaml file.
@@ -2184,6 +2136,7 @@ class TestInfo():
             str: a test log file name composed of the test class, name, and optional loop count
 
         """
+        self.name.uid = f"{loop}.{index}"
         log_file = f"{index}-launch-{'_'.join(self.test_file.split(os.path.sep)[1:])}.log"
         if repeat > 1:
             os.makedirs(os.path.join(logs_dir, str(loop)))
@@ -2264,6 +2217,10 @@ class TestResult(BaseResult):
         self.traceback = None
         self.loop = loop
 
+    def __getitem__(self, item):
+        """Get the value for the item."""
+        return getattr(self, item)
+
     def set_status(self, status, fail_class=None, fail_reason=None, traceback=None):
         """Set the status information for this test result.
 
@@ -2298,6 +2255,7 @@ class LaunchResult(BaseResult):
         self.failed = 0
         self.skipped = 0
         self.cancelled = 0
+        self.rate = 0
 
     def start(self):
         """Mark the start of launch and the current test."""
@@ -2368,7 +2326,8 @@ class LaunchJob():
         }
 
         # Attribute for avocado_result_html.HTMLResult
-        self.status = "RUNNING"
+        # self.status = "COMPLETE"
+        self.status = "RUNNING"     # Disables generating result.html
         self.config["job.run.result.html.enabled"] = "on"
         self.config["job.run.result.html.open_browser"] = False
         self.config["job.run.result.html.output"] = None
@@ -2711,38 +2670,42 @@ class LaunchJob():
             #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
             #     "pattern": "*_*_*.yaml",
             #     "hosts": self.local_host,
+            #     "depth": 0,
             # }
             # remote_files["remote configuration files"] = {
             #     "source": os.path.join(os.sep, "etc", "daos"),
             #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
             #     "pattern": "daos_*.yml",
             #     "hosts": test.hosts.all_remote,
+            #     "depth": 0,
             # }
             remote_files["daos log files"] = {
                 "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
+                "depth": 0,
             }
             remote_files["cart log files"] = {
-                "source": os.path.join(
-                    os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR), "*"),
+                "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
-
+                "depth": 1,
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.hosts.servers,
+                "depth": 0,
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME']),
                 "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
                 "pattern": "valgrind*",
                 "hosts": test.hosts.servers,
+                "depth": 0,
             }
             for summary, data in remote_files.items():
                 if not data["hosts"]:
@@ -2750,7 +2713,7 @@ class LaunchJob():
                 try:
                     self._archive_files(
                         summary, data["hosts"].copy(), data["source"], data["pattern"],
-                        data["destination"], threshold)
+                        data["destination"], data["depth"], threshold)
 
                 except LaunchException as error:
                     message = f"Error archiving {summary}"
@@ -2763,9 +2726,6 @@ class LaunchJob():
                     self.log.debug(message, exc_info=True)
                     self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
                     return_code |= 16
-
-            # # Compress any log file that haven't been remotely compressed.
-            # compress_log_files(log, avocado_logs_dir, args)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2789,126 +2749,236 @@ class LaunchJob():
 
         return return_code
 
-    def _archive_files(self, summary, hosts, source, pattern, destination, threshold):
-        """_summary_.
+    def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold):
+        """Archive the files from the source to the destiantion.
 
         Args:
-            summary (_type_): _description_
-            hosts (_type_): _description_
-            source (_type_): _description_
-            pattern (_type_): _description_
-            destination (_type_): _description_
+            summary (str): description of the files being processed
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            destination (str): where the files should be moved to on this host
+            depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
 
         Raises:
-            LaunchException: _description_
+            LaunchException: if there was a problem archiving the files
 
         """
         errors = []
-        find_command = f"find {source}"
+        self.log.debug("-" * 80)
+        self.log.info("Archiving %s from %s", summary, hosts)
         remote_hosts = hosts.difference(self.local_host)
         local_host = hosts.intersection(self.local_host)
-        self.log.debug("-" * 80)
-        self.log.debug(
-            "Archiving %s from %s (remote: %s, local: %s)",
-            summary, hosts, remote_hosts, local_host)
+        self.log.debug("Hosts: remote=%s, local=%s", remote_hosts, local_host)
 
         # Get a list of remote files and their sizes
-        self.log.debug("Detecting any %s files in %s on %s", pattern, source, hosts)
-        command = f"{find_command} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        if not run_remote(self.log, hosts, command).passed:
+        if not self._list_files(hosts, source, pattern, depth):
             errors.append("listing files")
 
         # Report an error if any files sizes exceed the threshold
-        if threshold:
-            self.log.debug(
-                "Checking for any %s files in %s exceeding %s on %s",
-                pattern, source, threshold, hosts)
-            command = (
-                f"{find_command} -type f -name '{pattern}' -size +{threshold} -printf '%p %k KB\n'")
-            result = run_remote(self.log, hosts, command)
-            if result.passed:
-                for data in result.output:
-                    if source in "\n".join(data.stdout):
-                        errors.append(f"test file sizes exceed {threshold} threshold")
-                        break
-            else:
-                errors.append(f"listing files for {threshold} threshold check")
+        if not self._check_log_size(hosts, source, pattern, depth, threshold):
+            errors.append(f"verifying file sizes do not exceed {threshold}")
 
         # Run cart_logtest
-        cart_logtest = os.path.join(os.curdir, "cart", "cart_logtest.py")
-        self.log.debug(
-            "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
-        command = (
-            f"{find_command} -type f -name '{pattern}' -print0 | xargs -r0 -I '[]' {cart_logtest} "
-            "'[]' > '[]'.cart_logtest")
-        if not run_remote(self.log, hosts, command).passed:
+        if not self._cart_log_test(hosts, source, pattern, depth):
             errors.append("running cart_logtest")
 
-        # Remove any remote 0 length files
-        self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
-        command = f"{find_command} -type f -name '{pattern}' -empty -print -delete"
-        if not run_remote(self.log, hosts, command).passed:
+        # Remove any empty files
+        if not self._remove_empty_files(hosts, source, pattern, depth):
             errors.append("removing zero-length files")
 
-        # Compress any files larger than 1 MB
-        command = (
-            f"{find_command} -maxdepth 0 -type f -name '{pattern}' -size +1M -print0 | "
-            "sudo xargs -r0 lbzip2 -v")
         if remote_hosts:
-            self.log.debug(
-                "Compressing (remotely) any %s files in %s on %s", pattern, source, remote_hosts)
-            if not run_remote(self.log, remote_hosts, command).passed:
+            # Compress any files larger than 1 MB
+            if not self._compress_remote_files(remote_hosts, source, pattern, depth):
                 errors.append("compressing files remotely")
-        #
-        # ** PIPE NOT WORKING WITH RUN_LOCAL **
-        #
-        # if local_host:
-        #     self.log.debug(
-        #         "Compressing (locally) any %s files in %s on %s", pattern, source, local_host)
-        #     try:
-        #         run_local(self.log, command.split(" "), check=True)
-        #     except LaunchException:
-        #         self.log.debug("Error compressing files locally on %s", local_host, exc_info=True)
-        #         errors.append("compressing files locally")
 
-        # Move the test files to the test-results directory on this host
-        if remote_hosts:
-            self.log.debug(
-                "Moving (remotely) files from %s to %s on %s", source, destination, remote_hosts)
-            try:
-                self._move_remote_files(remote_hosts, source, pattern, destination)
-            except LaunchException:
-                self.log.debug(
-                    "Error copying remote files to %s on %s",
-                    destination, local_host, exc_info=True)
+            # Move the test files to the test-results directory on this host
+            if not self._move_remote_files(remote_hosts, source, pattern, destination, depth):
                 errors.append("copying remote files")
+
         if local_host:
-            self.log.debug(
-                "Moving (locally) files from %s to %s on %s", source, destination, local_host)
-            for source in os.listdir(source):
-                name = ".".join([os.path.basename(source), str(hosts)])
-                destination = os.path.join(destination, name)
-                self.log.debug("  Moving %s to %s", source, destination)
-                os.rename(source, destination)
+            # Compress any files larger than 1 MB
+            if not self._compress_local_files(local_host, source, pattern, depth):
+                errors.append("compressing local files")
+
+            # Move the test files to the test-results directory on this host
+            if not self._move_local_files(local_host, source, pattern, destination, depth):
+                errors.append("moving local files")
 
         # Report any errors
         if errors:
             raise LaunchException(f"Errors archiving: {', '.join(errors)}")
 
-    def _move_remote_files(self, hosts, source, pattern, destination):
-        """Move remote files back to this host.
+    def _list_files(self, hosts, source, pattern, depth):
+        """List the files in source with that match the pattern.
 
         Args:
-            hosts (NodeSet): _description_
-            source (str): _description_
-            pattern (str): _description_
-            destination (str): _description_
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
 
-        Raises:
-            LaunchException: _description_
+        Returns:
+            bool: True if successful; False otherwise
 
         """
+        self.log.debug("-" * 80)
+        self.log.debug("Detecting any %s files in %s on %s", pattern, source, hosts)
+        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB'"
+        return run_remote(self.log, hosts, command).passed
+
+    def _check_log_size(self, hosts, source, pattern, depth, threshold):
+        """Check if any file sizes exceed the threshold.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+            threshold (str): optional upper size limit for test log files
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        if threshold is None:
+            return True
+        self.log.debug("-" * 80)
+        self.log.debug(
+            "Checking for any %s files in %s exceeding %s on %s", pattern, source, threshold, hosts)
+        command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +{threshold} "
+                   "-printf '%p %k KB'")
+        result = run_remote(self.log, hosts, command)
+        if not result.passed:
+            return False
+
+        # The command output will include the source path if the threshold has been exceeded
+        for data in result.output:
+            if source in "\n".join(data.stdout):
+                self.log.debug("One or more log file sizes exceeds the %s threshold", threshold)
+                return False
+
+        self.log.debug("No log file sizes found exceeding the %s threshold", threshold)
+        return True
+
+    def _cart_log_test(self, hosts, source, pattern, depth):
+        """Run cart_logtest on the log files.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        cart_logtest = os.path.abspath(os.path.join("cart", "cart_logtest.py"))
+        self.log.debug("-" * 80)
+        self.log.debug(
+            "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
+        command = (
+            f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
+            f"xargs -r0 -I '{{}}' {cart_logtest} '{{}}' > '{{}}'.cart_logtest")
+        return run_remote(self.log, hosts, command).passed
+
+    def _remove_empty_files(self, hosts, source, pattern, depth):
+        """Remove any files with zero size.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
+        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
+        return run_remote(self.log, hosts, command).passed
+
+    def _compress_remote_files(self, hosts, source, pattern, depth):
+        """Compress any files larger than 1M.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug(
+            "Compressing any remote %s files in %s on %s larger than 1M", pattern, source, hosts)
+        command = (
+            f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
+            "sudo xargs -r0 lbzip2 -v")
+        return run_remote(self.log, hosts, command).passed
+
+    def _compress_local_files(self, hosts, source, pattern, depth):
+        """Compress any files larger than 1M.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        compress_files = []
+        self.log.debug("-" * 80)
+        self.log.debug(
+            "Compressing any local %s files in %s on %s larger than 1M", pattern, source, hosts)
+        command = [
+            "find", source, "-maxdepth", f"{depth}", "-type", "f", "-name", f"'{pattern}'", "-size",
+            "+1M", "-print"
+        ]
+        try:
+            result = run_local(self.log, command, check=True)
+            for src_file in result.stdout.splitlines():
+                if os.path.isfile(src_file):
+                    compress_files.append(src_file)
+        except LaunchException:
+            self.log.debug("Error finding local file to compress on %s", hosts, exc_info=True)
+            return False
+
+        if compress_files:
+            command = ["sudo", "lbzip2", "-v"] + compress_files
+            try:
+                run_local(self.log, command, check=True)
+            except LaunchException:
+                self.log.debug("Error compressing local files on %s", hosts, exc_info=True)
+                return False
+        return True
+
+    def _move_remote_files(self, hosts, source, pattern, destination, depth):
+        """Move files from the source to the destination.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            destination (str): where the files should be moved to on this host
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug("Moving (remotely) files from %s to %s on %s", source, destination, hosts)
+
         # Create a temporary remote directory
         tmp_copy_dir = os.path.join(source, "launch_tmp_copy_dir")
         command = f"mkdir {tmp_copy_dir}"
@@ -2916,14 +2986,47 @@ class LaunchJob():
             raise LaunchException(f"Error creating temporary remote copy directory {tmp_copy_dir}")
 
         # Move the requested files into this temporary directory
-        command = f"mv {os.path.join(source, pattern)} {tmp_copy_dir}"
+        command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
+                   "xargs -r0 -I '{}' mv '{}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
             raise LaunchException(
                 f"Error moving files to temporary remote copy directory {tmp_copy_dir}")
 
         # Clush -rcopy the temporary remote directory to this host
         command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", destination]
-        run_local(self.log, command, check=True)
+        try:
+            run_local(self.log, command, check=True)
+        except LaunchException:
+            self.log.debug("Error copying remote files to %s", destination, exc_info=True)
+            return False
+        return True
+
+    def _move_local_files(self, hosts, source, pattern, destination, depth):
+        """Move files from the source to the destination.
+
+        Args:
+            hosts (NodSet): hosts on which the files are located
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            destination (str): where the files should be moved to on this host
+            depth (int): max depth for find command
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug("Moving local files from %s to %s on %s", source, destination, hosts)
+        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print"
+        try:
+            result = run_local(self.log, command.split(" "), check=True)
+            for src_file in result.stdout.splitlines():
+                dst_file = ".".join([os.path.basename(src_file), str(hosts)])
+                os.rename(src_file, os.path.join(destination, dst_file))
+        except LaunchException:
+            self.log.debug("Error moving files locally on %s", hosts, exc_info=True)
+            return False
+        return True
 
     def _rename_avocado_test_dir(self, test, loop, jenkinslog):
         """Append the test name to its avocado job-results directory name.
@@ -3315,50 +3418,49 @@ def main():
         sys.exit(0)
 
     # Execute the tests
-    ret_code = launch.run(
+    status = launch.run(
         args.sparse, args.failfast, args.extra_yaml, args.disable_stop_daos, args.archive,
         args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
 
-    # Process the avocado run return codes and only treat job and command
-    # failures as errors.
-    # if status == 0:
-    #     log.info("All avocado tests passed!")
-    # else:
-    #     if status & 1 == 1:
-    #         log.info("Detected one or more avocado test failures!")
-    #         if args.mode == 'manual':
-    #             ret_code = 1
-    #     if status & 8 == 8:
-    #         log.info("Detected one or more interrupted avocado jobs!")
-    #     if status & 2 == 2:
-    #         log.info("ERROR: Detected one or more avocado job failures!")
-    #         ret_code = 1
-    #     if status & 4 == 4:
-    #         log.info("ERROR: Detected one or more failed avocado commands!")
-    #         ret_code = 1
-    #     if status & 16 == 16:
-    #         log.info("ERROR: Detected one or more tests that failed archiving!")
-    #         ret_code = 1
-    #     if status & 32 == 32:
-    #         log.info("ERROR: Detected one or more tests with unreported big logs!")
-    #         ret_code = 1
-    #     if status & 64 == 64:
-    #         log.info("ERROR: Failed to create a junit xml test error file!")
-    #     if status & 128 == 128:
-    #         log.info("ERROR: Failed to clean logs in preparation for test run!")
-    #         ret_code = 1
-    #     if status & 256 == 256:
-    #         log.info("ERROR: Detected one or more tests with a failure processing core files!")
-    #         ret_code = 1
-    #     if status & 512 == 512:
-    #         log.info("ERROR: Detected stopping daos_server.service after one or more tests!")
-    #         ret_code = 1
-    #     if status & 1024 == 1024:
-    #         log.info(
-    #             "ERROR: Detected one or more failures in renaming logs and results for Jenkins!")
-    #         ret_code = 1
-    # if args.mode == 'ci':
-    #     ret_code = 0
+    # Process the avocado run return codes and only treat job and command failures as errors.
+    if status == 0:
+        launch.log.info("All avocado tests passed!")
+    else:
+        if status & 1 == 1:
+            launch.log.info("Failed avocado tests detected!")
+            if args.mode == 'manual':
+                ret_code = 1
+        if status & 8 == 8:
+            launch.log.info("Interrupted avocado jobs detected!")
+        if status & 2 == 2:
+            launch.log.info("ERROR: Failed avocado jobs detected!")
+            ret_code = 1
+        if status & 4 == 4:
+            launch.log.info("ERROR: Failed avocado commands detected!")
+            ret_code = 1
+        if status & 16 == 16:
+            launch.log.info("ERROR: Failed archiving after one or more tests!")
+            ret_code = 1
+        if status & 32 == 32:
+            launch.log.info("ERROR: Failed log size threshold check after one or more tests!")
+            ret_code = 1
+        if status & 64 == 64:
+            launch.log.info("ERROR: Failed to create a junit xml test error file!")
+        if status & 128 == 128:
+            launch.log.info("ERROR: Failed to clean logs in preparation for test run!")
+            ret_code = 1
+        if status & 256 == 256:
+            launch.log.info("ERROR: Failed to process core files after one or more tests!")
+            ret_code = 1
+        if status & 512 == 512:
+            launch.log.info("ERROR: Failed to stop daos_server.service after one or more tests!")
+            ret_code = 1
+        if status & 1024 == 1024:
+            launch.log.info("ERROR: Failed to rename logs and results after one or more tests!")
+            ret_code = 1
+    if args.mode == 'ci':
+        # Errors are reported by Jenkins using the results.xml when running in CI
+        ret_code = 0
     sys.exit(ret_code)
 
 

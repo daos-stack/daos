@@ -235,17 +235,17 @@ fi
 # need to increase the number of oopen files (on EL8 at least)
 ulimit -n 4096
 
-launch_args="-jcrisa"
-# processing cores is broken on EL7 currently
-id="$(lsb_release -si)"
-if { [ "$id" = "CentOS" ]                 &&
-     [[ $(lsb_release -s -r) != 7.* ]]; } ||
-   [ "$id" = "AlmaLinux" ]                ||
-   [ "$id" = "Rocky" ]                    ||
-   [ "$id" = "RedHatEnterpriseServer" ]   ||
-   [ "$id" = "openSUSE" ]; then
-    launch_args+="p"
-fi
+# launch_args="-jcrisa"
+# # processing cores is broken on EL7 currently
+# id="$(lsb_release -si)"
+# if { [ "$id" = "CentOS" ]                 &&
+#      [[ $(lsb_release -s -r) != 7.* ]]; } ||
+#    [ "$id" = "AlmaLinux" ]                ||
+#    [ "$id" = "Rocky" ]                    ||
+#    [ "$id" = "RedHatEnterpriseServer" ]   ||
+#    [ "$id" = "openSUSE" ]; then
+#     launch_args+="p"
+# fi
 
 # Clean stale job results
 if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
@@ -257,7 +257,7 @@ fi
 export WITH_VALGRIND
 export STAGE_NAME
 # shellcheck disable=SC2086
-if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
+if ! ./launch.py --mode ci -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
