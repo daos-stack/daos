@@ -1254,7 +1254,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		snprintf(command, sizeof(command),
 			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
 		fp = popen(command, "r");
-		while ((read = getline(&line, &len, fp)) != -1) {
+		while (fp && (read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
 					      state, pch);

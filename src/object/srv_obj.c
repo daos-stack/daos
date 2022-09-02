@@ -2577,10 +2577,9 @@ again1:
 
 again2:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
-		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
-					 orw->orw_nr, orw->orw_start_shard,
-					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, &ioc.ioc_oca, tgt_cnt, tgts, &split_req);
+		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array, orw->orw_nr,
+					 orw->orw_start_shard, orw->orw_tgt_max, PO_COMP_ID_ALL,
+					 NULL, 0, &ioc.ioc_oca, tgt_cnt, tgts, &split_req, opm);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -2650,10 +2649,6 @@ again2:
 		 * the restart to the RPC client.
 		 */
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			struct obj_pool_metrics	*m;
-
-			m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-
 			/*
 			 * Only standalone updates use this RPC. Retry with
 			 * newer epoch.
@@ -2661,7 +2656,7 @@ again2:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_inc_counter(m->opm_update_restart, 1);
+			d_tm_inc_counter(opm->opm_update_restart, 1);
 			goto again2;
 		}
 
@@ -4398,9 +4393,8 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
-					 ddt->ddt_id,
-					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
-					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
+					 ddt->ddt_id, dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
+					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req, NULL);
 		if (rc != 0) {
 			D_ERROR("obj_ec_rw_req_split failed for obj "
 				DF_UOID", DTX "DF_DTI": "DF_RC"\n",
