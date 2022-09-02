@@ -13,9 +13,7 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 1G
-  nvme_size: 10G
-  svcn: 1
+  size: 50G
   control_method: dmg
 container:
   type: POSIX
@@ -25,13 +23,12 @@ mdtest:
     np: 30
   api: DFS
   test_dir: "/"
-  iteration: 1
   dfs_destroy: false
   manager: "MPICH"
   num_of_files_dirs: 1667  # total 50K files and 50K dirs
   mdtest_flags:
-    - "-C"
-    - "-E -X"
+    - "-C -G 27"
+    - "-E -X -G 27"
   depth: 2
   branching_factor: 2
   bytes: 4096
