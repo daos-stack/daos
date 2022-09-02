@@ -747,8 +747,8 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 }
 
 static int
-entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct dfs_obj *obj, struct stat *stbuf, uint64_t *obj_hlc)
+entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
+	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -786,6 +786,16 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFREG:
 	{
 		daos_array_stbuf_t	array_stbuf = {0};
+
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
+
+		/** don't stat the array and use the entry mtime */
+		if (!get_size) {
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+			size = 0;
+			break;
+		}
 
 		if (obj) {
 			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
@@ -860,7 +870,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
-		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
@@ -967,7 +976,6 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			oexcl = flags & O_EXCL;
 	bool			ocreat = flags & O_CREAT;
-	struct timespec		now;
 	int			rc;
 
 	/*
@@ -984,6 +992,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 restart:
 	if (ocreat) {
+		struct timespec		now;
+
 		/*
 		 * If O_CREATE | O_EXCL, we just use conditional check to fail
 		 * when inserting the file. Otherwise we need the fetch to make
@@ -1039,6 +1049,7 @@ restart:
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size = chunk_size;
+
 		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
@@ -1058,7 +1069,7 @@ restart:
 	rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
-		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
+		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1163,20 +1174,52 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 {
 	bool			exists;
 	int			daos_mode;
+	daos_handle_t		th = DAOS_TX_NONE;
+	bool			oexcl = flags & O_EXCL;
+	bool			ocreat = flags & O_CREAT;
 	daos_handle_t		parent_oh;
 	int			rc;
 
 	parent_oh = parent ? parent->oh : dfs->super_oh;
 
-	if (flags & O_CREAT) {
+	/*
+	 * we only need a DTX in the case of O_CREAT without O_EXCL since we don't use a conditional
+	 * insert.
+	 */
+	if (ocreat && !oexcl && dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+restart:
+	if (ocreat) {
 		struct timespec		now;
 
 		D_ASSERT(parent);
 
+		/*
+		 * If O_CREATE | O_EXCL, we just use conditional check to fail when inserting the
+		 * file. Otherwise we need the fetch to make sure there is no existing entry that is
+		 * not a dir, or it's just a dir open if the dir entry exists.
+		 */
+		if (!oexcl) {
+			rc = fetch_entry(dfs->layout_v, parent->oh, th, dir->name, len, false,
+					 &exists, entry, 0, NULL, NULL, NULL);
+			if (rc)
+				D_GOTO(out, rc);
+
+			/** Just open the dir */
+			if (exists)
+				goto dopen;
+		}
+
 		/** this generates the OID and opens the object */
 		rc = create_dir(dfs, parent, cid, dir);
 		if (rc)
-			return rc;
+			D_GOTO(out, rc);
 
 		entry->oid = dir->oid;
 		entry->mode = dir->mode;
@@ -1184,7 +1227,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		if (rc) {
 			rc = errno;
 			daos_obj_close(dir->oh, NULL);
-			return rc;
+			D_GOTO(out, rc);
 		}
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
@@ -1192,51 +1235,69 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->oclass = parent->d.oclass;
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
-				  DAOS_COND_DKEY_INSERT, entry);
-		if (rc != 0) {
+		rc = insert_entry(dfs->layout_v, parent->oh, th, dir->name, len,
+				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
+		if (rc == EEXIST && !oexcl) {
+			/** just try refetching entry to open the file */
 			daos_obj_close(dir->oh, NULL);
-			if (rc != EPERM)
-				D_ERROR("Inserting dir entry %s failed (%d)\n",	dir->name, rc);
-			return rc;
+		} else if (rc) {
+			daos_obj_close(dir->oh, NULL);
+			D_DEBUG(DB_TRACE, "Insert dir entry %s failed (%d)\n", dir->name, rc);
+			D_GOTO(out, rc);
+		} else {
+			/** Success, commit */
+			dir->d.chunk_size = entry->chunk_size;
+			dir->d.oclass = entry->oclass;
+			D_GOTO(commit, rc);
 		}
-
-		dir->d.chunk_size = entry->chunk_size;
-		dir->d.oclass = entry->oclass;
-		return rc;
 	}
+
+	/* Check if parent has the dirname entry */
+	rc = fetch_entry(dfs->layout_v, parent_oh, th, dir->name, len, false, &exists, entry, 0,
+			 NULL, NULL, NULL);
+	if (rc) {
+		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);
+		D_GOTO(out, rc);
+	}
+
+	if (!exists)
+		D_GOTO(out, rc = ENOENT);
+
+dopen:
+	/* Check that the opened object is the type that's expected. */
+	if (!S_ISDIR(entry->mode))
+		D_GOTO(out, rc = ENOTDIR);
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
-		return EINVAL;
-
-	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false,
-			 &exists, entry, 0, NULL, NULL, NULL);
-	if (rc)
-		return rc;
-
-	if (!exists)
-		return ENOENT;
-
-	/* Check that the opened object is the type that's expected, this could
-	 * happen for example if dfs_open() is called with S_IFDIR but without
-	 * O_CREATE and a entry of a different type exists already.
-	 */
-	if (!S_ISDIR(entry->mode))
-		return ENOTDIR;
+		D_GOTO(out, rc = EINVAL);
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 	dir->mode = entry->mode;
 	oid_cp(&dir->oid, entry->oid);
 	dir->d.chunk_size = entry->chunk_size;
 	dir->d.oclass = entry->oclass;
 
-	return 0;
+commit:
+	if (daos_handle_is_valid(th) && dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+out:
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
+
+	return rc;
 }
 
 static int
@@ -1481,9 +1542,10 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	dfs_attr_t		dattr;
 	char			str[37];
 	struct daos_prop_co_roots roots;
-	int			rc;
+	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
+	uint32_t		pa_domain;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1540,12 +1602,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	} else {
 		rf_factor = dpe->dpe_val;
 	}
+	pa_domain = daos_cont_prop2redunlvl(prop);
 
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
 	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
-					 0, dattr.da_oclass_id, 0, 0);
+					 0, dattr.da_oclass_id, 0, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1555,7 +1618,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
 	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
-					 0, dattr.da_oclass_id, 0, 0);
+					 0, dattr.da_oclass_id, 0, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1647,7 +1710,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 err_super:
 	daos_obj_close(super_oh, NULL);
 err_close:
-	daos_cont_close(coh, NULL);
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc2)
+		D_ERROR("daos_cont_close failed "DF_RC"\n", DP_RC(rc));
 err_destroy:
 	/*
 	 * DAOS container create returns success even if container exists -
@@ -1655,8 +1720,11 @@ err_destroy:
 	 * the SB creation, so do not destroy the container, since another
 	 * process might have created it.
 	 */
-	if (rc != EEXIST)
-		daos_cont_destroy(poh, str, 1, NULL);
+	if (rc != EEXIST) {
+		rc2 = daos_cont_destroy(poh, str, 1, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_destroy failed "DF_RC"\n", DP_RC(rc));
+	}
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -3596,6 +3664,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		break;
 	case S_IFLNK:
 		if (flags & O_NOFOLLOW) {
+			if (entry.value == NULL) {
+				D_ERROR("Symlink entry found with no value\n");
+				D_GOTO(err_obj, rc = EIO);
+			}
 			/* Create a truncated version of the string */
 			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 			D_FREE(entry.value);
@@ -4405,7 +4477,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf, NULL);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, true, stbuf, NULL);
 }
 
 int
@@ -4424,7 +4496,8 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf, NULL);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, true, stbuf,
+			NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4563,10 +4636,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
@@ -4684,10 +4757,10 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	if (uid == -1 && gid == -1)
 		D_GOTO(out, rc = 0);
@@ -4770,6 +4843,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_iod_t		iod;
 	daos_recx_t		recx[8];
 	bool			set_size = false;
+	bool			set_mtime = false;
 	int			i = 0;
 	size_t			len;
 	int			rc;
@@ -4803,10 +4877,14 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	len = strlen(obj->name);
 
-	/* Fetch the remote entry first so we can check the oid, then keep
-	 * a track locally of what has been updated
+	/*
+	 * Fetch the remote entry first so we can check the oid, then keep track locally of what has
+	 * been updated. If we are setting the file size, there is no need to query it.
 	 */
-	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
+	if (flags & DFS_SET_ATTR_SIZE)
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, false, &rstat, &obj_hlc);
+	else
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, true, &rstat, &obj_hlc);
 	if (rc)
 		D_GOTO(out_obj, rc);
 
@@ -4845,6 +4923,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(uint64_t);
 		i++;
 
+		set_mtime = true;
 		flags &= ~DFS_SET_ATTR_MTIME;
 		rstat.st_mtim.tv_sec = stbuf->st_mtim.tv_sec;
 		rstat.st_mtim.tv_nsec = stbuf->st_mtim.tv_nsec;
@@ -4888,7 +4967,26 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
+
+		/** update the returned stat buf size with the new set size */
+		rstat.st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		rstat.st_size = stbuf->st_size;
+
+		/* mtime needs to be updated too only if mtime was not explicitly set */
+		if (!set_mtime) {
+			daos_array_stbuf_t	array_stbuf = {0};
+
+			/** TODO - need an array API to just stat the max epoch without size */
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+			if (rc)
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+		}
 	}
 
 	iod.iod_nr = i;
