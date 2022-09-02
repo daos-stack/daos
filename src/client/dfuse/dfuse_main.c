@@ -157,6 +157,46 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	exit(2);
 }
 
+/* Async progress thread.
+ *
+ * This thread is started at launch time with an event queue and blocks
+ * on a semaphore until a asynchronous event is created, at which point
+ * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
+ */
+static void *
+dfuse_progress_thread(void *arg)
+{
+	struct dfuse_projection_info *fs_handle = arg;
+	int                           rc;
+	daos_event_t                 *dev;
+	struct dfuse_event           *ev;
+
+	while (1) {
+		errno = 0;
+		rc    = sem_wait(&fs_handle->dpi_sem);
+		if (rc != 0) {
+			rc = errno;
+
+			if (rc == EINTR)
+				continue;
+
+			DFUSE_TRA_ERROR(fs_handle, "Error from sem_wait: %d", rc);
+		}
+
+		if (fs_handle->dpi_shutdown)
+			return NULL;
+
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 1, &dev);
+		if (rc == 1) {
+			daos_event_fini(dev);
+			ev = container_of(dev, struct dfuse_event, de_ev);
+			ev->de_complete_cb(ev);
+			D_FREE(ev);
+		}
+	}
+	return NULL;
+}
+
 /*
  * Creates a fuse filesystem for any plugin that needs one.
  *
@@ -164,11 +204,11 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  * a filesystem.
  * Returns true on success, false on failure.
  */
-int
+static int
 dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
 {
-	struct dfuse_info		*dfuse_info;
-	int				rc;
+	struct dfuse_info *dfuse_info;
+	int                rc;
 
 	dfuse_info = fs_handle->dpi_info;
 
@@ -187,7 +227,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	if (D_SHOULD_FAIL(start_fault_attr))
 		return -DER_SUCCESS;
 
-	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
+	rc = fuse_session_mount(dfuse_info->di_session, dfuse_info->di_mountpoint);
 	if (rc != 0) {
 		DFUSE_TRA_ERROR("Could not mount fuse");
 		return -DER_INVAL;
@@ -195,7 +235,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
+		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: " DF_RC, DP_RC(rc));
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
@@ -203,12 +243,98 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DFUSE_TRA_ERROR(dfuse_info, "Fuse loop exited with return code: %d (%s)", rc,
+				strerror(rc));
 
 	fuse_session_unmount(dfuse_info->di_session);
 
 	return daos_errno2der(rc);
+}
+
+static int
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
+{
+	struct fuse_args          args = {0};
+	struct dfuse_inode_entry *ie   = NULL;
+	int                       rc;
+
+	args.argc = 5;
+
+	/* These allocations are freed later by libfuse so do not use the
+	 * standard allocation macros
+	 */
+	args.allocated = 1;
+	args.argv      = calloc(sizeof(*args.argv), args.argc);
+	if (!args.argv)
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[0] = strdup("");
+	if (!args.argv[0])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[1] = strdup("-ofsname=dfuse");
+	if (!args.argv[1])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[2] = strdup("-osubtype=daos");
+	if (!args.argv[2])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[3] = strdup("-odefault_permissions");
+	if (!args.argv[3])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[4] = strdup("-onoatime");
+	if (!args.argv[4])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	/* Create the root inode and insert into table */
+	D_ALLOC_PTR(ie);
+	if (!ie)
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
+
+	ie->ie_dfs    = dfs;
+	ie->ie_root   = true;
+	ie->ie_parent = 1;
+	atomic_store_relaxed(&ie->ie_ref, 1);
+	ie->ie_stat.st_ino  = 1;
+	ie->ie_stat.st_uid  = geteuid();
+	ie->ie_stat.st_gid  = getegid();
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
+	dfs->dfs_ino        = ie->ie_stat.st_ino;
+
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
+			D_GOTO(err, rc = daos_errno2der(rc));
+		}
+	}
+
+	rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino),
+			       &ie->ie_htl, false);
+	D_ASSERT(rc == -DER_SUCCESS);
+
+	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
+	if (rc != 0)
+		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+
+	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
+
+	rc = dfuse_launch_fuse(fs_handle, &args);
+	fuse_opt_free_args(&args);
+	if (rc == -DER_SUCCESS)
+		return rc;
+
+err_ie_remove:
+	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
+err:
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
+	fuse_opt_free_args(&args);
+	D_FREE(ie);
+	return rc;
 }
 
 static void

@@ -50,10 +50,6 @@ struct dfuse_projection_info {
 	bool				dpi_shutdown;
 };
 
-/* Launch fuse, and do not return until complete */
-int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args);
-
 struct dfuse_inode_entry;
 
 struct dfuse_readdir_entry {
@@ -267,10 +263,6 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 int
 dfuse_fs_init(struct dfuse_info *dfuse_info,
 	      struct dfuse_projection_info **fsh);
-
-/* Start a dfuse projection */
-int
-dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
 
 int
 dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
