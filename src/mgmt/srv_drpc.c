@@ -199,6 +199,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_engines; i++) {
 		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_incarnation = req->engines[i]->incarnation;
 		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
 	in.gui_n_servers = req->n_engines;

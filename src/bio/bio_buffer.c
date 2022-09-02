@@ -1481,6 +1481,13 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	struct bio_desc		*biod;
 	int			 i, rc;
 
+	for (i = 0; i < bsgl_in->bs_nr; i++) {
+		if (bio_addr_is_hole(&bsgl_in->bs_iovs[i].bi_addr)) {
+			D_ERROR("Read/write a hole isn't allowed\n");
+			return -DER_INVAL;
+		}
+	}
+
 	/* allocate blob I/O descriptor */
 	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */,
 			update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);

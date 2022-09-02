@@ -39,8 +39,8 @@ repo_dels=()
 
 echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
 
-if { [ -n "${REPOSITORY_URL:-}" ] || [ -n "${ARTIFACTORY_URL:-}" ]; } \
-   && [ -n "$DISTRO_REPOS" ]; then
+if [ -n "${ARTIFACTORY_URL:-}" ] &&
+   [ -n "$DISTRO_REPOS" ]; then
     repo_dels+=("--disablerepo=\*")
 
     if [ -n "${REPO_FILE_URL:-}" ]; then
