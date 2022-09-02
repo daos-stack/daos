@@ -42,7 +42,7 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 
 	strncpy(dre->dre_name, name, NAME_MAX);
 	dre->dre_offset      = idata->id_base_offset + idata->id_index;
-	dre->dre_next_offset = idata->id_base_offset + idata->id_index + 1;
+	dre->dre_next_offset = dre->dre_offset + 1;
 	idata->id_index++;
 
 	return 0;
