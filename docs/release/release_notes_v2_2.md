@@ -14,7 +14,7 @@ This release adds the following changes to the DAOS support matrix:
 - Rocky Linux 8 support is added.
 - CentOS Linux 8 support is removed.
 - Support for the `libfabric/tcp` provider is added (replaces `libfabric/sockets`)
-- UCX support is added (Technology Preview - not recommended in production environments)
+- UCX support is added (Technology Preview - not supported in production environments)
 
 For a complete list of supported hardware and software, refer to the
 [Support Matrix](https://docs.daos.io/v2.2/release/support_matrix/).
@@ -32,6 +32,7 @@ RHEL 8.5 is no longer supported by RedHat; RHEL 8.6 and RHEL 8.4 EUS are still s
   This replaces the `libfabric/sockets` provider that was supported with DAOS 2.0.
   The `tcp` provider achieves significantly higher performance than the `sockets` provider
   and is the recommended provider for non-RDMA networks.
+  DAOS 2.2 no longer supports `libfabric/sockets`.
 
 - UCX support is added as a Technology Preview.
   Refer to [UCX](https://docs.daos.io/v2.2/admin/ucx/) for details.
