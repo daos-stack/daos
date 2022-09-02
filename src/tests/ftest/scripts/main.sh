@@ -235,18 +235,6 @@ fi
 # need to increase the number of oopen files (on EL8 at least)
 ulimit -n 4096
 
-# launch_args="-jcrisa"
-# # processing cores is broken on EL7 currently
-# id="$(lsb_release -si)"
-# if { [ "$id" = "CentOS" ]                 &&
-#      [[ $(lsb_release -s -r) != 7.* ]]; } ||
-#    [ "$id" = "AlmaLinux" ]                ||
-#    [ "$id" = "Rocky" ]                    ||
-#    [ "$id" = "RedHatEnterpriseServer" ]   ||
-#    [ "$id" = "openSUSE" ]; then
-#     launch_args+="p"
-# fi
-
 # Clean stale job results
 if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
     rm -rf "${logs_prefix}/ftest/avocado/job-results"

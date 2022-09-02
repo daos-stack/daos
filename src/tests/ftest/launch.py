@@ -8,9 +8,10 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
-from datetime import datetime
+# from datetime import datetime
 from tempfile import TemporaryDirectory
 import errno
+import fnmatch
 import json
 import logging
 import os
@@ -20,11 +21,11 @@ import subprocess   # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
+# from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
 
-from defusedxml import minidom
-import defusedxml.ElementTree as ET
+# from defusedxml import minidom
+# import defusedxml.ElementTree as ET
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -33,10 +34,10 @@ import defusedxml.ElementTree as ET
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
-# Graft some functions from xml.etree into defusedxml etree.
-ET.Element = Element
-ET.SubElement = SubElement
-ET.tostring = tostring
+# # Graft some functions from xml.etree into defusedxml etree.
+# ET.Element = Element
+# ET.SubElement = SubElement
+# ET.tostring = tostring
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
@@ -180,20 +181,6 @@ def run_remote(log, hosts, command, timeout=120):
     return results
 
 
-def display_disk_space(log, path):
-    """Display disk space of provided path destination.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        path (str): path to directory to print disk space for.
-    """
-    log.debug("Current disk space usage of %s", path)
-    try:
-        run_local(log, ["df", "-h", path])
-    except LaunchException:
-        pass
-
-
 def get_build_environment(args):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
@@ -217,30 +204,6 @@ def get_build_environment(args):
             return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
     # Pylint warns about possible return types if we take this path, so ensure we do not.
     assert False
-
-
-def get_temporary_directory(args, base_dir=None):
-    """Get the temporary directory used by functional tests.
-
-    Args:
-        base_dir (str, optional): base installation directory. Defaults to None.
-
-    Returns:
-        str: the full path of the temporary directory
-
-    """
-    if base_dir is None:
-        base_dir = get_build_environment(args)["PREFIX"]
-    if base_dir == "/usr":
-        tmp_dir = os.getenv("DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
-    else:
-        tmp_dir = os.path.join(base_dir, "tmp")
-
-    # Make sure the temporary directory exists to prevent pydaos import errors
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-
-    return tmp_dir
 
 
 def set_test_environment(log, args):
@@ -838,10 +801,12 @@ def setup_test_files(log, test_list, args, yaml_dir):
     # Log the test information
     log.debug("-" * 80)
     log.debug("Test information:")
+    log.debug("%3s  %-40s  %-40s  %-20s  %-20s", "UID", "Test", "Yaml File", "Servers", "Clients")
+    log.debug("%3s  %-40s  %-40s  %-20s  %-20s", "-" * 3, "-" * 40, "-" * 40, "-" * 20, "-" * 20)
     for test in test_list:
         log.debug(
-            "  test: %-40s, yaml: %-40s, servers: %-20s, clients: %-20s",
-            test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
+            "%3s  %-40s  %-40s  %-20s  %-20s",
+            test.name.uid, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
 
 
 def replace_yaml_file(log, yaml_file, args, yaml_dir):
@@ -1159,370 +1124,83 @@ def get_yaml_data(log, yaml_file):
     return yaml_data
 
 
-def report_skipped_test(log, test_file, avocado_logs_dir, reason):
-    """Report an error for the skipped test.
+# def report_skipped_test(log, test_file, avocado_logs_dir, reason):
+#     """Report an error for the skipped test.
 
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_file (str): the test python file
-        avocado_logs_dir (str): avocado job-results directory
-        reason (str): test skip reason
+#     Args:
+#         log (logger): logger for the messages produced by this method
+#         test_file (str): the test python file
+#         avocado_logs_dir (str): avocado job-results directory
+#         reason (str): test skip reason
 
-    Returns:
-        bool: status of writing to junit file
+#     Returns:
+#         bool: status of writing to junit file
 
-    """
-    message = f"The {test_file} test was skipped due to {reason}"
-    log.debug(message)
+#     """
+#     message = f"The {test_file} test was skipped due to {reason}"
+#     log.debug(message)
 
-    # Generate a fake avocado results.xml file to report the skipped test.
-    # This file currently requires being placed in a job-* subdirectory.
-    test_name = get_test_category(test_file)
-    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
-    destination = os.path.join(avocado_logs_dir, f"job-{time_stamp}-da03911-{test_name}")
-    try:
-        os.makedirs(destination)
-    except (OSError, FileExistsError) as error:
-        log.debug("Warning: Continuing after failing to create %s: %s", destination, error)
+#     # Generate a fake avocado results.xml file to report the skipped test.
+#     # This file currently requires being placed in a job-* subdirectory.
+#     test_name = get_test_category(test_file)
+#     time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
+#     destination = os.path.join(avocado_logs_dir, f"job-{time_stamp}-da03911-{test_name}")
+#     try:
+#         os.makedirs(destination)
+#     except (OSError, FileExistsError) as error:
+#         log.debug("Warning: Continuing after failing to create %s: %s", destination, error)
 
-    return create_results_xml(
-        log, message, test_name, "See launch.py command output for more details", destination)
-
-
-def create_results_xml(log, message, testname, output, destination):
-    """Create JUnit xml file.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        message (str): error summary message
-        testname (str): name of test
-        output (dict): result of the command.
-        destination (str): directory where junit xml will be created
-
-    Returns:
-        bool: status of writing to junit file
-
-    """
-    status = True
-
-    # Define the test suite
-    testsuite_attributes = {
-        "name": str(testname),
-        "errors": "1",
-        "failures": "0",
-        "skipped": "0",
-        "test": "1",
-        "time": "0.0",
-    }
-    testsuite = ET.Element("testsuite", testsuite_attributes)
-
-    # Define the test case error
-    testcase_attributes = {"classname": testname, "name": "framework_results",
-                           "time": "0.0"}
-    testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
-    ET.SubElement(testcase, "error", {"message": message})
-    system_out = ET.SubElement(testcase, "system-out")
-    system_out.text = output
-
-    # Get xml as string and write it to a file
-    rough_xml = ET.tostring(testsuite, "utf-8")
-    junit_xml = minidom.parseString(rough_xml)
-    results_xml = os.path.join(destination, "framework_results.xml")
-    log.debug("Generating junit xml file %s ...", results_xml)
-    try:
-        with open(results_xml, "w", encoding="utf-8") as xml_buffer:
-            xml_buffer.write(junit_xml.toprettyxml())
-    except IOError as error:
-        log.debug("Failed to create xml file: %s", str(error))
-        status = False
-    return status
+#     return create_results_xml(
+#         log, message, test_name, "See launch.py command output for more details", destination)
 
 
-USE_DEBUGINFO_INSTALL = True
+# def create_results_xml(log, message, testname, output, destination):
+#     """Create JUnit xml file.
 
+#     Args:
+#         log (logger): logger for the messages produced by this method
+#         message (str): error summary message
+#         testname (str): name of test
+#         output (dict): result of the command.
+#         destination (str): directory where junit xml will be created
 
-def resolve_debuginfo(log, pkg):
-    """Return the debuginfo package for a given package name.
+#     Returns:
+#         bool: status of writing to junit file
 
-    Args:
-        log (logger): logger for the messages produced by this method
-        pkg (str): a package name
+#     """
+#     status = True
 
-    Raises:
-        LaunchException: if there is an error searching for RPMs
+#     # Define the test suite
+#     testsuite_attributes = {
+#         "name": str(testname),
+#         "errors": "1",
+#         "failures": "0",
+#         "skipped": "0",
+#         "test": "1",
+#         "time": "0.0",
+#     }
+#     testsuite = ET.Element("testsuite", testsuite_attributes)
 
-    Returns:
-        dict: dictionary of debug package information
+#     # Define the test case error
+#     testcase_attributes = {"classname": testname, "name": "framework_results",
+#                            "time": "0.0"}
+#     testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
+#     ET.SubElement(testcase, "error", {"message": message})
+#     system_out = ET.SubElement(testcase, "system-out")
+#     system_out.text = output
 
-    """
-    package_info = None
-    try:
-        # Eventually use python libraries for this rather than exec()ing out
-        output = run_local(
-            log, ["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg], check=False)
-        name, version, release, epoch = output.stdout.split()
-
-        debuginfo_map = {"glibc": "glibc-debuginfo-common"}
-        try:
-            debug_pkg = debuginfo_map[name]
-        except KeyError:
-            debug_pkg = f"{name}-debuginfo"
-        package_info = {
-            "name": debug_pkg,
-            "version": version,
-            "release": release,
-            "epoch": epoch
-        }
-    except ValueError:
-        log.debug("Package %s not installed, skipping debuginfo", pkg)
-
-    return package_info
-
-
-def is_el(distro):
-    """Return True if a distro is an EL."""
-    return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
-
-
-def install_debuginfos(log):
-    """Install debuginfo packages.
-
-    NOTE: This does assume that the same daos packages that are installed
-        on the nodes that could have caused the core dump are installed
-        on this node also.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-
-    Raises:
-        LaunchException: if there is an error installing debuginfo packages
-
-    """
-    # The distro_utils.py file is installed in the util sub-directory relative to this file location
-    sys.path.append(os.path.join(os.getcwd(), "util"))
-    from distro_utils import detect         # pylint: disable=import-outside-toplevel
-
-    distro_info = detect()
-    install_pkgs = [{'name': 'gdb'}]
-    if is_el(distro_info):
-        install_pkgs.append({'name': 'python3-debuginfo'})
-
-    cmds = []
-
-    # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
-                'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
-                'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
-        try:
-            debug_pkg = resolve_debuginfo(log, pkg)
-        except LaunchException as error:
-            log.error("Failed trying to install_debuginfos(): %s", str(error))
-            raise
-
-        if debug_pkg and debug_pkg not in install_pkgs:
-            install_pkgs.append(debug_pkg)
-
-    # remove any "source tree" test hackery that might interfere with RPM installation
-    path = os.path.join(os.path.sep, "usr", "share", "spdk", "include")
-    if os.path.islink(path):
-        cmds.append(["sudo", "rm", "-f", path])
-
-    if USE_DEBUGINFO_INSTALL:
-        dnf_args = ["--exclude", "ompi-debuginfo"]
-        if os.getenv("TEST_RPMS", 'false') == 'true':
-            if "suse" in distro_info.name.lower():
-                dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
-            elif "centos" in distro_info.name.lower() and \
-                 distro_info.version == "7":
-                dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
-                                 "nvml-debuginfo", "libpmemobj",
-                                 "python36", "openmpi3", "gcc"])
-            elif is_el(distro_info) and distro_info.version == "8":
-                dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
-                                 "python3", "openmpi", "gcc"])
-            else:
-                raise LaunchException(f"install_debuginfos(): Unsupported distro: {distro_info}")
-            cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
-        output = run_local(log, ["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
-        rpm_version = output.stdout
-        cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
-            + ["daos-client-" + rpm_version,
-               "daos-server-" + rpm_version,
-               "daos-tests-" + rpm_version])
-    # else:
-    #     # We're not using the yum API to install packages
-    #     # See the comments below.
-    #     kwargs = {'name': 'gdb'}
-    #     yum_base.install(**kwargs)
-
-    # This is how you normally finish up a yum transaction, but
-    # again, we need to employ sudo
-    # yum_base.resolveDeps()
-    # yum_base.buildTransaction()
-    # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
-
-    # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "dnf", "-y"]
-    if is_el(distro_info) or "suse" in distro_info.name.lower():
-        cmd.append("--enablerepo=*debug*")
-    cmd.append("install")
-    for pkg in install_pkgs:
-        try:
-            cmd.append(f"{pkg['name']}-{pkg['version']}-{pkg['release']}")
-        except KeyError:
-            cmd.append(pkg['name'])
-
-    cmds.append(cmd)
-
-    retry = False
-    for cmd in cmds:
-        try:
-            run_local(log, cmd, check=True)
-        except LaunchException:
-            # got an error, so abort this list of commands and re-run
-            # it with a dnf clean, makecache first
-            retry = True
-            break
-    if retry:
-        log.debug("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "dnf"]
-        if is_el(distro_info) or "suse" in distro_info.name.lower():
-            cmd_prefix.append("--enablerepo=*debug*")
-        cmds.insert(0, cmd_prefix + ["clean", "all"])
-        cmds.insert(1, cmd_prefix + ["makecache"])
-        for cmd in cmds:
-            try:
-                run_local(log, cmd)
-            except LaunchException:
-                break
-
-
-def process_the_cores(log, avocado_logs_dir, test_hosts):
-    """Copy all of the host test log files to the avocado results directory.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        avocado_logs_dir (str): location of the avocado job logs
-        test_hosts (NodeSet): hosts from which to collect core files
-
-    Returns:
-        bool: True if everything was done as expected, False if there were
-              any issues processing core files
-
-    """
-    import fnmatch  # pylint: disable=import-outside-toplevel
-
-    return_status = True
-    daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
-
-    # Create a subdirectory in the avocado logs directory for this test
-    log.debug("-" * 80)
-    log.debug("Processing cores from %s in %s", test_hosts, daos_cores_dir)
-    os.makedirs(daos_cores_dir, exist_ok=True)
-
-    # Copy any core files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Attempt all of the commands and
-    # report status at the end of the loop.  Include a listing of the file
-    # related to any failed command.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "df -h /var/tmp",
-        "for file in /var/tmp/core.*",
-        "do if [ -e $file ]",
-        "then ls -al $file",
-        "if [ ! -s $file ]",
-        "then ((rc++))",
-        "else if sudo chmod 644 $file && "
-        f"scp $file {get_local_host()}:{daos_cores_dir}/${{file##*/}}-$(hostname -s)",
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "fi",
-        "else ((rc++))",
-        "fi",
-        "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
-    ]
-    result = run_remote(log, test_hosts, "; ".join(commands), timeout=1800)
-    if not result.passed:
-        # we might have still gotten some core files, so don't return here
-        # but save a False return status for later
-        return_status = False
-
-    cores = os.listdir(daos_cores_dir)
-
-    if not cores:
-        return True
-
-    try:
-        install_debuginfos(log)
-    except LaunchException as error:
-        log.debug(error)
-        log.debug("Removing core files to avoid archiving them")
-        for corefile in cores:
-            os.remove(os.path.join(daos_cores_dir, corefile))
-        return False
-
-    for corefile in cores:
-        if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
-            continue
-        corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-        run_local(log, ['ls', '-l', corefile_fqpn])
-        # can't use the file python magic binding here due to:
-        # https://bugs.astron.com/view.php?id=225, fixed in:
-        # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
-        # but not available to us until that is in a released version
-        # revert the commit this comment is in to see use python magic instead
-        try:
-            gdb_output = run_local(
-                log, ["gdb", "-c", corefile_fqpn, "-ex", "info proc exe", "-ex", "quit"])
-
-            last_line = gdb_output.stdout[-1]
-            cmd = last_line[7:-1]
-            # assume there are no arguments on cmd
-            find_char = "'"
-            if cmd.find(" ") > -1:
-                # there are arguments on cmd
-                find_char = " "
-            exe_name = cmd[0:cmd.find(find_char)]
-        except RuntimeError:
-            exe_name = None
-
-        if exe_name:
-            cmd = [
-                "gdb", f"-cd={daos_cores_dir}",
-                "-ex", "set pagination off",
-                "-ex", "thread apply all bt full",
-                "-ex", "detach",
-                "-ex", "quit",
-                exe_name, corefile
-            ]
-            stack_trace_file = os.path.join(daos_cores_dir, f"{corefile}.stacktrace")
-            try:
-                output = run_local(log, cmd, check=False)
-                with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
-                    stack_trace.writelines(output.stdout)
-            except IOError as error:
-                log.debug("Error writing %s: %s", stack_trace_file, error)
-                return_status = False
-            except LaunchException as error:
-                log.debug("Error creating %s: %s", stack_trace_file, error)
-                return_status = False
-        else:
-            log.debug(
-                "Unable to determine executable name from gdb output: '%s'\n"
-                "Not creating stacktrace", gdb_output)
-            return_status = False
-        log.debug("Removing %s", corefile_fqpn)
-        os.unlink(corefile_fqpn)
-
-    return return_status
+#     # Get xml as string and write it to a file
+#     rough_xml = ET.tostring(testsuite, "utf-8")
+#     junit_xml = minidom.parseString(rough_xml)
+#     results_xml = os.path.join(destination, "framework_results.xml")
+#     log.debug("Generating junit xml file %s ...", results_xml)
+#     try:
+#         with open(results_xml, "w", encoding="utf-8") as xml_buffer:
+#             xml_buffer.write(junit_xml.toprettyxml())
+#     except IOError as error:
+#         log.debug("Failed to create xml file: %s", str(error))
+#         status = False
+#     return status
 
 
 def get_test_category(test_file):
@@ -1969,7 +1647,7 @@ class RemoteCommandResult():
 class TestName():
     """Define the name for a test thats compatible with avocado's result render classes."""
 
-    def __init__(self, name, uid="0"):
+    def __init__(self, name, uid, repeat=0):
         """Initialize a TestName object.
 
         Args:
@@ -1978,6 +1656,7 @@ class TestName():
         """
         self.name = name
         self.uid = uid
+        self.repeat = repeat
 
     def __str__(self):
         """Get the test name as a string.
@@ -1986,7 +1665,27 @@ class TestName():
             str: combination of the uid and name
 
         """
-        return f"{self.uid}-{self.name}"
+        if self.repeat > 0:
+            return f"{self.uid:02}-{self.name}-repeat{self.repeat:03}"
+        return f"{self.uid:02}-{self.name}"
+
+    @property
+    def repeat_str(self):
+        """Get the string representation of the repeat counter.
+
+        Returns:
+            str: the repeat count as a string; useful for file/directory naming
+        """
+        return f"repeat{self.repeat:03}"
+
+    def copy(self):
+        """Create a copy of this object.
+
+        Returns:
+            TestName: a copy of this TestName object
+
+        """
+        return TestName(self.name, self.uid, self.repeat)
 
 
 class TestInfo():
@@ -2023,21 +1722,18 @@ class TestInfo():
             local_host = NodeSet(get_local_host())
             return self.all.difference(local_host)
 
-    def __init__(self, test_file):
+    def __init__(self, test_file, uid):
         """Initialize a TestInfo object.
 
         Args:
             test_file (str): the test python file
         """
-        self.name = TestName(test_file)
+        self.name = TestName(test_file, uid)
         self.test_file = test_file
-        test_path, self.python_file = os.path.split(self.test_file)
-        _, self.directory = os.path.split(test_path)
-        filename_root, _ = os.path.splitext(self.python_file)
-        self.class_name = ".".join(["FTEST_launch", self.directory, filename_root])
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
+        self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
+        self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
         self.hosts = self.HostInfo()
-        self.loop = 1
 
     def __str__(self):
         """Get the test file as a string.
@@ -2123,35 +1819,25 @@ class TestInfo():
             get_yaml_data(log, self.yaml_file),
             [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
-    def get_log_file(self, logs_dir, repeat, loop, index):
+    def get_log_file(self, logs_dir, total, repeat):
         """Get the test log file name.
 
         Args:
             logs_dir (str): _description_
-            repeat (int): _description_
-            loop (int): loop count. Defaults to None.
-            index (int): _description_
+            total (int): total number of test repetitions
+            repeat (int): current test repetition
 
         Returns:
-            str: a test log file name composed of the test class, name, and optional loop count
+            str: a test log file name composed of the test class, name, and optional repeat count
 
         """
-        self.name.uid = f"{loop}.{index}"
-        log_file = f"{index}-launch-{'_'.join(self.test_file.split(os.path.sep)[1:])}.log"
-        if repeat > 1:
-            os.makedirs(os.path.join(logs_dir, str(loop)))
-            return os.path.join(logs_dir, str(loop), log_file)
+        name = os.path.splitext(self.python_file)[0]
+        log_file = f"{self.name.uid:02}-{self.directory}-{name}-launch.log"
+        if total > 1:
+            self.name.repeat = repeat
+            os.makedirs(os.path.join(logs_dir, self.name.repeat_str))
+            return os.path.join(logs_dir, self.name.repeat_str, log_file)
         return os.path.join(logs_dir, log_file)
-
-    def report(self, log):
-        """_summary_.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
-        log.debug(
-            "  test: %40s  yaml: %40s  servers: %20s  clients: %20s",
-            self.test_file, self.yaml_file, self.hosts.servers, self.hosts.clients)
 
 
 class BaseResult():
@@ -2199,23 +1885,21 @@ class BaseResult():
 class TestResult(BaseResult):
     """Object to keep track of the running of a test."""
 
-    def __init__(self, class_name, test_name, logfile, loop):
+    def __init__(self, class_name, test_name, logfile):
         """_summary_.
 
         Args:
             class_name (_type_): _description_
             test_name (_type_): _description_
             logfile (_type_): _description_
-            loop (_type_): _description_
         """
         super().__init__()
         self.class_name = class_name
-        self.name = test_name
+        self.name = test_name.copy()
         self.logfile = logfile
         self.fail_class = None
         self.fail_reason = None
         self.traceback = None
-        self.loop = loop
 
     def __getitem__(self, item):
         """Get the value for the item."""
@@ -2316,22 +2000,22 @@ class LaunchJob():
         self.result = LaunchResult(self.logfile)
         self.local_host = NodeSet(get_local_host())
 
-        # Configuration information used by avocado.plugins.xunit.XUnitResult
+        # Configuration information used by:
+        #   avocado.plugins.xunit.XUnitResult
+        #   avocado_result_html.HTMLResult
         self.config = {
             "job.run.result.xunit.enabled": "on",
             "job.run.result.xunit.output": None,
             "job.run.result.xunit.max_test_log_chars": self.avocado.get_setting(
                 "job.run.result.xunit", "max_test_log_chars"),
             "job.run.result.xunit.job_name": name,
+            "job.run.result.html.enabled": "on",
+            "job.run.result.html.open_browser": False,
+            "job.run.result.html.output": None,
+            "stdout_claimed_by": None,
         }
-
-        # Attribute for avocado_result_html.HTMLResult
         # self.status = "COMPLETE"
         self.status = "RUNNING"     # Disables generating result.html
-        self.config["job.run.result.html.enabled"] = "on"
-        self.config["job.run.result.html.open_browser"] = False
-        self.config["job.run.result.html.output"] = None
-        self.config["stdout_claimed_by"] = None
 
     @staticmethod
     def _get_file_handler(log_file):
@@ -2417,7 +2101,6 @@ class LaunchJob():
             if os.path.isfile(tag):
                 # Assume an existing file is a test and add it to the list of tests
                 test_files.append(tag)
-                # self.test_list.append(TestInfo(tag))
                 if not faults_enabled and fault_filter not in self.tag_filters:
                     self.tag_filters.append(fault_filter)
             else:
@@ -2436,8 +2119,8 @@ class LaunchJob():
         # Find all the test files that contain tests matching the tags
         self.log.info("Detecting tests matching tags: %s", " ".join(command))
         output = run_local(self.log, command, check=True)
-        for test_file in set(re.findall(r"INSTRUMENTED\s+(.*):", output.stdout)):
-            self.tests.append(TestInfo(test_file))
+        for index, test_file in enumerate(set(re.findall(r"INSTRUMENTED\s+(.*):", output.stdout))):
+            self.tests.append(TestInfo(test_file, index + 1))
             self.log.info("  %s", self.tests[-1])
 
     def _faults_enabled(self):
@@ -2457,19 +2140,19 @@ class LaunchJob():
             self.log.debug("  Fault injection is disabled")
         return False
 
-    def run(self, sparse, fail_fast, extra_yaml, disable_stop, archive, rename, jenkinslog,
+    def run(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
             core_files, threshold):
         """Run all the tests.
 
         Args:
             sparse (bool): _description_
             fail_fast (bool): _description_
-            extra_yaml (list): _description_
-            disable_stop (bool): _description_
-            archive (bool): _description_
-            rename (bool): _description_
-            jenkinslog (bool): _description_
-            core_files (bool): _description_
+            extra_yaml (list): optional test yaml file to use when running the test
+            stop_daos (bool): whether or not to stop daos servers/clients after the test
+            archive (bool): whether or not to collect remote files generated by the test
+            rename (bool): whether or not to rename the default avocado job-results directory names
+            jenkinslog (bool): whether or not to update the results.xml to use Jenkins-stlye names
+            core_files (bool): whether or not to check for an process core files
             threshold (str): optional upper size limit for test log files
         """
         return_code = 0
@@ -2478,30 +2161,30 @@ class LaunchJob():
         self.log.info("Avocado logs stored in %s", self.job_results_dir)
 
         # Run each test for as many repetitions as requested
-        for loop in range(1, self.repeat + 1):
+        for repeat in range(1, self.repeat + 1):
             self.log.info("-" * 80)
-            self.log.info("Starting loop %s/%s", loop, self.repeat)
+            self.log.info("Starting test repetition %s/%s", repeat, self.repeat)
 
-            for index, test in enumerate(self.tests):
-                # Define a log for the execution of this test in this loop
-                test_log_file = test.get_log_file(self.logdir, self.repeat, loop, index + 1)
+            for test in self.tests:
+                # Define a log for the execution of this test for this repetition
+                test_log_file = test.get_log_file(self.logdir, self.repeat, repeat)
                 self.log.info(
-                    "Logging launch loop %s running of %s in %s", loop, test, test_log_file)
+                    "Logging launch repetition %s running of %s in %s", repeat, test, test_log_file)
                 test_file_handler = self._get_file_handler(test_log_file)
                 self.log.addHandler(test_file_handler)
 
                 # Mark the start of this test and prepare the hosts to run the tests
-                step_status = self.prepare(test, loop, test_log_file)
+                step_status = self.prepare(test, repeat, test_log_file)
                 if step_status:
                     return_code |= step_status
                     continue
 
                 # Run the test with avocado
-                return_code |= self.execute(test, loop, sparse, fail_fast, extra_yaml)
+                return_code |= self.execute(test, repeat, sparse, fail_fast, extra_yaml)
 
                 # Archive the test results
                 return_code |= self.process(
-                    test, loop, disable_stop, archive, rename, jenkinslog, core_files, threshold)
+                    test, repeat, stop_daos, archive, rename, jenkinslog, core_files, threshold)
 
                 # Mark the execution of the test as passed if nothing went wrong
                 if self.result.tests[-1].status is None:
@@ -2518,12 +2201,25 @@ class LaunchJob():
 
         return return_code
 
-    def prepare(self, test, loop, test_log_file):
+    def display_disk_space(self, path):
+        """Display disk space of provided path destination.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            path (str): path to directory to print disk space for.
+        """
+        self.log.debug("Current disk space usage of %s", path)
+        try:
+            run_local(self.log, ["df", "-h", path], check=False)
+        except LaunchException:
+            pass
+
+    def prepare(self, test, repeat, test_log_file):
         """Prepare the test for execution.
 
         Args:
             test (TestInfo): the test information
-            loop (int): the repeat loop number
+            repeat (int): the test repetition number
             test_log_file (_type_): _description_
 
         Returns:
@@ -2531,11 +2227,10 @@ class LaunchJob():
 
         """
         self.log.debug("=" * 80)
-        self.log.info("Preparing to run the %s test on loop %s/%s", test, loop, self.repeat)
+        self.log.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
-        # Create a new TestResult for this test - including the current loop in the test name
-        test.loop = loop
-        self.result.tests.append(TestResult(test.class_name, test.name, test_log_file, loop))
+        # Create a new TestResult for this test
+        self.result.tests.append(TestResult(test.class_name, test.name, test_log_file))
         self.result.start()
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
@@ -2558,12 +2253,12 @@ class LaunchJob():
 
         return 0
 
-    def execute(self, test, loop, sparse, fail_fast, extra_yaml):
+    def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
         """Run the specified test.
 
         Args:
             test (TestInfo): the test information
-            loop (int): the repeat loop number
+            repeat (int): the test repetition number
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
             extra_yaml (list): whether to use an exta yaml file with the avocado run command
@@ -2576,7 +2271,7 @@ class LaunchJob():
         command = self.avocado.get_run_command(
             test, self.tag_filters, sparse, fail_fast, extra_yaml)
         self.log.info(
-            "Running the %s test on loop %s/%s: %s", test, loop, self.repeat, " ".join(command))
+            "Running the %s test on repeat %s/%s: %s", test, repeat, self.repeat, " ".join(command))
         start_time = int(time.time())
 
         try:
@@ -2585,7 +2280,7 @@ class LaunchJob():
                 self._collect_crash_files()
 
         except LaunchException as error:
-            message = f"Error executing {test} on loop {loop}"
+            message = f"Error executing {test} on repeat {repeat}"
             self.log.debug(message, exc_info=True)
             self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
             return_code = 1
@@ -2602,8 +2297,7 @@ class LaunchJob():
             avocado_logs_dir (str): path to the avocado log files.
         """
         avocado_logs_dir = self.avocado.get_logs_dir()
-        data_dir = avocado_logs_dir.replace("job-results", "data")
-        crash_dir = os.path.join(data_dir, "crashes")
+        crash_dir = os.path.join(avocado_logs_dir.replace("job-results", "data"), "crashes")
         if os.path.isdir(crash_dir):
             crash_files = [
                 os.path.join(crash_dir, crash_file)
@@ -2611,10 +2305,9 @@ class LaunchJob():
                 if os.path.isfile(os.path.join(crash_dir, crash_file))]
 
             if crash_files:
-                latest_dir = os.path.join(avocado_logs_dir, "latest")
-                latest_crash_dir = os.path.join(latest_dir, "crashes")
+                latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(self.log, ["mkdir", latest_crash_dir], check=True)
+                    run_local(self.log, ["mkdir", "-p", latest_crash_dir], check=True)
                     for crash_file in crash_files:
                         run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
                 except LaunchException as error:
@@ -2624,7 +2317,7 @@ class LaunchJob():
             else:
                 self.log.debug("No avocado crash files found in %s", crash_dir)
 
-    def process(self, test, loop, disable_stop, archive, rename, jenkinslog, core_files, threshold):
+    def process(self, test, repeat, stop_daos, archive, rename, jenkinslog, core_files, threshold):
         """Process the test results.
 
         This may include (depending upon argument values):
@@ -2636,11 +2329,12 @@ class LaunchJob():
 
         Args:
             test (TestInfo): the test information
-            loop (int): the repeat loop number
-            disable_stop (bool): _description_
-            archive (bool): _description_
-            rename (bool): _description_
-            core_files (bool): _description_
+            repeat (int): the test repetition number
+            stop_daos (bool): whether or not to stop daos servers/clients after the test
+            archive (bool): whether or not to collect remote files generated by the test
+            rename (bool): whether or not to rename the default avocado job-results directory names
+            jenkinslog (bool): whether or not to update the results.xml to use Jenkins-stlye names
+            core_files (bool): whether or not to check for an process core files
             threshold (str): optional upper size limit for test log files
 
         Raises:
@@ -2652,10 +2346,11 @@ class LaunchJob():
         """
         return_code = 0
         self.log.debug("-" * 80)
-        self.log.info("Processing the %s test after the run on loop %s/%s", test, loop, self.repeat)
+        self.log.info(
+            "Processing the %s test after the run on repeat %s/%s", test, repeat, self.repeat)
 
         # Stop any agents or servers running via systemd
-        if not disable_stop:
+        if stop_daos:
             return_code |= stop_daos_agent_services(self.log, test)
             return_code |= stop_daos_server_service(self.log, test)
             return_code |= reset_server_storage(self.log, test)
@@ -2730,7 +2425,8 @@ class LaunchJob():
         # Optionally rename the test results directory for this test
         if rename:
             try:
-                self._rename_avocado_test_dir(test, loop, jenkinslog)
+                self._rename_avocado_test_dir(test, jenkinslog)
+
             except LaunchException as error:
                 message = "Error renaming test results"
                 self.log.debug(message, exc_info=True)
@@ -2739,13 +2435,22 @@ class LaunchJob():
 
         # Optionally process core files
         if core_files:
-            # try:
-            #     if not process_the_cores(log, avocado_logs_dir, test.hosts.all):
-            #         return_code |= 256
-            # except Exception as error:  # pylint: disable=broad-except
-            #     log.error("Error: unhandled exception processing core files: %s", str(error))
-            #     return_code |= 256
-            pass
+            core_file_processing = CoreFileProcessing(self.log)
+            try:
+                if not core_file_processing.get_stacktraces(self.job_results_dir, test.hosts.all):
+                    return_code |= 256
+
+            except LaunchException as error:
+                message = "Error processing test core files"
+                self.log.debug(message, exc_info=True)
+                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                return_code |= 256
+
+            except Exception as error:  # pylint: disable=broad-except
+                message = "Unhandled error processing test core files"
+                self.log.debug(message, exc_info=True)
+                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                return_code |= 256
 
         return return_code
 
@@ -2978,28 +2683,39 @@ class LaunchJob():
         """
         self.log.debug("-" * 80)
         self.log.debug("Moving (remotely) files from %s to %s on %s", source, destination, hosts)
+        os.makedirs(destination, exist_ok=True)
 
         # Create a temporary remote directory
         tmp_copy_dir = os.path.join(source, "launch_tmp_copy_dir")
-        command = f"mkdir {tmp_copy_dir}"
+        command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(self.log, hosts, command).passed:
-            raise LaunchException(f"Error creating temporary remote copy directory {tmp_copy_dir}")
+            self.log.debug("Error creating temporary remote copy directory %s", tmp_copy_dir)
+            return False
 
         # Move the requested files into this temporary directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
                    "xargs -r0 -I '{}' mv '{}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
-            raise LaunchException(
-                f"Error moving files to temporary remote copy directory {tmp_copy_dir}")
+            self.log.debug("Error moving files to temporary remote copy directory %s", tmp_copy_dir)
+            return False
 
         # Clush -rcopy the temporary remote directory to this host
         command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", destination]
+        status = True
         try:
             run_local(self.log, command, check=True)
+
         except LaunchException:
             self.log.debug("Error copying remote files to %s", destination, exc_info=True)
-            return False
-        return True
+            status = False
+
+        finally:
+            command = f"rm -fr {tmp_copy_dir}"
+            if not run_remote(self.log, hosts, command).passed:
+                self.log.debug("Error removing archived files temporary directory")
+                status = False
+
+        return status
 
     def _move_local_files(self, hosts, source, pattern, destination, depth):
         """Move files from the source to the destination.
@@ -3017,6 +2733,7 @@ class LaunchJob():
         """
         self.log.debug("-" * 80)
         self.log.debug("Moving local files from %s to %s on %s", source, destination, hosts)
+        os.makedirs(destination, exist_ok=True)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print"
         try:
             result = run_local(self.log, command.split(" "), check=True)
@@ -3028,25 +2745,18 @@ class LaunchJob():
             return False
         return True
 
-    def _rename_avocado_test_dir(self, test, loop, jenkinslog):
+    def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
 
         Args:
             test (TestInfo): the test information
-            loop (int): the repeat loop number
-
-            log (logger): logger for the messages produced by this method
-            avocado_logs_dir (str): avocado job-results directory
-            test_file (str): the test python file
-            loop (int): test execution loop count
-            args (argparse.Namespace): command line arguments for this program
+            jenkinslog (bool): whether to update the results.xml with the Jenkins test names
 
         Raises:
             LaunchException: if there is an error renaming the avocado test directory
 
         """
         avocado_logs_dir = self.avocado.get_logs_dir()
-        test_name = get_test_category(test.test_file)
         test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
         test_logs_dir = os.path.realpath(test_logs_lnk)
 
@@ -3054,15 +2764,14 @@ class LaunchJob():
         self.log.info("Renaming the avocado job-results directory")
 
         # Create the new avocado job-results test directory name
-        new_test_logs_dir = "-".join([test_logs_dir, test_name])
+        new_test_logs_dir = "-".join([test_logs_dir, get_test_category(test.test_file)])
         if jenkinslog:
+            new_test_logs_dir = os.path.join(avocado_logs_dir, test.directory, test.python_file)
             if self.repeat > 1:
                 # When repeating tests ensure Jenkins-style avocado log directories
-                # are unique by including the loop count in the path
+                # are unique by including the repeat count in the path
                 new_test_logs_dir = os.path.join(
-                    avocado_logs_dir, test.directory, test.python_file, str(loop))
-            else:
-                new_test_logs_dir = os.path.join(avocado_logs_dir, test.directory, test.python_file)
+                    avocado_logs_dir, test.directory, test.python_file, test.name.repeat_str)
             try:
                 os.makedirs(new_test_logs_dir)
             except OSError as error:
@@ -3096,10 +2805,7 @@ class LaunchJob():
             org_xml_data = xml_data
 
             # First, mangle the in-place file for Jenkins to consume
-            org_class = "classname=\""
-            new_class = f"{org_class}FTEST_{test.directory}."
-            xml_data = re.sub(org_class, new_class, xml_data)
-
+            xml_data = re.sub("classname=\"", f"classname=\"FTEST_{test.directory}.", xml_data)
             try:
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
@@ -3137,6 +2843,318 @@ class LaunchJob():
         from avocado_result_html import HTMLResult
         result_html = HTMLResult()
         result_html.render(self.result, self)
+
+
+class CoreFileProcessing():
+    """Process core files generated by tests."""
+
+    USE_DEBUGINFO_INSTALL = True
+
+    def __init__(self, log):
+        """Initialize a CoreFileProcessing object.
+
+        Args:
+            log (logger): object configured to log messages
+        """
+        # pylint: disable=import-outside-toplevel
+        from util.distro_utils import detect
+
+        self.log = log
+        self.distro_info = detect()
+
+    def get_stacktraces(self, avocado_logs_dir, test_hosts):
+        """Copy all of the host test log files to the avocado results directory.
+
+        Args:
+            avocado_logs_dir (str): location of the avocado job logs
+            test_hosts (NodeSet): hosts from which to collect core files
+
+        Returns:
+            bool: True if everything was done as expected, False if there were
+                any issues processing core files
+
+        """
+        return_status = True
+
+        # Processing core files is broken on EL7 currently
+        if self.is_el7():
+            self.log.debug("Generating stacktraces is currently not suppotrted on EL7")
+            return return_status
+
+        daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
+
+        # Create a subdirectory in the avocado logs directory for this test
+        self.log.debug("-" * 80)
+        self.log.info("Processing cores from %s in %s", test_hosts, daos_cores_dir)
+        os.makedirs(daos_cores_dir, exist_ok=True)
+
+        # Copy any core files that exist on the test hosts and remove them from the
+        # test host if the copy is successful.  Attempt all of the commands and
+        # report status at the end of the loop.  Include a listing of the file
+        # related to any failed command.
+        commands = [
+            "set -eu",
+            "rc=0",
+            "copied=()",
+            "df -h /var/tmp",
+            "for file in /var/tmp/core.*",
+            "do if [ -e $file ]",
+            "then ls -al $file",
+            "if [ ! -s $file ]",
+            "then ((rc++))",
+            "else if sudo chmod 644 $file && "
+            f"scp $file {get_local_host()}:{daos_cores_dir}/${{file##*/}}-$(hostname -s)",
+            "then copied+=($file)",
+            "if ! sudo rm -fr $file",
+            "then ((rc++))",
+            "fi",
+            "else ((rc++))",
+            "fi",
+            "fi",
+            "fi",
+            "done",
+            "echo Copied ${copied[@]:-no files}",
+            "exit $rc",
+        ]
+        result = run_remote(self.log, test_hosts, "; ".join(commands), timeout=1800)
+        if not result.passed:
+            # we might have still gotten some core files, so don't return here
+            # but save a False return status for later
+            return_status = False
+
+        cores = os.listdir(daos_cores_dir)
+        if not cores:
+            return True
+
+        try:
+            self.install_debuginfos()
+        except LaunchException as error:
+            self.log.debug(error)
+            self.log.debug("Removing core files to avoid archiving them")
+            for corefile in cores:
+                os.remove(os.path.join(daos_cores_dir, corefile))
+            return False
+
+        for corefile in cores:
+            if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
+                continue
+            corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+            run_local(self.log, ['ls', '-l', corefile_fqpn])
+            # can't use the file python magic binding here due to:
+            # https://bugs.astron.com/view.php?id=225, fixed in:
+            # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
+            # but not available to us until that is in a released version
+            # revert the commit this comment is in to see use python magic instead
+            try:
+                gdb_output = run_local(
+                    self.log, ["gdb", "-c", corefile_fqpn, "-ex", "info proc exe", "-ex", "quit"])
+
+                last_line = gdb_output.stdout[-1]
+                cmd = last_line[7:-1]
+                # assume there are no arguments on cmd
+                find_char = "'"
+                if cmd.find(" ") > -1:
+                    # there are arguments on cmd
+                    find_char = " "
+                exe_name = cmd[0:cmd.find(find_char)]
+            except RuntimeError:
+                exe_name = None
+
+            if exe_name:
+                cmd = [
+                    "gdb", f"-cd={daos_cores_dir}",
+                    "-ex", "set pagination off",
+                    "-ex", "thread apply all bt full",
+                    "-ex", "detach",
+                    "-ex", "quit",
+                    exe_name, corefile
+                ]
+                stack_trace_file = os.path.join(daos_cores_dir, f"{corefile}.stacktrace")
+                try:
+                    output = run_local(self.log, cmd, check=False)
+                    with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
+                        stack_trace.writelines(output.stdout)
+                except IOError as error:
+                    self.log.debug("Error writing %s: %s", stack_trace_file, error)
+                    return_status = False
+                except LaunchException as error:
+                    self.log.debug("Error creating %s: %s", stack_trace_file, error)
+                    return_status = False
+            else:
+                self.log.debug(
+                    "Unable to determine executable name from gdb output: '%s'\n"
+                    "Not creating stacktrace", gdb_output)
+                return_status = False
+            self.log.debug("Removing %s", corefile_fqpn)
+            os.unlink(corefile_fqpn)
+
+        return return_status
+
+    def install_debuginfos(self):
+        """Install debuginfo packages.
+
+        NOTE: This does assume that the same daos packages that are installed
+            on the nodes that could have caused the core dump are installed
+            on this node also.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+
+        Raises:
+            LaunchException: if there is an error installing debuginfo packages
+
+        """
+        install_pkgs = [{'name': 'gdb'}]
+        if self.is_el():
+            install_pkgs.append({'name': 'python3-debuginfo'})
+
+        cmds = []
+
+        # -debuginfo packages that don't get installed with debuginfo-install
+        for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
+                    'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
+                    'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
+            try:
+                debug_pkg = self.resolve_debuginfo(pkg)
+            except LaunchException as error:
+                self.log.error("Failed trying to install_debuginfos(): %s", str(error))
+                raise
+
+            if debug_pkg and debug_pkg not in install_pkgs:
+                install_pkgs.append(debug_pkg)
+
+        # remove any "source tree" test hackery that might interfere with RPM installation
+        path = os.path.join(os.path.sep, "usr", "share", "spdk", "include")
+        if os.path.islink(path):
+            cmds.append(["sudo", "rm", "-f", path])
+
+        if self.USE_DEBUGINFO_INSTALL:
+            dnf_args = ["--exclude", "ompi-debuginfo"]
+            if os.getenv("TEST_RPMS", 'false') == 'true':
+                if "suse" in self.distro_info.name.lower():
+                    dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
+                elif "centos" in self.distro_info.name.lower() and self.distro_info.version == "7":
+                    dnf_args.extend(
+                        ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
+                         "python36", "openmpi3", "gcc"])
+                elif self.is_el() and self.distro_info.version == "8":
+                    dnf_args.extend(
+                        ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
+                else:
+                    raise LaunchException(
+                        f"install_debuginfos(): Unsupported distro: {self.distro_info}")
+                cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
+            output = run_local(self.log, ["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
+            rpm_version = output.stdout
+            cmds.append(
+                ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+                + ["daos-client-" + rpm_version, "daos-server-" + rpm_version,
+                   "daos-tests-" + rpm_version])
+        # else:
+        #     # We're not using the yum API to install packages
+        #     # See the comments below.
+        #     kwargs = {'name': 'gdb'}
+        #     yum_base.install(**kwargs)
+
+        # This is how you normally finish up a yum transaction, but
+        # again, we need to employ sudo
+        # yum_base.resolveDeps()
+        # yum_base.buildTransaction()
+        # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
+
+        # Now install a few pkgs that debuginfo-install wouldn't
+        cmd = ["sudo", "dnf", "-y"]
+        if self.is_el() or "suse" in self.distro_info.name.lower():
+            cmd.append("--enablerepo=*debug*")
+        cmd.append("install")
+        for pkg in install_pkgs:
+            try:
+                cmd.append(f"{pkg['name']}-{pkg['version']}-{pkg['release']}")
+            except KeyError:
+                cmd.append(pkg['name'])
+
+        cmds.append(cmd)
+
+        retry = False
+        for cmd in cmds:
+            try:
+                run_local(self.log, cmd, check=True)
+            except LaunchException:
+                # got an error, so abort this list of commands and re-run
+                # it with a dnf clean, makecache first
+                retry = True
+                break
+        if retry:
+            self.log.debug("Going to refresh caches and try again")
+            cmd_prefix = ["sudo", "dnf"]
+            if self.is_el() or "suse" in self.distro_info.name.lower():
+                cmd_prefix.append("--enablerepo=*debug*")
+            cmds.insert(0, cmd_prefix + ["clean", "all"])
+            cmds.insert(1, cmd_prefix + ["makecache"])
+            for cmd in cmds:
+                try:
+                    run_local(self.log, cmd)
+                except LaunchException:
+                    break
+
+    def is_el(self):
+        """Determine if the distro EL based.
+
+        Args:
+            distro (str): distribution to verify
+
+        Returns:
+            list: type of EL distribution
+
+        """
+        el_distros = ["almalinux", "rocky", "centos", "rhel"]
+        return [d for d in el_distros if d in self.distro_info.name.lower()]
+
+    def is_el7(self):
+        """Determine if the distribution is CentOS 7.
+
+        Returns:
+            bool: True if the distribution is CentOS 7
+
+        """
+        return self.is_el() and self.distro_info.version == "7"
+
+    def resolve_debuginfo(self, pkg):
+        """Return the debuginfo package for a given package name.
+
+        Args:
+            pkg (str): a package name
+
+        Raises:
+            LaunchException: if there is an error searching for RPMs
+
+        Returns:
+            dict: dictionary of debug package information
+
+        """
+        package_info = None
+        try:
+            # Eventually use python libraries for this rather than exec()ing out
+            output = run_local(
+                self.log, ["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg],
+                check=False)
+            name, version, release, epoch = output.stdout.split()
+
+            debuginfo_map = {"glibc": "glibc-debuginfo-common"}
+            try:
+                debug_pkg = debuginfo_map[name]
+            except KeyError:
+                debug_pkg = f"{name}-debuginfo"
+            package_info = {
+                "name": debug_pkg,
+                "version": version,
+                "release": release,
+                "epoch": epoch
+            }
+        except ValueError:
+            self.log.debug("Package %s not installed, skipping debuginfo", pkg)
+
+        return package_info
 
 
 def main():
@@ -3367,6 +3385,7 @@ def main():
     if not args.test_servers and not args.list:
         launch.log.error("Error: Missing a required '--test_servers' argument.")
         sys.exit(1)
+    launch.log.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
 
     # Setup the user environment
     try:
@@ -3419,7 +3438,7 @@ def main():
 
     # Execute the tests
     status = launch.run(
-        args.sparse, args.failfast, args.extra_yaml, args.disable_stop_daos, args.archive,
+        args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
         args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
 
     # Process the avocado run return codes and only treat job and command failures as errors.
