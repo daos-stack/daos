@@ -1777,7 +1777,8 @@ exit:
 		}
 	}
 
-	D_FREE(iv_value);
+	if (iv_value)
+		D_FREE(iv_value);
 
 	/* ADDREF done in lookup above */
 	if (ivns_internal)

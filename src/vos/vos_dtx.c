@@ -229,7 +229,8 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		dae->dae_oid_cnt = 0;
 	}
 
-	D_FREE(dae->dae_records);
+	if (dae->dae_records)
+		D_FREE(dae->dae_records);
 	dae->dae_rec_cap = 0;
 	DAE_REC_CNT(dae) = 0;
 }
@@ -2911,7 +2912,8 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 {
 	if (dth->dth_rsrvds != NULL) {
 		D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
-		D_FREE(dth->dth_deferred);
+		if (dth->dth_deferred)
+			D_FREE(dth->dth_deferred);
 		if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
 			D_FREE(dth->dth_rsrvds);
 	}

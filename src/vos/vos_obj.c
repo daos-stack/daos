@@ -551,7 +551,8 @@ reset:
 		D_FREE(daes);
 	if (dces)
 		D_FREE(dces);
-	vos_ts_set_free(ts_set);
+	if (ts_set)
+		vos_ts_set_free(ts_set);
 
 	return rc;
 }

@@ -458,7 +458,8 @@ commit:
 	}
 
 out:
-	D_FREE(tgt_array);
+	if (tgt_array)
+		D_FREE(tgt_array);
 
 	while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
 				       dre_link)) != NULL)

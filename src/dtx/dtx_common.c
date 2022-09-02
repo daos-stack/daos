@@ -1304,7 +1304,8 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
-	D_FREE(dth->dth_oid_array);
+	if (dth->dth_oid_array)
+		D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
 
 	return result;

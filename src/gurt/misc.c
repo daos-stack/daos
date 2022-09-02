@@ -329,7 +329,8 @@ d_rank_list_free(d_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
-	D_FREE(rank_list->rl_ranks);
+	if (rank_list->rl_ranks)
+		D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
 }
 
