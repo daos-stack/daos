@@ -36,34 +36,6 @@ class DfuseCommand(ExecutableCommand):
         # Environment variable names to export when running dfuse
         self.update_env_names(["D_LOG_FILE"])
 
-    @staticmethod
-    def __param_sort(key):
-        """Key sort for get_param_names.
-
-        Args:
-            key (str): the key
-
-        Returns:
-            int: the sort priority
-
-        """
-        return {
-            'mount_dir': 1,
-            'puuid': 2,
-            'cuuid': 3
-        }.get(key, 0)
-
-    def get_param_names(self):
-        """Override the original get_param_names to apply custom sort.
-
-        Returns:
-            list: the sorted param names.
-
-        """
-        param_names = super().get_param_names()
-        param_names.sort(key=self.__param_sort)
-        return param_names
-
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.
 
