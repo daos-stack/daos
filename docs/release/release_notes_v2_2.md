@@ -52,40 +52,46 @@ This release adds the following usability improvements:
   support for LED management of VMD-managed NVMe disks,
   and hot-plug support for VMD-managed NVMe disks.
 
-- The `dmg pool create` command now accepts pool size specification in percent.
+- The `dmg pool create` command now accepts pool size specification in percent
+  of free capacity, in addition to the options to specify pool size in absolute
+  capacity numbers.
 
 - POSIX containers (DFS) now support file modification time (mtime).
 
 ### Known Issues and limitations
 
-- [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317)
+- [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317):
   Running the Mellanox-provided `mlnxofedinstall` script to install a new version of MLNX\_OFED,
   while the `mercury-ucx` RPM is already installed, will un-install `mercury-ucx`
   (as well as mercury-ucx-debuginfo if the debuginfo RPMs are installed).
   This leaves DAOS non-functional after the MOFED update.
-  The workaround is to run `{yum|dnf|zypper} install mercury-ucx [mercury-ucx-debuginfo]`
+  Workaround: Run `{yum|dnf|zypper} install mercury-ucx [mercury-ucx-debuginfo]`
   after the MLNX\_OFED update and before starting DAOS again.
 
-- Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
+- [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and
+  [SPDK-2587](https://github.com/spdk/spdk/issues/2587):
+  Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
   `daos_server storage prepare -n [--reset]` command) can sporadically cause
-  the NVMe SSDs to become inaccessible. This situation can be corrected by
+  the NVMe SSDs to become inaccessible.
+  Workaround: This situation can be corrected by
   running `rmmod vfio_pci; modprobe vfio_pci` and `rmmod nvme; modprobe nvme`.
-  See [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and the
-  corresponding [SPDK ticket](https://github.com/spdk/spdk/issues/2587).
 
-- For Replication and Erasure Coding (EC), in DAOS 2.2 the redundancy level (`rf_lvl`)
+- [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215):
+  For Replication and Erasure Coding (EC), in DAOS 2.2 the redundancy level (`rf_lvl`)
   is set to `1 (rank=engine)`. On servers with more than one engine per server,
   setting the redundancy level to `2 (server)` would be more appropriate
   but the `daos cont create` command currently does not support this
-  [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215).
+  No workaround is available at this point.
 
 - No OPA/PSM2 support.
   Please refer to the "Fabric Support" section of the
   [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/) for details.
+  No workaround is available at this point.
 
-- Premature ENOSPC error / [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943)
-  Reclaiming free NVMe space under heavy I/O load can cause early out-of-space errors
-  to be reported to applications.
+- [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943):
+  Premature ENOSPC error / Reclaiming free NVMe space under heavy I/O load can cause early
+  out-of-space errors to be reported to applications.
+  No workaround is available at this point.
 
 ### Bug fixes
 
@@ -120,7 +126,7 @@ The DAOS 2.2 release includes fixes for numerous defects, including:
 Visit the [online documentation](https://docs.daos.io/v2.2/) for more
 information. All DAOS project source code is maintained in the
 [https://github.com/daos-stack/daos](https://github.com/daos-stack/daos) repository.
-Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
+Please visit this [link](https://github.com/daos-stack/daos/blob/release/2.2/LICENSE)
 for more information on the licenses.
 
 Refer to the [System Deployment](https://docs.daos.io/v2.2/admin/deployment/)
