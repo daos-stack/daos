@@ -62,11 +62,19 @@ func (hn *hostName) Parse(input string) error {
 
 	matches := re.FindStringSubmatch(input)
 	if matches == nil {
-		// Try a special case for IP addresses, where the first three octets
-		// are treated as a prefix, and the fourth is treated as a host number.
-		re = regexp.MustCompile(`^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})(.*)`)
-		if matches = re.FindStringSubmatch(input); matches == nil {
-			return fmt.Errorf("invalid hostname %q", input)
+		if strings.Contains(input, ".") {
+			// Try a special case for IP addresses, where the first three octets
+			// are treated as a prefix, and the fourth is treated as a host number.
+			re = regexp.MustCompile(`^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})(.*)`)
+			if matches = re.FindStringSubmatch(input); matches == nil {
+				return fmt.Errorf("invalid hostname %q", input)
+			}
+		} else {
+			// Try a special case for hostnames with negative ports
+			re = regexp.MustCompile(`^([a-zA-Z\-]+)(\d+)?(.*)?`)
+			if matches = re.FindStringSubmatch(input); matches == nil {
+				return fmt.Errorf("invalid hostname %q", input)
+			}
 		}
 	}
 
