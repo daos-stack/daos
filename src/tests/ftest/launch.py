@@ -774,7 +774,8 @@ def setup_test_files(log, test_list, args, yaml_dir):
     """
     # Replace any placeholders in the extra yaml file, if provided
     if args.extra_yaml:
-        args.extra_yaml = replace_yaml_file(log, args.extra_yaml, args, yaml_dir)
+        args.extra_yaml = [
+            replace_yaml_file(log, extra, args, yaml_dir) for extra in args.extra_yaml]
 
     for test in test_list:
         test.yaml_file = replace_yaml_file(log, test.yaml_file, args, yaml_dir)
@@ -782,7 +783,7 @@ def setup_test_files(log, test_list, args, yaml_dir):
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
         if args.extra_yaml:
-            command.append(args.extra_yaml)
+            command.extend(args.extra_yaml)
         command.extend(["--summary", "3"])
         run_local(log, command, check=False)
 
@@ -1422,8 +1423,9 @@ class AvocadoInfo():
         Args:
             test (TestInfo): the test information
             tag_filters (list): optional '--filter-by-tags' arguments
-            sparse (bool): _description_
+            sparse (bool): whether or not to provide sparse output of the test execution
             failfast (bool): _description_
+            extra_yaml (list): additional yaml files to include on the command line
 
         Returns:
             list: avocado run command
@@ -1450,7 +1452,7 @@ class AvocadoInfo():
             command.extend(["--failfast", "on"])
         command.extend(["--mux-yaml", test.yaml_file])
         if extra_yaml:
-            command.append(extra_yaml)
+            command.extend(extra_yaml)
         command.extend(["--", str(test)])
         return command
 
@@ -2272,20 +2274,20 @@ class LaunchJob():
         # size exceeding the threshold.
         if archive:
             remote_files = OrderedDict()
-            # remote_files["local configuration files"] = {
-            #     "source": os.getenv("DAOS_TEST_LOG_DIR", "/tmp"),
-            #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
-            #     "pattern": "*_*_*.yaml",
-            #     "hosts": self.local_host,
-            #     "depth": 1,
-            # }
-            # remote_files["remote configuration files"] = {
-            #     "source": os.path.join(os.sep, "etc", "daos"),
-            #     "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
-            #     "pattern": "daos_*.yml",
-            #     "hosts": test.hosts.all_remote,
-            #     "depth": 1,
-            # }
+            remote_files["local configuration files"] = {
+                "source": os.getenv("DAOS_TEST_LOG_DIR", "/tmp"),
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "pattern": "*_*_*.yaml",
+                "hosts": self.local_host,
+                "depth": 1,
+            }
+            remote_files["remote configuration files"] = {
+                "source": os.path.join(os.sep, "etc", "daos"),
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "pattern": "daos_*.yml",
+                "hosts": test.hosts.all_remote,
+                "depth": 1,
+            }
             remote_files["daos log files"] = {
                 "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
@@ -2858,10 +2860,9 @@ class CoreFileProcessing():
             # but not available to us until that is in a released version
             # revert the commit this comment is in to see use python magic instead
             try:
-                gdb_output = run_local(
+                result = run_local(
                     self.log, ["gdb", "-c", corefile_fqpn, "-ex", "info proc exe", "-ex", "quit"])
-
-                last_line = gdb_output.stdout[-1]
+                last_line = result.stdout.splitlines()[-1]
                 cmd = last_line[7:-1]
                 # assume there are no arguments on cmd
                 find_char = "'"
@@ -2869,7 +2870,8 @@ class CoreFileProcessing():
                     # there are arguments on cmd
                     find_char = " "
                 exe_name = cmd[0:cmd.find(find_char)]
-            except RuntimeError:
+            except LaunchException:
+                self.log.debug("Error obtaining executable name for stacktrace", exc_info=True)
                 exe_name = None
 
             if exe_name:
@@ -2893,9 +2895,8 @@ class CoreFileProcessing():
                     self.log.debug("Error creating %s: %s", stack_trace_file, error)
                     return_status = False
             else:
-                self.log.debug(
-                    "Unable to determine executable name from gdb output: '%s'\n"
-                    "Not creating stacktrace", gdb_output)
+                self.log.debug("Unable to determine executable name from gdb output")
+                self.log.debug("Not creating stacktrace")
                 return_status = False
             self.log.debug("Removing %s", corefile_fqpn)
             os.unlink(corefile_fqpn)
@@ -3137,7 +3138,7 @@ def main():
         help="disable stopping DAOS servers and clients between running tests")
     parser.add_argument(
         "-e", "--extra_yaml",
-        action="store",
+        action="append",
         default=None,
         type=str,
         help="additional yaml file to include with the test yaml file. Any "
