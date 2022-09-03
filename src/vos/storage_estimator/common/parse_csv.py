@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 '''
   (C) Copyright 2019-2022 Intel Corporation.
 

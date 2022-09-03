@@ -1,3 +1,9 @@
+daos (2.3.100-23) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 19 Sep 2022 11:41:35 -0500
+
 daos (2.3.100-22) unstable; urgency=medium
   [ Jeff Olivier ]
   * Move io_conf files from bin to TESTING

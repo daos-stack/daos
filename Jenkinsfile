@@ -441,7 +441,7 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -477,7 +477,7 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'

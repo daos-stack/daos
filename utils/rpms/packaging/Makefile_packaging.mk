@@ -271,6 +271,9 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	cd $(DEB_BUILD); dpkg-buildpackage -S --no-sign --no-check-builddeps
 
 $(SRPM): $(SPEC) $(SOURCES)
+	if [ -f bz-1955184_find-requires ]; then \
+	    chmod 755 bz-1955184_find-requires;  \
+	fi
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
 
 srpm: $(SRPM)
@@ -375,18 +378,18 @@ podman_chrootbuild:
 	    exit 1;                                                  \
 	fi
 	rm -f /var/lib/mock/$(CHROOT_NAME)/result/{root,build}.log
-	if ! podman run --rm --privileged -w $(TOPDIR) -v=$(TOPDIR)/..:$(TOPDIR)/..                                                     \
-	                -it $(subst +,-,$(CHROOT_NAME))-chrootbuild                                                                     \
-	                bash -c 'if ! DISTRO_REPOS=false                                                                                \
-	                              REPO_FILE_URL=$(REPO_FILE_URL)                                                                    \
-	                              make REPO_FILES_PR=$(REPO_FILES_PR)                                                               \
-	                                   MOCK_OPTIONS=$(MOCK_OPTIONS)                                                                 \
-	                                   CHROOT_NAME=$(CHROOT_NAME) -C $(CURDIR) chrootbuild; then                                    \
-	                                 cat /var/lib/mock/$(CHROOT_NAME)/{result/{root,build},root/builddir/build/BUILD/*/config}.log; \
-	                                 exit 1;                                                                                        \
-	                             fi;                                                                                                \
-	                             rpmlint $$(ls /var/lib/mock/$(CHROOT_NAME)/result/*.rpm |                                          \
-	                                 grep -v -e debuginfo -e debugsource -e src.rpm)'
+	podman run --rm --privileged -w $(TOPDIR) -v=$(TOPDIR)/..:$(TOPDIR)/..                                                     \
+	           -it $(subst +,-,$(CHROOT_NAME))-chrootbuild                                                                     \
+	           bash -c 'if ! DISTRO_REPOS=false                                                                                \
+	                         REPO_FILE_URL=$(REPO_FILE_URL)                                                                    \
+	                         make REPO_FILES_PR=$(REPO_FILES_PR)                                                               \
+	                              MOCK_OPTIONS=$(MOCK_OPTIONS)                                                                 \
+	                              CHROOT_NAME=$(CHROOT_NAME) -C $(CURDIR) chrootbuild; then                                    \
+	                            cat /var/lib/mock/$(CHROOT_NAME)/{result/{root,build},root/builddir/build/BUILD/*/config}.log; \
+	                            exit 1;                                                                                        \
+	                        fi;                                                                                                \
+	                        rpmlint $$(ls /var/lib/mock/$(CHROOT_NAME)/result/*.rpm |                                          \
+	                            grep -v -e debuginfo -e debugsource -e src.rpm)'
 
 docker_chrootbuild:
 	if ! $(DOCKER) build --build-arg UID=$$(id -u) -t chrootbuild   \

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 

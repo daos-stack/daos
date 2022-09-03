@@ -1,4 +1,3 @@
-#!/bin/bash
 # Copyright 2020-2022 Intel Corporation
 # All rights reserved.
 #

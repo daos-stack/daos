@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +7,7 @@
 import time
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
+
 
 class DaosAggregationThrottling(IorTestBase):
     # pylint: disable=too-many-ancestors
