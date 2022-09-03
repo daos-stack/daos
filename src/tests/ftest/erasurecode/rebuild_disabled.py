@@ -1,11 +1,11 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
+
 
 class EcodDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors

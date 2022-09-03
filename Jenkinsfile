@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2022 Intel Corporation
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -80,6 +80,29 @@ Integer getuid() {
                         returnStdout: true).trim()
     }
     return cached_uid
+}
+
+void fixup_rpmlintrc() {
+    if (env.SCONS_FAULTS_ARGS != 'BUILD_TYPE=dev') {
+        return
+    }
+
+    List go_bins = ['/usr/bin/dmg',
+                    '/usr/bin/daos',
+                    '/usr/bin/daos_agent',
+                    '/usr/bin/hello_drpc',
+                    '/usr/bin/daos_firmware',
+                    '/usr/bin/daos_admin',
+                    '/usr/bin/daos_server']
+
+    String content = readFile(file: 'utils/rpms/daos.rpmlintrc') + '\n\n' +
+                     '# https://daosio.atlassian.net/browse/DAOS-11534\n'
+
+    go_bins.each { bin ->
+        content += 'addFilter("W: position-independent-executable-suggested ' + bin + '")\n'
+    }
+
+    writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
 pipeline {
@@ -445,7 +468,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -481,7 +505,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'

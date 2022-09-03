@@ -1,3 +1,9 @@
+daos (2.3.101-5) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 6 Jan 2023 09:04:51 -0400
+
 daos (2.3.101-4) unstable; urgency=medium
   [ Tom Nabarro ]
   * Update SPDK dependency requirement to greater than or equal to 22.01.2.

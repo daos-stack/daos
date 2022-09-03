@@ -1,10 +1,10 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeFio, check_aggregation_status
+
 
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
