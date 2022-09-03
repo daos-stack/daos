@@ -25,6 +25,7 @@
 
 #define DF_ENGINE	"Check engine (gen: "DF_X64")"
 #define DP_ENGINE(ins)	(ins)->ci_bk.cb_gen
+#define CHK_MSG_BUFLEN	320
 
 static struct chk_instance	*chk_engine;
 
@@ -366,7 +367,7 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[160] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	int				 decision = -1;
@@ -426,6 +427,12 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		option_nr = 2;
@@ -439,7 +446,8 @@ report:
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	snprintf(msg, 159, "Check engine detects orphan %s entry in pool map for "
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check engine detects orphan %s entry in pool map for "
 		 DF_UUIDF", rank %u, index %d",
 		 index < 0 ? "rank" : "shard", DP_UUID(cpr->cpr_uuid), rank, index);
 	cru.cru_msg = msg;
@@ -522,7 +530,7 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[160] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	int				 decision = -1;
@@ -563,6 +571,12 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		option_nr = 2;
@@ -576,7 +590,8 @@ report:
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	snprintf(msg, 159, "Check engine detects dangling %s entry in pool map for pool "
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check engine detects dangling %s entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u",
 		 comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index);
@@ -648,7 +663,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[256] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	int				 rc;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
@@ -662,7 +677,8 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_act = act;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	snprintf(msg, 255, "Check engine detects unknown target entry in pool map for pool "
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check engine detects unknown target entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u, status %u, skip.\n"
 		 "You can change its status via DAOS debug tool if it is not for downgrade case.",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
@@ -984,7 +1000,7 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[160] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN - 1] = { 0 };
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	int				 decision = -1;
@@ -1032,6 +1048,12 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		option_nr = 2;
@@ -1046,7 +1068,8 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
-	snprintf(msg, 159, "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF,
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF,
 		 DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
 	cru.cru_msg = msg;
 	cru.cru_options = options;
@@ -1138,7 +1161,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[320] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	int				 decision = -1;
@@ -1187,6 +1210,12 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -1227,6 +1256,12 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -1242,7 +1277,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
-	snprintf(msg, 319,
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects inconsistent container label: SVC %s vs property %s",
 		 label != NULL ? (char *)label->iov_buf : "(null)", ccr->ccr_label_prop != NULL ?
 		 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)");
@@ -2491,10 +2526,27 @@ chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 	if (rc != 0)
 		goto out;
 
+	/*
+	 * NOTE: If the rank dead before DAOS check start, then subsequent check start will
+	 *	 get failure, and then the control plane needs to decide whether or not to
+	 *	 exclude the dead rank from the system and re-run DAOS check.
+	 *
+	 *	 If the rank dead at (or before) CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST, then
+	 *	 related PS leaders will know that when list containers, and then mark related
+	 *	 pools as 'failed'.
+	 *
+	 *	 If the rank dead after CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST, then if such
+	 *	 rank is not involved in subsequent DAOS check, then no affect for current
+	 *	 check instance; otherwise, related pools will be marked as 'failed' when
+	 *	 try ro access the dead rank.
+	 *
+	 *	 So here, it is not ncessary to find out the affected pools and fail them
+	 *	 immediately when the death event reported, instead, that will be handled
+	 *	 sometime later as the DAOS check going.
+	 */
+
 	rc = crt_group_secondary_modify(ins->ci_iv_group, rank_list, rank_list,
 					CRT_GROUP_MOD_OP_REPLACE, version);
-
-	/* TBD: mark related pools as 'failed'. */
 
 out:
 	d_rank_list_free(rank_list);
