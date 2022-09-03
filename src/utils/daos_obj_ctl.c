@@ -381,6 +381,7 @@ static void
 cont_fini(struct credit_context *tsc)
 {
 	int	rc;
+
 	rc = daos_cont_close(tsc->tsc_coh, NULL);
 	if (rc)
 		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
