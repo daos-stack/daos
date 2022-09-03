@@ -1620,7 +1620,8 @@ out:
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && obj_rpc_is_update(rpc) && !dth->dth_pinned && sched_cur_seq() != sched_seq) {
+	if (rc == 0 && obj_rpc_is_update(rpc) && dth->dth_need_validation &&
+	    sched_cur_seq() != sched_seq) {
 		daos_epoch_t	epoch = 0;
 		int		rc1;
 
@@ -1650,34 +1651,15 @@ out:
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	     daos_iod_t *split_iods, struct dcs_iod_csums *split_csums,
-	     uint64_t *split_offs, struct dtx_handle *dth, bool pin)
+	     uint64_t *split_offs, struct dtx_handle *dth)
 {
 	int	rc;
 	int	count = 0;
 
 again:
-	if (pin) {
-		rc = vos_dtx_attach(dth, false);
-		if (rc != 0)
-			return rc;
-	}
-
 	rc = obj_local_rw_internal(rpc, ioc, split_iods, split_csums,
 				   split_offs, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (!dth->dth_pinned) {
-			int	rc1;
-
-			/* There will be CPU yield during DTX refresh. We need
-			 * to pin current DTX before refreshing other DTX(es),
-			 * that will avoid race with the resent RPC during the
-			 * DTX refresh.
-			 */
-			rc1 = vos_dtx_attach(dth, false);
-			if (rc1 != 0)
-				return -DER_INPROGRESS;
-		}
-
 		if (unlikely(++count % 10 == 3)) {
 			struct dtx_share_peer	*dsp;
 
@@ -2321,9 +2303,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * Pre-allocate DTX entry for handling resend under such case.
 	 */
 
-	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth,
-			  (orw->orw_bulks.ca_arrays != NULL ||
-			   orw->orw_bulks.ca_count != 0) ? true : false);
+	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 			 (rc == -DER_EXIST &&
@@ -2355,7 +2335,6 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 		struct dcs_iod_csums	*csums;
 		uint64_t		*offs;
 		int			 rc = 0;
-		bool			 pin;
 
 		if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 			D_GOTO(comp, rc = -DER_IO);
@@ -2404,15 +2383,8 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 			csums = NULL;
 		}
 
-		if (!dlh->dlh_handle.dth_solo ||
-		    orw->orw_bulks.ca_arrays != NULL ||
-		    orw->orw_bulks.ca_count != 0)
-			pin = true;
-		else
-			pin = false;
-
 		rc = obj_local_rw(exec_arg->rpc, exec_arg->ioc, iods, csums,
-				  offs, &dlh->dlh_handle, pin);
+				  offs, &dlh->dlh_handle);
 		if (rc != 0)
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				 (rc == -DER_EXIST && (orw->orw_api_flags &
@@ -2539,7 +2511,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
-			rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth, false);
+			rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth);
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
 
@@ -3135,7 +3107,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 
 static int
 obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
-		struct obj_io_context *ioc, struct dtx_handle *dth, bool pin)
+		struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	struct ds_cont_child *cont = ioc->ioc_coc;
 	int	rc = 0;
@@ -3143,16 +3115,9 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	if (daos_is_zero_dti(&opi->opi_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
-		pin = false;
 	}
 
 again:
-	if (pin) {
-		rc = vos_dtx_attach(dth, false);
-		if (rc != 0)
-			return rc;
-	}
-
 	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
 	if (rc != 0)
 		goto out;
@@ -3188,19 +3153,6 @@ again:
 	}
 
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (!dth->dth_pinned) {
-			int	rc1;
-
-			/* There will be CPU yield during DTX refresh. We need
-			 * to pin current DTX before refreshing other DTX(es),
-			 * that will avoid race with the resent RPC during the
-			 * DTX refresh.
-			 */
-			rc1 = vos_dtx_attach(dth, false);
-			if (rc1 != 0)
-				return -DER_INPROGRESS;
-		}
-
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -3287,8 +3239,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
 		D_GOTO(out, rc = -DER_IO);
 
-	/* non-leader local RPC handler, do not need pin the DTX entry.  */
-	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
+	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 			 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -3371,9 +3322,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
-		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
-				     &dlh->dlh_handle,
-				     !dlh->dlh_handle.dth_solo);
+		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -4095,7 +4044,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
-	if (rc == 0 && dth->dth_modification_cnt > 0 && !dth->dth_pinned &&
+	if (rc == 0 && dth->dth_modification_cnt > 0 && dth->dth_need_validation &&
 	    sched_cur_seq() != sched_seq) {
 		daos_epoch_t	epoch = 0;
 		int		rc1;
@@ -4203,34 +4152,14 @@ out:
 
 static int
 ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
-		       struct daos_cpd_disp_ent *dcde,
-		       struct daos_cpd_sub_req *dcsrs,
-		       struct obj_io_context *ioc,
-		       struct dtx_handle *dth, bool pin)
+		       struct daos_cpd_disp_ent *dcde, struct daos_cpd_sub_req *dcsrs,
+		       struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	int	rc;
 
 again:
-	if (pin) {
-		rc = vos_dtx_attach(dth, false);
-		if (rc != 0)
-			return rc;
-	}
-
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
-		/* There will be CPU yield during DTX refresh. We need to pin current DTX before
-		 * refreshing other DTX(es), that will avoid race with the resent RPC during the
-		 * DTX refresh.
-		 */
-		if (!dth->dth_pinned) {
-			int	rc1;
-
-			rc1 = vos_dtx_attach(dth, false);
-			if (rc1 != 0)
-				return -DER_INPROGRESS;
-		}
-
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -4308,14 +4237,13 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth,
-				    dth->dth_modification_cnt > 0 ? true : false);
+	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth);
 
 	/* For the case of only containing read sub operations, we will
 	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
 	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
-		rc = vos_dtx_attach(dth, true);
+		rc = vos_dtx_attach(dth, true, false);
 
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
@@ -4343,7 +4271,6 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			struct daos_cpd_disp_ent	*dcde;
 			struct daos_cpd_sub_head	*dcsh;
 			struct daos_cpd_sub_req		*dcsrs;
-			bool				 pin;
 
 			dcde = ds_obj_cpd_get_dcde(dca->dca_rpc,
 						   dca->dca_idx, 0);
@@ -4358,16 +4285,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 			dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
 			dcsrs = ds_obj_cpd_get_dcsr(dca->dca_rpc, dca->dca_idx);
-
-			if (dlh->dlh_normal_sub_cnt > 0 || dlh->dlh_delay_sub_cnt > 0 ||
-			    dlh->dlh_handle.dth_modification_cnt > 0)
-				pin = true;
-			else
-				pin = false;
-
 			rc = ds_cpd_handle_one_wrap(dca->dca_rpc, dcsh, dcde,
-						    dcsrs, ioc,
-						    &dlh->dlh_handle, pin);
+						    dcsrs, ioc, &dlh->dlh_handle);
 		}
 
 comp:

@@ -608,20 +608,20 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Multiple system states ({}) detected:\n  {}".format(states, data))
         return states.pop()
 
-    def check_rank_state(self, rank, valid_state, max_checks=1):
-        """Check the state of single rank in DAOS system.
+    def check_rank_state(self, ranks, valid_states, max_checks=1):
+        """Check the states of list of ranks in DAOS system.
 
         Args:
-            rankv(int): daos rank whose state need's to be checked
-            valid_state (str): expected state for the rank
+            ranks(list): daos rank list whose state need's to be checked
+            valid_states (list): list of expected states for the rank
             max_checks (int, optional): number of times to check the state
                 Defaults to 1.
         Raises:
             ServerFailed: if there was error obtaining the data for daos
                           system query
         Returns:
-            bool: returns True if there is a match for checked state,
-                  else False.
+            list: returns list of failed rank(s) if state does
+                  not match the expected state, otherwise returns empty list.
 
         """
         checks = 0
@@ -633,10 +633,14 @@ class DaosServerManager(SubprocessManager):
                 # The regex failed to get the rank and state
                 raise ServerFailed("Error obtaining {} output: {}".format(self.dmg, data))
             checks += 1
-            if data[rank]["state"] == valid_state:
-                return True
+            failed_ranks = []
+            for rank in ranks:
+                if data[rank]["state"] not in valid_states:
+                    failed_ranks.append(rank)
+            if not failed_ranks:
+                return []
 
-        return False
+        return failed_ranks
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
