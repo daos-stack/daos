@@ -292,13 +292,15 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
-/** Enable any version specific features on the pool
+/** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param feats	[IN]	Features to enable
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
+ *
+ * \return	0 on success, error otherwise
  */
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -1064,15 +1066,18 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
+ * The maximum write epoch for the object can be returned at the same time
+ * as the min or max query. Alternatively, this API can be used to only query
+ * the maximum write for an object if no flags are given.
+ *
  * \param[in]	coh		Container open handle.
  * \param[in]	oid		Object id
  * \param[in]	flags		mask with the following options:
  *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
  *				DAOS_GET_MAX, DAOS_GET_MIN
- *				User has to indicate whether to query the MAX or MIN, in
- *				addition to what needs to be queried. Providing
- *				(MAX | MIN) in any combination will return an error.
- *				i.e. user can only query MAX or MIN in one call.
+ *				If the user isn't querying max_write, they must specify either
+ *				DAOS_GET_MAX or DAOS_GET_MIN, exclusively. Anything else is
+ *				an error.
  * \param[in,out]
  *		dkey		[in]: allocated integer dkey. User can provide the dkey
  *				if not querying the max or min dkey.
@@ -1084,7 +1089,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx		max or min offset in dkey/akey, and the size of the
  *				extent at the offset. If there are no visible array
  *				records, the size in the recx returned will be 0.
- * \param[out]	max_write	Optional: Returns max write epoch for object
+ * \param[out]	max_write	Optional: Returns max write epoch for object.
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
