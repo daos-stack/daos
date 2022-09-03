@@ -1490,8 +1490,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	dfs_attr_t		dattr;
 	char			str[37];
 	struct daos_prop_co_roots roots;
-	int			rc;
-	int			rc2;
+	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
 	uint32_t		pa_domain;
