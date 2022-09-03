@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,10 +70,18 @@ CRT_RPC_DEFINE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DEFINE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 	       DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DEFINE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
+CRT_RPC_DEFINE(cont_open_v7, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V7)
+CRT_RPC_DEFINE(cont_open_v6, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V6)
 CRT_RPC_DEFINE(cont_open_bylabel, DAOS_ISEQ_CONT_OPEN_BYLABEL,
 	       DAOS_OSEQ_CONT_OPEN_BYLABEL)
+CRT_RPC_DEFINE(cont_open_bylabel_v7, DAOS_ISEQ_CONT_OPEN_BYLABEL,
+	       DAOS_OSEQ_CONT_OPEN_BYLABEL_V7)
+CRT_RPC_DEFINE(cont_open_bylabel_v6, DAOS_ISEQ_CONT_OPEN_BYLABEL,
+	       DAOS_OSEQ_CONT_OPEN_BYLABEL_V6)
 CRT_RPC_DEFINE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 CRT_RPC_DEFINE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
+CRT_RPC_DEFINE(cont_query_v7, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY_V7)
+CRT_RPC_DEFINE(cont_query_v6, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY_V6)
 CRT_RPC_DEFINE(cont_oid_alloc, DAOS_ISEQ_CONT_OID_ALLOC,
 		DAOS_OSEQ_CONT_OID_ALLOC)
 CRT_RPC_DEFINE(cont_attr_list, DAOS_ISEQ_CONT_ATTR_LIST,
@@ -111,17 +119,30 @@ CRT_RPC_DEFINE(cont_acl_delete, DAOS_ISEQ_CONT_ACL_DELETE,
 	.prf_co_ops  = NULL,	\
 }
 
-static struct crt_proto_rpc_format cont_proto_rpc_fmt[] = {
-	CONT_PROTO_CLI_RPC_LIST,
+static struct crt_proto_rpc_format cont_proto_rpc_fmt_v7[] = {
+	CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7),
+	CONT_PROTO_SRV_RPC_LIST,
+};
+
+static struct crt_proto_rpc_format cont_proto_rpc_fmt_v6[] = {
+	CONT_PROTO_CLI_RPC_LIST(6, ds_cont_op_handler_v6),
 	CONT_PROTO_SRV_RPC_LIST,
 };
 
 #undef X
 
-struct crt_proto_format cont_proto_fmt = {
+struct crt_proto_format cont_proto_fmt_v7 = {
 	.cpf_name  = "cont",
-	.cpf_ver   = DAOS_CONT_VERSION,
-	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt),
-	.cpf_prf   = cont_proto_rpc_fmt,
+	.cpf_ver   = 7,
+	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt_v7),
+	.cpf_prf   = cont_proto_rpc_fmt_v7,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_CONT_MODULE, 0)
+};
+
+struct crt_proto_format cont_proto_fmt_v6 = {
+	.cpf_name  = "cont",
+	.cpf_ver   = 6,
+	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt_v6),
+	.cpf_prf   = cont_proto_rpc_fmt_v6,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_CONT_MODULE, 0)
 };

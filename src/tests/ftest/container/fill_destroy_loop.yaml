@@ -1,0 +1,19 @@
+hosts:
+  test_servers: 1
+server_config:
+  name: daos_server
+timeout: 900
+pool:
+  name: daos_server
+  control_method: dmg
+  size: 300M
+  testloop: 100
+container:
+  control_method: daos
+  oclass: SX
+  type: POSIX
+  object_qty: 1
+  record_qty: 1
+  data_size: 1024000
+  akey_size: 5
+  dkey_size: 5
