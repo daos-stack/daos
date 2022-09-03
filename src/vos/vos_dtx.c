@@ -1795,8 +1795,12 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (mbs != NULL)
 			dae->dae_maybe_shared = 1;
 
-		if (dae->dae_dbd == NULL)
+		if (dae->dae_dbd == NULL) {
+			if (for_refresh)
+				D_ERROR("Hit non-prepared DTX "DF_DTI" during REFRESH\n",
+					DP_DTI(dti));
 			return -DER_INPROGRESS;
+		}
 
 		if (epoch != NULL) {
 			daos_epoch_t	e = *epoch;
@@ -1813,8 +1817,11 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
 			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
 			 */
-			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
+			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER)) {
+				D_ERROR("Hit in-resync prepared DTX "DF_DTI" during REFRESH\n",
+					DP_DTI(dti));
 				return -DER_INPROGRESS;
+			}
 
 			return DTX_ST_PREPARED;
 		}
@@ -1838,8 +1845,11 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		}
 	}
 
-	if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
+	if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed) {
+		if (for_refresh)
+			D_ERROR("Hit unknown DTX "DF_DTI" during REFRESH\n", DP_DTI(dti));
 		rc = -DER_INPROGRESS;
+	}
 
 	return rc;
 }
