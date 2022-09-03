@@ -126,59 +126,67 @@ class DmgCommandBase(YamlCommand):
             else:
                 self.sub_command_class = None
 
-        class DisableSubCommand(CommandWithParameters):
+        class DisableSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check disable command."""
 
             def __init__(self):
                 """Create a dmg check disable object."""
                 super().__init__("/run/dmg/check/disable/*", "disable")
+                self.pool = PositionalParameter(1)
 
-        class EnableSubCommand(CommandWithParameters):
+        class EnableSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check enable command."""
 
             def __init__(self):
                 """Create a dmg check enable object."""
                 super().__init__("/run/dmg/check/enable/*", "enable")
+                self.pool = PositionalParameter(1)
 
-        class PropSubCommand(CommandWithParameters):
+        class PropSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check prop command."""
 
             def __init__(self):
                 """Create a dmg check prop object."""
                 super().__init__("/run/dmg/check/prop/*", "prop")
+                self.pool = PositionalParameter(1)
 
-        class QuerySubCommand(CommandWithParameters):
+        class QuerySubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check query command."""
 
             def __init__(self):
                 """Create a dmg check query object."""
                 super().__init__("/run/dmg/check/query/*", "query")
+                self.pool = PositionalParameter(1)
 
-        class RepairSubCommand(CommandWithParameters):
+        class RepairSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check repair command."""
 
             def __init__(self):
                 """Create a dmg check repair object."""
                 super().__init__("/run/dmg/check/repair/*", "repair")
+                self.seq_num = PositionalParameter(1)
+                self.action = PositionalParameter(2)
                 self.for_all = FormattedParameter("--for-all", False)
 
-        class StartSubCommand(CommandWithParameters):
+        class StartSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check start command."""
 
             def __init__(self):
                 """Create a dmg check start object."""
                 super().__init__("/run/dmg/check/start/*", "start")
+                self.pool = PositionalParameter(1)
                 self.dry_run = FormattedParameter("--dry-run", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.failout = FormattedParameter("--failout", False)
                 self.auto = FormattedParameter("--auto", False)
 
-        class StopSubCommand(CommandWithParameters):
+        class StopSubCommand(CommandWithPositionalParameters):
             """Defines an object for the dmg check stop command."""
 
             def __init__(self):
                 """Create a dmg check stop object."""
                 super().__init__("/run/dmg/check/stop/*", "stop")
+                self.pool = PositionalParameter(1)
 
     class ConfigSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg config sub command."""
