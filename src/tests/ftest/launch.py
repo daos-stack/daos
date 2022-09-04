@@ -2386,7 +2386,9 @@ class LaunchJob():
         """
         errors = []
         self.log.debug("-" * 80)
-        self.log.info("Archiving %s from %s", summary, hosts)
+        self.log.info(
+            "Archiving %s from %s:%s to %s",
+            summary, hosts, os.path.join(source, pattern), destination)
         remote_hosts = hosts.difference(self.local_host)
         local_host = hosts.intersection(self.local_host)
         self.log.debug("Hosts: remote=%s, local=%s", remote_hosts, local_host)
@@ -2453,7 +2455,7 @@ class LaunchJob():
         self.log.debug("-" * 80)
         self.log.debug("Listing any %s files on %s", os.path.join(source, pattern), hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        result = run_remote(self.log, hosts, command).passed
+        result = run_remote(self.log, hosts, command)
         if not result.passed:
             message = f"Error detemining if {os.path.join(source, pattern)} files exist on {hosts}"
             self.log.debug(message)
