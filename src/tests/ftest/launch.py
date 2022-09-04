@@ -2392,7 +2392,12 @@ class LaunchJob():
         self.log.debug("Hosts: remote=%s, local=%s", remote_hosts, local_host)
 
         # Get a list of remote files and their sizes
-        if not self._list_files(hosts, source, pattern, depth):
+        try:
+            if not self._list_files(hosts, source, pattern, depth):
+                # If no files are found then there is nothing else to do
+                self.log.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
+                return
+        except LaunchException:
             errors.append("listing files")
 
         # Report an error if any files sizes exceed the threshold
@@ -2438,14 +2443,26 @@ class LaunchJob():
             pattern (str): pattern used to limit which files are processed
             depth (int): max depth for find command
 
+        Raises:
+            LaunchException: if there was a error running the command to get the list of files
+
         Returns:
-            bool: True if successful; False otherwise
+            bool: True if files where found; False otherwise
 
         """
         self.log.debug("-" * 80)
-        self.log.debug("Detecting any %s files in %s on %s", pattern, source, hosts)
+        self.log.debug("Listing any %s files on %s", os.path.join(source, pattern), hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        return run_remote(self.log, hosts, command).passed
+        result = run_remote(self.log, hosts, command).passed
+        if not result.passed:
+            message = f"Error detemining if {os.path.join(source, pattern)} files exist on {hosts}"
+            self.log.debug(message)
+            raise LaunchException(message)
+        for data in result.output:
+            if len(data.stdout) > 0:
+                # Files where found on at least one host
+                return True
+        return False
 
     def _check_log_size(self, hosts, source, pattern, depth, threshold):
         """Check if any file sizes exceed the threshold.
@@ -2599,14 +2616,21 @@ class LaunchJob():
         self.log.debug("Moving (remotely) files from %s to %s on %s", source, destination, hosts)
         os.makedirs(destination, exist_ok=True)
 
+        # Use the last directory in the destination path to create a temporary sub-directory on the
+        # remote hosts in which all the source files matching the pattern will be copied. The entire
+        # temporary sub-directory will then be copied back to this host and renamed as the original
+        # destination directory plus the name of the host from which the files originated. Finally
+        # delete this temporary sub-directory to remove the files from the remote hosts.
+        rcopy_dest, tmp_copy_dir = os.path.split(destination)
+        sudo = "sudo " if source.startswith("/etc") else ""
+
         # Create a temporary remote directory
-        tmp_copy_dir = os.path.join(source, "launch_tmp_copy_dir")
-        command = f"mkdir -p {tmp_copy_dir}"
+        command = f"{sudo}mkdir -p {tmp_copy_dir}"
         if not run_remote(self.log, hosts, command).passed:
             self.log.debug("Error creating temporary remote copy directory %s", tmp_copy_dir)
             return False
 
-        # Move the requested files into this temporary directory
+        # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
                    f"xargs -r0 -I '{{}}' mv '{{}}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
@@ -2614,7 +2638,7 @@ class LaunchJob():
             return False
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", destination]
+        command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         status = True
         try:
             run_local(self.log, command, check=True)
@@ -2624,7 +2648,8 @@ class LaunchJob():
             status = False
 
         finally:
-            command = f"rm -fr {tmp_copy_dir}"
+            # Remove the temporary remote directory on each host
+            command = f"{sudo}rm -fr {tmp_copy_dir}"
             if not run_remote(self.log, hosts, command).passed:
                 self.log.debug("Error removing archived files temporary directory")
                 status = False
