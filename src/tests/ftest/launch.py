@@ -2615,7 +2615,7 @@ class LaunchJob():
 
         """
         self.log.debug("-" * 80)
-        self.log.debug("Moving (remotely) files from %s to %s on %s", source, destination, hosts)
+        self.log.debug("Moving remote files from %s to %s on %s", source, destination, hosts)
         os.makedirs(destination, exist_ok=True)
 
         # Use the last directory in the destination path to create a temporary sub-directory on the
@@ -2634,7 +2634,7 @@ class LaunchJob():
 
         # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-                   f"xargs -r0 -I '{{}}' mv '{{}}' {tmp_copy_dir}/")
+                   f"xargs -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
             self.log.debug("Error moving files to temporary remote copy directory %s", tmp_copy_dir)
             return False
