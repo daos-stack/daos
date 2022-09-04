@@ -357,7 +357,7 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("Ranks to create pool = %s", target_list)
 
         # We'll take down network on the last server node where the pool isn't created.
-        self.network_down_host = self.hostlist_servers[2]
+        self.network_down_host = NodeSet(self.hostlist_servers[2])
         self.log.info("network_down_host = %s", self.network_down_host)
 
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
