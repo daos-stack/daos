@@ -1884,16 +1884,18 @@ class LaunchResult(BaseResult):
 class LaunchJob():
     """Simulate an avocado.core.job.Job."""
 
-    def __init__(self, name, repeat):
+    def __init__(self, name, repeat, mode):
         """Initialize a LaunchJob object.
 
         Args:
             name (str): launch job name
             repeat (int): number of times to repeat executing all of the tests
+            mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
         self.avocado = AvocadoInfo()
         self.name = name
         self.repeat = repeat
+        self.mode = mode
         self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
         self.tests = []
@@ -2058,7 +2060,7 @@ class LaunchJob():
         return False
 
     def run(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-            core_files, threshold, mode):
+            core_files, threshold):
         """Run all the tests.
 
         Args:
@@ -2071,7 +2073,6 @@ class LaunchJob():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (bool): whether or not to check for an process core files
             threshold (str): optional upper size limit for test log files
-            mode (str): launch.py execution mode, e.g. "normal", "manual", or "ci"
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2122,7 +2123,7 @@ class LaunchJob():
         self._generate_results()
 
         # Summarize the run
-        return self._summarize_run(return_code, mode)
+        return self._summarize_run(return_code)
 
     def display_disk_space(self, path):
         """Display disk space of provided path destination.
@@ -2791,12 +2792,11 @@ class LaunchJob():
         result_html = HTMLResult()
         result_html.render(self.result, self)
 
-    def _summarize_run(self, status, mode):
+    def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.
 
         Args:
             status (int): overall status of running all tests
-            mode (str): launch.py execution mode, e.g. "normal", "manual", or "ci"
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2824,7 +2824,7 @@ class LaunchJob():
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
                 self.log.info(error_message)
-                if mode == "ci" or (mode == "normal" and bit_code == 1) or bit_code == 8:
+                if self.mode == "ci" or (self.mode == "normal" and bit_code == 1) or bit_code == 8:
                     # In CI mode the errors are reported in the results.xml, so always return 0
                     # In normal mode avocado test failures do not yeild a non-zero exit status
                     # Interrupted avocado tests do not yeild a non-zero exit status
@@ -3346,7 +3346,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the LaunchJob
-    launch = LaunchJob(args.name, args.repeat)
+    launch = LaunchJob(args.name, args.repeat, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
@@ -3427,7 +3427,7 @@ def main():
     # Execute the tests
     status = launch.run(
         args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-        args.rename, args.jenkinslog, args.process_cores, args.logs_threshold, args.mode)
+        args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
     sys.exit(status)
 
 
