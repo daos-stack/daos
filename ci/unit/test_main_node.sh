@@ -28,8 +28,9 @@ if [ -n "$BULLSEYE" ]; then
 fi
 
 cd /opt/daos-remote
-mkdir /opt/daos
-tar --strip-components=1 --one-top-level /opt -xf /opt/daos-remote/opt-daos.tar
+mkdir new_dir
+sudo mv new_dir /opt/daos
+tar --strip-components=2 --one-top-level /opt/daos -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
 find /opt/
