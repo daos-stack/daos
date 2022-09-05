@@ -14,7 +14,6 @@ fi
 
 cd build
 tar -xf opt-daos.tar
-ls
 sudo mv opt/daos /opt/
 
 # Setup daos admin etc.

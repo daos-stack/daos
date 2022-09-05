@@ -661,6 +661,9 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 stashes: ['el8-gcc-opt-tar',
+                                           'el8-gcc-build-vars',
+                                           'el8-gcc-tests'],
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
                     }
