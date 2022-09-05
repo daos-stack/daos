@@ -13,7 +13,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@amd/faster-nlt-results") _
 
 job_status_internal = [:]
 
@@ -552,11 +552,12 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
+                                   stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'no',
+                                   stash_install: false,
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
                         sh '''tar -cf opt-daos.tar /opt/daos/'''
-                        stash name: 'el8-gcc-build-vars', includes: '.build_vars.*'
                         stash name: 'el8-gcc-opt-tar', includes: 'opt-daos.tar'
                     }
                     post {

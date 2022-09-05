@@ -648,7 +648,8 @@ class PreReqComponent():
 
         self.__top_dir = Dir('#').abspath
         self._setup_compiler(warning_level)
-        self.add_opts(PathVariable('BUILD_ROOT', 'Alternative build root directory', 'build',
+        self.add_opts(PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory', "build",
                                    PathVariable.PathIsDirCreate))
 
         bdir = self._setup_build_type()
