@@ -955,11 +955,11 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 self.soaktest_dir, self.test_name +
                 "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             macsio_log = os.path.join(
-                self.soaktest_dir, self.test_name +
-                "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
+                self.soaktest_dir, self.test_name
+                + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
             macsio_timing_log = os.path.join(
-                self.soaktest_dir, self.test_name +
-                "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
+                self.soaktest_dir, self.test_name
+                + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.get_environment("mpirun", log_file=daos_log)
