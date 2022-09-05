@@ -2464,7 +2464,7 @@ class LaunchJob():
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
         result = run_remote(self.log, hosts, command)
         if not result.passed:
-            message = f"Error detemining if {os.path.join(source, pattern)} files exist on {hosts}"
+            message = f"Error determining if {os.path.join(source, pattern)} files exist on {hosts}"
             self.log.debug(message)
             raise LaunchException(message)
         for data in result.output:
@@ -2826,8 +2826,8 @@ class LaunchJob():
                 self.log.info(error_message)
                 if self.mode == "ci" or (self.mode == "normal" and bit_code == 1) or bit_code == 8:
                     # In CI mode the errors are reported in the results.xml, so always return 0
-                    # In normal mode avocado test failures do not yeild a non-zero exit status
-                    # Interrupted avocado tests do not yeild a non-zero exit status
+                    # In normal mode avocado test failures do not yield a non-zero exit status
+                    # Interrupted avocado tests do not yield a non-zero exit status
                     continue
                 return_code = 1
         return return_code
