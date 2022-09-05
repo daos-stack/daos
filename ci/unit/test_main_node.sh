@@ -31,7 +31,7 @@ cd /opt/daos-remote
 tar -xf opt-daos.tar
 ls -l
 ls -l /opt
-sudo mv opt/daos /opt/
+sudo cp -a opt/daos /opt/
 
 ls /opt/
 find /opt/
