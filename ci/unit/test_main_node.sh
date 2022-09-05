@@ -29,7 +29,7 @@ fi
 
 cd /opt/daos-remote
 mkdir new_dir
-sudo mv new_dir /opt/daos
+sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --one-top-level /opt/daos -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
