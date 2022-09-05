@@ -30,6 +30,9 @@
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
+/** Number of offload XS */
+extern unsigned int	 dss_tgt_offload_xs_nr;
+
 /** Storage path (hack) */
 extern const char	*dss_storage_path;
 
