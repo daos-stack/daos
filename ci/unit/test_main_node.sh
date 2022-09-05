@@ -28,12 +28,10 @@ if [ -n "$BULLSEYE" ]; then
 fi
 
 cd /opt/daos-remote
-tar -xf opt-daos.tar
+mkdir /opt/daos
+tar --strip-components=1 --one-top-level /opt -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
-sudo cp -a opt/daos /opt/
-
-ls /opt/
 find /opt/
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
