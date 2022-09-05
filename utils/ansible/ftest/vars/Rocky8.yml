@@ -18,12 +18,8 @@ daos_dev_deps:
     - cmake
     - createrepo
     - dnf-plugins-core
-    - hdf5-devel
-    - hdf5-mpich-devel
-    - hdf5-mpich-static
-    - hdf5-static
+    - libaec-devel
     - meson
-    - mpich-devel
     - python3-clustershell
     - rpmdevtools
     - rpm-build
@@ -44,12 +40,10 @@ daos_client_deps:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
-    - hdf5-vol-daos-mpich-tests
-    - ior
     - jq
+    - libaec
     - libuuid
     - lz4-libs
-    - mpich
     - systemd
     - util-linux
 
