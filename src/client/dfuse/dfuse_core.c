@@ -1091,6 +1091,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       &ie->ie_htl, false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
+	return -DER_SUCCESS;
 err:
 	D_FREE(ie);
 	return rc;
