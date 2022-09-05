@@ -13,8 +13,8 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
-sudo mkdir -p "$DAOS_BASE"
-sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
+sudo mkdir -p /opt/daos-remote
+sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" /opt/daos-remote
 if [ -n "$BULLSEYE" ]; then
     pushd "$DAOS_BASE/bullseye"
     set +x
@@ -27,9 +27,10 @@ if [ -n "$BULLSEYE" ]; then
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
 fi
 
-cd "$DAOS_BASE"
-ls
+cd /opt/daos-remote
 tar -xf opt-daos.tar
+ls -l
+ls -l /opt
 sudo mv opt/daos /opt/
 
 ls /opt/
