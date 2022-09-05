@@ -793,11 +793,11 @@ def setup_test_files(log, test_list, args, yaml_dir):
     # Log the test information
     log.debug("-" * 80)
     log.debug("Test information:")
-    log.debug("%3s  %-40s  %-40s  %-20s  %-20s", "UID", "Test", "Yaml File", "Servers", "Clients")
-    log.debug("%3s  %-40s  %-40s  %-20s  %-20s", "-" * 3, "-" * 40, "-" * 40, "-" * 20, "-" * 20)
+    log.debug("%3s  %-40s  %-50s  %-20s  %-20s", "UID", "Test", "Yaml File", "Servers", "Clients")
+    log.debug("%3s  %-40s  %-50s  %-20s  %-20s", "-" * 3, "-" * 40, "-" * 50, "-" * 20, "-" * 20)
     for test in test_list:
         log.debug(
-            "%3s  %-40s  %-40s  %-20s  %-20s",
+            "%3s  %-40s  %-50s  %-20s  %-20s",
             test.name.uid, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
 
 
@@ -1012,7 +1012,7 @@ def replace_yaml_file(log, yaml_file, args, yaml_dir):
         orig_yaml_file = yaml_file
         yaml_name = get_test_category(yaml_file)
         yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
-        log.info("Creating copy: %s", yaml_file)
+        log.debug("Creating copy: %s", yaml_file)
         with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
             yaml_buffer.write(yaml_data)
 
@@ -2191,7 +2191,7 @@ class LaunchJob():
             int: status code: 0 = success, >0 = failure
 
         """
-        self.log.debug("-" * 80)
+        self.log.debug("=" * 80)
         command = self.avocado.get_run_command(
             test, self.tag_filters, sparse, fail_fast, extra_yaml)
         self.log.info(
@@ -2266,7 +2266,7 @@ class LaunchJob():
 
         """
         return_code = 0
-        self.log.debug("-" * 80)
+        self.log.debug("=" * 80)
         self.log.info(
             "Processing the %s test after the run on repeat %s/%s", test, repeat, self.repeat)
 
@@ -2392,7 +2392,7 @@ class LaunchJob():
 
         """
         errors = []
-        self.log.debug("-" * 80)
+        self.log.debug("=" * 80)
         self.log.info(
             "Archiving %s from %s:%s to %s",
             summary, hosts, os.path.join(source, pattern), destination)
@@ -2409,13 +2409,14 @@ class LaunchJob():
         except LaunchException:
             errors.append("listing files")
 
-        # Report an error if any files sizes exceed the threshold
-        if not self._check_log_size(hosts, source, pattern, depth, threshold):
-            errors.append(f"verifying file sizes do not exceed {threshold}")
+        if "log" in pattern:
+            # Report an error if any files sizes exceed the threshold
+            if not self._check_log_size(hosts, source, pattern, depth, threshold):
+                errors.append(f"verifying file sizes do not exceed {threshold}")
 
-        # Run cart_logtest
-        if not self._cart_log_test(hosts, source, pattern, depth):
-            errors.append("running cart_logtest")
+            # Run cart_logtest on log files
+            if not self._cart_log_test(hosts, source, pattern, depth):
+                errors.append("running cart_logtest")
 
         # Remove any empty files
         if not self._remove_empty_files(hosts, source, pattern, depth):
@@ -2468,9 +2469,9 @@ class LaunchJob():
             self.log.debug(message)
             raise LaunchException(message)
         for data in result.output:
-            if len(data.stdout) > 0:
-                # Files where found on at least one host
-                return True
+            for line in data.stdout:
+                if source in line:
+                    return True
         return False
 
     def _check_log_size(self, hosts, source, pattern, depth, threshold):
@@ -2631,7 +2632,7 @@ class LaunchJob():
         # destination directory plus the name of the host from which the files originated. Finally
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
-        sudo = "sudo " if source.startswith("/etc") else ""
+        sudo = "sudo " if source.startswith("/etc") or source.startswith("/tmp") else ""
 
         # Create a temporary remote directory
         command = f"{sudo}mkdir -p {tmp_copy_dir}"
@@ -2813,7 +2814,7 @@ class LaunchJob():
             2: "ERROR: Failed avocado jobs detected!",
             4: "ERROR: Failed avocado commands detected!",
             8: "Interrupted avocado jobs detected!",
-            16: "ERROR: Failed archiving after one or more tests!",
+            16: "ERROR: Failed archiving files after one or more tests!",
             32: "ERROR: Failed log size threshold check after one or more tests!",
             64: "ERROR: Failed to create a junit xml test error file!",
             128: "ERROR: Failed to clean logs in preparation for test run!",
@@ -2862,18 +2863,17 @@ class CoreFileProcessing():
                 any issues processing core files
 
         """
-        return_status = True
+        status = True
+        daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
+        self.log.debug("=" * 80)
+        self.log.info("Processing cores from %s in %s", test_hosts, daos_cores_dir)
 
         # Processing core files is broken on EL7 currently
         if self.is_el7():
-            self.log.debug("Generating stacktraces is currently not suppotrted on EL7")
-            return return_status
-
-        daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
+            self.log.debug("  Generating stacktraces is currently not suppotrted on EL7")
+            return status
 
         # Create a subdirectory in the avocado logs directory for this test
-        self.log.debug("-" * 80)
-        self.log.info("Processing cores from %s in %s", test_hosts, daos_cores_dir)
         os.makedirs(daos_cores_dir, exist_ok=True)
 
         # Copy any core files that exist on the test hosts and remove them from the
@@ -2908,7 +2908,7 @@ class CoreFileProcessing():
         if not result.passed:
             # we might have still gotten some core files, so don't return here
             # but save a False return status for later
-            return_status = False
+            status = False
 
         cores = os.listdir(daos_cores_dir)
         if not cores:
@@ -2964,18 +2964,18 @@ class CoreFileProcessing():
                         stack_trace.writelines(output.stdout)
                 except IOError as error:
                     self.log.debug("Error writing %s: %s", stack_trace_file, error)
-                    return_status = False
+                    status = False
                 except LaunchException as error:
                     self.log.debug("Error creating %s: %s", stack_trace_file, error)
-                    return_status = False
+                    status = False
             else:
                 self.log.debug("Unable to determine executable name from gdb output")
                 self.log.debug("Not creating stacktrace")
-                return_status = False
+                status = False
             self.log.debug("Removing %s", corefile_fqpn)
             os.unlink(corefile_fqpn)
 
-        return return_status
+        return status
 
     def install_debuginfos(self):
         """Install debuginfo packages.
@@ -3418,6 +3418,7 @@ def main():
         yaml_dir = args.yaml_directory
         if not os.path.exists(yaml_dir):
             os.mkdir(yaml_dir)
+    launch.log.info("Modified test yaml files being created in: %s", yaml_dir)
 
     # Create a dictionary of test and their yaml files
     setup_test_files(launch.log, launch.tests, args, yaml_dir)
