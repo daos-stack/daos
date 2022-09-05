@@ -33,12 +33,13 @@ sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
-find /opt/
 
 cd /opt/daos
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 /bin/rm "$DAOS_BASE/install/bin/daos_admin"
+
+cd /opt/daos-remote
 
 sudo mkdir -p /usr/share/spdk/scripts/
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts/
