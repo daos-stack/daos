@@ -56,7 +56,7 @@ init_tests(void **state)
 	unsigned int seed;
 
 	/* Seed the random number generator once per test run */
-	seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
+	seed = (unsigned int)(time(NULL) & 0x0FFFFFFFFULL);
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
