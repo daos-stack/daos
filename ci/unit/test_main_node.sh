@@ -15,7 +15,6 @@ sudo mkdir -p /mnt/daos
 
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
-sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
 if [ -n "$BULLSEYE" ]; then
     pushd "$DAOS_BASE/bullseye"
     set +x
@@ -32,6 +31,9 @@ cd "$DAOS_BASE"
 ls
 tar -xf opt-daos.tar
 sudo mv opt/daos /opt/
+
+ls /opt/
+find /opt/
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 /bin/rm "$DAOS_BASE/install/bin/daos_admin"
