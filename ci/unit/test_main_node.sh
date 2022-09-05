@@ -30,10 +30,12 @@ fi
 cd /opt/daos-remote
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
-tar --strip-components=2 --one-top-level /opt/daos -xf /opt/daos-remote/opt-daos.tar
+tar --strip-components=2 --directory /opt/daos -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
 find /opt/
+
+cd /opt/daos
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 /bin/rm "$DAOS_BASE/install/bin/daos_admin"
