@@ -973,8 +973,8 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 
-	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
-		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
+	db.log.Debugf("update pool %+v svc ranks %v->%v",
+		ps, ps.Replicas, ei.SvcReplicas)
 
 	ps.Replicas = system.RanksFromUint32(ei.SvcReplicas)
 

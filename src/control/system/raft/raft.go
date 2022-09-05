@@ -414,7 +414,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
+	db.log.Debugf("pool %+v updated @ %s", ps, ps.LastUpdate)
 	return db.submitRaftUpdate(data)
 }
 

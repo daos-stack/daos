@@ -519,7 +519,7 @@ func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDe
 
 	evResp, err := svc.PoolEvict(ctx, evReq)
 	if err != nil {
-		svc.log.Debugf("svc.PoolEvict failed\n")
+		svc.log.Debugf("svc.PoolEvict failed: %+v\n", err)
 		return 0, err
 	}
 
