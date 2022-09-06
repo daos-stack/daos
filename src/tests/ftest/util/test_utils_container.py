@@ -267,6 +267,9 @@ class TestContainer(TestDaosApiBase):
         self.oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
+        # Default to RANK fault domain (rf_lvl:1) when not specified
+        if 'rf_lvl' not in self.properties.value:
+            self.properties.update(self.properties.value + ',rf_lvl:1')
         self.daos_timeout = BasicParameter(None)
 
         self.container = None
