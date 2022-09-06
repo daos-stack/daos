@@ -1913,7 +1913,6 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	prop = daos_prop_alloc(nr);
 	if (prop == NULL)
 		return -DER_NOMEM;
-	*prop_out = prop;
 	if (bits & DAOS_PO_QUERY_PROP_LABEL) {
 		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_label,
@@ -2203,6 +2202,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	*prop_out = prop;
 	return 0;
 
 out_prop:
@@ -4752,7 +4752,6 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		/* Prop might be allocated and returned even if rc != 0 */
 		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
@@ -4898,7 +4897,6 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		/* Prop might be allocated and returned even if rc != 0 */
 		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
