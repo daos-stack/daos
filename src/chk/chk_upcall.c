@@ -158,7 +158,7 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 		report.objid = NULL;
 	}
 
-	if (dkey != NULL && !daos_key_is_null(*dkey)) {
+	if (!daos_iov_empty(dkey)) {
 		D_ASPRINTF(report.dkey, DF_KEY, DP_KEY(dkey));
 		if (report.dkey == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -166,7 +166,7 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 		report.dkey = NULL;
 	}
 
-	if (akey != NULL && !daos_key_is_null(*akey)) {
+	if (!daos_iov_empty(akey)) {
 		D_ASPRINTF(report.akey, DF_KEY, DP_KEY(akey));
 		if (report.akey == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
