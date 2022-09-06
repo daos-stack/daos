@@ -1055,7 +1055,6 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 {
 	struct crt_grp_priv	*grp_priv;
 	struct crt_swim_membs	*csm;
-	struct crt_swim_target	*cst;
 	int			 rc = 0;
 
 	D_ASSERT(grp_priv_created != NULL);
@@ -1074,7 +1073,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		D_GOTO(out_grp_priv, rc = -DER_NOMEM);
 
 	csm = &grp_priv->gp_membs_swim;
-	D_CIRCLEQ_INIT(&csm->csm_head);
+	csm->csm_target = CRT_SWIM_TARGET_INVALID;
 
 	rc = D_SPIN_INIT(&csm->csm_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc)
@@ -1090,12 +1089,6 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	return rc;
 
 out_swim_lock:
-	csm->csm_target = NULL;
-	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
-		cst = D_CIRCLEQ_FIRST(&csm->csm_head);
-		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
-		D_FREE(cst);
-	}
 	D_SPIN_DESTROY(&csm->csm_lock);
 out_grpid:
 	D_FREE(grp_priv->gp_pub.cg_grpid);
@@ -3429,6 +3422,9 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 		/* Remove rank from swim tracking */
 		crt_swim_rank_del(grp_priv, rank);
 	}
+
+	if (!grp_priv->gp_view && to_add->rl_nr > 0)
+		crt_swim_rank_shuffle(grp_priv);
 
 	d_rank_list_free(to_add);
 	d_rank_list_free(to_remove);

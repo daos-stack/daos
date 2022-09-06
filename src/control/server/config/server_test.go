@@ -216,7 +216,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
-		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithDisableVMD(true).    // vmd enabled by default
