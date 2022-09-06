@@ -379,10 +379,8 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		bool		 match;
 		daos_size_t	 rec_in_chunk;
 
-		if (sc_cont_is_stopping(ctx))	{
-			D_FREE(csum_buf);
-			return 0;
-		}
+		if (sc_cont_is_stopping(ctx))
+			D_GOTO(done, rc = 0);
 
 		orig_csum = ci_idx2csum(ctx->sc_csum_to_verify, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
