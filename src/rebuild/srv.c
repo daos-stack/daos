@@ -1690,7 +1690,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, uint32_t rebuild_gen
 		if (rc)
 			D_GOTO(free, rc);
 	}
-	if (tgts)
+	if (tgts != NULL)
 		rebuild_print_list_update(pool->sp_uuid, map_ver, rebuild_op, tgts);
 
 	/* Insert the task into the queue by order to make sure the rebuild
