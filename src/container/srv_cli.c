@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,7 +32,7 @@ dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 	if (cont == NULL)
 		return 0;
 
-	pool = dc_hdl2pool(poh);
+	pool = cont->dc_pool;
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -49,8 +49,6 @@ dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 out:
 	if (cont != NULL)
 		dc_cont_put(cont);
-	if (pool != NULL)
-		dc_pool_put(pool);
 
 	return rc;
 }
@@ -110,7 +108,7 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
-	cont->dc_pool_hdl = poh;
+	cont->dc_pool = pool;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont_hdl_link(cont); /* +1 ref */

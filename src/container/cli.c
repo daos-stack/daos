@@ -486,12 +486,6 @@ static struct d_hlink_ops cont_h_ops = {
 };
 
 void
-dc_cont_put(struct dc_cont *dc)
-{
-	daos_hhash_link_putref(&dc->dc_hlink);
-}
-
-void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
@@ -752,7 +746,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	}
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
-	cont->dc_pool_hdl = arg->hdl;
+	cont->dc_pool = pool;
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
@@ -1017,7 +1011,6 @@ cont_close_complete(tse_task_t *task, void *data)
 
 out:
 	crt_req_decref(arg->rpc);
-	dc_pool_put(pool);
 	dc_cont_put(cont);
 	return rc;
 }
@@ -1053,7 +1046,7 @@ dc_cont_close(tse_task_t *task)
 	cont->dc_closing = 1;
 	D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
@@ -1086,12 +1079,12 @@ dc_cont_close(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
-		goto err_pool;
+		goto err_cont;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		goto err_pool;
+		goto err_cont;
 	}
 
 	in = crt_req_get(rpc);
@@ -1116,8 +1109,6 @@ dc_cont_close(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_pool:
-	dc_pool_put(pool);
 err_cont:
 	dc_cont_put(cont);
 err:
@@ -1189,7 +1180,6 @@ cont_query_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1308,7 +1298,7 @@ dc_cont_query(tse_task_t *task)
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": querying: hdl="DF_UUID"\n",
@@ -1356,7 +1346,6 @@ err_rpc:
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to query container: "DF_RC"\n", DP_RC(rc));
@@ -1409,7 +1398,6 @@ cont_set_prop_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1468,7 +1456,7 @@ dc_cont_set_prop(tse_task_t *task)
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": setting props: hdl="DF_UUID"\n",
@@ -1514,7 +1502,6 @@ err_rpc:
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to set prop on container: "DF_RC"\n",
@@ -1568,7 +1555,6 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1591,7 +1577,7 @@ dc_cont_update_acl(tse_task_t *task)
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": updating ACL: hdl="DF_UUID"\n",
@@ -1637,7 +1623,6 @@ err_rpc:
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to update ACL on container: "DF_RC"\n",
@@ -1691,7 +1676,6 @@ cont_delete_acl_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1714,7 +1698,7 @@ dc_cont_delete_acl(tse_task_t *task)
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": deleting ACL: hdl="DF_UUID"\n",
@@ -1761,7 +1745,6 @@ err_rpc:
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to delete ACL on container: "DF_RC"\n",
@@ -1791,9 +1774,11 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		tse_sched_t *sched = tse_task2sched(task);
 		tse_task_t *ptask;
 		unsigned int map_version = out->coao_op.co_map_version;
+		daos_handle_t ph;
 
 		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
+		dc_pool2hdl_noref(arg->coaa_cont->dc_pool, &ph);
+		rc = dc_pool_create_map_refresh_task(ph, map_version,
 						     sched, &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -1835,7 +1820,6 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1882,7 +1866,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DB_MD, DF_CONT": oid allocate: hdl="DF_UUID" num "DF_U64"\n",
@@ -1928,7 +1912,6 @@ err_rpc:
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
-	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to allocate OIDs: "DF_RC"\n", DP_RC(rc));
@@ -2017,7 +2000,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	}
 	glob->iov_len = glob_buf_size;
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	pool = cont->dc_pool;
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
@@ -2046,7 +2029,6 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 	cont_glob->dcg_global_version	= cont->dc_props.dcp_global_version;
 
-	dc_pool_put(pool);
 out_cont:
 	dc_cont_put(cont);
 out:
@@ -2116,7 +2098,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D_ERROR("pool connection being invalidated\n");
 		D_GOTO(out_pool, rc = -DER_NO_HDL);
 	}
-	cont->dc_pool_hdl = poh;
+	cont->dc_pool = pool;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	/** extract container properties */
@@ -2241,7 +2223,6 @@ cont_req_cleanup(enum creq_cleanup_stage stage, struct cont_req_arg *args)
 	case CLEANUP_RPC:
 		crt_req_decref(args->cra_rpc);
 	case CLEANUP_POOL:
-		dc_pool_put(args->cra_pool);
 	case CLEANUP_CONT:
 		dc_cont_put(args->cra_cont);
 	}
@@ -2299,7 +2280,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	args->cra_cont = dc_hdl2cont(coh);
 	if (args->cra_cont == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
-	args->cra_pool = dc_hdl2pool(args->cra_cont->dc_pool_hdl);
+	args->cra_pool = args->cra_cont->dc_pool;
 	D_ASSERT(args->cra_pool != NULL);
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
@@ -3039,7 +3020,7 @@ out:
 /**
  * Get pool_target by container handle and target index.
  *
- * \param coh [IN]	container handle.
+ * \param co [IN]	container ptr.
  * \param tgt_idx [IN]	target index.
  * \param tgt [OUT]	pool target pointer.
  *
@@ -3047,25 +3028,21 @@ out:
  * \return		errno if it does not get the pool_target.
  */
 int
-dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
+dc_cont_tgt_idx2ptr(struct dc_cont *dc, uint32_t tgt_idx,
 		    struct pool_target **tgt)
 {
-	struct dc_cont	*dc;
 	struct dc_pool	*pool;
 	int		 n;
 
-	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
 	/* Get map_tgt so that we can have the rank of the target. */
-	pool = dc_hdl2pool(dc->dc_pool_hdl);
+	pool = dc->dc_pool;
 	D_ASSERT(pool != NULL);
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-	dc_pool_put(pool);
-	dc_cont_put(dc);
 	if (n != 1) {
 		D_ERROR("failed to find target %u\n", tgt_idx);
 		return -DER_INVAL;
@@ -3096,12 +3073,11 @@ dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 		return -DER_NO_HDL;
 
 	/* Get node so that we can have the rank of the target. */
-	pool = dc_hdl2pool(dc->dc_pool_hdl);
+	pool = dc->dc_pool;
 	D_ASSERT(pool != NULL);
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	n = pool_map_find_nodes(pool->dp_map, node_id, dom);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-	dc_pool_put(pool);
 	dc_cont_put(dc);
 	if (n != 1) {
 		D_ERROR("failed to find target %u\n", node_id);
@@ -3137,7 +3113,7 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	if (dc == NULL)
 		return DAOS_HDL_INVAL;
 
-	ph = dc->dc_pool_hdl;
+	dc_pool2hdl_noref(dc->dc_pool, &ph);
 	dc_cont_put(dc);
 	return ph;
 }

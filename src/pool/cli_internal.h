@@ -10,13 +10,6 @@
 #ifndef __POOL_CLIENT_INTERNAL_H__
 #define __POOL_CLIENT_INTERNAL_H__
 
-static inline void
-dc_pool2hdl(struct dc_pool *pool, daos_handle_t *hdl)
-{
-	daos_hhash_link_getref(&pool->dp_hlink);
-	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
-}
-
 void dc_pool_hdl_link(struct dc_pool *pool);
 void dc_pool_hdl_unlink(struct dc_pool *pool);
 struct dc_pool *dc_pool_alloc(unsigned int nr);

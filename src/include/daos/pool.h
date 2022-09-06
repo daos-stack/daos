@@ -107,6 +107,19 @@ dc_pool_get_version(struct dc_pool *pool)
 	return ver;
 }
 
+static inline void
+dc_pool2hdl(struct dc_pool *pool, daos_handle_t *hdl)
+{
+	daos_hhash_link_getref(&pool->dp_hlink);
+	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
+}
+
+static inline void
+dc_pool2hdl_noref(struct dc_pool *pool, daos_handle_t *hdl)
+{
+	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
+}
+
 struct dc_pool *dc_hdl2pool(daos_handle_t hdl);
 void dc_pool_get(struct dc_pool *pool);
 void dc_pool_put(struct dc_pool *pool);

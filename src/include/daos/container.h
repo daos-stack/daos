@@ -14,12 +14,68 @@
 #include <daos/pool_map.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include <daos/cont_props.h>
 #include "checksum.h"
+
+/* Client container handle */
+struct dc_cont {
+	/** link chain in the global handle hash table */
+	struct d_hlink		dc_hlink;
+	/* list to pool */
+	d_list_t		dc_po_list;
+	/* object list for this container */
+	d_list_t		dc_obj_list;
+	/* lock for list of dc_obj_list */
+	pthread_rwlock_t	dc_obj_list_lock;
+	/* uuid for this container */
+	uuid_t			dc_uuid;
+	uuid_t			dc_cont_hdl;
+	uint64_t		dc_capas;
+	/* pool ptr */
+	struct dc_pool	       *dc_pool;
+	struct daos_csummer    *dc_csummer;
+	struct cont_props	dc_props;
+	/* minimal pmap version */
+	uint32_t		dc_min_ver;
+	uint32_t		dc_closing:1,
+				dc_slave:1; /* generated via g2l */
+};
+
+static inline struct dc_cont *
+dc_hdl2cont(daos_handle_t coh)
+{
+	struct d_hlink *hlink;
+
+	hlink = daos_hhash_link_lookup(coh.cookie);
+	if (hlink == NULL)
+		return NULL;
+
+	return container_of(hlink, struct dc_cont, dc_hlink);
+}
+
+static inline void
+dc_cont_put(struct dc_cont *dc)
+{
+	daos_hhash_link_putref(&dc->dc_hlink);
+}
+
+static inline void
+dc_cont2hdl_noref(struct dc_cont *dc, daos_handle_t *hdl)
+{
+	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
+}
+
+static inline void
+dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
+{
+	daos_hhash_link_getref(&dc->dc_hlink);
+	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
+}
 
 int dc_cont_init(void);
 void dc_cont_fini(void);
 
-int dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
+int dc_cont_tgt_idx2ptr(struct dc_cont *dc, uint32_t tgt_idx,
 			struct pool_target **tgt);
 int dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 			struct pool_domain **dom);

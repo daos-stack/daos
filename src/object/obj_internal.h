@@ -21,6 +21,7 @@
 #include <daos/btree_class.h>
 #include <daos/object.h>
 #include <daos/cont_props.h>
+#include <daos/container.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -48,8 +49,8 @@ struct dc_obj_shard {
 	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
-	/** container handler of the object */
-	daos_handle_t		do_co_hdl;
+	/** container ptr */
+	struct dc_cont		*do_co;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
@@ -82,8 +83,8 @@ struct dc_object {
 	struct daos_obj_md	 cob_md;
 	/** object class attribute */
 	struct daos_oclass_attr	 cob_oca;
-	/** container open handle */
-	daos_handle_t		 cob_coh;
+	/** container ptr */
+	struct dc_cont		*cob_co;
 	/** cob_spin protects obj_shards' do_ref */
 	pthread_spinlock_t	 cob_spin;
 
@@ -490,6 +491,19 @@ struct dc_obj_verify_args {
 	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
+
+static inline int
+dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	if (!dc_cont)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dc_cont->dc_cont_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dc_cont->dc_uuid);
+	return 0;
+}
 
 int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		  enum daos_otype_t otype, daos_oclass_hints_t hints,
