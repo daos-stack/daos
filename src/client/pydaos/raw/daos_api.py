@@ -1419,7 +1419,7 @@ class DaosContProperties(ctypes.Structure):
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
-        self.rf_lvl = ctypes.c_uint64(DaosContPropEnum.DAOS_PROP_CO_REDUN_DEFAULT.value)
+        self.rf_lvl = ctypes.c_uint64(daos_cref.DAOS_PROP_CO_REDUN_DEFAULT)
 
 
 class DaosInputParams():
@@ -1502,7 +1502,7 @@ class DaosContainer():
             # Both layout and checksum properties defined
             num_prop = 4
 
-        if self.cont_input_values.rf_lvl != DaosContPropEnum.DAOS_PROP_CO_REDUN_DEFAULT.value:
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             num_prop = num_prop + 1
 
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
@@ -1557,7 +1557,7 @@ class DaosContainer():
                     self.cont_input_values.chunk_size)
 
         idx = idx + 1
-        if self.cont_input_values.rf_lvl != DaosContPropEnum.DAOS_PROP_CO_REDUN_DEFAULT.value:
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
             self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(

@@ -330,19 +330,19 @@ class TestContainer(TestDaosApiBase):
                 kwargs["con_uuid"] = uuid
 
             # Refer daos_api for setting input params for DaosContainer.
+            cop = self.input_params.get_con_create_params()
             if con_in is not None:
-                cop = self.input_params.get_con_create_params()
                 cop.type = con_in[0]
                 cop.enable_chksum = con_in[1]
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
                 cop.rf_lvl = con_in[5]
-                kwargs["con_prop"] = cop
             else:
-                cop = self.input_params.get_con_create_params()
+                # Default to RANK fault domain (rf_lvl:1) when not specified
                 cop.rf_lvl = ctypes.c_uint64(DaosContPropEnum.DAOS_PROP_CO_REDUN_RANK.value)
-                kwargs["con_prop"] = cop
+
+            kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
 
