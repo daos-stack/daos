@@ -104,7 +104,7 @@ static struct crt_proto_format my_proto_fmt_threaded_server = {
 int main(int argc, char **argv)
 {
 	pthread_t		thread[NUM_THREADS];
-	int			status = 0;
+	ATOMIC int              status = 0;
 	int			rc;
 	int			i;
 	int                     thread_count;
