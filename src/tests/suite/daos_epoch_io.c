@@ -31,11 +31,7 @@ const char *test_io_conf;
  * To add predefined io_conf:
  * and add file name to predefined_io_confs array before the NULL.
  */
-static char *predefined_io_confs[] = {
-	"./io_conf/daos_io_conf_1",
-	"./io_conf/daos_io_conf_2",
-	NULL
-};
+static char *predefined_io_confs[] = {"daos_io_conf_1", "daos_io_conf_2", NULL};
 
 static daos_size_t
 test_recx_size(daos_recx_t *recxs, int recx_num, daos_size_t iod_size)
@@ -1517,10 +1513,14 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	return rc;
 }
 
+#define PATH_APPEND 128
 static void
 epoch_io_predefined(void **state)
 {
+	char            *path;
+	char            *tmp;
 	test_arg_t	*arg = *state;
+	ssize_t          size;
 	int		 i;
 	int		 rc;
 
@@ -1537,19 +1537,34 @@ epoch_io_predefined(void **state)
 		return;
 	}
 
+	D_ALLOC(path, PATH_MAX);
+	assert_non_null(path);
+
+	size = readlink("/proc/self/exe", path, PATH_MAX - PATH_APPEND);
+	assert_true(size != -1);
+
+	/* dirname semantics are weird, so just look for / */
+	tmp = strrchr(path, '/');
+	assert_non_null(tmp);
+	*tmp = 0;
+
 	for (i = 0; predefined_io_confs[i] != NULL; i++) {
 		print_message("will run predefined io_conf %s ...\n",
 			      predefined_io_confs[i]);
-		rc = io_conf_run(arg, predefined_io_confs[i]);
+
+		rc = snprintf(tmp, PATH_APPEND, "/../TESTING/io_conf/%s", predefined_io_confs[i]);
+		tmp[PATH_APPEND - 1] = 0;
+
+		rc = io_conf_run(arg, path);
 		if (rc)
-			print_message("io_conf %s failed, rc %d.\n",
-				      predefined_io_confs[i], rc);
+			print_message("io_conf %s failed, rc %d.\n", path, rc);
 		else
-			print_message("io_conf %s succeed.\n",
-				     predefined_io_confs[i]);
+			print_message("io_conf %s succeed.\n", path);
 		assert_rc_equal(rc, 0);
 		test_eio_arg_oplist_free(arg);
 	}
+
+	D_FREE(path);
 }
 
 static const struct CMUnitTest epoch_io_tests[] = {
