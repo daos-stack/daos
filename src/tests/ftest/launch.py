@@ -1928,13 +1928,12 @@ class LaunchJob():
             "job.run.result.xunit.max_test_log_chars": self.avocado.get_setting(
                 "job.run.result.xunit", "max_test_log_chars"),
             "job.run.result.xunit.job_name": name,
-            "job.run.result.html.enabled": "on",
+            "job.run.result.html.enabled": None,
             "job.run.result.html.open_browser": False,
             "job.run.result.html.output": None,
             "stdout_claimed_by": None,
         }
-        # self.status = "COMPLETE"
-        self.status = "RUNNING"     # Disables generating result.html
+        self.status = "COMPLETE"
 
     @staticmethod
     def _get_file_handler(log_file):
@@ -2398,7 +2397,8 @@ class LaunchJob():
             summary, hosts, os.path.join(source, pattern), destination)
         remote_hosts = hosts.difference(self.local_host)
         local_host = hosts.intersection(self.local_host)
-        self.log.debug("Hosts: remote=%s, local=%s", remote_hosts, local_host)
+        self.log.debug("  Remote hosts: %s", remote_hosts)
+        self.log.debug("  Local host:   %s", local_host)
 
         # Get a list of remote files and their sizes
         try:
@@ -2527,7 +2527,7 @@ class LaunchJob():
             "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-            f"xargs -r0 -I '{{}}' {cart_logtest} '{{}}' > '{{}}'.cart_logtest")
+            f"xargs -r0 {cart_logtest}")
         return run_remote(self.log, hosts, command).passed
 
     def _remove_empty_files(self, hosts, source, pattern, depth):
@@ -2632,6 +2632,7 @@ class LaunchJob():
         # destination directory plus the name of the host from which the files originated. Finally
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
+        tmp_copy_dir = os.path.join(source, tmp_copy_dir)
         sudo = "sudo " if source.startswith("/etc") or source.startswith("/tmp") else ""
 
         # Create a temporary remote directory
