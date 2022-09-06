@@ -356,7 +356,6 @@ pipeline {
                     post {
                         always {
                             job_status_update()
-                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
