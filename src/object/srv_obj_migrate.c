@@ -2619,8 +2619,9 @@ migrate_fini_one_ult(void *data)
 		rc = dss_abterr2der(rc);
 		D_WARN("failed to migrate fini one ult "DF_UUID": "DF_RC"\n",
 		       DP_UUID(arg->pool_uuid), DP_RC(rc));
-	} else
+	} else {
 		rc = 0;
+	}
 	migrate_pool_tls_put(tls); /* destroy */
 
 	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
