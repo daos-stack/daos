@@ -1690,6 +1690,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, uint32_t rebuild_gen
 		if (rc)
 			D_GOTO(free, rc);
 	}
+
 	if (tgts != NULL)
 		rebuild_print_list_update(pool->sp_uuid, map_ver, rebuild_op, tgts);
 
