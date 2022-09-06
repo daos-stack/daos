@@ -271,7 +271,13 @@ class Dfuse(DfuseCommand):
                 "Dfuse missing environment variables for D_LOG_FILE")
 
         if 'D_LOG_MASK' not in self.env:
-            self.env['D_LOG_MASK'] = 'INFO'
+            self.env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
+
+        if 'DD_MASK' not in self.env:
+            self.env['DD_MASK'] = 'ALL'
+
+        if 'DD_SUBSYS' not in self.env:
+            self.env['DD_SUBSYS'] = 'ALL'
 
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
