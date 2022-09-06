@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
 from logging import getLogger
 from time import time
 
