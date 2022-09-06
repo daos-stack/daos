@@ -283,7 +283,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			};
-			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
+			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
 		case 'm':
 			printf("\n\n=================");
@@ -292,7 +292,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			const struct CMUnitTest metadata_tests[] = {
 			    cmocka_unit_test(do_mtime),
 			};
-			nr_failed = cmocka_run_group_tests(metadata_tests, NULL, NULL);
+			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
 
 		default:
@@ -310,8 +310,7 @@ main(int argc, char **argv)
 {
 	char                 tests[64];
 	int                  ntests          = 0;
-	int                  nr_failed       = 0;
-	int                  nr_total_failed = 0;
+	int                  nr_failed = 0;
 	int                  opt = 0, index = 0;
 
 	static struct option long_options[] = {
@@ -351,10 +350,10 @@ main(int argc, char **argv)
 	nr_failed = run_specified_tests(tests, NULL, 0);
 
 	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_total_failed == 0)
+	if (nr_failed == 0)
 		print_message("OK - NO TEST FAILURES\n");
 	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
+		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
 
 	return nr_failed;
 }
