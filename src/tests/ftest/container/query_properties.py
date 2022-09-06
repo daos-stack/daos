@@ -56,12 +56,14 @@ class QueryPropertiesTest(TestWithServers):
         srv_verify = srv_verify_conf
         chksum_type = ctypes.c_uint64(chksum_type_conf)
         chunk_size = ctypes.c_uint64(chunk_size_conf)
+        rf_lvl = ctypes.c_uint64(DaosContPropEnum.DAOS_PROP_CO_REDUN_DEFAULT.value)
         con_in = [
             cont_prop_type,
             enable_chksum,
             srv_verify,
             chksum_type,
-            chunk_size
+            chunk_size,
+            rf_lvl
         ]
 
         # Create container with the DaosContProperties.

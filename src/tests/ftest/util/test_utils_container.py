@@ -13,7 +13,7 @@ from avocado import fail_on
 from command_utils_base import BasicParameter
 from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str, str_to_c_uuid)
+                        c_uuid_to_str, str_to_c_uuid, DaosContPropEnum)
 from general_utils import get_random_bytes, DaosTestError
 
 
@@ -267,11 +267,6 @@ class TestContainer(TestDaosApiBase):
         self.oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
-        # Default to RANK fault domain (rf_lvl:1) when not specified
-        if self.properties.value is None:
-            self.properties.update('rf_lvl:1')
-        elif 'rf_lvl' not in self.properties.value:
-            self.properties.update(self.properties.value + ',rf_lvl:1')
         self.daos_timeout = BasicParameter(None)
 
         self.container = None
@@ -341,6 +336,11 @@ class TestContainer(TestDaosApiBase):
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
+                cop.rf_lvl = con_in[5]
+                kwargs["con_prop"] = cop
+            else:
+                cop = self.input_params.get_con_create_params()
+                cop.rf_lvl = ctypes.c_uint64(DaosContPropEnum.DAOS_PROP_CO_REDUN_RANK.value)
                 kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
