@@ -106,7 +106,6 @@ int main(int argc, char **argv)
 	pthread_t		thread[NUM_THREADS];
 	ATOMIC int              status = 0;
 	int			rc;
-	int                     rc2;
 	int			i;
 	int                     thread_count;
 
