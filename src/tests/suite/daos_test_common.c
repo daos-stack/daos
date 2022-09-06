@@ -1290,12 +1290,13 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 
 		if (fp != NULL)
 			pclose(fp);
-		free(line);
 	}
 
+	D_FREE(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
+	D_FREE(line);
 	D_FREE(tmp);
 	return 0;
 }
