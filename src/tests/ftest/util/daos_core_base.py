@@ -160,6 +160,9 @@ class DaosCoreBase(TestWithServers):
         job.assign_environment(env)
         job_str = str(job)
 
+        self.log.debug("CHECK: daos_test check_results_list: %s", job_cmd.check_results_list)
+        self.log.debug("CHECK: orterun check_results_list:   %s", job.check_results_list)
+
         # Update the expected status for each ranks that will be stopped by this
         # test to avoid a false failure during tearDown().
         if "random" in stopped_ranks:
@@ -185,6 +188,7 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
         finally:
+            self.log.debug("CHECK: orterun.check_results():      %s", job.check_results())
             if not self.using_local_host:
                 # List any remote cmocka files
                 self.log.debug("Remote %s directories:", cmocka_dir)
