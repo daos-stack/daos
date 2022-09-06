@@ -102,7 +102,6 @@ struct iter_cont_arg {
 	uuid_t			cont_hdl_uuid;
 	struct tree_cache_root	*cont_root;
 	unsigned int		yield_freq;
-	unsigned int		obj_cnt;
 	uint64_t		*snaps;
 	uint32_t		snap_cnt;
 	uint32_t		version;
@@ -156,8 +155,8 @@ out:
 }
 
 static int
-container_tree_create(daos_handle_t toh, uuid_t uuid,
-		      struct tree_cache_root **rootp)
+obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
+		uint32_t class, uint64_t feats, struct tree_cache_root **rootp)
 {
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
@@ -166,7 +165,7 @@ container_tree_create(daos_handle_t toh, uuid_t uuid,
 	struct tree_cache_root	*tmp_root;
 	int			rc;
 
-	d_iov_set(&key_iov, uuid, sizeof(uuid_t));
+	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, &root, sizeof(root));
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc)
@@ -181,15 +180,14 @@ container_tree_create(daos_handle_t toh, uuid_t uuid,
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create_inplace(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY, 32,
-				   &uma, &tmp_root->btr_root, &tmp_root->root_hdl);
+	rc = dbtree_create_inplace(class, feats, 32, &uma, &tmp_root->btr_root,
+				   &tmp_root->root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	*rootp = tmp_root;
-
 out:
 	if (rc < 0)
 		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
@@ -236,7 +234,7 @@ obj_tree_lookup(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 }
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id, daos_unit_oid_t oid,
 		d_iov_t *val_iov)
 {
 	struct tree_cache_root	*cont_root = NULL;
@@ -255,9 +253,13 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 			return rc;
 		}
 
-		D_DEBUG(DB_TRACE, "Create cont "DF_UUID" tree\n",
-			DP_UUID(co_uuid));
-		rc = container_tree_create(toh, co_uuid, &cont_root);
+		D_DEBUG(DB_TRACE, "Create cont "DF_UUID" tree\n", DP_UUID(co_uuid));
+		if (tgt_id != (uint64_t)(-1))
+			rc = obj_tree_create(toh, co_uuid, sizeof(uuid_t), DBTREE_CLASS_IV,
+					     BTR_FEAT_UINT_KEY, &cont_root);
+		else
+			rc = obj_tree_create(toh, co_uuid, sizeof(uuid_t), DBTREE_CLASS_NV,
+					     BTR_FEAT_DIRECT_KEY, &cont_root);
 		if (rc) {
 			D_ERROR("tree_create cont "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(co_uuid), DP_RC(rc));
@@ -265,6 +267,31 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		}
 	} else {
 		cont_root = tmp_iov.iov_buf;
+	}
+
+	/* Then try to insert the object under the container */
+	if (tgt_id != (uint64_t)(-1)) {
+		d_iov_set(&key_iov, &tgt_id, sizeof(tgt_id));
+		d_iov_set(&tmp_iov, NULL, 0);
+		rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &tmp_iov);
+		if (rc < 0) {
+			if (rc != -DER_NONEXIST) {
+				D_ERROR("lookup tgt "DF_U64" failed: "DF_RC"\n",
+					tgt_id, DP_RC(rc));
+				return rc;
+			}
+
+			D_DEBUG(DB_TRACE, "Create tgt "DF_U64" tree\n", tgt_id);
+			rc = obj_tree_create(cont_root->root_hdl, &tgt_id, sizeof(tgt_id),
+					     DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY, &cont_root);
+			if (rc) {
+				D_ERROR("tree_create tgt "DF_U64" failed: "DF_RC"\n",
+					tgt_id, DP_RC(rc));
+				return rc;
+			}
+		} else {
+			cont_root = tmp_iov.iov_buf;
+		}
 	}
 
 	/* Then try to insert the object under the container */
@@ -283,9 +310,9 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		return rc;
 	}
 	cont_root->count++;
-	D_DEBUG(DB_TRACE, "insert "DF_UOID"/"DF_UUID" in"
-		" cont_root %p count %d\n", DP_UOID(oid),
-		DP_UUID(co_uuid), cont_root, cont_root->count);
+	D_DEBUG(DB_TRACE, "insert "DF_UOID"/"DF_UUID"/"DF_U64" in"
+		" root %p count %d\n", DP_UOID(oid),
+		DP_UUID(co_uuid), tgt_id, cont_root, cont_root->count);
 
 	return rc;
 }
@@ -1415,9 +1442,6 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		}
 	}
 
-	if (tls->mpt_global_version >= 1)
-		vos_pool_features_set(cont_child->sc_pool->spc_hdl, VOS_POOL_FEAT_AGG_OPT);
-
 	*cont_p = cont_child;
 	return rc;
 }
@@ -1435,7 +1459,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
 	if (rc || cont == NULL)
-		D_GOTO(out, rc);
+		D_GOTO(cont_put, rc);
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -1512,8 +1536,8 @@ cont_close:
 pool_close:
 	dsc_pool_close(poh);
 cont_put:
-	ds_cont_child_put(cont);
-out:
+	if (cont != NULL)
+		ds_cont_child_put(cont);
 	return rc;
 }
 
@@ -2368,6 +2392,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_handle_t		 oh  = DAOS_HDL_INVAL;
 	uint32_t		 num;
+	int			 rc1;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -2564,7 +2589,10 @@ retry:
 
 	dsc_obj_close(oh);
 out_cont:
-	dsc_cont_close(poh, coh);
+	rc1 = dsc_cont_close(poh, coh);
+	if (rc1)
+		D_WARN(DF_UUID" container "DF_UUID" close failure: "DF_RC"\n",
+		       DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid), DP_RC(rc1));
 out_pool:
 	dsc_pool_close(poh);
 out:
@@ -2814,7 +2842,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	val.tgt_idx = tgt_idx;
 
 	d_iov_set(&val_iov, &val, sizeof(struct migrate_obj_val));
-	rc = obj_tree_insert(toh, cont_arg->cont_uuid, oid, &val_iov);
+	rc = obj_tree_insert(toh, cont_arg->cont_uuid, -1, oid, &val_iov);
 	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UUID"/"DF_UOID": ver %u "
 		"generated "DF_U64" "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
 		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), tls->mpt_version,
@@ -2911,7 +2939,6 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	}
 
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;
-	arg.obj_cnt	= root->count;
 	arg.cont_root	= root;
 	arg.snaps	= snapshots;
 	arg.snap_cnt	= snap_cnt;
@@ -3112,7 +3139,7 @@ migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 		return rc;
 	}
 
-	rc = obj_tree_insert(toh, co_uuid, oid, &val_iov);
+	rc = obj_tree_insert(toh, co_uuid, -1, oid, &val_iov);
 
 	return rc;
 }

@@ -9,6 +9,7 @@ package bdev
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -172,6 +173,22 @@ func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error
 		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
 }
 
+func logNUMAStats(log logging.Logger) {
+	var toLog string
+
+	out, err := exec.Command("numastat", "-m").Output()
+	if err != nil {
+		toLog = (&runCmdError{
+			wrapped: err,
+			stdout:  string(out),
+		}).Error()
+	} else {
+		toLog = string(out)
+	}
+
+	log.Debugf("run cmd numastat -m: %s", toLog)
+}
+
 // prepare receives function pointers for external interfaces.
 func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
@@ -183,6 +200,8 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
 		}
 		resp.NrHugePagesRemoved = nrRemoved
+
+		logNUMAStats(sb.log)
 
 		return resp, nil
 	}
@@ -219,15 +238,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 		return errors.Wrapf(err, "update prepare request")
 	}
 
-	if req.EnableVMD {
-		// First run with VMD addresses in allow list and then without to reset backing SSDs.
-		if err := sb.script.Reset(&req); err != nil {
-			return errors.Wrap(err, "unbinding vmd endpoints from userspace drivers")
-		}
-		req.PCIAllowList = ""
-	}
-
-	return errors.Wrap(sb.script.Reset(&req), "unbinding ssds from userspace drivers")
+	return errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence

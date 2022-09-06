@@ -352,12 +352,12 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	memSizeFreeMb := hpi.Free * pageSizeMb
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
+		pageSizeMb, *hpi)
 	if memSizeFreeMb < memSizeReqMb {
-		srv.log.Errorf("huge page info: %+v", *hpi)
 		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
 	engine.setMemSize(memSizeReqMb)
@@ -366,19 +366,19 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	return nil
 }
 
-func cleanEngineHugePages(srv *server, engineIdx uint32) error {
-	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
-
+func cleanEngineHugePages(srv *server) error {
 	req := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,
 	}
+
+	msg := "cleanup hugepages via bdev backend"
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
 
 	return nil
 }
@@ -400,14 +400,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		return nil
 	})
 
-	engine.RLock()
-	engineIdx := engine.runner.GetConfig().Index
-	engine.RUnlock()
-
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
+		srv.log.Debugf("engine %d: storage ready", engine.Index())
+
 		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugePages(srv, engineIdx); err != nil {
+		if err := cleanEngineHugePages(srv); err != nil {
 			srv.log.Errorf(err.Error())
 		}
 
@@ -525,6 +523,7 @@ func registerLeaderSubscriptions(srv *server) {
 	})
 }
 
+// getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
