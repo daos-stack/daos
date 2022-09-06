@@ -130,11 +130,10 @@ class ServerRankFailure(IorTestBase):
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
-    def verify_rank_failure(self, ior_namespace, container_namespace):
+    def verify_rank_failure(self, ior_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
 
-        1. Create a pool and a container. Create a container with or without redundancy
-        factor based on container_namespace.
+        1. Create a pool and a container. Create a container with redundancy factor.
         2. Get the amount of IO inflow to each rank. We expect them to be 0.
         3. Run IOR with given object class and let it run through step 7.
         4. Get the amount of IO inflow again.
@@ -154,11 +153,10 @@ class ServerRankFailure(IorTestBase):
 
         Args:
             ior_namespace (str): Yaml namespace that defines the object class used for IOR.
-            container_namespace (str): Yaml namespace that defines the container redundancy factor.
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool, namespace=container_namespace)
+        self.add_container(pool=self.pool)
 
         # 2. Run IOR with given object class and let it run through step 7.
         ior_results = {}
@@ -191,9 +189,9 @@ class ServerRankFailure(IorTestBase):
             errors.append("First IOR didn't fail as expected!")
 
         # 6. Wait for rebuild to finish
-        self.log.debug("## Wait for rebuild to start.")
+        self.log.info("Wait for rebuild to start.")
         self.pool.wait_for_rebuild(to_start=True, interval=10)
-        self.log.debug("## Wait for rebuild to finish.")
+        self.log.info("Wait for rebuild to finish.")
         self.pool.wait_for_rebuild(to_start=False, interval=10)
 
         # 7. Restart daos_servers. It's not easy to restart only on the host where the
@@ -222,9 +220,9 @@ class ServerRankFailure(IorTestBase):
                     self.log.debug("## pool reintegrate error: %s", error)
 
             # Wait for rebuild to finish
-            self.log.debug("## Wait for rebuild to start.")
+            self.log.info("Wait for rebuild to start.")
             self.pool.wait_for_rebuild(to_start=True, interval=10)
-            self.log.debug("## Wait for rebuild to finish.")
+            self.log.info("Wait for rebuild to finish.")
             self.pool.wait_for_rebuild(to_start=False, interval=10)
 
         # 11. Verify that the container Health is HEALTHY.
@@ -245,21 +243,6 @@ class ServerRankFailure(IorTestBase):
         report_errors(test=self, errors=errors)
         self.log.info("############################")
 
-    def test_server_rank_failure_wo_rf(self):
-        """Jira ID: DAOS-10002.
-
-        Test rank failure without redundancy factor and SX object class. See
-        verify_rank_failure() for test steps.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_wo_rf
-        """
-        self.verify_rank_failure(
-            ior_namespace="/run/ior_wo_rf/*",
-            container_namespace="/run/container_wo_rf/*")
-
     def test_server_rank_failure_with_rp(self):
         """Jira ID: DAOS-10002.
 
@@ -271,9 +254,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=deployment,server_rank_failure
         :avocado: tags=test_server_rank_failure_with_rp
         """
-        self.verify_rank_failure(
-            ior_namespace="/run/ior_with_rp/*",
-            container_namespace="/run/container_with_rf/*")
+        self.verify_rank_failure(ior_namespace="/run/ior_with_rp/*")
 
     def test_server_rank_failure_with_ec(self):
         """Jira ID: DAOS-10002.
@@ -284,9 +265,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=deployment,server_rank_failure
         :avocado: tags=test_server_rank_failure_with_ec
         """
-        self.verify_rank_failure(
-            ior_namespace="/run/ior_with_ec/*",
-            container_namespace="/run/container_with_rf/*")
+        self.verify_rank_failure(ior_namespace="/run/ior_with_ec/*")
 
     def test_server_rank_failure_isolation(self):
         """Jira ID: DAOS-10002.
@@ -299,7 +278,7 @@ class ServerRankFailure(IorTestBase):
         4. Run IOR with oclass SX.
         5. While IOR is running, kill daos_engine process from two of the ranks where the
         pool isn’t created. This will simulate the case where there’s a node failure, but
-        doesn’t affect the user because their pool isn’t created on the failed node
+        does not affect the user because their pool isn’t created on the failed node
         (assuming that everything else such as network, client node, etc. are still
         working).
         6. Verify that IOR finishes successfully.

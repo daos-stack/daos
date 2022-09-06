@@ -52,17 +52,13 @@ pool_size_ratio_80:
   size: 80%
   control_method: dmg
   rebuild_timeout: 240
-  # Based on Shilong's suggestion on 8/8.
   svcn: 5
 pool_size_value:
   size: 500G
   control_method: dmg
   rebuild_timeout: 240
 
-container_wo_rf:
-  type: POSIX
-  control_method: daos
-container_with_rf:
+container:
   type: POSIX
   control_method: daos
   properties: rf:2
@@ -80,10 +76,6 @@ ior: &ior_base
   # Total size is block_size * ppn.
   block_size: 150G
   sw_deadline: 120
-ior_wo_rf:
-  <<: *ior_base
-  dfs_oclass: SX
-  dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
   dfs_oclass: RP_3GX
