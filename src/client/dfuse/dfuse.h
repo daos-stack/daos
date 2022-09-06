@@ -24,31 +24,30 @@
 #include "dfuse_common.h"
 
 struct dfuse_info {
-	struct fuse_session		*di_session;
-	char				*di_group;
-	char				*di_mountpoint;
-	uint32_t			di_thread_count;
-	bool				di_threaded;
-	bool				di_foreground;
-	bool				di_caching;
-	bool				di_wb_cache;
+	struct fuse_session *di_session;
+	char                *di_group;
+	char                *di_mountpoint;
+	uint32_t             di_thread_count;
+	bool                 di_threaded;
+	bool                 di_foreground;
+	bool                 di_caching;
+	bool                 di_wb_cache;
+
+	/** Hash table of open inodes, this matches kernel ref counts */
+	struct d_hash_table  dpi_iet;
+	/** Hash table of open pools */
+	struct d_hash_table  dpi_pool_table;
+	/** Next available inode number */
+	ATOMIC uint64_t      dpi_ino_next;
+	/* Event queue for async events */
+	daos_handle_t        dpi_eq;
+	/** Semaphore to signal event waiting for async thread */
+	sem_t                dpi_sem;
+	pthread_t            dpi_thread;
+	bool                 dpi_shutdown;
 };
 
-struct dfuse_projection_info {
-	struct dfuse_info		*dpi_info;
-	/** Hash table of open inodes, this matches kernel ref counts */
-	struct d_hash_table		dpi_iet;
-	/** Hash table of open pools */
-	struct d_hash_table		dpi_pool_table;
-	/** Next available inode number */
-	ATOMIC uint64_t			dpi_ino_next;
-	/* Event queue for async events */
-	daos_handle_t			dpi_eq;
-	/** Semaphore to signal event waiting for async thread */
-	sem_t				dpi_sem;
-	pthread_t			dpi_thread;
-	bool				dpi_shutdown;
-};
+#define dfuse_projection_info dfuse_info
 
 struct dfuse_inode_entry;
 
@@ -261,8 +260,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 /* Setup internal structures */
 int
-dfuse_fs_init(struct dfuse_info *dfuse_info,
-	      struct dfuse_projection_info **fsh);
+dfuse_fs_init(struct dfuse_info *dfuse_info);
 
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);

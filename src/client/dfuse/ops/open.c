@@ -35,7 +35,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (ie->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_caching && fs_handle->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;

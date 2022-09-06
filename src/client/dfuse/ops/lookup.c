@@ -132,8 +132,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (wipe_parent == 0)
 		return;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
-					      wipe_name, strnlen(wipe_name, NAME_MAX));
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, wipe_parent, wipe_name,
+					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
 

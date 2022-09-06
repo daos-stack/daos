@@ -166,10 +166,10 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 static void *
 dfuse_progress_thread(void *arg)
 {
-	struct dfuse_projection_info *fs_handle = arg;
-	int                           rc;
-	daos_event_t                 *dev;
-	struct dfuse_event           *ev;
+	struct dfuse_info  *fs_handle = arg;
+	int                 rc;
+	daos_event_t       *dev;
+	struct dfuse_event *ev;
 
 	while (1) {
 		errno = 0;
@@ -205,14 +205,11 @@ dfuse_progress_thread(void *arg)
  * Returns true on success, false on failure.
  */
 static int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
+dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	struct dfuse_info *dfuse_info;
-	int                rc;
+	int rc;
 
-	dfuse_info = fs_handle->dpi_info;
-
-	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), fs_handle);
+	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), dfuse_info);
 	if (dfuse_info->di_session == NULL) {
 		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
 		return -DER_INVAL;
@@ -377,7 +374,6 @@ show_help(char *name)
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info	*fs_handle = NULL;
 	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_cont	*dfs = NULL;
@@ -543,7 +539,7 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	rc = dfuse_fs_init(dfuse_info, &fs_handle);
+	rc = dfuse_fs_init(dfuse_info);
 	if (rc != 0)
 		D_GOTO(out_fini, rc);
 
@@ -616,36 +612,36 @@ main(int argc, char **argv)
 	 * and parse pool_name, if that's not a uuid then try it as a label, else try it as a uuid.
 	 */
 	if (pool_name && uuid_parse(pool_name, pool_uuid) < 0)
-		rc = dfuse_pool_connect_by_label(fs_handle, pool_name, &dfp);
+		rc = dfuse_pool_connect_by_label(dfuse_info, pool_name, &dfp);
 	else
-		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
+		rc = dfuse_pool_connect(dfuse_info, &pool_uuid, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	if (cont_name && uuid_parse(cont_name, cont_uuid) < 0)
-		rc = dfuse_cont_open_by_label(fs_handle, dfp, cont_name, &dfs);
+		rc = dfuse_cont_open_by_label(dfuse_info, dfp, cont_name, &dfs);
 	else
-		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
+		rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_start_fs(fs_handle, dfs);
+	rc = dfuse_start_fs(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_cont, rc);
 
 	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
 	 * initial one.
 	 */
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&dfuse_info->dpi_pool_table, &dfp->dfp_entry);
 
-	rc = dfuse_fs_stop(fs_handle);
+	rc = dfuse_fs_stop(dfuse_info);
 
 	/* Remove all inodes from the hash tables */
-	rc2 = dfuse_fs_fini(fs_handle);
+	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 	fuse_session_destroy(dfuse_info->di_session);
@@ -653,13 +649,12 @@ main(int argc, char **argv)
 out_cont:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&dfuse_info->dpi_pool_table, &dfp->dfp_entry);
 out_daos:
-	rc2 = dfuse_fs_fini(fs_handle);
+	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	D_FREE(fs_handle);
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:

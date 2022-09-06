@@ -373,8 +373,8 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
-			       &p_info, NULL);
+	rc =
+	    daos_pool_connect(label, fs_handle->di_group, DAOS_PC_RO, &dfp->dfp_poh, &p_info, NULL);
 	if (rc) {
 		if (rc == -DER_NO_PERM)
 			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
@@ -456,8 +456,8 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 		uuid_copy(dfp->dfp_pool, *pool);
 		uuid_unparse(dfp->dfp_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str, fs_handle->dpi_info->di_group, DAOS_PC_RO,
-				       &dfp->dfp_poh, NULL, NULL);
+		rc = daos_pool_connect(uuid_str, fs_handle->di_group, DAOS_PC_RO, &dfp->dfp_poh,
+				       NULL, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM)
 				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, "DF_RC, DP_RC(rc));
@@ -736,7 +736,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 		D_GOTO(err_close, rc);
 	}
 
-	if (fs_handle->dpi_info->di_caching) {
+	if (fs_handle->di_caching) {
 		rc = dfuse_cont_get_cache(dfc);
 		if (rc == ENODATA) {
 			/* If there is no container specific
@@ -864,7 +864,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 			D_GOTO(err_close, rc);
 		}
 
-		if (fs_handle->dpi_info->di_caching) {
+		if (fs_handle->di_caching) {
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
 				/* If there are no container attributes then use defaults */
@@ -959,18 +959,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
 }
 
 int
-dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh)
+dfuse_fs_init(struct dfuse_info *fs_handle)
 {
-	struct dfuse_projection_info *fs_handle;
-	int                           rc;
-
-	D_ALLOC_PTR(fs_handle);
-	if (!fs_handle)
-		return -DER_NOMEM;
-
-	DFUSE_TRA_UP(fs_handle, dfuse_info, "fs_handle");
-
-	fs_handle->dpi_info = dfuse_info;
+	int rc;
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &pool_hops,
@@ -995,7 +986,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	fs_handle->dpi_shutdown = false;
-	*_fsh = fs_handle;
 	return rc;
 
 err_eq:
@@ -1005,7 +995,6 @@ err_iht:
 err_pt:
 	d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
 err:
-	D_FREE(fs_handle);
 	return rc;
 }
 
@@ -1091,7 +1080,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       &ie->ie_htl, false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
-	return -DER_SUCCESS;
+	return rc;
 err:
 	D_FREE(ie);
 	return rc;
@@ -1114,9 +1103,7 @@ ino_flush(d_list_t *rlink, void *arg)
 	if (ie->ie_stat.st_ino == 1)
 		return 0;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-					      ie->ie_parent,
-					      ie->ie_name,
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, ie->ie_parent, ie->ie_name,
 					      strlen(ie->ie_name));
 	if (rc != 0 && rc != -EBADF)
 		DFUSE_TRA_WARNING(ie,

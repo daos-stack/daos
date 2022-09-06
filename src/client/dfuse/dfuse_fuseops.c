@@ -60,7 +60,7 @@ dfuse_show_flags(void *handle, unsigned int in)
 static void
 dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
-	struct dfuse_projection_info *fs_handle = arg;
+	struct dfuse_info *fs_handle = arg;
 
 	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 
@@ -89,7 +89,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->time_gran = 1;
 
-	if (fs_handle->dpi_info->di_wb_cache)
+	if (fs_handle->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);

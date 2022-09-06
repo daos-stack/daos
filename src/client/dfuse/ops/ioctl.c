@@ -45,7 +45,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session,
 						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
 		if (rc == 0) {
