@@ -39,7 +39,8 @@ cd /opt/daos
 rsync -avp /opt/daos-remote/ /opt/daos/
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
-/bin/rm "$DAOS_BASE/install/bin/daos_admin"
+
+# /bin/rm "$DAOS_BASE/bin/daos_admin"
 
 cd /opt/daos-remote
 
