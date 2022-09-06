@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 	pthread_t		thread[NUM_THREADS];
 	ATOMIC int              status = 0;
 	int			rc;
+	int                     rc2;
 	int			i;
 	int                     thread_count;
 
@@ -133,7 +134,7 @@ int main(int argc, char **argv)
 	for (thread_count = 0; thread_count < NUM_THREADS; thread_count++) {
 		rc = pthread_create(&thread[thread_count], NULL, progress, &status);
 		if (rc != 0) {
-			printf("Failed to create thread: %d, exiting\n", rc);
+			printf("Failed to create thread: %d (%s), exiting\n", rc, strerror(rc));
 			goto stop;
 		}
 	}
