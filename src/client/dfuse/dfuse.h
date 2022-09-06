@@ -56,20 +56,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 struct dfuse_inode_entry;
 
-struct dfuse_readdir_entry {
-	/* Name of this directory entry */
-	char	dre_name[NAME_MAX + 1];
-
-	/* Offset of this directory entry */
-	off_t	dre_offset;
-
-	/* Offset of the next directory entry
-	 * A value of DFUSE_READDIR_EOD means end
-	 * of directory.
-	 */
-	off_t	dre_next_offset;
-};
-
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
@@ -79,17 +65,8 @@ struct dfuse_obj_hdl {
 	/** the inode entry for the file */
 	struct dfuse_inode_entry        *doh_ie;
 
-	/** an anchor to track listing in readdir */
-	daos_anchor_t                    doh_anchor;
-
-	/** Array of entries returned by dfs but not reported to kernel */
-	struct dfuse_readdir_entry      *doh_dre;
-	/** Current index into doh_dre array */
-	uint32_t                         doh_dre_index;
-	/** Last index containing valid data */
-	uint32_t                         doh_dre_last_index;
-	/** Next value from anchor */
-	uint32_t                         doh_anchor_index;
+	/** readdir handle. */
+	struct dfuse_readdir_hdl        *doh_rd;
 
 	ATOMIC uint32_t                  doh_il_calls;
 
@@ -108,6 +85,34 @@ struct dfuse_obj_hdl {
 	bool                             doh_kreaddir_started;
 	/* Set to true if readdir calls are made on this handle */
 	bool                             doh_kreaddir_finished;
+};
+
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char  dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
+	off_t dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t dre_next_offset;
+};
+
+struct dfuse_readdir_hdl {
+	/** an anchor to track listing in readdir */
+	daos_anchor_t               drh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
+	struct dfuse_readdir_entry *drh_dre;
+	/** Current index into doh_dre array */
+	uint32_t                    drh_dre_index;
+	/** Last index containing valid data */
+	uint32_t                    drh_dre_last_index;
+	/** Next value from anchor */
+	uint32_t                    drh_anchor_index;
 };
 
 /*
