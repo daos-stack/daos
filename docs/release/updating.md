@@ -1,13 +1,13 @@
-# Upgrading to DAOS Version 2.0
+# Updating to DAOS Version 2.0
 
 
-## Upgrading DAOS from Version 2.0.x to Version 2.0.y
+## Updating DAOS from Version 2.0.x to Version 2.0.y
 
-Upgrading DAOS from one 2.0.x fix level to a newer 2.0.y fix level is
+Updating DAOS from one 2.0.x fix level to a newer 2.0.y fix level is
 supported as an offline update, maintaining the data in DAOS pools and
 containers.
 
-The recommended procedure for the upgrade is:
+The recommended procedure for the update is:
 
 - Ensure that there are no client applications with open pool connections.
   If necessary, the `dmg pool evict` command can be used on an admin node
@@ -23,6 +23,9 @@ The recommended procedure for the upgrade is:
 
 - On all servers, admin nodes, and clients,
   perform the RPM update to the new DAOS fix level.
+  Set up the new DAOS repository, then run `yum update` (CentOS 7 or EL8),
+  `dnf update` (EL8), or `zypper update` (SLES/OpenSUSE)
+  to update the DAOS RPMs and their dependencies.
 
 - Start the `daos_server` daemons on all server nodes,
   for example by running `systemctl start daos_server` in a parallel shell.
@@ -37,7 +40,7 @@ DAOS fix levels include all previous fix levels. So it is possible to updating
 from Version 2.0.0 to Version 2.0.2 without updating to Version 2.0.1 first.
 
 
-## Upgrading DAOS from Version 1.x to Version 2.0
+## Updating DAOS from Version 1.x to Version 2.0
 
 DAOS Version 2.0 is a major feature release, and it was a conscious
 design decision to **not** provide backwards compatibility with previous
@@ -48,14 +51,14 @@ between two adjacent releases is planned.
 DAOS Version 2.0 introduces several protocol and API changes,
 as well as changes in the internal object layout,
 which make DAOS Version 2.0 incompatible with previous DAOS releases.
-It is therefore not possible to perform online or offline upgrades from
+It is therefore not possible to perform online or offline updates from
 previous DAOS releases to DAOS Version 2.0, while maintaining the user
 data in containers that have been created with previous DAOS releases.
 
-This means that an upgrade from DAOS Version 1.0 or 1.2 to
+This means that an update from DAOS Version 1.0 or 1.2 to
 DAOS Version 2.0 is essentially a new installation.
 Existing user data in DAOS should be backed up to non-DAOS storage
-before the upgrade, as the DAOS storage will need to be reformatted.
+before the update, as the DAOS storage will need to be reformatted.
 For POSIX containers, there are two paths to perform such a backup:
 
 1. On a DAOS client where the DAOS POSIX container is dfuse-mounted,
@@ -78,10 +81,10 @@ To do this, the `LD_PRELOAD` setting must be passed to all tasks
 of the MPI-parallel job, for example with
 `mpirun -genv LD_PRELOAD /usr/lib64/libioil.so -np 8 -f hostfile dcp $SOURCE $DEST`.
 
-When planning the upgrade to DAOS Version 2.0, please also verify the supported
+When planning the update to DAOS Version 2.0, please also verify the supported
 operating system levels as outlined in the
 [DAOS Version 2.0 Support](./support_matrix.md) document.
-If an OS upgrade is required, this should be performed prior to upgrading DAOS.
+If an OS update is required, this should be performed prior to updating DAOS.
 
 !!! note
     Note that CentOS 8.3 uses `hwloc-1.11`, while CentOS 8.4 uses `hwloc-2.2`.

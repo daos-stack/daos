@@ -64,7 +64,7 @@ nav:
     - Release Information:
         - 'Release Notes v2.0': 'release/release_notes.md'
         - 'Support Matrix v2.0': 'release/support_matrix.md'
-        - 'Upgrading to v2.0': 'release/upgrading.md'
+        - 'Updating to v2.0': 'release/updating.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Overview:
         - 'Architecture': 'overview/architecture.md'
