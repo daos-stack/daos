@@ -710,8 +710,8 @@ func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) 
 		if *engineCfg.PinnedNumaNode != node {
 			// TODO: This should probably be a fatal error, but we may need to allow the config
 			// override in case our affinity detection is incorrect.
-			log.Errorf("engine config pinned_numa_node is set to %d but detected affinity is with NUMA node %d",
-				*engineCfg.PinnedNumaNode, node)
+			log.Errorf("engine %d config pinned_numa_node is set to %d but detected affinity is with NUMA node %d",
+				engineCfg.Index, *engineCfg.PinnedNumaNode, node)
 		}
 	} else {
 		// If not set via config, use the detected NUMA node affinity.

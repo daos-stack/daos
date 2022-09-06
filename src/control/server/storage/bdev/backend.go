@@ -9,6 +9,7 @@ package bdev
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -172,6 +173,22 @@ func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error
 		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
 }
 
+func logNUMAStats(log logging.Logger) {
+	var toLog string
+
+	out, err := exec.Command("numastat", "-m").Output()
+	if err != nil {
+		toLog = (&runCmdError{
+			wrapped: err,
+			stdout:  string(out),
+		}).Error()
+	} else {
+		toLog = string(out)
+	}
+
+	log.Debugf("run cmd numastat -m: %s", toLog)
+}
+
 // prepare receives function pointers for external interfaces.
 func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
@@ -183,6 +200,8 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
 		}
 		resp.NrHugePagesRemoved = nrRemoved
+
+		logNUMAStats(sb.log)
 
 		return resp, nil
 	}
