@@ -43,8 +43,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
                 self.log.info("Adding SCM %d bytes from rank %d", scm_vos_bytes, rank)
                 scm_vos_size += host_size
 
-        self.log.info("Available VOS size: scm_bytes=%d, scm_size=%d",
-                      scm_vos_bytes, scm_vos_size)
+        self.log.info("Available VOS size: scm_bytes=%d, scm_size=%d", scm_vos_bytes, scm_vos_size)
 
         scm_pool_bytes = scm_vos_bytes * scm_vos_size if scm_vos_bytes != sys.maxsize else 0
         self.log.info("Available POOL size: scm_bytes=%d", scm_pool_bytes)
@@ -66,22 +65,25 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.log.info("Test basic pool creation with full storage")
 
         create_time = self.create_one_pool()
-        self.log.debug("Created one pool with 100%% of the available storage in %f seconds",
-                       create_time)
+        self.log.debug(
+            "Created one pool with 100%% of the available storage in %f seconds",
+            create_time)
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
         tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                             msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-        self.assertEqual(0, tier_bytes[1],
-                         "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+            msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+        self.assertEqual(
+            0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
         self.log.info("Checking size of available storage")
         self.scm_avail_bytes = self.get_available_bytes()
-        self.assertEqual(0, self.scm_avail_bytes,
-                         "Invalid SCM size: want=0, got={}".format(self.scm_avail_bytes))
+        self.assertEqual(
+            0, self.scm_avail_bytes,
+            "Invalid SCM size: want=0, got={}".format(self.scm_avail_bytes))
 
     def test_rank_filter(self):
         """Test the creation of one pool with filtering the rank to use
@@ -105,25 +107,27 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         scm_unused_bytes = self.scm_avail_bytes - scm_usable_bytes
 
         create_time = self.create_one_pool(ranks_used)
-        self.log.debug("Created one pool with 100%% of the available storage "
-                       "in %f seconds", create_time)
+        self.log.debug(
+            "Created one pool with 100%% of the available storage in %f seconds", create_time)
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
         tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
         delta_bytes = self.epsilon_bytes * len(ranks_used)
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(scm_usable_bytes - tier_bytes[0]), delta_bytes,
-                             msg.format(scm_usable_bytes, tier_bytes[0], delta_bytes))
-        self.assertEqual(0, tier_bytes[1],
-                         "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
+        self.assertLessEqual(
+            abs(scm_usable_bytes - tier_bytes[0]), delta_bytes,
+            msg.format(scm_usable_bytes, tier_bytes[0], delta_bytes))
+        self.assertEqual(
+            0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
         self.log.info("Checking size of available storage")
         self.scm_avail_bytes = self.get_available_bytes(ranks_unused)
         delta_bytes = self.epsilon_bytes * len(ranks_unused)
         msg = r"Invalid available SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(scm_unused_bytes - self.scm_avail_bytes), delta_bytes,
-                             msg.format(scm_unused_bytes, self.scm_avail_bytes, delta_bytes))
+        self.assertLessEqual(
+            abs(scm_unused_bytes - self.scm_avail_bytes), delta_bytes,
+            msg.format(scm_unused_bytes, self.scm_avail_bytes, delta_bytes))
 
     def test_recycle_pools(self):
         """Test the pool creation and destruction
@@ -143,27 +147,29 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         for index in range(10):
             self.log.info("Creating pool %d", index)
             create_time = self.create_one_pool()
-            self.log.debug("Created one pool with 100%% of the available storage in %f seconds",
-                           create_time)
+            self.log.debug(
+                "Created one pool with 100%% of the available storage in %f seconds", create_time)
 
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
             tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
             msg = r"Invalid SCM size: want={}, got={}, delta={}"
-            self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                                 msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-            self.assertEqual(0, tier_bytes[1],
-                             "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
+            self.assertLessEqual(
+                abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+                msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+            self.assertEqual(
+                0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
             self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
             scm_avail_bytes = self.get_available_bytes()
             msg = r"Invalid SCM size: want={}, got={}, delta={}"
-            self.assertLessEqual(abs(scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                                 msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-            self.assertEqual(0, tier_bytes[1],
-                             "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
+            self.assertLessEqual(
+                abs(scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+                msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+            self.assertEqual(
+                0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
     def check_pool_distribution(self):
         """Check if the size used on each hosts is more or less uniform
@@ -195,15 +201,17 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
                 # Update the difference of size allowed with metadata
                 if scm_delta_bytes == -1:
                     msg = r"Invalid size of SCM meta data: max={}, got={}"
-                    self.assertLessEqual(delta_bytes, self.max_scm_metadata_bytes,
-                                         msg.format(self.max_scm_metadata_bytes, delta_bytes))
+                    self.assertLessEqual(
+                        delta_bytes, self.max_scm_metadata_bytes,
+                        msg.format(self.max_scm_metadata_bytes, delta_bytes))
                     scm_delta_bytes = delta_bytes
                     continue
 
                 # Check the difference of size with metadata
                 msg = r"Invalid size of SCM used: want={} got={}"
-                self.assertLessEqual(delta_bytes, scm_delta_bytes + self.epsilon_bytes,
-                                     msg.format(scm_vos_bytes, scm_bytes))
+                self.assertLessEqual(
+                    delta_bytes, scm_delta_bytes + self.epsilon_bytes,
+                    msg.format(scm_vos_bytes, scm_bytes))
 
     def test_two_pools(self):
         """Test the creation of two pools with 50% and 100% of the available storage
@@ -223,18 +231,18 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 
         create_time = self.create_first_of_two_pools()
-        self.log.debug("Created a first pool with 50%% of the available storage "
-                       "in %f seconds", create_time)
+        self.log.debug(
+            "Created a first pool with 50%% of the available storage in %f seconds", create_time)
 
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
         tier_bytes = [self.pool[0].info.pi_space.ps_space.s_total]
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(self.scm_avail_bytes - 2 * tier_bytes[0][0]), self.delta_bytes,
-                             msg.format(self.scm_avail_bytes / 2, tier_bytes[0][0],
-                                        self.delta_bytes))
-        self.assertEqual(0, tier_bytes[0][1],
-                         "Invalid SMD size: want=0, got={}".format(tier_bytes[0][1]))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - 2 * tier_bytes[0][0]), self.delta_bytes,
+            msg.format(self.scm_avail_bytes / 2, tier_bytes[0][0], self.delta_bytes))
+        self.assertEqual(
+            0, tier_bytes[0][1], "Invalid SMD size: want=0, got={}".format(tier_bytes[0][1]))
 
         self.log.info("Checking the distribution of the first pool")
         self.check_pool_distribution()
@@ -242,30 +250,33 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.scm_avail_bytes = self.get_available_bytes()
 
         create_time = self.create_second_of_two_pools()
-        self.log.debug("Created a second pool with 100%% of the remaining storage in %f seconds",
-                       create_time)
+        self.log.debug(
+            "Created a second pool with 100%% of the remaining storage in %f seconds", create_time)
 
         self.pool[1].get_info()
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
 
         self.log.info("Checking size of the second pool with the old available size")
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[1][0]), self.delta_bytes,
-                             msg.format(self.scm_avail_bytes, tier_bytes[1][0], self.delta_bytes))
-        self.assertEqual(0, tier_bytes[1][1],
-                         "Invalid SMD size: want=0, got={}".format(tier_bytes[1][1]))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - tier_bytes[1][0]), self.delta_bytes,
+            msg.format(self.scm_avail_bytes, tier_bytes[1][0], self.delta_bytes))
+        self.assertEqual(
+            0, tier_bytes[1][1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1][1]))
 
         self.log.info("Checking size of the second pool with the size of the first pool")
         scm_delta_bytes = self.ranks_size * self.max_scm_metadata_bytes + self.delta_bytes
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
-        self.assertLessEqual(abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
-                             msg.format(tier_bytes[0][0], tier_bytes[1][0], self.delta_bytes))
-        self.assertEqual(0, tier_bytes[1][1],
-                         "Invalid SMD size: want=0, got={}".format(tier_bytes[1][1]))
+        self.assertLessEqual(
+            abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
+            msg.format(tier_bytes[0][0], tier_bytes[1][0], self.delta_bytes))
+        self.assertEqual(
+            0, tier_bytes[1][1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1][1]))
 
         self.scm_avail_bytes = self.get_available_bytes()
 
         self.log.info("Checking size of available storage after the creation of the second pool")
         msg = r"Invalid SCM size: want=0, got={}, delta={}"
-        self.assertLessEqual(self.scm_avail_bytes, self.delta_bytes,
-                             msg.format(self.scm_avail_bytes, self.delta_bytes))
+        self.assertLessEqual(
+            self.scm_avail_bytes, self.delta_bytes,
+            msg.format(self.scm_avail_bytes, self.delta_bytes))
