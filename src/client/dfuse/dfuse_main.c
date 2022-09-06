@@ -249,7 +249,7 @@ static void
 show_help(char *name)
 {
 	printf(
-	    "usage: %s -m mountpoint\n"
+	    "usage: %s <mountpoint> [pool] [container]\n"
 	    "Options:\n"
 	    "\n"
 	    "	-m --mountpoint=<path>	Mount point to use\n"
