@@ -69,7 +69,7 @@ do_openat(void **state)
 
 	assert_return_code(root, errno);
 
-	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	fd = openat(root, "openat_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	/* This will write six bytes, including a \0 terminator */
@@ -98,7 +98,7 @@ do_openat(void **state)
 	assert_int_equal(stbuf0.st_size, sizeof(input_buf) * 2);
 
 	/* stat through kernel to ensure it has observed write */
-	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
@@ -118,7 +118,7 @@ do_openat(void **state)
 	rc = ftruncate(fd, offset);
 	assert_return_code(rc, errno);
 
-	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, offset);
 
@@ -144,14 +144,14 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, 4);
 
-	rc = fstatat(root, "my_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = unlinkat(root, "my_file", 0);
+	rc = unlinkat(root, "openat_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -185,7 +185,7 @@ do_mtime(void **state)
 	assert_return_code(root, errno);
 
 	/* Open a file and sanity check the mtime */
-	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	fd = openat(root, "mtime_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	rc = fstatfs(root, &fs);
@@ -259,7 +259,7 @@ do_mtime(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = unlinkat(root, "my_file", 0);
+	rc = unlinkat(root, "mtime_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
