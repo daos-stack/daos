@@ -1,11 +1,13 @@
-#!/usr/bin/python
 """
 (C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 
+import os
+from os.path import join
+import re
+import ctypes
 from exception_utils import CommandFailure
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
@@ -15,10 +17,6 @@ from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path
-from os.path import join
-import uuid
-import re
-import ctypes
 from general_utils import create_string_buffer
 from command_utils_base import MappedParameter
 
@@ -77,8 +75,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
         self.pool = []
-        self.container = []
-        self.uuids = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
         self.job_manager = None
@@ -351,63 +347,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Continue using the uuid until there are tests for both uuid and label
         pool.use_label = False
 
-        # Save the pool and uuid
+        # Save the pool
         self.pool.append(pool)
-        self.uuids.append(str(pool.uuid))
 
         return pool
-
-    def create_cont(self, pool, use_dfuse_uns=False, dfuse_uns_pool=None, dfuse_uns_cont=None,
-                    cont_type=None, oclass=None):
-        # pylint: disable=arguments-differ
-        """Create a TestContainer object.
-
-        Args:
-            pool (TestPool): pool to create the container in.
-            use_dfuse_uns (bool, optional): whether to create a UNS path in the dfuse mount.
-                Default is False.
-            dfuse_uns_pool (TestPool, optional): pool in the
-                dfuse mount for which to create a UNS path.
-                Default assumes dfuse is running for a specific pool.
-            dfuse_uns_cont (TestContainer, optional): container in the
-                dfuse mount for which to create a UNS path.
-                Default assumes dfuse is running for a specific container.
-            cont_type (str, optional): the container type.
-
-        Returns:
-            TestContainer: the container object
-
-        Note about uns path:
-            These are only created within a dfuse mount.
-            The full UNS path will be created as:
-            <dfuse.mount_dir>/[pool_uuid]/[cont_uuid]/<dir_name>
-            dfuse_uns_pool and dfuse_uns_cont should only be supplied
-            when dfuse was not started for a specific pool/container.
-
-        """
-        params = {}
-
-        if use_dfuse_uns:
-            path = str(self.dfuse.mount_dir.value)
-            if dfuse_uns_pool:
-                path = join(path, dfuse_uns_pool.uuid)
-            if dfuse_uns_cont:
-                path = join(path, dfuse_uns_cont.uuid)
-            path = join(path, "uns{}".format(str(len(self.container))))
-            params["path"] = path
-
-        if cont_type:
-            params["type"] = cont_type
-        if oclass:
-            params["oclass"] = oclass
-
-        container = self.get_container(pool, **params)
-
-        # Save container and uuid
-        self.container.append(container)
-        self.uuids.append(str(container.uuid))
-
-        return container
 
     def get_cont(self, pool, cont_uuid):
         """Get an existing container.
@@ -430,23 +373,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         container.uuid = container.container.get_uuid_str()
         container.container.poh = pool.pool.handle
 
-        # Save container and uuid
-        self.container.append(container)
-        self.uuids.append(str(container.uuid))
-
         return container
-
-    def gen_uuid(self):
-        """Generate a unique uuid.
-
-        Returns:
-            str: a unique uuid
-
-        """
-        new_uuid = str(uuid.uuid4())
-        while new_uuid in self.uuids:
-            new_uuid = str(uuid.uuid4())
-        return new_uuid
 
     def parse_create_cont_uuid(self, output):
         """Parse a uuid from some output.
@@ -1068,49 +995,39 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         return result
 
-    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None, cont=None):
-        """Generic method to perform varios datamover activities
+    def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
+        """Generic method to perform various datamover activities
            using ior
         Args:
-            tool(str): specify the tool name to be used
-            create_dataset(bool): boolean to create initial set of
-                                  data using ior. Defaults to False.
-            pool(TestPool): Pool object. Defaults to None
-            cont(TestContainer): Container object. Defaults to None
+            tool (str): specify the tool name to be used
+            pool (TestPool): source pool object
+            cont (TestContainer): source container object
+            create_dataset (bool): boolean to create initial set of
+                                   data using ior. Defaults to False.
         """
         # Set the tool to use
         self.set_tool(tool)
 
         if create_dataset:
-            # create initial datasets
-            if not pool:
-                pool = self.create_pool()
-            cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
-
-            # update and run ior on container 1
+            # create initial datasets with ior
             self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
-        else:
-            if not pool:
-                pool = self.pool[0]
-            if not cont:
-                cont = self.container[-1]
 
         # create cont2
-        cont2 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+        cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # perform various datamover activities
         if tool == 'CONT_CLONE':
-            read_back_cont = self.gen_uuid()
-            self.run_datamover(
+            result = self.run_datamover(
                 self.test_id + " (cont to cont2)",
                 src_path=format_path(pool, cont),
-                dst_path=format_path(pool, read_back_cont))
+                dst_path=format_path(pool))
+            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
             read_back_pool = pool
         elif tool == 'DSERIAL':
             # Create pool2
             pool2 = self.get_pool()
             # Use dfuse as a shared intermediate for serialize + deserialize
-            dfuse_cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
             self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
             self.serial_tmp_dir = self.dfuse.mount_dir.value
 
@@ -1142,7 +1059,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 dst_path=posix_path)
 
             # create cont3
-            cont3 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            cont3 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
             # copy from posix file system to daos cont3
             self.run_datamover(
