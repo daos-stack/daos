@@ -62,6 +62,9 @@ container:
   type: POSIX
   control_method: daos
   properties: rf:2
+container_wo_rf:
+  type: POSIX
+  control_method: daos
 
 ior: &ior_base
   client_processes:
@@ -76,6 +79,10 @@ ior: &ior_base
   # Total size is block_size * ppn.
   block_size: 150G
   sw_deadline: 120
+ior_wo_rf:
+  <<: *ior_base
+  dfs_oclass: SX
+  dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
   dfs_oclass: RP_3GX
