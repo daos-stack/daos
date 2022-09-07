@@ -4176,12 +4176,12 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 		D_ASSERT(obj_auxi->reasb_req.orr_uiods != NULL);
 		obj_auxi->reasb_req.orr_args->iods = obj_auxi->reasb_req.orr_uiods;
 		obj_auxi->reasb_req.orr_args->sgls = obj_auxi->reasb_req.orr_usgls;
-		obj_auxi->req_reasbed = false;
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
 	obj_update_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
+	obj_auxi->req_reasbed = false;
 
 	/* zero it as user might reuse/resched the task, for
 	 * example the usage in dac_array_set_size().
