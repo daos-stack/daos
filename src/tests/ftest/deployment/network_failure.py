@@ -5,8 +5,8 @@
 """
 import os
 import time
-from ClusterShell.NodeSet import NodeSet
 from collections import defaultdict
+from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -319,7 +319,7 @@ class NetworkFailureTest(IorTestBase):
         2. Create a pool across the four ranks on the two nodes.
         3. Create a container without redundancy factor.
         4. Take down the interface where the pool isn't created. This will simulate the
-        case where there’s a network failure, but doesn’t affect the user because their
+        case where there’s a network failure, but does not affect the user because their
         pool isn’t created on the failed node (assuming that everything else such as
         client node, engine, etc. are still working).
         5. Run IOR with oclass SX.
@@ -362,8 +362,8 @@ class NetworkFailureTest(IorTestBase):
 
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
         # to provide the size because we're using --ranks.
-        self.add_pool(namespace="/run/pool_size_value/*", create=False)
-        self.pool.target_list.update(target_list)
+        self.add_pool(
+            namespace="/run/pool_size_value/*", create=False, target_list=target_list)
         self.pool.create()
 
         # 3. Create a container without redundancy factor.
