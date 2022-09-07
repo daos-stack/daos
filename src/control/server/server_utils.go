@@ -41,17 +41,8 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const scanMinHugePageCount = 128
 
-func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceList {
-	bdevs := []string{}
-	for _, bc := range bdevCfgs {
-		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
-	}
-
-	return storage.MustNewBdevDeviceList(bdevs...)
-}
-
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
-	bdevCfgs := []*storage.TierConfig{}
+	var bdevCfgs storage.TierConfigs
 	for _, engineCfg := range cfg.Engines {
 		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
@@ -218,9 +209,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		}
 	}
 
+	// When requesting to prepare NVMe drives during service start-up, use all addresses
+	// specified in engine config BdevList parameters as the PCIAllowList and the server
+	// config BdevExclude parameter as the PCIBlockList.
+
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,
-		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIAllowList: strings.Join(bdevCfgs.NVMeBdevs().Devices(), storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
@@ -296,7 +291,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  getBdevDevicesFromCfgs(getBdevCfgsFromSrvCfg(srv.cfg)),
+		DeviceList:  getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
@@ -332,7 +327,7 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	ec := engine.runner.GetConfig()
 	ei := ec.Index
 
-	if getBdevDevicesFromCfgs(ec.Storage.Tiers.BdevConfigs()).Len() == 0 {
+	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
 		engine.RUnlock()
 		return nil

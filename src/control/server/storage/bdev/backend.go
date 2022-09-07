@@ -247,7 +247,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, DetectVMD)
@@ -259,7 +259,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
 	return sb.prepare(req, DetectVMD, cleanHugePages)
