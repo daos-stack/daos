@@ -1,4 +1,3 @@
-.gitignore
 .sconsign.dblite
 .sconf_temp
 .build_vars.json
@@ -63,4 +62,3 @@ venv
 utils/githooks/*.d/*-user-*
 .prepare-commit-msg
 .pre-commit
-.gitconfig
