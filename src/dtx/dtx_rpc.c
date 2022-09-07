@@ -256,8 +256,10 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din->di_dtx_array.ca_count = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
-		if (dra->dra_opc == DTX_REFRESH && DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
-			crt_req_set_timeout(req, 3);
+		if (dra->dra_opc == DTX_REFRESH && DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY)) {
+			rc = crt_req_set_timeout(req, 3);
+			D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
+		}
 
 		rc = crt_req_send(req, dtx_req_cb, drr);
 	}
@@ -820,7 +822,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 
 out:
 	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
-	if (rc2 > 0 || rc2 == -DER_NONEXIST)
+	if (rc2 > 0 || rc2 == -DER_NONEXIST || rc2 == -DER_EXCLUDED)
 		rc2 = 0;
 
 	if (dtis != &dti)
