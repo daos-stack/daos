@@ -29,19 +29,20 @@ static void
 print_usage()
 {
 	print_message("Use one of these opt(s) for specific test\n");
-	print_message("vos_tests -p|--pool_tests\n");
-	print_message("vos_tests -c|--container_tests\n");
-	print_message("vos_tests -i|--io_tests <otype>\n");
+	print_message("vos_tests -p|--pool\n");
+	print_message("vos_tests -c|--container\n");
+	print_message("vos_tests -i|--io <otype>\n");
 	print_message("otypes = DAOS_OT_DKEY_UINT64, DAOS_OT_DKEY_LEXICAL\n");
 	print_message("%8s DAOS_OT_AKEY_UINT64, DAOS_OT_AKEY_LEXICAL\n", " ");
-	print_message("vos_tests -d |--discard-tests\n");
-	print_message("vos_tests -a |--aggregate-tests\n");
-	print_message("vos_tests -X|--dtx_tests\n");
-	print_message("vos_tests -l|--incarnation-log-tests\n");
-	print_message("vos_tests -z|--csum_tests\n");
-	print_message("vos_tests -A|--all_tests\n");
-	print_message("vos_tests -m|--punch-model-tests\n");
-	print_message("vos_tests -C|--mvcc-tests\n");
+	print_message("vos_tests -d |--discard\n");
+	print_message("vos_tests -a |--aggregate\n");
+	print_message("vos_tests -X|--dtx\n");
+	print_message("vos_tests -l|--ilog\n");
+	print_message("vos_tests -z|--csum\n");
+	print_message("vos_tests -A|--all <size>\n");
+	print_message("vos_tests -m|--punch_model\n");
+	print_message("vos_tests -C|--mvcc\n");
+	print_message("vos_tests -r|--run_vos_cmd <command>\n");
 	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
@@ -112,29 +113,31 @@ main(int argc, char **argv)
 	int	otypes;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:S:hf:e:tC";
+	const char          *vos_command    = NULL;
+	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCr:";
 	static struct option long_options[] = {
-		{"all_tests",		required_argument, 0, 'A'},
-		{"pool_tests",		no_argument, 0, 'p'},
-		{"container_tests",	no_argument, 0, 'c'},
-		{"io_tests",		required_argument, 0, 'i'},
-		{"discard_tests",	no_argument, 0, 'd'},
-		{"nest_iterators",	no_argument, 0, 'n'},
-		{"aggregate_tests",	no_argument, 0, 'a'},
-		{"dtx_tests",		no_argument, 0, 'X'},
-		{"punch_model_tests",	no_argument, 0, 'm'},
-		{"garbage_collector",	no_argument, 0, 'g'},
-		{"ilog_tests",		no_argument, 0, 'l'},
-		{"epoch cache tests",	no_argument, 0, 't'},
-		{"mvcc_tests",		no_argument, 0, 'C'},
-		{"csum_tests",		no_argument, 0, 'z'},
-		{"help",		no_argument, 0, 'h'},
-		{"filter",		required_argument, 0, 'f'},
-		{"exclude",		required_argument, 0, 'e'},
-		{"storage",		required_argument, 0, 'S'},
-		{"force_csum",		no_argument, 0, FORCE_CSUM},
-		{"force_no_zero_copy",	no_argument, 0, FORCE_NO_ZERO_COPY},
-		{NULL},
+	    {"all", required_argument, 0, 'A'},
+	    {"pool", no_argument, 0, 'p'},
+	    {"container", no_argument, 0, 'c'},
+	    {"io", required_argument, 0, 'i'},
+	    {"discard", no_argument, 0, 'd'},
+	    {"nest_iterators", no_argument, 0, 'n'},
+	    {"aggregate", no_argument, 0, 'a'},
+	    {"dtx", no_argument, 0, 'X'},
+	    {"punch_model", no_argument, 0, 'm'},
+	    {"garbage_collector", no_argument, 0, 'g'},
+	    {"ilog", no_argument, 0, 'l'},
+	    {"epoch_cache", no_argument, 0, 't'},
+	    {"mvcc", no_argument, 0, 'C'},
+	    {"csum", no_argument, 0, 'z'},
+	    {"run_vos_cmd", required_argument, 0, 'r'},
+	    {"help", no_argument, 0, 'h'},
+	    {"filter", required_argument, 0, 'f'},
+	    {"exclude", required_argument, 0, 'e'},
+	    {"storage", required_argument, 0, 'S'},
+	    {"force_csum", no_argument, 0, FORCE_CSUM},
+	    {"force_no_zero_copy", no_argument, 0, FORCE_NO_ZERO_COPY},
+	    {NULL},
 	};
 
 	d_register_alt_assert(mock_assert);
@@ -219,6 +222,12 @@ main(int argc, char **argv)
 			nr_failed += run_co_test("");
 			test_run = true;
 			break;
+		case 'r':
+			if (vos_command != NULL)
+				print_error("Only one -r option is supported\n");
+			vos_command = optarg;
+			test_run = true;
+			break;
 		case 'n':
 			nest_iterators = true;
 			break;
@@ -289,6 +298,8 @@ main(int argc, char **argv)
 	if (!test_run)
 		nr_failed = run_all_tests(0, false);
 
+	if (vos_command != NULL)
+		nr_failed += run_vos_command(argv[0], vos_command);
 
 	if (nr_failed)
 		print_error("ERROR, %i TEST(S) FAILED\n", nr_failed);
