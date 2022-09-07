@@ -455,10 +455,11 @@ agg_overlap(uint64_t estart, uint64_t elen, unsigned int cell_idx,
 
 static unsigned int
 agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
-		uint64_t elen, unsigned int k, unsigned int len,
+		uint64_t elen, unsigned int k, uint64_t len,
 		uint64_t stripenum, unsigned int *full_cell_cnt)
 {
-	unsigned int i, cell_cnt = 0;
+	uint64_t	i;
+	unsigned int	cell_cnt = 0;
 
 	for (i = 0; i < k; i++) {
 		if (i * len >= estart &&  estart + elen >= (i + 1) * len) {
@@ -2074,7 +2075,7 @@ agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
 
-/* Handles dkeys returned by the per-object nested iteratior. */
+/* Handles dkeys returned by the per-object nested iterator. */
 static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_param *agg_param, struct ec_agg_entry *agg_entry,
@@ -2121,7 +2122,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-/* Handles akeys returned by the iteratior. */
+/* Handles akeys returned by the iterator. */
 static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)

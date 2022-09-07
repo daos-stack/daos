@@ -201,6 +201,7 @@ def set_test_environment(args):
             os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
         os.environ["D_LOG_FILE"] = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+        os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
         # Assign the default value for transport configuration insecure mode
         os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
@@ -747,7 +748,7 @@ def get_test_files(test_list, args, yaml_dir):
     """
     # Replace any placeholders in the extra yaml file, if provided
     if args.extra_yaml:
-        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir)
+        args.extra_yaml = [replace_yaml_file(extra, args, yaml_dir) for extra in args.extra_yaml]
 
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
@@ -758,7 +759,7 @@ def get_test_files(test_list, args, yaml_dir):
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
         if args.extra_yaml:
-            command.append(args.extra_yaml)
+            command.extend(args.extra_yaml)
         command.extend(["--summary", "3"])
         display(args, get_output(command, False), 2)
 
@@ -1299,7 +1300,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list = list(command_list)
             test_command_list.extend(["--mux-yaml", test_file["yaml"]])
             if args.extra_yaml:
-                test_command_list.append(args.extra_yaml)
+                test_command_list.extend(args.extra_yaml)
             test_command_list.extend(["--", test_file["py"]])
             run_return_code = time_command(test_command_list)
             if run_return_code != 0:
@@ -2403,7 +2404,7 @@ def main():
         help="disable stopping DAOS servers and clients between running tests")
     parser.add_argument(
         "-e", "--extra_yaml",
-        action="store",
+        action="append",
         default=None,
         type=str,
         help="additional yaml file to include with the test yaml file. Any "
@@ -2616,15 +2617,15 @@ def main():
             ret_code = 1
         if status & 256 == 256:
             log("ERROR: Detected one or more tests with failure to create "
-                  "stack traces from core files!")
+                "stack traces from core files!")
             ret_code = 1
         if status & 512 == 512:
             log("ERROR: Detected stopping daos_server.service after one or "
-                  "more tests!")
+                "more tests!")
             ret_code = 1
         if status & 1024 == 1024:
             log("ERROR: Detected one or more failures in renaming logs and "
-                  "results for Jenkins!")
+                "results for Jenkins!")
             ret_code = 1
     sys.exit(ret_code)
 

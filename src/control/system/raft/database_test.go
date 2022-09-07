@@ -232,7 +232,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db0, cleanup0 := TestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log)
 	defer cleanup0()
 
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
@@ -302,7 +302,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := TestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log)
 	defer cleanup1()
 
 	if err := (*fsm)(db1).Restore(sink.Reader()); err != nil {
@@ -323,7 +323,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	db0, cleanup0 := TestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log)
 	defer cleanup0()
 	db0.data.SchemaVersion = 1024 // arbitrarily large, should never get here
 
@@ -336,7 +336,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := TestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log)
 	defer cleanup1()
 
 	wantErr := errors.Errorf("%d != %d", db0.data.SchemaVersion, CurrentSchemaVersion)
@@ -902,15 +902,15 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,
-				RankURIs: map[Rank]string{
-					0:  MockControlAddr(t, 0).String(),
-					2:  MockControlAddr(t, 2).String(),
-					3:  MockControlAddr(t, 3).String(),
-					4:  MockControlAddr(t, 4).String(),
-					5:  MockControlAddr(t, 5).String(),
-					6:  MockControlAddr(t, 6).String(),
-					9:  MockControlAddr(t, 9).String(),
-					10: MockControlAddr(t, 10).String(),
+				RankEntries: map[Rank]RankEntry{
+					0:  {URI: MockControlAddr(t, 0).String()},
+					2:  {URI: MockControlAddr(t, 2).String()},
+					3:  {URI: MockControlAddr(t, 3).String()},
+					4:  {URI: MockControlAddr(t, 4).String()},
+					5:  {URI: MockControlAddr(t, 5).String()},
+					6:  {URI: MockControlAddr(t, 6).String()},
+					9:  {URI: MockControlAddr(t, 9).String()},
+					10: {URI: MockControlAddr(t, 10).String()},
 				},
 			},
 		},
@@ -918,9 +918,9 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			members: membersWithStates(MemberStateJoined, MemberStateJoined),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]string{
-					0: MockControlAddr(t, 0).String(),
-					1: MockControlAddr(t, 1).String(),
+				RankEntries: map[Rank]RankEntry{
+					0: {URI: MockControlAddr(t, 0).String()},
+					1: {URI: MockControlAddr(t, 1).String()},
 				},
 				MSRanks: []Rank{1},
 			},
@@ -931,8 +931,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]string{
-					0: MockControlAddr(t, 0).String(),
+				RankEntries: map[Rank]RankEntry{
+					0: {URI: MockControlAddr(t, 0).String()},
 				},
 			},
 		},

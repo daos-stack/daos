@@ -117,6 +117,10 @@ enum daos_pool_props {
 	 * default: 0 (disabled)
 	 */
 	DAOS_PROP_PO_SCRUB_THRESH,
+	/**
+	 * Pool service redundancy factor.
+	 */
+	DAOS_PROP_PO_SVC_REDUN_FAC,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -124,7 +128,7 @@ enum daos_pool_props {
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
 #define DAOS_PROP_PO_REDUN_FAC_MAX	4
-#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)
@@ -152,6 +156,15 @@ enum {
 	DAOS_UPGRADE_STATUS_COMPLETED = 2,
 	DAOS_UPGRADE_STATUS_FAILED = 3,
 };
+
+#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX		4
+#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT	2
+
+static inline bool
+daos_svc_rf_is_valid(uint64_t svc_rf)
+{
+	return svc_rf <= DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
+}
 
 /**
  * Number of pool property types
@@ -397,6 +410,9 @@ enum {
 	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
+
+/** default fault domain level */
+#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
 
 /** container status flag */
 enum {

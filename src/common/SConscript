@@ -15,6 +15,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
 def build_daos_common(denv, client, prereqs):
     """ Building non-pmem version for client's common lib"""
     benv = denv.Clone()
+    stack_mmap_files = []
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
@@ -26,7 +27,13 @@ def build_daos_common(denv, client, prereqs):
         libname = 'daos_common_pmem'
         prereqs.require(benv, 'pmdk')
 
-    common = daos_build.library(benv, libname, COMMON_FILES, LIBS=common_libs)
+    if benv["STACK_MMAP"] == 1:
+        common_libs.extend(['abt'])
+        stack_mmap_files = ['stack_mmap.c']
+        prereqs.require(benv, 'argobots')
+        benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+
+    common = daos_build.library(benv, libname, COMMON_FILES + stack_mmap_files, LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 

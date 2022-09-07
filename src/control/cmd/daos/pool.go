@@ -41,10 +41,9 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
-	PoolFlag PoolID `long:"pool" short:"p" description:"pool UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
+	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
+	Args    struct {
+		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
@@ -57,9 +56,6 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 }
 
 func (cmd *poolBaseCmd) PoolID() PoolID {
-	if !cmd.PoolFlag.Empty() {
-		return cmd.PoolFlag
-	}
 	return cmd.Args.Pool
 }
 

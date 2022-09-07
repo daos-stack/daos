@@ -287,6 +287,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugeNodes:     "0",
 				TargetUser:    "root",
 				DisableVFIO:   true,
+				PCIAllowList:  test.MockPCIAddr(0),
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -324,6 +325,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    "root",
+				PCIAllowList:  test.MockPCIAddr(0),
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -374,7 +376,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1).WithPinnedNumaNode(0)).
-					WithBdevInclude(test.MockPCIAddr(1), test.MockPCIAddr(2)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 			hugePagesFree: 16384,
@@ -382,8 +383,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 16386, // 2 extra huge pages requested
 				HugeNodes:     "0",
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
@@ -400,7 +401,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 16386,
 				HugeNodes:     "1",
 				TargetUser:    username,
-				EnableVMD:     true,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+				EnableVMD: true,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -415,7 +418,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194, // 2 extra huge pages requested per-engine
 				HugeNodes:     "0,1",
 				TargetUser:    username,
-				EnableVMD:     true,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+				EnableVMD: true,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -430,7 +435,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
-				EnableVMD:     true,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+				EnableVMD: true,
 			},
 			expMemChkErr: errors.New("0: want 16 GiB (8192 hugepages), got 16 GiB (8191"),
 		},
@@ -486,6 +493,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0",
 				TargetUser:    username,
+				PCIAllowList:  test.MockPCIAddr(0),
 				EnableVMD:     true,
 			},
 			expMemChkErr: errors.New("could not find hugepage info"),
@@ -495,7 +503,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
-					WithBdevInclude(test.MockPCIAddr(1), test.MockPCIAddr(2)).
 					WithBdevExclude(test.MockPCIAddr(1))
 			},
 			hugePagesFree: 16384,
@@ -506,8 +513,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(1),
-					storage.BdevPciAddrSep, test.MockPCIAddr(2)),
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 				PCIBlockList: test.MockPCIAddr(1),
 				EnableVMD:    true,
 			},
@@ -526,6 +533,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				HugePageCount: 8194,
 				HugeNodes:     "0,1",
 				TargetUser:    username,
+				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+					storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,

@@ -79,6 +79,9 @@ func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 
 func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	openFlags |= C.DAOS_COO_FORCE
+	if (openFlags & C.DAOS_COO_RO) != 0 {
+		openFlags |= C.DAOS_COO_RO_MDSTATS
+	}
 
 	var rc C.int
 	switch {
@@ -206,11 +209,13 @@ type containerCreateCmd struct {
 	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
 	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Label       string               `long:"label" short:"l" description:"container label"`
 	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args        struct {
+		Label string `positional-arg-name:"label"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -260,16 +265,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		defer freeString(ap.aclfile)
 	}
 
-	if cmd.Label != "" {
+	if cmd.Args.Label != "" {
 		for key := range cmd.Properties.ParsedProps {
 			if key == "label" {
-				return errors.New("can't use both --label and --properties label:")
+				return errors.New("can't supply label arg and --properties label:")
 			}
 		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
 			return err
 		}
-		cmd.contLabel = cmd.Label
+		cmd.contLabel = cmd.Args.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -337,7 +342,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ci.PoolUUID = &cmd.poolUUID
 		ci.Type = cmd.Type.String()
 		ci.ContainerUUID = &cmd.contUUID
-		ci.ContainerLabel = cmd.Label
+		ci.ContainerLabel = cmd.Args.Label
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -356,17 +361,13 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Path     string      `long:"path" short:"d" description:"unified namespace path"`
-	ContFlag ContainerID `long:"cont" short:"c" description:"container UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Container ContainerID `positional-arg-name:"<container name or UUID>"`
+	Path string `long:"path" short:"d" description:"unified namespace path"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *existingContainerCmd) ContainerID() ContainerID {
-	if !cmd.ContFlag.Empty() {
-		return cmd.ContFlag
-	}
 	return cmd.Args.Container
 }
 
@@ -638,11 +639,62 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		ap.epc = C.uint64_t(cmd.Epoch)
 	}
 
-	// TODO: Build a Go slice so that we can JSON-format the list.
-	rc := C.cont_list_objs_hdlr(ap)
+	snapOpts := uint32(C.DAOS_SNAP_OPT_CR | C.DAOS_SNAP_OPT_OIT)
+	rc := C.daos_cont_create_snap_opt(ap.cont, &ap.epc, nil, snapOpts, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to list objects in container %s", cmd.ContainerID())
+		return errors.Wrapf(err, "failed to create snapshot for container %s", cmd.ContainerID())
+	}
+	defer func() {
+		rc = C.cont_destroy_snap_hdlr(ap)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to destroy snapshot in cleanup: %v", err)
+		}
+	}()
+
+	oit := C.daos_handle_t{}
+	rc = C.daos_oit_open(ap.cont, ap.epc, &oit, nil)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to open OIT for container %s", cmd.ContainerID())
+	}
+	defer func() {
+		rc = C.daos_oit_close(oit, nil)
+		if err := daosError(rc); err != nil {
+			cmd.Errorf("failed to close OIT in cleanup: %v", err)
+		}
+	}()
+
+	// NB: It is somewhat inefficient to build up a slice of OID strings for
+	// the JSON output format, but it is simple. If it turns out to be a problem,
+	// we can implement a custom JSON output handler that streams the OID
+	// strings directly to output.
+	var oids []string
+	var readOids C.uint32_t
+	oidArr := [C.OID_ARR_SIZE]C.daos_obj_id_t{}
+	anchor := C.daos_anchor_t{}
+	for {
+		if C.daos_anchor_is_eof(&anchor) {
+			break
+		}
+
+		readOids = C.OID_ARR_SIZE
+		rc = C.daos_oit_list(oit, &oidArr[0], &readOids, &anchor, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to list objects for container %s", cmd.ContainerID())
+		}
+
+		for i := C.uint32_t(0); i < readOids; i++ {
+			oid := fmt.Sprintf("%d.%d", oidArr[i].hi, oidArr[i].lo)
+
+			if !cmd.jsonOutputEnabled() {
+				cmd.Infof("%s", oid)
+				continue
+			}
+			oids = append(oids, oid)
+		}
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(oids, nil)
 	}
 
 	return nil
@@ -668,11 +720,15 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%#x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
+			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 		}...)
 
+		if *ci.LatestSnapshot != 0 {
+			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", *ci.LatestSnapshot, daos.HLC(*ci.LatestSnapshot))})
+		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}
@@ -692,6 +748,8 @@ type containerInfo struct {
 	LatestSnapshot   *uint64    `json:"latest_snapshot"`
 	RedundancyFactor *uint32    `json:"redundancy_factor"`
 	NumSnapshots     *uint32    `json:"num_snapshots"`
+	OpenTime         *uint64    `json:"open_time"`
+	CloseModifyTime  *uint64    `json:"close_modify_time"`
 	Type             string     `json:"container_type"`
 	ObjectClass      string     `json:"object_class,omitempty"`
 	ChunkSize        uint64     `json:"chunk_size,omitempty"`
@@ -716,7 +774,8 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-
+	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
+	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)
 	return ci
 }
 

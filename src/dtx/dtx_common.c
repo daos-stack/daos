@@ -778,6 +778,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
+	dth->dth_need_validation = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1028,6 +1029,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1100,7 +1103,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_pinned || dth->dth_prepared) {
+	if (dth->dth_need_validation) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
 		 * by race. Let's check it.
@@ -1147,7 +1150,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	}
 
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possbile that the DTX resync ULT may have aborted or committed
+	 * possible that the DTX resync ULT may have aborted or committed
 	 * the DTX during current ULT waiting for other non-leaders' reply.
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */
@@ -1346,6 +1349,8 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1468,37 +1473,28 @@ dtx_reindex_ult(void *arg)
 	struct ds_cont_child		*cont	= arg;
 	struct dss_module_info		*dmi	= dss_get_module_info();
 	uint64_t			 hint	= 0;
-	int				 rc;
+	int				 rc	= 0;
 
-	D_DEBUG(DB_ANY, DF_CONT": starting DTX reindex ULT on xstream %d\n",
-		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
+	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
 		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
-		if (rc < 0) {
-			D_ERROR(DF_UUID": DTX reindex failed: "DF_RC"\n",
-				DP_UUID(cont->sc_uuid), DP_RC(rc));
-			goto out;
-		}
-
-		if (rc > 0) {
-			D_DEBUG(DB_ANY, DF_CONT": DTX reindex done\n",
-				DP_CONT(NULL, cont->sc_uuid));
-			goto out;
-		}
+		if (rc != 0)
+			break;
 
 		ABT_thread_yield();
 	}
 
-	D_DEBUG(DB_ANY, DF_CONT": stopping DTX reindex ULT on stream %d\n",
-		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
+		 DF_CONT": stopping DTX reindex ULT on stream %d, ver %u: rc = %d\n",
+		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
 
-out:
 	cont->sc_dtx_reindex = 0;
 	ds_cont_child_put(cont);
 }
 
-static int
+int
 start_dtx_reindex_ult(struct ds_cont_child *cont)
 {
 	int rc;
@@ -1521,10 +1517,14 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 	return rc;
 }
 
-static void
+void
 stop_dtx_reindex_ult(struct ds_cont_child *cont)
 {
 	if (!cont->sc_dtx_reindex || dtx_cont_opened(cont))
+		return;
+
+	/* Do not stop DTX reindex if DTX resync is still in-progress. */
+	if (cont->sc_dtx_resyncing)
 		return;
 
 	cont->sc_dtx_reindex_abort = 1;

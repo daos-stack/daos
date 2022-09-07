@@ -827,10 +827,12 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 
 	dfs_attr_t attr = {};
 
-	attr.da_props = daos_prop_alloc(1);
+	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
@@ -953,14 +955,17 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	uint32_t		grp_idx;
 	uint32_t		idx;
 	d_rank_t		rank;
+	int			rc;
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
 	rank = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_rank;
 
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
-	daos_obj_layout_free(layout);
+	rc = daos_obj_layout_free(layout);
+	assert_rc_equal(rc, 0);
 	return rank;
 }
 
@@ -972,14 +977,17 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	uint32_t		grp_idx;
 	uint32_t		idx;
 	uint32_t		tgt_idx;
+	int			rc;
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
 	tgt_idx = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_tgt_idx;
 
 	print_message("idx %u grp %u tgt_idx %d\n", idx, grp_idx, tgt_idx);
-	daos_obj_layout_free(layout);
+	rc = daos_obj_layout_free(layout);
+	assert_rc_equal(rc, 0);
 	return tgt_idx;
 }
 

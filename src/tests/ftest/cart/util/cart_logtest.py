@@ -8,6 +8,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import re
 import sys
 import time
 import argparse
@@ -68,23 +69,23 @@ class RegionContig():
         return self.start == other.start and self.end == other.end
 
 
-def _ts_to_float(ts):
-    int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
-    float_part = int(ts[-2:]) / 100
+def _ts_to_float(times):
+    int_part = time.mktime(time.strptime(times[:-3], '%m/%d-%H:%M:%S'))
+    float_part = int(times[-2:]) / 100
     return int_part + float_part
 
 
 class RegionCounter():
     """Class to represent regions read/written to a file"""
-    def __init__(self, start, end, ts):
+    def __init__(self, start, end, times):
         self.start = start
         self.end = end
         self.reads = 1
-        self.first_ts = ts
-        self.last_ts = ts
+        self.first_ts = times
+        self.last_ts = times
         self.regions = []
 
-    def add(self, start, end, ts):
+    def add(self, start, end, times):
         """Record a new I/O operation"""
         self.reads += 1
         if start == self.end + 1:
@@ -93,7 +94,7 @@ class RegionCounter():
             self.regions.append(RegionContig(self.start, self.end))
             self.start = start
             self.end = end
-        self.last_ts = ts
+        self.last_ts = times
 
     def __str__(self):
         bytes_count = 0
@@ -127,11 +128,11 @@ class RegionCounter():
         start_time = _ts_to_float(self.first_ts)
         end_time = _ts_to_float(self.last_ts)
 
-        mb = int(bytes_count / (1024*1024))
-        if mb * 1024 * 1024 == bytes_count:
-            bytes_str = '{}Mb'.format(mb)
+        megabytes = int(bytes_count / (1024 * 1024))
+        if megabytes * 1024 * 1024 == bytes_count:
+            bytes_str = '{}Mb'.format(megabytes)
         else:
-            bytes_str = '{:.1f}Mb'.format(bytes_count / (1024*1024))
+            bytes_str = '{:.1f}Mb'.format(bytes_count / (1024 * 1024))
 
         return '{} reads, {} {:.1f}Seconds {}'.format(self.reads,
                                                       bytes_str,
@@ -143,7 +144,8 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-wf = None
+# This is set by node_local_test in order to reconfigure this code so disable the invalid_name.
+wf = None  # pylint: disable=invalid-name
 
 
 def show_line(line, sev, msg, custom=None):
@@ -166,7 +168,7 @@ def show_line(line, sev, msg, custom=None):
     shown_logs.add(log)
 
 
-class hwm_counter():
+class HwmCounter():
     """Class to track integer values, with high-water mark"""
 
     # Used for memory allocation sizes currently.
@@ -184,8 +186,7 @@ class hwm_counter():
         return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
                                                              self.__hwm,
                                                              self.__acount) + \
-            '{} frees {} possible leaks'.format(self.__fcount,
-                                                self.__acount - self.__fcount)
+            '{} frees {} possible leaks'.format(self.__fcount, self.__acount - self.__fcount)
 
     def add(self, val):
         """Add a value"""
@@ -220,8 +221,15 @@ class LogTest():
         self.log_locs = Counter()
         self.log_fac = Counter()
         self.log_levels = Counter()
+        self.nil_frees = Counter()
         self.log_count = 0
         self._common_shown = False
+
+    def save_nill_free(self, line):
+        """Save the location of a nill free call"""
+        loc = '{}:{}'.format(line.filename, line.lineno)
+
+        self.nil_frees[loc] += 1
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
@@ -250,38 +258,34 @@ class LogTest():
             if count < 10:
                 break
             percent = 100 * count / self.log_count
-            print('Logging used {} times at {} ({:.1f}%)'.format(count,
-                                                                 loc,
-                                                                 percent))
+            print('Logging used {} times at {} ({:.1f}%)'.format(count, loc, percent))
         print('Most common facilities')
         for (fac, count) in self.log_fac.most_common(10):
             if count < 10:
                 break
-            print('{}: {} ({:.1f}%)'.format(fac, count,
-                                            100*count/self.log_count))
+            print('{}: {} ({:.1f}%)'.format(fac, count, 100 * count / self.log_count))
 
         print('Most common levels')
         for (level, count) in self.log_levels.most_common(10):
             if count < 10:
                 break
-            print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
-                                            count,
-                                            100*count/self.log_count))
+            print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level], count,
+                                            100 * count / self.log_count))
         self._common_shown = True
 
-    def check_log_file(self,
-                       abort_on_warning,
-                       show_memleaks=True,
-                       leak_wf=None):
+        for (loc, count) in self.nil_frees.most_common(10):
+            if count < 10:
+                break
+            print('Null was freed {} times at {}'.format(count, loc))
+
+    def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""
         to_raise = None
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
             try:
-                self._check_pid_from_log_file(pid,
-                                              abort_on_warning,
-                                              leak_wf,
+                self._check_pid_from_log_file(pid, abort_on_warning, leak_wf,
                                               show_memleaks=show_memleaks)
             except LogCheckError as error:
                 if to_raise is None:
@@ -319,11 +323,7 @@ class LogTest():
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
     # pylint: disable=too-many-branches,too-many-nested-blocks
-    def _check_pid_from_log_file(self,
-                                 pid,
-                                 abort_on_warning,
-                                 leak_wf,
-                                 show_memleaks=True):
+    def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
         # Dict of active descriptors.
@@ -339,7 +339,7 @@ class LogTest():
         server_shutdown = False
 
         regions = OrderedDict()
-        memsize = hwm_counter()
+        memsize = HwmCounter()
 
         old_regions = {}
 
@@ -353,7 +353,7 @@ class LogTest():
         if self.quiet:
             rpc_r = None
         else:
-            rpc_r = rpc_reporting()
+            rpc_r = RpcReporting()
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             if rpc_r:
@@ -364,9 +364,9 @@ class LogTest():
                 # Warn if a line references the name of the function it was in,
                 # but skip short function names or _internal suffixes.
                 if line.function in msg and len(line.function) > 6 and \
+                   re.search(r'\b' + line.function + r'\b', msg) is not None and \
                    '{}_internal'.format(line.function) not in msg:
-                    show_line(line, 'NORMAL',
-                              'Logging references function name')
+                    show_line(line, 'NORMAL', 'Logging references function name')
             except AttributeError:
                 pass
             if abort_on_warning:
@@ -375,7 +375,7 @@ class LogTest():
                     server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
-                    if self.hide_fi_calls:
+                    if self.hide_fi_calls and line.fac != 'external':
                         if line.is_fi_site():
                             show = False
                         elif line.is_fi_alloc_fail():
@@ -392,10 +392,8 @@ class LogTest():
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
-                            if not line.get_msg().endswith(
-                                    "DER_NOMEM(-1009): 'Out of memory'"):
-                                show_line(line, 'LOW',
-                                          'Error does not use DF_RC')
+                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                                show_line(line, 'LOW', 'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
@@ -436,14 +434,12 @@ class LogTest():
                         warnings_mode = True
             if line.trace:
                 trace_lines += 1
-                if not have_debug and \
-                   line.level > cart_logparse.LOG_LEVELS['INFO']:
+                if not have_debug and line.level > cart_logparse.LOG_LEVELS['INFO']:
                     have_debug = True
                 desc = line.descriptor
                 if line.is_new():
                     if desc in active_desc:
-                        show_line(active_desc[desc], 'NORMAL',
-                                  'not deregistered')
+                        show_line(active_desc[desc], 'NORMAL', 'not deregistered')
                         show_line(line, 'NORMAL', 'already exists')
                         err_count += 1
                     if line.parent not in active_desc:
@@ -474,9 +470,7 @@ class LogTest():
                         show_line(line, 'NORMAL', 'invalid rpc remove')
                         err_count += 1
                 else:
-                    if have_debug and desc not in active_desc and \
-                       desc not in active_rpcs:
-
+                    if have_debug and desc not in active_desc and desc not in active_rpcs:
                         show_line(line, 'NORMAL', 'inactive desc')
                         if line.descriptor in regions:
                             show_line(regions[line.descriptor], 'NORMAL',
@@ -509,13 +503,13 @@ class LogTest():
                         if pointer in old_regions:
                             show_line(old_regions[pointer][0], 'ERROR',
                                       'double-free allocation point')
-                            show_line(old_regions[pointer][1], 'ERROR',
-                                      '1st double-free location')
-                            show_line(line, 'ERROR',
-                                      '2nd double-free location')
+                            show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
+                            show_line(line, 'ERROR', '2nd double-free location')
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
+                    else:
+                        self.save_nill_free(line)
                 elif line.is_realloc():
                     (new_pointer, old_pointer) = line.realloc_pointers()
                     (new_size, old_size) = line.realloc_sizes()
@@ -527,19 +521,16 @@ class LogTest():
                             # come from a realloc() call.
                             exp_sz = regions[old_pointer].calloc_size()
                             if old_size not in (0, exp_sz, new_size):
-                                show_line(line, 'HIGH',
-                                          'realloc used invalid old size')
+                                show_line(line, 'HIGH', 'realloc used invalid old size')
                             memsize.subtract(exp_sz)
                     regions[new_pointer] = line
                     memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
-                            old_regions[old_pointer] = [regions[old_pointer],
-                                                        line]
+                            old_regions[old_pointer] = [regions[old_pointer], line]
                             del regions[old_pointer]
                         else:
-                            show_line(line, 'NORMAL',
-                                      'realloc of unknown memory')
+                            show_line(line, 'NORMAL', 'realloc of unknown memory')
                             err_count += 1
 
         del active_desc['root']
@@ -594,7 +585,7 @@ class LogTest():
 # pylint: enable=too-many-branches,too-many-nested-blocks
 
 
-class rpc_reporting():
+class RpcReporting():
     """Class for reporting a summary of RPC states"""
 
     known_functions = frozenset({'crt_hg_req_send',
@@ -687,8 +678,8 @@ class rpc_reporting():
 
         for state in names:
             headers.append('-{}'.format(state))
-        for (op, counts) in sorted(self._op_state_counters.items()):
-            row = [op,
+        for (operation, counts) in sorted(self._op_state_counters.items()):
+            row = [operation,
                    counts['ALLOCATED'],
                    counts['SUBMITTED'],
                    counts['SENT'],
@@ -696,13 +687,13 @@ class rpc_reporting():
                    counts['DEALLOCATED']]
             for state in names:
                 try:
-                    row.append(self._c_states[op].get(state, ''))
+                    row.append(self._c_states[operation].get(state, ''))
                 except KeyError:
                     row.append('')
             table.append(row)
             if counts['ALLOCATED'] != counts['DEALLOCATED']:
                 errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
-                              format(op, counts['ALLOCATED'], counts['DEALLOCATED']))
+                              format(operation, counts['ALLOCATED'], counts['DEALLOCATED']))
 
         if HAVE_TABULATE:
             print('Opcode State Transition Tally')
@@ -717,9 +708,7 @@ class rpc_reporting():
 def run():
     """Trace a single file"""
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dfuse',
-                        help='Summarise dfuse I/O',
-                        action='store_true')
+    parser.add_argument('--dfuse', help='Summarise dfuse I/O', action='store_true')
     parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
