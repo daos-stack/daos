@@ -4250,7 +4250,7 @@ def test_fi_cont_check(server, conf, wf):
     return rc
 
 
-def test_alloc_fail(server, conf):
+def test_alloc_fail(server, conf, wf):
     """run 'daos' client binary with fault injection"""
 
     pool = server.get_test_pool()
@@ -4260,6 +4260,7 @@ def test_alloc_fail(server, conf):
            'list',
            pool]
     test_cmd = AllocFailTest(conf, 'pool-list-containers', cmd)
+    test_cmd.wf = wf
 
     # Create at least one container, and record what the output should be when
     # the command works.
@@ -4267,6 +4268,32 @@ def test_alloc_fail(server, conf):
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
+    return rc
+
+
+def test_pool_prop_alloc_fail(server, conf, wf):
+    """run 'daos' client binary with fault injection"""
+
+    pool = server.get_test_pool()
+
+    cmd = [join(conf['PREFIX'], 'bin', 'dmg'), 'pool', 'get-prop', '--insecure', pool]
+    test_cmd = AllocFailTest(conf, 'pool-get-prop', cmd)
+
+    rc = test_cmd.launch()
+    test_cmd.wf = wf
+    return rc
+
+
+def test_pool_acl_alloc_fail(server, conf, wf):
+    """run 'daos' client binary with fault injection"""
+
+    pool = server.get_test_pool()
+
+    cmd = [join(conf['PREFIX'], 'bin', 'dmg'), 'pool', 'get-acl', '--insecure', pool]
+    test_cmd = AllocFailTest(conf, 'pool-get-prop', cmd)
+
+    rc = test_cmd.launch()
+    test_cmd.wf = wf
     return rc
 
 
@@ -4344,11 +4371,14 @@ def run(wf, args):
 
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
+                fatal_errors.add_result(test_pool_prop_alloc_fail(server, conf, wf_client))
+                fatal_errors.add_result(test_pool_acl_alloc_fail(server, conf, wf_client))
+
                 # dfuse startup, uses custom fault to force exit if no other faults injected.
                 fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                fatal_errors.add_result(test_alloc_fail(server, conf), wf_client)
 
                 # Container query test.
                 fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
