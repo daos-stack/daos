@@ -2528,7 +2528,7 @@ class LaunchJob():
             "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-            f"xargs -0 -r0 -n1 {cart_logtest}")
+            f"xargs -0 -r0 -n1 -I '{{}}' {cart_logtest} '{{}}' > '{{}}'.cart_logtest 2>&1")
         return run_remote(self.log, hosts, command).passed
 
     def _remove_empty_files(self, hosts, source, pattern, depth):
@@ -2731,6 +2731,7 @@ class LaunchJob():
                 raise LaunchException(message) from error
 
         # Rename the avocado job-results test directory and update the 'latest' symlink
+        self.log.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
         try:
             os.rename(test_logs_dir, new_test_logs_dir)
             os.remove(test_logs_lnk)
@@ -2744,6 +2745,7 @@ class LaunchJob():
         # Update the results.xml file with the new functional test class name
         if jenkinslog:
             xml_file = os.path.join(new_test_logs_dir, "results.xml")
+            self.log.debug("Updating the 'classname' field in the %s", xml_file)
             try:
                 with open(xml_file, encoding="utf-8") as xml_buffer:
                     xml_data = xml_buffer.read()
@@ -2767,12 +2769,12 @@ class LaunchJob():
 
             # Now mangle (or rather unmangle back to canonical xunit1 format)
             # another copy for Launchable
+            xml_file = xml_file[0:-11] + "xunit1_results.xml"
+            self.log.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
             org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
-            xml_file = xml_file[0:-11] + "xunit1_results.xml"
-
             try:
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
