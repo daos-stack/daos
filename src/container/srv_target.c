@@ -1350,8 +1350,7 @@ ds_dtx_resync(void *arg)
 	int				 rc;
 
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version,
-			false, true);
+			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont "
 		       DF_UUID"/"DF_UUID" that may affect subsequent "
