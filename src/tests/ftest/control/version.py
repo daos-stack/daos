@@ -118,6 +118,6 @@ class DAOSVersion(TestWithServers):
                     tool, version, rpm_version)
                 errors.append(msg)
 
-        self.log.info("###### Errors ######")
+        self.log.info("###### Test Result ######")
         report_errors(test=self, errors=errors)
-        self.log.info("####################")
+        self.log.info("#########################")

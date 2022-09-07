@@ -62,6 +62,7 @@ acl
 akey
 akeys
 allocator
+allowlist
 amongst
 api
 arg
@@ -170,6 +171,7 @@ findcmd
 fini
 fio
 fnctl
+formattable
 fpp
 fs
 fstat
@@ -182,6 +184,7 @@ getattr
 getfattr
 getxattr
 gid
+groupname
 grp
 hackery
 hfi
@@ -189,6 +192,7 @@ hostfile
 hostlist
 hostname
 hostnames
+hugepage
 hugepages
 hwloc
 ib
@@ -234,6 +238,7 @@ localhost
 logdir
 logfile
 logfiles
+logmasks
 lseek
 lspci
 lua
