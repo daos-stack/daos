@@ -387,7 +387,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 		double timeout = 0;                                                                \
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
 				(attr)->st_mode, (attr)->st_size);                                 \
-		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {                                \
+		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_cache_set_time(ie);                                                  \
 		}                                                                                  \

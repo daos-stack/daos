@@ -971,6 +971,9 @@ dfuse_cache_set_time(struct dfuse_inode_entry *ie)
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 	ie->ie_cache_last_update = now;
+
+	DFUSE_TRA_DEBUG(ie, "Set time to %#lx %#lx", ie->ie_cache_last_update.tv_sec,
+			ie->ie_cache_last_update.tv_nsec);
 }
 
 void
@@ -978,6 +981,9 @@ dfuse_cache_evict(struct dfuse_inode_entry *ie)
 {
 	ie->ie_cache_last_update.tv_sec  = 0;
 	ie->ie_cache_last_update.tv_nsec = 0;
+
+	DFUSE_TRA_DEBUG(ie, "Set time to %#lx %#lx", ie->ie_cache_last_update.tv_sec,
+			ie->ie_cache_last_update.tv_nsec);
 }
 
 bool
@@ -987,6 +993,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	struct timespec now;
 	struct timespec left;
 	double          time_left;
+
+	DFUSE_TRA_DEBUG(ie, "Checking time %#lx %#lx", ie->ie_cache_last_update.tv_sec,
+			ie->ie_cache_last_update.tv_nsec);
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 

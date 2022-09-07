@@ -184,18 +184,20 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
-	if (inode->ie_dfs->dfc_attr_timeout && (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
-		double      timeout;
-		struct stat attr = {};
+	if (inode->ie_dfs->dfc_attr_timeout && (atomic_load_relaxed(&inode->ie_open_count) == 0)) {
+		double timeout;
 
-		rc = dfs_ostat(inode->ie_dfs->dfs_ns, inode->ie_obj, &attr);
-		if (rc == -DER_SUCCESS) {
-			DFUSE_TRA_INFO(inode, "ino %#lx size %#lx %#lx", ino,
-				       inode->ie_stat.st_size, attr.st_size);
-
-			D_ASSERT(attr.st_size == inode->ie_stat.st_size);
-		}
 		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			struct stat attr = {};
+
+			rc = dfs_ostat(inode->ie_dfs->dfs_ns, inode->ie_obj, &attr);
+			if (rc == -DER_SUCCESS) {
+				DFUSE_TRA_INFO(inode, "ino %#lx size %#lx %#lx", ino,
+					       inode->ie_stat.st_size, attr.st_size);
+
+				D_ASSERT(attr.st_size == inode->ie_stat.st_size);
+			}
+
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
 			D_GOTO(done, 0);
 		}
