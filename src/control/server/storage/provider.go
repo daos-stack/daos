@@ -219,7 +219,7 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
-// GetBdevConfig returns the Bdev tier configs.
+// GetBdevConfigs returns the Bdev tier configs.
 func (p *Provider) GetBdevConfigs() []*TierConfig {
 	return p.engineStorage.Tiers.BdevConfigs()
 }
@@ -247,21 +247,12 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	return resp, err
 }
 
-// GetBlockDevices returns the addresses of all block devices in all bdev storage tiers.
-func (p *Provider) GetBlockDevices() *BdevDeviceList {
-	bdevs := []string{}
-	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		bdevs = append(bdevs, cfg.Bdev.DeviceList.Devices()...)
-	}
-
-	p.log.Debugf("bdevs on instance %d: %v", p.engineIndex, bdevs)
-
-	return MustNewBdevDeviceList(bdevs...)
-}
-
 // HasBlockDevices returns true if provider engine storage config has configured block devices.
 func (p *Provider) HasBlockDevices() bool {
-	return p.GetBlockDevices().Len() > 0
+	p.RLock()
+	defer p.RUnlock()
+
+	return p.engineStorage.GetBdevs().Len() > 0
 }
 
 // BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
@@ -528,7 +519,7 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	defer p.Unlock()
 
 	// Filter out any controllers not configured in provider's engine storage config.
-	if err := filterBdevScanResponse(p.GetBlockDevices(), &resp); err != nil {
+	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp); err != nil {
 		return errors.Wrap(err, "filtering scan response before caching")
 	}
 
