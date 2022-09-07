@@ -95,15 +95,16 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
                 - stderr (not used; included in stdout)
 
     """
+    local_host = get_local_host()
     command_str = " ".join(command)
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
     if timeout:
-        log.debug("Running on %s with a %s timeout: %s", get_local_host(), timeout, command_str)
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
     else:
-        log.debug("Running on %s: %s", get_local_host(), command_str)
+        log.debug("Running on %s: %s", local_host, command_str)
 
     try:
         # pylint: disable=subprocess-run-check
@@ -138,10 +139,10 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
 
     if capture_output:
         # Log the output of the command
-        log.debug("Command '%s' (rc=%s):", command_str, result.returncode)
+        log.debug("  %s (rc=%s):", local_host, result.returncode)
         if result.stdout:
             for line in result.stdout.splitlines():
-                log.debug("  %s", line)
+                log.debug("    %s", line)
 
     return result
 
@@ -2396,10 +2397,8 @@ class LaunchJob():
         self.log.info(
             "Archiving %s from %s:%s to %s",
             summary, hosts, os.path.join(source, pattern), destination)
-        remote_hosts = hosts.difference(self.local_host)
-        local_host = hosts.intersection(self.local_host)
-        self.log.debug("  Remote hosts: %s", remote_hosts)
-        self.log.debug("  Local host:   %s", local_host)
+        self.log.debug("  Remote hosts: %s", hosts.difference(self.local_host))
+        self.log.debug("  Local host:   %s", hosts.intersection(self.local_host))
 
         # Get a list of remote files and their sizes
         try:
@@ -2423,23 +2422,13 @@ class LaunchJob():
         if not self._remove_empty_files(hosts, source, pattern, depth):
             errors.append("removing zero-length files")
 
-        if remote_hosts:
-            # Compress any files larger than 1 MB
-            if not self._compress_remote_files(remote_hosts, source, pattern, depth):
-                errors.append("compressing files remotely")
+        # Compress any files larger than 1 MB
+        if not self._compress_files(hosts, source, pattern, depth):
+            errors.append("compressing files")
 
-            # Move the test files to the test-results directory on this host
-            if not self._move_remote_files(remote_hosts, source, pattern, destination, depth):
-                errors.append("copying remote files")
-
-        if local_host:
-            # Compress any files larger than 1 MB
-            if not self._compress_local_files(local_host, source, pattern, depth):
-                errors.append("compressing local files")
-
-            # Move the test files to the test-results directory on this host
-            if not self._move_local_files(local_host, source, pattern, destination, depth):
-                errors.append("moving local files")
+        # Move the test files to the test-results directory on this host
+        if not self._move_files(hosts, source, pattern, destination, depth):
+            errors.append("moving files")
 
         # Report any errors
         if errors:
@@ -2549,7 +2538,7 @@ class LaunchJob():
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
         return run_remote(self.log, hosts, command).passed
 
-    def _compress_remote_files(self, hosts, source, pattern, depth):
+    def _compress_files(self, hosts, source, pattern, depth):
         """Compress any files larger than 1M.
 
         Args:
@@ -2564,52 +2553,13 @@ class LaunchJob():
         """
         self.log.debug("-" * 80)
         self.log.debug(
-            "Compressing any remote %s files in %s on %s larger than 1M", pattern, source, hosts)
+            "Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
             "sudo xargs -0 -r0 lbzip2 -v")
         return run_remote(self.log, hosts, command).passed
 
-    def _compress_local_files(self, hosts, source, pattern, depth):
-        """Compress any files larger than 1M.
-
-        Args:
-            hosts (NodSet): hosts on which the files are located
-            source (str): where the files are currently located
-            pattern (str): pattern used to limit which files are processed
-            depth (int): max depth for find command
-
-        Returns:
-            bool: True if successful; False otherwise
-
-        """
-        compress_files = []
-        self.log.debug("-" * 80)
-        self.log.debug(
-            "Compressing any local %s files in %s on %s larger than 1M", pattern, source, hosts)
-        command = [
-            "find", source, "-maxdepth", f"{depth}", "-type", "f", "-name", f"'{pattern}'", "-size",
-            "+1M", "-print"
-        ]
-        try:
-            result = run_local(self.log, command, check=True)
-            for src_file in result.stdout.splitlines():
-                if os.path.isfile(src_file):
-                    compress_files.append(src_file)
-        except LaunchException:
-            self.log.debug("Error finding local file to compress on %s", hosts, exc_info=True)
-            return False
-
-        if compress_files:
-            command = ["sudo", "lbzip2", "-v"] + compress_files
-            try:
-                run_local(self.log, command, check=True)
-            except LaunchException:
-                self.log.debug("Error compressing local files on %s", hosts, exc_info=True)
-                return False
-        return True
-
-    def _move_remote_files(self, hosts, source, pattern, destination, depth):
+    def _move_files(self, hosts, source, pattern, destination, depth):
         """Move files from the source to the destination.
 
         Args:
@@ -2624,7 +2574,7 @@ class LaunchJob():
 
         """
         self.log.debug("-" * 80)
-        self.log.debug("Moving remote files from %s to %s on %s", source, destination, hosts)
+        self.log.debug("Moving files from %s to %s on %s", source, destination, hosts)
         os.makedirs(destination, exist_ok=True)
 
         # Use the last directory in the destination path to create a temporary sub-directory on the
@@ -2667,34 +2617,6 @@ class LaunchJob():
                 status = False
 
         return status
-
-    def _move_local_files(self, hosts, source, pattern, destination, depth):
-        """Move files from the source to the destination.
-
-        Args:
-            hosts (NodSet): hosts on which the files are located
-            source (str): where the files are currently located
-            pattern (str): pattern used to limit which files are processed
-            destination (str): where the files should be moved to on this host
-            depth (int): max depth for find command
-
-        Returns:
-            bool: True if successful; False otherwise
-
-        """
-        self.log.debug("-" * 80)
-        self.log.debug("Moving local files from %s to %s on %s", source, destination, hosts)
-        os.makedirs(destination, exist_ok=True)
-        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print"
-        try:
-            result = run_local(self.log, command.split(" "), check=True)
-            for src_file in result.stdout.splitlines():
-                dst_file = ".".join([os.path.basename(src_file), str(hosts)])
-                os.rename(src_file, os.path.join(destination, dst_file))
-        except LaunchException:
-            self.log.debug("Error moving files locally on %s", hosts, exc_info=True)
-            return False
-        return True
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
