@@ -457,22 +457,23 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
-		dfuse_cache_set_time(desc);                                                        \
 		__rc = fuse_reply_create(req, &entry, fi);                                         \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_create returned %d:%s", __rc,            \
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_ENTRY(desc, req, entry)                                                        \
+#define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning entry inode %#lx mode %#o size %zi",              \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
-		dfuse_cache_set_time(desc);                                                        \
+		if (atomic_load_relaxed(&(inode)->ie_open_count) == 0) {                           \
+			dfuse_cache_set_time(inode);                                               \
+		}                                                                                  \
 		__rc = fuse_reply_entry(req, &entry);                                              \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_entry returned %d:%s", __rc,             \
+			DFUSE_TRA_ERROR(inode, "fuse_reply_entry returned %d:%s", __rc,            \
 					strerror(-__rc));                                          \
 	} while (0)
 

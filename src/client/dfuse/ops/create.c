@@ -179,8 +179,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
-
-		fi_out.keep_cache = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
