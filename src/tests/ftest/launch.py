@@ -1736,13 +1736,13 @@ class TestInfo():
             get_yaml_data(log, self.yaml_file),
             [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
-    def get_log_file(self, logs_dir, total, repeat):
+    def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
 
         Args:
             logs_dir (str): base directory in which to place the log file
-            total (int): total number of test repetitions
             repeat (int): current test repetition
+            total (int): total number of test repetitions
 
         Returns:
             str: a test log file name composed of the test class, name, and optional repeat count
@@ -1752,7 +1752,7 @@ class TestInfo():
         log_file = f"{self.name.uid:02}-{self.directory}-{name}-launch.log"
         if total > 1:
             self.name.repeat = repeat
-            os.makedirs(os.path.join(logs_dir, self.name.repeat_str))
+            os.makedirs(os.path.join(logs_dir, self.name.repeat_str), exist_ok=True)
             return os.path.join(logs_dir, self.name.repeat_str, log_file)
         return os.path.join(logs_dir, log_file)
 
@@ -2089,7 +2089,8 @@ class LaunchJob():
 
             for test in self.tests:
                 # Define a log for the execution of this test for this repetition
-                test_log_file = test.get_log_file(self.logdir, self.repeat, repeat)
+                test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
+
                 self.log.info(
                     "Logging launch repetition %s running of %s in %s", repeat, test, test_log_file)
                 test_file_handler = self._get_file_handler(test_log_file)
@@ -2527,7 +2528,7 @@ class LaunchJob():
             "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-            f"xargs -r0 {cart_logtest}")
+            f"xargs -0 -r0 -n1 {cart_logtest}")
         return run_remote(self.log, hosts, command).passed
 
     def _remove_empty_files(self, hosts, source, pattern, depth):
@@ -2566,7 +2567,7 @@ class LaunchJob():
             "Compressing any remote %s files in %s on %s larger than 1M", pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
-            "sudo xargs -r0 lbzip2 -v")
+            "sudo xargs -0 -r0 lbzip2 -v")
         return run_remote(self.log, hosts, command).passed
 
     def _compress_local_files(self, hosts, source, pattern, depth):
@@ -2643,7 +2644,7 @@ class LaunchJob():
 
         # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-                   f"xargs -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
+                   f"xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
             self.log.debug("Error moving files to temporary remote copy directory %s", tmp_copy_dir)
             return False
@@ -2846,7 +2847,7 @@ class CoreFileProcessing():
         Args:
             log (logger): object configured to log messages
         """
-        # pylint: disable=import-outside-toplevel
+        # pylint: disable=import-outside-toplevel,import-error,no-name-in-module
         from util.distro_utils import detect
 
         self.log = log
