@@ -66,6 +66,8 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		}
 	}
 
+	dfuse_cache_evict(oh->doh_ie);
+
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
 	return;
 err:
