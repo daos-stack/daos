@@ -342,4 +342,4 @@ class Logfac:
 DAOS_TX_NONE = Daos_handle_t(0)
 
 # default fault domain level
-DAOS_PROP_CO_REDUN_DEFAULT = ctypes.c_uint64(2)
+DAOS_PROP_CO_REDUN_DEFAULT = 2
