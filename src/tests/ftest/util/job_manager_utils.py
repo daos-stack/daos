@@ -1139,7 +1139,7 @@ class Clush(JobManager):
             str: the command with all the defined parameters
 
         """
-        commands = [super().__str__(), f"-w {self._hosts}", self.command]
+        commands = [super().__str__(), "-w {}".format(self.hosts), self.command]
         return " ".join(commands)
 
     @property
@@ -1181,11 +1181,13 @@ class Clush(JobManager):
         self.result = run_remote(self._hosts, self.command, self.verbose, self.timeout)
 
         if self.result.timeout:
-            raise CommandFailure(f"Timeout detected running '{self.command}' on {self._hosts}")
+            raise CommandFailure(
+                "Timeout detected running '{}' on {}".format(self.command, self.hosts))
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
-            raise CommandFailure(f"Bad words found in '<{self.command}>' output on {self._hosts}")
+            raise CommandFailure(
+                "Bad words detected in '{}' output on {}".format(self.command, self.hosts))
 
         return self.result
 

@@ -233,7 +233,7 @@ class DaosCoreBase(TestWithServers):
             command.run()
 
         except CommandFailure as error:
-            error_message = f"Error detected running {job_command}"
+            error_message = "Error detected running {}".format(job_command)
             error_exception = error
             self.log.exception(error_message)
             self.fail(error_message)
@@ -242,7 +242,8 @@ class DaosCoreBase(TestWithServers):
             self._collect_cmocka_results(cmocka_dir)
             if not self._check_cmocka_files():
                 if error_message is None:
-                    error_message = f"Missing cmocka results for {job_command} in {cmocka_dir}"
+                    error_message = "Missing cmocka results for {} in {}".format(
+                        job_command, cmocka_dir)
                 self._generate_cmocka_files(error_message, error_exception)
 
     def _collect_cmocka_results(self, cmocka_dir):
@@ -310,7 +311,7 @@ class DaosCoreBase(TestWithServers):
                     name (str): name of the daos_test subtest
                     log_dir (str): where to create the cmocka.xml file
                 """
-                cmocka_xml = os.path.join(log_dir, f"{name}_cmocka_results.xml")
+                cmocka_xml = os.path.join(log_dir, "{}_cmocka_results.xml".format(name))
                 self.config = {
                     "job.run.result.xunit.enabled": None,
                     "job.run.result.xunit.output": cmocka_xml,
@@ -331,7 +332,7 @@ class DaosCoreBase(TestWithServers):
                     log_file (str): the test log file
                     message (str): the failure message
                 """
-                self.class_name = f"FTEST_daos_test.{name}"
+                self.class_name = "FTEST_daos_test.{}".format(name)
                 self.name = name
                 self.logfile = log_file
                 self.errors = 1
