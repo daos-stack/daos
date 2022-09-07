@@ -997,6 +997,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	DFUSE_TRA_DEBUG(ie, "Checking time %#lx %#lx", ie->ie_cache_last_update.tv_sec,
 			ie->ie_cache_last_update.tv_nsec);
 
+	if (ie->ie_cache_last_update.tv_sec == 0)
+		return false;
+
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
 	left.tv_sec  = now.tv_sec - ie->ie_cache_last_update.tv_sec;
