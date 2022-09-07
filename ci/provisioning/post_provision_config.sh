@@ -34,7 +34,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            MY_UID=$(id -u)
            CONFIG_POWER_ONLY=${CONFIG_POWER_ONLY:-}
            INST_REPOS=\"${INST_REPOS:-}\"
-           INST_RPMS=\$(eval echo ${INST_RPMS:-})
+           INST_RPMS=\"${INST_RPMS:-}\"
            GPG_KEY_URLS=\"${GPG_KEY_URLS:-}\"
            REPOSITORY_URL=\"${REPOSITORY_URL:-}\"
            JENKINS_URL=\"${JENKINS_URL:-}\"
