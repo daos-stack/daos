@@ -14,6 +14,7 @@ class DAOSVersion(TestWithServers):
     """JIRA ID: DAOS-8539
 
     Verify version number and the output string.
+    MK
 
     :avocado: recursive
     """
