@@ -423,7 +423,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Open the obj
             obj = DaosObj(cont.pool.context, cont.container)
             obj_list.append(obj)
-            obj.create(rank=obj_idx, objcls=2)
+            obj.create(rank=obj_idx, objcls=3)
             obj.open()
 
             ioreq = IORequest(cont.pool.context, cont.container, obj)
