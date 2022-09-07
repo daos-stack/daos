@@ -1130,9 +1130,6 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_AVAILABLE_DIRTY;
 
 	if (!found) {
-		/** If we move to not marking entries explicitly, this
-		 *  state will mean it is committed
-		 */
 		D_DEBUG(DB_TRACE,
 			"Entry %d "DF_U64" not in lru array, it must be"
 			" committed\n", entry, epoch);
@@ -1242,18 +1239,26 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 
 	if (intent == DAOS_INTENT_DEFAULT) {
-		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
-		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
-			/* Non-leader or rebuild case, return -DER_INPROGRESS,
-			 * then the caller will retry the RPC (with leader).
-			 */
-			return dtx_inprogress(dae, dth, false, true, 1);
+		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
+			return dtx_inprogress(dae, dth, false, true, 6);
 
-		/* For transactional read, has to wait the non-committed
+		/*
+		 * For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
 			return dtx_inprogress(dae, dth, false, true, 2);
+
+		/* Ignore non-prepared DTX in spite of on leader or not. */
+		if (dae->dae_dbd == NULL || dae->dae_dth != NULL)
+			return ALB_UNAVAILABLE;
+
+		if (!(DAE_FLAGS(dae) & DTE_LEADER))
+			/*
+			 * Read on non-leader, return -DER_INPROGRESS, then the caller
+			 * will refresh the DTX or retry related RPC with the leader.
+			 */
+			return dtx_inprogress(dae, dth, false, true, 1);
 
 		/* For stand-alone read on leader, ignore non-committed DTX. */
 		return ALB_UNAVAILABLE;
@@ -1795,7 +1800,21 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (mbs != NULL)
 			dae->dae_maybe_shared = 1;
 
-		if (dae->dae_dbd == NULL || dae->dae_dth != NULL)
+		if (for_refresh) {
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (!(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
+
+			return dae->dae_prepared ? DTX_ST_PREPARED : DTX_ST_INITED;
+		}
+
+		/* Not committable yet, related RPC handler ULT is still running. */
+		if (dae->dae_dth != NULL)
 			return -DER_INPROGRESS;
 
 		if (epoch != NULL) {
@@ -1806,20 +1825,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared) {
-			/*
-			 * If DTX_REFRESH happened on current DTX entry but it was not marked
-			 * as leader, then there must be leader switch and the DTX resync has
-			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
-			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
-			 */
-			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
-				return -DER_INPROGRESS;
-
-			return DTX_ST_PREPARED;
-		}
-
-		return DTX_ST_INITED;
+		return dae->dae_prepared ? DTX_ST_PREPARED : DTX_ST_INITED;
 	}
 
 	if (rc == -DER_NONEXIST) {
