@@ -10,18 +10,14 @@
 
 /** indirect indices for binary search by ID */
 static struct daos_obj_class **oc_ident_array;
-/** indirect indices for binary search by number of groups */
-static struct daos_obj_class **oc_scale_array;
 /** indirect indices for binary search by number of replicas */
 static struct daos_obj_class **oc_resil_array;
 
 static int oc_ident_array_sz;
-static int oc_scale_array_sz;
 static int oc_resil_array_sz;
 
 static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
-static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
 /**
@@ -94,11 +90,27 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		strcpy(str, "UNKNOWN");
 		return -1;
 	}
-	if (nr_grps == oc->oc_grp_nr)
+	if (nr_grps == oc->oc_grp_nr) {
 		strcpy(str, oc->oc_name);
-	else
-	/* update oc_name according to nr_grps */
-		strcpy(str, "UNKNOWN");
+	} else {
+		/** update oclass name with group number */
+		char *p = oc->oc_name;
+		int i = 0;
+
+		while (p[i] != 'G') {
+			str[i] = p[i];
+			i++;
+		}
+		str[i++] = 'G';
+		p = &str[i];
+		str[i++] = 0;
+		i = snprintf(p, MAX_OBJ_CLASS_NAME_LEN - strlen(str), "%u", nr_grps);
+		if (i < 0) {
+			D_ERROR("Failed to encode object class name\n");
+			strcpy(str, "UNKNOWN");
+			return -1;
+		}
+	}
 	return 0;
 }
 
@@ -204,7 +216,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
-	int grp_size;
+	uint32_t grp_size;
 	uint32_t nr_grps;
 
 	D_ASSERT(target_nr > 0);
@@ -230,16 +242,21 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	}
 
 	grp_size = daos_oclass_grp_size(&ca);
-	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX ||
-	    ca.ca_grp_nr * grp_size > target_nr) {
-		/* search for the highest scalability in the allowed range */
+	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX)
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
-		oc = oclass_scale2cl(&ca);
-		*ord = oc->oc_redun;
-		*nr = ca.ca_grp_nr;
-		oc_id = oc->oc_id;
-		goto out;
+
+	if (grp_size > domain_nr) {
+		D_ERROR("grp size (%u) (%u) is larger than domain nr (%u)\n",
+			grp_size, DAOS_OBJ_REPL_MAX, domain_nr);
+		return -DER_INVAL;
 	}
+
+	if (ca.ca_grp_nr * grp_size > target_nr) {
+		D_ERROR("grp_size (%u) x grp_nr (%u) is larger than targets (%u)\n",
+			grp_size, ca.ca_grp_nr, target_nr);
+		return -DER_INVAL;
+	}
+
 	*ord = oc->oc_redun;
 	*nr = ca.ca_grp_nr;
 out:
@@ -603,64 +620,6 @@ static daos_sort_ops_t	oc_resil_sort_ops = {
 	.so_cmp_key	= oc_sop_resil_cmp_key,
 };
 
-static int
-oc_scale_cmp(struct daos_oclass_attr *ca1, struct daos_oclass_attr *ca2)
-{
-	if (ca1->ca_resil > ca2->ca_resil)
-		return 1;
-	if (ca1->ca_resil < ca2->ca_resil)
-		return -1;
-
-	if (ca1->ca_resil == DAOS_RES_EC) {
-		if (ca1->ca_ec_k + ca1->ca_ec_p > ca2->ca_ec_k + ca2->ca_ec_p)
-			return 1;
-		if (ca1->ca_ec_k + ca1->ca_ec_p < ca2->ca_ec_k + ca2->ca_ec_p)
-			return -1;
-	} else {
-		if (ca1->ca_rp_nr > ca2->ca_rp_nr)
-			return 1;
-		if (ca1->ca_rp_nr < ca2->ca_rp_nr)
-			return -1;
-	}
-
-	if (ca1->ca_resil_degree > ca2->ca_resil_degree)
-		return 1;
-	if (ca1->ca_resil_degree < ca2->ca_resil_degree)
-		return -1;
-
-	/* all the same, real comparison is here */
-	if (ca1->ca_grp_nr > ca2->ca_grp_nr)
-		return 1;
-	if (ca1->ca_grp_nr < ca2->ca_grp_nr)
-		return -1;
-
-	return 0;
-}
-
-static int
-oc_sop_scale_cmp(void *array, int a, int b)
-{
-	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
-
-	return oc_scale_cmp(&ocs[a]->oc_attr, &ocs[b]->oc_attr);
-}
-
-static int
-oc_sop_scale_cmp_key(void *array, int i, uint64_t key)
-{
-	struct daos_obj_class   **ocs = (struct daos_obj_class **)array;
-	struct daos_oclass_attr	 *ca;
-
-	ca = (struct daos_oclass_attr *)(unsigned long)key;
-	return oc_scale_cmp(&ocs[i]->oc_attr, ca);
-}
-
-static daos_sort_ops_t	oc_scale_sort_ops = {
-	.so_swap	= oc_sop_swap,
-	.so_cmp		= oc_sop_scale_cmp,
-	.so_cmp_key	= oc_sop_scale_cmp_key,
-};
-
 /* NB: ignore the last one which is UNKNOWN */
 #define OC_NR	daos_oclass_nr(0)
 
@@ -865,32 +824,6 @@ oclass_resil2cl(struct daos_oclass_attr *ca)
 	return oc_resil_array[idx];
 }
 
-/* find object class by number of redundancy groups
- * the returned class should have the same protection method (EC/replication),
- * the same group size, the same redundancy level, equal to or less than
- * redundancy groups than ca::ca_grp_nr.
- */
-static struct daos_obj_class *
-oclass_scale2cl(struct daos_oclass_attr *ca)
-{
-	struct daos_obj_class *oc;
-	int idx;
-
-	idx = daos_array_find_le(oc_scale_array, oc_scale_array_sz,
-				 (uint64_t)(unsigned long)ca,
-				 &oc_scale_sort_ops);
-	if (idx < 0)
-		return NULL;
-
-	oc = oc_scale_array[idx];
-	if (ca->ca_resil != oc->oc_resil ||
-	    ca->ca_resil_degree != oc->oc_resil_degree ||
-	    daos_oclass_grp_size(ca) != daos_oclass_grp_size(&oc->oc_attr))
-		return NULL;
-
-	return oc;
-}
-
 static char *
 oclass_resil_str(struct daos_obj_class *oc)
 {
@@ -932,12 +865,6 @@ obj_class_init(void)
 	if (!oc_ident_array)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(oc_scale_array, OC_NR);
-	if (!oc_scale_array) {
-		rc = -DER_NOMEM;
-		goto failed;
-	}
-
 	D_ALLOC_ARRAY(oc_resil_array, OC_NR);
 	if (!oc_resil_array) {
 		rc = -DER_NOMEM;
@@ -962,9 +889,6 @@ obj_class_init(void)
 			oc->oc_resil_degree = oc->oc_ec_p;
 		}
 		oc_ident_array[oc_ident_array_sz++] = oc;
-
-		if (!oc->oc_private) /* ignore private classes */
-			oc_scale_array[oc_scale_array_sz++] = oc;
 	}
 
 	rc = daos_array_sort(oc_ident_array, oc_ident_array_sz, true,
@@ -974,14 +898,6 @@ obj_class_init(void)
 		goto failed;
 	}
 	oclass_array_debug("ident", oc_ident_array, oc_ident_array_sz);
-
-	rc = daos_array_sort(oc_scale_array, oc_scale_array_sz, true,
-			     &oc_scale_sort_ops);
-	if (rc) {
-		D_ERROR("object class scale attribute should be unique\n");
-		goto failed;
-	}
-	oclass_array_debug("scale", oc_scale_array, oc_scale_array_sz);
 
 	rc = daos_array_sort(oc_resil_array, oc_resil_array_sz, true,
 			     &oc_resil_sort_ops);
@@ -1003,12 +919,6 @@ obj_class_fini(void)
 		D_FREE(oc_resil_array);
 		oc_resil_array = NULL;
 		oc_resil_array_sz = 0;
-	}
-
-	if (oc_scale_array) {
-		D_FREE(oc_scale_array);
-		oc_scale_array = NULL;
-		oc_scale_array_sz = 0;
 	}
 
 	if (oc_ident_array) {

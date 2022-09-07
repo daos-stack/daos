@@ -160,6 +160,7 @@ enum
 env
 environ
 epcrange
+errored
 ethernet
 fchmod
 fcntl
@@ -333,7 +334,6 @@ recurse
 redistributions
 refactor
 repo
-resizeable
 rf
 rmdir
 romio
@@ -373,12 +373,14 @@ stripesize
 struct
 su
 subcommand
+subcommands
 subdir
 subdirectories
 subdirectory
 sublicense
 submodules
 subprocess
+substring
 subtest
 sudo
 superblock
@@ -389,6 +391,7 @@ symlinks
 sys
 systemctl
 systemd
+taskset
 tcp
 teardown
 teardowns
