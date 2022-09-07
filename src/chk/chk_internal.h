@@ -647,11 +647,11 @@ int chk_bk_update_engine(struct chk_bookmark *cbk);
 
 int chk_bk_delete_engine(void);
 
-int chk_bk_fetch_pool(struct chk_bookmark *cbk, uuid_t uuid);
+int chk_bk_fetch_pool(struct chk_bookmark *cbk, char *uuid_str);
 
-int chk_bk_update_pool(struct chk_bookmark *cbk, uuid_t uuid);
+int chk_bk_update_pool(struct chk_bookmark *cbk, char *uuid_str);
 
-int chk_bk_delete_pool(uuid_t uuid);
+int chk_bk_delete_pool(char *uuid_str);
 
 int chk_prop_fetch(struct chk_property *cpp, d_rank_list_t **rank_list);
 
