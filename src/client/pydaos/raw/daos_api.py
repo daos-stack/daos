@@ -1502,7 +1502,7 @@ class DaosContainer():
             # Both layout and checksum properties defined
             num_prop = 4
 
-        if self.cont_input_values.rf_lvl.value != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             num_prop = num_prop + 1
 
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
@@ -1534,10 +1534,11 @@ class DaosContainer():
         if self.cont_input_values.enable_chksum is True:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
-            if self.cont_input_values.chksum_type.value == 100:
+            if self.cont_input_values.chksum_type == 100:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
-                self.cont_prop.dpp_entries[idx].dpe_val = self.cont_input_values.chksum_type
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_input_values.chksum_type)
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value)
@@ -1548,14 +1549,15 @@ class DaosContainer():
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
-            if self.cont_input_values.chunk_size.value == 0:
+            if self.cont_input_values.chunk_size == 0:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     16384)
             else:
-                self.cont_prop.dpp_entries[idx].dpe_val = self.cont_input_values.chunk_size
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_input_values.chunk_size)
 
         idx = idx + 1
-        if self.cont_input_values.rf_lvl.value != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
             self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
