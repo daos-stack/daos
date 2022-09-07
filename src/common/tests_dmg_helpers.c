@@ -167,39 +167,31 @@ run_cmd(const char *command, int *outputfd)
 		return rc;
 	}
 
+	D_DEBUG(DB_TEST, "forking to run dmg command\n");
+
 	child_pid = fork();
 	if (child_pid == -1) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to fork: %s\n", strerror(errno));
 		return rc;
-	}
-
-	if (child_pid == 0) {
+	} else if (child_pid == 0) {
 		/* child doesn't need the read end of the pipes */
 		close(stdoutfd[0]);
 		close(stderrfd[0]);
 
-		D_DEBUG(DB_TEST, "running dmg command\n");
+		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1)
+			_exit(errno);
 
-		if (dup2(stdoutfd[1], STDOUT_FILENO) == -1) {
-			D_ERROR("failed to dup stdout pipe: %s\n", strerror(errno));
-			_exit(daos_errno2der(errno));
-		}
-
-		if (dup2(stderrfd[1], STDERR_FILENO) == -1) {
-			D_ERROR("failed to dup stderr pipe: %s\n", strerror(errno));
-			_exit(daos_errno2der(errno));
-		}
+		if (dup2(stderrfd[1], STDERR_FILENO) == -1)
+			_exit(errno);
 
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
 
-		if (system(command) == -1) {
-			D_ERROR("failed to invoke '%s', errno=%d (%s)\n", command, errno,
-				strerror(errno));
-			_exit(daos_errno2der(errno));
-		}
-		_exit(0);
+		rc = system(command);
+		if (rc == -1)
+			_exit(errno);
+		_exit(rc);
 	}
 
 	/* parent doesn't need the write end of the pipes */
@@ -214,10 +206,10 @@ run_cmd(const char *command, int *outputfd)
 	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
 
 	if (child_rc != 0) {
-		D_ERROR("child process failed, "DF_RC"\n", DP_RC(child_rc));
+		D_ERROR("child process failed, rc=%d (%s)\n", child_rc, strerror(child_rc));
 		close(stdoutfd[0]);
 		log_stderr_pipe(stderrfd[0]);
-		return child_rc;
+		return daos_errno2der(child_rc);
 	}
 
 	close(stderrfd[0]);
