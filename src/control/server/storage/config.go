@@ -179,34 +179,57 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) HaveBdevs() bool {
+func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
+	bdevs := []string{}
+	for _, bc := range tcs.BdevConfigs() {
+		if nvmeOnly && bc.Class != ClassNvme {
+			continue
+		}
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
+	}
+
+	return MustNewBdevDeviceList(bdevs...)
+}
+
+func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	return tcs.getBdevs(false)
+}
+
+func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	return tcs.getBdevs(true)
+}
+
+func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
-			return true
+			switch {
+			case nvmeOnly:
+				if bc.Class == ClassNvme {
+					return true
+				}
+			case emulOnly:
+				if bc.Class != ClassNvme {
+					return true
+				}
+			default:
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func (tcs TierConfigs) HaveBdevs() bool {
+	return tcs.checkBdevs(false, false)
 }
 
 func (tcs TierConfigs) HaveRealNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
-			return true
-		}
-	}
-
-	return false
+	return tcs.checkBdevs(true, false)
 }
 
 func (tcs TierConfigs) HaveEmulatedNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class != ClassNvme {
-			return true
-		}
-	}
-
-	return false
+	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) Validate() error {
@@ -709,6 +732,14 @@ type Config struct {
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
 	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+}
+
+func (c *Config) GetBdevs() *BdevDeviceList {
+	return c.Tiers.Bdevs()
+}
+
+func (c *Config) GetNVMeBdevs() *BdevDeviceList {
+	return c.Tiers.NVMeBdevs()
 }
 
 func (c *Config) Validate() error {

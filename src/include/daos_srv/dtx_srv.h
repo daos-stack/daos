@@ -87,6 +87,8 @@ struct dtx_handle {
 					 dth_aborted:1,
 					 /* The modification is done by others. */
 					 dth_already:1,
+					 /* Need validation on leader before commit/committable. */
+					 dth_need_validation:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -310,8 +312,7 @@ struct dtx_scan_args {
 	uint32_t	version;
 };
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
-	       uint32_t ver, bool block, bool resync_all);
+int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block);
 void dtx_resync_ult(void *arg);
 
 #endif /* __DAOS_DTX_SRV_H__ */
