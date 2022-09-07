@@ -12,11 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type daosServerTestErr string
@@ -167,7 +168,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		},
 		{
 			"Prepare namespaces with all opts",
-			"scm prepare -S 2 -f",
+			"scm prepare -S 2 -f --socket 0",
 			printCommand(t, &prepareSCMCmd{
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
@@ -182,7 +183,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		},
 		{
 			"Reset namespaces with all opts",
-			"scm reset -f",
+			"scm reset -f --socket 1",
 			printCommand(t, &resetSCMCmd{
 				Force: true,
 			}),
