@@ -223,6 +223,12 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
+		/*
+		 * The ds_mgmt_pool_svc_create call doesn't clean up any
+		 * successful PS replica creations upon errors; we clean up
+		 * those here together with other pool resources to save one
+		 * round of RPCs.
+		 */
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",

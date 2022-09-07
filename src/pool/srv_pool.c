@@ -699,6 +699,11 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  * a single storage node in the pool. If the return value is 0, the caller is
  * responsible for freeing \a svc_addrs with d_rank_list_free.
  *
+ * Note that if the return value is nonzero, the caller is responsible for
+ * stopping and destroying any PS replicas that may have been created. This
+ * behavior is tailored for ds_mgmt_create_pool, who will clean up all pool
+ * resources upon errors.
+ *
  * \param[in]		pool_uuid	pool UUID
  * \param[in]		ntargets	number of targets in the pool
  * \param[in]		group		crt group ID (unused now)
@@ -749,7 +754,7 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
-		D_GOTO(out_creation, rc);
+		D_GOTO(out_ranks, rc);
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
 				8 /* next (ms) */, 1 << 10 /* max (ms) */);
@@ -807,10 +812,10 @@ out_rpc:
 out_backoff_seq:
 	d_backoff_seq_fini(&backoff_seq);
 	rsvc_client_fini(&client);
-out_creation:
-	if (rc != 0)
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
-				  NULL, true /* destroy */);
+	/*
+	 * Intentionally skip cleaning up the PS replicas. See the function
+	 * documentation above.
+	 */
 out_ranks:
 	d_rank_list_free(ranks);
 out:
@@ -828,12 +833,8 @@ ds_pool_svc_stop(uuid_t pool_uuid)
 
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, false /* destroy */);
 	if (rc == -DER_ALREADY) {
-		D_DEBUG(DB_MD, DF_UUID": pool service replica already stopped\n",
-			DP_UUID(pool_uuid));
+		D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop pool service replica: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
 	}
 
 	return rc;
