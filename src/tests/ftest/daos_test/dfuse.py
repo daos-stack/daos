@@ -6,11 +6,15 @@
 
 import os
 from collections import OrderedDict
-import general_utils
+
+from command_utils_base import EnvironmentVariables
+from daos_core_base import DaosCoreBase
 from dfuse_test_base import DfuseTestBase
+from general_utils import create_directory
+from job_manager_utils import get_job_manager
 
 
-class DaosCoreTestDfuse(DfuseTestBase):
+class DaosCoreTestDfuse(DaosCoreBase, DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
 
@@ -83,30 +87,22 @@ class DaosCoreTestDfuse(DfuseTestBase):
         else:
             # Bypass, simply create a remote directory and use that.
             mount_dir = '/tmp/dfuse-test'
-            general_utils.create_directory(self.hostlist_clients, mount_dir)
+            create_directory(self.hostlist_clients, mount_dir)
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
-
-        cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--metadata', '--stream']
-
+        intercept_envs = None
         if intercept:
-            remote_env = OrderedDict()
+            intercept_envs = EnvironmentVariables()
+            intercept_envs['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            intercept_envs['DD_MASK'] = 'all'
+            intercept_envs['DD_SUBSYS'] = 'all'
+            intercept_envs['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
-            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-            remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
-            remote_env['DD_MASK'] = 'all'
-            remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-
-            envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
-
-            preload_cmd = ';'.join(envs)
-
-            command = '{};{}'.format(preload_cmd, ' '.join(cmd))
-        else:
-            command = ' '.join(cmd)
-        ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60)
-        if 0 in ret_code:
-            return
-        self.log.info(ret_code)
-        self.fail('Error running {}'.format(cmd))
+        cmocka_dir = self._get_cmocka_dir()
+        daos_test_cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--metadata', '--stream']
+        job = get_job_manager(self, "Clush", daos_test_cmd)
+        job.assign_hosts(self.hostlist_clients)
+        job.assign_environment(self._get_daos_test_env(cmocka_dir, intercept_envs))
+        self.run_daos_test(job, cmocka_dir)
+        if not job.result.passed:
+            self.fail(f'Error running {job.command} on {job.hosts}')

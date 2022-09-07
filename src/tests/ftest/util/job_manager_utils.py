@@ -16,7 +16,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, run_remote
 from write_host_file import write_host_file
 
 
@@ -63,7 +63,7 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
         job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
         job_manager.get_params(test)
         job_manager.timeout = timeout
-        if mpi_type == "openmpi":
+        if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
             job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
         if isinstance(test.job_manager, list):
             test.job_manager.append(job_manager)
@@ -566,10 +566,10 @@ class Systemctl(JobManager):
         """Create a Orterun object.
 
         Args:
-            job (SubProcessCommand): command object to manage.
+            job (ExecutableCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super().__init__("/run/systemctl/*", "systemd", job)
+        super().__init__("/run/clush/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name
@@ -1116,3 +1116,100 @@ class Systemctl(JobManager):
             if hosts is None:
                 hosts = self._hosts
             self.display_log_data(self.get_log_data(hosts, timestamp))
+
+
+class Clush(JobManager):
+    # pylint: disable=too-many-public-methods
+    """A class for the clush job manager command."""
+
+    def __init__(self, job):
+        """Create a Clush object.
+
+        Args:
+            job (SubProcessCommand): command object to manage.
+        """
+        super().__init__("/run/systemctl/*", None, job)
+        self.verbose = True
+        self.timeout = 60
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        commands = [super().__str__(), f"-w {self._hosts}", self.command]
+        return " ".join(commands)
+
+    @property
+    def command(self):
+        """Get the command without its parameters."""
+        return str(self.job)
+
+    def assign_hosts(self, hosts, path=None, slots=None):
+        """Assign the hosts to use with the command (--hostfile).
+
+        Args:
+            hosts (NodeSet): hosts to specify in the hostfile
+            path (str, optional): not used. Defaults to None.
+            slots (int, optional): not used. Defaults to None.
+        """
+        self._hosts = hosts.copy()
+
+    def assign_environment(self, env_vars, append=False):
+        """Assign or add environment variables to the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to use
+                assign or add to the command
+            append (bool): whether to assign (False) or append (True) the
+                specified environment variables
+        """
+        if append:
+            self.env.update(env_vars)
+        else:
+            self.set_environment(env_vars)
+
+    def run(self):
+        """Run the command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        self.result = run_remote(self._hosts, self.command, self.verbose, self.timeout)
+
+        if self.result.timeout:
+            raise CommandFailure(f"Timeout detected running '{self.command}' on {self._hosts}")
+
+        if self.exit_status_exception and not self.check_results():
+            # Command failed if its output contains bad keywords
+            raise CommandFailure(f"Bad words found in '<{self.command}>' output on {self._hosts}")
+
+        return self.result
+
+    def check_results(self):
+        """Check the command result for any bad keywords.
+
+        Returns:
+            bool: True if either there were no items from self.check_result_list to verify or if
+                none of the items were found in the command output; False if a item was found in
+                the command output.
+
+        """
+        status = True
+        if self.result and self.check_results_list:
+            regex = r"({})".format("|".join(self.check_results_list))
+            self.log.debug("Checking the command output for any bad keywords: %s", regex)
+            for result in self.result:
+                match = re.findall(regex, "\n".join(result.output))
+                if match:
+                    self.log.info(
+                        "The following error messages have been detected in the %s output:",
+                        self.command)
+                    for item in match:
+                        self.log.info("  %s", item)
+                    status = False
+                    break
+        return status
