@@ -940,9 +940,25 @@ func (db *Database) UpdatePoolService(ps *system.PoolService) error {
 	db.Lock()
 	defer db.Unlock()
 
-	_, err := db.FindPoolServiceByUUID(ps.PoolUUID)
+	p, err := db.FindPoolServiceByUUID(ps.PoolUUID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to retrieve pool %s", ps.PoolUUID)
+	}
+
+	// This is a workaround before we can handle the following race
+	// properly.
+	//
+	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
+	//     Write ps: Creating
+	//                            Read ps: Creating
+	//     Write ps: Ready
+	//                            Write ps: Creating
+	//
+	// The pool remains in Creating state after PoolCreate completes,
+	// leading to DER_AGAINs during PoolDestroy.
+	if p.State == system.PoolServiceStateReady && ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("ignoring invalid pool service update: %+v -> %+v", p, ps)
+		return nil
 	}
 
 	if err := db.submitPoolUpdate(raftOpUpdatePoolService, ps); err != nil {
@@ -970,23 +986,6 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	ps, err := db.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
-		return
-	}
-
-	// This is a workaround before we can handle the following race
-	// properly.
-	//
-	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
-	//     Write ps: Creating
-	//                            Read ps: Creating
-	//     Write ps: Ready
-	//                            Write ps: Creating
-	//
-	// The pool remains in Creating state after PoolCreate completes,
-	// leading to DER_AGAINs during PoolDestroy.
-	if ps.State == system.PoolServiceStateCreating {
-		db.log.Debugf("ignoring RAS event %q for pool %s in PoolServiceStateCreating",
-			evt.Msg, evt.PoolUUID)
 		return
 	}
 
