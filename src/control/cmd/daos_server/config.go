@@ -7,8 +7,8 @@
 package main
 
 import (
-	"os"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"os"
 )
 
 type cfgLoader interface {
