@@ -6,6 +6,7 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include "obj_class.h"
+#include "obj_internal.h"
 #include <isa-l.h>
 
 /** indirect indices for binary search by ID */

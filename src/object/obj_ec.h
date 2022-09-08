@@ -262,6 +262,9 @@ struct obj_ec_fail_info {
 	uint32_t			 efi_recov_ntasks;
 };
 
+int
+obj_ec_grp_start(uint32_t layout_ver, uint64_t hash, uint32_t grp_size);
+
 struct obj_reasb_req;
 
 /** Query the number of records in EC full stripe */
@@ -287,29 +290,43 @@ struct obj_reasb_req;
 	(((idx) % (stripe_rec_nr)) / (e_len))
 
 /* Get shard idx according to dkey hash within one group. logical idx -> physical idx */
-#define obj_ec_shard_idx(dkey_hash, oca, t_idx)				\
-	((dkey_hash % obj_ec_tgt_nr(oca) + t_idx) % obj_ec_tgt_nr(oca))
+#define obj_ec_shard_idx(obj, dkey_hash, t_idx)				\
+	((obj_ec_grp_start(obj->cob_layout_version, dkey_hash, obj_ec_tgt_nr(&obj->cob_oca)) + \
+	 t_idx) % obj_ec_tgt_nr(&obj->cob_oca))
+
+#define obj_ec_shard_idx_by_layout_ver(layout_ver, dkey_hash, oca, t_idx)			\
+	((obj_ec_grp_start(layout_ver, dkey_hash, obj_ec_tgt_nr(oca)) + t_idx) % obj_ec_tgt_nr(oca))
 
 /* Get shard index within the object layout */
-#define obj_ec_shard(dkey_hash, oca, grp_idx, t_idx)					\
-	(grp_idx * obj_ec_tgt_nr(oca) + obj_ec_shard_idx(dkey_hash, oca, t_idx))
+#define obj_ec_shard(obj, dkey_hash, grp_idx, t_idx)				\
+	(grp_idx * obj_ec_tgt_nr(&obj->cob_oca) + obj_ec_shard_idx(obj, dkey_hash, t_idx))
 
 /* Get the parity index within one group, logical -> physical */
-#define obj_ec_parity_idx(dkey_hash, oca, p_idx)					\
-	((obj_ec_shard_idx(dkey_hash, oca, 0) + obj_ec_data_tgt_nr(oca) + p_idx) %	\
-	  obj_ec_tgt_nr(oca))
+#define obj_ec_parity_idx(obj, dkey_hash, p_idx)					\
+	((obj_ec_shard_idx(obj, dkey_hash, 0) + obj_ec_data_tgt_nr(&obj->cob_oca) + p_idx) %	\
+	  obj_ec_tgt_nr(&obj->cob_oca))
 
 /* Get parity start index according to dkey hash within one group */
-#define obj_ec_parity_start(dkey_hash, oca) obj_ec_parity_idx(dkey_hash, oca, 0)
+#define obj_ec_parity_start(obj, dkey_hash) obj_ec_parity_idx(obj, dkey_hash, 0)
 
 /* Get parity shard index within the object layout */
-#define obj_ec_parity_shard(dkey_hash, oca, grp_idx, p_idx)		\
-	((grp_idx) * obj_ec_tgt_nr(oca) + obj_ec_parity_idx(dkey_hash, oca, p_idx))
+#define obj_ec_parity_shard(obj, dkey_hash, grp_idx, p_idx)		\
+	((grp_idx) * obj_ec_tgt_nr(&obj->cob_oca) + obj_ec_parity_idx(obj, dkey_hash, p_idx))
 
 /* Get the logical offset of shard within one group, physical idx -> logical idx */
-#define obj_ec_shard_off(dkey_hash, oca, shard)				\
-	((shard % obj_ec_tgt_nr(oca) + obj_ec_tgt_nr(oca) -		\
-	 obj_ec_shard_idx(dkey_hash, oca, 0)) % obj_ec_tgt_nr(oca))
+#define obj_ec_shard_off(obj, dkey_hash, shard)				\
+	((shard % obj_ec_tgt_nr(&obj->cob_oca) + obj_ec_tgt_nr(&obj->cob_oca) -		\
+	 obj_ec_shard_idx(obj, dkey_hash, 0)) % obj_ec_tgt_nr(&obj->cob_oca))
+
+/* Get the logical offset of the tgt_idx by start target of EC, physical idx -> logical idx */
+#define obj_ec_shard_off_by_start(tgt_idx, oca, start_tgt)		\
+	((tgt_idx + obj_ec_tgt_nr(oca) - start_tgt) % obj_ec_tgt_nr(oca))
+
+/* Get the logical offset of tgt_idx by gl version. */
+#define obj_ec_shard_off_by_layout_ver(layout_ver, dkey_hash, oca, tgt_idx)	\
+	((tgt_idx + obj_ec_tgt_nr(oca) -					\
+	 obj_ec_grp_start(layout_ver, dkey_hash, obj_ec_tgt_nr(oca))) %		\
+	 obj_ec_tgt_nr(oca))
 /**
  * Query the mapped VOS recx idx on data cells of daos recx idx, it is also the
  * parity's VOS recx idx on parity cells (the difference is parity's VOS recx
@@ -343,20 +360,40 @@ struct obj_ec_singv_local {
 };
 
 /** Query the target index for small sing-value record */
-#define obj_ec_singv_small_idx(oca, dkey_hash, iod)	obj_ec_shard_idx(dkey_hash, oca, 0)
+#define obj_ec_singv_small_idx(obj, dkey_hash, iod)	obj_ec_shard_idx(obj, dkey_hash, 0)
 
+/* check EC data shard by its logical offset */
 static inline bool
-is_ec_data_shard(uint32_t shard, uint64_t dkey_hash, struct daos_oclass_attr *oca)
+is_ec_data_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
-	return obj_ec_shard_off(dkey_hash, oca, shard) < obj_ec_data_tgt_nr(oca);
+	return tgt_off < obj_ec_data_tgt_nr(oca);
 }
 
 static inline bool
-is_ec_parity_shard(uint32_t shard, uint64_t dkey_hash, struct daos_oclass_attr *oca)
+is_ec_data_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+			       struct daos_oclass_attr *oca, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(oca));
-	return obj_ec_shard_off(dkey_hash, oca, shard) >= obj_ec_data_tgt_nr(oca);
+	return obj_ec_shard_off_by_layout_ver(layout_ver, dkey_hash, oca, shard) <
+	       obj_ec_data_tgt_nr(oca);
+}
+
+/* check EC parity shard by its logical offset */
+static inline bool
+is_ec_parity_shard_by_tgt_off(uint32_t tgt_off, struct daos_oclass_attr *oca)
+{
+	D_ASSERT(daos_oclass_is_ec(oca));
+	return tgt_off >= obj_ec_data_tgt_nr(oca);
+}
+
+static inline bool
+is_ec_parity_shard_by_layout_ver(uint32_t layout_ver, uint64_t dkey_hash,
+				 struct daos_oclass_attr *oca, uint32_t shard)
+{
+	D_ASSERT(daos_oclass_is_ec(oca));
+	return obj_ec_shard_off_by_layout_ver(layout_ver, dkey_hash, oca, shard) >=
+	       obj_ec_data_tgt_nr(oca);
 }
 
 /** Query if the single value record is stored in one data target */
@@ -670,15 +707,6 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 	return false;
 }
 
-static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, uint64_t dkey_hash, struct daos_oclass_attr *attr)
-{
-	if (!daos_oclass_is_ec(attr))
-		return false;
-
-	return is_ec_parity_shard(oid.id_shard, dkey_hash, attr);
-}
-
 /* obj_class.c */
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
@@ -724,21 +752,21 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 	return 0;
 }
 
+struct dc_object;
 /* cli_ec.c */
-int obj_ec_req_reasb(daos_iod_t *iods, uint64_t dkey_hash, d_sg_list_t *sgls,
-		     daos_obj_id_t oid, struct daos_oclass_attr *oca,
+int obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_sg_list_t *sgls,
 		     struct obj_reasb_req *reasb_req, uint32_t iod_nr, bool update);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 			uint32_t iod_nr, uint8_t *tgt_bitmap,
-			uint32_t tgt_max_idx, uint32_t tgt_nr, uint64_t dkey_hash,
+			uint32_t tgt_max_idx, uint32_t tgt_nr, uint32_t start_tgt,
 			struct daos_oclass_attr *oca);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
-void obj_ec_fetch_set_sgl(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
-			  uint32_t iod_nr);
+void obj_ec_fetch_set_sgl(struct dc_object *obj, struct obj_reasb_req *reasb_req,
+			  uint64_t dkey_hash, uint32_t iod_nr);
 void obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
@@ -747,16 +775,13 @@ int obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,
 					      bool create, uint16_t p);
 
-int obj_ec_fail_info_parity_get(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
-				uint32_t *parity_tgt_idx, uint8_t *cur_bitmap);
+int obj_ec_fail_info_parity_get(struct dc_object *obj, struct obj_reasb_req *reasb_req,
+				uint64_t dkey_hash, uint32_t *parity_tgt_idx, uint8_t *cur_bitmap);
 int obj_ec_fail_info_insert(struct obj_reasb_req *reasb_req, uint16_t fail_tgt);
 void obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req);
 void obj_ec_fail_info_free(struct obj_reasb_req *reasb_req);
-int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
+int obj_ec_recov_prep(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 		      uint64_t dkey_hash, daos_iod_t *iods, uint32_t iod_nr);
-void obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
-		       uint32_t iod_nr);
-int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
-		       uint32_t *parity_tgt_idx, bool ignore_fail_tgt_idx);
+void obj_ec_recov_data(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 
 #endif /* __OBJ_EC_H__ */
