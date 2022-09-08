@@ -1510,7 +1510,6 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERTF(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi, "phy_ent "DF_RECT" off="DF_X64"\n",
 			  DP_RECT(&phy_ent->pe_rect), phy_ent->pe_off);
-		D_ASSERT(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
 
 		/*
 		 * The physical entry spans window end, but is fully covered
