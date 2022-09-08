@@ -1042,7 +1042,7 @@ client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
 Make sure communications with verbs can go through.
 
 server_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
-client_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_eth0_server
+client_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_mlx5_0_server
 ```
 ### ib_send_lat
 ```
