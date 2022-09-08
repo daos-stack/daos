@@ -428,7 +428,7 @@ class NetworkFailureTest(IorTestBase):
         # Some ranks may be excluded after bringing up the network interface, so wait
         # until they are up (joined).
         server_crashed = True
-        for _ in range(6):
+        for _ in range(12):
             time.sleep(10)
             if check_system_query_status(self.get_dmg_command().system_query()):
                 self.log.info("All ranks are joined after bringing up the interface.")
