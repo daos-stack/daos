@@ -1,7 +1,7 @@
 """
-(C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022 Intel Corporation.
 
-SPDX-License-Identifier: BSD-2-Clause-Patent
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os

@@ -1,7 +1,7 @@
 """
-(C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022 Intel Corporation.
 
-SPDX-License-Identifier: BSD-2-Clause-Patent
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
@@ -10,7 +10,7 @@ from avocado.plugins.xunit import XUnitResult
 
 
 class TestResult():
-    """Provides the neccessary test result data to generate a cmocka.xml file."""
+    """Provides the necessary test result data to generate a xml file."""
 
     PASS = "PASS"
     WARN = "WARN"
@@ -65,7 +65,7 @@ class TestResult():
 
 class Results():
     # pylint: disable=too-few-public-methods
-    """Provides the neccessary result data to generate a xml file."""
+    """Provides the necessary result data to generate a xml file."""
 
     def __init__(self, log_file):
         """Initialize a Results object.
@@ -92,7 +92,7 @@ class Results():
         Returns:
             int: total duration of all the tests
         """
-        return sum([test.time_elapsed for test in self.tests])
+        return sum(test.time_elapsed for test in self.tests)
 
     @property
     def errors(self):
@@ -147,7 +147,7 @@ class Results():
 
 class TestJob():
     # pylint: disable=too-few-public-methods
-    """Provides the neccessary job data to generate a xml file."""
+    """Provides the necessary job data to generate a xml file."""
 
     def __init__(self, name, enabled=None, output=None, max_chars=100000):
         """Initialize a DaosTestJob object.
