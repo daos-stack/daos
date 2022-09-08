@@ -541,7 +541,12 @@ static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
-	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
+	if (dc_obj_proto_version == 0 || dc_obj_proto_version >= DAOS_OBJ_VERSION)
+		/* To 2.2 or newer server. */
+		return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
+
+	/* To 2.0 or older server. */
+	return crt_proc_memcpy(proc, proc_op, p, offsetof(struct daos_shard_tgt, st_ec_tgt));
 }
 
 /* For compounded RPC. */
