@@ -10,12 +10,13 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import FormattedParameter, CommandWithParameters,\
     PositionalParameter, CommandWithPositionalParameters
 from command_utils import CommandWithSubCommand, YamlCommand
+from general_utils import nodeset_append_suffix
 
 
 class DmgCommandBase(YamlCommand):
     """Defines a base object representing a dmg command."""
 
-    def __init__(self, path, yaml_cfg=None):
+    def __init__(self, path, yaml_cfg=None, hostlist_suffix=None):
         """Create a dmg Command object.
 
         Args:
@@ -23,6 +24,7 @@ class DmgCommandBase(YamlCommand):
             yaml_cfg (DmgYamlParameters, optional): dmg config file
                 settings. Defaults to None, in which case settings
                 must be supplied as command-line parameters.
+            hostlist_suffix (str, optional): Suffix to append to each host name. Defaults to None.
         """
         super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
@@ -33,6 +35,8 @@ class DmgCommandBase(YamlCommand):
         default_yaml_file = None
         if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
+
+        self.hostlist_suffix = hostlist_suffix
 
         self._hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
@@ -60,6 +64,9 @@ class DmgCommandBase(YamlCommand):
         Args:
             hostlist (string list): list of host addresses
         """
+        if self.hostlist_suffix:
+            hostlist = nodeset_append_suffix(hostlist, self.hostlist_suffix)
+
         if self.yaml:
             if isinstance(hostlist, NodeSet):
                 hostlist = list(hostlist)
