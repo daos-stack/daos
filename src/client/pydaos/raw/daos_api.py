@@ -1489,24 +1489,15 @@ class DaosContainer():
         # 2. Enable checksum,
         # 3. Server Verify
         # 4. Chunk Size Allocation.
-        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-                and (self.cont_input_values.enable_chksum is False)):
-            # Only type like posix, hdf5 defined.
-            num_prop = 1
-        elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
-              and (self.cont_input_values.enable_chksum is True)):
-            # Only checksum enabled.
-            num_prop = 3
-        elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-              and (self.cont_input_values.enable_chksum is True)):
-            # Both layout and checksum properties defined
-            num_prop = 4
-
+        num_prop = 0
+        if self.cont_input_values.type.decode("UTF-8") != "Unknown":
+            num_prop = num_prop + 1
+        if self.cont_input_values.enable_chksum is True:
+            num_prop = num_prop + 3
         if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             num_prop = num_prop + 1
 
-        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-                or (self.cont_input_values.enable_chksum is True)):
+        if num_prop != 0:
             self.cont_prop = daos_cref.DaosProperty(num_prop)
         # idx index is used to increment the dpp_entries array
         # value. If layer_type is None and checksum is enabled
