@@ -889,7 +889,7 @@ pipeline {
                     steps {
                         runTest script: 'export DAOS_PKG_VERSION=' +
                                         daosPackagesVersion(next_version) + '\n' +
-                                        'ci/rpm/scan_daos_maldet.sh',
+                                        'utils/ci/scan_daos_maldet.sh',
                                 junit_files: 'maldetect_el8.xml',
                                 failure_artifacts: env.STAGE_NAME,
                                 ignore_failure: false,
@@ -921,13 +921,12 @@ pipeline {
                     steps {
                         runTest script: 'export DAOS_PKG_VERSION=' +
                                         daosPackagesVersion(next_version) + '\n' +
-                                        'ci/rpm/scan_daos_maldet.sh',
+                                        'utils/ci/scan_daos_maldet.sh',
                               junit_files: 'maldetect_leap15.xml',
                               failure_artifacts: env.STAGE_NAME,
                               ignore_failure: false,
                               description: env.STAGE_NAME,
                               context: 'test' + env.STAGE_NAME
-
                     }
                     post {
                         always {
