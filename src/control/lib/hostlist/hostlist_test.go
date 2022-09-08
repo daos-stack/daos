@@ -167,7 +167,7 @@ func TestHostList_Create(t *testing.T) {
 			expErr:    errors.New("invalid hostname"),
 		},
 		"negative port with ip": {
-			startList:    "1.2.3.4:10001,1.2.3.5:-10001",
+			startList: "1.2.3.4:10001,1.2.3.5:-10001",
 			expErr:    errors.New("invalid hostname"),
 		},
 	} {

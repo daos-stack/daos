@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,7 +71,7 @@ func (hn *hostName) Parse(input string) error {
 			_, err := strconv.ParseUint(matches[3][1:], 10, 0)
 			if err != nil {
 				return fmt.Errorf("invalid hostname %q", input)
-			}			
+			}
 		}
 	}
 
