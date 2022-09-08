@@ -10,8 +10,6 @@
 static void
 dfuse_cb_write_complete(struct dfuse_event *ev)
 {
-	dfuse_cache_evict(ev->de_oh->doh_ie);
-
 	if (ev->de_ev.ev_error == 0)
 		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
 	else
@@ -89,8 +87,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
-
-	dfuse_cache_evict(ev->de_oh->doh_ie);
 
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
 		       position, &ev->de_ev);
