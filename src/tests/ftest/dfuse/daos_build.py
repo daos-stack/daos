@@ -59,7 +59,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("metadata", True)
+        self.run_build_test("writethrough", True)
 
     def test_dfuse_daos_build_metadata(self):
         """ This test builds DAOS on a dfuse filesystem.
@@ -158,7 +158,7 @@ class DaosBuild(DfuseTestBase):
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'WARN,IL=INFO'
+            remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
