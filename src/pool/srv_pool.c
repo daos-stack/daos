@@ -710,6 +710,11 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  * a single storage node in the pool. If the return value is 0, the caller is
  * responsible for freeing \a svc_addrs with d_rank_list_free.
  *
+ * Note that if the return value is nonzero, the caller is responsible for
+ * stopping and destroying any PS replicas that may have been created. This
+ * behavior is tailored for ds_mgmt_create_pool, who will clean up all pool
+ * resources upon errors.
+ *
  * \param[in]		pool_uuid	pool UUID
  * \param[in]		ntargets	number of targets in the pool
  * \param[in]		group		crt group ID (unused now)
@@ -722,9 +727,9 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  *					replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		   const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		   daos_prop_t *prop, d_rank_list_t **svc_addrs)
+ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+			daos_prop_t *prop, d_rank_list_t **svc_addrs)
 {
 	struct daos_prop_entry *svc_rf_entry;
 	d_rank_list_t	       *ranks;
@@ -760,7 +765,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
-		D_GOTO(out_creation, rc);
+		D_GOTO(out_ranks, rc);
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
 				8 /* next (ms) */, 1 << 10 /* max (ms) */);
@@ -818,28 +823,30 @@ out_rpc:
 out_backoff_seq:
 	d_backoff_seq_fini(&backoff_seq);
 	rsvc_client_fini(&client);
-out_creation:
-	if (rc != 0)
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
-				  NULL, true /* destroy */);
+	/*
+	 * Intentionally skip cleaning up the PS replicas. See the function
+	 * documentation above.
+	 */
 out_ranks:
 	d_rank_list_free(ranks);
 out:
 	return rc;
 }
 
+/** Stop any local PS replica for \a pool_uuid. */
 int
-ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_pool_svc_stop(uuid_t pool_uuid)
 {
-	d_iov_t		psid;
-	int		rc;
+	d_iov_t	id;
+	int	rc;
 
-	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, svc_ranks,
-			       NULL /* excluded */, true /* destroy */);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+	d_iov_set(&id, pool_uuid, sizeof(uuid_t));
+
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, false /* destroy */);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		rc = 0;
+	}
 
 	return rc;
 }
