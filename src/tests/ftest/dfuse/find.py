@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
@@ -8,10 +7,11 @@ import os
 import sys
 import string
 import random
-import general_utils
-
 from ClusterShell.NodeSet import NodeSet
+
+import general_utils
 from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from io_utilities import DirTree
 
@@ -85,8 +85,7 @@ class DfuseFind(DfuseTestBase):
         # Height of the directory-tree.
         height = self.params.get("height", '/run/find_cmd/*')
         # Number of sub directories per directories.
-        subdirs_per_node = self.params.get(
-            "subdirs_per_node", '/run/find_cmd/*')
+        subdirs_per_node = self.params.get("subdirs_per_node", '/run/find_cmd/*')
         # Number of files created per directory.
         files_per_node = self.params.get("files_per_node", '/run/find_cmd/*')
         # Number of *.needle files that will be created.
@@ -103,8 +102,7 @@ class DfuseFind(DfuseTestBase):
             dfs_path = temp_dfs_path
 
         if challenger_path:
-            challenger_path = self._generate_temp_path_name(
-                challenger_path, "test_")
+            challenger_path = self._generate_temp_path_name(challenger_path, "test_")
 
         def _run_find_test(test_root, dir_tree_paths):
             self._create_dir_forest(
@@ -180,8 +178,8 @@ class DfuseFind(DfuseTestBase):
 
         self.log.info("Sampling path: %s", test_path)
 
-        for i in range(samples):
-            self.log.info("Running sample number %d of %d", i + 1, samples)
+        for sample_num in range(1, samples + 1):
+            self.log.info("Running sample number %d of %d", sample_num, samples)
 
             prefix = random.randrange(containers - 1)  # nosec
             suffix = random.randrange(needles - 1)  # nosec
@@ -208,10 +206,11 @@ class DfuseFind(DfuseTestBase):
             mount_dir = os.path.join(dfs_path, cont_dir)
             self.log.info(
                 "Creating container Pool UUID: %s Con UUID: %s", self.pool, self.container)
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir)
-            dfuses.append(self.dfuse)
+            dfuse = get_dfuse(self, self.hostlist_clients)
+            start_dfuse(self, dfuse, pool=self.pool, container=self.container, mount_dir=mount_dir)
+            dfuses.append(dfuse)
             containers.append(self.container)
-            mount_dirs.append(self.dfuse.mount_dir.value)
+            mount_dirs.append(dfuse.mount_dir.value)
 
         return mount_dirs
 
