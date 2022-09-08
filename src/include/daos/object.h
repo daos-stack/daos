@@ -176,15 +176,41 @@ struct daos_obj_layout {
 #define DAOS_TGT_IGNORE		((d_rank_t)-1)
 
 enum daos_tgt_flags {
-	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
+	/*
+	 * When leader forward IO RPC to non-leaders, delay the target until the others replied.
+	 *
+	 * For old client (2.0 or older), it will not set such flag when trigger related IO RPC,
+	 * then it may get trouble for conditional check during rebuild. To avoid that, need to
+	 * upgrade DAOS (both client and server) to at least 2.2 or newer. See DAOS-10204.
+	 */
 	DTF_DELAY_FORWARD	= (1 << 0),
-	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	/*
+	 * When leader forward IO RPC to non-leaders, reassemble related sub request.
+	 *
+	 * For old client (2.0 or older), it will not set such flag when trigger related CPD RPC
+	 * (for punch object across multiple RDGs), then it may get trouble during OSA. To avoid
+	 * that, need to upgrade DAOS (both client and server) to at least 2.2 or newer.
+	 */
 	DTF_REASSEMBLE_REQ	= (1 << 1),
+	/* The request is from old (2.0 or older) client. */
+	DTF_OLD_FORMAT		= (1 << 2),
 };
+
+#define DAOS_RANK_BITS		31
+#define DAOS_RANK_FLAG		(1 << DAOS_RANK_BITS)
 
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
+	/*
+	 * NOTE: To resolve the interoperability issue between 2.2 and 2.0, the 31th bit of
+	 *	 "st_rank" will be used as the flag to indicate whether contains "st_ec_tgt"
+	 *	 and "st_flags" in the on-wire RPC data or not: if it is not set, then it is
+	 *	 the old format (from 2.0 client or to 2.0 server) without these two fields.
+	 *
+	 *	 So the valid server rank ranage is [0, 2^31 - 1] instead of [0, 2^32 - 1],
+	 *	 but that is still large enough.
+	 */
 	uint32_t		st_shard;	/* shard index */
 	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */

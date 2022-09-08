@@ -541,7 +541,44 @@ static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
-	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
+	int	offset = offsetof(struct daos_shard_tgt, st_ec_tgt);
+	int	rc = 0;
+
+	if (FREEING(proc_op))
+		return 0;
+
+	if (DECODING(proc_op)) {
+		/* Receive RPC from client. */
+		rc = crt_proc_memcpy(proc, proc_op, p, offset);
+		if (rc != 0)
+			return rc;
+
+		if ((p->st_rank & DAOS_RANK_FLAG) != 0) {
+			/* From 2.2 or newer client. */
+			rc = crt_proc_memcpy(proc, proc_op,
+					     (char *)p + offset, sizeof(*p) - offset);
+			p->st_rank &= ~DAOS_RANK_FLAG;
+		} else {
+			/* From 2.0 or older client. */
+			p->st_flags = DTF_OLD_FORMAT;
+		}
+	} else  {
+		/* Send RPC to server. */
+		D_ASSERT(ENCODING(proc_op));
+		D_ASSERT((p->st_rank & DAOS_RANK_FLAG) == 0);
+
+		if (dc_obj_proto_version == 0 || dc_obj_proto_version >= DAOS_OBJ_VERSION) {
+			/* To 2.2 or newer server. */
+			p->st_rank |= DAOS_RANK_FLAG;
+			rc = crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
+			p->st_rank &= ~DAOS_RANK_FLAG;
+		} else {
+			/* To 2.0 or older server. */
+			rc = crt_proc_memcpy(proc, proc_op, p, offset);
+		}
+	}
+
+	return rc;
 }
 
 /* For compounded RPC. */

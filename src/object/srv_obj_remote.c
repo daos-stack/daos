@@ -505,7 +505,18 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	if (dcde_parent == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	if (shard_tgt->st_flags & DTF_REASSEMBLE_REQ) {
+	/*
+	 * For forwarding the request from old (2.0 or older) client, we have to check
+	 * whether need to reassemble the sub-request or not. If not, then skip inside
+	 * ds_obj_cpd_clone_reqs().
+	 *
+	 * But during OSA, sometimes, multiple shards of the same object may locate on
+	 * the same DAOS target. Under such case, the CPD request for punch the object
+	 * across multuple RDGs from old client may cause trouble because even through
+	 * it is a new server, it still cannot know whether need to reassemble related
+	 * sub-request or not.
+	 */
+	if (shard_tgt->st_flags & (DTF_REASSEMBLE_REQ || DTF_OLD_FORMAT)) {
 		rc = ds_obj_cpd_clone_reqs(shard_tgt, dcde_parent, dcsr_parent,
 					   total, &dcde, &dcsr);
 		if (rc < 0)
