@@ -2281,9 +2281,10 @@ class LaunchJob():
         # this test's results. Also report an error if the test generated any log files with a
         # size exceeding the threshold.
         if archive:
+            daos_test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
             remote_files = OrderedDict()
             remote_files["local configuration files"] = {
-                "source": os.getenv("DAOS_TEST_LOG_DIR", "/tmp"),
+                "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
@@ -2297,14 +2298,14 @@ class LaunchJob():
                 "depth": 1,
             }
             remote_files["daos log files"] = {
-                "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
+                "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
                 "depth": 1,
             }
             remote_files["cart log files"] = {
-                "source": os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR),
+                "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
@@ -2517,7 +2518,7 @@ class LaunchJob():
             "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-            f"xargs -0 -r0 -n1 -I '{{}}' {cart_logtest} '{{}}' > '{{}}'.cart_logtest 2>&1")
+            f"xargs -0 -r0 -n1 -I % sh -c '{cart_logtest} % > %.cart_logtest 2>&1'")
         return run_remote(self.log, hosts, command).passed
 
     def _remove_empty_files(self, hosts, source, pattern, depth):
