@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 const defaultConfigFile = "daos_server.yml"
@@ -42,16 +43,38 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		"unable to configure privileged helper logging")
 }
 
+type iommuCheckFn func() (bool, error)
+
 type iommuChecker interface {
-	setIOMMUChecker(func() (bool, error))
+	setIOMMUChecker(iommuCheckFn)
 }
 
 type iommuCheckerCmd struct {
-	isIOMMUEnabled func() (bool, error)
+	isIOMMUEnabled iommuCheckFn
 }
 
-func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
-	icc.isIOMMUEnabled = isIOMMUEnabled
+func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	if icc == nil {
+		return
+	}
+	icc.isIOMMUEnabled = fn
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
+func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	if icc == nil {
+		return false, errors.New("nil pointer receiver")
+	}
+	if icc.isIOMMUEnabled == nil {
+		return false, errors.New("nil isIOMMUEnabled function")
+	}
+
+	return icc.isIOMMUEnabled()
+}
+
+type socketCmd struct {
+	affinitySource config.EngineAffinityFn
+	SocketID       *uint `long:"socket" description:"Perform command operations on the socket identified by this ID (defaults to all sockets)"`
 }
 
 type mainOpts struct {
@@ -93,7 +116,6 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
-	var cfgLoaded = true
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
@@ -128,14 +150,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				if ( len(args) == 2 && args[0] == "network" && args[1] == "scan" ) {
-					cfgLoaded = false
-				} else {
-					return errors.Wrapf(err, "failed to load config from %s",
-							    cfgCmd.configPath())
-				}
+				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			if cfgLoaded {
+			if _, err := os.Stat(opts.ConfigPath); err == nil {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
 			}
 
@@ -150,10 +167,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(func() (bool, error) {
-				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
-			})
+			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
