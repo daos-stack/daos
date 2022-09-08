@@ -7,14 +7,13 @@
 import os
 from collections import OrderedDict
 
-from command_utils_base import EnvironmentVariables
-from daos_core_base import DaosCoreBase
+from cmocka_utils import CmockaUtils
 from dfuse_test_base import DfuseTestBase
 from general_utils import create_directory
 from job_manager_utils import get_job_manager
 
 
-class DaosCoreTestDfuse(DaosCoreBase, DfuseTestBase):
+class DaosCoreTestDfuse(DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
 
@@ -89,20 +88,20 @@ class DaosCoreTestDfuse(DaosCoreBase, DfuseTestBase):
             mount_dir = '/tmp/dfuse-test'
             create_directory(self.hostlist_clients, mount_dir)
 
+        cmocka_utils = CmockaUtils(
+            self.hostlist_clients, "FTEST_daos_test.dfuse", "dfuse", self.outputdir, self.test_dir)
+        daos_test_env = cmocka_utils.get_cmocka_env()
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
-        intercept_envs = None
         if intercept:
-            intercept_envs = EnvironmentVariables()
-            intercept_envs['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-            intercept_envs['DD_MASK'] = 'all'
-            intercept_envs['DD_SUBSYS'] = 'all'
-            intercept_envs['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-
-        cmocka_dir = self._get_cmocka_dir()
-        daos_test_cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--metadata', '--stream']
+            daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            daos_test_env['DD_MASK'] = 'all'
+            daos_test_env['DD_SUBSYS'] = 'all'
+            daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+        daos_test_cmd = cmocka_utils.get_cmocka_command(
+            " ".join([self.daos_test, '--test-dir', mount_dir, '--io', '--metadata', '--stream']))
         job = get_job_manager(self, "Clush", daos_test_cmd)
-        job.assign_hosts(self.hostlist_clients)
-        job.assign_environment(self._get_daos_test_env(cmocka_dir, intercept_envs))
-        self.run_daos_test(job, cmocka_dir)
+        job.assign_hosts(cmocka_utils.hosts)
+        job.assign_environment(daos_test_env)
+        cmocka_utils.run_cmocka_test(self, job)
         if not job.result.passed:
             self.fail(f'Error running {job.command} on {job.hosts}')
