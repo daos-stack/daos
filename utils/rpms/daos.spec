@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.104
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -510,6 +510,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_debug_set_params
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
+%{_bindir}/dfuse_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
@@ -570,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
+- Add dfuse unit-test binary to call from ftest.
+
 * Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-4
 - Update PMDK to 1.12.1~rc1 to fix DAOS-11151
 

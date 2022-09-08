@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -18,7 +18,7 @@ import json
 #pylint: disable=C0325
 
 TEST_NOT_RUN = -1
-DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')
+DIR = os.path.join(os.path.dirname(os.path.relpath(os.path.dirname(__file__))), 'raft')
 
 def number_of_failures():
     """
@@ -31,15 +31,14 @@ def number_of_failures():
     json_file = ".build_vars.json"
     path = os.path.join("build", DIR, "src")
     if os.path.exists(json_file):
-        ofh = open(json_file, "r")
-        conf = json.load(ofh)
-        ofh.close()
+        with open(json_file, "r") as ofh:
+            conf = json.load(ofh)
         path = os.path.join(conf["BUILD_DIR"], DIR, "src")
     if not os.path.exists(path):
         try:
             res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
-        except Exception as e:
-            print("Building Raft Tests failed due to\n{}".format(e))
+        except subprocess.CalledProcessError as error:
+            print(f"Building Raft Tests failed due to{error}\n")
             return TEST_NOT_RUN
     else:
         os.chdir(path)
@@ -47,7 +46,7 @@ def number_of_failures():
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
-            line = "FAIL: {}".format(line)
+            line = f"FAIL: {line}"
             failures += 1
         elif line.startswith("ok"):
             successes += 1
@@ -68,7 +67,7 @@ def main():
     elif failures == TEST_NOT_RUN:
         print("Raft Tests did not run")
     else:
-        print("Raft Tests had {} failures".format(failures))
+        print(f"Raft Tests had {failures} failures")
     sys.exit(failures)
 
 

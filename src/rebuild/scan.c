@@ -630,7 +630,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
 
-			discard_epr.epr_hi = rpt->rt_stable_epoch;
+			D_ASSERT(rpt->rt_reclaim_epoch != 0);
+			discard_epr.epr_hi = rpt->rt_reclaim_epoch;
 			discard_epr.epr_lo = 0;
 			/*
 			 * It's possible this object might still be being

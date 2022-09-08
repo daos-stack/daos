@@ -743,8 +743,8 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 }
 
 static int
-entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct dfs_obj *obj, struct stat *stbuf, uint64_t *obj_hlc)
+entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
+	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -782,6 +782,16 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFREG:
 	{
 		daos_array_stbuf_t	array_stbuf = {0};
+
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
+
+		/** don't stat the array and use the entry mtime */
+		if (!get_size) {
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+			size = 0;
+			break;
+		}
 
 		if (obj) {
 			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
@@ -856,7 +866,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
-		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
@@ -1480,7 +1489,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	dfs_attr_t		dattr;
 	char			str[37];
 	struct daos_prop_co_roots roots;
-	int			rc;
+	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
 
@@ -1646,7 +1655,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 err_super:
 	daos_obj_close(super_oh, NULL);
 err_close:
-	daos_cont_close(coh, NULL);
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc2)
+		D_ERROR("daos_cont_close failed "DF_RC"\n", DP_RC(rc));
 err_destroy:
 	/*
 	 * DAOS container create returns success even if container exists -
@@ -1654,8 +1665,11 @@ err_destroy:
 	 * the SB creation, so do not destroy the container, since another
 	 * process might have created it.
 	 */
-	if (rc != EEXIST)
-		daos_cont_destroy(poh, str, 1, NULL);
+	if (rc != EEXIST) {
+		rc2 = daos_cont_destroy(poh, str, 1, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_destroy failed "DF_RC"\n", DP_RC(rc));
+	}
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -3511,6 +3525,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		break;
 	case S_IFLNK:
 		if (flags & O_NOFOLLOW) {
+			if (entry.value == NULL) {
+				D_ERROR("Symlink entry found with no value\n");
+				D_GOTO(err_obj, rc = EIO);
+			}
 			/* Create a truncated version of the string */
 			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 			D_FREE(entry.value);
@@ -4310,7 +4328,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf, NULL);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, true, stbuf, NULL);
 }
 
 int
@@ -4329,7 +4347,8 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf, NULL);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, true, stbuf,
+			NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4468,10 +4487,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
@@ -4589,10 +4608,10 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
 	if (uid == -1 && gid == -1)
 		D_GOTO(out, rc = 0);
@@ -4675,6 +4694,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_iod_t		iod;
 	daos_recx_t		recx[8];
 	bool			set_size = false;
+	bool			set_mtime = false;
 	int			i = 0;
 	size_t			len;
 	int			rc;
@@ -4708,10 +4728,14 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	len = strlen(obj->name);
 
-	/* Fetch the remote entry first so we can check the oid, then keep
-	 * a track locally of what has been updated
+	/*
+	 * Fetch the remote entry first so we can check the oid, then keep track locally of what has
+	 * been updated. If we are setting the file size, there is no need to query it.
 	 */
-	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat, &obj_hlc);
+	if (flags & DFS_SET_ATTR_SIZE)
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, false, &rstat, &obj_hlc);
+	else
+		rc = entry_stat(dfs, th, oh, obj->name, len, obj, true, &rstat, &obj_hlc);
 	if (rc)
 		D_GOTO(out_obj, rc);
 
@@ -4750,6 +4774,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(uint64_t);
 		i++;
 
+		set_mtime = true;
 		flags &= ~DFS_SET_ATTR_MTIME;
 		rstat.st_mtim.tv_sec = stbuf->st_mtim.tv_sec;
 		rstat.st_mtim.tv_nsec = stbuf->st_mtim.tv_nsec;
@@ -4793,7 +4818,26 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
+
+		/** update the returned stat buf size with the new set size */
+		rstat.st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		rstat.st_size = stbuf->st_size;
+
+		/* mtime needs to be updated too only if mtime was not explicitly set */
+		if (!set_mtime) {
+			daos_array_stbuf_t	array_stbuf = {0};
+
+			/** TODO - need an array API to just stat the max epoch without size */
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+			if (rc)
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+		}
 	}
 
 	iod.iod_nr = i;
