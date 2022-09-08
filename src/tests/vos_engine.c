@@ -76,8 +76,6 @@ engine_cont_init(struct credit_context *tsc)
 	if (rc)
 		return rc;
 
-	vos_pool_features_set(tsc->tsc_poh, VOS_POOL_FEAT_AGG_OPT);
-
 	tsc->tsc_coh = coh;
 	return rc;
 }

@@ -417,6 +417,7 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         job = Orterun(tst_cmd)
+        job.get_params(self)
         job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
