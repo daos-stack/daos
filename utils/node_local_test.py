@@ -3385,7 +3385,7 @@ def run_in_fg(server, conf):
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
         cont_attrs = OrderedDict()
-        cont_attrs['dfuse-data-cache'] = True
+        cont_attrs['dfuse-data-cache'] = False
         cont_attrs['dfuse-attr-time'] = 60
         cont_attrs['dfuse-dentry-time'] = 60
         cont_attrs['dfuse-ndentry-time'] = 60
@@ -3396,7 +3396,7 @@ def run_in_fg(server, conf):
                                 '--attr', key, '--value', str(value)],
                          show_stdout=True)
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=True)
+    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
     dfuse.log_flush = True
     dfuse.start()
 
