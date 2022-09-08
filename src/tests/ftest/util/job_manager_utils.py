@@ -566,7 +566,7 @@ class Systemctl(JobManager):
         """Create a Orterun object.
 
         Args:
-            job (ExecutableCommand): command object to manage.
+            job (SubProcessCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
         super().__init__("/run/systemctl/*", "systemd", job)
@@ -1126,7 +1126,7 @@ class Clush(JobManager):
         """Create a Clush object.
 
         Args:
-            job (SubProcessCommand): command object to manage.
+            job (ExecutableCommand): command object to manage.
         """
         super().__init__("/run/clush/*", "clush", job)
         self.verbose = True
