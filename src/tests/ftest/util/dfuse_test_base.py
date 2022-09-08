@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,7 +7,7 @@ from agent_utils import include_local_host
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
-from dfuse_utils import Dfuse
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class DfuseTestBase(TestWithServers):
@@ -47,43 +46,22 @@ class DfuseTestBase(TestWithServers):
         """Create a DfuseCommand object
 
         Args:
-            hosts (list): list of hosts on which to start Dfuse
+            hosts (NodeSet): hosts on which to start Dfuse
         """
+        self.dfuse = get_dfuse(self, hosts)
 
-        self.dfuse = Dfuse(hosts, self.tmp)
-        self.dfuse.get_params(self)
-
-    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
+    def start_dfuse(self, hosts, pool=None, container=None, **params):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
             hosts (NodeSet): hosts on which to start Dfuse
-            pool (TestPool, optional): pool to use with Dfuse
-            container (TestContainer, optional): container to use with Dfuse
-            mount_dir (str, optional): updated mount dir name. Defaults to None.
+            pool (TestPool, optional): pool to mount. Defaults to None
+            container (TestContainer, optional): container to mount. Defaults to None
+            params (Object, optional): Dfuse command arguments to update
         """
         if self.dfuse is None:
             self.load_dfuse(hosts)
-
-        dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
-
-        # Update dfuse params
-        if mount_dir:
-            self.dfuse.mount_dir.update(mount_dir)
-        if pool:
-            self.dfuse.set_dfuse_params(pool)
-        if container:
-            self.dfuse.set_dfuse_cont_param(container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # Start dfuse
-            self.dfuse.run(bind_cores=dfuse_cores)
-        except CommandFailure as error:
-            self.log.error(
-                "Dfuse command %s failed on hosts %s", str(self.dfuse),
-                self.dfuse.hosts, exc_info=error)
-            self.fail("Test was expected to pass but it failed.")
+        start_dfuse(self, self.dfuse, pool=pool, container=container, **params)
 
     def stop_dfuse(self):
         """Stop Dfuse and unset the DfuseCommand object."""

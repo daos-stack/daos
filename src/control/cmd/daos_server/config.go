@@ -21,7 +21,8 @@ type cliOverrider interface {
 }
 
 type cfgCmd struct {
-	config *config.Server
+	config       *config.Server
+	IgnoreConfig bool `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
 }
 
 type optCfgCmd struct {
