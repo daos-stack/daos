@@ -1036,21 +1036,58 @@ bytes   #sent   #ack     total       time     MB/sec    usec/xfer   Mxfers/sec
 
 Make sure communications with tcp can go through.
 
-server_node # fi_pingpong -p "verbs;ofi_rxm" -e rdm -d eth0
-client_node # fi_pingpong -p "verbs;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
 
 Make sure communications with verbs can go through.
 
-fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
-fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_mlx5_0_server
+server_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
+client_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_eth0_server
 ```
-
 ### ib_send_lat
 ```
 server_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3
 client_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3 ip_of_server
 ```
 This test checks whether verbs goes through with Infiniband or RoCE cards. In case ib_send_lat in not installed, you can install package "perftest" with yum/dnf or other package managers.
+
+## Tools to measure the network latency and bandwidth across nodes
+
+### The tools in perftest for Infiniband and RoCE
+You can install package "perftest" with yum/dnf or other package managers if it is not available.
+
+Examples for measuring bandwidth,
+```
+ib_read_bw -a
+ib_read_bw -a 192.168.1.46
+
+ib_write_bw -a
+ib_write_bw -a 192.168.1.46
+
+ib_send_bw -a
+ib_send_bw -a 192.168.1.46
+```
+Examples for measuring latency,
+```
+ib_read_lat -a
+ib_read_lat -a 192.168.1.46
+
+ib_write_lat -a
+ib_write_lat -a 192.168.1.46
+
+ib_send_lat -a
+ib_send_lat -a 192.168.1.46
+```
+
+### fi_pingpong for Ethernet
+You can install package "libfabric" with yum/dnf or other package managers if it is not available.
+
+Example,
+```
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000 ip_of_eth0_server
+```
+This reports network bandwidth. One can deduce the latency for given packet size.
 
 ## Bug Report
 
