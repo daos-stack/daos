@@ -54,7 +54,7 @@ pool_size_ratio_80:
   rebuild_timeout: 240
   svcn: 5
 pool_size_value:
-  size: 500G
+  size: 2T
   control_method: dmg
   rebuild_timeout: 240
 
