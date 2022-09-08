@@ -1118,6 +1118,8 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		strcat(dpid, line);
 	}
 
+	if (line)
+		free(line);
 	pclose(fp1);
 	return 0;
 }
@@ -1190,7 +1192,8 @@ get_server_config(char *host, char *server_config_file)
 	pclose(fp);
 
 	D_FREE(dpid);
-	free(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1219,13 +1222,12 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
-
-		D_FREE(line);
 	}
 
 out:
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return rc;
 }
 
@@ -1251,7 +1253,8 @@ int get_log_file(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1292,11 +1295,13 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			pclose(fp);
 	}
 
-	D_FREE(line);
+	if (line)
+		free(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
-	D_FREE(line);
+	if (line)
+		free(line);
 	D_FREE(tmp);
 	return 0;
 }
