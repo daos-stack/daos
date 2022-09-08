@@ -569,7 +569,7 @@ class Systemctl(JobManager):
             job (ExecutableCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super().__init__("/run/clush/*", "systemd", job)
+        super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name
@@ -1128,7 +1128,7 @@ class Clush(JobManager):
         Args:
             job (SubProcessCommand): command object to manage.
         """
-        super().__init__("/run/systemctl/*", None, job)
+        super().__init__("/run/clush/*", "clush", job)
         self.verbose = True
         self.timeout = 60
 
