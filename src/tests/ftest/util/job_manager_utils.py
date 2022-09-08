@@ -1139,13 +1139,8 @@ class Clush(JobManager):
             str: the command with all the defined parameters
 
         """
-        commands = [super().__str__(), "-w {}".format(self.hosts), self.command]
+        commands = [super().__str__(), "-w {}".format(self.hosts), str(self.job)]
         return " ".join(commands)
-
-    @property
-    def command(self):
-        """Get the command without its parameters."""
-        return str(self.job)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -1178,16 +1173,16 @@ class Clush(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        self.result = run_remote(self._hosts, self.command, self.verbose, self.timeout)
+        self.result = run_remote(self._hosts, str(self.job), self.verbose, self.timeout)
 
         if self.result.timeout:
             raise CommandFailure(
-                "Timeout detected running '{}' on {}".format(self.command, self.hosts))
+                "Timeout detected running '{}' on {}".format(str(self.job), self.hosts))
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
             raise CommandFailure(
-                "Bad words detected in '{}' output on {}".format(self.command, self.hosts))
+                "Bad words detected in '{}' output on {}".format(str(self.job), self.hosts))
 
         return self.result
 
@@ -1208,8 +1203,8 @@ class Clush(JobManager):
                 match = re.findall(regex, "\n".join(result.output))
                 if match:
                     self.log.info(
-                        "The following error messages have been detected in the %s output:",
-                        self.command)
+                        "The following error messages have been detected in the '%s' output:",
+                        str(self.job))
                     for item in match:
                         self.log.info("  %s", item)
                     status = False
