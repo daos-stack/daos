@@ -326,8 +326,6 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             uuid (str): Device UUID to query. Defaults to None.
-            rank (int, optional): Limit response to pools on this rank.
-                Defaults to None.
             verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
@@ -341,6 +339,26 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("storage", "identify", "vmd" ), uuid=uuid,
             verbose=verbose)
+
+    def storage_replace_device(self, old_uuid=None,  new_uuid=None, no_reint=False):
+        """Get the result of the 'dmg storage query list-pools' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID. Defaults to None.
+            new_uuid (str): New NVME Device ID replacing the old device. Defaults to None.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(
+            ("storage", "replace", "nvme" ), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
 
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.

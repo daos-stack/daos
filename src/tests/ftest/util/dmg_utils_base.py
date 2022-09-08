@@ -392,26 +392,50 @@ class DmgCommandBase(YamlCommand):
             else:
                 self.sub_command_class = None
 
+        class ReplaceSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage replace command"""
+            def __init__(self):
+                """Create a dmg storage format command object."""
+                super().__init__("/run/dmg/storage/replace/*", "replace")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg storage replace sub command object."""
+                if self.sub_command.value == "nvme":
+                    self.sub_command_class = self.NVMEReplaceSubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class NVMEReplaceSubCommand(CommandWithParameters):
+                """Get dmg storage replace sub command object"""
+                def __init__(self):
+                    """Create a dmg storage format command object."""
+                    super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
+                    self.old_uuid = FormattedParameter("--old-uuid {}", None)
+                    self.new_uuid = FormattedParameter("--new-uuid {}", None)
+                    self.no_reint = FormattedParameter("--no-reint", False)
+
         class IdentifySubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage identify command"""
             def __init__(self):
                 """Create a dmg storage format command object."""
                 super().__init__("/run/dmg/storage/identify/*", "identify")
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
-                """Get the dmg storage query sub command object."""
+                """Get the dmg storage identify sub command object."""
                 if self.sub_command.value == "vmd":
                     self.sub_command_class = self.VMDIdentifySubCommand()
                 else:
                     self.sub_command_class = None
 
             class VMDIdentifySubCommand(CommandWithParameters):
+                """Get dmg storage identify sub command object"""
                 def __init__(self):
-                     """Create a dmg storage format command object."""
-                     super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
-                     self.verbose = FormattedParameter("--verbose", False)
-                     self.uuid = FormattedParameter("--uuid {}", None)
-
+                    """Create a dmg storage format command object."""
+                    super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
+                    self.verbose = FormattedParameter("--verbose", False)
+                    self.uuid = FormattedParameter("--uuid {}", None)
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""
