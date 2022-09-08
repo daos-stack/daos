@@ -90,6 +90,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         cmocka_utils = CmockaUtils(
             self.hostlist_clients, "FTEST_daos_test.dfuse", "dfuse", self.outputdir, self.test_dir)
+
         daos_test_env = cmocka_utils.get_cmocka_env()
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:
@@ -98,11 +99,15 @@ class DaosCoreTestDfuse(DfuseTestBase):
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-        daos_test_cmd = cmocka_utils.get_cmocka_command(
-            " ".join([self.daos_test, '--test-dir', mount_dir, '--io', '--metadata', '--stream']))
-        job = get_job_manager(self, "Clush", daos_test_cmd)
+
+        command = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream']
+        if cache_mode != 'writeback':
+            command.append('--metadata')
+
+        job = get_job_manager(self, "Clush", cmocka_utils.get_cmocka_command(" ".join(command)))
         job.assign_hosts(cmocka_utils.hosts)
         job.assign_environment(daos_test_env)
+
         cmocka_utils.run_cmocka_test(self, job)
         if not job.result.passed:
             self.fail(f'Error running {job.command} on {job.hosts}')

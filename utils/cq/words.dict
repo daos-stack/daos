@@ -172,6 +172,7 @@ fio
 fnctl
 fpp
 fs
+fstab
 fstat
 ftest
 fuseblk
