@@ -1924,24 +1924,23 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	prop = daos_prop_alloc(nr);
 	if (prop == NULL)
 		return -DER_NOMEM;
-	*prop_out = prop;
 	if (bits & DAOS_PO_QUERY_PROP_LABEL) {
 		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_label,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
 			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
 				DAOS_PROP_LABEL_MAX_LEN);
-			return -DER_IO;
+			D_GOTO(out_prop, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_prop, rc = -DER_NOMEM);
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB) {
@@ -1949,7 +1948,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_space_rb,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SPACE_RB;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -1960,7 +1959,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_self_heal,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SELF_HEAL;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -1971,7 +1970,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reclaim,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -1982,7 +1981,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_ec_cell_sz,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2000,7 +1999,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			rc = 0;
 			val = DAOS_PROP_PO_REDUN_FAC_DEFAULT;
 		} else if (rc != 0) {
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_REDUN_FAC;
@@ -2012,12 +2011,12 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_prop, rc = -DER_NOMEM);
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
 		       value.iov_buf_len);
 		idx++;
@@ -2027,18 +2026,18 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
 				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
+			D_GOTO(out_prop, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_prop, rc = -DER_NOMEM);
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP) {
@@ -2046,19 +2045,19 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner_group,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner group length %zu (> %d).\n",
 				value.iov_len,
 				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
+			D_GOTO(out_prop, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_prop, rc = -DER_NOMEM);
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST) {
@@ -2068,7 +2067,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &svc_list);
 		if (rc) {
 			D_ERROR("get svc list failed: rc %d\n", rc);
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
 		prop->dpp_entries[idx].dpe_val_ptr = svc_list;
@@ -2083,7 +2082,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		if (rc == -DER_NONEXIST && global_ver < 1)
 			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
 		else  if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_EC_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
@@ -2099,7 +2098,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		if (rc == -DER_NONEXIST && global_ver < 1)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
 		else  if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RP_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2118,19 +2117,19 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			value.iov_buf = DAOS_PROP_POLICYSTR_DEFAULT;
 			value.iov_len = strlen(DAOS_PROP_POLICYSTR_DEFAULT);
 		} else  if (rc != 0) {
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 		if (value.iov_len > DAOS_PROP_POLICYSTR_MAX_LEN) {
 			D_ERROR("bad policy string length %zu (> %d).\n",
 				value.iov_len, DAOS_PROP_POLICYSTR_MAX_LEN);
-			return -DER_IO;
+			D_GOTO(out_prop, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out_prop, rc = -DER_NOMEM);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
@@ -2154,7 +2153,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		if (rc == -DER_NONEXIST && global_ver < 1)
 			val32 = DAOS_UPGRADE_STATUS_NOT_STARTED;
 		else  if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_UPGRADE_STATUS;
@@ -2170,7 +2169,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_sched,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2181,7 +2180,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_freq,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_FREQ;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2192,7 +2191,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_thresh,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_THRESH;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2206,7 +2205,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			rc = 0;
 			val = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
 		} else if (rc != 0) {
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
@@ -2214,7 +2213,12 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	*prop_out = prop;
 	return 0;
+
+out_prop:
+	daos_prop_free(prop);
+	return rc;
 }
 
 /*
@@ -3424,7 +3428,8 @@ out:
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pqi_op.pi_uuid), rpc,
 		DP_RC(rc));
 	crt_reply_send(rpc);
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 }
 
 void
@@ -3866,7 +3871,8 @@ out:
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pgi_op.pi_uuid), rpc,
 		DP_RC(rc));
 	crt_reply_send(rpc);
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 }
 
 /**
@@ -4161,8 +4167,8 @@ out_lock:
 		if (rc)
 			D_ERROR(DF_UUID": failed to update prop IV for pool, "
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
+		daos_prop_free(prop);
 	}
-	daos_prop_free(prop);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -4352,6 +4358,7 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		if (rc)
 			D_GOTO(out_free, rc);
 		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
+		daos_prop_free(prop);
 	}
 
 out_free:
@@ -4756,7 +4763,6 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		/* Prop might be allocated and returned even if rc != 0 */
 		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
@@ -4902,7 +4908,6 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		/* Prop might be allocated and returned even if rc != 0 */
 		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
@@ -5119,10 +5124,8 @@ get_svc_rf(struct rdb_tx *tx, struct pool_svc *svc)
 		return -DER_NONEXIST;
 
 	rc = pool_prop_read(tx, svc, DAOS_PO_QUERY_PROP_SVC_REDUN_FAC, &svc_rf_prop);
-	if (rc != 0) {
-		daos_prop_free(svc_rf_prop);
+	if (rc != 0)
 		return rc;
-	}
 	svc_rf_entry = daos_prop_entry_get(svc_rf_prop, DAOS_PROP_PO_SVC_REDUN_FAC);
 	D_ASSERT(svc_rf_entry != NULL && daos_prop_is_set(svc_rf_entry));
 	rc = svc_rf_entry->dpe_val;
