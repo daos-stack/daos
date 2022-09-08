@@ -1060,20 +1060,14 @@ class ValgrindHelper():
                         ofd.write(line)
         os.unlink(self._xml_file)
 
+
 class DFuse():
     """Manage a dfuse instance"""
 
     instance_num = 0
 
-    def __init__(self,
-                 daos,
-                 conf,
-                 pool=None,
-                 container=None,
-                 mount_path=None,
-                 uns_path=None,
-                 caching=True,
-                 wbcache=True):
+    def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
+                 caching=True, wbcache=True):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1105,10 +1099,9 @@ class DFuse():
 
         return f'DFuse instance at {self.dir} ({running})'
 
-    def start(self, v_hint=None, single_threaded=False):
+    def start(self, v_hint=None, single_threaded=False, use_oopt=False):
         """Start a dfuse instance"""
 
-        # pylint: disable=consider-using-with
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         pre_inode = os.stat(self.dir).st_ino
@@ -1125,10 +1118,8 @@ class DFuse():
             v_hint = get_inc_id()
 
         prefix = f'dnt_dfuse_{v_hint}_'
-        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                               suffix='.log',
-                                               delete=False)
-        self.log_file = log_file.name
+        with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+            self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
@@ -1143,16 +1134,13 @@ class DFuse():
             self.valgrind.use_valgrind = False
 
         if self.cores:
-            cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
+            cmd = ['numactl', '--physcpubind', f'0-{self.cores - 1}']
         else:
             cmd = []
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin,
-                    '--mountpoint',
-                    self.dir,
-                    '--foreground'])
+        cmd.extend([dfuse_bin, '--mountpoint', self.dir, '--foreground'])
 
         if single_threaded:
             cmd.append('--singlethread')
@@ -1166,21 +1154,31 @@ class DFuse():
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
 
-        if self.pool:
-            cmd.extend(['--pool', self.pool])
-        if self.container:
-            cmd.extend(['--container', self.container])
-        print('Running {}'.format(' '.join(cmd)))
+        if use_oopt:
+            if self.pool:
+                if self.container:
+                    cmd.extend(['-o', f'pool={self.pool},container={self.container}'])
+                else:
+                    cmd.extend(['-o', f'pool={self.pool}'])
+
+        else:
+            if self.pool:
+                cmd.extend(['--pool', self.pool])
+            if self.container:
+                cmd.extend(['--container', self.container])
+
+        print(f"Running {' '.join(cmd)}")
+        # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)
-        print('Started dfuse at {}'.format(self.dir))
-        print('Log file is {}'.format(self.log_file))
+        print(f'Started dfuse at {self.dir}')
+        print(f'Log file is {self.log_file}')
 
         total_time = 0
         while os.stat(self.dir).st_ino == pre_inode:
             print('Dfuse not started, waiting...')
             try:
                 ret = self._sp.wait(timeout=1)
-                print('dfuse command exited with {}'.format(ret))
+                print(f'dfuse command exited with {ret}')
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
@@ -1202,7 +1200,7 @@ class DFuse():
             except FileNotFoundError:
                 continue
             if tfile.startswith(self.dir):
-                print('closing file {}'.format(tfile))
+                print(f'closing file {tfile}')
                 os.close(int(fname))
                 work_done = True
         return work_done
@@ -1229,7 +1227,7 @@ class DFuse():
         run_log_test = True
         try:
             ret = self._sp.wait(timeout=20)
-            print('rc from dfuse {}'.format(ret))
+            print(f'rc from dfuse {ret}')
             if ret == 42:
                 self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
                 self.conf.valgrind_errors = True
@@ -1254,7 +1252,7 @@ class DFuse():
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
         ret = self._sp.wait()
-        print('rc from dfuse {}'.format(ret))
+        print(f'rc from dfuse {ret}')
         self._sp = None
         log_test(self.conf, self.log_file)
 
@@ -1263,20 +1261,23 @@ class DFuse():
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
 
+
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
-    print('Checking file size is {} {}'.format(size, my_stat.st_size))
+    print(f'Checking file size is {size} {my_stat.st_size}')
     assert my_stat.st_size == size
+
 
 def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
     assert_file_size_fd(ofd.fileno(), size)
 
+
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
+    pydir = f'python{sys.version_info.major}.{sys.version_info.minor}'
 
     sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 
@@ -2662,6 +2663,37 @@ class posix_tests():
         fname = join(dfuse.dir, 'test_file3')
         with open(fname, 'w') as ofd:
             ofd.write('hello')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_dfuse_oopt(self):
+        """Test dfuse with -opool=,container= options as used by fstab"""
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid, container=self.container)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.label)
+
+        dfuse.start(use_oopt=True)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf)
+
+        dfuse.start(use_oopt=True)
 
         if dfuse.stop():
             self.fatal_errors = True

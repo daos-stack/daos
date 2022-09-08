@@ -250,14 +250,29 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle,
 		struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfs);
 
+/* Connect to a pool via either a label or uuid.
+ *
+ * Create a datastructure and connect to a pool by label or uuid or neither if required.  After
+ * making the connection then add it to the hash table and disconnect if an existing connection
+ * is identified.
+ *
+ * Returns a system error code.
+ */
 int
-dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
-			const char *label,
-			struct dfuse_pool **_dfp);
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
+		   struct dfuse_pool **_dfp);
 
+/* Return a connection for a pool uuid.
+ *
+ * Queries the hash table for an existing connection and makes a call to dfuse_pool_connect() as
+ * necessary.  This function is fast for cases where existing connections exist but only accepts
+ * uuids not labels.
+ *
+ * Returns a system error code.
+ */
 int
-dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
-		struct dfuse_pool **_dfp);
+dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
+		      struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.
  *
