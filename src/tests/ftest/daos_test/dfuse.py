@@ -9,7 +9,7 @@ from collections import OrderedDict
 
 from cmocka_utils import CmockaUtils
 from dfuse_test_base import DfuseTestBase
-from general_utils import create_directory
+from general_utils import create_directory, get_log_file
 from job_manager_utils import get_job_manager
 
 
@@ -94,6 +94,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:
             daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            daos_test_env['D_LOG_FILE'] = get_log_file('daos-il.log')
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
