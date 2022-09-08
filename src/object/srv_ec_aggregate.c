@@ -2090,7 +2090,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
-	agg_entry->ae_rotate_parity = 1;
+	agg_entry->ae_rotate_parity = 0;
 	agg_entry->ae_dkey = entry->ie_key;
 	agg_entry->ae_grp_idx = agg_entry->ae_oid.id_shard /
 				daos_oclass_grp_size(&agg_entry->ae_oca);
