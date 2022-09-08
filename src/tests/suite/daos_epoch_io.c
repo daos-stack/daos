@@ -1552,7 +1552,8 @@ epoch_io_predefined(void **state)
 		print_message("will run predefined io_conf %s ...\n",
 			      predefined_io_confs[i]);
 
-		rc = snprintf(tmp, PATH_APPEND, "/../TESTING/io_conf/%s", predefined_io_confs[i]);
+		rc = snprintf(tmp, PATH_APPEND, "/../lib/daos/TESTING/io_conf/%s",
+			      predefined_io_confs[i]);
 		tmp[PATH_APPEND - 1] = 0;
 
 		rc = io_conf_run(arg, path);
