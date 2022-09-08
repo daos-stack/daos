@@ -481,7 +481,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "a:M:ims", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:ims", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
