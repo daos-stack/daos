@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -57,8 +56,7 @@ class SparseFile(IorTestBase):
 
         # create large file and perform write to it so that if goes out of
         # space.
-        sparse_file = str(self.dfuse.mount_dir.value + "/" +
-                          "sparsefile.txt")
+        sparse_file = str(self.dfuse.mount_dir.value + "/" + "sparsefile.txt")
         self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(

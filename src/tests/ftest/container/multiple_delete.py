@@ -38,17 +38,16 @@ class MultipleContainerDelete(IorTestBase):
 
         initial_scm_fs, initial_ssd_fs = self.get_pool_space()
 
-        for i in range(50):
-            self.log.info("Create-Write-Destroy Iteration %d", i)
+        for idx in range(50):
+            self.log.info("Create-Write-Destroy Iteration %d", idx)
             self.create_cont()
-            self.ior_cmd.set_daos_params(
-                self.server_group, self.pool, self.container.uuid)
+            self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
             # If the transfer size is less than 4K, the objects are
             # inserted into SCM and anything greater goes to SSD
             self.run_ior_with_pool(create_cont=False)
             self.container.destroy()
             scm_fs, ssd_fs = self.get_pool_space()
-            out.append("iter = {}, scm = {}, ssd = {}".format(i + 1, scm_fs, ssd_fs))
+            out.append("iter = {}, scm = {}, ssd = {}".format(idx + 1, scm_fs, ssd_fs))
 
         self.log.info("Initial Free Space")
         self.log.info("SCM = %d, NVMe = %d", initial_scm_fs, initial_ssd_fs)

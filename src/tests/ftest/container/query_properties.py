@@ -51,8 +51,8 @@ class QueryPropertiesTest(TestWithServers):
         srv_verify_conf = self.params.get("configured", "/run/properties/srv_verify/*")
         chunk_size_conf = self.params.get("configured", "/run/properties/chunk_size/*")
 
-        cont_prop_type = bytes("POSIX", "utf-8") # Updated
-        enable_chksum = True # Updated
+        cont_prop_type = bytes("POSIX", "utf-8")  # Updated
+        enable_chksum = True  # Updated
         srv_verify = srv_verify_conf
         chksum_type = ctypes.c_uint64(chksum_type_conf)
         chunk_size = ctypes.c_uint64(chunk_size_conf)

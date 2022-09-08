@@ -140,6 +140,6 @@ class BoundaryTest(TestWithServers):
 
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
         num_containers = self.params.get("num_containers", '/run/boundary_test/*')
-        io = self.params.get("with_io", '/run/boundary_test/*')
-        self.create_pools(num_pools=num_pools, num_containers=num_containers, with_io=io)
+        with_io = self.params.get("with_io", '/run/boundary_test/*')
+        self.create_pools(num_pools=num_pools, num_containers=num_containers, with_io=with_io)
         self.log.info("===>Boundary test passed.")
