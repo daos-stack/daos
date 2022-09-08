@@ -1304,13 +1304,21 @@ d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink)
 void
 d_hhash_link_getref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 void
 d_hhash_link_putref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	/**
+	 * handle hash table should not use D_HASH_FT_EPHEMERAL,
+	 * just in case someone add it.
+	 */
+	if (hhash->ch_htable.ht_feats & D_HASH_FT_EPHEMERAL)
+		d_hash_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	else
+		if (ch_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link))
+			ch_rec_free(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 bool
