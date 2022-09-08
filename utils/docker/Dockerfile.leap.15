@@ -21,14 +21,14 @@ ARG REPOS
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/scripts/repo-helper-leap15.sh /tmp/repo-helper.sh
+COPY ./utils/ci/repo-helper-leap15.sh /tmp/repo-helper.sh
 RUN set -e;                                         \
     chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh
 
 # Add DAOS users
 ARG UID=1000
-COPY ./utils/scripts/daos-server-user-setup.sh /tmp/daos-server-user-setup.sh
+COPY ./utils/ci/daos-server-user-setup.sh /tmp/daos-server-user-setup.sh
 RUN set -e;                                    \
     chmod +x /tmp/daos-server-user-setup.sh && \
     /tmp/daos-server-user-setup.sh
