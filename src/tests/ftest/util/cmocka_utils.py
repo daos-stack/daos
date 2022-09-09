@@ -11,7 +11,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from general_utils import get_clush_command, run_command, run_remote
-from xml_utils import TestResult, Results, TestJob, create_xml
+from results_utils import TestResult, Results, Job, create_xml
 
 
 class CmockaUtils():
@@ -119,7 +119,7 @@ class CmockaUtils():
                 if error_message is None:
                     error_message = "Missing cmocka results for {} in {}".format(
                         job_command, self.cmocka_dir)
-                self._generate_cmocka_files(test.logfile, test.name, error_message, error_exception)
+                self._generate_cmocka_files(test, error_message, error_exception)
 
     def _collect_cmocka_results(self, test):
         """Collect any remote cmocka files.
@@ -168,7 +168,7 @@ class CmockaUtils():
                 return True
         return False
 
-    def _generate_cmocka_files(self, log_file, test_variant, error_message, error_exception):
+    def _generate_cmocka_files(self, test, error_message, error_exception):
         """Generate a cmocka xml file.
 
         Args:
@@ -178,7 +178,8 @@ class CmockaUtils():
             error_exception (Exception): the exception raised when the failure occurred
         """
         # Create a failed test result
-        test_result = TestResult(self.test_name, test_variant, log_file)
+        test_result = TestResult(
+            self.test_name, test.name, test.name.str_uid, test.name.str_variant, test.logfile)
         test_result.status = TestResult.ERROR
         test_result.fail_class = "Missing file" if error_exception is None else "Failed command"
         test_result.fail_reason = error_message
@@ -186,7 +187,7 @@ class CmockaUtils():
         test_result.time_elapsed = 0
 
         cmocka_xml = os.path.join(self.outputdir, "{}_cmocka_results.xml".format(self.test_name))
-        job = TestJob(self.test_name, output=cmocka_xml)
-        result = Results(log_file)
+        job = Job(self.test_name, xml_output=cmocka_xml)
+        result = Results(test.logfile)
         result.tests.append(test_result)
         create_xml(job, result)
