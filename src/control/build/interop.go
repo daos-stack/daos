@@ -82,15 +82,29 @@ type InteropRule struct {
 
 // defaultRules are a set of default rules which should apply regardless
 // of release or caller.
-var defaultRules = []InteropRule{
+var defaultRules = []*InteropRule{
+	// Allow older agents to talk to newer servers, or newer agents to talk
+	// to older servers, but only up to the allowed minor delta.
+	// NB: Compatibility between a new major release (e.g. v3.0.x) and the
+	// previous minor release will need to be explicitly defined via a
+	// custom release rule, if appropriate.
+	{
+		Self:          ComponentServer,
+		Other:         ComponentAgent,
+		Description:   "server and agent must be within 2 minor versions",
+		StopOnSuccess: true,
+		Check: func(self, other *VersionedComponent) bool {
+			return (self.Version.MajorDelta(other.Version) == 0 &&
+				self.Version.MinorDelta(other.Version) <= MaxMinorDelta)
+		},
+	},
 	// Should never happen, but just in case. We know that releases
 	// prior to 2.0.0 will never be compatible with 2.0.0 or above.
 	{
 		Description: "no backward compatibility prior to 2.0.0",
 		Check: func(self, other *VersionedComponent) bool {
 			v2_0 := MustNewVersion("2.0.0")
-			return !((self.Version.Equals(v2_0) || self.Version.GreaterThan(v2_0)) &&
-				other.Version.LessThan(v2_0))
+			return !(self.Version.GreaterThanOrEquals(v2_0) && other.Version.LessThan(v2_0))
 		},
 	},
 	// The default DAOS compatibility rule, which is:
@@ -103,6 +117,10 @@ var defaultRules = []InteropRule{
 	},
 }
 
+// releaseRules are a set of rules which apply to a specific release,
+// and are likely to change between releases.
+var releaseRules = []*InteropRule{}
+
 // CheckCompatibility checks a pair of versioned components
 // for compatibility based on specific interoperability constraints
 // or general rules.
@@ -112,7 +130,7 @@ var defaultRules = []InteropRule{
 // for specific requirements at the call site.
 //
 // e.g. "I am server v2.0.0. Am I compatible with agent v1.2.0?"
-func CheckCompatibility(self, other *VersionedComponent, customRules ...InteropRule) error {
+func CheckCompatibility(self, other *VersionedComponent, customRules ...*InteropRule) error {
 	if self == nil || other == nil {
 		return errors.New("nil components")
 	}
@@ -123,7 +141,10 @@ func CheckCompatibility(self, other *VersionedComponent, customRules ...InteropR
 	}
 
 	// Apply custom rules first (if any), then apply the default rules.
-	for _, rule := range append(customRules, defaultRules...) {
+	for _, rule := range append(customRules, append(releaseRules, defaultRules...)...) {
+		if rule == nil {
+			return errors.New("nil rule")
+		}
 		if rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component) {
 			if !rule.Check(self, other) {
 				return errors.Wrap(errIncompatComponents(self, other), rule.Description)
