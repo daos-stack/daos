@@ -3326,10 +3326,11 @@ out_task:
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
 
+		/* abort/complete sub-tasks will complete obj_task */
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(obj_task, rc);
 	}
-
-	tse_task_complete(obj_task, rc);
 
 	return rc;
 }
@@ -6503,11 +6504,11 @@ out_task:
 	if (head != NULL && !d_list_empty(head)) {
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
-
+		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(api_task, rc);
 	}
-
-	tse_task_complete(api_task, rc);
 
 	return rc;
 }
