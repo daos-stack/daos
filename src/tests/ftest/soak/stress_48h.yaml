@@ -1,18 +1,18 @@
 hosts:
-# servers if no server partition is defined
+    # servers if no server partition is defined
     test_servers: 10
-# servers if a server partition is defined
+    # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
     # client_reservation: daos-test
 orterun:
-    allow_run_as_root: True
+    allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
 timeout: 48H15M
 setup:
-    start_servers: True
-    start_agents: True
+    start_servers: true
+    start_agents: true
 server_config:
     engines_per_host: 2
     name: daos_server
@@ -28,7 +28,7 @@ server_config:
             fabric_iface_port: 31317
             log_file: daos_server0.log
             bdev_class: nvme
-            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
             scm_class: dcpm
             scm_list: ["/dev/pmem0"]
             scm_mount: /mnt/daos0
@@ -43,7 +43,7 @@ server_config:
             fabric_iface_port: 31417
             log_file: daos_server1.log
             bdev_class: nvme
-            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
             scm_class: dcpm
             scm_list: ["/dev/pmem1"]
             scm_mount: /mnt/daos1
@@ -101,7 +101,7 @@ soak_stress:
         - vpic_stress
         - lammps_stress
         - macsio_stress
-    ignore_soak_errors: False
+    ignore_soak_errors: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -135,52 +135,52 @@ ior_stress:
     dfs_oclass:
         - "SX"
         - "EC_2P1GX"
-#        - "EC_4P1G1"
-#        - "EC_4P2GX"
-#        - "EC_8P2G1"
-#        - "EC_16P2GX"
+        #  - "EC_4P1G1"
+        #  - "EC_4P2GX"
+        #  - "EC_8P2G1"
+        #  - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/ior/"
-        disable_caching: True
+        disable_caching: true
 fio_stress:
-  job_timeout: 30
-  names:
-    - global
-    - test
-  global:
-    directory: "/tmp/daos_dfuse/fio/"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
-    numjobs: 16
-  soak:
-    blocksize:
-        - '64K'
-        - '1M'
-    size:
-        - '500M'
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-    oclass:
-        - "SX"
-        - "EC_2P1GX"
-        # - "EC_4P1G1"
-        # - "EC_4P2GX"
-        # - "EC_8P2G1"
-        # - "EC_16P2GX"
-  dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: True
+    job_timeout: 30
+    names:
+        - global
+        - test
+    global:
+        directory: "/tmp/daos_dfuse/fio/"
+        ioengine: 'libaio'
+        thread: 1
+        group_reporting: 1
+        direct: 1
+        verify: 'crc64'
+        iodepth: 16
+    test:
+        numjobs: 16
+    soak:
+        blocksize:
+            - '64K'
+            - '1M'
+        size:
+            - '500M'
+            - '1G'
+        rw:
+            - 'rw'
+            - 'randrw'
+        oclass:
+            - "SX"
+            - "EC_2P1GX"
+            # - "EC_4P1G1"
+            # - "EC_4P2GX"
+            # - "EC_8P2G1"
+            # - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/fio/"
+        disable_wb_caching: true
 daos_racer:
     runtime: 120
 vpic_stress:
-# Requires opeapi
+    # Requires opeapi
     job_timeout: 20
     nodesperjob:
         - 8
@@ -188,7 +188,7 @@ vpic_stress:
         - 32
     cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
     module: mpi/latest
-    posix: True
+    posix: true
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/vpic/"
@@ -201,7 +201,7 @@ lammps_stress:
     taskspernode:
         - 32
     cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj"
-    posix: True
+    posix: true
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/lammps/"
@@ -234,14 +234,14 @@ mdtest_stress:
     dfs_oclass:
         - "S1"
         - "EC_2P1G1"
-#        - "EC_4P1G1"
-#        - "EC_4P2G1"
-#        - "EC_8P2G1"
-#        - "EC_16P2G1"
-    dfs_destroy: False
+        #  - "EC_4P1G1"
+        #  - "EC_4P2G1"
+        #  - "EC_8P2G1"
+        #  - "EC_16P2G1"
+    dfs_destroy: false
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
-        disable_caching: True
+        disable_caching: true
 macsio_stress:
     job_timeout: 30
     nodesperjob:
@@ -270,7 +270,7 @@ macsio_stress:
         # - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/macsio/"
-        disable_caching: True
+        disable_caching: true
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
@@ -280,4 +280,4 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-enable_telemetry: True
+enable_telemetry: true
