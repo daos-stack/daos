@@ -97,8 +97,8 @@ smoke:
         - fio_smoke
         - daos_racer
         - mdtest_smoke
-        #- vpic_smoke
-        #- lammps_smoke
+        - vpic_smoke
+        - lammps_smoke
         - macsio_smoke
     # num of bytes to write to reserved container
     resv_bytes: 500
@@ -177,7 +177,7 @@ vpic_smoke:
         - 1
     taskspernode:
         - 1
-    cmdline: "/scratch/soak/apps/vpic-install/bin/harris.Linux"
+    cmdline: "${DAOS_TEST_SHARED_DIR}/soak/apps/vpic-install/bin/harris.Linux"
     posix: True
     workdir: "/tmp/daos_dfuse/vpic/"
     module: "mpi/latest"
@@ -191,7 +191,7 @@ lammps_smoke:
         - 1
     taskspernode:
         - 1
-    cmdline: "/scratch/soak/apps/lammps/src/lmp_mpi -i /scratch/soak/apps/lammps/bench/in.lj.smoke"
+    cmdline: "${DAOS_TEST_SHARED_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_TEST_SHARED_DIR}/soak/apps/lammps/bench/in.lj.smoke"
     posix: True
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
