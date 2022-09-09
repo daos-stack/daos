@@ -17,18 +17,16 @@ from xml_utils import TestResult, Results, TestJob, create_xml
 class CmockaUtils():
     """Utilities for running test that generate cmocka xml results."""
 
-    def __init__(self, hosts, class_name, test_name, outputdir, test_dir):
+    def __init__(self, hosts, test_name, outputdir, test_dir):
         """Initialize a CmockaUtils object.
 
         Args:
             hosts (str): hosts on which to run the cmocka tests
-            class_name (str): class name of the cmocka test
-            test_name (str): name of the cmocka test
+            test_name (str): simple name for the test
             outputdir (str): final location for cmocka xml files on this host
             test_dir (str): directory common to all hosts for storing remote cmocka xml files
         """
         self.hosts = hosts
-        self.class_name = class_name
         self.test_name = test_name
         self.outputdir = outputdir
         self._using_local_host = False
@@ -121,7 +119,7 @@ class CmockaUtils():
                 if error_message is None:
                     error_message = "Missing cmocka results for {} in {}".format(
                         job_command, self.cmocka_dir)
-                self._generate_cmocka_files(test.logfile, error_message, error_exception)
+                self._generate_cmocka_files(test.logfile, test.name, error_message, error_exception)
 
     def _collect_cmocka_results(self, test):
         """Collect any remote cmocka files.
@@ -170,15 +168,17 @@ class CmockaUtils():
                 return True
         return False
 
-    def _generate_cmocka_files(self, log_file, error_message, error_exception):
+    def _generate_cmocka_files(self, log_file, test_variant, error_message, error_exception):
         """Generate a cmocka xml file.
 
         Args:
+            log_file (str): the avocado test log
+            test_variant (str): the avocado test name which includes the variant information
             error_message (str): a description of the test failure
             error_exception (Exception): the exception raised when the failure occurred
         """
         # Create a failed test result
-        test_result = TestResult(self.class_name, self.test_name, log_file)
+        test_result = TestResult(self.test_name, test_variant, log_file)
         test_result.status = TestResult.ERROR
         test_result.fail_class = "Missing file" if error_exception is None else "Failed command"
         test_result.fail_reason = error_message

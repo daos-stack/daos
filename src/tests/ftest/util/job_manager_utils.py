@@ -1173,7 +1173,9 @@ class Clush(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        self.result = run_remote(self._hosts, str(self.job), self.verbose, self.timeout)
+        # command = " ".join([self.env.to_export_str, str(self.job)]).strip()
+        command = str(self.job)
+        self.result = run_remote(self._hosts, command, self.verbose, self.timeout)
 
         if self.result.timeout:
             raise CommandFailure(

@@ -118,8 +118,7 @@ class DaosCoreBase(TestWithServers):
 
         # Set up the daos test command
         cmocka_utils = CmockaUtils(
-            self.hostlist_clients, self.subtest_name, self.subtest_name, self.outputdir,
-            self.test_dir)
+            self.hostlist_clients, self.subtest_name, self.outputdir, self.test_dir)
         daos_test_env = cmocka_utils.get_cmocka_env()
         daos_test_env["D_LOG_FILE"] = get_log_file(self.client_log)
         daos_test_env["D_LOG_MASK"] = "DEBUG"
