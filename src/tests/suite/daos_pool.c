@@ -591,6 +591,7 @@ pool_properties(void **state)
 		print_message("Owner prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(expected_owner);
 
 	/* default owner-group should be effective gid */
 	assert_int_equal(daos_acl_gid_to_principal(getegid(), &expected_group),
