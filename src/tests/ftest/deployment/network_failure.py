@@ -111,7 +111,15 @@ class NetworkFailureTest(IorTestBase):
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
+        ip_to_host = {}
+        for result in results:
+            ips_str = result["stdout"][0]
+            # There may be multiple IP addresses for one host.
+            ip_addresses = ips_str.split()
+            for ip_address in ip_addresses:
+                ip_to_host[ip_address] = NodeSet(str(result["hosts"]))
+
+        return ip_to_host
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
@@ -330,7 +338,7 @@ class NetworkFailureTest(IorTestBase):
         ip_to_host = self.create_ip_to_host()
         for member in members:
             ip_addr = member["addr"].split(":")[0]
-            if rank_0_ip != ip_addr:
+            if ip_to_host[rank_0_ip] != ip_to_host[ip_addr]:
                 self.network_down_host = ip_to_host[ip_addr]
                 break
         self.log.info("network_down_host = %s", self.network_down_host)
