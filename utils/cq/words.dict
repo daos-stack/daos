@@ -205,6 +205,7 @@ iod
 iodepth
 ioengine
 ior
+ioreqs
 iotype
 iov
 ip

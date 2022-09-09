@@ -604,6 +604,25 @@ class DaosCommand(DaosCommandBase):
             ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name,
             verbose=verbose)
 
+    def container_list_objects(self, pool, cont, sys_name=None):
+        """Call daos container list-objects.
+
+        Args:
+            pool (str): Pool UUID or label
+            cont (str): Container UUID or label
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the daos container list-objects command fails.
+
+        """
+        return self._get_json_result(
+            ("container", "list-objects"), pool=pool, cont=cont, sys_name=sys_name)
+
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
                               sys_name=None):
         """Call daos container create-snap.
