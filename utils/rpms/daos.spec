@@ -361,7 +361,7 @@ mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
-#install -m 644 utils/rpms/%{limits_script_name} %{buildroot}/%{_limitsdir}
+install -m 644 utils/rpms/%{limits_script_name} %{buildroot}/%{_sysconfigdir}/security/limits.d
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
@@ -455,7 +455,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
-#%{_limitsdir}/%{limits_script_name}
+%{_sysconfigdir}/security/limits.d/%{limits_script_name}
 
 %files admin
 %{_bindir}/dmg
