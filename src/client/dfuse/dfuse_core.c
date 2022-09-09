@@ -1047,7 +1047,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 6;
+	args.argc = 5;
 
 	if (fs_handle->dpi_info->di_multi_user)
 		args.argc++;
