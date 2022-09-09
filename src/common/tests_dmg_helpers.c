@@ -143,7 +143,7 @@ log_stderr_pipe(int fd)
 }
 
 static int
-cmd2tokens(const char *cmd, char*** tokens, int *tokens_len)
+cmd2tokens(const char *cmd, char ***tokens, int *tokens_len)
 {
 	char	*tmp_cmd;
 	char	*ch;
