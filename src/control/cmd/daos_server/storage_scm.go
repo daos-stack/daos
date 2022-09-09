@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -14,10 +15,19 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+type scmSocketCmd struct {
+	affinitySource config.EngineAffinityFn
+	SocketID       *uint `long:"socket" description:"Perform PMem namespace operations on the socket identified by this ID (defaults to all sockets). PMem region operations will be performed across all sockets."`
+}
 
 const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed and namespaces " +
 	"modified, this may be a destructive operation. Please ensure namespaces are unmounted " +
@@ -35,9 +45,58 @@ type scmCmd struct {
 type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	cfgCmd         `json:"-"`
+	scmSocketCmd   `json:"-"`
 
 	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
+}
+
+func setSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.EngineAffinityFn, req *storage.ScmPrepareRequest) error {
+	msgSkip := "so skip fetching sockid from config"
+
+	if cfg == nil {
+		log.Debug("nil input server config " + msgSkip)
+		return nil
+	}
+	if req.SocketID != nil {
+		log.Debug("sockid set in req " + msgSkip)
+		return nil
+	}
+
+	// Set engine NUMA affinities accurately in config.
+	if err := cfg.SetEngineAffinities(log, affSrc); err != nil {
+		return errors.Wrapf(err, "failed to set engine affinities %s: %s", msgSkip, err)
+	}
+
+	socksToPrep := make(map[uint]bool)
+
+	for _, ec := range cfg.Engines {
+		for _, scmCfg := range ec.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassRam {
+				continue
+			}
+			socksToPrep[ec.Storage.NumaNodeIndex] = true
+		}
+	}
+
+	// Only set socket ID in request if one engine has been configured in config file with SCM
+	// storage specified, if engines exist assigned to different sockets, don't set the value.
+
+	switch len(socksToPrep) {
+	case 0:
+	case 1:
+		log.Debug("config contains scm-engines attached to a single socket, " +
+			"only process that socket")
+		for k := range socksToPrep {
+			req.SocketID = &k
+		}
+	default:
+		log.Debug("config contains scm-engines attached to different sockets, " +
+			"process all sockets")
+	}
+
+	return nil
 }
 
 func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
@@ -53,8 +112,14 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	}
 
 	req := storage.ScmPrepareRequest{
+		SocketID:              cmd.SocketID,
 		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
 	}
+
+	if err := setSockFromCfg(cmd.Logger, cmd.config, cmd.affinitySource, &req); err != nil {
+		return errors.Wrap(err, "setting sockid in prepare request")
+	}
+
 	cmd.Debugf("scm prepare request parameters: %+v", req)
 
 	// Prepare PMem modules to be presented as pmem device files.
@@ -105,15 +170,47 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		}
 		cmd.Infof("%s\n", bld.String())
 	default:
-		return errors.Errorf("unexpected state %q after pmem create-namespaces", state)
+		return errors.Errorf("unexpected state %q after scm prepare", state)
 	}
 
 	return nil
 }
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+func getAffinitySource(log logging.Logger) (config.EngineAffinityFn, error) {
+	scanner := hwprov.DefaultFabricScanner(log)
+
+	fiSet, err := scanner.Scan(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "scan fabric")
+	}
+
+	return genFiAffFn(fiSet), nil
+}
+
 func (cmd *prepareSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
+	}
+
+	if cmd.IgnoreConfig {
+		cmd.config = nil
+	} else {
+		affSrc, err := getAffinitySource(cmd.Logger)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.affinitySource = affSrc
+		}
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
@@ -125,6 +222,8 @@ func (cmd *prepareSCMCmd) Execute(args []string) error {
 type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	cfgCmd         `json:"-"`
+	scmSocketCmd   `json:"-"`
 
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`
 }
@@ -138,9 +237,15 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	}
 
 	req := storage.ScmPrepareRequest{
-		Reset: true,
+		SocketID: cmd.SocketID,
+		Reset:    true,
 	}
-	cmd.Debugf("scm prepare request parameters: %+v", req)
+
+	if err := setSockFromCfg(cmd.Logger, cmd.config, cmd.affinitySource, &req); err != nil {
+		return errors.Wrap(err, "setting sockid in prepare (reset) request")
+	}
+
+	cmd.Debugf("scm prepare (reset) request parameters: %+v", req)
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
 	resp, err := resetBackend(req)
@@ -148,7 +253,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 		return err
 	}
 
-	cmd.Debugf("scm prepare response: %+v", resp)
+	cmd.Debugf("scm prepare (reset) response: %+v", resp)
 
 	state := resp.Socket.State
 
@@ -178,7 +283,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	case storage.ScmNoModules:
 		return storage.FaultScmNoModules
 	default:
-		return errors.Errorf("unexpected state %q after pmem remove-namespaces", state)
+		return errors.Errorf("unexpected state %q after scm reset", state)
 	}
 
 	return nil
@@ -187,6 +292,17 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 func (cmd *resetSCMCmd) Execute(args []string) error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
+	}
+
+	if cmd.IgnoreConfig {
+		cmd.config = nil
+	} else {
+		affSrc, err := getAffinitySource(cmd.Logger)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.affinitySource = affSrc
+		}
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
