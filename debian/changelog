@@ -1,3 +1,9 @@
+daos (2.3.100-22) unstable; urgency=medium
+  [ Michael Hennecke ]
+  * Add /etc/security/limits.d/daos_limits.conf
+
+ -- Michael Hennecke <michael.hennecke@intel.com>  Fri, Sep 09 2022 10:59:00 +0100
+
 daos (2.3.100-21) unstable; urgency=medium
   [ Jeff Olivier ]
   * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
@@ -20,8 +26,7 @@ daos (2.3.100-18) unstable; urgency=medium
   [Michael MacDonald]
   * Bump min supported go version to 1.16
 
- -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00
--0400
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00 -0400
 
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]

@@ -2,6 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
+%define limits_script_name daos_limits.conf
 
 %global mercury_version 2.2.0-1%{?dist}
 %global libfabric_version 1.15.1-1
@@ -15,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       21%{?relval}%{?dist}
+Release:       22%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -360,6 +361,7 @@ mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
+#install -m 644 utils/rpms/%{limits_script_name} %{buildroot}/%{_limitsdir}
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
@@ -453,6 +455,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
+#%{_limitsdir}/%{limits_script_name}
 
 %files admin
 %{_bindir}/dmg
@@ -561,6 +564,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Sep 09 2022 Michael Hennecke <michael.hennecke@intel.com> 2.3.100-22
+- Add /etc/security/limits.d/daos_limits.conf
+
 * Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-21
 - Update PMDK to 1.12.1~rc1 to fix DAOS-11151
 
