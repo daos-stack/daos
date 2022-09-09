@@ -54,7 +54,7 @@ pool_size_ratio_80:
   rebuild_timeout: 240
   svcn: 5
 pool_size_value:
-  size: 2T
+  size: 500G
   control_method: dmg
   rebuild_timeout: 240
 
@@ -81,6 +81,7 @@ ior: &ior_base
   sw_deadline: 120
 ior_wo_rf:
   <<: *ior_base
+  block_size: 1G
   dfs_oclass: SX
   dfs_dir_oclass: SX
 ior_with_rp:
