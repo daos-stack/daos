@@ -16,13 +16,12 @@
 static void
 dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 		struct dfuse_inode_entry *parent, const char *name,
-		struct dfuse_inode_entry *newparent,
-		const char *newname)
+		struct dfuse_inode_entry *newparent, const char *newname)
 {
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
-	int				rc;
-	ino_t                            ino;
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+	int                       rc;
+	ino_t                     ino;
 
 	ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
 
@@ -43,12 +42,12 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 
 	/* If the move is not from where we thought the file was then invalidate the old entry */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
+	    (strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
-		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-						      ie->ie_parent,
-						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+		rc =
+		    fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, ie->ie_parent,
+						     ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
 		if (rc && rc != -ENOENT)
 			DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
@@ -66,14 +65,13 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 }
 
 void
-dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name, struct dfuse_inode_entry *newparent,
-		const char *newname, unsigned int flags)
+dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		struct dfuse_inode_entry *newparent, const char *newname, unsigned int flags)
 {
-	struct dfuse_projection_info	*fs_handle;
-	daos_obj_id_t			moid = {};
-	daos_obj_id_t			oid = {};
-	int				rc;
+	struct dfuse_projection_info *fs_handle;
+	daos_obj_id_t                 moid = {};
+	daos_obj_id_t                 oid  = {};
+	int                           rc;
 
 	fs_handle = fuse_req_userdata(req);
 
@@ -107,7 +105,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	/* Check if a file was unlinked and see if anything needs updating */
 	if (oid.lo || oid.hi)
-		dfuse_oid_unlinked(fs_handle, req, &oid, newparent, newname);
+		dfuse_oid_unlinked(fs_handle, req, &oid, newparent, newname, false);
 	else
 		DFUSE_REPLY_ZERO(newparent, req);
 

@@ -137,8 +137,8 @@ struct dfuse_inode_ops {
 		       const char *newname, unsigned int flags);
 	void (*symlink)(fuse_req_t req, const char *link,
 			struct dfuse_inode_entry *parent, const char *name);
-	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		       const char *name);
+	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		       bool is_dir);
 	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			 const char *name, const char *value, size_t size,
 			 int flags);
@@ -672,8 +672,7 @@ dfuse_cb_read(fuse_req_t, fuse_ino_t, size_t, off_t,
 	      struct fuse_file_info *);
 
 void
-dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
-		const char *);
+dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, bool is_dir);
 
 void
 dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
@@ -737,7 +736,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 /* Mark object as removed and invalidate any kernel data for it */
 void
 dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
-		   struct dfuse_inode_entry *parent, const char *name);
+		   struct dfuse_inode_entry *parent, const char *name, bool is_dir);
 
 /* dfuse_cont.c */
 void

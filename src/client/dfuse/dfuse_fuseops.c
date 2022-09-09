@@ -351,19 +351,18 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-/* Fuse wrapper for unlink, and rmdir */
+/* Fuse wrapper for unlink */
 static void
 df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*parent_inode;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *parent_inode;
+	d_list_t                     *rlink;
+	int                           rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
-				parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
@@ -372,7 +371,37 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (!parent_inode->ie_dfs->dfs_ops->unlink)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
+	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name, false);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+/* Fuse wrapper for rmdir */
+static void
+df_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *parent_inode;
+	d_list_t                     *rlink;
+	int                           rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->unlink)
+		D_GOTO(decref, rc = ENOTSUP);
+
+	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name, true);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -690,43 +719,43 @@ struct dfuse_inode_ops dfuse_pool_ops = {
 };
 
 struct fuse_lowlevel_ops dfuse_ops = {
-	/* Ops that support per-inode indirection */
-	.getattr	= df_ll_getattr,
-	.lookup		= df_ll_lookup,
-	.mkdir		= df_ll_mkdir,
-	.opendir	= df_ll_opendir,
-	.releasedir	= df_ll_releasedir,
-	.unlink		= df_ll_unlink,
-	.rmdir		= df_ll_unlink,
-	.readdir	= df_ll_readdir,
-	.readdirplus	= df_ll_readdirplus,
-	.create		= df_ll_create,
-	.mknod		= df_ll_mknod,
-	.rename		= df_ll_rename,
-	.symlink	= df_ll_symlink,
-	.setxattr	= df_ll_setxattr,
-	.getxattr	= df_ll_getxattr,
-	.listxattr	= df_ll_listxattr,
-	.removexattr	= df_ll_removexattr,
-	.setattr	= df_ll_setattr,
-	.statfs		= df_ll_statfs,
+    /* Ops that support per-inode indirection */
+    .getattr     = df_ll_getattr,
+    .lookup      = df_ll_lookup,
+    .mkdir       = df_ll_mkdir,
+    .opendir     = df_ll_opendir,
+    .releasedir  = df_ll_releasedir,
+    .unlink      = df_ll_unlink,
+    .rmdir       = df_ll_rmdir,
+    .readdir     = df_ll_readdir,
+    .readdirplus = df_ll_readdirplus,
+    .create      = df_ll_create,
+    .mknod       = df_ll_mknod,
+    .rename      = df_ll_rename,
+    .symlink     = df_ll_symlink,
+    .setxattr    = df_ll_setxattr,
+    .getxattr    = df_ll_getxattr,
+    .listxattr   = df_ll_listxattr,
+    .removexattr = df_ll_removexattr,
+    .setattr     = df_ll_setattr,
+    .statfs      = df_ll_statfs,
 
-	/* Ops that do not need to support per-inode indirection */
-	.init		 = dfuse_fuse_init,
-	.forget		 = dfuse_cb_forget,
-	.forget_multi	 = dfuse_cb_forget_multi,
+    /* Ops that do not need to support per-inode indirection */
+    .init         = dfuse_fuse_init,
+    .forget       = dfuse_cb_forget,
+    .forget_multi = dfuse_cb_forget_multi,
 
-	/* Ops that do not support per-inode indirection
-	 *
-	 * Avoid the extra level of indirection here, as only dfs allows
-	 * creation of files, so it should be the only place to see file
-	 * operations.
-	 *
-	 */
-	.open		= dfuse_cb_open,
-	.release	= dfuse_cb_release,
-	.write_buf	= dfuse_cb_write,
-	.read		= dfuse_cb_read,
-	.readlink	= dfuse_cb_readlink,
-	.ioctl		= dfuse_cb_ioctl,
+    /* Ops that do not support per-inode indirection
+     *
+     * Avoid the extra level of indirection here, as only dfs allows
+     * creation of files, so it should be the only place to see file
+     * operations.
+     *
+     */
+    .open      = dfuse_cb_open,
+    .release   = dfuse_cb_release,
+    .write_buf = dfuse_cb_write,
+    .read      = dfuse_cb_read,
+    .readlink  = dfuse_cb_readlink,
+    .ioctl     = dfuse_cb_ioctl,
 };
