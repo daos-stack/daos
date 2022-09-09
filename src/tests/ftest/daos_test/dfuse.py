@@ -87,8 +87,10 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
-        cmd = [self.daos_test, '--test-dir', mount_dir]
+        cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream']
 
+        if cache_mode != 'writeback':
+            cmd.append('--metadata')
         if intercept:
             remote_env = OrderedDict()
 

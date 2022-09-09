@@ -42,16 +42,33 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		"unable to configure privileged helper logging")
 }
 
+type iommuCheckFn func() (bool, error)
+
 type iommuChecker interface {
-	setIOMMUChecker(func() (bool, error))
+	setIOMMUChecker(iommuCheckFn)
 }
 
 type iommuCheckerCmd struct {
-	isIOMMUEnabled func() (bool, error)
+	isIOMMUEnabled iommuCheckFn
 }
 
-func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
-	icc.isIOMMUEnabled = isIOMMUEnabled
+func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	if icc == nil {
+		return
+	}
+	icc.isIOMMUEnabled = fn
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
+func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	if icc == nil {
+		return false, errors.New("nil pointer receiver")
+	}
+	if icc.isIOMMUEnabled == nil {
+		return false, errors.New("nil isIOMMUEnabled function")
+	}
+
+	return icc.isIOMMUEnabled()
 }
 
 type mainOpts struct {
@@ -71,6 +88,7 @@ type mainOpts struct {
 	Start         startCmd               `command:"start" description:"Start daos_server"`
 	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`
+	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 
@@ -141,10 +159,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(func() (bool, error) {
-				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
-			})
+			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

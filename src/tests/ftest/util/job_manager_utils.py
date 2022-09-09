@@ -61,6 +61,7 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
     # Setup a job manager command for running the test command
     if class_name is not None:
         job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+        job_manager.get_params(test)
         job_manager.timeout = timeout
         if mpi_type == "openmpi":
             job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
@@ -298,6 +299,7 @@ class Orterun(JobManager):
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.bind_to = FormattedParameter("--bind-to {}", None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -382,7 +384,7 @@ class Mpirun(JobManager):
             raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("mpirun"))
-        super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
+        super().__init__("/run/mpirun/*", "mpirun", job, path, subprocess)
 
         mca_default = None
         if mpi_type == "openmpi":
@@ -406,6 +408,7 @@ class Mpirun(JobManager):
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.bind_to = FormattedParameter("--bind-to {}", None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -483,7 +486,7 @@ class Srun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super().__init__("/run/srun", "srun", job, path, subprocess)
+        super().__init__("/run/srun/*", "srun", job, path, subprocess)
 
         self.label = FormattedParameter("--label", True)
         self.mpi = FormattedParameter("--mpi={}", "pmi2")
