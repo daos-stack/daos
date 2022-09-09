@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -371,10 +371,9 @@ sched_ult2xs(int xs_type, int tgt_id)
 		 * ask neighbor to do IO forwarding seems is helpful to make
 		 * them concurrent, right?
 		 */
-		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id;
-		else if (dss_tgt_offload_xs_nr > 0)
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
+		if (dss_tgt_offload_xs_nr > 0)
+			xs_id = dss_sys_xs_nr + dss_tgt_nr +
+				rand() % min(dss_tgt_nr, dss_tgt_offload_xs_nr);
 		else
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;

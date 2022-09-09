@@ -109,23 +109,12 @@
 #
 #core_dump_filter: 0x13
 #
-## NVMe SSD inclusion list
-## Immutable after running "dmg storage format".
-#
-## Only use NVMe controllers with specific PCI addresses.
-## Colons replaced by dots in PCI identifiers.
-## default: Use all the NVMe SSDs that don't have active mount points.
-#
-#bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
-#
 #
 ## NVMe SSD exclusion list
 ## Immutable after running "dmg storage format".
 #
 ## Only use NVMe controllers with specific PCI addresses.
-## Excludes drives listed in bdev_include and forces auto-detection to
-## skip those drives.
-## Colons replaced by dots in PCI identifiers.
+## Excludes drives listed and forces auto-detection to skip those drives.
 ## default: Use all the NVMe SSDs that don't have active mount points.
 #
 #bdev_exclude: ["0000:81:00.1"]
@@ -227,13 +216,13 @@
 #
 ## Enable daos_admin (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #helper_log_file: /tmp/daos_admin.log
 #
 #
 ## Enable daos_firmware (privileged helper) logging.
 #
-## default: disabled (errors only to control plane log)
+## default: disabled (errors only to control_log_file)
 #firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
@@ -279,9 +268,14 @@
 #  # Immutable after running "dmg storage format".
 #  #
 #  # Helper threads to accelerate checksum and server-side RPC dispatch.
+#  # When using EC, it is recommended to configure helper threads in
+#  # roughly a 1:4 ratio to the number of target threads. For example,
+#  # when using 16 targets it is recommended to set nr_xs_helpers to 4.
 #  #
 #  # The server should have sufficiently many physical cores to support the
 #  # number of helper threads, plus the number of targets.
+#  #
+#  # default: 0 (using existing target threads for this task)
 #
 #  nr_xs_helpers: 4
 #
@@ -329,7 +323,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.0.log
 #
 #  # Pass specific environment variables to the engine process.
@@ -491,7 +485,7 @@
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos.log
+#  # default: engine log goes to control_log_file
 #  log_file: /tmp/daos_engine.1.log
 #
 #  # Pass specific environment variables to the engine process.

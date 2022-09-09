@@ -61,6 +61,8 @@ def check_aggregation_status(pool, quick_check=True, attempt=20):
                 # Return immediately once aggregation starts for quick check
                 if quick_check:
                     return agg_status
+            else:
+                initial_usage[storage_type] = current_usage[storage_type]
         time.sleep(5)
     return agg_status
 
@@ -228,6 +230,7 @@ class ErasureCodeIor(ServerFillUp):
 
                 self.ior_read_single_dataset(oclass, sizes, storage, operation, percent)
                 self.cont_number += 1
+
 
 class ErasureCodeSingle(TestWithServers):
     # pylint: disable=too-many-ancestors

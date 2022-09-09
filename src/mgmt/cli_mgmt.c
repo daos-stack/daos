@@ -318,6 +318,13 @@ dc_get_attach_info(const char *name, bool all_ranks,
 
 #define SYS_INFO_BUF_SIZE 16
 
+static int g_num_serv_ranks = 1;
+
+int dc_mgmt_net_get_num_srv_ranks(void)
+{
+	return g_num_serv_ranks;
+}
+
 /*
  * Get the CaRT network configuration for this client node
  * via the get_attach_info() dRPC.
@@ -335,10 +342,13 @@ int dc_mgmt_net_cfg(const char *name)
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, false /* all_ranks */, &info, &resp);
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
 	if (rc != 0)
 		return rc;
 
+	/* Save number of server ranks */
+	g_num_serv_ranks = resp->n_rank_uris;
+	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)
@@ -888,13 +898,15 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {
-		if (label)
-			D_ERROR("%s: MGMT_POOL_FIND rpc failed to %d ranks, "
-				DF_RC"\n", label, ms_ranks->rl_nr, DP_RC(rc));
-		else
-			D_ERROR(DF_UUID": MGMT_POOL_FIND rpc failed to %d "
-				"ranks, "DF_RC"\n", DP_UUID(puuid),
-				ms_ranks->rl_nr, DP_RC(rc));
+		if (label) {
+			D_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR,
+				 "%s: MGMT_POOL_FIND rpc failed to %d ranks, " DF_RC "\n", label,
+				 ms_ranks->rl_nr, DP_RC(rc));
+		} else {
+			D_ERROR(DF_UUID ": MGMT_POOL_FIND rpc failed to %d "
+					"ranks, " DF_RC "\n",
+				DP_UUID(puuid), ms_ranks->rl_nr, DP_RC(rc));
+		}
 		goto decref;
 	}
 	if (label)

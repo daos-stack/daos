@@ -9,6 +9,7 @@ from collections import OrderedDict
 import general_utils
 from dfuse_test_base import DfuseTestBase
 
+
 class DaosCoreTestDfuse(DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
@@ -27,7 +28,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_test
-        :avocado: tags=dfuse_unit
+        :avocado: tags=dfuse_unit,test_daos_dfuse_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfuse_test')
 
@@ -43,6 +44,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '5m'
+
+        use_dfuse = True
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
@@ -64,21 +67,30 @@ class DaosCoreTestDfuse(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
+        elif cache_mode == 'native':
+            use_dfuse = False
         else:
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
-        for key, value in cont_attrs.items():
-            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                        attr=key, val=value)
+        if use_dfuse:
+            for key, value in cont_attrs.items():
+                daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
+                                            attr=key, val=value)
 
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        mount_dir = self.dfuse.mount_dir.value
+            mount_dir = self.dfuse.mount_dir.value
+        else:
+            # Bypass, simply create a remote directory and use that.
+            mount_dir = '/tmp/dfuse-test'
+            general_utils.create_directory(self.hostlist_clients, mount_dir)
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
-        cmd = [self.daos_test, '--test-dir', mount_dir]
+        cmd = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream']
 
+        if cache_mode != 'writeback':
+            cmd.append('--metadata')
         if intercept:
             remote_env = OrderedDict()
 

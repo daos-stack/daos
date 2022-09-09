@@ -187,6 +187,7 @@ hyperthreads: false
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
+		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).

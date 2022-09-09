@@ -35,10 +35,14 @@ if $quick_build; then
         cat "$distro"-required-mercury-rpm-version
         exit 1
     fi
-    pkgs="$pkgs spdk-tools mercury\ \>=\ $mercury_version \
-          libisa-l_crypto libfabric-debuginfo             \
-          argobots-debuginfo protobuf-c-debuginfo"
+    pkgs+=" spdk-tools mercury\ \>=\ $mercury_version"
+    pkgs+=" libisa-l_crypto libfabric-debuginfo"
+    pkgs+=" argobots-debuginfo"
+    if [[ "$distro" == *7 ]];then
+        pkgs+=" protobuf-c-debuginfo"
+    fi
 fi
 
-echo "$pkgs"
+# output with trailing newline suppressed
+echo  -e "$pkgs\c"
 exit 0

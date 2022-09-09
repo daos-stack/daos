@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,6 +12,7 @@ from data_mover_test_base import DataMoverTestBase
 from general_utils import human_to_bytes
 from pool_test_base import PoolTestBase
 import security_test_base as secTestBase
+
 
 class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
     # pylint: disable=too-many-ancestors
@@ -82,8 +83,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].destroy_snap(epc=self.container[-1].epoch)
         # Now check if the space is returned back.
         counter = 1
-        returned_space = (self.get_free_space()[1] -
-                          nvme_free_space_before_snap_destroy)
+        returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
 
         data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
         while returned_space < int(data_written):
@@ -97,15 +97,14 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_free_space()[1] -
-                              nvme_free_space_before_snap_destroy)
+            returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
             counter += 1
 
         self.log.info("#####Starting FS_COPY Test")
-        self.run_dm_activities_with_ior("FS_COPY", pool=self.pool)
+        self.run_dm_activities_with_ior("FS_COPY", self.pool, self.container[-1])
         self.log.info("#####Starting DCP Test")
-        self.run_dm_activities_with_ior("DCP", pool=self.pool)
+        self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
         self.log.info("#####Starting DSERIAL Test")
-        self.run_dm_activities_with_ior("DSERIAL", pool=self.pool)
+        self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)

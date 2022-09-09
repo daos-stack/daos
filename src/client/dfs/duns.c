@@ -676,7 +676,8 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (create_with_label)
 			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
 							&attrp->da_cuuid, NULL, NULL);
-		rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
+		else
+			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
 	} else {
 		daos_prop_t	*prop;
 		int		 nr = 1;

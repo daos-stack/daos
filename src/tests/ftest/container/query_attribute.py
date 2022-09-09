@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 import base64
+from apricot import TestWithServers
 
 
 class ContainerQueryAttributeTest(TestWithServers):
@@ -46,8 +46,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test container query, set-attr, get-attr, and list-attrs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_query_attr
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_query_attr,test_container_query_attr
         """
         # Create a pool and a container.
         self.add_pool()
@@ -76,9 +77,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
             # Characters that don't require backslash. The backslashes in here
             # are required for the code to work, but not by daos.
-            "~@#$%^*-=_+[]\{\}:/?,.", # noqa: W605
+            "~@#$%^*-=_+[]\{\}:/?,.",  # noqa: W605
             # Characters that require backslash.
-            "\`\&\(\)\\\;\\'\\\"\!\<\>", # noqa: W605
+            "\`\&\(\)\\\;\\'\\\"\!\<\>",  # noqa: W605
             # Characters that include space.
             "\"aa bb\""]
         # We added backslashes for the code to work, but get-attr output
@@ -88,9 +89,9 @@ class ContainerQueryAttributeTest(TestWithServers):
         escape_to_not[test_strings[-3]] = "~@#$%^*-=_+[]{}:/?,."
         # We still need a backslash before the double quote for the code to
         # work.
-        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>" # noqa: W605
+        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>"  # noqa: W605
         escape_to_not[test_strings[-1]] = "aa bb"
-        # Prepare attr-value paris. Use the test_strings in value for the first
+        # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
         attr_values = []
         j = 0
@@ -157,8 +158,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test daos container list-attrs with 50 attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_list_attrs
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_list_attrs,test_list_attrs_long
         """
         # Create a pool and a container.
         self.add_pool()

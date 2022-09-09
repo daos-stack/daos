@@ -18,6 +18,7 @@ class DaosServerTest(TestWithServers):
 
     :avocado: recursive
     """
+
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_daos_server(self, force=True):
@@ -32,6 +33,8 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].prepare()
         self.log.info("=Restart daos_server, detect_format_ready().")
         self.server_managers[0].detect_format_ready()
+        for pool in self.pool:
+            pool.skip_cleanup()
         self.log.info("=Restart daos_server, dmg storage_format.")
         self.server_managers[0].dmg.storage_format(force)
         self.log.info("=Restart daos_server, detect_engine_start().")
@@ -107,7 +110,6 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
 
-        self.pool = None
         self.container = None
 
     def test_engine_restart(self):

@@ -1,14 +1,16 @@
-"""Analyze -fstack-usage output"""
+"""Analyze stack usage output"""
 import os
 import argparse
 import atexit
 from SCons.Script import Exit
 
-def exit_handler(sa):
-    """run analysis on exit"""
-    sa.analyze()
 
-class analyzer():
+def exit_handler(handle):
+    """run analysis on exit"""
+    handle.analyze()
+
+
+class Analyzer():
     """Class to parse .su files"""
 
     def __init__(self, env, basedir, arg=""):
@@ -77,15 +79,15 @@ class analyzer():
         """Run the analysis"""
         function_map = {}
 
-        print("Analyzing %s" % self.base_dir)
-        print("Options:")
-        print("\texcluded directory strings: %s" % self.get_value(self.dir_exclusions, "none"))
-        print("\tincluded directory strings: %s" % self.get_value(self.dir_inclusions, "all"))
-        print("\tincluded file strings     : %s" % self.get_value(self.file_inclusions, "all"))
-        print("\tcutoff                    : %d" % self.cutoff)
+        print(f'"Analyzing {self.base_dir}')
+        print('Options:')
+        print('\texcluded directory strings: {self.get_value(self.dir_exclusions, "none")}')
+        print('\tincluded directory strings: {self.get_value(self.dir_inclusions, "all")}')
+        print('\tincluded file strings     : {self.get_value(self.file_inclusions, "all")}')
+        print('\tcutoff                    : {self.cutoff}')
 
         if not os.path.exists(self.base_dir):
-            print("No files in %s" % self.base_dir)
+            print('No files in {self.build_dir}')
             return
 
         for root, _dirs, files in os.walk(self.base_dir):
@@ -97,8 +99,8 @@ class analyzer():
                 if not self.included(fname, self.file_inclusions):
                     continue
                 if fname.endswith(".su"):
-                    with open(os.path.join(root, fname), "r") as sf:
-                        for line in sf.readlines():
+                    with open(os.path.join(root, fname), "r") as frame:
+                        for line in frame.readlines():
                             split = line.split()
                             if len(split) < 3:
                                 continue

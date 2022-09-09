@@ -1,13 +1,12 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - client-B
+    test_servers: 1
+    test_clients: 1
 timeout: 1000
 job_manager:
     manager_timeout: 900
 server_config:
     name: daos_server
+    crt_timeout: 60
     servers:
         bdev_class: nvme
         bdev_list: ["0000:81:00.0", "0000:da:00.0"]

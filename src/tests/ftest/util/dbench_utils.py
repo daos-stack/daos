@@ -11,6 +11,7 @@ from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
 from job_manager_utils import Mpirun
 
+
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 class DbenchCommand(ExecutableCommand):
     """Defines a object representing a dbench command."""

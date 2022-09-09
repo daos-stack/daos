@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
 import avocado
 
@@ -61,7 +61,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         self.preserve_props_path = join(self.tmp, "cont_props.h5")
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type=cont_type)
+        cont1 = self.get_container(pool1, type=cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)
@@ -238,5 +238,6 @@ class DmvrPreserveProps(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5
         :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
+        :avocado: tags=test_dm_preserve_props_fs_copy_posix_dfs
         """
         self.run_dm_preserve_props("FS_COPY", "POSIX", "DFS")

@@ -1,12 +1,13 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from command_utils_base import \
-     BasicParameter, FormattedParameter
+
+from ClusterShell.NodeSet import NodeSet
+
+from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure, MPILoadError
 from command_utils import ExecutableCommand
 from general_utils import pcmd, get_log_file
@@ -27,7 +28,7 @@ class DaosRacerCommand(ExecutableCommand):
         """
         super().__init__(
             "/run/daos_racer/*", "daos_racer", path)
-        self.host = host
+        self.host = NodeSet(host)
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
@@ -36,8 +37,8 @@ class DaosRacerCommand(ExecutableCommand):
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
-            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
-            dmg.copy_configuration([self.host])
+            dmg.copy_certificates(get_log_file("daosCA/certs"), self.host)
+            dmg.copy_configuration(self.host)
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
@@ -99,7 +100,7 @@ class DaosRacerCommand(ExecutableCommand):
                 names and values to export prior to running daos_racer
         """
         # Include exports prior to the daos_racer command
-        self._pre_command = env.get_export_str()
+        self._pre_command = env.to_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.
@@ -111,17 +112,16 @@ class DaosRacerCommand(ExecutableCommand):
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
-            self.__str__(), self.host,
+            str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(
-            [self.host], self.__str__(), True, self.clush_timeout.value)
+        return_codes = pcmd(self.host, str(self), True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
                 self.log.info(
                     "Stopping timed out daos_racer process on %s", self.host)
-                pcmd([self.host], "pkill daos_racer", True)
+                pcmd(self.host, "pkill daos_racer", True)
 
             raise CommandFailure("Error running '{}'".format(self._command))
 

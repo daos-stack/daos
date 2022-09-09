@@ -27,8 +27,8 @@ int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *con_uuid);
 daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
 struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
 struct cont_props dc_cont_hdl2props(daos_handle_t coh);
+int dc_cont_hdl2redunlvl(daos_handle_t coh);
 int dc_cont_hdl2redunfac(daos_handle_t coh);
-int dc_cont_get_redunc(daos_handle_t poh, daos_prop_t *prop);
 
 int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,

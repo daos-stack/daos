@@ -21,6 +21,7 @@ from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
     run_pcmd, convert_list
+from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
@@ -132,7 +133,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     Args:
         self (obj): soak obj
         source_dir (str): Source directory to archive
-        dest_dir (str): Destinaton directory
+        dest_dir (str): Destination directory
         host_list (list): list of hosts
 
     Raises:
@@ -331,9 +332,9 @@ def run_metrics_check(self, logging=True, prefix=None):
         prefix (str): add prefix to name; ie initial or final
     """
     enable_telemetry = self.params.get("enable_telemetry", "/run/*")
+    engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
+
     if enable_telemetry:
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
         for engine in range(engine_count):
             name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
             if prefix:
@@ -354,7 +355,7 @@ def run_metrics_check(self, logging=True, prefix=None):
 
 
 def get_harassers(harasser):
-    """Create a valid harasserlist from the yaml job harassers.
+    """Create a valid harasser list from the yaml job harassers.
 
     Args:
         harassers (list): harasser jobs from yaml.
@@ -443,7 +444,7 @@ def launch_snapshot(self, pool, name):
         self.log.error("Snapshot failed", exc_info=error)
         status &= False
     if status:
-        self.log.info("Sanpshot Created")
+        self.log.info("Snapshot Created")
         # write more data to object
         data_pattern2 = get_random_bytes(500)
         datasize2 = len(data_pattern2) + 1
@@ -500,8 +501,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     tgt_idx = None
     if name == "EXCLUDE":
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
+        engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
@@ -577,9 +577,8 @@ def launch_server_stop_start(self, pools, name, results, args):
     params = {}
     rank = None
     drain = self.params.get("enable_drain", "/run/soak_harassers/*", False)
+    engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
     if name == "SVR_STOP":
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
@@ -730,11 +729,12 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         pool (obj):             TestPool obj
 
     Returns dfuse(obj):         Dfuse obj
-            cmd(list):          list of dfuse commands to add to jobscript
+            cmd(list):          list of dfuse commands to add to job script
     """
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
@@ -752,7 +752,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
         "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
-            dfuse.mount_dir.value, dfuse_env, module_load, dfuse.__str__()),
+            dfuse.mount_dir.value, dfuse_env, module_load, str(dfuse)),
         "sleep 10",
         "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
@@ -898,12 +898,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
                     mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
+                    mpirun_cmd.get_params(self)
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
                         vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-                        # env["H5_DAOS_BYPASS_DUNS"] = 1
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
                     mpirun_cmd.ppn.update(ppn)
@@ -965,6 +965,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             env = macsio.get_environment("mpirun", log_file=daos_log)
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
+            mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             if api in ["HDF5-VOL"]:
                 # include dfuse cmdlines
@@ -1068,6 +1069,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             mdtest_cmd.test_dir.update(
                                 dfuse.mount_dir.value)
                         mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
+                        mpirun_cmd.get_params(self)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
                         mpirun_cmd.ppn.update(ppn)
@@ -1112,7 +1114,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.set_environment(env)
     log_name = job_spec
     cmds = []
-    cmds.append(str(daos_racer.__str__()))
+    cmds.append(str(daos_racer))
     cmds.append("status=$?")
     # add exit code
     commands.append([cmds, log_name])
@@ -1123,7 +1125,7 @@ def create_racer_cmdline(self, job_spec):
 
 
 def create_fio_cmdline(self, job_spec, pool):
-    """Create the FOI commandline for job script.
+    """Create the FOI command line for job script.
 
     Args:
 
@@ -1183,8 +1185,8 @@ def create_fio_cmdline(self, job_spec, pool):
                         "global", "directory",
                         dfuse.mount_dir.value,
                         "fio --name=global --directory")
-                    # add fio cmline
-                    cmds.append(str(fio_cmd.__str__()))
+                    # add fio cmdline
+                    cmds.append(str(fio_cmd))
                     cmds.append("status=$?")
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
@@ -1196,12 +1198,79 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
+def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create the srun cmdline to run app.
+
+    This method will use a cmdline specified in the yaml file to
+    execute a local binary until the rpms are available
+    Args:
+        self (obj):       soak obj
+        job_spec (str):   job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+    Returns:
+        cmd(list): list of cmdlines
+
+    """
+    commands = []
+    sbatch_cmds = []
+    app_params = os.path.join(os.sep, "run", job_spec, "*")
+    app_cmd = self.params.get("cmdline", app_params, default=None)
+    mpi_module = self.params.get("module", app_params, self.mpi_module)
+    posix = self.params.get("posix", app_params, default=False)
+    if app_cmd is None:
+        self.log.info(
+            "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
+        return commands
+    oclass_list = self.params.get("oclass", app_params)
+    for oclass in oclass_list:
+        add_containers(self, pool, oclass)
+        sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
+        log_name = "{}_{}_{}_{}_{}".format(
+            job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
+        # include dfuse cmdlines
+        if posix:
+            dfuse, dfuse_start_cmdlist = start_dfuse(
+                self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+            sbatch_cmds.extend(dfuse_start_cmdlist)
+        # allow apps that use an mpi other than default (self.mpi_module)
+        if mpi_module != self.mpi_module:
+            sbatch_cmds.append("module load {}".format(mpi_module))
+        mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
+        mpirun_cmd.get_params(self)
+        if "mpich" in mpi_module:
+            # Pass pool and container information to the commands
+            env = EnvironmentVariables()
+            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool.uuid, self.container[-1].uuid)
+            mpirun_cmd.assign_environment(env, True)
+        mpirun_cmd.assign_processes(nodesperjob * ppn)
+        mpirun_cmd.ppn.update(ppn)
+        if posix:
+            mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
+        cmdline = "{}".format(str(mpirun_cmd))
+        sbatch_cmds.append(str(cmdline))
+        sbatch_cmds.append("status=$?")
+        if posix:
+            if mpi_module != self.mpi_module:
+                sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
+                sbatch_cmds.extend(stop_dfuse(dfuse))
+        commands.append([sbatch_cmds, log_name])
+        self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
+        for cmd in sbatch_cmds:
+            self.log.info("%s", cmd)
+        if mpi_module != self.mpi_module:
+            mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
+            mpirun_cmd.get_params(self)
+    return commands
+
+
 def build_job_script(self, commands, job, nodesperjob):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
         self (obj): soak obj
-        commands(list): commandlines and cmd specific log_name
+        commands(list): command lines and cmd specific log_name
         job(str): the job name that will be defined in the slurm script
 
     Returns:
@@ -1229,7 +1298,7 @@ def build_job_script(self, commands, job, nodesperjob):
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
-            "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
+            "exclude": self.exclude_slurm_nodes,
             "error": str(error),
             "export": "ALL",
             "exclusive": None

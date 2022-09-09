@@ -1,26 +1,17 @@
 hosts:
   servers: !mux
     4_server:
-      test_servers:
-        - server-A
-        - server-B
+      test_servers: server-[1-2]
     6_server:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
+      test_servers: server-[1-3]
     10_server:
-      test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-        - server-E
-  test_clients:
-    - client-A
-    - client-B
-    - client-C
+      test_servers: server-[1-5]
+  test_clients: 3
 timeout: 3500
+setup:
+  # Test variants use different server counts, so ensure servers are stopped after each run
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -71,7 +62,7 @@ ior:
   chunk_block_transfer_sizes:
    # [ChunkSize, BlocksSize, TransferSize]
    - [32M, 128M, 8M]       # Full Striped
-   - [32M, 128M, 2K]       # Partial Striped
+   - [32M, 32M, 4K]       # Partial Striped
   objectclass:
    dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]

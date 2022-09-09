@@ -585,6 +585,30 @@ out:
 	return rc;
 }
 
+/**
+ * Create a ranged string representation of a rank list.
+ *
+ * \param[in]  rank_list	the rank list to represent
+ *
+ * \return			a ranged string (caller must free)
+ */
+char *
+d_rank_list_to_str(d_rank_list_t *rank_list)
+{
+	char			*str;
+	bool			 truncated = false;
+	d_rank_range_list_t	*range_list;
+
+	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	if (range_list == NULL)
+		return NULL;
+	str = d_rank_range_list_str(range_list, &truncated);
+
+	d_rank_range_list_free(range_list);
+
+	return str;
+}
+
 d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {
@@ -793,6 +817,12 @@ dis_integer_str(char *str)
 	return true;
 }
 
+static inline bool
+dis_single_char_str(char *str)
+{
+	return strlen(str) == 1;
+}
+
 /**
  * get a bool type environment variables
  *
@@ -819,6 +849,31 @@ d_getenv_bool(const char *env, bool *bool_val)
 		*bool_val = true;
 
 	*bool_val = (atoi(env_val) == 0 ? false : true);
+}
+
+/**
+ * get single character environment variable
+ *
+ * \param[in]           env     name of the environment variable
+ * \param[in,out]       char_val returned value of the ENV. Will not change the original value
+ */
+void
+d_getenv_char(const char *env, char *char_val)
+{
+	char		*env_val;
+
+	if (env == NULL || char_val == NULL)
+		return;
+
+	env_val = getenv(env);
+	if (!env_val)
+		return;
+
+	if (!dis_single_char_str(env_val)) {
+		D_ERROR("ENV %s is not single character.\n", env_val);
+		return;
+	}
+	*char_val = *env_val;
 }
 
 /**

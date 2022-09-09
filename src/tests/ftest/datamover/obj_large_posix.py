@@ -1,17 +1,16 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from duns_utils import format_path
 
 
 # pylint: disable=too-many-ancestors
 class DmvrObjLargePosix(DataMoverTestBase):
     """Test class Description:
-       Verify cloning a large POSIX container at the object level (non-DFS)
-       using dcp.
+       Verify cloning a large POSIX container at the object level (non-DFS).
 
     :avocado: recursive
     """
@@ -39,26 +38,22 @@ class DmvrObjLargePosix(DataMoverTestBase):
 
         # Create pool1 and cont1
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
         self.mdtest_cmd.write_bytes.update(file_size)
-        self.run_mdtest_with_params(
-            "DAOS", "/", pool1, cont1,
-            flags=mdtest_flags[0])
+        self.run_mdtest_with_params("DAOS", "/", pool1, cont1, flags=mdtest_flags[0])
 
         # Clone cont1 to cont2
         result = self.run_datamover(
             self.test_id + " (cont1 to cont2)",
-            "DAOS", None, pool1, cont1,
-            "DAOS", None, pool1, None)
+            src_path=format_path(pool1, cont1),
+            dst_path=format_path(pool1))
         cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params(
-            "DAOS", "/", pool1, cont2_uuid,
-            flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool1, cont2_uuid, flags=mdtest_flags[1])
 
     def test_dm_obj_large_posix_dcp(self):
         """Jira ID: DAOS-6892
@@ -67,7 +62,7 @@ class DmvrObjLargePosix(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=datamover,mfu,mfu_dcp,mdtest
-        :avocado: tags=dm_obj_large_posix,dm_obj_large_posix_dcp
+        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_dcp
         """
         self.run_dm_obj_large_posix("DCP")
 
@@ -79,6 +74,6 @@ class DmvrObjLargePosix(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=datamover,daos_cont_clone,mdtest
-        :avocado: tags=dm_obj_large_posix,dm_obj_large_posix_cont_clone
+        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_cont_clone
         """
         self.run_dm_obj_large_posix("CONT_CLONE")
