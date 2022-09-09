@@ -1199,8 +1199,8 @@ class Clush(JobManager):
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
             self.log.debug("Checking the command output for any bad keywords: %s", regex)
-            for result in self.result:
-                match = re.findall(regex, "\n".join(result.output))
+            for data in self.result.output:
+                match = re.findall(regex, "\n".join(data.stdout))
                 if match:
                     self.log.info(
                         "The following error messages have been detected in the '%s' output:",

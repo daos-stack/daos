@@ -22,7 +22,7 @@ class CmockaUtils():
 
         Args:
             hosts (str): hosts on which to run the cmocka tests
-            class_name (str): class name of the cmocka test, e.g. FTEST_<test_dir>.<test_name>
+            class_name (str): class name of the cmocka test
             test_name (str): name of the cmocka test
             outputdir (str): final location for cmocka xml files on this host
             test_dir (str): directory common to all hosts for storing remote cmocka xml files
