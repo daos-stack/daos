@@ -19,6 +19,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -479,6 +481,19 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// started yet, it's always valid to retry.
 			if system.IsUnavailable(err) {
 				break
+			}
+
+			// For the 2.2 release, we have to support 2.2 agents
+			// talking to 2.0 servers. If we receive an error that
+			// the server doesn't understand our system name, and
+			// it's an agent request, then enable compatibility mode
+			// and retry.
+			if fault.IsFaultCode(err, code.ServerWrongSystem) {
+				if isAgentRequest(req) && !getAgentCompat(req) {
+					log.Debug("retrying agent request with compatibility mode enabled")
+					setAgentCompat(req)
+					break
+				}
 			}
 
 			// Otherwise, we're finished trying.
