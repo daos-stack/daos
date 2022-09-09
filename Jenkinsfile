@@ -1,5 +1,7 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
+   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
+*/
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -13,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+//@Library(value='pipeline-lib@your_branch') _
 
 job_status_internal = [:]
 
@@ -167,9 +169,6 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit CI tests')
-        booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
-                     description: 'Run the Fault Injection on EL 8 CI tests')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
@@ -356,7 +355,6 @@ pipeline {
                     post {
                         always {
                             job_status_update()
-                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
@@ -435,7 +433,7 @@ pipeline {
                             dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -507,7 +505,7 @@ pipeline {
                             dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -567,35 +565,37 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 Bullseye') {
+                stage('Build on EL 8 Bullseye') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                                qb: true) +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8', true) + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   build_deps: 'no',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
                         unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-covc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-covc',
+                            sh label: 'Save failed Bullseye logs',
+                               script: '''if [ -f config.log ]; then
+                                          mv config.log config.log-el8-covc
+                                       fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-covc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -698,7 +698,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye') {
+                stage('Unit Test Bullseye on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -724,7 +724,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit test Bullseye')
+                } // stage('Unit test Bullseye on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
                       beforeAgent true
@@ -734,7 +734,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 45,
+                        unitTest timeout_time: 60,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -747,7 +747,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck')
+                } // stage('Unit Test with memcheck on EL 8')
             }
         }
         stage('Test') {
@@ -1049,28 +1049,32 @@ pipeline {
         } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
-                stage('Bullseye Report') {
+                stage('Bullseye Report on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
+                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
+                                                               'func-vm-cov',
+                                                               'func-hw-small-cov',
+                                                               'func-hw-medium-cov',
+                                                               'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
@@ -1081,7 +1085,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Bullseye Report')
+                } // stage('Bullseye Report on EL 8')
             } // parallel
         } // stage ('Test Report')
     } // stages
