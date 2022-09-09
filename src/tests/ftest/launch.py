@@ -7,7 +7,7 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
 import fnmatch
@@ -25,10 +25,13 @@ import yaml
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
 # from avocado.core.version import MAJOR, MINOR
-# from avocado.plugins.xunit import XUnitResult
-# from avocado_result_html import HTMLResult
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
+
+# When SRE-439 is fixed we should be able to include these import statements here
+# from util.distro_utils import detect
+# from util.general_utils import run_remote, RemoteCommandResult
+from util.results_utils import create_html, create_xml, Job, Results, TestResult
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
@@ -57,6 +60,10 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+
+
+class LaunchException(Exception):
+    """Exception for launch.py execution."""
 
 
 def get_local_host():
@@ -317,66 +324,65 @@ def get_available_interfaces(log, args):
     operstate = os.path.join(net_path, "*", "operstate")
     command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"])
 
-    active_interfaces = {}
     result = run_remote(log, all_hosts, command)
-    if result.passed:
-        # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
-        active_interfaces = {}
-        for data in result.output:
-            for line in data.stdout:
-                try:
-                    interface = line.split("/")[-2]
-                    if interface not in active_interfaces:
-                        active_interfaces[interface] = data.hosts
-                    else:
-                        active_interfaces[interface].update(data.hosts)
-                except IndexError:
-                    pass
-
-        # From the active interface dictionary find all the interfaces that are common to all hosts
-        log.debug("Active network interfaces detected:")
-        common_interfaces = []
-        for interface, node_set in active_interfaces.items():
-            log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
-            if node_set == all_hosts:
-                common_interfaces.append(interface)
-
-        # Find the speed of each common active interface in order to be able to choose the fastest
-        interface_speeds = {}
-        for interface in common_interfaces:
-            command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-            result = run_remote(log, all_hosts, command)
-            # Verify each host has the same interface speed
-            if result.passed and result.homogeneous:
-                for line in result.output[0].stdout:
-                    try:
-                        interface_speeds[interface] = int(line.strip())
-                    except IOError as io_error:
-                        # KVM/Qemu/libvirt returns an EINVAL
-                        if io_error.errno == errno.EINVAL:
-                            interface_speeds[interface] = 1000
-                    except ValueError:
-                        # Any line not containing a speed (integer)
-                        pass
-            elif not result.homogeneous:
-                log.error(
-                    "Non-homogeneous interface speed detected for %s on %s.",
-                    interface, str(all_hosts))
-            else:
-                log.error("Error detecting speed of %s on %s", interface, str(all_hosts))
-
-        if interface_speeds:
-            log.debug("Active network interface speeds on %s:", all_hosts)
-
-        for interface, speed in interface_speeds.items():
-            log.debug("  - %-8s (speed: %6s)", interface, speed)
-            # Only include the first active interface for each speed - first is
-            # determined by an alphabetic sort: ib0 will be checked before ib1
-            if speed is not None and speed not in available_interfaces:
-                available_interfaces[speed] = interface
-    else:
+    if not result.passed:
         raise LaunchException(
             f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
+
+    # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
+    active_interfaces = {}
+    for data in result.output:
+        for line in data.stdout:
+            try:
+                interface = line.split("/")[-2]
+                if interface not in active_interfaces:
+                    active_interfaces[interface] = data.hosts
+                else:
+                    active_interfaces[interface].update(data.hosts)
+            except IndexError:
+                pass
+
+    # From the active interface dictionary find all the interfaces that are common to all hosts
+    log.debug("Active network interfaces detected:")
+    common_interfaces = []
+    for interface, node_set in active_interfaces.items():
+        log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
+        if node_set == all_hosts:
+            common_interfaces.append(interface)
+
+    # Find the speed of each common active interface in order to be able to choose the fastest
+    interface_speeds = {}
+    for interface in common_interfaces:
+        command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
+        result = run_remote(log, all_hosts, command)
+        # Verify each host has the same interface speed
+        if result.passed and result.homogeneous:
+            for line in result.output[0].stdout:
+                try:
+                    interface_speeds[interface] = int(line.strip())
+                except IOError as io_error:
+                    # KVM/Qemu/libvirt returns an EINVAL
+                    if io_error.errno == errno.EINVAL:
+                        interface_speeds[interface] = 1000
+                except ValueError:
+                    # Any line not containing a speed (integer)
+                    pass
+        elif not result.homogeneous:
+            log.error(
+                "Non-homogeneous interface speed detected for %s on %s.",
+                interface, str(all_hosts))
+        else:
+            log.error("Error detecting speed of %s on %s", interface, str(all_hosts))
+
+    if interface_speeds:
+        log.debug("Active network interface speeds on %s:", all_hosts)
+
+    for interface, speed in interface_speeds.items():
+        log.debug("  - %-8s (speed: %6s)", interface, speed)
+        # Only include the first active interface for each speed - first is
+        # determined by an alphabetic sort: ib0 will be checked before ib1
+        if speed is not None and speed not in available_interfaces:
+            available_interfaces[speed] = interface
 
     log.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
     return available_interfaces
@@ -403,7 +409,7 @@ def set_provider_environment(log, interface, args):
         provider = args.provider
     else:
         provider = os.environ.get("CRT_PHY_ADDR_STR")
-    if provider is None:    # pylint: disable=too-many-nested-blocks
+    if provider is None:
         log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
 
         # Check for a Omni-Path interface
@@ -420,13 +426,11 @@ def set_provider_environment(log, interface, args):
         result = run_remote(log, args.test_servers, command)
         if result.passed:
             # Find all supported providers
-            keys_found = {}
+            keys_found = defaultdict(NodeSet)
             for data in result.output:
                 for line in data.stdout:
                     provider_name = line.replace(":", "")
                     if provider_name in PROVIDER_KEYS:
-                        if provider_name not in keys_found:
-                            keys_found[provider_name] = NodeSet()
                         keys_found[provider_name].update(data.hosts)
 
             # Only use providers available on all the server hosts
@@ -799,7 +803,7 @@ def setup_test_files(log, test_list, args, yaml_dir):
     for test in test_list:
         log.debug(
             "%3s  %-40s  %-50s  %-20s  %-20s",
-            test.name.uid, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
+            test.uid_str, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
 
 
 def replace_yaml_file(log, yaml_file, args, yaml_dir):
@@ -1040,8 +1044,9 @@ def generate_certs(log):
     log.debug("Generating certificates")
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
     certs_dir = os.path.join(daos_test_log_dir, "daosCA")
+    certgen_dir = os.path.abspath(os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
     run_local(log, ["/usr/bin/rm", "-rf", certs_dir])
-    run_local(log, ["../../../../lib64/daos/certgen/gen_certificates.sh", daos_test_log_dir])
+    run_local(log, [os.path.join(certgen_dir, "gen_certificates.sh"), daos_test_log_dir])
 
 
 def setup_test_directory(log, test, mode="all"):
@@ -1290,10 +1295,6 @@ def reset_server_storage(log, test):
     return 0
 
 
-class LaunchException(Exception):
-    """Exception for launch.py execution."""
-
-
 class AvocadoInfo():
     """Information about this version of avocado."""
 
@@ -1492,6 +1493,16 @@ class RemoteCommandResult():
         self._process_task(task, command)
 
     @property
+    def homogeneous(self):
+        """Did all the hosts produce the same output.
+
+        Returns:
+            bool: if all the hosts produced the same output
+
+        """
+        return len(self.output) == 1
+
+    @property
     def passed(self):
         """Did the command pass on all the hosts.
 
@@ -1499,18 +1510,18 @@ class RemoteCommandResult():
             bool: if the command was successful on each host
 
         """
-        timeout = all(data.timeout for data in self.output)
         non_zero = any(data.returncode != 0 for data in self.output)
-        return not non_zero and not timeout
+        return not non_zero and not self.timeout
 
     @property
-    def homogeneous(self):
-        """Did all the hosts produce the same output.
+    def timeout(self):
+        """Did the command timeout on any hosts.
 
         Returns:
-            bool: if all the hosts produced the same output
+            bool: True if the command timed out on at least one set of hosts; False otherwise
+
         """
-        return len(self.output) == 1
+        return any(data.timeout for data in self.output)
 
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
@@ -1560,51 +1571,6 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
-class TestName():
-    """Define a test name compatible with avocado's result render classes."""
-
-    def __init__(self, name, uid, repeat=0):
-        """Initialize a TestName object.
-
-        Args:
-            name (str): test name
-            uid (str): unique identifier for the test. Defaults to "0".
-        """
-        self.name = name
-        self.uid = uid
-        self.repeat = repeat
-
-    def __str__(self):
-        """Get the test name as a string.
-
-        Returns:
-            str: combination of the uid and name
-
-        """
-        if self.repeat > 0:
-            return f"{self.uid:02}-{self.name}-repeat{self.repeat:03}"
-        return f"{self.uid:02}-{self.name}"
-
-    @property
-    def repeat_str(self):
-        """Get the string representation of the repeat counter.
-
-        Returns:
-            str: the repeat count as a string; useful for file/directory naming
-
-        """
-        return f"repeat{self.repeat:03}"
-
-    def copy(self):
-        """Create a copy of this object.
-
-        Returns:
-            TestName: a copy of this TestName object
-
-        """
-        return TestName(self.name, self.uid, self.repeat)
-
-
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
@@ -1626,9 +1592,7 @@ class TestInfo():
                 NodeSet: test clients including the localhost
 
             """
-            clients = self.clients.copy()
-            clients.update(NodeSet(get_local_host()))
-            return clients
+            return self.clients | NodeSet(get_local_host())
 
         @property
         def all_remote(self):
@@ -1638,8 +1602,7 @@ class TestInfo():
                 NodeSet: all the hosts excluding the localhost
 
             """
-            local_host = NodeSet(get_local_host())
-            return self.all.difference(local_host)
+            return self.all - NodeSet(get_local_host())
 
     def __init__(self, test_file, uid):
         """Initialize a TestInfo object.
@@ -1647,7 +1610,7 @@ class TestInfo():
         Args:
             test_file (str): the test python file
         """
-        self.name = TestName(test_file, uid)
+        self.name = {"name": test_file, "uid": uid, "variant": 0}
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
@@ -1662,6 +1625,67 @@ class TestInfo():
 
         """
         return self.test_file
+
+    @property
+    def name_str(self):
+        """Get the test name as a string.
+
+        Returns:
+            str: combination of the uid and name
+
+        """
+        if self.repeat > 0:
+            return f"{self.uid_str}-{self.name['name']}-{self.repeat_str}"
+        return f"{self.uid_str}-{self.name['name']}"
+
+    @property
+    def uid(self):
+        """Get the string representation of the name uid.
+
+        Returns:
+            str: the name uid as a string; useful for file/directory naming
+
+        """
+        return self.name['uid']
+
+    @property
+    def uid_str(self):
+        """Get the string representation of the name uid.
+
+        Returns:
+            str: the name uid as a string; useful for file/directory naming
+
+        """
+        return f"repeat{self.uid:02}"
+
+    @property
+    def repeat(self):
+        """Get the test name repeat counter.
+
+        Returns:
+            int: the test name repeat
+
+        """
+        return self.name['variant']
+
+    @repeat.setter
+    def repeat(self, value):
+        """Set the test name repeat counter.
+
+        Args:
+            value (int): the test repeat counter
+        """
+        self.name['variant'] = value
+
+    @property
+    def repeat_str(self):
+        """Get the string representation of the repeat counter.
+
+        Returns:
+            str: the repeat count as a string; useful for file/directory naming
+
+        """
+        return f"repeat{self.repeat:03}"
 
     def set_host_info(self, log, include_localhost=False):
         """Set the test host information using the test yaml file.
@@ -1750,143 +1774,19 @@ class TestInfo():
 
         """
         name = os.path.splitext(self.python_file)[0]
-        log_file = f"{self.name.uid:02}-{self.directory}-{name}-launch.log"
+        log_file = f"{self.uid_str}-{self.directory}-{name}-launch.log"
         if total > 1:
-            self.name.repeat = repeat
-            os.makedirs(os.path.join(logs_dir, self.name.repeat_str), exist_ok=True)
-            return os.path.join(logs_dir, self.name.repeat_str, log_file)
+            self.repeat = repeat
+            os.makedirs(os.path.join(logs_dir, self.repeat_str), exist_ok=True)
+            return os.path.join(logs_dir, self.repeat_str, log_file)
         return os.path.join(logs_dir, log_file)
 
 
-class BaseResult():
-    """Object to keep track of the start, end, and elapsed time of a test."""
-
-    PASS = "PASS"
-    WARN = "WARN"
-    SKIP = "SKIP"
-    FAIL = "FAIL"
-    ERROR = "ERROR"
-    CANCEL = "CANCEL"
-    INTERRUPT = "INTERRUPT"
-
-    def __init__(self):
-        """Initialize a TimedResult object."""
-        self.time_start = -1
-        self.time_end = -1
-        self.time_elapsed = -1
-        self.status = None
-
-    def get(self, name, default=None):
-        """Get the value of the attribute name.
-
-        Args:
-            name (str): TimedResult attribute name to get
-            default (object, optional): value to return if name is not defined. Defaults to None.
-
-        Returns:
-            object: the attribute value or default if not defined
-
-        """
-        return getattr(self, name, default)
-
-    def start(self):
-        """Mark the start of the test."""
-        if self.time_start == -1:
-            self.time_start = time.time()
-
-    def end(self):
-        """Mark the end of the test."""
-        self.time_end = time.time()
-        self.time_elapsed = self.time_end - self.time_start
-
-
-class TestResult(BaseResult):
-    """Object to keep track of the running of a test."""
-
-    def __init__(self, class_name, test_name, logfile):
-        """Initialize a TestResult object.
-
-        Args:
-            class_name (str): the class name for the test
-            test_name (str): the name of the test
-            logfile (str): the log file for the test
-        """
-        super().__init__()
-        self.class_name = class_name
-        self.name = test_name.copy()
-        self.logfile = logfile
-        self.fail_class = None
-        self.fail_reason = None
-        self.traceback = None
-
-    def __getitem__(self, item):
-        """Get the value for the item."""
-        return getattr(self, item)
-
-    def set_status(self, status, fail_class=None, fail_reason=None, traceback=None):
-        """Set the status information for this test result.
-
-        Args:
-            status (str): test status
-            fail_class (str, optional): failure category. Defaults to None.
-            fail_reason (str, optional): failure description. Defaults to None.
-            traceback (Exception, optional): exception linked to the failure. Defaults to None.
-        """
-        self.status = status
-        self.fail_class = fail_class
-        self.fail_reason = fail_reason
-        self.traceback = traceback
-
-
-class LaunchResult(BaseResult):
-    """Object to keep track of a test result."""
-
-    def __init__(self, log_file):
-        """Initialize a TestResult object.
-
-        Args:
-            log_file (str): file used to log the testing being reported in this result
-        """
-        super().__init__()
-        self.logfile = log_file
-        self.tests = []
-        self.tests_total_time = 0
-        self.tests_total = 0
-        self.errors = 0
-        self.interrupted = 0
-        self.failed = 0
-        self.skipped = 0
-        self.cancelled = 0
-        self.rate = 0
-
-    def start(self):
-        """Mark the start of launch and the current test."""
-        super().start()
-        self.tests[-1].start()
-        self.tests_total += 1
-
-    def end(self):
-        """Mark the end of launch and the current test."""
-        super().end()
-        self.tests[-1].end()
-        self.tests_total_time += self.tests[-1].time_elapsed
-        if self.tests[-1].status == self.ERROR:
-            self.errors += 1
-        elif self.tests[-1].status == self.SKIP:
-            self.skipped += 1
-        elif self.tests[-1].status == self.FAIL:
-            self.failed += 1
-        elif self.tests[-1].status == self.CANCEL:
-            self.cancelled += 1
-        elif self.tests[-1].status == self.INTERRUPT:
-            self.interrupted += 1
-
-
-class LaunchJob():
-    """Simulate an avocado.core.job.Job."""
+class Launch():
+    """Class to launch avocado tests."""
 
     def __init__(self, name, repeat, mode):
-        """Initialize a LaunchJob object.
+        """Initialize a Launch object.
 
         Args:
             name (str): launch job name
@@ -1915,26 +1815,14 @@ class LaunchJob():
         self.log.addHandler(self._get_file_handler(self.logfile))
         self._start_logging(renamed_log_dir)
 
-        # Setup results tracking
+        # Results tracking settings
         self.job_results_dir = self.avocado.get_logs_dir()
-        self.result = LaunchResult(self.logfile)
         self.local_host = NodeSet(get_local_host())
-
-        # Configuration information used by:
-        #   avocado.plugins.xunit.XUnitResult
-        #   avocado_result_html.HTMLResult
-        self.config = {
-            "job.run.result.xunit.enabled": "on",
-            "job.run.result.xunit.output": None,
-            "job.run.result.xunit.max_test_log_chars": self.avocado.get_setting(
-                "job.run.result.xunit", "max_test_log_chars"),
-            "job.run.result.xunit.job_name": name,
-            "job.run.result.html.enabled": None,
-            "job.run.result.html.open_browser": False,
-            "job.run.result.html.output": None,
-            "stdout_claimed_by": None,
-        }
-        self.status = "COMPLETE"
+        max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
+        self.job = Job(
+            self.logfile, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
+            max_chars=max_chars)
+        self.result = Results(self.logdir)
 
     @staticmethod
     def _get_file_handler(log_file):
@@ -2093,12 +1981,18 @@ class LaunchJob():
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
 
                 self.log.info(
-                    "Logging launch repetition %s running of %s in %s", repeat, test, test_log_file)
+                    "Log file for repetition %s of running %s: %s", repeat, test, test_log_file)
                 test_file_handler = self._get_file_handler(test_log_file)
                 self.log.addHandler(test_file_handler)
 
-                # Mark the start of this test and prepare the hosts to run the tests
-                step_status = self.prepare(test, repeat, test_log_file)
+                # Create a new TestResult for this test
+                self.result.tests.append(TestResult(test.class_name, test.name, test_log_file))
+
+                # Mark the start of this test
+                self.result.tests[-1].start()
+
+                # Prepare the hosts to run the tests
+                step_status = self.prepare(test, repeat)
                 if step_status:
                     return_code |= step_status
                     continue
@@ -2114,14 +2008,17 @@ class LaunchJob():
                 if self.result.tests[-1].status is None:
                     self.result.tests[-1].status = TestResult.PASS
 
-                # Update the launch execution status - mark the end of executing the test file
-                self.result.end()
+                # Mark the end of this test
+                self.result.tests[-1].end()
 
                 # Stop logging to the test log file
                 self.log.removeHandler(test_file_handler)
 
-        # Generate results
-        self._generate_results()
+        # Generate a results.xml for the this run
+        create_xml(self.job, self.result)
+
+        # Generate a results.html for the this run
+        create_html(self.job, self.result)
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -2139,13 +2036,12 @@ class LaunchJob():
         except LaunchException:
             pass
 
-    def prepare(self, test, repeat, test_log_file):
+    def prepare(self, test, repeat):
         """Prepare the test for execution.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
-            test_log_file (str): the lgo file for the execution of this test
 
         Returns:
             int: status code: 0 = success, 4 = failure
@@ -2153,10 +2049,6 @@ class LaunchJob():
         """
         self.log.debug("=" * 80)
         self.log.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
-
-        # Create a new TestResult for this test
-        self.result.tests.append(TestResult(test.class_name, test.name, test_log_file))
-        self.result.start()
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         try:
@@ -2645,7 +2537,7 @@ class LaunchJob():
                 # When repeating tests ensure Jenkins-style avocado log directories
                 # are unique by including the repeat count in the path
                 new_test_logs_dir = os.path.join(
-                    avocado_logs_dir, test.directory, test.python_file, test.name.repeat_str)
+                    avocado_logs_dir, test.directory, test.python_file, test.repeat_str)
             try:
                 os.makedirs(new_test_logs_dir)
             except OSError as error:
@@ -2705,20 +2597,6 @@ class LaunchJob():
                 message = f"Error writing {xml_file}"
                 self.log.debug(message, exc_info=True)
                 raise LaunchException(message) from error
-
-    def _generate_results(self):
-        """Generate results for this job."""
-        # pylint: disable=import-outside-toplevel
-
-        # Generate a results.xml for the this run
-        from avocado.plugins.xunit import XUnitResult
-        result_xml = XUnitResult()
-        result_xml.render(self.result, self)
-
-        # Generate a results.html for the this run
-        from avocado_result_html import HTMLResult
-        result_html = HTMLResult()
-        result_html.render(self.result, self)
 
     def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.
@@ -3272,8 +3150,8 @@ def main():
              "command - is used by default.")
     args = parser.parse_args()
 
-    # Setup the LaunchJob
-    launch = LaunchJob(args.name, args.repeat, args.mode)
+    # Setup the Launch object
+    launch = Launch(args.name, args.repeat, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
