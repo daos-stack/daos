@@ -178,7 +178,7 @@ class CmockaUtils():
             error_exception (Exception): the exception raised when the failure occurred
         """
         # Create a failed test result
-        test_name = TestName(test.name, test.name.str_uid, test.name.str_variant)
+        test_name = TestName(test.name.name, test.name.str_uid, test.name.str_variant)
         test_result = TestResult(self.test_name, test_name, test.logfile, test.logdir)
         test_result.status = TestResult.ERROR
         test_result.fail_class = "Missing file" if error_exception is None else "Failed command"
