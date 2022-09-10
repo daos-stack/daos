@@ -180,7 +180,6 @@ vpic_smoke:
     cmdline: "${DAOS_TEST_SHARED_DIR}/soak/apps/vpic-install/bin/harris.Linux"
     posix: True
     workdir: "/tmp/daos_dfuse/vpic/"
-    module: "mpi/latest"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/vpic/"
     oclass:
