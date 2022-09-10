@@ -134,22 +134,17 @@ class ServerRankFailure(IorTestBase):
         """Verify engine failure can be recovered by restarting daos_server.
 
         1. Create a pool and a container. Create a container with redundancy factor.
-        2. Get the amount of IO inflow to each rank. We expect them to be 0.
-        3. Run IOR with given object class and let it run through step 7.
-        4. Get the amount of IO inflow again.
-        5. Get the rank with the largest amount of inflow. Find out its hostname. We'll
-        kill engines here. If we use replication, some ranks receive more data than
-        others. e.g., With RP_2G1, two ranks get most of the data.
-        6. While IOR is running, kill daos_engine processes from the node to simulate a
-        node failure. (Two engines per node.)
-        7. Wait for IOR to complete.
-        8. Verify that IOR failed.
-        9. Restart daos_server service.
-        10. Verify the system status by calling dmg system query.
-        11. Call dmg pool query -b to find the disabled ranks.
-        12. Call dmg pool reintegrate one rank at a time to enable all ranks.
-        13. Verify that the container Health is HEALTHY.
-        14. Run IOR to the same container and verify that it works.
+        2. Run IOR with given object class and let it run through step 7.
+        3. While IOR is running, kill all daos_engine on a non-access-point node
+        4. Wait for IOR to complete.
+        5. Verify that IOR failed.
+        6. Wait for rebuild to finish
+        7. Restart daos_servers.
+        8. Verify the system status by calling dmg system query.
+        9. Call dmg pool query -b to find the disabled ranks.
+        10. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        11. Verify that the container Health is HEALTHY.
+        12. Run IOR and verify that it works.
 
         Args:
             ior_namespace (str): Yaml namespace that defines the object class used for IOR.
@@ -188,7 +183,7 @@ class ServerRankFailure(IorTestBase):
         if job_num not in ior_results or ior_results[job_num][0]:
             errors.append("First IOR didn't fail as expected!")
 
-        # 6. Wait for rebuild to finish
+        # 6. Wait for rebuild to finish.
         self.log.info("Wait for rebuild to start.")
         self.pool.wait_for_rebuild(to_start=True, interval=10)
         self.log.info("Wait for rebuild to finish.")
@@ -258,8 +253,10 @@ class ServerRankFailure(IorTestBase):
 
     def test_server_rank_failure_with_ec(self):
         """Jira ID: DAOS-10002.
+
         Test rank failure with redundancy factor and EC_4P2GX object class. See
         verify_rank_failure() for test steps.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
@@ -332,7 +329,7 @@ class ServerRankFailure(IorTestBase):
         self.container.append(
             self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
 
-        # 3. Run IOR with oclass SX.
+        # 4. Run IOR with oclass SX.
         ior_results = {}
         job_num = 1
         ior_namespace = "/run/ior_wo_rf/*"
@@ -347,24 +344,24 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Waiting 5 sec for IOR to start writing data...")
         time.sleep(5)
 
-        # 4. Kill daos_engine from the host where the pool isn't created.
+        # 5. Kill daos_engine from the host where the pool isn't created.
         self.kill_engine(engine_kill_host=engine_kill_host)
 
         # Wait for IOR to complete.
         ior_thread.join()
 
-        # 5. Verify that IOR worked.
+        # 6. Verify that IOR worked.
         errors = []
         self.log.info("----- IOR results 1 -----")
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
-        # 6. Verify that the container Health is HEALTHY.
+        # 7. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
                 container=self.container[0], expected_health="HEALTHY"):
             errors.append(
                 "Container health isn't HEALTHY after killing engine on rank 1!")
 
-        # 7. Create a new container on the pool and run IOR.
+        # 8. Create a new container on the pool and run IOR.
         self.container.append(
             self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
 
