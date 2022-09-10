@@ -213,6 +213,11 @@ Filesystem      Size  Used Avail Use% Mounted on
 dfuse           9.4G  326K  9.4G   1% /tmp/dfuse
 ```
 
+### Launching via fstab
+
+DFuse can be launched via fstab and the standard mount command, it will parse -o options
+and extract pool=<name>,container=<name> if provided and ignore any other filesystem options given.
+
 ### Links into other Containers
 
 It is possible to link to other containers in DFuse, where subdirectories
