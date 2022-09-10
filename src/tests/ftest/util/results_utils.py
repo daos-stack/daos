@@ -6,9 +6,6 @@
 
 import time
 
-from avocado.plugins.xunit import XUnitResult
-from avocado_result_html import HTMLResult
-
 
 class TestResult():
     """Provides the necessary test result data to generate a xml file."""
@@ -21,16 +18,18 @@ class TestResult():
     CANCEL = "CANCEL"
     INTERRUPT = "INTERRUPT"
 
-    def __init__(self, class_name, name, log_file):
+    def __init__(self, class_name, name, uid, variant, log_file):
         """Initialize a TestResult object.
 
         Args:
             class_name (str): the test class name, e.g. FTEST_<name>
-            name (dict): the test name
+            name (str): the test name
+            uid (str): the test uid
+            variant (str): the test variant
             log_file (str): the log file for a single test
         """
         self.class_name = class_name
-        self.name = name
+        self.name = {"name": name, "uid": uid, "variant": variant}
         self.logfile = log_file
         self.time_start = -1
         self.time_end = -1
@@ -267,6 +266,9 @@ def create_xml(job, results):
         job (Job): information about the job producing the results
         results (Results): the test results to include in the xml file
     """
+    # When SRE-439 is fixed we should be able to move these imports to the top of the file
+    # pylint: disable=import-outside-toplevel
+    from avocado.plugins.xunit import XUnitResult
     result_xml = XUnitResult()
     result_xml.render(results, job)
 
@@ -280,5 +282,8 @@ def create_html(job, results):
         job (Job): information about the job producing the results
         results (Results): the test results to include in the html file
     """
+    # When SRE-439 is fixed we should be able to move these imports to the top of the file
+    # pylint: disable=import-outside-toplevel
+    from avocado_result_html import HTMLResult
     result_html = HTMLResult()
     result_html.render(results, job)

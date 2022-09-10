@@ -31,6 +31,7 @@ from ClusterShell.Task import task_self
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # from util.general_utils import run_remote, RemoteCommandResult
+# pylint: disable=import-error,no-name-in-module
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
@@ -803,7 +804,7 @@ def setup_test_files(log, test_list, args, yaml_dir):
     for test in test_list:
         log.debug(
             "%3s  %-40s  %-50s  %-20s  %-20s",
-            test.uid_str, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
+            test.name.order, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
 
 
 def replace_yaml_file(log, yaml_file, args, yaml_dir):
@@ -1571,6 +1572,62 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+class TestName():
+    """Define a test name compatible with avocado's result render classes."""
+
+    def __init__(self, name, order, repeat):
+        """Initialize a TestName object.
+
+        Args:
+            name (str): test name
+            order (int): order in which this test is executed
+            repeat (int): repeat count for this test
+        """
+        self.name = name
+        self.order = order
+        self.repeat = repeat
+
+    def __str__(self):
+        """Get the test name as a string.
+
+        Returns:
+            str: combination of the order and name
+
+        """
+        if self.repeat > 0:
+            return f"{self.order_str}-{self.name}-{self.repeat_str}"
+        return f"{self.order_str}-{self.name}"
+
+    @property
+    def repeat_str(self):
+        """Get the string representation of the repeat count.
+
+        Returns:
+            str: the repeat count as a string; useful for file/directory naming
+
+        """
+        return f"repeat{self.repeat:03}"
+
+    @property
+    def order_str(self):
+        """Get the string representation of the order count.
+
+        Returns:
+            str: the order count as a string; useful for file/directory naming
+
+        """
+        return f"{self.order:02}"
+
+    def copy(self):
+        """Create a copy of this object.
+
+        Returns:
+            TestName: a copy of this TestName object
+
+        """
+        return TestName(self.name, self.order, self.repeat)
+
+
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
@@ -1604,13 +1661,14 @@ class TestInfo():
             """
             return self.all - NodeSet(get_local_host())
 
-    def __init__(self, test_file, uid):
+    def __init__(self, test_file, order):
         """Initialize a TestInfo object.
 
         Args:
             test_file (str): the test python file
+            order (int): order in which this test is executed
         """
-        self.name = {"name": test_file, "uid": uid, "variant": 0}
+        self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
@@ -1625,67 +1683,6 @@ class TestInfo():
 
         """
         return self.test_file
-
-    @property
-    def name_str(self):
-        """Get the test name as a string.
-
-        Returns:
-            str: combination of the uid and name
-
-        """
-        if self.repeat > 0:
-            return f"{self.uid_str}-{self.name['name']}-{self.repeat_str}"
-        return f"{self.uid_str}-{self.name['name']}"
-
-    @property
-    def uid(self):
-        """Get the string representation of the name uid.
-
-        Returns:
-            str: the name uid as a string; useful for file/directory naming
-
-        """
-        return self.name['uid']
-
-    @property
-    def uid_str(self):
-        """Get the string representation of the name uid.
-
-        Returns:
-            str: the name uid as a string; useful for file/directory naming
-
-        """
-        return f"repeat{self.uid:02}"
-
-    @property
-    def repeat(self):
-        """Get the test name repeat counter.
-
-        Returns:
-            int: the test name repeat
-
-        """
-        return self.name['variant']
-
-    @repeat.setter
-    def repeat(self, value):
-        """Set the test name repeat counter.
-
-        Args:
-            value (int): the test repeat counter
-        """
-        self.name['variant'] = value
-
-    @property
-    def repeat_str(self):
-        """Get the string representation of the repeat counter.
-
-        Returns:
-            str: the repeat count as a string; useful for file/directory naming
-
-        """
-        return f"repeat{self.repeat:03}"
 
     def set_host_info(self, log, include_localhost=False):
         """Set the test host information using the test yaml file.
@@ -1774,11 +1771,11 @@ class TestInfo():
 
         """
         name = os.path.splitext(self.python_file)[0]
-        log_file = f"{self.uid_str}-{self.directory}-{name}-launch.log"
+        log_file = f"{self.name.order_str}-{self.directory}-{name}-launch.log"
         if total > 1:
-            self.repeat = repeat
-            os.makedirs(os.path.join(logs_dir, self.repeat_str), exist_ok=True)
-            return os.path.join(logs_dir, self.repeat_str, log_file)
+            self.name.repeat = repeat
+            os.makedirs(os.path.join(logs_dir, self.name.repeat_str), exist_ok=True)
+            return os.path.join(logs_dir, self.name.repeat_str, log_file)
         return os.path.join(logs_dir, log_file)
 
 
@@ -1986,7 +1983,11 @@ class Launch():
                 self.log.addHandler(test_file_handler)
 
                 # Create a new TestResult for this test
-                self.result.tests.append(TestResult(test.class_name, test.name, test_log_file))
+                self.result.tests.append(
+                    TestResult(
+                        test.class_name, str(test.name), test.name.order, test.name.repeat,
+                        test_log_file)
+                )
 
                 # Mark the start of this test
                 self.result.tests[-1].start()
@@ -2537,7 +2538,7 @@ class Launch():
                 # When repeating tests ensure Jenkins-style avocado log directories
                 # are unique by including the repeat count in the path
                 new_test_logs_dir = os.path.join(
-                    avocado_logs_dir, test.directory, test.python_file, test.repeat_str)
+                    avocado_logs_dir, test.directory, test.python_file, test.name.repeat_str)
             try:
                 os.makedirs(new_test_logs_dir)
             except OSError as error:
