@@ -11,7 +11,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from general_utils import get_clush_command, run_command, run_remote
-from results_utils import TestResult, Results, Job, create_xml
+from results_utils import TestName, TestResult, Results, Job, create_xml
 
 
 class CmockaUtils():
@@ -178,8 +178,8 @@ class CmockaUtils():
             error_exception (Exception): the exception raised when the failure occurred
         """
         # Create a failed test result
-        test_result = TestResult(
-            self.test_name, test.name, test.name.str_uid, test.name.str_variant, test.logfile)
+        test_name = TestName(test.name, test.name.str_uid, test.name.str_variant)
+        test_result = TestResult(self.test_name, test_name, test.logfile, test.logdir)
         test_result.status = TestResult.ERROR
         test_result.fail_class = "Missing file" if error_exception is None else "Failed command"
         test_result.fail_reason = error_message

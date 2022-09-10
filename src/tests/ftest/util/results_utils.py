@@ -6,12 +6,35 @@
 
 import time
 
-from avocado.plugins.xunit import XUnitResult
-from avocado_result_html import HTMLResult
+
+class TestName():
+    # pylint: disable=too-few-public-methods
+    """Provides the necessary test name data to generate a xml/html results file."""
+
+    def __init__(self, name, uid, variant):
+        """Initialize a TestName object.
+
+        Args:
+            name (str): the test name
+            uid (str): the test uid
+            variant (str): the test variant
+        """
+        self.name = name
+        self.uid = uid
+        self.variant = variant
+
+    def __str__(self):
+        """Get the test name as a string.
+
+        Returns:
+            str: the test name including the uid, name, and variant
+
+        """
+        return "-".join([str(self.uid), "".join([str(self.name), str(self.variant)])])
 
 
 class TestResult():
-    """Provides the necessary test result data to generate a xml file."""
+    """Provides the necessary test result data to generate a xml/html results file."""
 
     PASS = "PASS"
     WARN = "WARN"
@@ -21,19 +44,21 @@ class TestResult():
     CANCEL = "CANCEL"
     INTERRUPT = "INTERRUPT"
 
-    def __init__(self, class_name, name, uid, variant, log_file):
+    def __init__(self, class_name, name, log_file, log_dir):
         """Initialize a TestResult object.
 
         Args:
             class_name (str): the test class name, e.g. FTEST_<name>
-            name (str): the test name
+            name (TestName): the test uid, name, and variant
             uid (str): the test uid
             variant (str): the test variant
             log_file (str): the log file for a single test
+            log_dir (str): the log file directory for a single test
         """
         self.class_name = class_name
-        self.name = {"name": name, "uid": uid, "variant": variant}
+        self.name = name
         self.logfile = log_file
+        self.logdir = log_dir
         self.time_start = -1
         self.time_end = -1
         self.time_elapsed = -1
@@ -54,6 +79,20 @@ class TestResult():
 
         """
         return self.get(name, default)
+
+    def __contains__(self, item):
+        """Determine if the attribute exists in this class, e.g. 'item' in self.
+
+        This is used when creating the html test result.
+
+        Args:
+            item (str): attribute name
+
+        Returns:
+            bool: True if the attribute name has a value in this object; False otherwise
+
+        """
+        return self.get(item, None) is not None
 
     def get(self, name, default=None):
         """Get the value of the attribute name.
@@ -84,7 +123,7 @@ class TestResult():
 
 class Results():
     # pylint: disable=too-few-public-methods
-    """Provides the necessary result data to generate a xml file."""
+    """Provides the necessary result data to generate a xml/html results file."""
 
     def __init__(self, log_file):
         """Initialize a Results object.
@@ -223,7 +262,7 @@ class Results():
 
 class Job():
     # pylint: disable=too-few-public-methods
-    """Provides the necessary job data to generate a xml file."""
+    """Provides the necessary job data to generate a xml/html results file."""
 
     def __init__(self, name, xml_enabled=None, xml_output=None, html_enabled=None,
                  html_output=None, log_dir=None, max_chars=100000):
@@ -256,7 +295,7 @@ class Job():
         }
         self.logdir = log_dir
 
-        # If the following is set to either an html result will not be generated
+        # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"
 
 
@@ -269,6 +308,9 @@ def create_xml(job, results):
         job (Job): information about the job producing the results
         results (Results): the test results to include in the xml file
     """
+    # When SRE-439 is fixed we should be able to move these imports to the top of the file
+    # pylint: disable=import-outside-toplevel
+    from avocado.plugins.xunit import XUnitResult
     result_xml = XUnitResult()
     result_xml.render(results, job)
 
@@ -282,5 +324,8 @@ def create_html(job, results):
         job (Job): information about the job producing the results
         results (Results): the test results to include in the html file
     """
+    # When SRE-439 is fixed we should be able to move these imports to the top of the file
+    # pylint: disable=import-outside-toplevel
+    from avocado_result_html import HTMLResult
     result_html = HTMLResult()
     result_html.render(results, job)
