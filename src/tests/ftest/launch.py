@@ -1595,28 +1595,77 @@ class TestName():
 
         """
         if self.repeat > 0:
-            return f"{self.order_str}-{self.name}-{self.repeat_str}"
-        return f"{self.order_str}-{self.name}"
+            return f"{self.uid}-{self.name}{self.variant}"
+        return f"{self.uid}-{self.name}"
 
-    @property
-    def repeat_str(self):
-        """Get the string representation of the repeat count.
+    def __getitem__(self, name, default=None):
+        """Get the value of the attribute name.
+
+        Args:
+            name (str): name of the class attribute to get
+            default (object, optional): value to return if name is not defined. Defaults to None.
 
         Returns:
-            str: the repeat count as a string; useful for file/directory naming
+            object: the attribute value or default if not defined
 
         """
-        return f"repeat{self.repeat:03}"
+        return self.get(name, default)
+
+    def get(self, name, default=None):
+        """Get the value of the attribute name.
+
+        Args:
+            name (str): name of the class attribute to get
+            default (object, optional): value to return if name is not defined. Defaults to None.
+
+        Returns:
+            object: the attribute value or default if not defined
+
+        """
+        try:
+            return getattr(self, name, default)
+        except TypeError:
+            return default
 
     @property
     def order_str(self):
         """Get the string representation of the order count.
 
         Returns:
-            str: the order count as a string; useful for file/directory naming
+            str: the order count as a string
 
         """
         return f"{self.order:02}"
+
+    @property
+    def repeat_str(self):
+        """Get the string representation of the repeat count.
+
+        Returns:
+            str: the repeat count as a string
+
+        """
+        return f"repeat{self.repeat:03}"
+
+    @property
+    def uid(self):
+        """Get the test order to use as the test uid for xml/html results.
+
+        Returns:
+            str: the test uid (order)
+
+        """
+        return self.order_str
+
+    @property
+    def variant(self):
+        """Get the test repeat count as the test variant for xml/html results.
+
+        Returns:
+            str: the test variant (repeat)
+
+        """
+        return f";{self.repeat_str}"
 
     def copy(self):
         """Create a copy of this object.
@@ -1817,7 +1866,7 @@ class Launch():
         self.local_host = NodeSet(get_local_host())
         max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
         self.job = Job(
-            self.logfile, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
+            self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
             max_chars=max_chars)
         self.result = Results(self.logdir)
 
@@ -1984,10 +2033,7 @@ class Launch():
 
                 # Create a new TestResult for this test
                 self.result.tests.append(
-                    TestResult(
-                        test.class_name, str(test.name), test.name.order, test.name.repeat,
-                        test_log_file)
-                )
+                    TestResult(test.class_name, test.name.copy(), test_log_file, self.logdir))
 
                 # Mark the start of this test
                 self.result.tests[-1].start()
