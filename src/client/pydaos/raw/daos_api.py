@@ -1546,8 +1546,8 @@ class DaosContainer():
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     self.cont_input_values.chunk_size)
+            idx = idx + 1
 
-        idx = idx + 1
         if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
