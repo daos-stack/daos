@@ -145,6 +145,23 @@ class NetworkFailureTest(IorTestBase):
 
         return host_to_ranks
 
+    def wait_for_ranks_to_join(self):
+        """Wait for all ranks to join.
+
+        Returns:
+            bool: False if any of the rank's state is in the failed state (unknown,
+                excluded, errored, unresponsive) after waiting for 2 min. True otherwise.
+
+        """
+        for _ in range(12):
+            time.sleep(10)
+            if check_system_query_status(self.get_dmg_command().system_query()):
+                self.log.info("All ranks are joined after updating the interface.")
+                return True
+            self.log.info("One or more servers crashed. Check system query again.")
+
+        return False
+
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
         DAOS.
@@ -386,6 +403,12 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
+        # Some ranks may be excluded after bringing down the network interface, so wait
+        # until they are up (joined).
+        if not self.wait_for_ranks_to_join():
+            self.fail(
+                "One or more servers crashed after bringing down the network interface!")
+
         # 5. Run IOR with oclass SX.
         ior_results = {}
         job_num = 1
@@ -427,16 +450,7 @@ class NetworkFailureTest(IorTestBase):
 
         # Some ranks may be excluded after bringing up the network interface, so wait
         # until they are up (joined).
-        server_crashed = True
-        for _ in range(12):
-            time.sleep(10)
-            if check_system_query_status(self.get_dmg_command().system_query()):
-                self.log.info("All ranks are joined after bringing up the interface.")
-                server_crashed = False
-                break
-            self.log.info("One or more servers crashed. Check system query again.")
-
-        if server_crashed:
+        if not self.wait_for_ranks_to_join():
             msg = "One or more servers crashed after bringing up the network interface!"
             errors.append(msg)
 
