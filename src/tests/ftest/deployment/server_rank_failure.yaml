@@ -76,19 +76,20 @@ ior: &ior_base
   # process ends in about 120 sec. Adjust the transfer_size - block_size combination
   # based on the system so that it takes longer than the -D value.
   transfer_size: 512K
-  # Total size is block_size * ppn.
-  block_size: 150G
   sw_deadline: 120
 ior_wo_rf:
   <<: *ior_base
+  # Total size is block_size * ppn.
   block_size: 1G
   dfs_oclass: SX
   dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
+  block_size: 150G
   dfs_oclass: RP_3GX
   dfs_dir_oclass: RP_3GX
 ior_with_ec:
   <<: *ior_base
+  block_size: 150G
   dfs_oclass: EC_4P2GX
   dfs_dir_oclass: EC_4P2GX
