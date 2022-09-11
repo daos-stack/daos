@@ -231,13 +231,13 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
         rc=0
     fi
 
-    if ! mkdir -p "${DAOS_TEST_SHARED_DIR}/soak"; then
+    if ! mkdir -p "${DAOS_TEST_SHARED_DIR}/soak_apps"; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
     fi
 
-    if ! cp -r /scratch/soak/apps "${DAOS_TEST_SHARED_DIR}/soak/"; then
+    if ! cp -r /scratch/soak/apps/* "${DAOS_TEST_SHARED_DIR}/soak_apps/"; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0

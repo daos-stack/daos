@@ -186,7 +186,7 @@ vpic_stress:
         - 1
     taskspernode:
         - 32
-    cmdline: "${DAOS_TEST_SHARED_DIR}/soak/apps/vpic-install/bin/harris.Linux"
+    cmdline: "${DAOS_TEST_SHARED_DIR}/soak_apps/vpic-install/bin/harris.Linux"
     posix: True
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
@@ -199,7 +199,7 @@ lammps_stress:
         - 8
     taskspernode:
         - 32
-    cmdline: "${DAOS_TEST_SHARED_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_TEST_SHARED_DIR}/soak/apps/lammps/bench/in.lj"
+    cmdline: "${DAOS_TEST_SHARED_DIR}/soak_apps/lammps/src/lmp_mpi -i ${DAOS_TEST_SHARED_DIR}/soak_apps/lammps/bench/in.lj"
     posix: True
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
