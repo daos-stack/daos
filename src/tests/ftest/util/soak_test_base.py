@@ -579,7 +579,7 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
         # cleanup test_node
-        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
+        for log_dir in [self.soak_dir, self.sharedsoaktest_dir]:
             cmd = "rm -rf {}".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)
