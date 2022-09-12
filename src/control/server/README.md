@@ -52,7 +52,7 @@ directory.
 
 ### Control Service
 
-The gRPC server registers the [control service](/src/proto/ctl/control.proto)
+The gRPC server registers the [control service](/src/proto/ctl/ctl.proto)
 to handle requests from the management tool.
 
 Control service requests are operations that will be performed on one or more
