@@ -83,15 +83,65 @@ var (
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
-	timeout  time.Duration
-	deadline time.Time
-	Sys      string // DAOS system name
-	HostList []string
+	timeout      time.Duration
+	deadline     time.Time
+	agentRequest bool
+	agentCompat  bool
+	Sys          string // DAOS system name
+	HostList     []string
 }
 
 // SetSystem sets the request's system name.
 func (r *request) SetSystem(name string) {
 	r.Sys = name
+}
+
+type agentRequest interface {
+	getAgentRequest() bool
+	setAgentCompat()
+	getAgentCompat() bool
+}
+
+// SetAgentRequest sets a flag to indicate that the request
+// is being made by an agent.
+func (r *request) SetAgentRequest() {
+	r.agentRequest = true
+}
+
+func (r *request) setAgentCompat() {
+	r.agentCompat = true
+}
+
+func (r *request) getAgentCompat() bool {
+	return r.agentCompat
+}
+
+func (r *request) getAgentRequest() bool {
+	return r.agentRequest
+}
+
+func isAgentRequest(req targetChooser) bool {
+	ar, ok := req.(agentRequest)
+	if !ok {
+		return false
+	}
+	return ar.getAgentRequest()
+}
+
+func setAgentCompat(req targetChooser) {
+	ar, ok := req.(agentRequest)
+	if !ok {
+		return
+	}
+	ar.setAgentCompat()
+}
+
+func getAgentCompat(req targetChooser) bool {
+	ar, ok := req.(agentRequest)
+	if !ok {
+		return false
+	}
+	return ar.getAgentCompat()
 }
 
 // getSystem returns the system name set on the request or that returned by the
@@ -107,6 +157,11 @@ func (r *request) getSystem(getter sysGetter) string {
 		sysName = r.Sys
 	case getter.GetSystem() != "":
 		sysName = getter.GetSystem()
+	}
+	// For the 2.2 release, we need to support 2.2 agents talking
+	// to 2.0 servers, which don't understand the versioned system name.
+	if r.agentRequest && r.agentCompat {
+		return sysName
 	}
 	return sysName + "-" + build.DaosVersion
 }

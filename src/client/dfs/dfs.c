@@ -972,7 +972,6 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			oexcl = flags & O_EXCL;
 	bool			ocreat = flags & O_CREAT;
-	struct timespec		now;
 	int			rc;
 
 	/*
@@ -989,6 +988,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 restart:
 	if (ocreat) {
+		struct timespec		now;
+
 		/*
 		 * If O_CREATE | O_EXCL, we just use conditional check to fail
 		 * when inserting the file. Otherwise we need the fetch to make
@@ -1046,6 +1047,7 @@ restart:
 		entry->chunk_size = chunk_size;
 		entry->uid = geteuid();
 		entry->gid = getegid();
+
 		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
@@ -1065,7 +1067,7 @@ restart:
 	rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
-		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
+		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1170,20 +1172,52 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 {
 	bool			exists;
 	int			daos_mode;
+	daos_handle_t		th = DAOS_TX_NONE;
+	bool			oexcl = flags & O_EXCL;
+	bool			ocreat = flags & O_CREAT;
 	daos_handle_t		parent_oh;
 	int			rc;
 
 	parent_oh = parent ? parent->oh : dfs->super_oh;
 
-	if (flags & O_CREAT) {
+	/*
+	 * we only need a DTX in the case of O_CREAT without O_EXCL since we don't use a conditional
+	 * insert.
+	 */
+	if (ocreat && !oexcl && dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+restart:
+	if (ocreat) {
 		struct timespec		now;
 
 		D_ASSERT(parent);
 
+		/*
+		 * If O_CREATE | O_EXCL, we just use conditional check to fail when inserting the
+		 * file. Otherwise we need the fetch to make sure there is no existing entry that is
+		 * not a dir, or it's just a dir open if the dir entry exists.
+		 */
+		if (!oexcl) {
+			rc = fetch_entry(dfs->layout_v, parent->oh, th, dir->name, len, false,
+					 &exists, entry, 0, NULL, NULL, NULL);
+			if (rc)
+				D_GOTO(out, rc);
+
+			/** Just open the dir */
+			if (exists)
+				goto dopen;
+		}
+
 		/** this generates the OID and opens the object */
 		rc = create_dir(dfs, parent, cid, dir);
 		if (rc)
-			return rc;
+			D_GOTO(out, rc);
 
 		entry->oid = dir->oid;
 		entry->mode = dir->mode;
@@ -1191,7 +1225,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		if (rc) {
 			rc = errno;
 			daos_obj_close(dir->oh, NULL);
-			return rc;
+			D_GOTO(out, rc);
 		}
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
@@ -1201,51 +1235,69 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->gid = getegid();
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
-				  DAOS_COND_DKEY_INSERT, entry);
-		if (rc != 0) {
+		rc = insert_entry(dfs->layout_v, parent->oh, th, dir->name, len,
+				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
+		if (rc == EEXIST && !oexcl) {
+			/** just try refetching entry to open the file */
 			daos_obj_close(dir->oh, NULL);
-			if (rc != EPERM)
-				D_ERROR("Inserting dir entry %s failed (%d)\n",	dir->name, rc);
-			return rc;
+		} else if (rc) {
+			daos_obj_close(dir->oh, NULL);
+			D_DEBUG(DB_TRACE, "Insert dir entry %s failed (%d)\n", dir->name, rc);
+			D_GOTO(out, rc);
+		} else {
+			/** Success, commit */
+			dir->d.chunk_size = entry->chunk_size;
+			dir->d.oclass = entry->oclass;
+			D_GOTO(commit, rc);
 		}
-
-		dir->d.chunk_size = entry->chunk_size;
-		dir->d.oclass = entry->oclass;
-		return rc;
 	}
+
+	/* Check if parent has the dirname entry */
+	rc = fetch_entry(dfs->layout_v, parent_oh, th, dir->name, len, false, &exists, entry, 0,
+			 NULL, NULL, NULL);
+	if (rc) {
+		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);
+		D_GOTO(out, rc);
+	}
+
+	if (!exists)
+		D_GOTO(out, rc = ENOENT);
+
+dopen:
+	/* Check that the opened object is the type that's expected. */
+	if (!S_ISDIR(entry->mode))
+		D_GOTO(out, rc = ENOTDIR);
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
-		return EINVAL;
-
-	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false,
-			 &exists, entry, 0, NULL, NULL, NULL);
-	if (rc)
-		return rc;
-
-	if (!exists)
-		return ENOENT;
-
-	/* Check that the opened object is the type that's expected, this could
-	 * happen for example if dfs_open() is called with S_IFDIR but without
-	 * O_CREATE and a entry of a different type exists already.
-	 */
-	if (!S_ISDIR(entry->mode))
-		return ENOTDIR;
+		D_GOTO(out, rc = EINVAL);
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 	dir->mode = entry->mode;
 	oid_cp(&dir->oid, entry->oid);
 	dir->d.chunk_size = entry->chunk_size;
 	dir->d.oclass = entry->oclass;
 
-	return 0;
+commit:
+	if (daos_handle_is_valid(th) && dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+out:
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
+
+	return rc;
 }
 
 static int

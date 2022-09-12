@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.104
-Release:       5%{?relval}%{?dist}
+Version:       2.2.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -571,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Sep 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-1
+- First release candidate for 2.2.0.
+
 * Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
 - Add dfuse unit-test binary to call from ftest.
 

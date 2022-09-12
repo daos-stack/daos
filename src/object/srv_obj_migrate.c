@@ -161,7 +161,7 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 	struct umem_attr	uma;
 	struct tree_cache_root	root = { 0 };
 	struct tree_cache_root	*tmp_root;
-	int			rc;
+	int			rc, rc2;
 
 	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, &root, sizeof(root));
@@ -187,8 +187,12 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 
 	*rootp = tmp_root;
 out:
-	if (rc < 0)
-		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+	if (rc < 0) {
+		rc2 = dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+		if (rc2)
+			D_WARN("failed to delete "DF_KEY": "DF_RC"\n",
+			       DP_KEY(&key_iov), DP_RC(rc2));
+	}
 	return rc;
 }
 
@@ -2598,6 +2602,7 @@ migrate_fini_one_ult(void *data)
 {
 	struct migrate_stop_arg *arg = data;
 	struct migrate_pool_tls *tls;
+	int			 rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL)
@@ -2610,12 +2615,18 @@ migrate_fini_one_ult(void *data)
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
 	migrate_pool_tls_put(tls); /* lookup */
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
-
+	rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_WARN("failed to migrate fini one ult "DF_UUID": "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+	} else {
+		rc = 0;
+	}
 	migrate_pool_tls_put(tls); /* destroy */
 
 	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
-	return 0;
+	return rc;
 }
 
 /* stop the migration */
