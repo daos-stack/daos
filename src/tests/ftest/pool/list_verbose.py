@@ -58,11 +58,11 @@ class ListVerboseTest(IorTestBase):
             "svc_reps": pool.svc_ranks,
             "targets_total": targets_total,
             "targets_disabled": targets_disabled,
-            "pool_layout_ver": 1,
+            "pool_layout_ver": 2,
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
-            "upgrade_layout_ver": 1,
+            "upgrade_layout_ver": 2,
             "usage": [
                 {
                     "tier_name": "SCM",

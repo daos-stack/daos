@@ -21,6 +21,49 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+func TestPretty_PrintNVMeController(t *testing.T) {
+	for name, tc := range map[string]struct {
+		devices     storage.NvmeControllers
+		expPrintStr string
+	}{
+		"multiple controllers": {
+			devices: storage.NvmeControllers{
+				storage.MockNvmeController(1),
+				storage.MockNvmeController(2),
+			},
+			expPrintStr: `
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:80:00.2 model-2 fwRev-2     0         2.0 TB   
+`,
+		},
+		"vmd backing devices": {
+			devices: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: "050505:01:00.0"},
+				&storage.NvmeController{PciAddr: "050505:03:00.0"},
+			},
+			expPrintStr: `
+NVMe PCI       Model FW Revision Socket ID Capacity 
+--------       ----- ----------- --------- -------- 
+050505:01:00.0                   0         0 B      
+050505:03:00.0                   0         0 B      
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintNvmeControllers(tc.devices, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 	var (
 		controllerA    = storage.MockNvmeController(1)

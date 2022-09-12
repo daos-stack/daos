@@ -22,12 +22,13 @@ Here are maven dependencies.
 
 You can download them with below commands if you have maven installed.
 ```bash
-mvn dependency:get -Dartifact=io.daos:daos-java:<version> -Ddest=./
-mvn dependency:get -Dartifact=io.daos:hadoop-daos:<version> -Ddest=./
+mvn dependency:get -DgroupId=io.daos -DartifactId=daos-java -Dversion=<version> -Dclassifier=protobuf3-netty4-shaded -Ddest=./
+mvn dependency:get -DgroupId=io.daos -DartifactId=hadoop-daos -Dversion=<version> -Dclassifier=protobuf3-netty4-shaded -Ddest=./
 ```
 
 Or search these artifacts from maven central(https://search.maven.org) and
-download them manually.
+download them manually. Just make sure classifier, "protobuf3-netty4-shaded",
+is selected.
 
 You can also build artifacts by yourself.
 see [Build DAOS Hadoop Filesystem](#builddaos) for details.
@@ -37,17 +38,20 @@ see [Build DAOS Hadoop Filesystem](#builddaos) for details.
 
 ### JAR Files
 
-`daos-java-<version>.jar` and `hadoop-daos-<version>.jar` need to be deployed
-on every compute node that runs Spark or Hadoop.
-Place them in a directory, e.g., `$SPARK_HOME/jars` for Spark and
-`$HADOOP_HOME/share/hadoop/common/lib` for Hadoop, which is accessible to all
-the nodes or copy them to every node.<br/>
+`daos-java-<version>-protobuf3-netty4-shaded.jar` and
+`hadoop-daos-<version>-protobuf3-netty4-shaded.jar` need to be deployed on
+every compute node that runs Spark or Hadoop. Place them in a directory,
+e.g., `$SPARK_HOME/jars` for Spark and `$HADOOP_HOME/share/hadoop/common/lib`
+for Hadoop, which is accessible to all the nodes or copy them to every node.
+<br/>
 
-### `daos-site-example.xml`
+### `core-site-daos-ref.xml` (version >= 2.2.1, or `daos-site-example.xml`)
 
-Extract from `hadoop-daos-<version>.jar` and rename to `daos-site.xml`. Then
-copy it to your application config directory, e.g., `$SPARK_HOME/conf` for
-Spark and `$HADOOP_HOME/etc/hadoop` for Hadoop.
+Extract from `hadoop-daos-<version>-protobuf3-netty4-shaded.jar`. Then merge
+with your Hadoop `core-site.xml` under `$HADOOP_HOME/etc/hadoop`. If Hadoop
+installation is not present, you can rename the file to `core-site.xml` and put
+it under `$SPARK_HOME/conf` or directory to `$HADOOP_CONF_DIR/` if
+`HADOOP_CONF_DIR` env variable is defined.
 
 ## Configuring Hadoop
 
@@ -57,8 +61,9 @@ Export all DAOS-specific env variables in your application, e.g.,
 `spark-env.sh` for Spark and `hadoop-env.sh` for Hadoop. Or you can simply put
 env variables in your `.bashrc`.
 
-Besides, you should have LD\_LIBRARY\_PATH include DAOS library path so that Java
-can link to DAOS libs, like below.
+Besides, if your DAOS is not installed from linux package, like RPM, you should
+have `LD_LIBRARY_PATH` include DAOS library path so that Java can link to DAOS
+libs, like below.
 
 ```bash
 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/lib
@@ -66,8 +71,9 @@ $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/li
 
 ### DAOS URI
 
-In `daos-site.xml`, we default the DAOS URI as simplest form, "daos:///". For
-other form of URIs, please check [DAOS More URIs](#uris).
+In `core-site-daos-ref.xml`, we default the DAOS URI as simplest form,
+"daos://Pool1/Cont1". For other form of URIs, please check
+[DAOS More URIs](#uris).
 
 If the DAOS pool and container have not been created, we can use the following
 command to create them and get the pool UUID and container UUID.
@@ -75,31 +81,12 @@ command to create them and get the pool UUID and container UUID.
 ```bash
 $ export DAOS_POOL="mypool"
 $ export DAOS_CONT="mycont"
-$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> $DAOS_POOL
+$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> --label $DAOS_POOL
 $ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
 ```
 
-After that, configure `daos-site.xml` with the pool and container created.
-
-```xml
-<configuration>
-...
-  <property>
-    <name>fs.daos.pool.uuid</name>
-    <value>your pool UUID</value>
-    <description>UUID of DAOS pool</description>
-  </property>
-  <property>
-    <name>fs.daos.container.uuid</name>
-    <value>your container UUID</value>
-    <description>UUID of DAOS container created with "--type posix"</description>
-  </property>
-...
-</configuration>
-```
-
-Please put `daos-site.xml` in right place, e.g., Java classpath, and
-loadable by Hadoop DAOS FileSystem.
+After that, replace pool label and container label in DAOS URI in
+`core-site.xml` with your above labels.
 
 ### Validating Hadoop Access
 
@@ -125,12 +112,12 @@ spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop
 spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
 ```
 
-### Validatng Spark Access
+### Validating Spark Access
 
 All Spark APIs that work with the Hadoop filesystem will work with DAOS. We can
-use the `daos:///` URI to access files stored in DAOS. For example, to read the
-`people.json` file from the root directory of DAOS filesystem, we can use the
-following pySpark code:
+use the `daos://Pool1/Cont1/` URI to access files stored in DAOS. For example,
+to read the `people.json` file from the root directory of DAOS filesystem, we
+can use the following pySpark code:
 
 ```python
 df = spark.read.json("daos:///people.json")
@@ -207,11 +194,11 @@ URIs described above.
 ### <a name="mapreduce"></a>Run Map-Reduce in Hadoop
 
 Edit `$HADOOP_HOME/etc/hadoop/core-site.xml` to change fs.defaultFS to
-`daos:///`. It is not recommended to set fs.defaultFS to a DAOS UNS path.
-You may get an error complaining pool/container UUIDs cannot be found. It's
-because Hadoop considers the default filesystem is DAOS since you configured
-DAOS UNS URI. YARN has some working directories defaulting to local path
-without schema, like "/tmp/yarn", which is then constructed as
+`daos://Pool1/Cont1/`. It is not recommended to set fs.defaultFS to a DAOS UNS
+path. You may get an error complaining pool/container UUIDs cannot be found.
+It's because Hadoop considers the default filesystem is DAOS since you
+configured DAOS UNS URI. YARN has some working directories defaulting to local
+path without schema, like "/tmp/yarn", which is then constructed as
 "daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS since no
 pool/container UUIDs can be found if daos-site.xml is not provided too.
 
@@ -237,15 +224,8 @@ configuration to the scheduler configuration file, like
 </property>
 ```
 
-Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
+Then replicate `core-site.xml`, `yarn-site.xml` and
 `capacity-scheduler.xml` to other nodes.
-
-#### Known Issues
-
-If you use Omni-Path PSM2 provider in DAOS, you'll get connection issue in
-Yarn container due to PSM2 resource not being released properly in time.
-The PSM2 provides has known issues with DAOS and is not supported in
-production environments.
 
 ### Tune More Configurations
 
@@ -272,7 +252,7 @@ $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
 .. And key\* should be from
-[daos-site-example.xml](https://github.com/daos-stack/daos/blob/release/master/src/client/java/hadoop-daos/src/main/resources/daos-site-example.xml).
+[daos-config.txt](https://github.com/daos-stack/daos/blob/release/master/src/client/java/hadoop-daos/src/main/resources/daos-config.txt).
 If value\* contains characters of '=' or ':', you need to escape the value with
 below command.
 
@@ -287,9 +267,10 @@ value in `daos-site.xml` takes priority. If user sets Hadoop configuration
 before initializing Hadoop DAOS FileSystem, the user's configuration takes
 priority.
 
-### PSM2 Issue
+### Libfabric Signal Handling Issue
 
-For some libfabric providers, like PSM2, signal chaining should be enabled to
+For some libfabric providers, like the (unsupported) PSM2 provider,
+signal chaining should be enabled to
 better interoperate with DAOS and its dependencies which may install its own
 signal handlers. It ensures that signal calls are intercepted so that they do
 not actually replace the JVM's signal handlers if the handlers conflict with
