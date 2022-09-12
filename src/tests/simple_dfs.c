@@ -75,12 +75,13 @@ main(int argc, char **argv)
 			rc = dfs_mkdir(dfs, dir1, name, create_mode | S_IFDIR, 0);
 			ASSERT(rc == 0, "create /dir1/%s failed\n", name);
 		} else {
+			daos_obj_id_t oid;
+
 			sprintf(name, "file.%d", i);
 			rc = dfs_open(dfs, dir1, name, create_mode | S_IFREG, create_flags, 0, 0,
 				      NULL, &f1);
 			ASSERT(rc == 0, "create /dir1/%s failed\n", name);
 
-			daos_obj_id_t oid;;
 			dfs_obj2id(f1, &oid);
 			/* printf("File %s \t OID: %"PRIu64".%"PRIu64"\n", name, oid.hi, oid.lo); */
 
@@ -154,8 +155,8 @@ main(int argc, char **argv)
 		}
 	}
 
-	printf("total entries scanned = %"PRIu64"\n", nr_total); 
-	printf("total entries matched = %"PRIu64"\n", nr_matched); 
+	printf("total entries scanned = %"PRIu64"\n", nr_total);
+	printf("total entries matched = %"PRIu64"\n", nr_matched);
 
 	free(dents);
 	free(anchors);

@@ -6622,6 +6622,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 	while (!daos_anchor_is_eof(anchor)) {
 		daos_pipeline_stats_t	stats = {0};
 		char			*ptr1;
+
 		memset(buf_keys, 0, *nr * DFS_MAX_NAME);
 
 		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, DAOS_TX_NONE, 0, NULL,
@@ -6636,7 +6637,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 		for (i = 0; i < nr_kds; i++) {
 			char		*ptr2;
 			mode_t		mode;
-			char		*dkey = (char *) ptr1;
+			char		*dkey = (char *)ptr1;
 
 			/** set the dentry name */
 			memcpy(dirs[key_nr].d_name, dkey, kds[i].kd_key_len);
@@ -6644,7 +6645,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 
 			/** set the dentry type */
 			ptr2 = &buf_recs[i * record_len];
-			mode = *((mode_t *) ptr2);
+			mode = *((mode_t *)ptr2);
 
 			if (S_ISDIR(mode)) {
 				dirs[key_nr].d_type = DT_DIR;
@@ -6660,7 +6661,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 			/** set the OID for dentry if requested */
 			if (oids) {
 				ptr2 += sizeof(mode_t) + sizeof(time_t);
-				oid_cp(&oids[key_nr], *((daos_obj_id_t *) ptr2));
+				oid_cp(&oids[key_nr], *((daos_obj_id_t *)ptr2));
 			}
 
 			/** set the chunk size for dentry if requested */
@@ -6669,7 +6670,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 					ptr2 += sizeof(daos_obj_id_t);
 				else
 					ptr2 += sizeof(mode_t) + sizeof(time_t);
-				csize[key_nr] = *((daos_size_t *) ptr2);
+				csize[key_nr] = *((daos_size_t *)ptr2);
 			}
 
 			key_nr++;

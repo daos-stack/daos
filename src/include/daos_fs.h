@@ -1160,7 +1160,7 @@ dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
  * Same as dfs_readdir() but this additionally applies a filter created with dfs_pipeline_create()
  * on the entries that are enumerated. This function also optionally returns the object ID of each
  * dirent if requested through a pre-allocated OID input array.
- * 
+ *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
  * \param[in]	dpipe	DFS pipeline filter.
