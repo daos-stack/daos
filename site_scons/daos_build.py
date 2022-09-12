@@ -66,7 +66,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
 
 
 def add_build_rpath(env, pathin="."):
-    """Add a build directory with -Wl,-rpath-link"""
+    """Add a build directory to rpath"""
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
     env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
@@ -207,13 +207,13 @@ def _configure_mpi_pkg(env):
     if _find_mpicc(env):
         return True
     try:
-        env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
-    except OSError as e:
-        print("\n**********************************")
-        print("Could not find package MPI_PKG=%s\n" % env.subst("$MPI_PKG"))
-        print("Unset it or update PKG_CONFIG_PATH")
-        print("**********************************")
-        raise e
+        env.ParseConfig('pkg-config --cflags --libs $MPI_PKG')
+    except OSError as error:
+        print('\n**********************************')
+        print(f'Could not find package MPI_PKG={env.subst("$MPI_PKG")}\n')
+        print('Unset it or update PKG_CONFIG_PATH')
+        print('**********************************')
+        raise error
 
     return True
 

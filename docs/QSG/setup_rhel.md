@@ -1,15 +1,14 @@
 # DAOS Set-Up on RHEL and Clones
 
+The following instructions detail how to install, set up and start DAOS servers and clients on
+two or more nodes.
+This document includes instructions for RHEL8-compatible distributions. This includes
+RHEL8, Rocky Linux and AlmaLinux.
 
-The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.
-This document includes instructions for EL8 and CentOS 7.
-The process is identical for CentOS Linux 7 and EL 8,
-except for the location of the DAOS RPM repository.
-For setup instructions on OpenSuse, refer to
-[OpenSuse setup](setup_suse.md).
+For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
-For more details reference the [DAOS administration guide](https://docs.daos.io/v2.2/admin/hardware/).
-
+For more details, including the prerequisite steps before installing DAOS,
+reference the [DAOS administration guide](../admin/hardware/).
 
 ## Requirements
 
@@ -28,7 +27,7 @@ All nodes must have:
     commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.2/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -62,17 +61,9 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
-   using the subdirectory that matches the EL/CentOS version of the nodes:
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
 
-	**For CentOS7:**
-
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
-
-
-	**For EL8:**
-
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/EL8/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.4/EL8/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
@@ -100,17 +91,17 @@ SSDs will be prepared and configured to be used by DAOS.
 !!! note
     PMem preparation is required once per DAOS installation.
 
-1. Prepare the pmem devices on Server nodes:
+1.  Prepare the pmem devices on Server nodes:
 
-		daos_server storage prepare --scm-only
+		daos_server scm prepare
 
 	Sample Script:
 
-		Preparing locally-attached SCM...
+		Prepare locally-attached PMem\...
 
-		Memory allocation goals for SCM will be changed and namespaces
-		modified, this will be a destructive operation. Please ensure
-		namespaces are unmounted and locally attached SCM & NVMe devices are
+		Memory allocation goals for PMem will be changed and namespaces
+		modified, this may be a destructive operation. Please ensure
+		namespaces are unmounted and locally attached PMem modules are
 		not in use. Please be patient as it may take several minutes and
 		subsequent reboot maybe required.
 
@@ -118,17 +109,17 @@ SSDs will be prepared and configured to be used by DAOS.
 
 		yes
 
-		A reboot is required to process new SCM memory allocation goals.
+		A reboot is required to process new PMem memory allocation goals.
 
-2. Reboot the server node.
+2.  Reboot the server node.
 
-3. Run the prepare cmdline again:
+3.  Run the prepare cmdline again:
 
-		daos_server storage prepare --scm-only
+		daos_server scm prepare
 
 	Sample Script:
 
-		Preparing locally-attached SCM...
+		Prepare locally-attached PMem\...
 		SCM namespaces:
 		SCM Namespace	Socket ID	Capacity
 		-------------	---------	--------
@@ -137,13 +128,13 @@ SSDs will be prepared and configured to be used by DAOS.
 
 4. Prepare the NVME devices on Server nodes:
 
-		daos_server storage prepare --nvme-only -u root
-		Preparing locally-attached NVMe storage...
+		daos_server nvme prepare -u root
+		Preparing locally-attached NVMe storage\...
 
 5. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
-		Scanning locally-attached storage...
+		Scanning locally-attached storage\...
 
 		NVMe PCI		Model				FW Revision	Socket ID	Capacity
 		--------		-----				-----------	---------	--------
@@ -190,7 +181,7 @@ Server nodes require the following certificate files:
 -   A copy of the Client certificate (client.crt) owned by the
     daos_server user
 
-See [Certificate Configuration](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration)
+See [Certificate Configuration](../admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
@@ -265,9 +256,8 @@ for more information.
 
 ## Create Configuration Files
 
-In this section the `daos_server`, `daos_agent`, and dmg command
-configuration files will be defined. Examples are available at
-<https://github.com/daos-stack/daos/tree/master/utils/config/examples>
+In this section the `daos_server`, `daos_agent`, and dmg command configuration files will be defined.
+Examples are available on [github](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
 1. Determine the addresses for the NVMe devices on the server nodes:
 
@@ -297,14 +287,14 @@ configuration files will be defined. Examples are available at
 			cert: /etc/daos/certs/server.crt
 			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
-		nr_hugepages: 4096
 		control_log_mask: DEBUG
 		control_log_file: /tmp/daos_server.log
 		helper_log_file: /tmp/daos_admin.log
 		engines:
 		-
+			pinned_numa_node: 0
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib0
 			fabric_iface_port: 31316
 			log_mask: INFO
@@ -317,19 +307,20 @@ configuration files will be defined. Examples are available at
 			bdev_class: nvme
 			bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 		-
+			pinned_numa_node: 1
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib1
 			fabric_iface_port: 31416
 			log_mask: INFO
 			log_file: /tmp/daos_engine_1.log
 			env_vars:
 				- CRT_TIMEOUT=30
-		 	scm_mount: /mnt/daos1
-		 	scm_class: dcpm
-		 	scm_list: [/dev/pmem1]
-		 	bdev_class: nvme
-		 	bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
+			scm_mount: /mnt/daos1
+			scm_class: dcpm
+			scm_list: [/dev/pmem1]
+			bdev_class: nvme
+			bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
 
 3. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 

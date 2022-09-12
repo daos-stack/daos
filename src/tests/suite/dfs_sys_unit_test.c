@@ -853,7 +853,8 @@ dfs_sys_setup(void **state)
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
 			0, NULL);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		return rc;
 
 	arg = *state;
 

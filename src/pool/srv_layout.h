@@ -63,11 +63,15 @@ extern d_iov_t ds_pool_prop_ec_cell_sz;		/* uint64_t */
 extern d_iov_t ds_pool_prop_redun_fac;		/* uint64_t */
 extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
 extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
-extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_attr_user;		/* pool user attribute KVS */
 extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
 extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
+extern d_iov_t ds_pool_prop_scrub_sched;	/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_thresh;	/* uint64_t */
+extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -80,6 +84,14 @@ struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
 	char		ph_machine[MAXHOSTNAMELEN+1];
+	size_t		ph_cred_len;
+	char		ph_cred[];
+};
+
+/* old format (<= version 2.0) */
+struct pool_hdl_v0 {
+	uint64_t	ph_flags;
+	uint64_t	ph_sec_capas;
 };
 
 /*

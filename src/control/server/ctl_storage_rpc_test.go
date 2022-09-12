@@ -190,30 +190,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scm get state failure": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{ctrlr},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
-				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-				GetStateErr:      errors.New("scm get state failed"),
-			},
-			expResp: &ctlpb.StorageScanResp{
-				Nvme: &ctlpb.ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrPB},
-					State:  new(ctlpb.ResponseState),
-				},
-				Scm: &ctlpb.ScanScmResp{
-					State: &ctlpb.ResponseState{
-						Error:  "scm get state failed",
-						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-					},
-				},
-			},
-		},
 		"all discover fail": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk scan failed"),
@@ -326,16 +302,40 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
+		"scan bdev; vmd enabled": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  &ctlpb.ScanScmReq{},
+				Nvme: &ctlpb.ScanNvmeReq{},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						&storage.NvmeController{PciAddr: "050505:01:00.0"},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						&ctlpb.NvmeController{PciAddr: "050505:01:00.0"},
+					},
+					State: new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					State: new(ctlpb.ResponseState),
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			tCfg := storage.NewTierConfig().
+			tierCfg := storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
 				WithBdevDeviceList(test.MockPCIAddr(0))
 
-			engineCfg := engine.MockConfig().WithStorage(tCfg)
+			engineCfg := engine.MockConfig().WithStorage(tierCfg)
 			engineCfgs := []*engine.Config{engineCfg}
 			if tc.multiEngine {
 				engineCfgs = append(engineCfgs, engineCfg)
@@ -522,7 +522,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
 			},
-			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -530,6 +529,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {},
 			},
@@ -1124,13 +1124,15 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 
 			var csbmbc *bdev.MockBackendConfig
 			if tc.csCtrlrs != nil {
+				log.Debugf("bdevs %v to be returned for control service scan", *tc.csCtrlrs)
 				csbmbc = &bdev.MockBackendConfig{
 					ScanRes: &storage.BdevScanResponse{Controllers: *tc.csCtrlrs},
 				}
 			}
 
 			var engineCfgs []*engine.Config
-			for _, sc := range tc.storageCfgs {
+			for i, sc := range tc.storageCfgs {
+				log.Debugf("storage cfg contains bdevs %v for engine %d", sc.Bdevs(), i)
 				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
@@ -1147,7 +1149,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			for idx, ec := range engineCfgs {
 				var ebmbc *bdev.MockBackendConfig
 				if tc.eCtrlrs != nil && len(tc.eCtrlrs) > idx {
-					log.Debugf("bdevs %v for engine %d", *tc.eCtrlrs[idx], idx)
+					log.Debugf("bdevs %v to be returned for engine %d scan",
+						*tc.eCtrlrs[idx], idx)
 					ebmbc = &bdev.MockBackendConfig{
 						ScanRes: &storage.BdevScanResponse{
 							Controllers: *tc.eCtrlrs[idx],
@@ -2778,7 +2781,7 @@ func TestServer_adjustScmSize(t *testing.T) {
 			},
 			output: ExpectedOutput{
 				availableBytes: []uint64{0},
-				message:        "WARNING: Adjusting available size to 0 Bytes of SCM device",
+				message:        "Adjusting available size to 0 Bytes of SCM device",
 			},
 		},
 	} {

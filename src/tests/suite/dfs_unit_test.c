@@ -1221,6 +1221,13 @@ dfs_test_chown(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &obj, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_gid, getegid());
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
 		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
@@ -1358,7 +1365,7 @@ dfs_test_mtime(void **state)
 	d_iov_t			iov;
 	char			buf[64];
 	struct stat		stbuf;
-	struct timespec		prev_ts;
+	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
 	int			rc;
 
@@ -1374,6 +1381,10 @@ dfs_test_mtime(void **state)
 	assert_int_equal(stbuf.st_size, 0);
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/** store the first modification timestamp (at creation time) */
+	first_ts.tv_sec = prev_ts.tv_sec;
+	first_ts.tv_nsec = prev_ts.tv_nsec;
 
 	d_iov_set(&iov, buf, 64);
 	sgl.sg_nr = 1;
@@ -1401,13 +1412,104 @@ dfs_test_mtime(void **state)
 	assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 
-	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
+	/** reset the mtime on the file to the first timestamp */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = first_ts.tv_sec;
+	stbuf.st_mtim.tv_nsec = first_ts.tv_nsec;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 
+	/** verify mtime is now the same as the one we just set */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
+	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+
+	/** truncate the file */
+	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/** set size on file with dfs_osetattr and stat at same time */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1024;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 1024);
+	/** check the mtime was updated with the setattr */
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+
+	struct tm	tm = {0};
+	time_t		ts;
+	char		*p;
+	struct tm       *timeptr;
+	char		time_str[64];
+
+	/** set the mtime to 2020 */
+	p = strptime("2020-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/** verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("2020", time_str, 4) == 0);
+
+	/** set the mtime to 1900 */
+	memset(&tm, 0, sizeof(struct tm));
+	p = strptime("1900-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/* verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("1900", time_str, 4) == 0);
+
+	/** set the mtime to 2999 */
+	memset(&tm, 0, sizeof(struct tm));
+	p = strptime("2999-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/* verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("2999", time_str, 4) == 0);
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
@@ -1695,7 +1797,8 @@ dfs_setup(void **state)
 	int		rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		return rc;
 
 	arg = *state;
 

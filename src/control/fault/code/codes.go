@@ -74,9 +74,9 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
-	ScmNotInterleaved
 	ScmNoModules
-	ScmNamespacesNrMismatch
+	ScmBadRegion
+	ScmInvalidPMem
 )
 
 // Bdev fault codes
@@ -90,6 +90,9 @@ const (
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
+	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
@@ -132,6 +135,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerPoolHasContainers
 )
 
 // server config fault codes
@@ -164,6 +168,7 @@ const (
 	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
+	ServerConfigVMDSettingDuplicate
 )
 
 // SPDK library bindings codes

@@ -278,8 +278,14 @@ extern "C" {
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
 	       No service available)					\
+	/** The TX ID may be reused. */					\
+	ACTION(DER_TX_ID_REUSED,	(DER_ERR_DAOS_BASE + 40),	\
+	       TX ID may be reused)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
+	       update again)						\
 	/** Division by zero. */					\
-	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 40),	\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 42),	\
 	       Division by zero)					\
 
 /** Defines the gurt error codes */

@@ -280,7 +280,7 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 				scmNamespace.Mount.GetPath(), humanize.Bytes(mdBytes), mdBytes)
 			scmNamespace.Mount.AvailBytes -= mdBytes
 		} else {
-			c.log.Infof("WARNING: Adjusting available size to 0 Bytes of SCM device %q: "+
+			c.log.Noticef("Adjusting available size to 0 Bytes of SCM device %q: "+
 				"old available size %s (%d Bytes), metadata size %s (%d Bytes)",
 				scmNamespace.Mount.GetPath(),
 				humanize.Bytes(availBytes), availBytes,
@@ -453,7 +453,6 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 }
 
 // StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
-//
 //
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {

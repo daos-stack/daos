@@ -209,7 +209,34 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
+		daos_prop_t	*redun_lvl_prop = NULL;
+		daos_prop_t	*merged_props = NULL;
+
+		/* create container with redun_lvl on RANK */
+		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_REDUN_LVL) == NULL) {
+			redun_lvl_prop = daos_prop_alloc(1);
+			if (redun_lvl_prop == NULL) {
+				D_ERROR("failed to allocate prop\n");
+				return -DER_NOMEM;
+			}
+			redun_lvl_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+			redun_lvl_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+			if (co_prop) {
+				merged_props = daos_prop_merge(co_prop, redun_lvl_prop);
+				if (merged_props == NULL) {
+					D_ERROR("failed to merge cont_prop and redun_lvl_prop\n");
+					daos_prop_free(redun_lvl_prop);
+					return -DER_NOMEM;
+				}
+				co_prop = merged_props;
+			} else {
+				co_prop = redun_lvl_prop;
+			}
+		}
+
+		D_ASSERT(co_prop != NULL);
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
 			char cont_label[32];
 			static int cont_idx;
 
@@ -221,6 +248,9 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			print_message("setup: creating container\n");
 			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
 		}
+
+		daos_prop_free(redun_lvl_prop);
+		daos_prop_free(merged_props);
 
 		if (rc) {
 			print_message("daos_cont_create failed, rc: %d\n", rc);
@@ -1165,11 +1195,12 @@ get_server_config(char *host, char *server_config_file)
 }
 
 int verify_server_log_mask(char *host, char *server_config_file,
-			   char *log_mask){
+			   char *log_mask) {
 	char	command[256];
 	size_t	len = 0;
 	size_t	read;
 	char	*line = NULL;
+	int	rc = 0;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s cat %s", host, server_config_file);
@@ -1185,14 +1216,17 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				print_message(
 					"Expected log_mask = %s, Found %s\n ",
 					log_mask, line);
-				return -DER_INVAL;
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
+
+		D_FREE(line);
 	}
 
+out:
 	pclose(fp);
-	free(line);
-	return 0;
+	D_FREE(line);
+	return rc;
 }
 
 int get_log_file(char *host, char *server_config_file,
@@ -1244,10 +1278,11 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		snprintf(command, sizeof(command),
 			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
 		fp = popen(command, "r");
-		while ((read = getline(&line, &len, fp)) != -1) {
+		while (fp && (read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
 					      state, pch);
+				pclose(fp);
 				goto out;
 			}
 		}
@@ -1255,12 +1290,13 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 
 		if (fp != NULL)
 			pclose(fp);
-		free(line);
 	}
 
+	D_FREE(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
+	D_FREE(line);
 	D_FREE(tmp);
 	return 0;
 }

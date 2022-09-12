@@ -11,12 +11,17 @@
 
 #if HAVE_STDATOMIC
 
+#ifndef __cplusplus
 #include <stdatomic.h>
 
 #ifdef __INTEL_COMPILER
 #define ATOMIC volatile
 #else
 #define ATOMIC _Atomic
+#endif
+
+#else
+#define ATOMIC
 #endif
 
 /* stdatomic interface for compare_and_exchange doesn't quite align */
