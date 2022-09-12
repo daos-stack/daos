@@ -277,9 +277,13 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
-	vmds, err := mapVMDToBackingDevs(discovered)
-	if err != nil {
-		return nil, err
+	var vmds map[string]storage.NvmeControllers
+	if vmdEnabled {
+		vmdMap, err := mapVMDToBackingDevs(discovered)
+		if err != nil {
+			return nil, err
+		}
+		vmds = vmdMap
 	}
 
 	for _, want := range reqDevs.Addresses() {

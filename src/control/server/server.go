@@ -368,14 +368,16 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return nil
 	}
 
+	nrEngineBdevsIdx := -1
+	nrEngineBdevs := -1
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
-			return errors.Wrap(err, "setting engine storage bdev cache")
+		if err := setEngineBdevs(engine, nvmeScanResp, &nrEngineBdevsIdx, &nrEngineBdevs); err != nil {
+			return errors.Wrap(err, "setting engine bdevs")
 		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)

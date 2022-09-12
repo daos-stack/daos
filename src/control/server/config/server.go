@@ -615,7 +615,11 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenBdevSet[dev] = idx
 		}
 		if seenBdevCount != -1 && bdevCount != seenBdevCount {
-			return FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			// Log error but don't fail in order to be lenient with unbalanced device
+			// counts in particular cases e.g. using different capacity SSDs or VMDs
+			// with different number of backing devices.
+			err := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(err.Error())
 		}
 		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
 			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,
