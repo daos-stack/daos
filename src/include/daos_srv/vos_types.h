@@ -288,6 +288,8 @@ enum {
 enum {
 	/** Aggregation optimization is enabled for this pool */
 	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
+	/** Pool check is supported for this pool */
+	VOS_POOL_FEAT_CHK = (1ULL << 1),
 };
 
 /** Mask for any conditionals passed to to the fetch */
