@@ -4210,7 +4210,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	daos_obj_id_t		oid;
 	daos_oclass_id_t        cid;
 	struct daos_oclass_attr	*attr;
-	char			name[10];
+	char			name[MAX_OBJ_CLASS_NAME_LEN];
 	int			rc;
 
 	oid.hi = 1;
@@ -4259,7 +4259,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	/** need an easier way to determine grp nr. for now use fit for GX */
 	rc = compare_oclass(coh, oid, ecid);
 	if (rc) {
-		char ename[10];
+		char ename[MAX_OBJ_CLASS_NAME_LEN];
 
 		daos_oclass_id2name(ecid, ename);
 		fail_msg("Mismatch oclass %s vs %s\n", name, ename);
@@ -4916,7 +4916,7 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
-	char oclass[16] = {0};
+	char oclass[MAX_OBJ_CLASS_NAME_LEN + 1] = {0};
 	char buf[32];
 
 	par_barrier(PAR_COMM_WORLD);
