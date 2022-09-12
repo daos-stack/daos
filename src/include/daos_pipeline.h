@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,7 +125,7 @@ typedef struct {
 	 *       *chained aggregations are actually done in parallel. For
 	 *        example, the following pipeline:
 	 *            (condition) --> (aggregation1) --> (aggregation2)
-	 *        is actually exectuted as:
+	 *        is actually executed as:
 	 *                          -> (aggregation1)
 	 *            (condition) -|
 	 *                          -> (aggregation2)
