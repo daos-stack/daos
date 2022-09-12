@@ -37,35 +37,35 @@ typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
 
 /* --- enums --- */
 
-typedef enum _Ctl__DevManageReq__Action {
-  CTL__DEV_MANAGE_REQ__ACTION__GET = 0,
-  CTL__DEV_MANAGE_REQ__ACTION__SET = 1,
-  CTL__DEV_MANAGE_REQ__ACTION__RESET = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__DEV_MANAGE_REQ__ACTION)
-} Ctl__DevManageReq__Action;
 typedef enum _Ctl__VmdLedState {
   /*
    * Equivalent to SPDK_VMD_LED_STATE_OFF
    */
   CTL__VMD_LED_STATE__OFF = 0,
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY
+   * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
    */
   CTL__VMD_LED_STATE__QUICK_BLINK = 1,
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_FAULT
+   * Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
    */
   CTL__VMD_LED_STATE__ON = 2,
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_REBUILD
+   * Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
    */
   CTL__VMD_LED_STATE__SLOW_BLINK = 3,
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN
+   * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
    */
   CTL__VMD_LED_STATE__NA = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__VMD_LED_STATE)
 } Ctl__VmdLedState;
+typedef enum _Ctl__VmdLedAction {
+  CTL__VMD_LED_ACTION__GET = 0,
+  CTL__VMD_LED_ACTION__SET = 1,
+  CTL__VMD_LED_ACTION__RESET = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__VMD_LED_ACTION)
+} Ctl__VmdLedAction;
 
 /* --- messages --- */
 
@@ -282,12 +282,12 @@ struct  _Ctl__DevManageReq
   char **tr_addrs;
   size_t n_dev_uuids;
   char **dev_uuids;
-  Ctl__DevManageReq__Action led_action;
+  Ctl__VmdLedAction led_action;
   Ctl__VmdLedState led_state;
 };
 #define CTL__DEV_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , 0,NULL, 0,NULL, CTL__DEV_MANAGE_REQ__ACTION__GET, CTL__VMD_LED_STATE__OFF }
+    , 0,NULL, 0,NULL, CTL__VMD_LED_ACTION__GET, CTL__VMD_LED_STATE__OFF }
 
 
 struct  _Ctl__DevManageResp__Result
@@ -819,6 +819,7 @@ typedef void (*Ctl__SmdQueryResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCEnumDescriptor    ctl__vmd_led_state__descriptor;
+extern const ProtobufCEnumDescriptor    ctl__vmd_led_action__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_device__descriptor;
@@ -828,7 +829,6 @@ extern const ProtobufCMessageDescriptor ctl__smd_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor;
-extern const ProtobufCEnumDescriptor    ctl__dev_manage_req__action__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__result__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor;

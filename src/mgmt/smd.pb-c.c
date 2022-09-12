@@ -1550,36 +1550,6 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue ctl__dev_manage_req__action__enum_values_by_number[3] =
-{
-  { "GET", "CTL__DEV_MANAGE_REQ__ACTION__GET", 0 },
-  { "SET", "CTL__DEV_MANAGE_REQ__ACTION__SET", 1 },
-  { "RESET", "CTL__DEV_MANAGE_REQ__ACTION__RESET", 2 },
-};
-static const ProtobufCIntRange ctl__dev_manage_req__action__value_ranges[] = {
-{0, 0},{0, 3}
-};
-static const ProtobufCEnumValueIndex ctl__dev_manage_req__action__enum_values_by_name[3] =
-{
-  { "GET", 0 },
-  { "RESET", 2 },
-  { "SET", 1 },
-};
-const ProtobufCEnumDescriptor ctl__dev_manage_req__action__descriptor =
-{
-  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "ctl.DevManageReq.Action",
-  "Action",
-  "Ctl__DevManageReq__Action",
-  "ctl",
-  3,
-  ctl__dev_manage_req__action__enum_values_by_number,
-  3,
-  ctl__dev_manage_req__action__enum_values_by_name,
-  1,
-  ctl__dev_manage_req__action__value_ranges,
-  NULL,NULL,NULL,NULL   /* reserved[1234] */
-};
 static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] =
 {
   {
@@ -1613,7 +1583,7 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevManageReq, led_action),
-    &ctl__dev_manage_req__action__descriptor,
+    &ctl__vmd_led_action__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -2344,5 +2314,35 @@ const ProtobufCEnumDescriptor ctl__vmd_led_state__descriptor =
   ctl__vmd_led_state__enum_values_by_name,
   1,
   ctl__vmd_led_state__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
+static const ProtobufCEnumValue ctl__vmd_led_action__enum_values_by_number[3] =
+{
+  { "GET", "CTL__VMD_LED_ACTION__GET", 0 },
+  { "SET", "CTL__VMD_LED_ACTION__SET", 1 },
+  { "RESET", "CTL__VMD_LED_ACTION__RESET", 2 },
+};
+static const ProtobufCIntRange ctl__vmd_led_action__value_ranges[] = {
+{0, 0},{0, 3}
+};
+static const ProtobufCEnumValueIndex ctl__vmd_led_action__enum_values_by_name[3] =
+{
+  { "GET", 0 },
+  { "RESET", 2 },
+  { "SET", 1 },
+};
+const ProtobufCEnumDescriptor ctl__vmd_led_action__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "ctl.VmdLedAction",
+  "VmdLedAction",
+  "Ctl__VmdLedAction",
+  "ctl",
+  3,
+  ctl__vmd_led_action__enum_values_by_number,
+  3,
+  ctl__vmd_led_action__enum_values_by_name,
+  1,
+  ctl__vmd_led_action__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

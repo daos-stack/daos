@@ -14,34 +14,23 @@
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 
-static const char *g_led_actions[] = {
-	[DAOS_LED_ACT_GET]		= "get",
-	[DAOS_LED_ACT_SET]		= "set",
-	[DAOS_LED_ACT_RESET]		= "reset",
-};
-
-static const char *g_led_states[] = {
-	[DAOS_LED_ST_OFF]		= "off",
-	[DAOS_LED_ST_IDENTIFY]	= "identify",
-	[DAOS_LED_ST_FAULT]		= "fault",
-	[DAOS_LED_ST_REBUILD]	= "rebuild",
-	[DAOS_LED_ST_UNKNOWN]	= "unknown",
-};
+#define LED_STATE_NAME(s) (ctl__vmd_led_state__descriptor.values[s].name)
+#define LED_ACTION_NAME(a) (ctl__vmd_led_action__descriptor.values[a].name)
 
 struct led_opts {
-	struct spdk_pci_addr		pci_addr;
-	bool				all_devices;
-	bool				finished;
-	int				action;
-	int				led_state;
-	int				status;
+	struct spdk_pci_addr	pci_addr;
+	bool			all_devices;
+	bool			finished;
+	Ctl__VmdLedAction	action;
+	Ctl__VmdLedState	led_state;
+	int			status;
 };
 
 static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore	*bbs;
-	int			 state;
+	Ctl__VmdLedState	 led_state;
 	int			 rc;
 
 	D_ASSERT(d_bdev);
@@ -65,8 +54,9 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	state = DAOS_LED_ST_OFF;
-	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, DAOS_LED_ACT_SET, &state);
+	led_state = CTL__VMD_LED_STATE__OFF;
+	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, CTL__VMD_LED_ACTION__SET,
+			    &led_state);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
 			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
@@ -735,28 +725,28 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	}
 
 	D_DEBUG(DB_MGMT, "led on dev %s has state: %s (action: %s, new state: %s)\n", addr_buf,
-		g_led_states[cur_led_state], g_led_actions[opts->action],
-		g_led_states[opts->led_state]);
+		LED_STATE_NAME(cur_led_state), LED_ACTION_NAME(opts->action),
+		LED_STATE_NAME(opts->led_state));
 
 	switch (opts->action) {
-	case DAOS_LED_ACT_GET:
+	case CTL__VMD_LED_ACTION__GET:
 		/* Return early with current device state set */
 		opts->led_state = cur_led_state;
 		return;
-	case DAOS_LED_ACT_SET:
+	case CTL__VMD_LED_ACTION__SET:
 		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
-			g_led_states[opts->led_state]);
+			LED_STATE_NAME(opts->led_state));
 		break;
-	case DAOS_LED_ACT_RESET:
+	case CTL__VMD_LED_ACTION__RESET:
 		/* If the current state of a device is FAULTY we do not want to reset */
-		if (cur_led_state == DAOS_LED_ST_FAULT) {
+		if (cur_led_state == (enum spdk_vmd_led_state)CTL__VMD_LED_STATE__ON) {
 			D_DEBUG(DB_MGMT, "ignoring LED reset on %s as state is %s\n",
-				addr_buf, g_led_states[cur_led_state]);
+				addr_buf, LED_STATE_NAME(cur_led_state));
 			opts->led_state = cur_led_state;
 			return;
 		}
 		D_DEBUG(DB_MGMT, "Resetting VMD device %s LED state to %s\n", addr_buf,
-			g_led_states[opts->led_state]);
+			LED_STATE_NAME(opts->led_state));
 		break;
 	default:
 		D_ERROR("Unrecognized LED action requested\n");
@@ -764,9 +754,9 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	if (cur_led_state == opts->led_state) {
+	if (cur_led_state == (enum spdk_vmd_led_state)opts->led_state) {
 		D_DEBUG(DB_MGMT, "VMD device %s LED state already in state %s\n", addr_buf,
-			g_led_states[opts->led_state]);
+			LED_STATE_NAME(opts->led_state));
 		return;
 	}
 
@@ -788,16 +778,16 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	}
 
 	/* Verify the correct state is set */
-	if (cur_led_state != opts->led_state) {
+	if (cur_led_state != (enum spdk_vmd_led_state)opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
-			g_led_states[opts->led_state], g_led_states[cur_led_state]);
+			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(cur_led_state));
 		opts->status = -DER_INVAL;
 	}
 }
 
 static int
-led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, int action, int *state)
-{
+led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
+	   Ctl__VmdLedAction action, Ctl__VmdLedState *state) {
 	struct led_opts		opts = { 0 };
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -810,29 +800,28 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, int ac
 	/* Init context to be used by led_device_action() */
 	opts.all_devices = false;
 	opts.finished = false;
-	opts.led_state = DAOS_LED_ST_UNKNOWN;
+	opts.led_state = CTL__VMD_LED_STATE__NA;
 	opts.status = 0;
 	opts.pci_addr = pci_addr;
 
-	opts.action = action;
+	/* Validate action value. */
 	switch (action) {
-	case DAOS_LED_ACT_RESET:
-		break;
-	case DAOS_LED_ACT_GET:
-		break;
-	case DAOS_LED_ACT_SET:
+	case CTL__VMD_LED_ACTION__SET:
 		opts.led_state = *state;
 		break;
+	case CTL__VMD_LED_ACTION__RESET:
+	case CTL__VMD_LED_ACTION__GET:
 	default:
-		D_ERROR("invalid action supplied\n");
+		D_ERROR("invalid action supplied: %d\n", action);
 		return -DER_INVAL;
 	}
+	opts.action = action;
 
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		D_ERROR("LED %s failed (targeted state: %s): %s\n", g_led_actions[action],
-			g_led_states[*state], spdk_strerror(opts.status));
+		D_ERROR("LED %s failed (targeted state: %s): %s\n", LED_ACTION_NAME(action),
+			LED_STATE_NAME(*state), spdk_strerror(opts.status));
 		return opts.status;
 	}
 	if (!opts.all_devices && !opts.finished) {
@@ -879,7 +868,8 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 }
 
 int
-bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, int action, int *state)
+bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, Ctl__VmdLedAction action,
+	       Ctl__VmdLedState *state)
 {
 	struct spdk_pci_addr	pci_addr;
 	int			rc;

@@ -2416,7 +2416,7 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		uuid_clear(dev_uuid); /* need to set uuid = NULL */
 	}
 
-	rc = ds_mgmt_dev_manage_led(dev_uuid, req.led_state, resp);
+	rc = ds_mgmt_dev_manage_led(dev_uuid, req.led_action, req.led_state, resp);
 	if (rc != 0)
 		D_ERROR("Failed to get LED state on device:%s\n",
 			req->dev_uuid);

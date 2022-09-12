@@ -497,8 +497,8 @@ out:
 
 struct bio_led_manage_info {
 	uuid_t		 	 dev_uuid;
-	enum led_action	 	 action;
-	enum spdk_vmd_led_state	*state;
+	Ctl__VmdLedAction	 action;
+	Ctl__VmdLedState	*state;
 };
 
 static int
@@ -560,7 +560,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	struct smd_dev_info		*dev_info;
 	ABT_thread			 thread;
 	char				*state_str;
-	int				 led_state;
+	Ctl__VmdLedState		 led_state;
 	int				 tgt_id;
 	int				 buflen;
 	int				 rc = 0;
@@ -609,8 +609,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	ABT_thread_free(&thread);
 
 	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = LED_ACTION_SET;
-	led_state = SPDK_VMD_LED_STATE_FAULT;
+	led_info.action = CTL__VMD_LED_ACTION__SET;
+	led_state = CTL__VMD_LED_STATE__ON;
 	led_info.state = &led_state;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
@@ -632,24 +632,13 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
-	state_str = DAOS_LED_STATE_FAULT;
-	buflen = strlen(state_str) + 1;
-	D_ALLOC(resp->led_state, buflen);
-	if (resp->led_state == NULL) {
-		D_ERROR("Failed to allocate led state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	strncpy(resp->led_state, state_str, buflen);
-
+	resp->led_state = led_state;
 out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
 			D_FREE(resp->dev_state);
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
@@ -658,12 +647,10 @@ out:
 }
 
 int
-ds_mgmt_dev_manage_led(enum led_action act, uuid_t dev_uuid, enum spdk_vmd_led_state led_state,
-		       Ctl__DevManageLedResp *resp)
+ds_mgmt_dev_manage_led(enum Ctl__VmdLedAction led_action, uuid_t dev_uuid,
+		       enum Ctl__VmdLedState led_state, Ctl__DevManageLedResp *resp)
 {
 	struct bio_led_manage_info	 led_info = { 0 };
-	char				*state_str;
-	int				 buflen;
 	int				 rc = 0;
 
 	if (uuid_is_null(dev_uuid))
@@ -680,7 +667,7 @@ ds_mgmt_dev_manage_led(enum led_action act, uuid_t dev_uuid, enum spdk_vmd_led_s
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
 	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = req.led_action;
+	led_info.action = led_action;
 	led_info.state = &led_state;
 
 	/* Manage the VMD LED state on init xstream */
@@ -690,9 +677,9 @@ ds_mgmt_dev_manage_led(enum led_action act, uuid_t dev_uuid, enum spdk_vmd_led_s
 	}
 
 	if (rc == -DER_NOSYS)
-		resp->state = (int32_t)SPDK_VMD_LED_STATE_UNKNOWN;
+		resp->state = CTL__VMD_LED_STATE__NA
 	else
-		resp->state = (int32_t)led_state;
+		resp->state = (Ctl__VmdLedState)led_state;
 
 out:
 

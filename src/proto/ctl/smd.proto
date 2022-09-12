@@ -80,6 +80,12 @@ enum VmdLedState {
 	NA = 4;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
 }
 
+enum VmdLedAction {
+	GET = 0;
+	SET = 1;
+	RESET = 2;
+}
+
 message SmdDevice {
 	string uuid = 1; // UUID of blobstore
 	repeated int32 tgt_ids = 2; // VOS target IDs
@@ -110,12 +116,7 @@ message SmdPoolResp {
 message DevManageReq {
 	repeated string tr_addrs = 1;
 	repeated string dev_uuids = 2;
-	enum Action {
-		GET = 0;
-		SET = 1;
-		RESET = 2;
-	}
-	Action led_action = 3;
+	VmdLedAction led_action = 3;
 	VmdLedState led_state = 4; }
 
 message DevManageResp {

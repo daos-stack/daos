@@ -15,6 +15,8 @@
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
+#include "smd.pb-c.h"
+
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
@@ -596,8 +598,8 @@ int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
-int bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, int led_action,
-		   int *led_state);
+int bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, Ctl__VmdLedAction action,
+		   Ctl__VmdLedState *state);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */

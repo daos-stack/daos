@@ -278,15 +278,15 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 
 	switch {
 	case req.GetLed:
-		dreq.LedAction = ctlpb.DevManageReq_GET
+		dreq.LedAction = ctlpb.VmdLedAction_GET
 	case req.SetFaulty:
-		// LED action and target state will be populated in handler.
+		// LED action and target state will be populated in dRPC handler.
 		meth = drpc.MethodSetFaultyState
 	case req.Identify:
 		dreq.LedState = ctlpb.VmdLedState_QUICK_BLINK
-		dreq.LedAction = ctlpb.DevManageReq_SET
+		dreq.LedAction = ctlpb.VmdLedAction_SET
 	case req.ResetLed:
-		dreq.LedAction = ctlpb.DevManageReq_RESET
+		dreq.LedAction = ctlpb.VmdLedAction_RESET
 	default:
 		return nil, errors.New("smd manage called without modifier set in request")
 	}
