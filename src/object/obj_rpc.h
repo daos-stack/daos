@@ -47,7 +47,7 @@
 
 #define OBJ_PROTO_CLI_RPC_LIST(ver)					\
 	X(DAOS_OBJ_RPC_UPDATE,						\
-		0, &CQF_obj_rw,						\
+		0, ver == 0 ? &CQF_obj_rw_20 : &CQF_obj_rw,		\
 		ds_obj_rw_handler, NULL, "update")			\
 	X(DAOS_OBJ_RPC_FETCH,						\
 		0, &CQF_obj_rw,						\
@@ -65,13 +65,13 @@
 		0, &CQF_obj_key_enum,					\
 		ds_obj_enum_handler, NULL, "obj_enum")			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
-		0, &CQF_obj_punch,					\
+		0, ver == 0 ? &CQF_obj_punch_20 : &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "obj_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 0 ? &CQF_obj_punch_20 : &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "dkey_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 0 ? &CQF_obj_punch_20 : &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 	  0, ver == 0 ? &CQF_obj_query_key_0 : &CQF_obj_query_key_1,	\
@@ -102,7 +102,7 @@
 		0, &CQF_obj_ec_rep,					\
 		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
-		0, &CQF_obj_cpd,					\
+		0, ver == 0 ? &CQF_obj_cpd_20 : &CQF_obj_cpd,		\
 		ds_obj_cpd_handler, NULL, "compound")
 
 /* Define for RPC enum population below */
@@ -183,7 +183,32 @@ enum obj_rpc_flags {
 };
 
 /* common for update/fetch */
-#define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
+#define DAOS_ISEQ_OBJ_RW_20	/* input fields for 2.0 or older */ \
+	((struct dtx_id)	(orw_dti)		CRT_RAW) \
+	((daos_unit_oid_t)	(orw_oid)		CRT_RAW) \
+	((uuid_t)		(orw_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
+	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
+	((uint64_t)		(orw_epoch)		CRT_VAR) \
+	((uint64_t)		(orw_epoch_first)	CRT_VAR) \
+	((uint64_t)		(orw_api_flags)		CRT_VAR) \
+	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
+	((uint32_t)		(orw_map_ver)		CRT_VAR) \
+	((uint32_t)		(orw_nr)		CRT_VAR) \
+	((uint32_t)		(orw_start_shard)	CRT_VAR) \
+	((uint32_t)		(orw_flags)		CRT_VAR) \
+	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((struct dcs_csum_info)	(orw_dkey_csum)		CRT_PTR) \
+	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR) \
+	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
+	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
+	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
+	((struct daos_shard_tgt_20) (orw_shard_tgts)	CRT_ARRAY) \
+	/* orw_tgt_idx and orw_tgt_max only for EC obj */	   \
+	((uint32_t)		(orw_tgt_idx)		CRT_VAR)   \
+	((uint32_t)		(orw_tgt_max)		CRT_VAR)
+
+#define DAOS_ISEQ_OBJ_RW	/* input fields for 2.2 or newer */ \
 	((struct dtx_id)	(orw_dti)		CRT_RAW) \
 	((daos_unit_oid_t)	(orw_oid)		CRT_RAW) \
 	((uuid_t)		(orw_pool_uuid)		CRT_VAR) \
@@ -220,6 +245,7 @@ enum obj_rpc_flags {
 	((struct daos_recx_ep_list)	(orw_rels)	CRT_ARRAY) \
 	((daos_iom_t)		(orw_maps)		CRT_ARRAY)
 
+CRT_RPC_DECLARE(obj_rw_20,	DAOS_ISEQ_OBJ_RW_20, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 /* object Enumerate in/out */
@@ -261,7 +287,23 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
-#define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
+#define DAOS_ISEQ_OBJ_PUNCH_20	/* input fields for 2.0 or older */ \
+	((struct dtx_id)	(opi_dti)		CRT_RAW) \
+	((uuid_t)		(opi_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
+	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
+	((daos_unit_oid_t)	(opi_oid)		CRT_RAW) \
+	((uint64_t)		(opi_epoch)		CRT_VAR) \
+	((uint64_t)		(opi_api_flags)		CRT_VAR) \
+	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
+	((uint32_t)		(opi_map_ver)		CRT_VAR) \
+	((uint32_t)		(opi_flags)		CRT_VAR) \
+	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
+	((d_iov_t)		(opi_dkeys)		CRT_ARRAY) \
+	((d_iov_t)		(opi_akeys)		CRT_ARRAY) \
+	((struct daos_shard_tgt_20) (opi_shard_tgts)	CRT_ARRAY)
+
+#define DAOS_ISEQ_OBJ_PUNCH	/* input fields for 2.0 or newer */ \
 	((struct dtx_id)	(opi_dti)		CRT_RAW) \
 	((uuid_t)		(opi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
@@ -281,6 +323,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((int32_t)		(opo_ret)		CRT_VAR) \
 	((uint32_t)		(opo_map_version)	CRT_VAR)
 
+CRT_RPC_DECLARE(obj_punch_20, DAOS_ISEQ_OBJ_PUNCH_20, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
 #define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
@@ -540,13 +583,43 @@ enum daos_cpd_sg_type {
 };
 
 /** Scatter/gather info for CPD RPC data structure. */
+
+/* For 2.0 or older */
+struct daos_cpd_sg_20 {
+	uint32_t	 dcs_type;
+	uint32_t	 dcs_nr;
+	void		*dcs_buf;
+};
+
+/* For 2.2 or newer */
 struct daos_cpd_sg {
 	uint32_t	 dcs_type;
 	uint32_t	 dcs_nr;
 	void		*dcs_buf;
 };
 
-#define DAOS_ISEQ_OBJ_CPD /* input fields */				    \
+D_CASSERT(sizeof(struct daos_cpd_sg_20) == sizeof(struct daos_cpd_sg));
+
+D_CASSERT(offsetof(struct daos_cpd_sg_20, dcs_type) == offsetof(struct daos_cpd_sg, dcs_type));
+D_CASSERT(offsetof(struct daos_cpd_sg_20, dcs_nr) == offsetof(struct daos_cpd_sg, dcs_nr));
+D_CASSERT(offsetof(struct daos_cpd_sg_20, dcs_buf) == offsetof(struct daos_cpd_sg, dcs_buf));
+
+#define DAOS_ISEQ_OBJ_CPD_20 /* input fields for 2.0 or older */	    \
+	((uuid_t)			(oci_pool_uuid)		CRT_VAR)    \
+	((uuid_t)			(oci_co_hdl)		CRT_VAR)    \
+	((uuid_t)			(oci_co_uuid)		CRT_VAR)    \
+	((uint32_t)			(oci_map_ver)		CRT_VAR)    \
+	((uint32_t)			(oci_flags)		CRT_VAR)    \
+	/* scatter array for daos_cpd_sub_head. */			    \
+	((struct daos_cpd_sg)		(oci_sub_heads)		CRT_ARRAY)  \
+	/* scatter array for daos_cpd_sub_req. */			    \
+	((struct daos_cpd_sg)		(oci_sub_reqs)		CRT_ARRAY)  \
+	/* scatter array for daos_cpd_disp_ent. */			    \
+	((struct daos_cpd_sg)		(oci_disp_ents)		CRT_ARRAY)  \
+	/* scatter array for daos_shard_tgt_20. */			    \
+	((struct daos_cpd_sg_20)	(oci_disp_tgts)		CRT_ARRAY)
+
+#define DAOS_ISEQ_OBJ_CPD /* input fields for 2.2 or newer */		    \
 	((uuid_t)			(oci_pool_uuid)		CRT_VAR)    \
 	((uuid_t)			(oci_co_hdl)		CRT_VAR)    \
 	((uuid_t)			(oci_co_uuid)		CRT_VAR)    \
@@ -587,6 +660,7 @@ struct daos_cpd_sg {
 	 * other transactions in the same CPD RPC.
 	 */
 
+CRT_RPC_DECLARE(obj_cpd_20, DAOS_ISEQ_OBJ_CPD_20, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DECLARE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 
 static inline int
