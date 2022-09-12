@@ -190,8 +190,8 @@ class DaosBuild(DfuseTestBase):
                                               timeout=timeout, expect_rc=0)
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
-            self.log.info('Ran in %02d mintutes %02d seconds (%02d%% of timeout)',
-                          minutes, seconds, elapsed / timeout * 60)
+            self.log.info('Completed in %d minutes %02d seconds (%d%% of timeout)',
+                          minutes, seconds, elapsed / timeout * 100)
             assert len(ret_code) == 1
 
             cmd_ret = ret_code[0]
