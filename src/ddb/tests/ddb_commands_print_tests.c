@@ -253,7 +253,7 @@ print_dtx_active(void **state)
 
 	ddb_print_dtx_active(&ctx, &entry);
 
-	assert_str("ID: 12345678.1234\n");
+	assert_str("ID: 12345678-9abc-0000-0000-000000000000.1234\n");
 	assert_str("Epoch: 99\n");
 	assert_str("Handle Time: 12345690\n");
 	assert_str("Grp Cnt: 3\n");
@@ -274,7 +274,7 @@ print_dtx_committed(void **state)
 
 	ddb_print_dtx_committed(&ctx, &entry);
 
-	assert_str("ID: 12345678.1234\n");
+	assert_str("ID: 12345678-9abc-0000-0000-000000000000.1234\n");
 	assert_str("Epoch: 1234\n");
 }
 

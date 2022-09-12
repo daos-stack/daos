@@ -26,6 +26,8 @@ enum ddb_cmd {
 	DDB_CMD_SMD_SYNC = 15,
 	DDB_CMD_DUMP_VEA = 16,
 	DDB_CMD_UPDATE_VEA = 17,
+	DDB_CMD_DTX_COMMIT = 18,
+	DDB_CMD_DTX_ABORT = 19,
 };
 
 /* option and argument structures for commands that need them */
@@ -80,6 +82,16 @@ struct update_vea_options {
 	char *blk_cnt;
 };
 
+struct dtx_commit_options {
+	char *path;
+	char *dtx_id;
+};
+
+struct dtx_abort_options {
+	char *path;
+	char *dtx_id;
+};
+
 struct ddb_cmd_info {
 	enum ddb_cmd dci_cmd;
 	union {
@@ -94,6 +106,8 @@ struct ddb_cmd_info {
 		struct dump_dtx_options dci_dump_dtx;
 		struct clear_cmt_dtx_options dci_clear_cmt_dtx;
 		struct update_vea_options dci_update_vea;
+		struct dtx_commit_options dci_dtx_commit;
+		struct dtx_abort_options dci_dtx_abort;
 	} dci_cmd_option;
 };
 
@@ -117,6 +131,9 @@ int ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt
 int ddb_run_smd_sync(struct ddb_ctx *ctx);
 int ddb_run_dump_vea(struct ddb_ctx *ctx);
 int ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt);
+int ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt);
+int ddb_run_dtx_abort(struct ddb_ctx *ctx, struct dtx_abort_options *opt);
+
 
 void ddb_program_help(struct ddb_ctx *ctx);
 void ddb_commands_help(struct ddb_ctx *ctx);

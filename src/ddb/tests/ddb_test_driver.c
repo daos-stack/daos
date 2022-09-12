@@ -433,18 +433,34 @@ dvt_dtx_end(struct dtx_handle *dth)
 	D_FREE(dth);
 }
 
+/* After called, there should be two dtx records. 1 in committed table and 1 in active table */
 void
 dvt_vos_insert_2_records_with_dtx(daos_handle_t coh)
 {
-	struct dtx_handle	*dth1;
-	struct dtx_handle	*dth2;
+	dvt_vos_insert_dtx_records(coh, 2, 1);
+}
+
+void
+dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr)
+{
+	struct dtx_handle	**dth;
 	const uint32_t		 recxs_nr = 1;
 	const uint32_t		 rec_size = 1;
 	daos_recx_t		 recxs[recxs_nr];
 	daos_iod_t		 iod = {0};
 	d_sg_list_t		 sgl = {0};
 	daos_epoch_t		 epoch = 1;
+	uint64_t		 dkey_hash = 0x123;
+	int			 i;
 
+	assert_true(committed_nr <= nr);
+	assert_true(nr <= ARRAY_SIZE(g_oids) && nr <= ARRAY_SIZE(g_dkeys));
+
+	D_ALLOC_ARRAY(dth, nr);
+	assert_non_null(dth);
+	memset(dth, 0, sizeof(*dth) * nr);
+
+	/* use the same data for each update */
 	d_sgl_init(&sgl, 1);
 
 	recxs[0].rx_idx = 0;
@@ -456,19 +472,27 @@ dvt_vos_insert_2_records_with_dtx(daos_handle_t coh)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	dvt_iov_alloc_str(&iod.iod_name, "akey");
 
-	dvt_dtx_begin_helper(coh, &g_oids[0], epoch++, 0x123, &dth1);
-	dvt_dtx_begin_helper(coh, &g_oids[0], epoch++, 0x124, &dth2);
-	assert_success(vos_obj_update_ex(coh, g_oids[0], epoch, 0, 0, &g_dkeys[0], 1, &iod,
-					 NULL, &sgl, dth1));
-	assert_success(vos_obj_update_ex(coh, g_oids[1], epoch, 0, 0, &g_dkeys[1], 1, &iod,
-					 NULL, &sgl, dth2));
-	/* Only commit 1 of the  transactions */
-	assert_int_equal(1, vos_dtx_commit(coh, &dth1->dth_xid, 1, NULL));
+	for (i = 0; i < nr; i++) {
+		dvt_dtx_begin_helper(coh, &g_oids[i], epoch++, dkey_hash++, &dth[i]);
+		assert_success(vos_obj_update_ex(coh, g_oids[i], epoch, 0, 0, &g_dkeys[i], 1, &iod,
+						 NULL, &sgl, dth[i]));
+	}
 
-	dvt_dtx_end(dth1);
-	dvt_dtx_end(dth2);
+	/* commit */
+	for (i = 0; i < committed_nr; i++)
+		assert_int_equal(1, vos_dtx_commit(coh, &dth[i]->dth_xid, 1, NULL));
+
+	/* end each dtx */
+	for (i = 0; i < nr; i++)
+		dvt_dtx_end(dth[i]);
+
+	/* Reindex the dtx tables */
+	vos_dtx_cache_reset(coh, true);
+
+	/* clean up */
 	daos_iov_free(&iod.iod_name);
 	d_sgl_fini(&sgl, false);
+	D_FREE(dth);
 }
 
 struct ddb_test_driver_arguments {

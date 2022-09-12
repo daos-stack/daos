@@ -21,7 +21,6 @@ ddb_run_help(struct ddb_ctx *ctx)
 	return 0;
 }
 
-
 int
 ddb_run_quit(struct ddb_ctx *ctx)
 {
@@ -372,7 +371,7 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 
 	if (both || opt->active) {
 		ddb_print(ctx, "Active Transactions:\n");
-		rc = dv_active_dtx(coh, active_dtx_cb, &args);
+		rc = dv_dtx_get_act_table(coh, active_dtx_cb, &args);
 		if (!SUCCESS(rc)) {
 			ddb_vtp_fini(&vtp);
 			return rc;
@@ -382,7 +381,7 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 	if (both || opt->committed) {
 		args.entry_count = 0;
 		ddb_print(ctx, "Committed Transactions:\n");
-		rc = dv_committed_dtx(coh, committed_cb, &args);
+		rc = dv_dtx_get_cmt_table(coh, committed_cb, &args);
 		if (!SUCCESS(rc)) {
 			ddb_vtp_fini(&vtp);
 			return rc;
@@ -580,7 +579,7 @@ ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt)
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
 
-	rc = dv_clear_committed_table(coh);
+	rc = dv_dtx_clear_cmt_table(coh);
 	if (rc < 0)
 		D_GOTO(done, rc);
 
@@ -744,5 +743,105 @@ ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
 	if (!SUCCESS(rc))
 		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
 
+	return rc;
+}
+
+/* Information used while modifying a dtx active entry */
+struct dtx_modify_args {
+	struct dv_tree_path_builder	 vtpb;
+	struct dtx_id			 dti;
+	daos_handle_t			 coh;
+};
+
+/* setup information needed for calling commit or abort active dtx entry */
+static int
+dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_modify_args *args)
+{
+	struct dv_tree_path	*vtp;
+	int			 rc;
+
+	rc = init_path(ctx->dc_poh, path, &args->vtpb);
+	if (!SUCCESS(rc))
+		D_GOTO(error, rc);
+	vtp = &args->vtpb.vtp_path;
+
+	vtp_print(ctx, vtp, true);
+
+	if (!dv_has_cont(vtp)) {
+		ddb_error(ctx, "Path to container is required\n");
+		D_GOTO(error, rc = -DER_INVAL);
+	}
+
+	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &args->coh);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Unable to open container: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(error, rc);
+	}
+
+	rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Invalid dtx_id: %s\n", dtx_id_str);
+		D_GOTO(error, rc);
+	}
+	return 0;
+
+error:
+	dv_cont_close(&args->coh);
+	ddb_vtp_fini(&args->vtpb);
+	return rc;
+}
+
+static void
+dtx_modify_fini(struct dtx_modify_args *args)
+{
+	dv_cont_close(&args->coh);
+	ddb_vtp_fini(&args->vtpb);
+}
+
+int
+ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt)
+{
+	struct dtx_modify_args	args = {0};
+	int			rc;
+
+	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
+	if (!SUCCESS(rc))
+		return rc;
+	/* Marking entries as committed returns the number of entries committed */
+	rc = dv_dtx_commit_active_entry(args.coh, &args.dti);
+	if (rc < 0) {
+		ddb_errorf(ctx, "Error marking entry as committed: "DF_RC"\n", DP_RC(rc));
+	} else if (rc > 0) {
+		ddb_print(ctx, "Entry marked as committed\n");
+		rc = 0;
+	} else {
+		ddb_print(ctx, "No entry found to mark as committed\n");
+	}
+
+	dtx_modify_fini(&args);
+
+	return rc;
+}
+
+int ddb_run_dtx_abort(struct ddb_ctx *ctx, struct dtx_abort_options *opt)
+{
+	struct dtx_modify_args	args = {0};
+	int			rc;
+
+	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
+	if (!SUCCESS(rc))
+		return rc;
+
+	rc = dv_dtx_abort_active_entry(args.coh, &args.dti);
+	if (SUCCESS(rc)) {
+		ddb_print(ctx, "Entry marked as aborted\n");
+	} else if (rc == -DER_NONEXIST) {
+		ddb_print(ctx, "No entry found to mark as aborted\n");
+		rc = 0;
+	} else {
+		ddb_errorf(ctx, "Error marking entry as aborted: "DF_RC"\n", DP_RC(rc));
+	}
+
+	dtx_modify_fini(&args);
 	return rc;
 }

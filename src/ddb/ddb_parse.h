@@ -56,4 +56,9 @@ static inline void ddb_vos_tree_path_setup(struct dv_tree_path_builder *vt_path)
 	vt_path->vtp_recx_idx = DDB_IDX_UNSET;
 }
 
+/* Parse a string into the parts of a dtx_id. See DF_DTIF for how the format of the dtx_id is
+ * expected to be.
+ */
+int ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
+
 #endif /** __DAOS_DDB_PARSE_H */

@@ -244,7 +244,38 @@ update_vea_options_parsing(void **state)
 	test_run_cmd(&info, "update_vea", "offset", "blk_cnt");
 	assert_non_null(options->offset);
 	assert_non_null(options->blk_cnt);
+}
 
+static void
+dtx_commit_options_parsing(void **state)
+{
+	struct ddb_cmd_info		 info = {0};
+	struct dtx_commit_options	*options = &info.dci_cmd_option.dci_dtx_commit;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dtx_commit", "path", "dtx_id", "extra"); /* too many argument */
+	test_run_inval_cmd("dtx_commit", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_commit", "path", "dtx_id");
+	assert_non_null(options->path);
+	assert_non_null(options->dtx_id);
+}
+
+static void
+dtx_abort_options_parsing(void **state)
+{
+	struct ddb_cmd_info		 info = {0};
+	struct dtx_abort_options	*options = &info.dci_cmd_option.dci_dtx_abort;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dtx_abort", "path", "dtx_id", "extra"); /* too many argument */
+	test_run_inval_cmd("dtx_abort", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "dtx_abort", "path", "dtx_id");
+	assert_non_null(options->path);
+	assert_non_null(options->dtx_id);
 }
 
 /*
@@ -268,6 +299,8 @@ ddb_cmd_options_tests_run()
 		TEST(dump_dtx_options_parsing),
 		TEST(clear_cmt_dtx_options_parsing),
 		TEST(update_vea_options_parsing),
+		TEST(dtx_commit_options_parsing),
+		TEST(dtx_abort_options_parsing),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,

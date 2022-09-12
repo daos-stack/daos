@@ -75,5 +75,6 @@ extern char dvt_fake_read_file_buf[64];
 size_t dvt_fake_read_file(const char *src_path, d_iov_t *contents);
 
 void dvt_vos_insert_2_records_with_dtx(daos_handle_t coh);
+void dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr);
 
 #endif /* DAOS_DDB_TEST_DRIVER_H */

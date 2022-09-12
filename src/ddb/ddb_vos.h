@@ -161,11 +161,13 @@ struct dv_dtx_active_entry {
 	daos_unit_oid_t ddtx_oid;
 };
 
-typedef int (*dv_committed_dtx_handler)(struct dv_dtx_committed_entry *entry, void *cb_arg);
-int dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *handler_arg);
-typedef int (*dv_active_dtx_handler)(struct dv_dtx_active_entry *entry, void *cb_arg);
-int dv_active_dtx(daos_handle_t coh, dv_active_dtx_handler handler_cb, void *handler_arg);
-int dv_clear_committed_table(daos_handle_t coh);
+typedef int (*dv_dtx_cmt_handler)(struct dv_dtx_committed_entry *entry, void *cb_arg);
+int dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *handler_arg);
+typedef int (*dv_dtx_act_handler)(struct dv_dtx_active_entry *entry, void *cb_arg);
+int dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void *handler_arg);
+int dv_dtx_clear_cmt_table(daos_handle_t coh);
+int dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti);
+int dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti);
 
 /* Sync the smd table with information saved in blobs */
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,

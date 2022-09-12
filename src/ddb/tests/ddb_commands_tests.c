@@ -309,6 +309,32 @@ clear_cmt_dtx_cmd_tests(void **state)
 	assert_success(ddb_run_clear_cmt_dtx(&g_ctx, &opt));
 }
 
+static void
+dtx_commit_entry_tests(void **state)
+{
+	struct dtx_commit_options opt = {0};
+
+	assert_invalid(ddb_run_dtx_commit(&g_ctx, &opt));
+	opt.path = "[0]/[0]";
+	assert_invalid(ddb_run_dtx_commit(&g_ctx, &opt));
+
+	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
+	assert_success(ddb_run_dtx_commit(&g_ctx, &opt));
+}
+
+static void
+dtx_abort_entry_tests(void **state)
+{
+	struct dtx_abort_options opt = {0};
+
+	assert_invalid(ddb_run_dtx_abort(&g_ctx, &opt));
+
+	opt.path = "[0]/[0]";
+	assert_invalid(ddb_run_dtx_abort(&g_ctx, &opt));
+	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
+	assert_success(ddb_run_dtx_abort(&g_ctx, &opt));
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -361,6 +387,8 @@ ddb_commands_tests_run()
 		TEST(rm_ilog_cmd_tests),
 		TEST(process_ilog_cmd_tests),
 		TEST(clear_cmt_dtx_cmd_tests),
+		TEST(dtx_commit_entry_tests),
+		TEST(dtx_abort_entry_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,

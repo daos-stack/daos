@@ -1147,12 +1147,12 @@ dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *
 }
 
 struct committed_dtx_cb_arg {
-	dv_committed_dtx_handler handler;
+	dv_dtx_cmt_handler handler;
 	void *handler_arg;
 };
 
 struct active_dtx_cb_arg {
-	dv_active_dtx_handler handler;
+	dv_dtx_act_handler handler;
 	void *handler_arg;
 };
 
@@ -1196,7 +1196,7 @@ active_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 }
 
 int
-dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *handler_arg)
+dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *handler_arg)
 {
 	struct vos_container		*cont;
 	int				 rc;
@@ -1227,7 +1227,7 @@ dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *h
 }
 
 int
-dv_active_dtx(daos_handle_t coh, dv_active_dtx_handler handler_cb, void *handler_arg)
+dv_dtx_get_act_table(daos_handle_t coh, dv_dtx_act_handler handler_cb, void *handler_arg)
 {
 	struct vos_container	*cont;
 	int			 rc;
@@ -1245,6 +1245,18 @@ dv_active_dtx(daos_handle_t coh, dv_active_dtx_handler handler_cb, void *handler
 			    active_dtx_cb, &cb_arg);
 
 	return rc;
+}
+
+int
+dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti)
+{
+	return vos_dtx_commit(coh, dti, 1, NULL);
+}
+
+int
+dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
+{
+	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX);
 }
 
 int
@@ -1529,7 +1541,7 @@ out:
 }
 
 int
-dv_clear_committed_table(daos_handle_t coh)
+dv_dtx_clear_cmt_table(daos_handle_t coh)
 {
 	uint32_t	delete_count = 0;
 	int		rc;

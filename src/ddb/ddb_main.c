@@ -132,6 +132,12 @@ run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 	case DDB_CMD_UPDATE_VEA:
 		rc = ddb_run_update_vea(ctx, &info.dci_cmd_option.dci_update_vea);
 		break;
+	case DDB_CMD_DTX_COMMIT:
+		rc = ddb_run_dtx_commit(ctx, &info.dci_cmd_option.dci_dtx_commit);
+		break;
+	case DDB_CMD_DTX_ABORT:
+		rc = ddb_run_dtx_abort(ctx, &info.dci_cmd_option.dci_dtx_abort);
+		break;
 	}
 done:
 	ddb_str2argv_free(&parse_args);
