@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -133,8 +132,8 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,offline_extend_with_csum
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=test_osa_offline_extend
         """
         self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
@@ -146,8 +145,8 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_without_csum
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=test_osa_offline_extend_without_checksum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -161,8 +160,8 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_multiple_pools
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=test_osa_offline_extend_multiple_pools
         """
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
@@ -175,15 +174,14 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_oclass
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=test_osa_offline_extend_oclass
         """
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.run_offline_extend_test(4, data=True,
                                      oclass=self.test_oclass)
 
-    @skipForTicket("DAOS-7195")
     def test_osa_offline_extend_during_aggregation(self):
         """Test ID: DAOS-6294
         Test Description: Extend rank while aggregation
@@ -191,8 +189,8 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,offline_extend_during_aggregation
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=test_osa_offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -207,8 +205,8 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_after_snapshot
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=otest_osa_offline_extend_after_snapshot
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot",
                                                   '/run/snapshot/*')

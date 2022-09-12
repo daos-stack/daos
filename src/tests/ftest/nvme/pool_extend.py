@@ -1,13 +1,11 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 import threading
 
-from apricot import skipForTicket
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 from dmg_utils import check_system_query_status
@@ -119,7 +117,6 @@ class NvmePoolExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195, DAOS-7955")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
@@ -127,6 +124,6 @@ class NvmePoolExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=nvme,checksum,nvme_osa
-        :avocado: tags=nvme_pool_extend
+        :avocado: tags=test_nvme_pool_extend
         """
         self.run_nvme_pool_extend(3)
