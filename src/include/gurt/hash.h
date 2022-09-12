@@ -24,7 +24,7 @@
 /**
  * Hash table keeps and prints extra debugging information
  */
-#define D_HASH_DEBUG 1
+#define D_HASH_DEBUG	0
 
 struct d_hash_table;
 

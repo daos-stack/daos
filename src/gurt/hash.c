@@ -120,7 +120,7 @@ d_hash_string_u32(const char *string, unsigned int len)
 	uint32_t result = 5381;
 	const unsigned char *p;
 
-	p = (const unsigned char *)string;
+	p = (const unsigned char *) string;
 
 	for (; len > 0; len--) {
 		result = (result << 5) + result + *p;
@@ -947,8 +947,6 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	uint32_t		 i;
 	int			 rc = 0;
 
-	d_hash_table_debug(htable);
-
 	for (i = 0; i < nr; i++) {
 		bucket = &htable->ht_buckets[i];
 		while (!d_list_empty(&bucket->hb_head)) {
@@ -1003,17 +1001,8 @@ void
 d_hash_table_debug(struct d_hash_table *htable)
 {
 #if D_HASH_DEBUG
-	uint32_t nr = 1U << htable->ht_bits;
-	uint32_t idx;
-
 	D_DEBUG(DB_TRACE, "max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
-
-	for (idx = 0; idx < nr; idx++)
-		if (htable->ht_buckets[idx].hb_dep > 0)
-			D_DEBUG(DB_TRACE, "Bucket: %d depth: %d\n", idx,
-				htable->ht_buckets[idx].hb_dep);
-
 #endif
 }
 
@@ -1185,6 +1174,7 @@ out:
 void
 d_hhash_destroy(struct d_hhash *hhash)
 {
+	d_hash_table_debug(&hhash->ch_htable);
 	d_hash_table_destroy_inplace(&hhash->ch_htable, true);
 	D_FREE(hhash);
 }
@@ -1451,6 +1441,7 @@ d_uhash_create(uint32_t feats, uint32_t bits, struct d_hash_table **htable_pp)
 void
 d_uhash_destroy(struct d_hash_table *htable)
 {
+	d_hash_table_debug(htable);
 	d_hash_table_destroy(htable, true);
 }
 
