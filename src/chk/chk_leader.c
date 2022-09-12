@@ -1697,6 +1697,25 @@ chk_leader_pool_mbs(struct chk_sched_args *csa)
 	return rc;
 }
 
+/*
+ * Whether need to stop current check instance or not.
+ *
+ * \return	1:	the check is completed.
+ * \return	0:	someone wants to stop the check.
+ * \return	-1:	continue the check.
+ */
+static inline int
+chk_leader_need_stop(struct chk_instance *ins)
+{
+	if (d_list_empty(&ins->ci_rank_list))
+		return 1;
+
+	if (!ins->ci_sched_running)
+		return 0;
+
+	return -1;
+}
+
 static void
 chk_leader_sched(void *args)
 {
@@ -1719,11 +1738,6 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
-	if (d_list_empty(&ins->ci_rank_list)) {
-		ABT_mutex_unlock(ins->ci_abt_mutex);
-		D_GOTO(out, rc = 1);
-	}
-
 	if (ins->ci_started) {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		goto handle;
@@ -1734,6 +1748,19 @@ again:
 	goto again;
 
 handle:
+	/*
+	 * For very race case, there may be no pools on check engines, so check engines
+	 * may complete check scan very quickly before leader sched here. But there are
+	 * still potential dangling pool entries on MS. Let's check it before complete.
+	 */
+	if (unlikely(d_list_empty(&ins->ci_rank_list))) {
+		rc = chk_leader_handle_pools_list(csa);
+		if (rc == 0)
+			rc = 1;
+
+		D_GOTO(out, bcast = false);
+	}
+
 	phase = chk_leader_find_slowest(ins);
 	if (phase != cbk->cb_phase) {
 		cbk->cb_phase = phase;
@@ -1744,6 +1771,10 @@ handle:
 		rc = chk_leader_handle_pools_list(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
+
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
 
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST;
@@ -1772,9 +1803,17 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		rc = chk_leader_handle_pools_svc(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
+
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
 
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
@@ -1803,20 +1842,21 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		rc = chk_leader_pool_mbs(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 	}
 
-	while (ins->ci_sched_running) {
+	while (1) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		dss_sleep(300);
-
-		/* Someone wants to stop the check. */
-		if (!ins->ci_sched_running)
-			D_GOTO(out, rc = 0);
-
-		if (d_list_empty(&ins->ci_rank_list))
-			D_GOTO(out, rc = 1);
 
 		/*
 		 * TBD: The leader may need to detect engines' status/phase actively, otherwise
