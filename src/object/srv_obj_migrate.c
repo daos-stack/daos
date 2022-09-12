@@ -1521,6 +1521,9 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 		D_GOTO(obj_close, rc);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
+		D_GOTO(obj_close, rc = -DER_INVAL);
+
 	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
 		rc = migrate_fetch_update_single(mrone, oh, cont);
 	else if (obj_shard_is_ec_parity(mrone->mo_oid, mrone->mo_dkey_hash,
@@ -2654,8 +2657,10 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
-	if (tls == NULL)
+	if (tls == NULL) {
+		D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 		return;
+	}
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
