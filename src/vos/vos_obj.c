@@ -2161,6 +2161,7 @@ vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			return sv_iter_corrupt(oiter);
 		if (iter->it_type == VOS_ITER_RECX)
 			return evt_iter_corrupt(oiter->it_hdl);
+		break;
 	default:
 		D_ASSERT(0);
 	}
