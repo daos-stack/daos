@@ -21,6 +21,10 @@ failed=0
 failures=()
 log_num=0
 
+if [ -z "$DAOS_BASE" ]; then
+    DAOS_BASE="."
+fi
+
 run_test()
 {
     local in="$*"

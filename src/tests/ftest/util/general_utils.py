@@ -529,7 +529,7 @@ def colate_results(command, results):
     res += "Results:\n"
     for result in results:
         res += "  %s: exit_status=%s, interrupted=%s:" % (
-               result["hosts"], result["exit_status"], result["interrupted"])
+            result["hosts"], result["exit_status"], result["interrupted"])
         for line in result["stdout"]:
             res += "    %s\n" % line
 
@@ -1525,6 +1525,22 @@ def set_avocado_config_value(section, key, value):
         settings.update_option(".".join([section, key]), value)
     else:
         settings.config.set(section, key, str(value))
+
+
+def nodeset_append_suffix(nodeset, suffix):
+    """Append a suffix to each element of a NodeSet/list.
+
+    Only appends if the element does not already end with the suffix.
+
+    Args:
+        nodeset (NodeSet/list): the NodeSet or list
+        suffix: the suffix to append
+
+    Returns:
+        NodeSet: a new NodeSet with the suffix
+    """
+    return NodeSet.fromlist(
+        map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,

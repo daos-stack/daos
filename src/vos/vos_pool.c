@@ -886,15 +886,45 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *
 	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats)
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 {
-	struct vos_pool	*pool;
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+	int                 rc = 0;
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
-	pool->vp_feats |= feats;
+	pool_df = pool->vp_pool_df;
+
+	if (version == pool_df->pd_version)
+		return 0;
+
+	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
+		  "Invalid pool upgrade version %d, current version is %d\n", version,
+		  pool_df->pd_version);
+
+	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(&pool->vp_umm, &pool_df->pd_version, sizeof(pool_df->pd_version));
+	if (rc != 0)
+		goto end;
+
+	pool_df->pd_version = version;
+
+end:
+	rc = umem_tx_end(&pool->vp_umm, rc);
+
+	if (rc != 0)
+		return rc;
+
+	if (version >= POOL_DF_AGG_OPT)
+		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+
+	return 0;
 }
 
 /**
