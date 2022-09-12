@@ -247,6 +247,7 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 		handles := info.handles[poolUUID].ToSlice()
 		req := &control.PoolEvictReq{ID: poolUUID, Handles: handles}
 		req.SetSystem(p.systemName)
+		req.SetAgentRequest()
 
 		err := control.PoolEvict(ctx, p.ctlInvoker, req)
 		if err != nil {

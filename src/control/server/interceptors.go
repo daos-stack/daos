@@ -145,7 +145,7 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	}
 
 	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
-	if err != nil || other.Version.IsZero() {
+	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
 			Version:   build.MustNewVersion(otherVersion),
@@ -153,7 +153,11 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 		return FaultIncompatibleComponents(self, other)
 	}
 
-	if err := build.CheckCompatibility(self, other); err != nil {
+	// Set per-release compatibility rules here.
+	releaseCompatRules := []*build.InteropRule{
+		build.Server22xAgent20x,
+	}
+	if err := build.CheckCompatibility(self, other, releaseCompatRules...); err != nil {
 		return FaultIncompatibleComponents(self, other)
 	}
 
