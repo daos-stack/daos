@@ -9,7 +9,6 @@
 #ifndef __GURT_ATOMIC_H__
 #define __GURT_ATOMIC_H__
 
-
 #ifndef __cplusplus
 #include <stdatomic.h>
 
