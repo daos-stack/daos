@@ -119,7 +119,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 240
+                build_time = 210
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
@@ -189,7 +189,9 @@ class DaosBuild(DfuseTestBase):
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
             elapsed = time.time() - start
-            self.log.info('Ran in %d seconds', elapsed)
+            (minutes, seconds) = divmod(elapsed, 60)
+            self.log.info('Ran in %02d mintutes %02d seconds (%02d%% of timeout)',
+                          minutes, seconds, elapsed / timeout * 60)
             assert len(ret_code) == 1
 
             cmd_ret = ret_code[0]
