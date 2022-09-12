@@ -217,6 +217,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		if (oh->doh_rd == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
+		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+
 		D_ALLOC_ARRAY(oh->doh_rd->drh_dre, READDIR_MAX_COUNT);
 		if (oh->doh_rd->drh_dre == NULL) {
 			D_FREE(oh->doh_rd);
