@@ -239,8 +239,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
+		D_FREE_NLF(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }

@@ -265,11 +265,26 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-#define D_FREE(ptr)							\
-	do {								\
-		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		d_free(ptr);						\
-		(ptr) = NULL;						\
+/* Free a pointer.  Always logs as this both records that the memory has been freed but also shows
+ * in the logs the code-paths that are taken where the free was called.
+ */
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                                \
+		d_free(ptr);                                                                       \
+		(ptr) = NULL;                                                                      \
+	} while (0)
+
+/* Free a pointer without logging NULL frees.  This should be used in cases where NULL is
+ * frequently freed and avoids spanning log files with hundreds of log lines.
+ */
+#define D_FREE_NLF(ptr)                                                                            \
+	do {                                                                                       \
+		if (ptr) {                                                                         \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                 \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)

@@ -828,8 +828,7 @@ rewait:
 	/** free up all buffers */
 	for (i = 0; i < MAX_INFLIGHT; i++) {
 		op = &kv_array[i];
-		if (op->buf)
-			D_FREE(op->buf);
+		D_FREE_NLF(op->buf);
 	}
 
 out:

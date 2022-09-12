@@ -229,7 +229,7 @@ class LogTest():
         """Save the location of a nill free call"""
         loc = '{}:{}'.format(line.filename, line.lineno)
 
-        self.nil_frees[loc] += 1
+        self.nil_frees[line] += 1
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
@@ -276,7 +276,9 @@ class LogTest():
         for (loc, count) in self.nil_frees.most_common(10):
             if count < 10:
                 break
-            print('Null was freed {} times at {}'.format(count, loc))
+            print('Null was freed {} times at {}:{}'.format(count, loc.filename, loc.lineno))
+            if count > 20:  # TODO, set this to 250.
+                show_line(loc, 'NORMAL', 'Free of NULL, Use D_FREE_NLF')
 
     def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""
