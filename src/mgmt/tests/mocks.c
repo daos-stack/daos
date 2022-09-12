@@ -538,26 +538,20 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 }
 
 int
-ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp)
+ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLedState led_state,
+		       Ctl__DevManageResp *resp)
 {
 	return 0;
 }
 
 int
-ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp)
 {
 	return 0;
 }
 
 int
-ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-		    Ctl__DevReplaceResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
+ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevReplaceResp *resp)
 {
 	return 0;
 }
@@ -577,17 +571,4 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 {
 	ds_mgmt_pool_upgrade_return = 0;
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
-}
-
-int
-ds_mgmt_dev_reset_led(uuid_t uuid, Ctl__DevResetLEDResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_get_led_state(uuid_t uuid, int *led_state,
-			  Ctl__DevGetLEDStateResp *resp)
-{
-	return 0;
 }

@@ -779,32 +779,18 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
 		    uuid_t new_dev_id);
 
 /*
- * Set the LED on a VMD device to new state.
+ * Manage the LED on a VMD device.
  *
- * \param xs            [IN]    xstream context
- * \param devid		[IN]	UUID of the VMD device
- * \param led_state	[IN]	State to set the LED to
- *				(ie identify, off, fault/on)
- * \param reset		[IN]	Reset flag indicates that the led_state
- * 				will be determined by the saved state in
- * 				bio_bdev (bb_led_state)
+ * \param xs            [IN]	xstream context
+ * \param dev_uuid	[IN]	UUID of the VMD device
+ * \param action	[IN]	Action to perform on the VMD device
+ * \param state		[IN]	Pointer to state to set the LED to (i.e. identify, off, fault/on).
+ * \param state		[OUT]	Pointer to state that shows resultant LED state after action.
  *
  * \return                      Zero on success, negative value on error
  */
-int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
-		      const char *led_state, bool reset);
-
-/*
- * Query the LED state on a VMD device.
- *
- * \param xs            [IN]    xstream context
- * \param devid		[IN]	UUID of the VMD device
- * \param led_state	[OUT]	Current state of the LED
- *				(ie identify, off, fault/on)
- *
- * \return                      Zero on success, negative value on error
- */
-int bio_get_led_state(struct bio_xs_context *xs, uuid_t devid, int *led_state);
+int bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, unsigned int action,
+		   unsigned int *state);
 
 /*
  * Allocate DMA buffer, the buffer could be from bulk cache if bulk context

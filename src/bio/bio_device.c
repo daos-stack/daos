@@ -30,7 +30,7 @@ static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore	*bbs;
-	Ctl__VmdLedState	 led_state;
+	unsigned int		 led_state = (unsigned int)CTL__VMD_LED_STATE__OFF;
 	int			 rc;
 
 	D_ASSERT(d_bdev);
@@ -54,8 +54,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	led_state = CTL__VMD_LED_STATE__OFF;
-	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, CTL__VMD_LED_ACTION__SET,
+	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, (unsigned int)CTL__VMD_LED_ACTION__SET,
 			    &led_state);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
@@ -868,8 +867,8 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 }
 
 int
-bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, Ctl__VmdLedAction action,
-	       Ctl__VmdLedState *state)
+bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, unsigned int action,
+	       unsigned int *state)
 {
 	struct spdk_pci_addr	pci_addr;
 	int			rc;
@@ -878,5 +877,5 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, Ctl__VmdLedActio
 	if (rc != 0)
 		return rc;
 
-	return led_manage(xs_ctxt, pci_addr, action, state);
+	return led_manage(xs_ctxt, pci_addr, (Ctl__VmdLedAction)action, (Ctl__VmdLedState *)state);
 }

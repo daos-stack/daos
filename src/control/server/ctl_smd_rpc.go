@@ -271,7 +271,7 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 
 	// TODO: Enable batching of requests for multiple devices.
 	dreq := &ctlpb.DevManageReq{
-		DevUuids: []string{req.Uuid},
+		DevUuid:  req.Uuid,
 		LedState: ctlpb.VmdLedState_NA,
 	}
 	meth := drpc.MethodLedManage
@@ -304,22 +304,14 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(daos.Status(dmr.Status), "%T failed", meth)
 	}
 
-	sqr := &ctlpb.SmdQueryResp{
+	return &ctlpb.SmdQueryResp{
 		Ranks: []*ctlpb.SmdQueryResp_RankResp{
 			{
 				Rank:    rank.Uint32(),
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{},
+				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{{Details: dmr.Device}},
 			},
 		},
-	}
-
-	for _, r := range dmr.Results {
-		sqr.Ranks[0].Devices = append(sqr.Ranks[0].Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-			Status: r.Status, Details: r.Device,
-		})
-	}
-
-	return sqr, nil
+	}, nil
 }
 
 func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {

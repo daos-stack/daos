@@ -91,14 +91,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Results: []*ctlpb.DevManageResp_Result{
-								{
-									Device: &ctlpb.SmdDevice{
-										Uuid:     test.MockUUID(),
-										DevState: devStateFaulty,
-										LedState: ledStateFault,
-									},
-								},
+							Device: &ctlpb.SmdDevice{
+								Uuid:     test.MockUUID(),
+								DevState: devStateFaulty,
+								LedState: ledStateFault,
 							},
 						},
 					},
@@ -149,14 +145,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Results: []*ctlpb.DevManageResp_Result{
-								{
-									Device: &ctlpb.SmdDevice{
-										Uuid:     test.MockUUID(),
-										DevState: devStateNormal,
-										LedState: ledStateIdentify,
-									},
-								},
+							Device: &ctlpb.SmdDevice{
+								Uuid:     test.MockUUID(),
+								DevState: devStateNormal,
+								LedState: ledStateIdentify,
 							},
 						},
 					},
@@ -186,14 +178,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Results: []*ctlpb.DevManageResp_Result{
-								{
-									Device: &ctlpb.SmdDevice{
-										Uuid:     test.MockUUID(),
-										DevState: devStateNormal,
-										LedState: ledStateIdentify,
-									},
-								},
+							Device: &ctlpb.SmdDevice{
+								Uuid:     test.MockUUID(),
+								DevState: devStateNormal,
+								LedState: ledStateIdentify,
 							},
 						},
 					},
@@ -223,14 +211,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevManageResp{
-							Results: []*ctlpb.DevManageResp_Result{
-								{
-									Device: &ctlpb.SmdDevice{
-										Uuid:     test.MockUUID(),
-										DevState: devStateNormal,
-										LedState: ledStateNormal,
-									},
-								},
+							Device: &ctlpb.SmdDevice{
+								Uuid:     test.MockUUID(),
+								DevState: devStateNormal,
+								LedState: ledStateNormal,
 							},
 						},
 					},

@@ -114,19 +114,14 @@ message SmdPoolResp {
 }
 
 message DevManageReq {
-	repeated string tr_addrs = 1;
-	repeated string dev_uuids = 2;
-	VmdLedAction led_action = 3;
-	VmdLedState led_state = 4; }
+	string dev_uuid = 1;
+	VmdLedAction led_action = 2;
+	VmdLedState led_state = 3;
+}
 
 message DevManageResp {
 	int32 status = 1;
-	message
-	Result {
-		int32 status = 1;
-		SmdDevice device = 2;
-	}
-	repeated Result results = 2;
+	SmdDevice device = 2; // Details of device that has been managed
 }
 
 message DevReplaceReq {
