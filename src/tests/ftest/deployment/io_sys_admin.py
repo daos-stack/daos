@@ -76,7 +76,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].create_snap()
         # overwrite the last ior file
         self.ior_cmd.signature.update('456')
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_flags(self.ior_np, self.ior_ppn, create_pool=False, create_cont=False)
 
         nvme_free_space_before_snap_destroy = self.get_free_space()[1]
         # delete snapshot
