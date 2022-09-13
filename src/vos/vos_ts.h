@@ -655,7 +655,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
  * \param[in]	ts_set	Set to free
  */
 
-#define vos_ts_set_free(ts_set) D_FREE(ts_set)
+#define vos_ts_set_free(ts_set) D_FREE_NLF(ts_set)
 
 /** Internal API to copy timestamp */
 static inline void

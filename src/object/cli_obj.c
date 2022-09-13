@@ -121,8 +121,7 @@ obj_free(struct d_hlink *hlink)
 	obj = container_of(hlink, struct dc_object, cob_hlink);
 	D_ASSERT(daos_hhash_link_empty(&obj->cob_hlink));
 	obj_layout_free(obj);
-	if (obj->cob_time_fetch_leader)
-		D_FREE(obj->cob_time_fetch_leader);
+	D_FREE_NLF(obj->cob_time_fetch_leader);
 	D_SPIN_DESTROY(&obj->cob_spin);
 	D_RWLOCK_DESTROY(&obj->cob_lock);
 	D_FREE(obj);
@@ -4537,9 +4536,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			break;
 		}
 
-		if (obj_auxi->req_tgts.ort_shard_tgts &&
-		    (obj_auxi->req_tgts.ort_shard_tgts != obj_auxi->req_tgts.ort_tgts_inline))
-			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
+		if (obj_auxi->req_tgts.ort_shard_tgts != obj_auxi->req_tgts.ort_tgts_inline)
+			D_FREE_NLF(obj_auxi->req_tgts.ort_shard_tgts);
 
 		if (!d_list_empty(head)) {
 			if (obj_is_enum_opc(obj_auxi->opc))

@@ -249,7 +249,7 @@ out:
 		else
 			vos_ts_set_update(ts_set, dth->dth_epoch);
 	}
-	if (rc != 0 && ts_set)
+	if (rc != 0)
 		vos_ts_set_free(ts_set);
 	return rc;
 }
@@ -265,8 +265,7 @@ iter_decref(struct vos_iterator *iter)
 	if (iter->it_ref_cnt)
 		return 0;
 
-	if (iter->it_ts_set)
-		vos_ts_set_free(iter->it_ts_set);
+	vos_ts_set_free(iter->it_ts_set);
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
 }

@@ -1304,8 +1304,7 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
-	if (dth->dth_oid_array)
-		D_FREE(dth->dth_oid_array);
+	D_FREE_NLF(dth->dth_oid_array);
 	D_FREE(dlh);
 
 	return result;
@@ -1415,8 +1414,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	vos_dtx_detach(dth);
 
 out:
-	if (dth->dth_oid_array)
-		D_FREE(dth->dth_oid_array);
+	D_FREE_NLF(dth->dth_oid_array);
 	D_FREE(dth);
 
 	return result;
