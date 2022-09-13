@@ -71,14 +71,6 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        NOT_SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
-
-    cat ./.build_vars.sh
-    echo Wrong prefix is $NOT_SL_PREFIX
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
