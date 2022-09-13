@@ -94,7 +94,7 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 		},
 		"2.4 agent compatible with 2.2 server": {
 			a: testComponent(t, "server", "2.2.0"),
-			b: testComponent(t, "agent", "2.4.0"),
+			b: testComponent(t, "agent", "2.3.100"),
 		},
 		"2.6 server not compatible with 2.2 agent": {
 			a:      testComponent(t, "server", "2.6.0"),
@@ -159,6 +159,37 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 					return self.Version.Equals(v1_1_1) && other.Version.Equals(v2_0_0)
 				},
 			},
+		},
+		"custom matcher: narrowly-scoped rule (non-match)": {
+			a: testComponent(t, "server", "2.0.0"),
+			b: testComponent(t, "agent", "2.0.0"),
+			customRule: &build.InteropRule{
+				Self:        build.ComponentServer,
+				Other:       build.ComponentAgent,
+				Description: "server/agent 2.0.0/2.0.1 interop rule",
+				Match: func(self, other *build.VersionedComponent) bool {
+					v1_1_1 := build.MustNewVersion("2.0.0")
+					v2_0_1 := build.MustNewVersion("2.0.1")
+					return self.Version.Equals(v1_1_1) && other.Version.Equals(v2_0_1)
+				},
+				Check: func(self, other *build.VersionedComponent) bool { return false },
+			},
+		},
+		"custom matcher: narrowly-scoped rule (match)": {
+			a: testComponent(t, "server", "2.0.0"),
+			b: testComponent(t, "agent", "2.0.1"),
+			customRule: &build.InteropRule{
+				Self:        build.ComponentServer,
+				Other:       build.ComponentAgent,
+				Description: "server/agent 2.0.0/2.0.1 interop rule",
+				Match: func(self, other *build.VersionedComponent) bool {
+					v1_1_1 := build.MustNewVersion("2.0.0")
+					v2_0_1 := build.MustNewVersion("2.0.1")
+					return self.Version.Equals(v1_1_1) && other.Version.Equals(v2_0_1)
+				},
+				Check: func(self, other *build.VersionedComponent) bool { return false },
+			},
+			expErr: errors.New("2.0.0/2.0.1 interop rule"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
