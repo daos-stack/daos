@@ -59,7 +59,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
         :avocado: tags=test_ec_multiple_targets_on_same_rank
         """
