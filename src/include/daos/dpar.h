@@ -31,7 +31,7 @@ par_version_compatible(uint32_t version)
 	if (major != DPAR_MAJOR) /* Total incompatibility */
 		return false;
 
-	if (minor < DPAR_MINOR) /* An API we use doesn't exist in other library */
+	if (minor > DPAR_MINOR) /* An API used by the caller doesn't exist in this library */
 		return false;
 
 	return true;
