@@ -41,10 +41,9 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
-	PoolFlag PoolID `long:"pool" short:"p" description:"pool UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
+	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
+	Args    struct {
+		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
@@ -57,9 +56,6 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 }
 
 func (cmd *poolBaseCmd) PoolID() PoolID {
-	if !cmd.PoolFlag.Empty() {
-		return cmd.PoolFlag
-	}
 	return cmd.Args.Pool
 }
 
@@ -336,12 +332,16 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTarg
 	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
 	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
 	pqti.Space = []*control.StorageTargetUsage{
-		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
-			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
-			C.DAOS_MEDIA_SCM},
-		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
-			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
-			C.DAOS_MEDIA_NVME},
+		{
+			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
+			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
+			MediaType: C.DAOS_MEDIA_SCM,
+		},
+		{
+			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
+			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
+			MediaType: C.DAOS_MEDIA_NVME,
+		},
 	}
 
 	return pqti, nil

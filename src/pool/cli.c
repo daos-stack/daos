@@ -30,18 +30,132 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
+struct pool_proto {
+	struct rsvc_client	cli;
+	crt_endpoint_t		ep;
+	int			version;
+	int			rc;
+	bool			completed;
+};
+
+int	dc_pool_proto_version;
+
+static void
+query_cb(struct crt_proto_query_cb_info *cb_info)
+{
+	struct pool_proto *pproto = (struct pool_proto *)cb_info->pq_arg;
+
+	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
+		uint32_t	ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
+		int		rc;
+
+		rc = rsvc_client_choose(&pproto->cli, &pproto->ep);
+		if (rc) {
+			D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
+			pproto->rc = rc;
+			pproto->completed = true;
+		}
+
+		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base, ver_array, 2,
+					      query_cb, pproto, daos_get_crt_ctx());
+		if (rc) {
+			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
+			pproto->rc = rc;
+			pproto->completed = true;
+		}
+	} else {
+		pproto->rc = cb_info->pq_rc;
+		pproto->version = cb_info->pq_ver;
+		pproto->completed = true;
+	}
+}
+
 /**
  * Initialize pool interface
  */
 int
 dc_pool_init(void)
 {
-	int rc;
+	uint32_t		ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
+	struct dc_mgmt_sys	*sys;
+	struct pool_proto	*pproto = NULL;
+	crt_context_t		ctx = daos_get_crt_ctx();
+	int			rc;
+	int			num_ranks;
 
-	rc = daos_rpc_register(&pool_proto_fmt, POOL_PROTO_CLI_COUNT,
-				NULL, DAOS_POOL_MODULE);
-	if (rc != 0)
-		D_ERROR("failed to register pool RPCs: "DF_RC"\n", DP_RC(rc));
+	dc_pool_proto_version = 0;
+
+	rc = dc_mgmt_sys_attach(NULL, &sys);
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	D_ALLOC_PTR(pproto);
+	if (pproto == NULL)
+		D_GOTO(out_detach, rc = -DER_NOMEM);
+
+	rc = rsvc_client_init(&pproto->cli, sys->sy_info.ms_ranks);
+	if (rc) {
+		D_ERROR("rsvc_client_init() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_free, rc);
+	}
+
+	pproto->ep.ep_grp = sys->sy_group;
+	pproto->ep.ep_tag = 0;
+
+	num_ranks = dc_mgmt_net_get_num_srv_ranks();
+	pproto->ep.ep_rank = rand() % num_ranks;
+
+	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base,
+				      ver_array, 2, query_cb, pproto, ctx);
+	if (rc) {
+		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_rsvc, rc);
+	}
+
+	while (!pproto->completed) {
+		rc = crt_progress(ctx, 0);
+		if (rc && rc != -DER_TIMEDOUT) {
+			D_ERROR("failed to progress CART context: %d\n", rc);
+			D_GOTO(out_rsvc, rc);
+		}
+	}
+
+	if (pproto->rc != -DER_SUCCESS) {
+		rc = pproto->rc;
+		D_ERROR("crt_proto_query()failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_rsvc, rc);
+	}
+
+	dc_pool_proto_version = pproto->version;
+	if (dc_pool_proto_version != DAOS_POOL_VERSION &&
+	    dc_pool_proto_version != DAOS_POOL_VERSION - 1) {
+		D_ERROR("Invalid object protocol version %d\n", dc_pool_proto_version);
+		D_GOTO(out_rsvc, rc = -DER_PROTO);
+	}
+
+	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
+		rc = daos_rpc_register(&pool_proto_fmt_v4, POOL_PROTO_CLI_COUNT,
+				       NULL, DAOS_POOL_MODULE);
+		if (rc) {
+			D_ERROR("failed to register daos obj RPCs: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_rsvc, rc);
+		}
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
+				       DAOS_POOL_MODULE);
+		if (rc) {
+			D_ERROR("failed to register pool RPCs: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_rsvc, rc);
+		}
+	}
+out_rsvc:
+	rsvc_client_fini(&pproto->cli);
+out_free:
+	D_FREE(pproto);
+out_detach:
+	dc_mgmt_sys_detach(sys);
 
 	return rc;
 }
@@ -54,7 +168,10 @@ dc_pool_fini(void)
 {
 	int rc;
 
-	rc = daos_rpc_unregister(&pool_proto_fmt);
+	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1)
+		rc = daos_rpc_unregister(&pool_proto_fmt_v4);
+	else
+		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
 	if (rc != 0)
 		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
@@ -190,16 +307,16 @@ dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 choose:
 	rc = rsvc_client_choose(cli, ep);
 	if ((rc == -DER_NOTREPLICA) && !sys->sy_server) {
-		d_rank_list_t	*ranklist = NULL;
+		d_rank_list_t *ranklist = NULL;
 
 		/* Query MS for replica ranks. Not under client lock. */
 		if (cli_lock)
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_pool_find(sys, label, puuid, &ranklist);
 		if (rc) {
-			D_ERROR(DF_UUID":%s: dc_mgmt_pool_find() failed, "
-				DF_RC"\n", DP_UUID(puuid), label ? label : "",
-				DP_RC(rc));
+			D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
+				 DF_UUID ":%s: dc_mgmt_pool_find() failed, " DF_RC "\n",
+				 DP_UUID(puuid), label ? label : "", DP_RC(rc));
 			return rc;
 		}
 		if (cli_lock)
@@ -434,14 +551,14 @@ struct pool_connect_arg {
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
-	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
-	struct dc_pool		*pool = dc_task_get_priv(task);
-	daos_pool_info_t	*info = arg->pca_info;
-	struct pool_buf		*map_buf = arg->pca_map_buf;
-	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
-	struct pool_connect_out	*pco = crt_reply_get(arg->rpc);
-	bool			 put_pool = true;
-	int			 rc = task->dt_result;
+	struct pool_connect_arg   *arg = (struct pool_connect_arg *)data;
+	struct dc_pool		  *pool = dc_task_get_priv(task);
+	daos_pool_info_t	  *info = arg->pca_info;
+	struct pool_buf		  *map_buf = arg->pca_map_buf;
+	struct pool_connect_v5_in  *pci = crt_req_get(arg->rpc);
+	struct pool_connect_v5_out *pco = crt_reply_get(arg->rpc);
+	bool			   put_pool = true;
+	int			   rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &pco->pco_op, task);
@@ -558,23 +675,23 @@ static int
 dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 			 const char *label, daos_handle_t *poh)
 {
-	struct dc_pool		*pool;
-	crt_endpoint_t		 ep;
-	crt_rpc_t		*rpc;
-	struct pool_connect_in	*pci;
-	struct pool_buf		*map_buf;
-	struct pool_connect_arg	 con_args;
-	int			 rc;
+	struct dc_pool		 *pool;
+	crt_endpoint_t		  ep;
+	crt_rpc_t		 *rpc;
+	struct pool_connect_v5_in *pci;
+	struct pool_buf		 *map_buf;
+	struct pool_connect_arg	  con_args;
+	int			  rc;
 
 	pool = dc_task_get_priv(task);
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client,
-				     &pool->dp_client_lock, pool->dp_sys, &ep);
+	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client, &pool->dp_client_lock,
+				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID":%s: cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool),
-			label ? label : "", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
+			 DF_UUID ":%s: cannot find pool service: " DF_RC "\n",
+			 DP_UUID(pool->dp_pool), label ? label : "", DP_RC(rc));
 		goto out;
 	}
 
@@ -602,6 +719,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_flags = pool->dp_capas;
 	pci->pci_query_bits = pool_query_bits(info, NULL);
+	pci->pci_pool_version = DAOS_POOL_GLOBAL_VERSION;
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
@@ -1338,8 +1456,8 @@ pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
-	struct pool_query_in	       *in = crt_req_get(arg->rpc);
-	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
+	struct pool_query_v4_in	       *in = crt_req_get(arg->rpc);
+	struct pool_query_v4_out       *out = crt_reply_get(arg->rpc);
 	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
@@ -1410,7 +1528,7 @@ dc_pool_query(tse_task_t *task)
 	struct dc_pool		       *pool;
 	crt_endpoint_t			ep;
 	crt_rpc_t		       *rpc;
-	struct pool_query_in	       *in;
+	struct pool_query_v4_in	       *in;
 	struct pool_buf		       *map_buf;
 	struct pool_query_arg		query_args;
 	int				rc;
@@ -1496,17 +1614,46 @@ map_known_stale(struct dc_pool *pool)
 	return (pool->dp_map_version_known > cached);
 }
 
+static void
+register_map_task(struct dc_pool *pool, tse_task_t *task)
+{
+	D_DEBUG(DB_MD, DF_UUID": registering map task %p\n", DP_UUID(pool->dp_pool), task);
+	D_ASSERT(pool->dp_map_task == NULL);
+	tse_task_addref(task);
+	pool->dp_map_task = task;
+}
+
+static void
+unregister_map_task(struct dc_pool *pool, tse_task_t *task)
+{
+	D_DEBUG(DB_MD, DF_UUID": unregistering map task %p\n", DP_UUID(pool->dp_pool),
+		pool->dp_map_task);
+	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
+	tse_task_decref(pool->dp_map_task);
+	pool->dp_map_task = NULL;
+}
+
 /*
  * Arg and state of map_refresh
  *
  * mra_i is an index in the internal node array of a pool map. It is used to
  * perform a round robin of the array starting from a random element.
+ *
+ * mra_n is the number of "serious" errors at which we will fall back to
+ * POOL_QUERY via dc_pool_query. "Serious" errors like -DER_NO_HDL or
+ * -DER_NONEXIST are not "retryable" normally. In the case of
+ * POOL_TGT_QUERY_MAP, since they may indicate that the engines we have chosen
+ * simply don't have the info locally, we retry for mra_n such errors and then
+ * fall back to the PS.
  */
 struct map_refresh_arg {
 	struct dc_pool	       *mra_pool;
+	daos_handle_t		mra_pool_hdl;
 	bool			mra_passive;
+	bool			mra_fallen_back;
 	unsigned int		mra_map_version;
 	int			mra_i;
+	int			mra_n;
 	struct d_backoff_seq	mra_backoff_seq;
 };
 
@@ -1522,6 +1669,9 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	int			i;
 	int			j;
 	int			k = -1;
+
+	if (arg->mra_n <= 0)
+		return CRT_NO_RANK;
 
 	n = pool_map_find_nodes(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
 	/* There must be at least one rank. */
@@ -1634,6 +1784,9 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY))
+		out->tmo_op.po_rc = -DER_NO_HDL;
+
 	rc = out->tmo_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		/*
@@ -1645,9 +1798,16 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		pool->dp_map_sz = out->tmo_map_buf_size;
 		reinit = true;
 		goto out;
+	} else if (daos_rpc_retryable_rc(rc) || rc == -DER_AGAIN) {
+		D_DEBUG(DB_MD, DF_UUID": %p: retryable: "DF_RC"\n", DP_UUID(pool->dp_pool), task,
+			DP_RC(rc));
+		reinit = true;
+		goto out;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fetch pool map: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		D_DEBUG(DB_MD, DF_UUID": %p: serious: "DF_RC"\n", DP_UUID(pool->dp_pool), task,
+			DP_RC(rc));
+		arg->mra_n--;
+		reinit = true;
 		goto out;
 	}
 
@@ -1722,11 +1882,8 @@ out:
 		}
 	}
 
-	if (!reinit) {
-		D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
-		tse_task_decref(pool->dp_map_task);
-		pool->dp_map_task = NULL;
-	}
+	if (!reinit)
+		unregister_map_task(pool, task);
 
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
@@ -1765,7 +1922,18 @@ map_refresh(tse_task_t *task)
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 
-	/* Update the highest known pool map version in all cases. */
+	if (arg->mra_fallen_back) {
+		unregister_map_task(pool, task);
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		D_DEBUG(DB_MD, DF_UUID": %p: fallen-back done\n", DP_UUID(pool->dp_pool), task);
+		rc = 0;
+		goto out_task;
+	}
+
+	/*
+	 * Update the highest known pool map version when every map_refresh
+	 * task runs for the first time.
+	 */
 	if (pool->dp_map_version_known < arg->mra_map_version)
 		pool->dp_map_version_known = arg->mra_map_version;
 
@@ -1789,13 +1957,14 @@ map_refresh(tse_task_t *task)
 			DP_UUID(pool->dp_pool), task, pool->dp_map_task);
 		arg->mra_passive = true;
 		rc = tse_task_register_deps(task, 1, &pool->dp_map_task);
-		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to depend on active pool map "
 				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 			goto out_task;
 		}
 		rc = tse_task_reinit(task);
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
 				DP_UUID(pool->dp_pool), task, DP_RC(rc));
@@ -1804,12 +1973,53 @@ map_refresh(tse_task_t *task)
 		goto out;
 	}
 
-	/* No active pool map refresh task; become one. */
-	D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
-	tse_task_addref(task);
-	pool->dp_map_task = task;
+	if (pool->dp_map_task == NULL) {
+		/* No active pool map refresh task; become one */
+		D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
+		register_map_task(pool, task);
+	}
 
 	rank = choose_map_refresh_rank(arg);
+	if (rank == CRT_NO_RANK) {
+		tse_task_t	       *query_task;
+		daos_pool_query_t      *query_arg;
+
+		/* Fall back to dc_pool_query. */
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		D_DEBUG(DB_MD, DF_UUID": %p: falling back to dc_pool_query\n",
+			DP_UUID(pool->dp_pool), task);
+		arg->mra_fallen_back = true;
+		rc = dc_task_create(dc_pool_query, tse_task2sched(task), NULL /* ev */,
+				    &query_task);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create pool query task: "DF_RC"\n",
+				DP_UUID(pool->dp_pool), DP_RC(rc));
+			goto out_map_task;
+		}
+		query_arg = dc_task_get_args(query_task);
+		query_arg->poh = arg->mra_pool_hdl;
+		rc = tse_task_register_deps(task, 1, &query_task);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to depend on pool query task: "DF_RC"\n",
+				DP_UUID(pool->dp_pool), DP_RC(rc));
+			dc_task_decref(query_task);
+			goto out_map_task;
+		}
+		rc = tse_task_reinit(task);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
+				DP_UUID(pool->dp_pool), task, DP_RC(rc));
+			dc_task_decref(query_task);
+			goto out_map_task;
+		}
+		rc = dc_task_schedule(query_task, true);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to run pool query task %p: "DF_RC"\n",
+				DP_UUID(pool->dp_pool), query_task, DP_RC(rc));
+			goto out_map_task;
+		}
+		goto out;
+	}
 
 	/*
 	 * The server side will see if it has a pool map version >
@@ -1846,9 +2056,9 @@ out_cb_arg:
 	crt_req_decref(cb_arg.mrc_rpc);
 	destroy_map_refresh_rpc(rpc, cb_arg.mrc_map_buf);
 out_map_task:
-	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
-	tse_task_decref(pool->dp_map_task);
-	pool->dp_map_task = NULL;
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+	unregister_map_task(pool, task);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 out_task:
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
@@ -1870,37 +2080,49 @@ out:
  * In either case, the pool map refresh task may temporarily miss the latest
  * pool map version in certain scenarios, resulting in extra retries.
  *
- * \param[in]	pool		pool
+ * \param[in]	pool_hdl	pool handle
  * \param[in]	map_version	known pool map version
  * \param[in]	sched		scheduler
  * \param[out]	task		pool map refresh task
  */
 int
-dc_pool_create_map_refresh_task(struct dc_pool *pool, uint32_t map_version,
-				tse_sched_t *sched, tse_task_t **task)
+dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, tse_sched_t *sched,
+				tse_task_t **task)
 {
+	struct dc_pool	       *pool;
 	tse_task_t	       *t;
 	struct map_refresh_arg *a;
 	int			rc;
+
+	pool = dc_hdl2pool(pool_hdl);
+	if (pool == NULL) {
+		D_ERROR("failed to find pool handle "DF_X64"\n", pool_hdl.cookie);
+		return -DER_NO_HDL;
+	}
 
 	rc = tse_task_create(map_refresh, sched, NULL /* priv */, &t);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool map refresh task: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
+		dc_pool_put(pool);
 		return rc;
 	}
 
 	a = tse_task_buf_embedded(t, sizeof(*a));
 	dc_pool_get(pool);
 	a->mra_pool = pool;
+	a->mra_pool_hdl = pool_hdl;
 	a->mra_passive = false;
+	a->mra_fallen_back = false;
 	a->mra_map_version = map_version;
 	a->mra_i = -1;
-	rc = d_backoff_seq_init(&a->mra_backoff_seq, 1 /* nzeros */, 4 /* factor */,
-				16 /* next (us) */, 1 << 20 /* max (us) */);
+	a->mra_n = 4;
+	rc = d_backoff_seq_init(&a->mra_backoff_seq, 0 /* nzeros */, 8 /* factor */,
+				1 << 10 /* next (us) */, 4 << 20 /* max (us) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
 	*task = t;
+	dc_pool_put(pool);
 	return 0;
 }
 
@@ -1915,7 +2137,7 @@ dc_pool_abandon_map_refresh_task(tse_task_t *task)
 
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
-	tse_task_decref(task);
+	tse_task_complete(task, -DER_CANCELED);
 }
 
 struct pool_lc_arg {

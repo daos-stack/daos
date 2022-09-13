@@ -84,6 +84,9 @@ func sanitizeDescription(inDescription string) (outDescription string) {
 }
 
 func (f *Fault) Error() string {
+	if f == nil {
+		return "(nil)"
+	}
 	return fmt.Sprintf("%s: code = %d description = %q",
 		sanitizeDomain(f.Domain), f.Code, sanitizeDescription(f.Description))
 }

@@ -1208,7 +1208,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_lookup2() failed. uri=%s, hg_ret=%d\n",
 			rpc_priv->crp_tgt_uri, hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,

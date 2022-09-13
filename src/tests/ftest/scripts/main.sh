@@ -38,6 +38,12 @@
 
 set -eux
 
+# check that vm.max_map_count has been configured/bumped
+if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
+    echo "vm.max_map_count is not set as expected"
+    exit 1
+fi
+
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
@@ -68,9 +74,9 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
-# The dmg pool destroy can take up to 3 minutes to timeout.  To help ensure
-# that the avocado test tearDown method is run long enough to account for this
-# use a 240 second timeout when running tearDown after the test has timed out.
+# Give the avocado test tearDown method a minimum of 120 seconds to complete when the test process
+# has timed out.  The test harness will increment this timeout based upon the number of pools
+# created in the test to account for pool destroy command timeouts.
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
@@ -81,7 +87,9 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
-process_died = 240
+after_interrupted = 120
+process_alive = 120
+process_died = 120
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -259,10 +267,16 @@ fi
 # daos_test uses cmocka framework which generates a set of xml of its own.
 # Post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
-dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
-FILES=("${dt_xml_path}"/*/test-results/*/data/*.xml)
-COMP="FTEST_daos_test"
+TEST_DIRS=("daos_test" "checksum")
 
-./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
+for test_dir in "${TEST_DIRS[@]}"; do
+    COMP="FTEST_${test_dir}"
+    if [[ "${LAUNCH_OPT_ARGS}" == *"--repeat="* ]]; then
+        FILES=("${logs_prefix}/ftest/avocado/job-results/${test_dir}"/*/*/test-results/*/data/*.xml)
+    else
+        FILES=("${logs_prefix}/ftest/avocado/job-results/${test_dir}"/*/test-results/*/data/*.xml)
+    fi
+    ./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
+done
 
 exit $rc

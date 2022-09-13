@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -58,10 +59,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp := new(mgmtpb.GetAttachInfoResp)
 	if req.GetAllRanks() {
-		for rank, uri := range groupMap.RankURIs {
+		for rank, entry := range groupMap.RankEntries {
 			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank: rank.Uint32(),
-				Uri:  uri,
+				Uri:  entry.URI,
 			})
 		}
 	} else {
@@ -71,7 +72,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		for _, rank := range groupMap.MSRanks {
 			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
 				Rank: rank.Uint32(),
-				Uri:  groupMap.RankURIs[rank],
+				Uri:  groupMap.RankEntries[rank].URI,
 			})
 		}
 	}
@@ -115,8 +116,19 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	return resp, nil
 }
 
-// getPeerListenAddr combines peer ip from supplied context with input port.
+// getPeerListenAddr provides the resolved TCP address where the peer server is listening.
 func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr, error) {
+	ipAddr, portStr, err := net.SplitHostPort(listenAddrStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "get listening port")
+	}
+
+	if ipAddr != "0.0.0.0" {
+		// If the peer gave us an explicit IP address, just use it.
+		return net.ResolveTCPAddr("tcp", listenAddrStr)
+	}
+
+	// If we got 0.0.0.0, we may be able to harvest the remote IP from the context.
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("peer details not found in context")
@@ -125,12 +137,6 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 	tcpAddr, ok := p.Addr.(*net.TCPAddr)
 	if !ok {
 		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
-	}
-
-	// what port is the input address listening on?
-	_, portStr, err := net.SplitHostPort(listenAddrStr)
-	if err != nil {
-		return nil, errors.Wrap(err, "get listening port")
 	}
 
 	// resolve combined IP/port address
@@ -185,8 +191,8 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 					svc.log.Errorf("sync GroupUpdate failed: %s", err)
 					continue
 				}
+				groupUpdateNeeded = false
 			}
-			groupUpdateNeeded = false
 		case <-groupUpdateTimer.C:
 			if !groupUpdateNeeded {
 				continue
@@ -336,7 +342,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	if err != nil {
 		return err
 	}
-	if len(gm.RankURIs) == 0 {
+	if len(gm.RankEntries) == 0 {
 		return system.ErrEmptyGroupMap
 	}
 	if gm.Version == svc.lastMapVer {
@@ -351,12 +357,18 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 		MapVersion: gm.Version,
 	}
 	rankSet := &system.RankSet{}
-	for rank, uri := range gm.RankURIs {
+	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
-			Rank: rank.Uint32(),
-			Uri:  uri,
+			Rank:        rank.Uint32(),
+			Uri:         entry.URI,
+			Incarnation: entry.Incarnation,
 		})
 		rankSet.Add(rank)
+	}
+
+	// Final check to make sure we're still leader.
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
@@ -498,6 +510,49 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	return
 }
 
+// synthesise "Stopped" rank results for any harness host errors
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+	for _, hes := range rr.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
+			for _, rank := range hostRanks[addr] {
+				resp.Results = append(resp.Results,
+					&system.MemberResult{
+						Rank: rank, Msg: hes.HostError.Error(),
+						State: system.MemberStateUnresponsive,
+					})
+			}
+			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
+				hes.HostError)
+		}
+	}
+}
+
+// Remove any duplicate results from response.
+func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
+	seenResults := make(map[uint32]*system.MemberResult)
+	for _, res := range resp.Results {
+		if res == nil {
+			continue
+		}
+		rID := res.Rank.Uint32()
+		if extant, existing := seenResults[rID]; !existing {
+			seenResults[rID] = res
+		} else if !extant.Equals(res) {
+			log.Errorf("nonidentical result for same rank: %+v != %+v", *extant, *res)
+		}
+	}
+
+	if len(seenResults) == len(resp.Results) {
+		return
+	}
+
+	newResults := make(system.MemberResults, 0, len(seenResults))
+	for _, res := range seenResults {
+		newResults = append(newResults, res)
+	}
+	resp.Results = newResults
+}
+
 // rpcFanout sends requests to ranks in list on their respective host
 // addresses through functions implementing UnaryInvoker.
 //
@@ -549,7 +604,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
 	if ok {
-		ranksReq.SetTimeout(dl.Sub(time.Now()))
+		ranksReq.SetTimeout(time.Until(dl))
 	}
 
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
@@ -560,21 +615,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 
 	resp.Results = ranksResp.RankResults
 
-	// synthesise "Stopped" rank results for any harness host errors
-	hostRanks := svc.membership.HostRanks(req.Ranks)
-	for _, hes := range ranksResp.HostErrors {
-		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
-			for _, rank := range hostRanks[addr] {
-				resp.Results = append(resp.Results,
-					&system.MemberResult{
-						Rank: rank, Msg: hes.HostError.Error(),
-						State: system.MemberStateUnresponsive,
-					})
-			}
-			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], hes.HostError)
-		}
-	}
+	addUnresponsiveResults(svc.log, svc.membership.HostRanks(req.Ranks), ranksResp, resp)
+
+	removeDuplicateResults(svc.log, resp)
 
 	if len(resp.Results) != req.Ranks.Count() {
 		svc.log.Debugf("expected %d results, got %d",
@@ -934,10 +977,9 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 // SystemCleanup implements the method defined for the Management Service.
 //
-// Signal to the data plane to find all resources associted with a given machine
+// Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
-//
 func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanupReq) (*mgmtpb.SystemCleanupResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -1028,5 +1070,41 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	}
 
 	resp = &mgmtpb.SystemGetAttrResp{Attributes: props}
+	return
+}
+
+// SystemSetProp sets user-visible system properties.
+func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (_ *mgmtpb.DaosResp, err error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemSetProp RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemSetProp RPC: (%v)", err)
+	}()
+
+	if err := system.SetUserProperties(svc.sysdb, svc.systemProps, req.GetProperties()); err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.DaosResp{}, nil
+}
+
+// SystemGetProp gets user-visible system properties.
+func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (resp *mgmtpb.SystemGetPropResp, err error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemGetProp RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemGetProp RPC: %+v (%v)", resp, err)
+	}()
+
+	props, err := system.GetUserProperties(svc.sysdb, svc.systemProps, req.GetKeys())
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &mgmtpb.SystemGetPropResp{Properties: props}
 	return
 }

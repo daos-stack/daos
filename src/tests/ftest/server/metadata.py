@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -66,7 +65,7 @@ class ObjectMetadata(TestWithServers):
     """
 
     # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 2900
+    CREATED_CONTAINERS_MIN = 2500
 
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
@@ -156,24 +155,18 @@ class ObjectMetadata(TestWithServers):
             bool: was a container created successfully
 
         """
-        status = False
-        # self.log.info("Creating container %d", index + 1)
         self.container.append(self.get_container(self.pool, create=False))
         if self.container[-1].daos:
             self.container[-1].daos.verbose = False
         try:
             self.container[-1].create()
-            status = True
+            return True
         except TestFail as error:
-            self.log.info(
-                "  Failed to create container %s: %s",
-                index + 1, str(error))
+            self.log.info("  Failed to create container %s: %s", index + 1, str(error))
             del self.container[-1]
             if "RC: -1007" not in str(error):
-                self.fail(
-                    "Unexpected error detected creating container {}".format(
-                        index + 1))
-        return status
+                self.fail("Unexpected error detected creating container {}".format(index + 1))
+        return False
 
     def destroy_all_containers(self):
         """Destroy all of the created containers.
@@ -205,7 +198,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,metadata_fillup
+        :avocado: tags=server,metadata
+        :avocado: tags=metadata_fillup,test_metadata_fillup
         """
         self.create_pool()
 
@@ -234,8 +228,7 @@ class ObjectMetadata(TestWithServers):
 
         # Phase 2 clean up containers (expected to succeed)
         self.log.info(
-            "Phase 2: Cleaning up %d containers (expected to work)",
-            len(self.container))
+            "Phase 2: Cleaning up %d containers (expected to work)", len(self.container))
         if not self.destroy_all_containers():
             self.fail("Phase 2: fail (unexpected container destroy error)")
         self.log.info("Phase 2: passed")
@@ -284,8 +277,7 @@ class ObjectMetadata(TestWithServers):
                 self.log.error(str(error))
                 self.fail("Phase 3: fail (unexpected container create error)")
         self.log.info(
-            "Phase 3: passed (created %d / %d containers)",
-            len(self.container), loop)
+            "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
         self.log.info("Test passed")
 
     def test_metadata_addremove(self):
@@ -299,7 +291,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,metadata_compact,nvme,metadata_addremove
+        :avocado: tags=server,metadata,nvme
+        :avocado: tags=metadata_compact,metadata_addremove,test_metadata_addremove
         """
         self.create_pool()
         self.container = []
@@ -310,8 +303,7 @@ class ObjectMetadata(TestWithServers):
         containers_created = []
         for loop in range(10):
             self.log.info("Container Create Iteration %d / 9", loop)
-            # The test will encounter ENOSPACE (-1007) while creating
-            # containers.
+            # The test will encounter ENOSPACE (-1007) while creating containers.
             if not self.create_all_containers():
                 self.log.error("Errors during create iteration %d/9", loop)
 
@@ -369,7 +361,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,metadata_ior,nvme
+        :avocado: tags=server,metadata,nvme
+        :avocado: tags=metadata_ior,test_metadata_server_restart
         """
         self.create_pool()
         files_per_thread = 400
@@ -381,20 +374,19 @@ class ObjectMetadata(TestWithServers):
             [str(uuid.uuid4()) for _ in range(files_per_thread)]
             for _ in range(total_ior_threads)]
 
-        # Setup the thread manager
-        thread_manager = ThreadManager(run_ior_loop, self.timeout - 30)
-
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
+            # Setup the thread manager
+            thread_manager = ThreadManager(run_ior_loop, self.timeout - 30)
+
             # Create the IOR threads
             for index in range(total_ior_threads):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.server_group, self.pool)
-                ior_cmd.flags.value = self.params.get(
-                    "F", "/run/ior/ior{}flags/".format(operation))
+                ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
                 self.ior_managers.append(
@@ -449,7 +441,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,metadata_der_nospace,nvme,der_nospace
+        :avocado: tags=server,metadata,nvme
+        :avocado: tags=metadata_der_nospace,der_nospace,test_container_removal_after_der_nospace
         """
         self.create_pool()
 
@@ -479,24 +472,19 @@ class ObjectMetadata(TestWithServers):
             self.fail(
                 f"Storage resource not exhausted after {len(self.container)} "
                 "containers created")
-        self.log.info(
-            "(1.5) Additional %d containers created and detected der_no_space.",
-            loop)
+        self.log.info("(1.5) Additional %d containers created and detected der_no_space.", loop)
 
         self.log.info(
-            "(2) Verify removal of %d containers after full storage .. ",
-            len(self.container))
+            "(2) Verify removal of %d containers after full storage .. ", len(self.container))
         if not self.destroy_all_containers():
             self.fail("Container destroy failed after full storage.")
         self.log.info("(2.1) Container removal succeed after full storage.")
 
         self.log.info(
-            "(3) Create %d containers after container cleanup.",
-            len(self.container))
+            "(3) Create %d containers after container cleanup.", len(self.container))
         if not self.create_all_containers(len(self.container)):
             self.fail("Failed to create containers after container cleanup.")
         self.log.info(
-            "(3.1) Create %d containers succeed after cleanup.",
-            len(self.container))
+            "(3.1) Create %d containers succeed after cleanup.", len(self.container))
 
         self.log.info("Test passed")

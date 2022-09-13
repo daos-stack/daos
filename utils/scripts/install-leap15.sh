@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -10,7 +10,9 @@
 
 set -e
 
-dnf -y --nodocs install \
+arch=$(uname -i)
+
+dnf --nodocs install \
     boost-devel \
     bzip2 \
     curl \
@@ -22,12 +24,11 @@ dnf -y --nodocs install \
     gcc \
     gcc-c++ \
     git \
-    go1.14 \
-    go1.14-race \
+    go1.18 \
+    go1.18-race \
     graphviz \
     gzip \
     hwloc-devel \
-    ipmctl-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
@@ -45,24 +46,21 @@ dnf -y --nodocs install \
     lua-lmod \
     make \
     maven \
-    meson \
     numactl \
-    ninja \
     openmpi3-devel \
     patch \
     patchelf \
     pciutils \
-    python3-defusedxml \
     python3-devel \
-    python3-distro \
-    python3-junit-xml \
-    python3-pyxattr  \
-    python3-PyYAML \
-    python3-pyelftools \
-    python3-tabulate \
     scons \
     sg3_utils \
     sudo \
     valgrind-devel \
     which \
     yasm
+
+# ipmctl is only available on x86_64
+if [ "$arch" = x86_64 ]; then
+    dnf --nodocs install \
+        ipmctl-devel
+fi

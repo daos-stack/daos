@@ -78,14 +78,16 @@ Directory Object
       RECX (byte array starting at idx 0):
         mode_t: permission bit mask + type of entry
         oid: object id of entry
-        atime: access time
-        mtime: modify time
-        ctime: change time
+        mtime: modify time (seconds)
+        ctime: change time (seconds)
         chunk_size: chunk_size of file (0 if default or not a file)
         object class: default object class of objects under this dir
+        mtime: modify time (nano-seconds)
+        ctime: change time (nano-seconds)
         uid: user identifier
         gid: group identifier
         size: symlink size (0 for files/dirs)
+        object HLC: internal timestamp used to track max epoch of a file
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
@@ -191,3 +193,11 @@ namespace.
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
 DFS namespace.
+
+## Time settings
+
+DFS stores the mtime (modify) and ctime (change) in the inode information of an object. the mtime is
+actively maintained for just file objects (changing a file contents updates the mtime value that
+would be returned on stat). At this time, mtime for directory objects and ctime for all objects are
+not actively maintained. atime (access) is not stored in DFS and stat returns the max value between
+mtime and ctime for atime.

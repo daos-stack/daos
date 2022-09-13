@@ -1,12 +1,11 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 import os
-import io
 import yaml
 from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
 
@@ -258,7 +257,7 @@ class FaultInjection():
 
         fi_config = os.path.join(self._test_dir, "fi.yaml")
 
-        with io.open(fi_config, 'w', encoding='utf8') as outfile:
+        with open(fi_config, 'w', encoding='utf8') as outfile:
             yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
             fault_config = []
             if self._fault_list is not None:
@@ -267,7 +266,7 @@ class FaultInjection():
             if on_the_fly_fault is not None:
                 fault_config.append(on_the_fly_fault)
             yaml.dump({'fault_config': fault_config}, outfile,
-                        default_flow_style=False, allow_unicode=True)
+                      default_flow_style=False, allow_unicode=True)
 
         os.environ["D_FI_CONFIG"] = fi_config
 

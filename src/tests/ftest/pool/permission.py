@@ -30,7 +30,9 @@ class Permission(TestWithServers):
             permission levels.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=pool,permission,file_modification
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=permission,file_modification,test_file_modification
         """
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')

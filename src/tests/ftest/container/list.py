@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -61,8 +61,9 @@ class ListContainerTest(TestWithServers):
             See test cases in the class description.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,list_containers
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=list_containers,test_list_containers
         """
         expected_uuids1 = []
         self.pool = []

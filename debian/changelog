@@ -1,3 +1,91 @@
+daos (2.3.100-22) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Move io_conf files from bin to TESTING
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Thu, 9 Sep 2022 10:26:00 -0400
+
+daos (2.3.100-21) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 16 Aug 2022 12:52:00 -0400
+
+daos (2.3.100-20) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
+ -- Wang Shilong <shilong.wang@intel.com>  Thu, 11 Aug 2022 09:52:00 -0400
+
+daos (2.3.100-19) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Fri, 5 Aug 2022 17:30:00 -0600
+
+daos (2.3.100-18) unstable; urgency=medium
+  [Michael MacDonald]
+  * Bump min supported go version to 1.16
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00
+-0400
+
+daos (2.3.100-17) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Remove now unused openpa dependency
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
+
+daos (2.3.100-16) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * Add pool_scrubbing_tests to test package
+
+ -- Jeff Olivier <Jeff Olivier <jeffrey.v.olivier@intel.com>  Fri, 15 Jul 2022 12:48:00 -0400
+
+daos (2.3.100-15) unstable; urgency=medium
+
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Wed, 13 Jul 2022 12:43:00 -0400
+
+daos (2.3.100-14) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0rc6
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 27 Jun 2022 18:26:02 -0600
+
+daos (2.3.100-13) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove libdts.so, make it build time static
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Fri, 17 Jun 2022 10:30:00 -0500
+
+daos (2.3.100-12) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
+daos (2.3.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 01 Jun 2022 13:58:03 -0000
+
+daos (2.3.100-10) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+
+daos (2.3.100-9) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-client-tests-openmpi dependency from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 17 May 2022 12:43:00 -0400
+
 daos (2.3.100-8) unstable; urgency=medium
   [ Ashley Pittman ]
   * Extend dfusedaosbuild test to run in different configurations.

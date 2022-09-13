@@ -14,11 +14,6 @@ class RbldContRfTest(ContRedundancyFactor):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        ["DAOS-8827", "properties", "rf:1", "rank", [3,4,5]],
-        ["DAOS-8827", "properties", "rf:2", "rank", [3]]
-    ]
-
     def __init__(self, *args, **kwargs):
         """Initialize a Rebuild Container RF with ObjClass Write object."""
         super().__init__(*args, **kwargs)
@@ -47,9 +42,9 @@ class RbldContRfTest(ContRedundancyFactor):
             Verify container RF with rebuild with multiple server failures.
 
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=container,rebuild
-        :avocado: tags=container_rf
-        :avocado: tags=rebuild_container_rf
+        :avocado: tags=container_rf,rebuild_container_rf,test_rebuild_with_container_rf
         """
         self.mode = "cont_rf_with_rebuild"
         self.execute_cont_rf_test()

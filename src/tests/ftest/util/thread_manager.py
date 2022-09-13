@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,10 +28,10 @@ class ThreadResult():
         self.result = result
 
     def __str__(self):
-        """Return the string respresentation of this object.
+        """Return the string representation of this object.
 
         Returns:
-            str: the string respresentation of this object
+            str: the string representation of this object
 
         """
         def get_result(result):
@@ -127,6 +127,7 @@ class ThreadManager():
             except TimeoutError as error:
                 for future in futures:
                     if not future.done():
+                        # pylint: disable-next=invalid-sequence-index
                         results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
                         self.log.info("Thread %d timed out: %s", id, results[-1])
         return results
@@ -155,7 +156,7 @@ class ThreadManager():
         return len(failed)
 
     def check_run(self):
-        """Run the threads and check thr result.
+        """Run the threads and check the result.
 
         Returns:
             int: number of threads that failed

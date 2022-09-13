@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Helper module to choose build/cache keys to use for github actions"""
+"""Helper module to choose build/cache keys to use for GitHub actions"""
 
 import os
 import sys
@@ -19,12 +19,13 @@ COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
 
 def set_output(key, value):
-    """ Set a key-value pair in github actions metadata"""
+    """ Set a key-value pair in GitHub actions metadata"""
 
     print('::set-output name={}::{}'.format(key, value))
 
+
 def main():
-    """Parse git histrory to load caches for GHA"""
+    """Parse git history to load caches for GHA"""
 
     # Try and use the right hash key.  For chained PRs on release branches this won't be correct
     # however most of the time it should be right, and the build should still work on cache miss
@@ -67,8 +68,6 @@ def main():
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        if install_helper == 'ubuntu2004':
-            install_helper = install_helper[:-2]
         install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
 
         assert os.path.exists(install_script)

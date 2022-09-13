@@ -30,10 +30,13 @@ func (db *testAttrDb) SetSystemAttrs(attrs map[string]string) error {
 	return nil
 }
 
-func (db *testAttrDb) GetSystemAttrs(keys []string) (map[string]string, error) {
+func (db *testAttrDb) GetSystemAttrs(keys []string, filterFn func(string) bool) (map[string]string, error) {
 	out := make(map[string]string)
 	if len(keys) == 0 {
 		for k, v := range db.attrs {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 		}
 		return out, nil
@@ -41,6 +44,9 @@ func (db *testAttrDb) GetSystemAttrs(keys []string) (map[string]string, error) {
 
 	for _, k := range keys {
 		if v, ok := db.attrs[k]; ok {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 			continue
 		}
@@ -127,7 +133,7 @@ func TestSystem_GetAttributes(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expAttrs, gotAttrs); diff != "" {
-				t.Fatalf("unexpected attrerties (-want +got):\n%s", diff)
+				t.Fatalf("unexpected attributes (-want +got):\n%s", diff)
 			}
 		})
 	}

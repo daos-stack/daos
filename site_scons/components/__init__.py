@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -36,7 +35,7 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
 
-class installed_comps():
+class InstalledComps():
     """Checks for installed components and keeps track of prior checks"""
     installed = []
     not_installed = []
@@ -56,34 +55,34 @@ class installed_comps():
         if name in self.not_installed:
             return False
         if self.inst(name) and self.reqs.is_installed(name):
-            print("Using installed version of %s" % name)
+            print(f'Using installed version of {name}')
             self.installed.append(name)
             return True
 
-        print("Using build version of %s" % name)
+        print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
 
 def include(reqs, name, use_value, exclude_value):
     """Return True if in include list"""
-    if set([name, 'all']).intersection(set(reqs.include)):
-        print("Including %s optional component from build" % name)
+    if reqs.included(name):
+        print(f'Including {name} optional component from build')
         return use_value
-    print("Excluding %s optional component from build" % name)
+    print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     return installed.check(name)
 
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
        installed or not"""
-    installed = installed_comps(reqs)
+    installed = InstalledComps(reqs)
     if installed.check(name):
         return installed_str
     return built_str
@@ -105,12 +104,6 @@ def define_mercury(reqs):
         libs = []
     else:
         reqs.define('rt', libs=['rt'])
-    reqs.define('stdatomic', headers=['stdatomic.h'])
-
-    if reqs.check_component('stdatomic'):
-        atomic = 'stdatomic'
-    else:
-        atomic = 'openpa'
 
     reqs.define('psm2',
                 retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
@@ -163,21 +156,33 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-    reqs.define('openpa',
-                retriever=GitRepoRetriever('https://github.com/pmodels/openpa.git'),
-                commands=[['libtoolize'],
-                          ['./autogen.sh'],
-                          ['./configure', '--prefix=$OPENPA_PREFIX'],
-                          ['make'],
-                          ['make', 'install']],
-                libs=['opa'],
-                package='openpa-devel' if inst(reqs, 'openpa') else None)
+    ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
+                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
+                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
+                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
+                     '--without-xpmem', '--without-fuse3', '--without-ugni']
 
-    reqs.define('ucx', libs=['ucp'])
+    if reqs.target_type == 'debug':
+        ucx_configure.extend(['--enable-debug'])
+    else:
+        ucx_configure.extend(['--disable-debug', '--disable-logging'])
+
+    reqs.define('ucx',
+                retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
+                libs=['ucs', 'ucp', 'uct'],
+                functions={'ucs': ['ucs_debug_disable_signal']},
+                headers=['uct/api/uct.h'],
+                pkgconfig='ucx',
+                commands=[['./autogen.sh'],
+                          ucx_configure,
+                          ['make'],
+                          ['make', 'install'],
+                          ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
+                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
+                package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
-                     '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/',
                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX',
                      '-DCMAKE_CXX_FLAGS="-std=c++11"',
                      '-DBUILD_EXAMPLES=OFF',
@@ -186,25 +191,13 @@ def define_mercury(reqs):
                      '-DNA_USE_OFI=ON',
                      '-DBUILD_DOCUMENTATION=OFF',
                      '-DBUILD_SHARED_LIBS=ON',
+                     '-DNA_USE_UCX=ON',
                      '../mercury']
 
     if reqs.target_type == 'debug':
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
-
-    if reqs.get_env('UCX'):
-        mercury_build.extend(['-DNA_USE_UCX=ON',
-                              '-DUCX_INCLUDE_DIR=/usr/include',
-                              '-DUCP_LIBRARY=/usr/lib64/libucp.so',
-                              '-DUCS_LIBRARY=/usr/lib64/libucs.so',
-                              '-DUCT_LIBRARY=/usr/lib64/libuct.so'])
-        libs.append('ucx')
-
-    mercury_build.append(check(reqs,
-                               'openpa',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a',
-                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a'))
 
     mercury_build.extend(check(reqs,
                                'ofi',
@@ -217,12 +210,11 @@ def define_mercury(reqs):
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
-                libs=['mercury', 'na', 'mercury_util'],
+                libs=['mercury'],
                 pkgconfig='mercury',
-                requires=[atomic, 'boost', 'ofi'] + libs,
+                requires=['boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None,
-                patch_rpath=['lib'])
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
 
 
 def define_common(reqs):
@@ -284,7 +276,7 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
+                retriever=GitRepoRetriever('https://github.com/intel/isa-l.git'),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
@@ -308,6 +300,7 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n',
+                           'EXTRA_CFLAGS="-Wno-error"',
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
@@ -339,7 +332,7 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
-    # are relocating binaries across systems, for example in CI under github actions etc.  There
+    # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
     # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
     # prematurely with SIGILL (-4).
     # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
@@ -348,7 +341,9 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
+    if ARM_PLATFORM:
+        spdk_arch = 'native'
+    elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
         spdk_arch = 'nehalem'
@@ -371,7 +366,7 @@ def define_components(reqs):
                            '--without-isal',
                            '--without-vtune',
                            '--with-shared'],
-                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch)],
+                          ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
@@ -381,11 +376,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
-                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
-                extra_include_path=['/usr/include/dpdk',
-                                    '$SPDK_PREFIX/include/dpdk',
-                                    # debian dpdk rpm puts rte_config.h here
-                                    '/usr/include/x86_64-linux-gnu/dpdk'],
+                headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',

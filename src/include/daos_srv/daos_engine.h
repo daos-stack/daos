@@ -744,8 +744,8 @@ struct tree_cache_root {
 };
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-		d_iov_t *val_iov);
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
+		daos_unit_oid_t oid, d_iov_t *val_iov);
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
@@ -792,8 +792,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id);
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
 struct sys_db;
 typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,

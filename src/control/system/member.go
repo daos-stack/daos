@@ -248,16 +248,6 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
-// NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
-	// FIXME: Either require a valid uuid.UUID to be supplied
-	// or else change the return signature to include an error
-	newUUID := uuid.MustParse(uuidStr)
-	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
-		State: state, FaultDomain: MustCreateFaultDomain(),
-		LastUpdate: time.Now()}
-}
-
 // Members is a type alias for a slice of member references
 type Members []*Member
 
@@ -308,6 +298,17 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	mr.State = memberStateFromString(from.State)
 
 	return nil
+}
+
+// Equals returns true if dereferenced structs share the same field values.
+func (mr *MemberResult) Equals(other *MemberResult) bool {
+	if mr == nil {
+		return false
+	}
+	if other == nil {
+		return false
+	}
+	return *mr == *other
 }
 
 // NewMemberResult returns a reference to a new member result struct.

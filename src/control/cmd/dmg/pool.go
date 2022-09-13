@@ -36,6 +36,7 @@ type PoolCmd struct {
 	Drain        PoolDrainCmd        `command:"drain" description:"Drain targets from a rank"`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" description:"Query a DAOS pool"`
+	QueryTargets PoolQueryTargetsCmd `command:"query-targets" description:"Query pool target info"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" description:"Update entries in a DAOS pool's Access Control List"`
@@ -338,20 +339,26 @@ func (cmd *poolCmd) PoolID() *PoolID {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	Force bool `short:"f" long:"force" description:"Force removal of DAOS pool"`
+	Recursive bool `short:"r" long:"recursive" description:"Remove pool with existing containers"`
+	Force     bool `short:"f" long:"force" description:"Forcibly remove pool with active client connections"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (cmd *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &control.PoolDestroyReq{ID: cmd.PoolID().String(), Force: cmd.Force}
+	req := &control.PoolDestroyReq{
+		ID:        cmd.PoolID().String(),
+		Force:     cmd.Force,
+		Recursive: cmd.Recursive,
+	}
 
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
+	cmd.ctlInvoker.Debugf("Pool-destroy command %s", msg)
 	cmd.Infof("Pool-destroy command %s\n", msg)
 
 	return err
@@ -526,6 +533,46 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 
 	var bld strings.Builder
 	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
+		return err
+	}
+	cmd.Info(bld.String())
+	return nil
+}
+
+// PoolQueryTargetsCmd is the struct representing the command to query a DAOS pool engine's targets
+type PoolQueryTargetsCmd struct {
+	poolCmd
+
+	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
+	Targets string `long:"target-idx" required:"1" description:"Comma-separated list of target idx(s) to be queried"`
+}
+
+// Execute is run when PoolQueryTargetsCmd subcommand is activated
+func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
+
+	var tgtsList []uint32
+	if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
+		return errors.WithMessage(err, "parsing target list")
+	}
+
+	req := &control.PoolQueryTargetReq{
+		ID:      cmd.PoolID().String(),
+		Rank:    system.Rank(cmd.Rank),
+		Targets: tgtsList,
+	}
+
+	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "pool query targets failed")
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintPoolQueryTargetResponse(resp, &bld); err != nil {
 		return err
 	}
 	cmd.Info(bld.String())

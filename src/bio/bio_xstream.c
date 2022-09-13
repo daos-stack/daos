@@ -37,6 +37,8 @@
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
+/* Stop issuing new IO when queued blob IOs reach a threshold */
+#define BIO_BS_STOP_WATERMARK	(4000)
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -52,6 +54,8 @@ bool bio_scm_rdma;
 bool bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
+/* How many blob unmap calls can be called in a row */
+unsigned int bio_spdk_max_unmap_cnt = 32;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -112,6 +116,12 @@ bio_spdk_env_init(void)
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+
+		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -195,6 +205,11 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
+
+	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
+	if (bio_spdk_max_unmap_cnt == 0)
+		bio_spdk_max_unmap_cnt = UINT32_MAX;
+	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -335,6 +350,20 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return false;
 	return ctxt->bxc_blob_rw > BIO_BS_POLL_WATERMARK;
+}
+
+void
+drain_inflight_ios(struct bio_xs_context *ctxt)
+{
+	if (ctxt == NULL || ctxt->bxc_blob_rw <= BIO_BS_POLL_WATERMARK)
+		return;
+
+	do {
+		if (ctxt->bxc_self_polling)
+			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
+		else
+			bio_yield();
+	} while (ctxt->bxc_blob_rw >= BIO_BS_STOP_WATERMARK);
 }
 
 struct common_cp_arg {
@@ -1278,7 +1307,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 int
-bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
@@ -1290,10 +1319,11 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+	ctxt->bxc_self_polling = self_polling;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
 			*pctxt = NULL;
@@ -1327,7 +1357,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	/*
 	 * The first started xstream will scan all bdevs and create blobstores,
-	 * it's a prequisite for all per-xstream blobstore initialization.
+	 * it's a prerequisite for all per-xstream blobstore initialization.
 	 */
 	if (nvme_glb.bd_init_thread == NULL) {
 		struct common_cp_arg cp_arg;
@@ -1369,7 +1399,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	if (rc)
 		goto out;
 
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;

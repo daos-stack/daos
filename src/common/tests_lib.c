@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,7 @@ dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
-	uoid.id_pub	= dts_oid_gen(time(NULL));
+	uoid.id_pub	= dts_oid_gen((unsigned int)(time(NULL) & 0xFFFFFFFFUL));
 	daos_obj_set_oid(&uoid.id_pub, type, DTS_OCLASS_DEF, shard + 1, 0);
 	uoid.id_shard	= shard;
 	uoid.id_pad_32	= 0;
@@ -204,6 +204,7 @@ v_dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 		arg = va_arg(valist, char *);
 	}
+	sgl->sg_nr_out = count;
 }
 
 void
@@ -225,4 +226,13 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	va_start(valist, d);
 	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
 	va_end(valist);
+}
+
+void
+dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size)
+{
+	d_sgl_init(sgl, 1);
+	D_ALLOC(sgl->sg_iovs[0].iov_buf, size);
+	D_ASSERT(sgl->sg_iovs[0].iov_buf != NULL);
+	sgl->sg_iovs[0].iov_buf_len = size;
 }

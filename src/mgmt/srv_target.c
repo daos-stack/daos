@@ -809,9 +809,11 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_count  = 1;
 
 	rc = ds_pool_start(tc_in->tc_pool_uuid);
-	if (rc)
+	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
 out:
 	if (rc && tca.tca_newborn != NULL) {
 		/*
@@ -975,6 +977,18 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
 		DP_UUID(td_in->td_pool_uuid));
 
+	/*
+	 * If there is a local PS replica, its RDB file will be deleted later
+	 * together with the other pool files by the tgt_destroy call below; if
+	 * there is no local PS replica, rc will be zero.
+	 */
+	rc = ds_pool_svc_stop(td_in->td_pool_uuid);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to stop pool service replica (if any): "DF_RC"\n",
+			DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	ds_pool_stop(td_in->td_pool_uuid);
 
 	/** generate path to the target directory */
@@ -1100,23 +1114,9 @@ int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
 	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
-	uint32_t			version;
-	int				rc;
 
-	rc = crt_group_version(NULL /* grp */, &version);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_DEBUG(DB_MGMT, "in=%u current=%u\n", in->tm_map_version, version);
-	if (in->tm_map_version <= version)
-		return 0;
-
-	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE,
-				  in->tm_servers.ca_arrays,
-				  in->tm_servers.ca_count, in->tm_map_version);
-	if (rc != 0)
-		return rc;
-
-	D_INFO("updated group: %u -> %u\n", version, in->tm_map_version);
-	return 0;
+	return ds_mgmt_group_update(in->tm_servers.ca_arrays, in->tm_servers.ca_count,
+				    in->tm_map_version);
 }
 
 void

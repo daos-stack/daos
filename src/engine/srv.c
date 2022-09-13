@@ -458,7 +458,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -478,8 +478,8 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, NULL, attr, NULL);
+		rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NVME_POLL],
+					    dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -574,6 +574,17 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
+
+#ifdef ULT_MMAP_STACK
+	if (daos_ult_mmap_stack == true) {
+		rc = stack_pool_create(&dx->dx_sp);
+		if (rc != 0) {
+			D_ERROR("failed to create stack pool\n");
+			D_GOTO(err_free, rc);
+		}
+	}
+#endif
+
 	dx->dx_stopping = ABT_FUTURE_NULL;
 	dx->dx_shutdown = ABT_FUTURE_NULL;
 
@@ -617,6 +628,14 @@ err_free:
 static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
+#ifdef ULT_MMAP_STACK
+	struct stack_pool *sp = dx->dx_sp;
+
+	if (daos_ult_mmap_stack == true) {
+		stack_pool_destroy(sp);
+		dx->dx_sp = NULL;
+	}
+#endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
 }
@@ -732,9 +751,9 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
-			       dss_srv_handler, dx, attr,
-			       &dx->dx_progress);
+	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NET_POLL],
+				    dss_srv_handler, dx, attr,
+				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
@@ -937,6 +956,12 @@ dss_xstreams_init(void)
 	d_getenv_bool("DAOS_SCHED_PRIO_DISABLED", &sched_prio_disabled);
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
+
+#ifdef ULT_MMAP_STACK
+	d_getenv_bool("DAOS_ULT_MMAP_STACK", &daos_ult_mmap_stack);
+	if (daos_ult_mmap_stack == false)
+		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
+#endif
 
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
@@ -1253,7 +1278,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path, NULL, false);
+	rc = vos_db_init(dss_storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;

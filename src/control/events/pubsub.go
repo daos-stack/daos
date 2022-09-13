@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,8 @@ import (
 const (
 	// set a timeout to prevent a deadlock on channel write
 	submitTimeout = 1 * time.Second
+	// periodically check for debounced events that can be cleaned
+	defaultDebounceCleanInterval = 1 * time.Hour
 )
 
 // Handler defines an interface to be implemented by event receivers.
@@ -52,29 +54,64 @@ type filterUpdate struct {
 	ids    []RASID
 }
 
+type (
+	// DebounceKeyFn defines a function that returns a key to be used
+	// for determining if the event matches a previously-seen event.
+	DebounceKeyFn func(*RASEvent) string
+
+	// dbncCtrlMsg contains details to be stored in the dbncCtrl map.
+	dbncCtrlMsg struct {
+		id       RASID
+		keyFn    DebounceKeyFn
+		cooldown time.Duration
+	}
+
+	// dbncCtrl stores debounce control messages for event IDs.
+	dbncCtrl map[RASID]*dbncCtrlMsg
+	// dbncEvts is used to keep track of events that have been seen
+	// and their last seen time.
+	dbncEvts map[RASID]map[string]time.Time
+)
+
+// updateLastSeen updates the last seen time for the given event ID and key.
+func (de dbncEvts) updateLastSeen(id RASID, key string) {
+	if _, found := de[id]; !found {
+		de[id] = map[string]time.Time{}
+	}
+	de[id][key] = time.Now()
+}
+
 // PubSub stores subscriptions to event topics and handlers to be called on
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
-	log           logging.Logger
-	events        chan *RASEvent
-	subscribers   chan *subscriber
-	handlers      map[RASTypeID][]Handler
-	filterUpdates chan *filterUpdate
-	disabledIDs   map[RASID]struct{}
-	reset         chan struct{}
-	shutdown      context.CancelFunc
+	log               logging.Logger
+	events            chan *RASEvent
+	subscribers       chan *subscriber
+	handlers          map[RASTypeID][]Handler
+	filterUpdates     chan *filterUpdate
+	dbncCtrl          dbncCtrl
+	dbncCtrlMsgs      chan *dbncCtrlMsg
+	dbncEvts          dbncEvts
+	dbncCleanInterval time.Duration
+	disabledIDs       map[RASID]struct{}
+	reset             chan struct{}
+	shutdown          context.CancelFunc
 }
 
 // NewPubSub returns a reference to a newly initialized PubSub struct.
 func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
-		log:           log,
-		events:        make(chan *RASEvent),
-		subscribers:   make(chan *subscriber),
-		handlers:      make(map[RASTypeID][]Handler),
-		filterUpdates: make(chan *filterUpdate),
-		disabledIDs:   make(map[RASID]struct{}),
-		reset:         make(chan struct{}),
+		log:               log,
+		events:            make(chan *RASEvent),
+		subscribers:       make(chan *subscriber),
+		handlers:          make(map[RASTypeID][]Handler),
+		filterUpdates:     make(chan *filterUpdate),
+		dbncCtrl:          make(dbncCtrl),
+		dbncCtrlMsgs:      make(chan *dbncCtrlMsg),
+		dbncEvts:          make(dbncEvts),
+		dbncCleanInterval: defaultDebounceCleanInterval,
+		disabledIDs:       make(map[RASID]struct{}),
+		reset:             make(chan struct{}),
 	}
 
 	ctx, cancel := context.WithCancel(parent)
@@ -133,8 +170,60 @@ func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
 	}
 }
 
+// Debounce accepts an event ID and a key function to be used to determine
+// if an event matches a previously-seen event with that ID. This mechanism
+// provides control over publication of duplicate events. The cooldown parameter
+// determines the minimum amount of time required between publication of
+// duplicate events. If cooldown is zero, then a given event may only
+// be published at most once.
+func (ps *PubSub) Debounce(id RASID, cooldown time.Duration, keyFn DebounceKeyFn) {
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit debounce update within %s", submitTimeout)
+	case ps.dbncCtrlMsgs <- &dbncCtrlMsg{id: id, keyFn: keyFn, cooldown: cooldown}:
+	}
+}
+
+func (ps *PubSub) debounceEvent(event *RASEvent) bool {
+	ctrl, isControlled := ps.dbncCtrl[event.ID]
+	if !isControlled {
+		return false
+	}
+
+	key := ctrl.keyFn(event)
+	if lastSeen, found := ps.dbncEvts[event.ID][key]; found {
+		if ctrl.cooldown == 0 || time.Since(lastSeen) < ctrl.cooldown {
+			ps.dbncEvts.updateLastSeen(event.ID, key)
+			return true
+		}
+	}
+
+	ps.dbncEvts.updateLastSeen(event.ID, key)
+	return false
+}
+
+func (ps *PubSub) cleanDebouncedEvents() {
+	for id, events := range ps.dbncEvts {
+		ctrl, found := ps.dbncCtrl[id]
+		if !found {
+			delete(ps.dbncEvts, id)
+			continue
+		}
+
+		for key, lastSeen := range events {
+			if time.Since(lastSeen) > ps.dbncCleanInterval+ctrl.cooldown {
+				delete(events, key)
+			}
+		}
+	}
+}
+
 func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
 	if _, exists := ps.disabledIDs[event.ID]; exists {
+		return
+	}
+
+	if ps.debounceEvent(event) {
 		return
 	}
 
@@ -162,13 +251,18 @@ func (ps *PubSub) updateFilter(fu *filterUpdate) {
 // simplicity. Select on one of cancellation/reset/additional subscriber/new
 // event.
 func (ps *PubSub) eventLoop(ctx context.Context) {
+	cleanDebounceTicker := time.NewTicker(ps.dbncCleanInterval)
+
 	for {
 		select {
 		case <-ctx.Done():
 			ps.log.Debug("stopping event loop")
+			cleanDebounceTicker.Stop()
 			return
 		case <-ps.reset:
 			ps.handlers = make(map[RASTypeID][]Handler)
+			ps.dbncCtrl = make(dbncCtrl)
+			ps.dbncEvts = make(dbncEvts)
 		case newSub := <-ps.subscribers:
 			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic],
 				newSub.handler)
@@ -176,6 +270,10 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			ps.publish(ctx, event)
 		case fu := <-ps.filterUpdates:
 			ps.updateFilter(fu)
+		case msg := <-ps.dbncCtrlMsgs:
+			ps.dbncCtrl[msg.id] = msg
+		case <-cleanDebounceTicker.C:
+			ps.cleanDebouncedEvents()
 		}
 	}
 }

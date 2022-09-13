@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -64,9 +64,11 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,object,full_regression,small,objbadhandle
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objbadhandle,test_bad_handle
         """
-
         try:
             # trash the handle and read again
             saved_oh = self.obj.obj_handle
@@ -93,7 +95,10 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass null pointers for various fetch parameters.
 
-        :avocado: tags=all,object,full_regression,small,objfetchnull
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=object
+        :avocado: tags=objfetchnull,test_null_ptrs
         """
         try:
             # now try it with a bad dkey, expecting this to fail with -1003
@@ -112,11 +117,11 @@ class ObjFetchBadParam(TestWithServers):
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
-            # now try it with a null sgl (iod_size is not set)
+            # now try it with a null SGL (iod_size is not set)
             test_hints = ['sglnull']
-            dummy_thedata2 = self.container.read_an_obj(self.datasize,
-                                                        self.dkey, self.akey,
-                                                        self.obj, test_hints)
+            _ = self.container.read_an_obj(self.datasize,
+                                           self.dkey, self.akey,
+                                           self.obj, test_hints)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())

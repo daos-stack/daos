@@ -2,10 +2,8 @@
 # required quantity is indicated by the placeholders
 timeout: 255
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 server_config:
   name: daos_server
   port: 10001

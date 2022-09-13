@@ -1,8 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 150
 # below mentioned path should be replaced by path of
 # romio test suite directory in CI nodes when available.

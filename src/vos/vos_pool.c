@@ -253,15 +253,15 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
  * Unmap (TRIM) the extent being freed
  */
 static int
-vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
+vos_blob_unmap_cb(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data)
 {
 	struct bio_io_context	*ioctxt = data;
 	int			 rc;
 
 	/* unmap unused pages for NVMe media to perform more efficiently */
-	rc = bio_blob_unmap(ioctxt, off, cnt);
+	rc = bio_blob_unmap_sgl(ioctxt, unmap_sgl, blk_sz);
 	if (rc)
-		D_ERROR("Failed to unmap blob\n");
+		D_ERROR("Blob unmap SGL failed. "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -742,6 +742,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 		/* set unmap callback fp */
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
+		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
 			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
@@ -884,15 +885,45 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *
 	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats)
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 {
-	struct vos_pool	*pool;
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+	int                 rc = 0;
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
-	pool->vp_feats |= feats;
+	pool_df = pool->vp_pool_df;
+
+	if (version == pool_df->pd_version)
+		return 0;
+
+	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
+		  "Invalid pool upgrade version %d, current version is %d\n", version,
+		  pool_df->pd_version);
+
+	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(&pool->vp_umm, &pool_df->pd_version, sizeof(pool_df->pd_version));
+	if (rc != 0)
+		goto end;
+
+	pool_df->pd_version = version;
+
+end:
+	rc = umem_tx_end(&pool->vp_umm, rc);
+
+	if (rc != 0)
+		return rc;
+
+	if (version >= POOL_DF_AGG_OPT)
+		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+
+	return 0;
 }
 
 /**

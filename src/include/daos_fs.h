@@ -715,7 +715,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ * \param[out]	oid	Optional: return the internal object ID of the removed obj
  *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.
@@ -1056,56 +1056,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
-
 #if defined(__cplusplus)
 }
-
-#define dfs_cont_create dfs_cont_create_cpp
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
-}
-
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
-};
-#else
-/**
- * for backward compatibility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define dfs_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = dfs_cont_create2((poh), _u, __VA_ARGS__); \
-		}							\
-		_ret;							\
-	})
-
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

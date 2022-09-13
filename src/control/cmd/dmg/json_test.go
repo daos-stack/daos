@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage":
+				"manpage", "system set-prop":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -102,6 +102,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
 			case "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
+			case "pool query-targets":
+				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
 				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
 					"--cont", test.MockUUID())

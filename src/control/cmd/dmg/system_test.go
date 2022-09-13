@@ -17,6 +17,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -249,6 +250,19 @@ func TestDmg_SystemCommands(t *testing.T) {
 					Attributes: map[string]string{
 						"foo": "",
 						"baz": "",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system get-prop multi props",
+			"system get-prop daos_system,daos_version",
+			strings.Join([]string{
+				printRequest(t, &control.SystemGetPropReq{
+					Keys: []daos.SystemPropertyKey{
+						daos.SystemPropertyDaosSystem,
+						daos.SystemPropertyDaosVersion,
 					},
 				}),
 			}, " "),

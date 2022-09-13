@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package common
 
 import (
@@ -112,7 +113,9 @@ func TestCommon_CalcMinHugePages(t *testing.T) {
 			expErr:     errors.New("invalid system hugepage size"),
 		},
 		"no targets": {
-			input:  &HugePageInfo{},
+			input: &HugePageInfo{
+				PageSizeKb: 2048,
+			},
 			expErr: errors.New("numTargets"),
 		},
 		"2KB pagesize; 16 targets": {

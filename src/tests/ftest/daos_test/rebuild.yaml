@@ -1,11 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
+  test_servers: 4
 timeout: 800
 timeouts:
     test_rebuild_0to10: 2000
@@ -120,3 +116,8 @@ daos_tests:
     test_rebuild_27: ["random"]
     test_rebuild_28: [7]
     test_rebuild_29: ["random"]
+  pools_created:
+    test_rebuild_0to10: 16
+    test_rebuild_12to15: 5
+    test_rebuild_18: 5
+    test_rebuild_28: 2

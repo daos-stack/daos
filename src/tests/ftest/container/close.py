@@ -23,7 +23,7 @@ class ContainerCloseTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=smoke,container
-        :avocado: tags=container_close
+        :avocado: tags=container_close,test_container_close
         """
         self.container = []
         saved_coh = None

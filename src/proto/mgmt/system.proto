@@ -110,14 +110,33 @@ message SystemSetAttrReq {
 	map<string, string> attributes = 2;
 }
 
-// SystemAttrGetReq contains a request to get one or more attributes by key. If
+// SystemGetAttrReq contains a request to get one or more attributes by key. If
 // no keys are supplied, all attributes are returned in the response.
 message SystemGetAttrReq {
 	string sys = 1;
 	repeated string keys = 2;
 }
 
-// SystemAttrGetResp contains a list of attribute key/value pairs.
+// SystemGetAttrResp contains a list of attribute key/value pairs.
 message SystemGetAttrResp {
 	map<string, string> attributes = 1;
 }
+
+// SystemSetPropReq contains a request to set one or more system properties.
+message SystemSetPropReq {
+	string sys = 1;
+	map<string, string> properties = 2;
+}
+
+// SystemGetPropReq contains a request to get one or more properties by key. If
+// no keys are supplied, all properties are returned in the response.
+message SystemGetPropReq {
+	string sys = 1;
+	repeated string keys = 2;
+}
+
+// SystemGetPropResp contains a list of property key/value pairs.
+message SystemGetPropResp {
+	map<string, string> properties = 1;
+}
+

@@ -1,17 +1,21 @@
 """Build versioned extent allocator tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv')
 
     libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common_pmem']
 
-    denv.AppendUnique(LIBPATH=['..'])
-    vea_ut = daos_build.test(denv, 'vea_ut', 'vea_ut.c', LIBS=libraries)
-    vea_stress = daos_build.test(denv, 'vea_stress', 'vea_stress.c', LIBS=libraries)
-    denv.Install('$PREFIX/bin/', vea_ut)
-    denv.Install('$PREFIX/bin/', vea_stress)
+    env = denv.Clone()
+
+    env.AppendUnique(LIBPATH=[Dir('..')])
+    vea_ut = daos_build.test(env, 'vea_ut', 'vea_ut.c', LIBS=libraries)
+    vea_stress = daos_build.test(env, 'vea_stress', 'vea_stress.c', LIBS=libraries)
+    env.Install('$PREFIX/bin/', vea_ut)
+    env.Install('$PREFIX/bin/', vea_stress)
+
 
 if __name__ == "SCons.Script":
     scons()

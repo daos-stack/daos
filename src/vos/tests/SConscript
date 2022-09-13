@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils', 'conf_dir')
+    Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'cart', 'uuid', 'pthread',
@@ -22,13 +22,23 @@ def scons():
                     '../../object/srv_csum.c', '../../object/srv_io_map.c']
     vos_tests = daos_build.program(denv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
-    denv.AppendUnique(CPPPATH=["../../common/tests"])
-    Import('cmd_parser')
+    denv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils,
                                  cmd_parser], LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
     denv.Install(conf_dir, ['vos_size_input.yaml'])
+
+    unit_env = denv.Clone()
+    unit_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+
+    libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
+                 'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
+    src = ['pool_scrubbing_tests.c', '../vos_pool_scrub.c']
+    pool_scrubbing_tests = daos_build.test(unit_env, 'pool_scrubbing_tests',
+                                           src, LIBS=libraries)
+    unit_env.Install('$PREFIX/bin/', [pool_scrubbing_tests])
+
 
 if __name__ == "SCons.Script":
     scons()

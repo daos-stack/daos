@@ -105,11 +105,20 @@ void mock_ds_mgmt_pool_extend_setup(void);
  */
 extern int		ds_mgmt_pool_query_return;
 extern uuid_t		ds_mgmt_pool_query_uuid;
-extern daos_pool_info_t	ds_mgmt_pool_query_info_out;
 extern daos_pool_info_t	ds_mgmt_pool_query_info_in;
+extern daos_pool_info_t	ds_mgmt_pool_query_info_out;
 extern void		*ds_mgmt_pool_query_info_ptr;
 extern d_rank_list_t	*ds_mgmt_pool_query_ranks_out;
 void mock_ds_mgmt_pool_query_setup(void);
+
+/*
+ * Mock ds_mgmt_pool_query_targets
+ */
+extern int			ds_mgmt_pool_query_targets_return;
+extern uuid_t			ds_mgmt_pool_query_targets_uuid;
+extern daos_target_info_t	*ds_mgmt_pool_query_targets_info_out;
+void mock_ds_mgmt_pool_query_targets_setup(void);
+void mock_ds_mgmt_pool_query_targets_teardown(void);
 
 /*
  * Mock ds_mgmt_tgt_state_update
@@ -135,7 +144,7 @@ extern char	*ds_mgmt_cont_set_owner_user;
 extern char	*ds_mgmt_cont_set_owner_group;
 void mock_ds_mgmt_cont_set_owner_setup(void);
 void mock_ds_mgmt_cont_set_owner_teardown(void);
-
+void mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos);
 /*
  * Mock ds_mgmt_upgrade
  */

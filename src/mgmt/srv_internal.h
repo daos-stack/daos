@@ -63,16 +63,13 @@ void ds_mgmt_svc_put(struct mgmt_svc *svc);
 int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 
 /** srv_pool.c */
-int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-			d_rank_list_t *targets, size_t scm_size,
-			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp, int domains_nr,
-			uint32_t *domains);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			 const char *group, uint32_t force);
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+			int domains_nr, uint32_t *domains);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
-		       char *machine, const char *group, uint32_t *count);
+		       char *machine, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     struct pool_target_addr_list *tgt_addr,
 				     pool_comp_state_t new_state);
@@ -100,7 +97,11 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		       daos_pool_info_t *pool_info);
+		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		       uint32_t *upgrade_layout_ver);
+int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			       d_rank_list_t *tgts, daos_target_info_t **infos);
+
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);
@@ -141,8 +142,7 @@ int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
-int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
-			 int nservers, uint32_t version);
+int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

@@ -199,6 +199,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_engines; i++) {
 		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_incarnation = req->engines[i]->incarnation;
 		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
 	in.gui_n_servers = req->n_engines;
@@ -281,16 +282,32 @@ out:
 }
 
 static int
-create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
+create_pool_props(daos_prop_t **out_prop, uint32_t numsvcreps, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
 {
+	uint64_t	out_svc_rf = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
-	uint32_t	entries = 0;
+	uint32_t	entries = 1;
 	uint32_t	idx = 0;
 	int		rc = 0;
+
+	if (numsvcreps > 0) {
+#ifndef DRPC_TEST
+		out_svc_rf = ds_pool_svc_rf_from_nreplicas(numsvcreps);
+#else
+		if (numsvcreps % 2 == 0)
+			numsvcreps--;
+		out_svc_rf = numsvcreps / 2;
+#endif
+		if (!daos_svc_rf_is_valid(out_svc_rf)) {
+			D_ERROR("invalid numsvcreps %u\n", numsvcreps);
+			rc = -DER_INVAL;
+			goto err_out;
+		}
+	}
 
 	if (ace_list != NULL && ace_nr > 0) {
 		rc = daos_acl_from_strs(ace_list, ace_nr, &out_acl);
@@ -316,14 +333,13 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
-	if (entries == 0) {
-		D_ERROR("No prop entries provided, aborting!\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
 	new_prop = daos_prop_alloc(entries);
 	if (new_prop == NULL)
 		D_GOTO(err_out, rc = -DER_NOMEM);
+
+	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
+	new_prop->dpp_entries[idx].dpe_val = out_svc_rf;
+	idx++;
 
 	if (out_owner != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
@@ -373,7 +389,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -458,7 +474,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&base_props, req->user, req->usergroup,
+	rc = create_pool_props(&base_props, req->numsvcreps, req->user, req->usergroup,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -476,10 +492,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tierbytes[DAOS_MEDIA_SCM],
-				 req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, req->numsvcreps, &svc,
-				 req->n_faultdomains, req->faultdomains);
+				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
+				 prop, &svc, req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -548,9 +562,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
-				  (req->force == true) ? 1 : 0);
+	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
@@ -646,7 +658,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
-				machine, req->sys, &count);
+				machine, &count);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
@@ -1594,6 +1606,8 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	resp.n_containers = containers_len;
 
+	D_DEBUG(DB_MGMT, "Found %lu containers in DAOS pool %s\n", containers_len, req->id);
+
 	for (i = 0; i < containers_len; i++) {
 		D_ALLOC_PTR(resp.containers[i]);
 		if (resp.containers[i] == NULL)
@@ -1721,7 +1735,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
 	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
+				&resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;
@@ -1792,6 +1807,121 @@ out:
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 
 	pool_query_free_tier_stats(&resp);
+}
+
+void
+ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int				rc = 0;
+	Mgmt__PoolQueryTargetReq	*req;
+	Mgmt__PoolQueryTargetResp	resp = MGMT__POOL_QUERY_TARGET_RESP__INIT;
+	uint32_t			i;
+	uuid_t				uuid;
+	d_rank_list_t			*svc_ranks;
+	d_rank_list_t			*tgts;
+	size_t				len;
+	uint8_t				*body;
+	daos_target_info_t		*infos = NULL;
+	Mgmt__PoolQueryTargetInfo	*resp_infos = NULL;
+
+	req = mgmt__pool_query_target_req__unpack(&alloc.alloc, drpc_req->body.len,
+						  drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack pool query targets req\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query DAOS pool %s, %zu targets\n", req->id, req->n_targets);
+
+	if (uuid_parse(req->id, uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->id);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	tgts = uint32_array_to_rank_list(req->targets, req->n_targets);
+	if (tgts == NULL)
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_query_targets(uuid, svc_ranks, req->rank, tgts, &infos);
+	if (rc != 0) {
+		D_ERROR("ds_mgmt_pool_query_targets() failed, pool %s rank %u, "DF_RC"\n",
+			req->id, req->rank, DP_RC(rc));
+		goto out_tgts;
+	}
+
+	/* Populate the response */
+	/* array of pointers to Mgmt__PoolQueryTargetInfo */
+	D_ALLOC_ARRAY(resp.infos, req->n_targets);
+	if (resp.infos == NULL)
+		D_GOTO(out_infos, rc = -DER_NOMEM);
+	resp.n_infos = req->n_targets;
+
+	/* array of Mgmt__PoolQueryTargetInfo so we don't have to allocate individually */
+	D_ALLOC_ARRAY(resp_infos, req->n_targets);
+	if (resp_infos == NULL)
+		D_GOTO(out_infos, rc = -DER_NOMEM);
+
+	for (i = 0; i < req->n_targets; i++) {
+		int				j;
+		Mgmt__StorageTargetUsage	*space;
+
+		resp.infos[i] = &resp_infos[i];
+		mgmt__pool_query_target_info__init(resp.infos[i]);
+
+		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
+		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
+		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
+		if (resp.infos[i]->space == NULL)
+			D_GOTO(out_infos, rc = -DER_NOMEM);
+		resp.infos[i]->n_space = DAOS_MEDIA_MAX;
+
+		D_ALLOC_ARRAY(space, DAOS_MEDIA_MAX);
+		if (space == NULL)
+			D_GOTO(out_infos, rc = -DER_NOMEM);
+
+		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
+			resp.infos[i]->space[j] = &space[j];
+			mgmt__storage_target_usage__init(resp.infos[i]->space[j]);
+
+			resp.infos[i]->space[j]->total = infos[i].ta_space.s_total[j];
+			resp.infos[i]->space[j]->free = infos[i].ta_space.s_free[j];
+			resp.infos[i]->space[j]->media_type = j;
+		}
+	}
+
+out_infos:
+	D_FREE(infos);
+out_tgts:
+	d_rank_list_free(tgts);
+out_ranks:
+	d_rank_list_free(svc_ranks);
+out:
+	resp.status = rc;
+
+	len = mgmt__pool_query_target_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__pool_query_target_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_query_target_req__free_unpacked(req, &alloc.alloc);
+
+	for (i = 0; i < resp.n_infos; i++) {
+		D_FREE(resp.infos[i]->space[0]);
+		D_FREE(resp.infos[i]->space);
+	}
+	D_FREE(resp.infos);
+	D_FREE(resp_infos);
 }
 
 void

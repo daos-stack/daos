@@ -76,8 +76,6 @@ engine_cont_init(struct credit_context *tsc)
 	if (rc)
 		return rc;
 
-	vos_pool_features_set(tsc->tsc_poh, VOS_POOL_FEAT_AGG_OPT);
-
 	tsc->tsc_coh = coh;
 	return rc;
 }
@@ -101,7 +99,7 @@ engine_fini(struct credit_context *tsc)
 static int
 engine_init(struct credit_context *tsc)
 {
-	return vos_self_init(tsc->tsc_pmem_path);
+	return vos_self_init(tsc->tsc_pmem_path, false, -1);
 }
 
 struct io_engine vos_engine = {

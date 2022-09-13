@@ -8,7 +8,7 @@ if [ -n "$repo_server_pragma" ]; then
 else
     # default is artifactory
     # shellcheck disable=SC2034
-    repo_servers=('artifactory' 'nexus')
+    repo_servers=('artifactory')
 fi
 
 # Use a daos-do/repo-files PR if specified
@@ -30,7 +30,7 @@ release=$(lsb_release -sr)
 EXCLUDE_UPGRADE=mercury,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
-    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*
+    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
 fi
 case "$id" in
     CentOS|Rocky|AlmaLinux|RedHatEnterpriseServer)
@@ -39,7 +39,7 @@ case "$id" in
             EXCLUDE_UPGRADE+=,fuse
         else
             DISTRO_NAME=el${release%%.*}
-            EXCLUDE_UPGRADE+=,dpdk
+            EXCLUDE_UPGRADE+=,dpdk\*
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el

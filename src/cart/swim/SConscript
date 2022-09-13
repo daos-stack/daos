@@ -16,15 +16,13 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/cart/swim'])
     denv.AppendUnique(LIBS=['gurt'])
-    denv.Append(CCFLAGS=['-D_USE_CART_'])
 
     swim_targets = denv.SharedObject(SRC)
-    swim_lib = denv.SharedLibrary('libswim', swim_targets)
 
     Default(swim_targets)
-    Export('swim_lib', 'swim_targets')
+    Export('swim_targets')
+
 
 if __name__ == "SCons.Script":
     scons()

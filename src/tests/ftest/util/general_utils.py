@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -19,6 +18,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -288,8 +289,110 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         raise DaosTestError(msg)
 
 
-def run_task(hosts, command, timeout=None):
+def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
+
+    Args:
+        hosts (NodeSet): hosts on which to run the command
+        command (str): the command to run in parallel
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+        verbose (bool, optional): display message for command execution. Defaults to False.
+
+    Returns:
+        Task: a ClusterShell.Task.Task object for the executed command
+
+    """
+    if not isinstance(hosts, NodeSet):
+        hosts = NodeSet.fromlist(hosts)
+    task = task_self()
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
+    kwargs = {"command": command, "nodes": hosts}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    if verbose:
+        log = getLogger()
+        log.info("Running on %s: %s", hosts, command)
+    task.run(**kwargs)
+    return task
+
+
+def check_task(task, logger=None):
+    """Check the results of the executed task and get the output.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    def check_task_log(message):
+        """Log the provided text if a logger is present.
+
+        Args:
+            message (str): text to display
+        """
+        if logger:
+            logger.info(message)
+
+    # Create a dictionary of hosts for each unique return code
+    results = dict(task.iter_retcodes())
+
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if not output_data:
+            output_data = [["<NONE>", results[code]]]
+        for output, o_hosts in output_data:
+            node_set = NodeSet.fromlist(o_hosts)
+            lines = list(output.splitlines())
+            if len(lines) > 1:
+                # Print the sub-header for multiple lines of output
+                check_task_log("    {}: rc={}, output:".format(node_set, code))
+            for number, line in enumerate(lines):
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if len(lines) == 1:
+                    # Print the sub-header and line for one line of output
+                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
+                    continue
+                try:
+                    check_task_log("      {}".format(line))
+                except IOError:
+                    # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
+                    # space of time so catch this and retry.
+                    check_task_log(
+                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
+                        "retry ***".format(*number + 1, len(lines)))
+                    time.sleep(5)
+                    check_task_log("      {}".format(line))
+
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
+
+    # Determine if the command completed successfully across all the hosts
+    return len(results) == 1 and 0 in results
+
+
+def display_task(task):
+    """Display the output for the executed task.
+
+    Args:
+        task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    log = getLogger()
+    return check_task(task, log)
+
+
+def log_task(hosts, command, timeout=None):
+    """Display the output of the command executed on each host in parallel.
 
     Args:
         hosts (list): list of hosts
@@ -297,24 +400,17 @@ def run_task(hosts, command, timeout=None):
         timeout (int, optional): command timeout in seconds. Defaults to None.
 
     Returns:
-        Task: a ClusterShell.Task.Task object for the executed command
+        bool: if the command returned an 0 exit status on every host
 
     """
-    task = task_self()
-    # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", "-oForwardAgent=yes")
-    kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
-    if timeout is not None:
-        kwargs["timeout"] = timeout
-    task.run(**kwargs)
-    return task
+    return display_task(run_task(hosts, command, timeout, True))
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the results.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -357,7 +453,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     task = run_task(hosts, command, timeout)
 
     # Get the exit status of each host
-    host_exit_status = {host: None for host in hosts}
+    host_exit_status = {str(host): None for host in hosts}
     for exit_status, host_list in task.iter_retcodes():
         for host in host_list:
             host_exit_status[host] = exit_status
@@ -372,7 +468,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     if not output_data:
         output_data = [["", hosts]]
     for output, host_list in output_data:
-        # Deterimine the unique exit status for each host with the same output
+        # Determine the unique exit status for each host with the same output
         output_exit_status = {}
         for host in host_list:
             if host_exit_status[host] not in output_exit_status:
@@ -422,6 +518,7 @@ def colate_results(command, results):
                         containing output, exit status, and interrupted
                         status common to each group of hosts (see run_pcmd()'s
                         return for details)
+
     Returns:
         str: a string colating run_pcmd()'s results
 
@@ -431,7 +528,7 @@ def colate_results(command, results):
     res += "Results:\n"
     for result in results:
         res += "  %s: exit_status=%s, interrupted=%s:" % (
-               result["hosts"], result["exit_status"], result["interrupted"])
+            result["hosts"], result["exit_status"], result["interrupted"])
         for line in result["stdout"]:
             res += "    %s\n" % line
 
@@ -442,7 +539,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): command used to obtain the data on each server
         text (str): data identification string
         error (str): data error string
@@ -473,7 +570,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                     result["interrupted"], result["command"])
                 for line in result["stdout"]:
                     log.info("        %s", line)
-        host_data.append({"hosts": NodeSet.fromlist(hosts), "data": DATA_ERROR})
+        host_data.append({"hosts": hosts, "data": DATA_ERROR})
     else:
         for result in results:
             host_data.append(
@@ -486,7 +583,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -507,15 +604,18 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return exit_status
 
 
-def check_file_exists(hosts, filename, user=None, directory=False):
+def check_file_exists(hosts, filename, user=None, directory=False,
+                      sudo=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
 
     Returns:
         (bool, NodeSet): A tuple of:
@@ -532,12 +632,35 @@ def check_file_exists(hosts, filename, user=None, directory=False):
     elif directory:
         command = "test -d '{0}'".format(filename)
 
-    task = run_task(hosts, command)
+    if sudo:
+        command = "sudo " + command
+
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))
 
     return len(missing_file) == 0, missing_file
+
+
+def check_for_pool(host, uuid):
+    """Check if pool folder exist on server.
+
+    Args:
+        host (NodeSet): Server host name
+        uuid (str): Pool uuid to check if exists
+
+    Returns:
+        bool: True if pool folder exists, False otherwise
+
+    """
+    pool_dir = "/mnt/daos/{}".format(uuid)
+    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    if result[0]:
+        print("{} exists on {}".format(pool_dir, host))
+    else:
+        print("{} does not exist on {}".format(pool_dir, host))
+    return result[0]
 
 
 def process_host_list(hoststr):
@@ -602,7 +725,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
+        random_string = "".join(random.choice(include) for _ in range(length))  # nosec
     return random_string
 
 
@@ -630,7 +753,7 @@ def check_pool_files(log, hosts, uuid):
 
     Args:
         log (logging): logging object used to display messages
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
         uuid (str): uuid file name to look for in /mnt/daos.
 
     Returns:
@@ -639,10 +762,10 @@ def check_pool_files(log, hosts, uuid):
 
     """
     status = True
-    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    log.info("Checking for pool data on %s", hosts)
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename)
+        result = check_file_exists(hosts, filename, sudo=True)
         if not result[0]:
             log.error("%s: %s not found", result[1], filename)
             status = False
@@ -673,13 +796,12 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     """Signal the engines on each hosts to generate their ULT stacks dump.
 
     Args:
-        hosts (list): hosts on which to signal the engines
+        hosts (NodeSet): hosts on which to signal the engines
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
         added_filter (str, optional): negative filter to better identify
             engines.
-
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -713,8 +835,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout,
-                      None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
 
     return result
 
@@ -723,14 +844,13 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
-        hosts (list): hosts on which to stop the processes
+        hosts (NodeSet): hosts on which to stop the processes
         pattern (str): regular expression used to find process names to stop
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -778,6 +898,7 @@ def get_partition_hosts(partition, reservation=None):
     Args:
         partition (str): name of the partition
         reservation (str): name of reservation
+
     Returns:
         list: list of hosts in the specified partition
 
@@ -1026,7 +1147,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         directory (str): the directory to create
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
@@ -1063,7 +1184,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
@@ -1106,7 +1227,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     the specified hosts prior to copying the source.
 
     Args:
-        hosts (list): hosts on which to copy the source
+        hosts (NodeSet): hosts on which to copy the source
         source (str): the file to copy to the hosts
         destination (str): the host location in which to copy the source
         mkdir (bool, optional): whether or not to ensure the destination
@@ -1148,7 +1269,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
             localhost = gethostname().split(".")[0]
-            other_hosts = [host for host in hosts if host != localhost]
+            other_hosts = NodeSet.fromlist([host for host in hosts if host != localhost])
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
@@ -1271,7 +1392,7 @@ def create_string_buffer(value, size=None):
 
     Args:
     value (object): value to pass to ctypes.create_string_buffer()
-    size (int, optional): sze to pass to ctypes.create_string_buffer()
+    size (int, optional): size to pass to ctypes.create_string_buffer()
 
     Returns:
     array: return value from ctypes.create_string_buffer()
@@ -1343,8 +1464,12 @@ def get_primary_group(user=None):
     """
     if user is None:
         user = getuser()
-    gid = pwd.getpwnam(user).pw_gid
-    return grp.getgrgid(gid).gr_name
+    try:
+        gid = pwd.getpwnam(user).pw_gid
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        # User may not exist on this host, e.g. daos_server, so just return the user name
+        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
@@ -1368,3 +1493,50 @@ def get_journalctl(hosts, since, until, journalctl_type):
     results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
     return results
+
+
+def get_avocado_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    return settings.get_value(section, key)     # pylint: disable=no-member
+
+
+def set_avocado_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(section, key, str(value))
+
+
+def nodeset_append_suffix(nodeset, suffix):
+    """Append a suffix to each element of a NodeSet/list.
+
+    Only appends if the element does not already end with the suffix.
+
+    Args:
+        nodeset (NodeSet/list): the NodeSet or list
+        suffix: the suffix to append
+
+    Returns:
+        NodeSet: a new NodeSet with the suffix
+    """
+    return NodeSet.fromlist(
+        map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))

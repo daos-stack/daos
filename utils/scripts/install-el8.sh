@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/usr/bin/env bash
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -7,9 +7,12 @@
 # interactively then these two commands can be used to set dnf into automatic mode.
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
+
 set -e
 
-dnf -y --nodocs install \
+arch=$(uname -i)
+
+dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
     clang \
@@ -30,13 +33,11 @@ dnf -y --nodocs install \
     graphviz \
     help2man \
     hwloc-devel \
-    ipmctl \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
     libcmocka-devel \
     libevent-devel \
-    libipmctl-devel \
     libiscsi-devel \
     libtool \
     libtool-ltdl-devel \
@@ -57,16 +58,24 @@ dnf -y --nodocs install \
     python3-pip \
     sg3_utils \
     sudo \
+    systemd \
     valgrind-devel \
     which \
     yasm
+
+# ipmctl is only available on x86_64
+if [ "$arch" = x86_64 ]; then
+    dnf --nodocs install \
+        ipmctl \
+        libipmctl-devel
+fi
 
 # For fedora, java-11 is installed along with maven if we install maven from
 # repo. But we need java-8 (1.8). The 'devel' package also needs to be
 # installed specifically.
 
 if [ -e /etc/fedora-release ]; then
-        dnf -y install java-1.8.0-openjdk-devel maven-openjdk8
+        dnf install java-1.8.0-openjdk-devel maven-openjdk8
 else
-        dnf -y install maven
+        dnf install maven
 fi

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1220,6 +1220,133 @@ out:
 	return rc;
 }
 
+static int
+test_10_task_body(tse_task_t *task)
+{
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static int
+sched_test_10()
+{
+	pthread_t	th_1, th_2;
+	tse_sched_t	sched_1, sched_2;
+	tse_task_t	**tasks = NULL;
+	bool		flag;
+	int		ntask = 100;
+	int		i, rc;
+
+	TSE_TEST_ENTRY("10", "cross scheduler task dependency test");
+
+	D_ALLOC_ARRAY(tasks, ntask * 2);
+	if (tasks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	stop_progress = 0;
+	print_message("Init Scheduler\n");
+	rc = tse_sched_init(&sched_1, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = tse_sched_init(&sched_2, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Creating progress thread..\n");
+
+	rc = pthread_create(&th_1, NULL, th_sched_progress, &sched_1);
+	if (rc != 0) {
+		print_error("Failed to create pthread: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = pthread_create(&th_2, NULL, th_sched_progress, &sched_2);
+	if (rc != 0) {
+		print_error("Failed to create pthread: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	for (i = 0; i < ntask * 2; i++) {
+		if (i < ntask)
+			rc = tse_task_create(test_10_task_body, &sched_1, NULL, &tasks[i]);
+		else
+			rc = tse_task_create(test_10_task_body, &sched_2, NULL, &tasks[i]);
+		if (rc != 0) {
+			print_error("Failed to create task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	for (i = 0; i < ntask; i++) {
+		rc = tse_task_register_deps(tasks[i], 1, &tasks[i + ntask]);
+		if (rc != 0) {
+			print_error("Failed to register task Deps: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	for (i = 0; i < ntask * 2; i++) {
+		rc = tse_task_schedule(tasks[i], false);
+		if (rc != 0) {
+			print_error("Failed to schedule task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	do {
+		flag = tse_sched_check_complete(&sched_2);
+		if (flag)
+			printf("sched not empty, sleeping\n");
+		sleep(1);
+	} while (!flag);
+	do {
+		flag = tse_sched_check_complete(&sched_1);
+		if (flag)
+			printf("sched not empty, sleeping\n");
+		sleep(1);
+	} while (!flag);
+
+	stop_progress = true;
+	rc = pthread_join(th_1, NULL);
+	if (rc != 0) {
+		print_error("Failed pthread_join: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = pthread_join(th_2, NULL);
+	if (rc != 0) {
+		print_error("Failed pthread_join: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("COMPLETE Scheduler\n");
+	tse_sched_addref(&sched_1);
+	tse_sched_complete(&sched_1, 0, false);
+	tse_sched_addref(&sched_2);
+	tse_sched_complete(&sched_2, 0, false);
+
+	print_message("Check scheduler is empty\n");
+	flag = tse_sched_check_complete(&sched_1);
+	tse_sched_decref(&sched_1);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	flag = tse_sched_check_complete(&sched_2);
+	tse_sched_decref(&sched_2);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+out:
+	D_FREE(tasks);
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1281,6 +1408,12 @@ main(int argc, char **argv)
 	rc = sched_test_9();
 	if (rc != 0) {
 		print_error("SCHED TEST 9 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = sched_test_10();
+	if (rc != 0) {
+		print_error("SCHED TEST 10 failed: %d\n", rc);
 		test_fail++;
 	}
 

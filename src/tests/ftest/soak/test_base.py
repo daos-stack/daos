@@ -26,7 +26,8 @@ from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
-    get_journalctl, get_daos_server_logs
+    get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
+    create_app_cmdline
 
 
 class SoakTestBase(TestWithServers):
@@ -42,7 +43,7 @@ class SoakTestBase(TestWithServers):
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
         self.soaktest_dir = None
-        self.exclude_slurm_nodes = None
+        self.exclude_slurm_nodes = NodeSet()
         self.loop = None
         self.outputsoak_dir = None
         self.test_name = None
@@ -75,7 +76,6 @@ class SoakTestBase(TestWithServers):
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
-        self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
@@ -105,10 +105,10 @@ class SoakTestBase(TestWithServers):
         for host_server in self.hostlist_servers:
             if host_server in self.hostlist_clients:
                 self.hostlist_clients.remove(host_server)
-                self.exclude_slurm_nodes.append(host_server)
+                self.exclude_slurm_nodes.add(host_server)
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
-        self.exclude_slurm_nodes.extend(local_host_list)
+        self.exclude_slurm_nodes.add(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
         if not self.hostlist_clients:
@@ -326,6 +326,12 @@ class SoakTestBase(TestWithServers):
                             self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
+                    elif "vpic" in job:
+                        commands = create_app_cmdline(self, job, pool, ppn, npj)
+                    elif "lammps" in job:
+                        commands = create_app_cmdline(self, job, pool, ppn, npj)
+                    elif "macsio" in job:
+                        commands = create_macsio_cmdline(self, job, pool, ppn, npj)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))
@@ -627,7 +633,7 @@ class SoakTestBase(TestWithServers):
             self.container = []
             # Remove the test pools from self.pool; preserving reserved pool
             if not single_test_pool:
-                self.soak_errors.extend(self.destroy_pools(self.pool[1]))
+                self.soak_errors.extend(self.destroy_pools(self.pool[1:]))
                 self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",

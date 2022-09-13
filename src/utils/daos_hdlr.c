@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	17
+#define NUM_SERIALIZE_PROPS	18
 
 #include <stdio.h>
 #include <dirent.h>
@@ -39,8 +39,6 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
-
-#define OID_ARR_SIZE 8
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -574,17 +572,11 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 
-		if (uuid_is_null(ap->c_uuid))
-			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
-		if (uuid_is_null(ap->c_uuid))
-			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
-		else
-			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
@@ -1608,6 +1600,7 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
+	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {
@@ -1960,41 +1953,22 @@ dm_connect(struct cmd_args_s *ap,
 
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc)
-						D_GOTO(err, rc);
-					rc = dfs_cont_create(ca->dst_poh, cuuid, &attr, NULL, NULL);
-				} else {
-					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
-							     NULL, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
+				rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL, NULL);
 				if (rc != 0) {
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
+				uuid_unparse(cuuid, ca->dst_cont);
 			} else {
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc == 0)
-						rc = daos_cont_create(ca->dst_poh, cuuid, props,
-								      NULL);
-					else
-						rc = daos_cont_create_with_label(ca->dst_poh,
-										 ca->dst_cont,
-										 props, NULL, NULL);
-				} else {
-					rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
+				rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
+				uuid_unparse(cuuid, ca->dst_cont);
 			}
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
@@ -3156,52 +3130,6 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 
 	fprintf(ap->outstream, "successfully rollback container\n");
-	return rc;
-}
-
-int
-cont_list_objs_hdlr(struct cmd_args_s *ap)
-{
-	daos_obj_id_t		oids[OID_ARR_SIZE];
-	daos_handle_t		oit;
-	daos_anchor_t		anchor = {0};
-	uint32_t		oids_nr;
-	int			rc, i;
-
-	/* create a snapshot with OIT */
-	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
-				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
-				       NULL);
-	if (rc != 0)
-		goto out;
-
-	/* open OIT */
-	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"open of container's OIT failed: "DF_RC"\n", DP_RC(rc));
-		goto out_snap;
-	}
-
-	while (!daos_anchor_is_eof(&anchor)) {
-		oids_nr = OID_ARR_SIZE;
-		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"object IDs enumeration failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out_close, rc);
-		}
-
-		for (i = 0; i < oids_nr; i++)
-			D_PRINT(DF_OID"\n", DP_OID(oids[i]));
-	}
-
-out_close:
-	daos_oit_close(oit, NULL);
-out_snap:
-	cont_destroy_snap_hdlr(ap);
-out:
 	return rc;
 }
 
