@@ -1082,24 +1082,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expErr: FaultConfigVMDImbalance,
 		},
-		// If there is an equal total number of backing devices behind VMDs attached to each
-		// engine but the number of VMDs for each engine differs then validation will fail.
-		// It is expected that there are an equal number of VMD addresses per engine.
-		"vmd enabled; balanced nr ssds; imbalanced nr vmds": {
-			engineCount:  2,
-			accessPoints: []string{"hostX"},
-			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
-			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
-			numaSSDs: numaSSDsMap{
-				0: hardware.MustNewPCIAddressSet(test.MockVMDPCIAddrs(5, 2, 4)...),
-				1: hardware.MustNewPCIAddressSet(append(test.MockVMDPCIAddrs(13, 1),
-					test.MockVMDPCIAddrs(14, 1)...)...),
-			},
-			numaCoreCounts: numaCoreCountsMap{
-				0: &coreCounts{22, 1}, 1: &coreCounts{22, 1},
-			},
-			expErr: config.FaultConfigBdevCountMismatch(1, 2, 0, 1),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
