@@ -317,7 +317,7 @@ ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
 	if (dtx_id_str == NULL)
 		return -DER_INVAL;
 
-	strncpy(cpy, dtx_id_str, 128);
+	strncpy(cpy, dtx_id_str, sizeof(cpy) - 1);
 
 	tok = strtok(cpy, ".");
 	if (tok == NULL)

@@ -854,7 +854,7 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
 	ddb_print(ctx, "    <dtx_id>\n");
-	ddb_print(ctx, "\tThe dtx id of the entry to abort.\n");
+	ddb_print(ctx, "\tDTX id of the entry to abort.\n");
 	ddb_print(ctx, "\n");
 }
 
@@ -887,8 +887,8 @@ ddb_program_help(struct ddb_ctx *ctx)
 
 	ddb_print(ctx, "\nOptions:\n");
 	ddb_print(ctx, "   -w, --write_mode\n");
-	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying\n"
-		       "\tthe vos file with the load,\n"
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the\n"
+		       "\tvos file with the load,\n"
 		       "\tcommit_ilog, etc commands.\n");
 	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
 	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");

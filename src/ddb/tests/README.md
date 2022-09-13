@@ -13,7 +13,7 @@ a different test suite for each of the following layers:
   though test suite will setup a vos instance and tests the commands and vos
   layers together, most of the testing is focused on the commands layer, that
   invalid input for options and arguments is handled appropriately, etc.
-- The main test suit focuses on the ddb_main function and that the ddb utility
+- The main test suite focuses on the ddb_main function and that the ddb utility
   options and arguments are handled appropriately.
 - The print test suite looks at how information is printed and if it seems
   correct.
@@ -21,4 +21,4 @@ a different test suite for each of the following layers:
 The ddb_test_driver.c file contains the entry point for ddb_tests. It does not
 take any arguments for filtering or modifying tests; however, while debugging,
 the "test_suites" and "cmocka_set_test_filter" variable and function can be
-used, with a test recompile, to filter which tests are run. 
+used, with a test recompile, to filter which tests are run.
