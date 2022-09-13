@@ -358,7 +358,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		/**
 		 * TODO: state should be "NA" by default and shouldn't be changed
 		 * if (rc == -DER_NOSYS)
-		 * 	resp->devices[i]->led_state = CTL__VMD_LED_STATE__NA;
+		 *	resp->devices[i]->led_state = CTL__VMD_LED_STATE__NA;
 		 * else
 		 */
 		resp->devices[i]->led_state = led_state;
