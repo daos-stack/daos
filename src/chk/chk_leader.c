@@ -2294,6 +2294,10 @@ out_log:
 			chk_pools_dump(pool_nr, pools);
 		else if (prop->cp_pool_nr > 0)
 			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
+
+		/* Notify the control plane that the check (re-)starts from the beginning. */
+		if (flags & CHK__CHECK_FLAG__CF_RESET)
+			rc = 1;
 	} else if (rc != -DER_ALREADY) {
 		D_ERROR("Leader failed to start check on %u ranks for %d pools with "
 			"flags %x, phase %d, leader %u, gen "DF_X64": "DF_RC"\n",
