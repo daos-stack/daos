@@ -239,7 +239,7 @@ bio_query_dev_list(void *arg)
 }
 
 struct bio_led_manage_info {
-	uuid_t		 	 dev_uuid;
+	uuid_t			 dev_uuid;
 	Ctl__VmdLedAction	 action;
 	Ctl__VmdLedState	*state;
 };
