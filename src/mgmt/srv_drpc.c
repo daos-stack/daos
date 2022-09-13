@@ -2195,35 +2195,6 @@ out:
 		D_FREE(bio_health);
 }
 
-static int
-drpc_dev_manage_init(Ctl__DevManageReq *req, Ctl__DevManageResp *resp, Drpc__Response *drpc_resp)
-{
-	if (strlen(req->dev_uuid) == 0) {
-		D_ERROR("Device UUID for management request is empty\n");
-		return DRPC__STATUS__FAILURE;
-	}
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response ref\n");
-		return DRPC__STATUS__FAILURE;
-	}
-
-	ctl__dev_manage_resp__init(resp);
-
-	D_ALLOC_PTR(resp->device);
-	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response device ref\n");
-		return DRPC__STATUS__FAILURE;
-	}
-
-	ctl__smd_device__init(resp->device);
-	resp->device->dev_state = NULL;
-	resp->device->uuid = NULL;
-
-	return DRPC__STATUS__SUCCESS;
-}
-
 static void
 drpc_dev_manage_pack(Ctl__DevManageResp *resp, uint8_t *body, Drpc__Response *drpc_resp)
 {
@@ -2275,9 +2246,18 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to set device state to FAULTY\n");
 
-	rc = drpc_dev_manage_init(req, resp, drpc_resp);
-	if (rc != 0) {
-		drpc_resp->status = rc;
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		D_ERROR("Failed to allocate daos response ref\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		goto out;
+	}
+
+	ctl__dev_manage_resp__init(resp);
+
+	if (strlen(req->dev_uuid) == 0) {
+		D_ERROR("Device UUID for management request is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		goto out;
 	}
 
@@ -2317,9 +2297,18 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to manage LED on device %s\n", req->dev_uuid);
 
-	rc = drpc_dev_manage_init(req, resp, drpc_resp);
-	if (rc != 0) {
-		drpc_resp->status = rc;
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		D_ERROR("Failed to allocate daos response ref\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		goto out;
+	}
+
+	ctl__dev_manage_resp__init(resp);
+
+	if (strlen(req->dev_uuid) == 0) {
+		D_ERROR("Device UUID for management request is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		goto out;
 	}
 

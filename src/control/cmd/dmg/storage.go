@@ -331,7 +331,7 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 		UUID:     cmd.UUID,
 		Identify: true,
 	}
-	return cmd.makeRequest(context.Background(), req)
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
 
 type ledClearCmd struct {
@@ -347,7 +347,7 @@ func (cmd *ledClearCmd) Execute(_ []string) error {
 		UUID:     cmd.UUID,
 		ResetLED: true,
 	}
-	return cmd.makeRequest(context.Background(), req)
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
 
 type ledCheckCmd struct {
@@ -363,5 +363,5 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 		UUID:   cmd.UUID,
 		GetLED: true,
 	}
-	return cmd.makeRequest(context.Background(), req)
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }

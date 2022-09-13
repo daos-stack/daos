@@ -584,17 +584,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	/* Default tgt_id is the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
 
-	ctl__smd_device__init(resp->device);
-
-	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
-	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
-	uuid_unparse_lower(dev_uuid, resp->device->uuid);
-
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS, tgt_id, 0, &thread);
@@ -606,6 +595,25 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
 
+	dev_info->sdi_state = SMD_DEV_FAULTY;
+
+	D_ALLOC_PTR(resp->device);
+	if (resp->device == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	ctl__smd_device__init(resp->device);
+	resp->device->dev_state = NULL;
+	resp->device->uuid = NULL;
+
+	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
+	if (resp->device->uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	uuid_unparse_lower(dev_uuid, resp->device->uuid);
+
 	uuid_copy(led_info.dev_uuid, dev_uuid);
 	led_info.action = CTL__VMD_LED_ACTION__SET;
 	led_state = CTL__VMD_LED_STATE__ON;
@@ -613,12 +621,13 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 
 	/* Set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
-	if (rc) {
-		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
-			DP_UUID(dev_uuid));
+	if (rc != 0) {
+		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
+		if (rc == -DER_NOSYS)
+			resp->device->led_state = CTL__VMD_LED_STATE__NA;
+		else
+			goto out;
 	}
-
-	dev_info->sdi_state = SMD_DEV_FAULTY;
 
 	state_str = nvme_state2str(NVME_DEV_STATE_NORMAL_FAULTY);
 	buflen = strlen(state_str) + 1;
@@ -635,13 +644,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 out:
 	smd_dev_free_info(dev_info);
 
-	if (rc != 0) {
-		if (resp->device->dev_state != NULL)
-			D_FREE(resp->device->dev_state);
-		if (resp->device->uuid != NULL)
-			D_FREE(resp->device->uuid);
-	}
-
 	return rc;
 }
 
@@ -657,13 +659,18 @@ ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLe
 
 	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
 
+	D_ALLOC_PTR(resp->device);
+	if (resp->device == NULL) {
+		return -DER_NOMEM;
+	}
 	ctl__smd_device__init(resp->device);
+	resp->device->dev_state = NULL;
+	resp->device->uuid = NULL;
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
 		D_ERROR("Failed to allocate device uuid");
-		rc = -DER_NOMEM;
-		goto out;
+		return -DER_NOMEM;
 	}
 	uuid_unparse_lower(dev_uuid, resp->device->uuid);
 
@@ -673,20 +680,10 @@ ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLe
 
 	/* Manage the VMD LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
-	if (rc != 0 && rc != -DER_NOSYS) {
-		goto out;
-	}
-
 	if (rc == -DER_NOSYS)
 		resp->device->led_state = CTL__VMD_LED_STATE__NA;
-	else
+	else if (rc == 0)
 		resp->device->led_state = (Ctl__VmdLedState)led_state;
-
-out:
-	if (rc != 0) {
-		if (resp->device->uuid != NULL)
-			D_FREE(resp->device->uuid);
-	}
 
 	return rc;
 }
