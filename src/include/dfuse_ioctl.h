@@ -31,8 +31,8 @@
 
 /* TODO: What value to offset base by. */
 /* Notify dfuse that file has been written to externally, disable all caching until file is
-* next closed */
-#define DFUSE_IOCTL_START_WRITE (DFUSE_IOCTL_REPLY_BASE + 20)
+ * next closed */
+#define DFUSE_IOCTL_START_WRITE  (DFUSE_IOCTL_REPLY_BASE + 20)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
