@@ -11,10 +11,9 @@ sudo bash -c 'echo 1024 > /proc/sys/vm/nr_hugepages'
 if grep /mnt/daos\  /proc/mounts; then
     sudo umount /mnt/daos
 fi
-sudo mkdir -p /mnt/daos
 
-sudo mkdir -p /opt/daos-remote
-sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" /opt/daos-remote
+sudo mkdir -p "$DAOS_BASE"
+sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 if [ -n "$BULLSEYE" ]; then
     pushd "$DAOS_BASE/bullseye"
     set +x
@@ -27,22 +26,17 @@ if [ -n "$BULLSEYE" ]; then
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
 fi
 
-cd /opt/daos-remote
+cd "$DAOS_BASE"
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf /opt/daos-remote/opt-daos.tar
 ls -l
 ls -l /opt
 
-cd /opt/daos
+cd "$DAOS_BASE"
 
-rsync -avp /opt/daos-remote/ /opt/daos/
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
-
-# /bin/rm "$DAOS_BASE/bin/daos_admin"
-
-cd /opt/daos-remote
 
 sudo mkdir -p /usr/share/spdk/scripts/
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts/
@@ -58,5 +52,5 @@ else
 fi
 
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" \
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" \
     DAOS_BASE="$DAOS_BASE" utils/run_test.sh
