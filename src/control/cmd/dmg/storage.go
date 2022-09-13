@@ -19,15 +19,14 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd      `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	NvmeAddDevice nvmeAddDeviceCmd   `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
-	Set           setFaultyCmd       `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	Identify      storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
-	LedManage     ledManageCmd       `command:"led-manage" description:"Reset the status LED or get current LED states for VMD devices."`
+	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
+	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage     ledManageCmd      `command:"led" description:"Manage status LEDs of VMD enabled NVMe SSDs."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -250,12 +249,10 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	return resp.Errors()
 }
 
-// setFaultyCmd is the struct representing the set storage subcommand
 type setFaultyCmd struct {
 	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" description:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
-// nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
 type nvmeSetFaultyCmd struct {
 	smdQueryCmd
 	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
@@ -315,21 +312,21 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	return cmd.makeRequest(context.Background(), req)
 }
 
-// storageIdentifyCmd is the struct representing the identify storage subcommand.
-type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
+type ledManageCmd struct {
+	Check    ledCheckCmd    `command:"check" description:"Retrieve the current LED state of specified VMD device."`
+	Identify ledIdentifyCmd `command:"identify" description:"Blink the status LED on specified VMD device (for the purpose of visual SSD identification). Default duration is 2 minutes."`
+	Clear    ledClearCmd    `command:"clear" description:"Clear any blinking LED state on specified VMD device that was due to a prior identify command action."`
 }
 
-// vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
-type vmdIdentifyCmd struct {
+type ledIdentifyCmd struct {
 	smdQueryCmd
-	UUID string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
 }
 
-// Execute is run when vmdIdentifyCmd activates.
+// Execute is run when ledIdentifyCmd activates.
 //
-// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
-func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
+// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
+func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:     cmd.UUID,
 		Identify: true,
@@ -337,22 +334,15 @@ func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
 	return cmd.makeRequest(context.Background(), req)
 }
 
-// ledManageCmd is the struct representing the led-manage storage subcommand.
-type ledManageCmd struct {
-	Reset    vmdResetCmd    `command:"reset" description:"Reset the status LED on a VMD NVMe SSD back to a normal OFF state. Useful for debug or mistakenly set LEDs only, not necessary in a typical use case."`
-	GetState vmdGetStateCmd `command:"get-state" description:"Display the current state of the status LED on a VMD device. Useful for remote debugging."`
-}
-
-// vmdResetCmd is the struct representing the led-manage reset storage subcommand.
-type vmdResetCmd struct {
+type ledClearCmd struct {
 	smdQueryCmd
-	UUID string `long:"uuid" description:"Device UUID of the VMD SSD LED to reset to OFF" required:"1"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to clear" required:"1"`
 }
 
-// Execute is run when vmdResetCmd activates.
+// Execute is run when ledClearCmd activates.
 //
-// Runs SPDK VMD API commands to reset the LED state on the VMD to "OFF"
-func (cmd *vmdResetCmd) Execute(_ []string) error {
+// Runs SPDK VMD API commands to clear any identify LED state on the VMD.
+func (cmd *ledClearCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:     cmd.UUID,
 		ResetLED: true,
@@ -360,16 +350,15 @@ func (cmd *vmdResetCmd) Execute(_ []string) error {
 	return cmd.makeRequest(context.Background(), req)
 }
 
-// vmdGetStateCmd is the struct representing the led-manage get-state storage subcommand.
-type vmdGetStateCmd struct {
+type ledCheckCmd struct {
 	smdQueryCmd
-	UUID string `long:"uuid" description:"Device UUID of the VMD SSD LED to query" required:"1"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to check" required:"1"`
 }
 
-// Execute is run when vmdGetStateCmd activates.
+// Execute is run when ledCheckCmd activates.
 //
 // Runs SPDK VMD API commands to query the LED state on VMD devices
-func (cmd *vmdGetStateCmd) Execute(_ []string) error {
+func (cmd *ledCheckCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:   cmd.UUID,
 		GetLED: true,

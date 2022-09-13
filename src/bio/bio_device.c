@@ -805,11 +805,13 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
 
 	/* Validate action value. */
 	switch (action) {
+	case CTL__VMD_LED_ACTION__GET:
+		break;
 	case CTL__VMD_LED_ACTION__SET:
 		opts.led_state = *state;
 		break;
 	case CTL__VMD_LED_ACTION__RESET:
-	case CTL__VMD_LED_ACTION__GET:
+		break;
 	default:
 		D_ERROR("invalid action supplied: %d\n", action);
 		return -DER_INVAL;

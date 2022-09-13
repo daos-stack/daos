@@ -238,8 +238,14 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("the required flag `--new-uuid' was not specified"),
 		},
 		{
+			"Identify device without device specified",
+			"storage led identify",
+			"",
+			errors.New("the required flag `-u, --uuid' was not specified"),
+		},
+		{
 			"Identify a device",
-			"storage identify vmd --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"storage led identify --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
 				UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				Identify: true,
@@ -247,8 +253,8 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Reset LED state on a VMD device",
-			"storage led-manage reset --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"Clear identifying LED state on a VMD device",
+			"storage led clear --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
 				UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				ResetLED: true,
@@ -257,7 +263,7 @@ func TestStorageCommands(t *testing.T) {
 		},
 		{
 			"Query LED state of a VMD device",
-			"storage led-manage get-state --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"storage led check --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
 				UUID:   "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				GetLED: true,
