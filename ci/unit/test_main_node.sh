@@ -11,6 +11,7 @@ sudo bash -c 'echo 1024 > /proc/sys/vm/nr_hugepages'
 if grep /mnt/daos\  /proc/mounts; then
     sudo umount /mnt/daos
 fi
+sudo mkdir -p /mnt/daos
 
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
