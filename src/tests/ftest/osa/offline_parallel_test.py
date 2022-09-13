@@ -15,7 +15,6 @@ from exception_utils import CommandFailure
 from test_utils_pool import add_pool
 
 
-
 class OSAOfflineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
