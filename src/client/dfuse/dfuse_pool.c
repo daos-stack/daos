@@ -46,10 +46,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 		return false;
 	}
 
-	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID,
-			DP_UUID(pool));
+	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(pool));
 
-	rc = dfuse_pool_connect(fs_handle, &pool, &dfp);
+	rc = dfuse_pool_get_handle(fs_handle, pool, &dfp);
 	if (rc != 0)
 		goto err;
 
