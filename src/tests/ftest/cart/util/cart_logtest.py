@@ -279,8 +279,8 @@ class LogTest():
                 break
             line = self.nil_free_ref[loc]
             print('NULL was freed {} times at {}:{}'.format(count, line.filename, line.lineno))
-            if count > 20:  # TODO, set this to 250.
-                show_line(line, 'NORMAL', 'Free of NULL, Use D_FREE_NLF')
+            if count > 250:
+                show_line(line, 'NORMAL', 'Frequent free with NULL value, Use D_FREE_NLF')
 
     def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""

@@ -522,8 +522,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
-	if (ioc->ic_umoffs)
-		D_FREE(ioc->ic_umoffs);
+	D_FREE_NLF(ioc->ic_umoffs);
 }
 
 static int
@@ -2418,10 +2417,8 @@ abort:
 
 	if (size != NULL && err == 0)
 		*size = ioc->ic_io_size;
-	if (daes)
-		D_FREE(daes);
-	if (dces)
-		D_FREE(dces);
+	D_FREE_NLF(daes);
+	D_FREE_NLF(dces);
 	vos_ioc_destroy(ioc, err != 0);
 
 	return err;

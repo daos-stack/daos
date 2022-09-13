@@ -134,8 +134,7 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (FREEING(proc_op)) {
 		rc = proc_struct_dcs_csum_info(proc, proc_op, *p_csum);
-		if (*p_csum)
-			D_FREE(*p_csum);
+		D_FREE_NLF(*p_csum);
 	}
 
 	return rc;
