@@ -1513,6 +1513,8 @@ def needs_dfuse(method):
 
     return _helper
 
+
+# pylint: disable-next=invalid-name
 class needs_dfuse_with_opt():
     """Decorator class for starting dfuse under posix_tests class
 
@@ -1523,8 +1525,9 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, single_threaded=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False):
         self.caching = caching
+        self.wbcache = wbcache
         self.single_threaded = single_threaded
 
     def __call__(self, method):
@@ -1537,13 +1540,14 @@ class needs_dfuse_with_opt():
                 if obj.call_index == 0:
                     caching = True
                     obj.needs_more = True
-                    obj.test_name = '{}_with_caching'.format(method.__name__)
+                    obj.test_name = f'{method.__name__}_with_caching'
                 else:
                     caching = False
 
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
+                              wbcache=self.wbcache,
                               pool=obj.pool.dfuse_mount_name(),
                               container=obj.container)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
@@ -1554,6 +1558,7 @@ class needs_dfuse_with_opt():
                     obj.fatal_errors = True
             return rc
         return _helper
+
 
 class print_stat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""
@@ -2007,7 +2012,21 @@ class posix_tests():
 
             xattr.set(fd, 'user.Xfuse.ids', b'other_value')
             for (key, value) in xattr.get_all(fd):
-                print('xattr is {}:{}'.format(key, value))
+                print(f'xattr is {key}:{value}')
+
+    @needs_dfuse_with_opt(wbcache=True, caching=True)
+    def test_stat_before_open(self):
+        """Run open/close in a loop on the same file
+
+        This only runs a reproducer, it does not trawl the logs to ensure the feature is working"""
+
+        test_file = join(self.dfuse.dir, 'test_file')
+        with open(test_file, 'w'):
+            pass
+
+        for _ in range(100):
+            with open(test_file, 'r'):
+                pass
 
     @needs_dfuse
     def test_chmod(self):
