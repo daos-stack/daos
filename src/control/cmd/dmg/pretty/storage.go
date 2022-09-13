@@ -176,23 +176,25 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 }
 
 func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
-	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n",
+	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]",
 		dev.UUID, dev.TrAddr); err != nil {
 
 		return err
 	}
 
-	iw1 := txtfmt.NewIndentWriter(iw)
 	fc := getPrintConfig(opts...)
 
 	if fc.LEDInfoOnly {
-		if _, err := fmt.Fprintf(iw1, "LED:%s\n", dev.LedState); err != nil {
+		if _, err := fmt.Fprintf(iw, " LED:%s\n", dev.LedState); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s LED:%s\n",
+	if _, err := fmt.Fprintf(iw, "\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw), "Targets:%+v Rank:%d State:%s LED:%s\n",
 		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.LedState); err != nil {
 
 		return err

@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -181,4 +184,126 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	cmd.Infof("%s", bld.String())
 
 	return resp.Errors()
+}
+
+type setFaultyCmd struct {
+	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" description:"Manually set the device state of an NVMe SSD to FAULTY."`
+}
+
+type nvmeSetFaultyCmd struct {
+	smdQueryCmd
+	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
+	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
+}
+
+// Execute is run when nvmeSetFaultyCmd activates
+// Set the SMD device state of the given device to "FAULTY"
+func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
+	cmd.Notice("This command will permanently mark the device as unusable!")
+	if !cmd.Force {
+		if cmd.jsonOutputEnabled() {
+			return errors.New("Cannot use --json without --force")
+		}
+		if !common.GetConsent(cmd.Logger) {
+			return errors.New("consent not given")
+		}
+	}
+
+	req := &control.SmdQueryReq{
+		UUID:      cmd.UUID,
+		SetFaulty: true,
+		OmitPools: true,
+	}
+	return cmd.makeRequest(context.Background(), req)
+}
+
+// storageReplaceCmd is the struct representing the replace storage subcommand
+type storageReplaceCmd struct {
+	NVMe nvmeReplaceCmd `command:"nvme" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
+}
+
+// nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
+type nvmeReplaceCmd struct {
+	smdQueryCmd
+	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
+	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
+	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
+}
+
+// Execute is run when storageReplaceCmd activates
+// Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
+func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
+	if cmd.OldDevUUID == cmd.NewDevUUID {
+		cmd.Notice("Attempting to reuse a previously set FAULTY device!")
+	}
+
+	// TODO: Implement no-reint flag option
+	if cmd.NoReint {
+		cmd.Info("NoReint is not currently implemented")
+	}
+
+	req := &control.SmdQueryReq{
+		UUID:        cmd.OldDevUUID,
+		ReplaceUUID: cmd.NewDevUUID,
+		NoReint:     cmd.NoReint,
+		OmitPools:   true,
+	}
+	return cmd.makeRequest(context.Background(), req)
+}
+
+type ledManageCmd struct {
+	Check    ledCheckCmd    `command:"check" description:"Retrieve the current LED state of specified VMD device."`
+	Identify ledIdentifyCmd `command:"identify" description:"Blink the status LED on specified VMD device (for the purpose of visual SSD identification). Default duration is 2 minutes."`
+	Clear    ledClearCmd    `command:"clear" description:"Clear any blinking LED state on specified VMD device that was due to a prior identify command action."`
+}
+
+type ledIdentifyCmd struct {
+	smdQueryCmd
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+}
+
+// Execute is run when ledIdentifyCmd activates.
+//
+// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
+func (cmd *ledIdentifyCmd) Execute(_ []string) error {
+	req := &control.SmdQueryReq{
+		UUID:      cmd.UUID,
+		Identify:  true,
+		OmitPools: true,
+	}
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
+}
+
+type ledClearCmd struct {
+	smdQueryCmd
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to clear" required:"1"`
+}
+
+// Execute is run when ledClearCmd activates.
+//
+// Runs SPDK VMD API commands to clear any identify LED state on the VMD.
+func (cmd *ledClearCmd) Execute(_ []string) error {
+	req := &control.SmdQueryReq{
+		UUID:      cmd.UUID,
+		ResetLED:  true,
+		OmitPools: true,
+	}
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
+}
+
+type ledCheckCmd struct {
+	smdQueryCmd
+	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to check" required:"1"`
+}
+
+// Execute is run when ledCheckCmd activates.
+//
+// Runs SPDK VMD API commands to query the LED state on VMD devices
+func (cmd *ledCheckCmd) Execute(_ []string) error {
+	req := &control.SmdQueryReq{
+		UUID:      cmd.UUID,
+		GetLED:    true,
+		OmitPools: true,
+	}
+	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
