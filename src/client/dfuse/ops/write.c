@@ -33,6 +33,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 			position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
 
+	atomic_fetch_add_relaxed(&oh->doh_write_count, 1);
+
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);

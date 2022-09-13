@@ -96,13 +96,22 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 	int                   rc;
+	bool                  evicted = false;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
+	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
+		dfuse_cache_evict(oh->doh_ie);
+		evicted = true;
+	}
+
+	if (atomic_load_relaxed(&oh->doh_il_calls) != 0) {
+		if (!evicted)
+			dfuse_cache_evict(oh->doh_ie);
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
+	}
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);

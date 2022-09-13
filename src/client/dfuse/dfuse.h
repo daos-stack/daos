@@ -92,6 +92,7 @@ struct dfuse_obj_hdl {
 	uint32_t                         doh_anchor_index;
 
 	ATOMIC uint32_t                  doh_il_calls;
+	ATOMIC uint64_t                  doh_write_count;
 
 	/** True if caching is enabled for this file. */
 	bool                             doh_caching;

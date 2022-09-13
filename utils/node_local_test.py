@@ -1560,7 +1560,7 @@ class needs_dfuse_with_opt():
         return _helper
 
 
-class print_stat():
+class PrintStat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""
 
     headers = ['uid', 'gid', 'size', 'mode', 'filename']
@@ -2304,22 +2304,22 @@ class posix_tests():
 
         dfuse.start(v_hint='cont_rw_1')
 
-        ps = print_stat(dfuse.dir)
+        stat_log = PrintStat(dfuse.dir)
         testfile = join(dfuse.dir, 'testfile')
         with open(testfile, 'w') as fd:
-            ps.add(testfile, attr=os.fstat(fd.fileno()))
+            stat_log.add(testfile, attr=os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         os.mkdir(dirname)
 
-        ps.add(dirname)
+        stat_log.add(dirname)
 
         dir_perms = os.stat(dirname).st_mode
         base_perms = stat.S_IMODE(dir_perms)
 
         os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
-        ps.add(dirname)
-        print(ps)
+        stat_log.add(dirname)
+        print(stat_log)
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2352,19 +2352,19 @@ class posix_tests():
                       caching=False)
         dfuse.start(v_hint='cont_rw_2')
 
-        ps = print_stat()
-        ps.add(dfuse.dir, show_dir=True)
+        stat_log = PrintStat()
+        stat_log.add(dfuse.dir, show_dir=True)
 
         with open(join(dfuse.dir, 'testfile'), 'r') as fd:
-            ps.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+            stat_log.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         testfile = join(dirname, 'new_file')
         fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
         os.write(fd, b'read-only-data')
-        ps.add(testfile, attr=os.fstat(fd))
+        stat_log.add(testfile, attr=os.fstat(fd))
         os.close(fd)
-        print(ps)
+        print(stat_log)
 
         fd = os.open(testfile, os.O_RDONLY)
         # previous code was using stream/file methods and it appears that
