@@ -713,6 +713,115 @@ func TestServer_scanBdevStorage(t *testing.T) {
 	}
 }
 
+func TestServer_setEngineBdevs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg              engine.Config
+		engineIdx        uint32
+		scanResp         *storage.BdevScanResponse
+		lastEngineIdx    int
+		lastBdevCount    int
+		expErr           error
+		expLastEngineIdx int
+		expLastBdevCount int
+	}{
+		"nil input": {
+			expErr: errors.New("nil input param: scanResp"),
+		},
+		"empty cache": {
+			scanResp:      &storage.BdevScanResponse{},
+			lastEngineIdx: -1,
+			lastBdevCount: -1,
+		},
+		"index unset; bdev count set": {
+			scanResp:      &storage.BdevScanResponse{},
+			lastEngineIdx: -1,
+			lastBdevCount: 0,
+			expErr:        errors.New("to be unset"),
+		},
+		"index set; bdev count unset": {
+			scanResp:      &storage.BdevScanResponse{},
+			lastEngineIdx: 0,
+			lastBdevCount: -1,
+			expErr:        errors.New("to be set"),
+		},
+		"empty cache; counts match": {
+			engineIdx:        1,
+			scanResp:         &storage.BdevScanResponse{},
+			lastEngineIdx:    0,
+			lastBdevCount:    0,
+			expLastEngineIdx: 1,
+		},
+		"empty cache; count mismatch": {
+			engineIdx:     1,
+			scanResp:      &storage.BdevScanResponse{},
+			lastEngineIdx: 0,
+			lastBdevCount: 1,
+			expErr:        errors.New("engine 1 has 0 but engine 0 has 1"),
+		},
+		"populated cache; cache miss": {
+			engineIdx:     1,
+			scanResp:      &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},
+			lastEngineIdx: 0,
+			lastBdevCount: 1,
+			expErr:        errors.New("engine 1 has 0 but engine 0 has 1"),
+		},
+		"populated cache; cache hit": {
+			cfg: *engine.MockConfig().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:80:00.0"),
+				),
+			engineIdx:        1,
+			scanResp:         &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},
+			lastEngineIdx:    0,
+			lastBdevCount:    1,
+			expLastEngineIdx: 1,
+			expLastBdevCount: 1,
+		},
+		"populated cache; multiple vmd backing devices": {
+			cfg: *engine.MockConfig().
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList("0000:05:05.5", "0000:5d:05.5"),
+				),
+			engineIdx: 1,
+			scanResp: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: "5d0505:01:00.0"},
+					&storage.NvmeController{PciAddr: "5d0505:03:00.0"},
+					&storage.NvmeController{PciAddr: "050505:01:00.0"},
+					&storage.NvmeController{PciAddr: "050505:02:00.0"},
+				},
+			},
+			lastEngineIdx:    0,
+			lastBdevCount:    4,
+			expLastEngineIdx: 1,
+			expLastBdevCount: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			engine := NewEngineInstance(log,
+				storage.DefaultProvider(log, int(tc.engineIdx), &tc.cfg.Storage),
+				nil, engine.NewRunner(log, &tc.cfg))
+			engine.setIndex(tc.engineIdx)
+
+			gotErr := setEngineBdevs(engine, tc.scanResp, &tc.lastEngineIdx, &tc.lastBdevCount)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expLastEngineIdx, tc.lastEngineIdx, "unexpected last engine index")
+			test.AssertEqual(t, tc.expLastBdevCount, tc.lastBdevCount, "unexpected last bdev count")
+		})
+	}
+}
+
 func TestServer_getNetDevClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.MockConfig().
