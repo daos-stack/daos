@@ -288,4 +288,6 @@ int ds_cont_metrics_count(void);
 int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 			   daos_epoch_t epoch);
 
+int ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+			   struct container_hdl *chdl);
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */
