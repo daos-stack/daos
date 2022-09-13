@@ -29,12 +29,7 @@ fi
 cd "$DAOS_BASE"
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
-tar --strip-components=2 --directory /opt/daos -xf /opt/daos-remote/opt-daos.tar
-ls -l
-ls -l /opt
-
-cd "$DAOS_BASE"
-
+tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 
