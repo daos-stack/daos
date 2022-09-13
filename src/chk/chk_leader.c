@@ -641,6 +641,12 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		option_nr = 2;
@@ -807,6 +813,12 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 
 interact:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -990,6 +1002,12 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -1063,6 +1081,12 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1370,6 +1394,12 @@ try_ps:
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		if (clp->clp_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;

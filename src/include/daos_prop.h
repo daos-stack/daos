@@ -532,28 +532,8 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && strnlen(label, 36) == 36) {
-		bool		is_uuid = true;
-		const char	*p;
-
-		/** Implement the check directly to avoid uuid_parse() overhead */
-		for (i = 0, p = label; i < 36; i++, p++) {
-			if (i == 8 || i == 13 || i == 18 || i == 23) {
-				if (*p != '-') {
-					is_uuid = false;
-					break;
-				}
-				continue;
-			}
-			if (!isxdigit(*p)) {
-				is_uuid = false;
-				break;
-			}
-		}
-
-		if (is_uuid)
-			return false;
-	}
+	if (maybe_uuid && daos_is_valid_uuid_string(label))
+		return false;
 
 	return true;
 }

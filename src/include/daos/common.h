@@ -498,8 +498,6 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
-#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
-
 /* byte swapper */
 #define D_SWAP16(x)	bswap_16(x)
 #define D_SWAP32(x)	bswap_32(x)
