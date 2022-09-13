@@ -19,6 +19,7 @@
 #define VOS_SUB_OP_MAX	((uint16_t)-2)
 
 #define VOS_POOL_DF_2_2 24
+#define VOS_POOL_DF_2_4 25
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
