@@ -216,7 +216,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
-		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithDisableVMD(true).    // vmd enabled by default
@@ -471,14 +470,14 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadTelemetryPort,
 		},
-		"different number of ssds": {
+		"different number of bdevs": {
 			extraConfig: func(c *Server) *Server {
 				// add multiple bdevs for engine 0 to create mismatch
 				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
 					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
 				return c
 			},
-			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
+			// No failure because validation now occurs on server start-up.
 		},
 		"different number of targets": {
 			extraConfig: func(c *Server) *Server {
