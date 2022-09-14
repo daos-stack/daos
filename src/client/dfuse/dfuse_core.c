@@ -914,9 +914,6 @@ dfuse_cache_set_time(struct dfuse_inode_entry *ie)
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 	ie->ie_cache_last_update = now;
-
-	DFUSE_TRA_DEBUG(ie, "Set time to %#lx %#lx", ie->ie_cache_last_update.tv_sec,
-			ie->ie_cache_last_update.tv_nsec);
 }
 
 void
