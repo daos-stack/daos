@@ -963,7 +963,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 		D_GOTO(err, rc);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 5, fs_handle, &ie_hops,
+					 1, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err_pt, rc);
