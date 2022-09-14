@@ -30,7 +30,7 @@ class TestName():
             str: the test name including the uid, name, and variant
 
         """
-        return "-".join([str(self.uid), "".join([str(self.name), str(self.variant)])])
+        return "{}-{}{}".format(self.uid, self.name, self.variant)
 
 
 class TestResult():
@@ -59,6 +59,7 @@ class TestResult():
         self.name = name
         self.logfile = log_file
         self.logdir = log_dir
+        self._time_split = 0
         self.time_start = -1
         self.time_end = -1
         self.time_elapsed = -1
@@ -92,7 +93,11 @@ class TestResult():
             bool: True if the attribute name has a value in this object; False otherwise
 
         """
-        return self.get(item, None) is not None
+        try:
+            getattr(self, item)
+        except (AttributeError, TypeError):
+            return False
+        return True
 
     def get(self, name, default=None):
         """Get the value of the attribute name.
@@ -112,13 +117,17 @@ class TestResult():
 
     def start(self):
         """Mark the start of the test."""
+        self._time_split = time.time()
         if self.time_start == -1:
-            self.time_start = time.time()
+            # Set the start time and initialize the elapsed time if this is the first start call
+            self.time_start = self._time_split
+            self.time_elapsed = 0
 
     def end(self):
         """Mark the end of the test."""
         self.time_end = time.time()
-        self.time_elapsed = self.time_end - self.time_start
+        # Increase the elapsed time by the delta between the last start call and this end call
+        self.time_elapsed += self.time_end - self._time_split
 
 
 class Results():

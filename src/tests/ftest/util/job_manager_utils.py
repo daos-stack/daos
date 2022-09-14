@@ -1204,8 +1204,8 @@ class Clush(JobManager):
                 match = re.findall(regex, "\n".join(data.stdout))
                 if match:
                     self.log.info(
-                        "The following error messages have been detected in the '%s' output:",
-                        str(self.job))
+                        "The following error messages have been detected in the '%s' output on %s:",
+                        str(self.job), str(data.hosts))
                     for item in match:
                         self.log.info("  %s", item)
                     status = False

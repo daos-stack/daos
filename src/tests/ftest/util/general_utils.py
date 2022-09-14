@@ -185,8 +185,8 @@ class RemoteCommandResult():
             bool: if the command was successful on each host
 
         """
-        non_zero = any(data.returncode != 0 for data in self.output)
-        return not non_zero and not self.timeout
+        all_zero = all(data.returncode == 0 for data in self.output)
+        return all_zero and not self.timeout
 
     @property
     def timeout(self):
@@ -196,7 +196,7 @@ class RemoteCommandResult():
             bool: True if the command timed out on at least one set of hosts; False otherwise
 
         """
-        return all(data.timeout for data in self.output)
+        return any(data.timeout for data in self.output)
 
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
@@ -217,6 +217,8 @@ class RemoteCommandResult():
             if not output_data:
                 output_data = [["<NONE>", results[code]]]
             for output, output_hosts in output_data:
+                # In run_remote(), task.run() is executed with the stderr=False default.
+                # As a result task.iter_buffers() will return combined stdout and stderr.
                 stdout = []
                 for line in output.splitlines():
                     if isinstance(line, bytes):

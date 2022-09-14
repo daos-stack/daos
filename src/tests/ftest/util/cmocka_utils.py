@@ -78,7 +78,7 @@ class CmockaUtils():
     def get_cmocka_command(self, command):
         """Get an ExecutableCommand representing the provided command string.
 
-        Adds detection of any bad words in the command output that, if found, will result in a
+        Adds detection of any bad keywords in the command output that, if found, will result in a
         command failure.
 
         Args:
@@ -88,11 +88,11 @@ class CmockaUtils():
             ExecutableCommand: the object setup to run the command
 
         """
-        bad_words = ["Process received signal", "stack smashing detected", "End of error message"]
-        return ExecutableCommand(namespace=None, command=command, check_results=bad_words)
+        keywords = ["Process received signal", "stack smashing detected", "End of error message"]
+        return ExecutableCommand(namespace=None, command=command, check_results=keywords)
 
     def run_cmocka_test(self, test, command):
-        """Run the daos_test command.
+        """Run the cmocka test command.
 
         After the command completes, copy any remote cmocka results that may exist back to this host
         and generate a cmocka result if one is missing or the command failed before generating one.
@@ -152,8 +152,8 @@ class CmockaUtils():
                 cmocka_node_path = os.path.join(self.cmocka_dir, cmocka_node_dir)
                 if os.path.isdir(cmocka_node_path):
                     for cmocka_file in os.listdir(cmocka_node_path):
-                        cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
                         if "_cmocka_results." in cmocka_file:
+                            cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
                             command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
                             run_command(command)
 
