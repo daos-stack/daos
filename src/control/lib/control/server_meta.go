@@ -46,13 +46,13 @@ type (
 		OmitPools        bool                 `json:"omit_pools"`
 		IncludeBioHealth bool                 `json:"include_bio_health"`
 		SetFaulty        bool                 `json:"set_faulty"`
-		UUID             string               `json:"uuid"` // UUID of pool or device for single result
+		UUID             string               `json:"uuid"`
 		Rank             system.Rank          `json:"rank"`
 		Target           string               `json:"target"`
 		ReplaceUUID      string               `json:"replace_uuid"` // UUID of new device to replace storage
 		NoReint          bool                 `json:"no_reint"`     // for device replacement
 		Identify         bool                 `json:"identify"`     // for VMD LED device identification
-		StateMask        storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
+		DevStateMask     storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
 		ResetLED         bool                 `json:"reset_led"`    // for resetting VMD LED, debug only
 		GetLED           bool                 `json:"get_led"`      // get LED state of VMD devices
 	}
@@ -145,7 +145,8 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if req.UUID != "" {
+	// Defer UUID validation until SmdQueryReq processing for LED requests.
+	if !req.Identify && !req.ResetLED && !req.GetLED && req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
 			return nil, errors.Wrap(err, "bad device UUID")
 		}
@@ -169,7 +170,6 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 		if err != nil {
 			return nil, err
 		}
-		// TODO: Doesn't this apply to all SmdQuery requests?
 		if len(reqHosts) > 1 {
 			return nil, errors.New("cannot perform SetFaulty operation on > 1 host")
 		}

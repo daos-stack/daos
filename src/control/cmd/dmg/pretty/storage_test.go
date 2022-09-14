@@ -1555,6 +1555,67 @@ host1
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
 			),
 		},
+		"identify led": {
+			req: &control.SmdQueryReq{
+				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify:  true,
+				OmitPools: true,
+			},
+			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*storage.SmdDevice{
+								{
+									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+									TrAddr:   "0000:8a:00.0",
+									LedState: storage.LedStateIdentify,
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Devices
+    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+`,
+		},
+		"identify led; transport address specified": {
+			req: &control.SmdQueryReq{
+				UUID:      "0000:8a:00.0",
+				Identify:  true,
+				OmitPools: true,
+			},
+			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*storage.SmdDevice{
+								{
+									TrAddr:   "0000:8a:00.0",
+									LedState: storage.LedStateIdentify,
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Devices
+    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder

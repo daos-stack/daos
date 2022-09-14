@@ -129,7 +129,15 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 				},
 			},
-			expErr: daos.InvalidInput,
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{Status: int32(daos.InvalidInput)},
+						},
+					},
+				},
+			},
 		},
 		"identify": {
 			req: &ctlpb.SmdQueryReq{

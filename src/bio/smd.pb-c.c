@@ -1544,7 +1544,7 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] =
 {
   {
     "dev_uuid",
@@ -1559,8 +1559,20 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[3] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "led_action",
+    "tr_addr",
     2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevManageReq, tr_addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "led_action",
+    3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
@@ -1572,7 +1584,7 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[3] 
   },
   {
     "led_state",
-    3,
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
@@ -1585,13 +1597,14 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[3] 
 };
 static const unsigned ctl__dev_manage_req__field_indices_by_name[] = {
   0,   /* field[0] = dev_uuid */
-  1,   /* field[1] = led_action */
-  2,   /* field[2] = led_state */
+  2,   /* field[2] = led_action */
+  3,   /* field[3] = led_state */
+  1,   /* field[1] = tr_addr */
 };
 static const ProtobufCIntRange ctl__dev_manage_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor =
 {
@@ -1601,7 +1614,7 @@ const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor =
   "Ctl__DevManageReq",
   "ctl",
   sizeof(Ctl__DevManageReq),
-  3,
+  4,
   ctl__dev_manage_req__field_descriptors,
   ctl__dev_manage_req__field_indices_by_name,
   1,  ctl__dev_manage_req__number_ranges,
@@ -1774,7 +1787,7 @@ const ProtobufCMessageDescriptor ctl__dev_replace_resp__descriptor =
   (ProtobufCMessageInit) ctl__dev_replace_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] =
+static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[14] =
 {
   {
     "omit_devices",
@@ -1932,6 +1945,18 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "tr_addr",
+    15,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdQueryReq, tr_addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__smd_query_req__field_indices_by_name[] = {
   12,   /* field[12] = get_led */
@@ -1946,13 +1971,14 @@ static const unsigned ctl__smd_query_req__field_indices_by_name[] = {
   3,   /* field[3] = set_faulty */
   9,   /* field[9] = state_mask */
   6,   /* field[6] = target */
+  13,   /* field[13] = tr_addr */
   4,   /* field[4] = uuid */
 };
 static const ProtobufCIntRange ctl__smd_query_req__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 9, 7 },
-  { 0, 13 }
+  { 0, 14 }
 };
 const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
 {
@@ -1962,7 +1988,7 @@ const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
   "Ctl__SmdQueryReq",
   "ctl",
   sizeof(Ctl__SmdQueryReq),
-  13,
+  14,
   ctl__smd_query_req__field_descriptors,
   ctl__smd_query_req__field_indices_by_name,
   2,  ctl__smd_query_req__number_ranges,

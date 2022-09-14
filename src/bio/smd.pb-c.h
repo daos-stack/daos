@@ -278,12 +278,13 @@ struct  _Ctl__DevManageReq
 {
   ProtobufCMessage base;
   char *dev_uuid;
+  char *tr_addr;
   Ctl__VmdLedAction led_action;
   Ctl__VmdLedState led_state;
 };
 #define CTL__DEV_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, CTL__VMD_LED_ACTION__GET, CTL__VMD_LED_STATE__OFF }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, CTL__VMD_LED_ACTION__GET, CTL__VMD_LED_STATE__OFF }
 
 
 struct  _Ctl__DevManageResp
@@ -393,10 +394,14 @@ struct  _Ctl__SmdQueryReq
    * get LED state of VMD devices
    */
   protobuf_c_boolean get_led;
+  /*
+   * constrain query to this PCI address (device only)
+   */
+  char *tr_addr;
 };
 #define CTL__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth

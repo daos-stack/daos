@@ -875,6 +875,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, unsigned int act
 	struct spdk_pci_addr	pci_addr;
 	int			rc;
 
+	/* If UUID is provided, populate tr_addr. If tr_addr is provided, populate uuid.
 	rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
 	if (rc != 0)
 		return rc;

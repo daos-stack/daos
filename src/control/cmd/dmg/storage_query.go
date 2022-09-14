@@ -62,6 +62,14 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 	return resp.Errors()
 }
 
+type ledCmd struct {
+	smdQueryCmd
+
+	Args struct {
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device"`
+	} `positional-args:"yes"`
+}
+
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
 	TargetHealth tgtHealthQueryCmd   `command:"target-health" description:"Query the target health"`
@@ -125,7 +133,7 @@ func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 		IncludeBioHealth: cmd.Health,
 		Rank:             cmd.GetRank(),
 		UUID:             cmd.UUID,
-		StateMask:        mask,
+		DevStateMask:     mask,
 	}
 	return cmd.makeRequest(ctx, req)
 }
@@ -254,54 +262,45 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 type ledManageCmd struct {
 	Check    ledCheckCmd    `command:"check" description:"Retrieve the current LED state of specified VMD device."`
 	Identify ledIdentifyCmd `command:"identify" description:"Blink the status LED on specified VMD device (for the purpose of visual SSD identification). Default duration is 2 minutes."`
-	Clear    ledClearCmd    `command:"clear" description:"Clear any blinking LED state on specified VMD device that was due to a prior identify command action."`
 }
 
 type ledIdentifyCmd struct {
-	smdQueryCmd
-	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
+	ledCmd
+	Reset bool `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
 }
 
 // Execute is run when ledIdentifyCmd activates.
 //
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
 func (cmd *ledIdentifyCmd) Execute(_ []string) error {
+	if cmd.Args.IDs == "" {
+		return errors.New("neither a pci address or a uuid has been supplied")
+	}
 	req := &control.SmdQueryReq{
-		UUID:      cmd.UUID,
-		Identify:  true,
+		UUID:      cmd.Args.IDs,
 		OmitPools: true,
 	}
-	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
-}
-
-type ledClearCmd struct {
-	smdQueryCmd
-	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to clear" required:"1"`
-}
-
-// Execute is run when ledClearCmd activates.
-//
-// Runs SPDK VMD API commands to clear any identify LED state on the VMD.
-func (cmd *ledClearCmd) Execute(_ []string) error {
-	req := &control.SmdQueryReq{
-		UUID:      cmd.UUID,
-		ResetLED:  true,
-		OmitPools: true,
+	if cmd.Reset {
+		req.ResetLED = true
+	} else {
+		req.Identify = true
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
 
 type ledCheckCmd struct {
-	smdQueryCmd
-	UUID string `short:"u" long:"uuid" description:"Device UUID of the VMD SSD LED to check" required:"1"`
+	ledCmd
 }
 
 // Execute is run when ledCheckCmd activates.
 //
 // Runs SPDK VMD API commands to query the LED state on VMD devices
 func (cmd *ledCheckCmd) Execute(_ []string) error {
+	if cmd.Args.IDs == "" {
+		return errors.New("neither a pci address or a uuid has been supplied")
+	}
 	req := &control.SmdQueryReq{
-		UUID:      cmd.UUID,
+		UUID:      cmd.Args.IDs,
 		GetLED:    true,
 		OmitPools: true,
 	}
