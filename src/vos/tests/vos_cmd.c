@@ -958,7 +958,7 @@ run_vos_command(const char *arg0, const char *cmd)
 	if (rc != 0)
 		return 1;
 
-	dts_create_config(test_name, "VOS command line %s", args.a_cfg);
+	dts_create_config(test_name, "Command-line %s", args.a_cfg);
 
 	if (abit_start() != 0) {
 		free_args();
