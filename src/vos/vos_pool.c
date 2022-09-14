@@ -771,6 +771,8 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
 		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (pool_df->pd_version >= POOL_DF_POOL_CHK)
+		pool->vp_feats |= VOS_POOL_FEAT_CHK;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -923,6 +925,8 @@ end:
 
 	if (version >= POOL_DF_AGG_OPT)
 		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (version >= POOL_DF_POOL_CHK)
+		pool->vp_feats |= VOS_POOL_FEAT_CHK;
 
 	return 0;
 }
@@ -979,10 +983,12 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	pinfo->pif_gc_stat = pool->vp_gc_stat;
 
 	cpi = umem_off2ptr(&pool->vp_umm, pool_df->pd_chk);
-	if (cpi != NULL)
+	if (cpi != NULL) {
 		pinfo->pif_chk = *cpi;
-	else
+		D_ASSERT(pool->vp_feats & VOS_POOL_FEAT_CHK);
+	} else {
 		memset(&pinfo->pif_chk, 0, sizeof(pinfo->pif_chk));
+	}
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
