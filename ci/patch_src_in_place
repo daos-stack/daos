@@ -21,7 +21,7 @@ then
 	if grep -lq CRT_RPC_DECLARE "$FILE"; then
 	    ignore+=",SPACING_CAST"
 	fi
-        $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
+        echo $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
 
