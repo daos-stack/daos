@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,7 +20,8 @@ type cliOverrider interface {
 }
 
 type cfgCmd struct {
-	config *config.Server
+	config       *config.Server
+	IgnoreConfig bool `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
 }
 
 func (c *cfgCmd) configPath() string {

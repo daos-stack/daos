@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -24,6 +23,7 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from pydaos.raw import IORequest, DaosObjClass
 
 
 class DaosTestError(Exception):
@@ -529,7 +529,7 @@ def colate_results(command, results):
     res += "Results:\n"
     for result in results:
         res += "  %s: exit_status=%s, interrupted=%s:" % (
-               result["hosts"], result["exit_status"], result["interrupted"])
+            result["hosts"], result["exit_status"], result["interrupted"])
         for line in result["stdout"]:
             res += "    %s\n" % line
 
@@ -1525,3 +1525,110 @@ def set_avocado_config_value(section, key, value):
         settings.update_option(".".join([section, key]), value)
     else:
         settings.config.set(section, key, str(value))
+
+
+def nodeset_append_suffix(nodeset, suffix):
+    """Append a suffix to each element of a NodeSet/list.
+
+    Only appends if the element does not already end with the suffix.
+
+    Args:
+        nodeset (NodeSet/list): the NodeSet or list
+        suffix: the suffix to append
+
+    Returns:
+        NodeSet: a new NodeSet with the suffix
+    """
+    return NodeSet.fromlist(
+        map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
+
+
+def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
+                   base_akey, base_data):
+    """Insert objects, dkeys, akeys, and data into the container.
+
+    Args:
+        context (DaosContext):
+        container (TestContainer): Container to insert objects.
+        object_count (int): Number of objects to insert.
+        dkey_count (int): Number of dkeys to insert.
+        akey_count (int): Number of akeys to insert.
+        base_dkey (str): Base dkey. Index numbers will be appended to it.
+        base_akey (str):Base akey. Index numbers will be appended to it.
+        base_data (str):Base data that goes inside akey. Index numbers will be appended
+            to it.
+
+    Returns:
+        tuple: Inserted objects, dkeys, akeys, and data as (ioreqs, dkeys, akeys,
+        data_list)
+
+    """
+    ioreqs = []
+    dkeys = []
+    akeys = []
+    data_list = []
+
+    container.open()
+
+    for obj_index in range(object_count):
+        # Insert object.
+        ioreqs.append(IORequest(
+            context=context, container=container.container, obj=None,
+            objtype=DaosObjClass.OC_S1))
+
+        for dkey_index in range(dkey_count):
+            # Prepare the dkey to insert into the object.
+            dkey_str = " ".join(
+                [base_dkey, str(obj_index), str(dkey_index)]).encode("utf-8")
+            dkeys.append(create_string_buffer(value=dkey_str, size=len(dkey_str)))
+
+            for akey_index in range(akey_count):
+                # Prepare the akey to insert into the dkey.
+                akey_str = " ".join(
+                    [base_akey, str(obj_index), str(dkey_index),
+                     str(akey_index)]).encode("utf-8")
+                akeys.append(create_string_buffer(value=akey_str, size=len(akey_str)))
+
+                # Prepare the data to insert into the akey.
+                data_str = " ".join(
+                    [base_data, str(obj_index), str(dkey_index),
+                     str(akey_index)]).encode("utf-8")
+                data_list.append(create_string_buffer(value=data_str, size=len(data_str)))
+                c_size = ctypes.c_size_t(ctypes.sizeof(data_list[-1]))
+
+                # Insert dkeys, akeys, and the data.
+                ioreqs[-1].single_insert(
+                    dkey=dkeys[-1], akey=akeys[-1], value=data_list[-1], size=c_size)
+
+    return (ioreqs, dkeys, akeys, data_list)
+
+
+def copy_remote_to_local(remote_file_path, test_dir, remote):
+    """Copy the given file from the server node to the local test node and retrieve
+    the original name.
+
+    Args:
+        remote_file_path (str): File path to copy to local.
+        test_dir (str): Test directory. Usually self.test_dir.
+        remote (str): Remote hostname to copy file from.
+    """
+    # Use clush --rcopy to copy the file from the remote server node to the local test
+    # node. clush will append .<server_hostname> to the file when copying.
+    args = "--rcopy {} --dest {}".format(remote_file_path, test_dir)
+    clush_command = get_clush_command(hosts=remote, args=args)
+    try:
+        run_command(command=clush_command)
+    except DaosTestError as error:
+        print("ERROR: Copying {} from {}: {}".format(remote_file_path, remote, error))
+        raise error
+
+    # Remove the appended .<server_hostname> from the copied file.
+    current_file_path = "".join([remote_file_path, ".", remote])
+    mv_command = "mv {} {}".format(current_file_path, remote_file_path)
+    try:
+        run_command(command=mv_command)
+    except DaosTestError as error:
+        print(
+            "ERROR: Moving {} to {}: {}".format(
+                current_file_path, remote_file_path, error))
+        raise error

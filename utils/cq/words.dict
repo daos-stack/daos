@@ -173,6 +173,7 @@ fio
 fnctl
 fpp
 fs
+fstab
 fstat
 ftest
 fuseblk
@@ -205,6 +206,7 @@ iod
 iodepth
 ioengine
 ior
+ioreqs
 iotype
 iov
 ip

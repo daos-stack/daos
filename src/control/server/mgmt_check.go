@@ -200,6 +200,10 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}()
 	svc.log.Debugf("Received SystemCheckStart RPC: %+v", req)
 
+	if err := svc.sysdb.ResetCheckerData(); err != nil {
+		return nil, errors.Wrap(err, "failed to reset checker finding database")
+	}
+
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
 	if err != nil {
 		return nil, err

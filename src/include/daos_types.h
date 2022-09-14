@@ -18,6 +18,7 @@ extern "C" {
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 /** uuid_t */
 #include <uuid/uuid.h>
@@ -216,6 +217,30 @@ typedef struct {
 	/** most significant (high) bits of object ID */
 	uint64_t	hi;
 } daos_obj_id_t;
+
+#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+
+static inline bool
+daos_is_valid_uuid_string(const char *uuid)
+{
+	const char	*p;
+	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the ternimated '\0' */
+	int		 i;
+
+	if (strnlen(uuid, len) != len)
+		return false;
+
+	for (i = 0, p = uuid; i < len; i++, p++) {
+		if (i == 8 || i == 13 || i == 18 || i == 23) {
+			if (*p != '-')
+				return false;
+		} else if (!isxdigit(*p)) {
+			return false;
+		}
+	}
+
+	return true;
+}
 
 /** max pool/cont attr size */
 #define DAOS_ATTR_NAME_MAX 511
