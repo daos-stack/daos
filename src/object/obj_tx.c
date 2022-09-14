@@ -3257,6 +3257,10 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	int		 rc = 0;
 
 	D_ASSERT(obj != NULL);
+
+	if (task->dt_result == -DER_NEED_TX)
+		task->dt_result = 0;
+
 	D_ASSERTF(task->dt_result == 0, "Unexpected initial task result %d\n", task->dt_result);
 
 	rc = dc_tx_alloc(obj->cob_coh, 0, DAOS_TF_ZERO_COPY, &tx);
