@@ -22,20 +22,9 @@ extern "C" {
 
 #define PAR_COMM_WORLD	0
 
-static inline bool
-par_version_compatible(uint32_t version)
-{
-	uint32_t major = version >> DPAR_VERSION_SHIFT;
-	uint32_t minor = version & DPAR_VERSION_MASK;
-
-	if (major != DPAR_MAJOR) /* Total incompatibility */
-		return false;
-
-	if (minor > DPAR_MINOR) /* An API used by the caller doesn't exist in this library */
-		return false;
-
-	return true;
-}
+/** Return true if the opened library is compatible with the client */
+bool
+par_version_compatible(uint32_t version);
 
 enum par_type {
 	PAR_INT		= 0,
