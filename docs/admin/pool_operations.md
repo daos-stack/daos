@@ -24,7 +24,7 @@ Its subcommands can be grouped into the following areas:
   and evicting client connections to a pool.
 
 * An upgrade command to upgrade a pool's format version
-  after a DAOS software upgrade.
+  after a DAOS software update to a newer DAOS version.
 
 ### Creating a Pool
 

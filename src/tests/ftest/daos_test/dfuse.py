@@ -79,10 +79,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         cmd = [self.daos_test, '--test-dir', mount_dir, '--io']
 
-        # Metadata tests don't work with caching enabled, see DAOS-11204
-        if intercept or cache_mode in ('nocache', 'native'):
+        if cache_mode != 'writeback':
             cmd.append('--metadata')
-
         if intercept:
             remote_env = OrderedDict()
 

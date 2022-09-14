@@ -1369,11 +1369,21 @@ dfs_test_mtime(void **state)
 	/** truncate the file */
 	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
-
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/** set size on file with dfs_osetattr and stat at same time */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1024;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 1024);
+	/** check the mtime was updated with the setattr */
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 
 	struct tm	tm = {0};

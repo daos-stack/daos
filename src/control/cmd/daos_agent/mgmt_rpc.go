@@ -193,6 +193,7 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	// cache can serve future "pbReq.AllRanks == true" requests.
 	req := new(control.GetAttachInfoReq)
 	req.SetSystem(sys)
+	req.SetAgentRequest()
 	req.AllRanks = true
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
