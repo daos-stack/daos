@@ -277,7 +277,7 @@ struct  _Ctl__SmdPoolResp
 struct  _Ctl__DevManageReq
 {
   ProtobufCMessage base;
-  char *dev_uuid;
+  char *uuid;
   char *tr_addr;
   Ctl__VmdLedAction led_action;
   Ctl__VmdLedState led_state;

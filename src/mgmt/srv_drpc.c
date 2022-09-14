@@ -2255,14 +2255,14 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	ctl__dev_manage_resp__init(resp);
 
-	if (strlen(req->dev_uuid) == 0) {
+	if (strlen(req->uuid) == 0) {
 		D_ERROR("Device UUID for management request is empty\n");
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		goto out;
 	}
 
-	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
-		D_ERROR("Unable to parse device UUID %s: %d\n", req->dev_uuid, rc);
+	if (uuid_parse(req->uuid, dev_uuid) != 0) {
+		D_ERROR("Unable to parse device UUID %s: %d\n", req->uuid, rc);
 		uuid_clear(dev_uuid);
 	}
 
@@ -2284,7 +2284,6 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Ctl__DevManageReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
 	uint8_t			*body;
-	uuid_t			 dev_uuid;
 	int			 rc = 0;
 
 	req = ctl__dev_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
@@ -2295,7 +2294,8 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to manage LED on device %s\n", req->dev_uuid);
+	D_INFO("Received request to manage LED (PCI-addr: %s, device-ID: %s)\n", req->tr_addr,
+	       req->uuid);
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -2306,20 +2306,9 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	ctl__dev_manage_resp__init(resp);
 
-	if (strlen(req->dev_uuid) == 0) {
-		D_ERROR("Device UUID for management request is empty\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		goto out;
-	}
-
-	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
-		D_ERROR("Unable to parse device UUID %s: %d\n", req->dev_uuid, rc);
-		uuid_clear(dev_uuid);
-	}
-
-	rc = ds_mgmt_dev_manage_led(req->led_action, dev_uuid, req->led_state, resp);
+	rc = ds_mgmt_dev_manage_led(req, resp);
 	if (rc != 0)
-		D_ERROR("Failed to manage LED state on device %s (%d)\n", req->dev_uuid, rc);
+		D_ERROR("Failed to manage LED state (%d)\n", rc);
 	resp->status = rc;
 
 	drpc_dev_manage_pack(resp, body, drpc_resp);

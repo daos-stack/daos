@@ -781,16 +781,17 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
 /*
  * Manage the LED on a VMD device.
  *
- * \param xs            [IN]	xstream context
- * \param dev_uuid	[IN]	UUID of the VMD device
- * \param action	[IN]	Action to perform on the VMD device
- * \param state		[IN]	Pointer to state to set the LED to (i.e. identify, off, fault/on).
- * \param state		[OUT]	Pointer to state that shows resultant LED state after action.
+ * \param xs		[IN]		xstream context
+ * \param tr_addr	[IN,OUT]	PCI address of the VMD backing SSD, update if empty
+ * \param dev_uuid	[IN]		UUID of the VMD device
+ * \param action	[IN]		Action to perform on the VMD device
+ * \param state		[IN,OUT]	State to set the LED to (i.e. identify, off, fault/on)
+ *					Update to reflect transition after action
  *
- * \return                      Zero on success, negative value on error
+ * \return				Zero on success, negative value on error
  */
-int bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, unsigned int action,
-		   unsigned int *state);
+int bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid,
+		   unsigned int action, unsigned int *state);
 
 /*
  * Allocate DMA buffer, the buffer could be from bulk cache if bulk context

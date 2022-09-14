@@ -35,8 +35,8 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 
 	D_ASSERT(d_bdev);
 	if (d_bdev->bb_removed) {
-		D_ERROR("Old dev "DF_UUID"(%s) is hot removed\n",
-			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
+		D_ERROR("Old dev "DF_UUID"(%s) is hot removed\n", DP_UUID(d_bdev->bb_uuid),
+			d_bdev->bb_name);
 		return -DER_INVAL;
 	}
 
@@ -54,12 +54,12 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	rc = bio_led_manage(xs_ctxt, d_bdev->bb_uuid, (unsigned int)CTL__VMD_LED_ACTION__SET,
+	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__VMD_LED_ACTION__SET,
 			    &led_state);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
-			 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
+			 DP_RC(rc));
 
 	return 0;
 }
@@ -687,7 +687,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 {
 	struct led_opts		*opts = ctx;
 	enum spdk_vmd_led_state	 cur_led_state;
-	char			 addr_buf[128];
+	char			 addr_buf[ADDR_STR_MAX_LEN + 1];
 	int			 rc;
 
 	if (opts->status != 0)
@@ -869,16 +869,39 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 }
 
 int
-bio_led_manage(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid, unsigned int action,
+bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, unsigned int action,
 	       unsigned int *state)
 {
 	struct spdk_pci_addr	pci_addr;
 	int			rc;
 
-	/* If UUID is provided, populate tr_addr. If tr_addr is provided, populate uuid.
-	rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
-	if (rc != 0)
-		return rc;
+	/**
+	 * If tr_addr is already provided, convert to a PCI address. If tr_addr is NULL or empty,
+	 * derive PCI address from the provided UUID and if tr_addr is an empty string buffer then
+	 * populate with the derived address.
+	 */
+
+	if ((tr_addr == NULL) || (strlen(tr_addr) == 0)) {
+		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
+		if (rc != 0)
+			return rc;
+
+		if (tr_addr != NULL) {
+			rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
+			if (rc != 0) {
+				D_ERROR("Failed to write VMD's PCI address (%s)\n",
+					spdk_strerror(-rc));
+				return -DER_INVAL;
+			}
+		}
+	} else {
+		rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
+		if (rc != 0) {
+			D_ERROR("Unable to parse PCI address for device %s (%s)\n", tr_addr,
+				spdk_strerror(-rc));
+			return -DER_INVAL;
+		}
+	}
 
 	return led_manage(xs_ctxt, pci_addr, (Ctl__VmdLedAction)action, (Ctl__VmdLedState *)state);
 }

@@ -114,7 +114,7 @@ message SmdPoolResp {
 }
 
 message DevManageReq {
-	string dev_uuid = 1;
+	string uuid = 1;
 	string tr_addr = 2;
 	VmdLedAction led_action = 3;
 	VmdLedState led_state = 4;

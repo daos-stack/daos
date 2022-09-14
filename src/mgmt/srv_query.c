@@ -264,9 +264,9 @@ bio_storage_dev_manage_led(void *arg)
 		return -DER_INVAL;
 	}
 
-	/* Set the LED of the VMD device to a FAULT state */
-	rc = bio_led_manage(bxc, led_info->dev_uuid, (unsigned int)led_info->action,
-			    (unsigned int *)led_info->state);
+	/* Set the LED of the VMD device to a FAULT state, tr_addr and state may be updated */
+	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
+			    (unsigned int)led_info->action, (unsigned int *)led_info->state);
 	if (rc != 0)
 		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s)\n",
 			DP_UUID(led_info->dev_uuid),
@@ -649,16 +649,15 @@ out:
 }
 
 int
-ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLedState led_state,
-		       Ctl__DevManageResp *resp)
+ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 {
-	struct bio_led_manage_info	 led_info = { 0 };
-	int				 rc = 0;
+	struct bio_led_manage_info	led_info = { 0 };
+	Ctl__VmdLedState		led_state;
+	uuid_t				dev_uuid;
+	int				rc = 0;
 
-	if (uuid_is_null(dev_uuid))
-		return -DER_INVAL;
-
-	D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
+	assert(req->tr_addr != NULL);
+	assert(req->uuid != NULL);
 
 	D_ALLOC_PTR(resp->device);
 	if (resp->device == NULL) {
@@ -667,16 +666,47 @@ ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLe
 	ctl__smd_device__init(resp->device);
 	resp->device->dev_state = NULL;
 	resp->device->uuid = NULL;
+	resp->device->tr_addr = NULL;
 
-	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
-	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
+	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
+	if (resp->device->tr_addr == NULL) {
+		D_ERROR("Failed to allocate transport address in response");
 		return -DER_NOMEM;
 	}
-	uuid_unparse_lower(dev_uuid, resp->device->uuid);
 
+	/* Either tr_addr or uuid to be set in led_info */
+	if (strlen(req->tr_addr) != 0) {
+		D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->tr_addr);
+
+		strncpy(resp->device->tr_addr, req->tr_addr, ADDR_STR_MAX_LEN + 1);
+		uuid_clear(dev_uuid);
+	} else if (strlen(req->uuid) != 0) {
+		rc = uuid_parse(req->uuid, dev_uuid);
+		if (rc != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n", req->uuid, rc);
+			return rc;
+		}
+		if (uuid_is_null(dev_uuid))
+			return -DER_INVAL;
+
+		D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
+
+		D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
+		if (resp->device->uuid == NULL) {
+			D_ERROR("Failed to allocate device uuid in response");
+			return -DER_NOMEM;
+		}
+		uuid_unparse_lower(dev_uuid, resp->device->uuid);
+	} else {
+		D_ERROR("Transport address and device UUID both empty in request\n");
+		return -DER_INVAL;
+	}
+
+	/* tr_addr will be used if set and get populated if not */
+	led_info.tr_addr = resp->device->tr_addr;
 	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = led_action;
+	led_info.action = req->led_action;
+	led_state = req->led_state;
 	led_info.state = &led_state;
 
 	/* Manage the VMD LED state on init xstream */

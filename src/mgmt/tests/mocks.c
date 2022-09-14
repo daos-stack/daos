@@ -538,8 +538,7 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 }
 
 int
-ds_mgmt_dev_manage_led(Ctl__VmdLedAction led_action, uuid_t dev_uuid, Ctl__VmdLedState led_state,
-		       Ctl__DevManageResp *resp)
+ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 {
 	return 0;
 }

@@ -434,7 +434,7 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 			case dev.trAddr != "":
 				dreq.TrAddr = dev.trAddr
 			case dev.uuid != "":
-				dreq.DevUuid = dev.uuid
+				dreq.Uuid = dev.uuid
 			default:
 				return nil, errors.New("no id found in engine device map value")
 			}

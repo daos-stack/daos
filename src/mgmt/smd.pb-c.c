@@ -1547,12 +1547,12 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
 static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] =
 {
   {
-    "dev_uuid",
+    "uuid",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageReq, dev_uuid),
+    offsetof(Ctl__DevManageReq, uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -1596,10 +1596,10 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
   },
 };
 static const unsigned ctl__dev_manage_req__field_indices_by_name[] = {
-  0,   /* field[0] = dev_uuid */
   2,   /* field[2] = led_action */
   3,   /* field[3] = led_state */
   1,   /* field[1] = tr_addr */
+  0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange ctl__dev_manage_req__number_ranges[1 + 1] =
 {

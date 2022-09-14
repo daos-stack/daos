@@ -1587,7 +1587,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 
 			/* LED will be reset to the original saved state */
 			led_state = (unsigned int)d_bdev->bb_led_state;
-			if (bio_led_manage(ctxt, d_bdev->bb_uuid,
+			if (bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					   (unsigned int)CTL__VMD_LED_ACTION__SET,
 					   &led_state) != 0)
 				D_ERROR("Failed resetting LED state\n");
