@@ -47,7 +47,7 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'r':
 			cmd_args->recursive = true;
@@ -90,7 +90,7 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'w':
 			cmd_args->write_mode = true;
@@ -135,7 +135,7 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -180,7 +180,7 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -218,7 +218,7 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -263,7 +263,7 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -301,7 +301,7 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -339,7 +339,7 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -379,7 +379,7 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'a':
 			cmd_args->active = true;
@@ -427,7 +427,7 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -465,7 +465,7 @@ update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -510,7 +510,7 @@ dtx_commit_option_parse(struct ddb_ctx *ctx, struct dtx_commit_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -555,7 +555,7 @@ dtx_abort_option_parse(struct ddb_ctx *ctx, struct dtx_abort_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -845,7 +845,7 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
 	ddb_print(ctx, "    <dtx_id>\n");
-	ddb_print(ctx, "\tThe dtx id of the entry to commit.\n");
+	ddb_print(ctx, "\tDTX id of the entry to commit.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dtx_abort */

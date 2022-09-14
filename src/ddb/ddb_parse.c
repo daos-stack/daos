@@ -312,7 +312,6 @@ ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
 	char	 cpy[128] = {0};
 	char	 validate_buf[128] = {0};
 	char	*tok;
-	char	*p;
 
 	if (dtx_id_str == NULL)
 		return -DER_INVAL;
@@ -326,12 +325,9 @@ ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
 		return -DER_INVAL;
 
 	tok = strtok(NULL, ".");
-	/* validate the second part is a valid number */
-	p = tok;
-	while (isdigit(*p))
-		p++;
 	dtx_id->dti_hlc = strtoll(tok, NULL, 16);
 
+	/* Validate input was complete and in correct format */
 	snprintf(validate_buf, 128, DF_DTIF, DP_DTI(dtx_id));
 	if (strncmp(dtx_id_str, validate_buf, 128) != 0)
 		return -DER_INVAL;

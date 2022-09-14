@@ -902,9 +902,9 @@ clear_committed_table(void **state)
 
 	assert_int_equal(1, dv_dtx_clear_cmt_table(coh));
 
+	committed_entry_handler_called = 0;
 	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
 
-	committed_entry_handler_called = 0;
 	assert_int_equal(0, committed_entry_handler_called);
 
 	dv_cont_close(&coh);
