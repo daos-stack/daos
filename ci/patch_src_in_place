@@ -30,11 +30,7 @@ find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {
 
 git diff
 
-env | grep amd
-
-clang-format --version
-
-git-clang-format ${CHANGE_TARGET}
+git-clang-format origin/${CHANGE_TARGET}
 
 git diff
 
