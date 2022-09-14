@@ -22,9 +22,11 @@ extern "C" {
 
 #define PAR_COMM_WORLD	0
 
-/** Return true if the opened library is compatible with the client */
+/** Return true if the opened library is compatible with the client.  Not
+ *  defined in stub library.
+ */
 bool
-par_version_compatible(uint32_t version);
+par_version_compatible(uint32_t version, uint32_t *libmajor, uint32_t *libminor);
 
 enum par_type {
 	PAR_INT		= 0,
@@ -39,10 +41,6 @@ enum par_op {
 	PAR_MIN		= 1,
 	PAR_SUM		= 2,
 };
-
-/** Retrieve the version */
-uint32_t
-par_getversion(void);
 
 /** Initialize the library */
 int

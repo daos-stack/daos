@@ -31,12 +31,6 @@ pcom2comm(uint32_t pcom, MPI_Comm *comm)
 	return 0;
 }
 
-uint32_t
-par_getversion(void)
-{
-	return DPAR_VERSION;
-}
-
 int
 par_init(int *argc, char ***argv)
 {
@@ -355,10 +349,15 @@ par_comm_free(uint32_t pcom)
 }
 
 bool
-par_version_compatible(uint32_t version)
+par_version_compatible(uint32_t version, uint32_t *libmajor, uint32_t *libminor)
 {
 	uint32_t major = version >> DPAR_VERSION_SHIFT;
 	uint32_t minor = version & DPAR_VERSION_MASK;
+
+	if (libmajor != NULL)
+		*libmajor = DPAR_MAJOR;
+	if (libminor != NULL)
+		*libminor = DPAR_MINOR;
 
 	/** Major version difference means this library is incompatible with the caller */
 	if (major != DPAR_MAJOR)
