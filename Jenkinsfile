@@ -627,8 +627,9 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_args: sconsFaultsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release',
+                        sconsBuild parallel_build: true,
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release',
                                    build_deps: 'no'
                     }
                     post {
@@ -746,6 +747,9 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 stashes: ['el8-gcc-opt-tar',
+                                           'el8-gcc-build-vars',
+                                           'el8-gcc-tests'],
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
