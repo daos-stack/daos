@@ -137,13 +137,13 @@ print_usage(const char *prog)
 }
 
 static int
-alloc_pool(const char *name, bool create, struct known_pool **pool)
+alloc_pool(const char *name, bool exclusive, struct known_pool **pool)
 {
 	struct known_pool *known_pool;
 
 	d_list_for_each_entry(known_pool, &pool_list, kp_link) {
 		if (strncmp(name, known_pool->kp_name, PATH_MAX) == 0) {
-			if (create)
+			if (exclusive)
 				return -DER_EXIST;
 			*pool = known_pool;
 			return 0;
@@ -186,7 +186,7 @@ free_pool(struct known_pool *pool)
 /* ACTION(name, function, open, randompct) */
 #define FOREACH_OP(ACTION)                                                                         \
 	ACTION(CREATE_POOL, create_pool, false, 0)                                                 \
-	ACTION(OPEN_POOL, open_pool, true, 0)                                                      \
+	ACTION(OPEN_POOL, open_pool, false, 0)                                                     \
 	ACTION(CLOSE_POOL, close_pool, true, 0)                                                    \
 	ACTION(PUNCH_KEY, punch_key, true, 2)                                                      \
 	ACTION(PUNCH_EXTENT, write_key, true, 18)                                                  \
@@ -221,11 +221,20 @@ init_shares(void)
 	int op;
 	int share;
 	int cursor = 0;
+	int c;
 
 	for (op = 0; op < OP_COUNT; op++)
 		for (share = 0; share < op_info[op].oi_random_share; share++)
 			shares[cursor++] = op;
+	/** The values defined in FOREACH_OP are percentages and should add up to 100 which should
+	 *  also be equal to the size of the array shares.should add up to the number of entries
+	 *  in the array.  If we change it to some other shares, they should still add up to the
+	 *  number in the array.
+	 */
 	D_ASSERT(cursor == ARRAY_SIZE(shares));
+
+	for (c = 0; c < sizeof(write_buf); c++)
+		write_buf[c] = (c % 26) + 97;
 }
 
 static int
@@ -312,7 +321,7 @@ open_pool(struct cmd_info *cinfo)
 	bool               created;
 
 	rc = alloc_pool(&cinfo->key[0], false, &known_pool);
-	if (rc <= 0) {
+	if (rc < 0) {
 		D_ERROR("Could not open pool: rc=" DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -378,7 +387,7 @@ punch_key(struct cmd_info *cinfo)
 
 	set_oid(&oid);
 
-	/* Set up dkey and akey */
+	/* Set up dkey */
 	d_iov_set(&dkey, &cinfo->key[0], strlen(&cinfo->key[0]));
 
 	/* Write the original value (under) */
@@ -759,6 +768,7 @@ abit_start(void)
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
+		ABT_finalize();
 		printf("ABT get self xstream failed: %d\n", rc);
 		return -1;
 	}
@@ -780,7 +790,7 @@ struct args {
 	char           **a_argv;
 	struct cmd_info *a_cmds;
 	bool             a_clean_all;
-	int    a_nr;
+	int              a_nr;
 	int              a_cmd_nr;
 	int              a_size;
 };
@@ -804,7 +814,7 @@ split_cmd_args(const char *arg0, const char *cmd)
 
 	D_STRNDUP(args.a_cfg, cmd, PATH_MAX);
 	if (args.a_cfg == NULL) {
-		D_FREE(args.a_cfg);
+		D_FREE(args.a_argbuf);
 		return -DER_NOMEM;
 	}
 
@@ -951,12 +961,10 @@ run_vos_command(const char *arg0, const char *cmd)
 	dts_create_config(test_name, "VOS command line %s", args.a_cfg);
 
 	if (abit_start() != 0) {
+		free_args();
 		D_ERROR("Failed to init abt\n");
 		return 1;
 	}
-
-	for (c = 0; c < sizeof(write_buf); c++)
-		write_buf[c] = (c % 26) + 97;
 
 	optind = 1;
 
