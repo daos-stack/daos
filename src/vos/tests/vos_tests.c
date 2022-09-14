@@ -230,7 +230,7 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'a':
-			nr_failed += run_aggregate_tests(true, "agg");
+			nr_failed += run_aggregate_tests(true, "");
 			test_run = true;
 			break;
 		case 'd':

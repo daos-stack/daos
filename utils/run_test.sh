@@ -61,6 +61,7 @@ run_test()
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
 
+    sudo chown $USER "${DAOS_BASE}"/test_results/*.xml
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
                                                                   "${FILES[@]}"
@@ -96,19 +97,15 @@ if [ -d "/mnt/daos" ]; then
         fi
         COMP="UTEST_control"
         run_test src/control/run_go_tests.sh
-        COMP="UTEST_common.perf"
+        COMP="UTEST_common"
         run_test src/common/tests/btree.sh perf -s 20000
-        COMP="UTEST_common.perf.direct"
         run_test src/common/tests/btree.sh perf direct -s 20000
-        COMP="UTEST_common.perf.ukey"
         run_test src/common/tests/btree.sh perf ukey -s 20000
-        COMP="UTEST_common.perf.dyn"
         run_test src/common/tests/btree.sh dyn perf -s 20000
-        COMP="UTEST_common.perf.dyn_ukey"
         run_test src/common/tests/btree.sh dyn perf ukey -s 20000
         BTREE_SIZE=20000
 
-        COMP="UTEST_vos.nvme"
+        COMP="UTEST_vos"
         cat /proc/meminfo
         # Setup AIO device
         AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
@@ -154,9 +151,8 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
 
-    COMP="UTEST_vos.singleton"
+    COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    COMP="UTEST_vos.nested"
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
 
     COMP="UTEST_vea"
@@ -207,24 +203,19 @@ if [ -d "/mnt/daos" ]; then
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
-    COMP="UTEST_common.btree.ukey"
+    COMP="UTEST_common"
     run_test src/common/tests/btree.sh ukey -s ${BTREE_SIZE}
-    COMP="UTEST_common.btree.direct"
     run_test src/common/tests/btree.sh direct -s ${BTREE_SIZE}
-    COMP="UTEST_common.btree"
     run_test src/common/tests/btree.sh -s ${BTREE_SIZE}
-    COMP="UTEST_common.btree.dyn_ukey"
     run_test src/common/tests/btree.sh dyn ukey -s ${BTREE_SIZE}
-    COMP="UTEST_common.btree.dyn"
     run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
 
     COMP="UTEST_csum"
     run_test "${SL_PREFIX}/bin/srv_checksum_tests"
     run_test "${SL_PREFIX}/bin/pool_scrubbing_tests"
 
-    COMP="UTEST_vos.vmem"
+    COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
-    COMP="UTEST_vos.pmem"
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
