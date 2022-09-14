@@ -201,7 +201,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	array->oid.hi		= args->oid.hi;
 	array->oid.lo		= args->oid.lo;
 	array->mode		= DAOS_OO_RW;
-	array->cell_size	= args->cell_size;
+array->cell_size	= args->cell_size;
 	array->chunk_size	= args->chunk_size;
 	array->daos_oh		= *args->oh;
 

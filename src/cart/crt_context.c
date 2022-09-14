@@ -21,7 +21,7 @@ epi_link2ptr(d_list_t *rlink)
 
 static uint32_t
 epi_op_key_hash(struct d_hash_table *hhtab, const void *key,
-		unsigned int ksize)
+	unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
@@ -72,8 +72,8 @@ epi_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t epi_table_ops = {
-	.hop_key_hash		= epi_op_key_hash,
 	.hop_key_cmp		= epi_op_key_cmp,
+	.hop_key_hash		= epi_op_key_hash,
 	.hop_rec_hash		= epi_op_rec_hash,
 	.hop_rec_addref		= epi_op_rec_addref,
 	.hop_rec_decref		= epi_op_rec_decref,
@@ -131,8 +131,8 @@ static int
 crt_context_init(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx;
-	uint32_t		 bh_node_cnt;
 	int			 rc;
+	uint32_t		 bh_node_cnt;
 
 	D_ASSERT(crt_ctx != NULL);
 	ctx = crt_ctx;
