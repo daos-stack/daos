@@ -2976,10 +2976,11 @@ out_task:
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
 
+		/* abort/complete sub-tasks will complete obj_task */
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(obj_task, rc);
 	}
-
-	tse_task_complete(obj_task, rc);
 
 	return rc;
 }
@@ -3261,8 +3262,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 		kds[i] = shard_arg->la_kds[i];
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
-		obj_arg->sgl->sg_iovs[0].iov_len);
+	D_DEBUG(DB_TRACE, "shard %u shard nr %u merge_nr %d/"DF_U64"\n", shard_auxi->shard,
+		shard_arg->la_nr, iter_arg->merge_nr, obj_arg->sgl->sg_iovs[0].iov_len);
 	return 0;
 }
 
@@ -3528,6 +3529,7 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 						shard_auxi->shard, obj_arg->kds[0].kd_key_len,
 						shard_arg->la_kds[0].kd_key_len);
 					obj_arg->kds[0] = shard_arg->la_kds[0];
+					iter_arg->merge_nr++;
 				}
 			}
 
@@ -6512,11 +6514,11 @@ out_task:
 	if (head != NULL && !d_list_empty(head)) {
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
-
+		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(api_task, rc);
 	}
-
-	tse_task_complete(api_task, rc);
 
 	return rc;
 }
