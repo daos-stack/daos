@@ -31,8 +31,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_filter_ranks, filter_ranks);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "d_rank_list_dup failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "d_rank_list_dup failed: "DF_RC"\n", DP_RC(rc));
 		D_FREE(co_info);
 		D_GOTO(out, rc);
 	}
@@ -114,9 +113,9 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			 * return GRPVER to retry until pool map is updated
 			 * or the pool is stopped.
 			 */
-			RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: "
-				  DF_RC"\n", co_hdr->coh_grpid,
-				  DP_RC(-DER_GRPVER));
+		RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: "
+			  DF_RC"\n", co_hdr->coh_grpid,
+			  DP_RC(-DER_GRPVER));
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
@@ -150,14 +149,14 @@ out:
 static int
 crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
-	crt_rpc_t			*rpc_req;
-	struct crt_rpc_priv		*rpc_priv;
-	struct crt_corpc_hdr		*co_hdr;
-	struct crt_bulk_desc		*bulk_desc;
-	crt_bulk_t			 local_bulk_hdl;
-	crt_bulk_t			 remote_bulk_hdl;
-	void				*bulk_buf;
-	int				 rc = 0;
+crt_rpc_t			*rpc_req;
+struct crt_rpc_priv		*rpc_priv;
+struct crt_corpc_hdr		*co_hdr;
+struct crt_bulk_desc		*bulk_desc;
+crt_bulk_t			 local_bulk_hdl;
+crt_bulk_t			 remote_bulk_hdl;
+void				*bulk_buf;
+int				 rc = 0;
 
 	rc = cb_info->bci_rc;
 	bulk_desc = cb_info->bci_bulk_desc;
@@ -180,8 +179,8 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	co_hdr->coh_bulk_hdl = NULL;
 
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: "
-			  DF_RC"\n", DP_RC(rc));
+	RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: "
+		  DF_RC"\n", DP_RC(rc));
 		D_FREE(bulk_buf);
 		D_GOTO(out, rc);
 	}
@@ -189,8 +188,8 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "DF_RC"\n",
-			  DP_RC(rc));
+	RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "DF_RC"\n",
+		  DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 	}
 
@@ -210,8 +209,8 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	if (bulk_hdl == CRT_BULK_NULL)
 		return 0;
 
-	sgl.sg_nr = 0;
-	sgl.sg_iovs = NULL;
+sgl.sg_nr = 0;
+sgl.sg_iovs = NULL;
 	rc = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != -DER_TRUNC) {
 		if (rc == 0)

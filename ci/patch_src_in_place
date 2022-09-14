@@ -21,14 +21,12 @@ then
 	if grep -lq CRT_RPC_DECLARE "$FILE"; then
 	    ignore+=",SPACING_CAST"
 	fi
-        echo $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
+        $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
 
 # Correct any formatting of go code.
 find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
-
-git diff
 
 git-clang-format "origin/${CHANGE_TARGET}"
 
