@@ -1511,8 +1511,8 @@ class RemoteCommandResult():
             bool: if the command was successful on each host
 
         """
-        non_zero = any(data.returncode != 0 for data in self.output)
-        return not non_zero and not self.timeout
+        all_zero = all(data.returncode == 0 for data in self.output)
+        return all_zero and not self.timeout
 
     @property
     def timeout(self):
@@ -1543,6 +1543,8 @@ class RemoteCommandResult():
             if not output_data:
                 output_data = [["<NONE>", results[code]]]
             for output, output_hosts in output_data:
+                # In run_remote(), task.run() is executed with the stderr=False default.
+                # As a result task.iter_buffers() will return combined stdout and stderr.
                 stdout = []
                 for line in output.splitlines():
                     if isinstance(line, bytes):
@@ -2035,7 +2037,7 @@ class Launch():
                 self.result.tests.append(
                     TestResult(test.class_name, test.name.copy(), test_log_file, self.logdir))
 
-                # Mark the start of this test
+                # Mark the start of the processing of this test
                 self.result.tests[-1].start()
 
                 # Prepare the hosts to run the tests
@@ -2044,8 +2046,14 @@ class Launch():
                     return_code |= step_status
                     continue
 
+                # Avoid counting the test execution time as part of the processing time of this test
+                self.result.tests[-1].end()
+
                 # Run the test with avocado
                 return_code |= self.execute(test, repeat, sparse, fail_fast, extra_yaml)
+
+                # Mark the continuation of the processing of this test
+                self.result.tests[-1].start()
 
                 # Archive the test results
                 return_code |= self.process(
@@ -2055,7 +2063,7 @@ class Launch():
                 if self.result.tests[-1].status is None:
                     self.result.tests[-1].status = TestResult.PASS
 
-                # Mark the end of this test
+                # Mark the end of the processing of this test
                 self.result.tests[-1].end()
 
                 # Stop logging to the test log file
@@ -2100,22 +2108,38 @@ class Launch():
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         try:
             setup_test_directory(self.log, test)
-        except LaunchException as error:
+        except LaunchException:
             message = "Error setting up test directories"
             self.log.debug(message, exc_info=True)
-            self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
+            self._mark_test_failed("Prepare", message, sys.exc_info())
             return 4
 
         # Generate certificate files for the test
         try:
             generate_certs(self.log)
-        except LaunchException as error:
+        except LaunchException:
             message = "Error generating certificates"
             self.log.debug(message, exc_info=True)
-            self.result.tests[-1].set_status(TestResult.ERROR, "Prepare", message, error)
+            self._mark_test_failed("Prepare", message, sys.exc_info())
             return 4
 
         return 0
+
+    def _mark_test_failed(self, fail_class, fail_reason, exc_info):
+        """Set the reason for the current test failure.
+
+        Args:
+            fail_class (str, optional): failure category.
+            fail_reason (str, optional): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info().
+        """
+        # pylint: disable=import-outside-toplevel
+        from avocado.utils.stacktrace import prepare_exc_info
+
+        self.result.tests[-1].status = TestResult.ERROR
+        self.result.tests[-1].fail_class = fail_class
+        self.result.tests[-1].fail_reason = fail_reason
+        self.result.tests[-1].traceback = prepare_exc_info(exc_info)
 
     def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
         """Run the specified test.
@@ -2143,10 +2167,10 @@ class Launch():
             if return_code:
                 self._collect_crash_files()
 
-        except LaunchException as error:
+        except LaunchException:
             message = f"Error executing {test} on repeat {repeat}"
             self.log.debug(message, exc_info=True)
-            self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
+            self._mark_test_failed("Execute", message, sys.exc_info())
             return_code = 1
 
         end_time = int(time.time())
@@ -2174,10 +2198,10 @@ class Launch():
                     run_local(self.log, ["mkdir", "-p", latest_crash_dir], check=True)
                     for crash_file in crash_files:
                         run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
-                except LaunchException as error:
+                except LaunchException:
                     message = "Error collecting crash files"
                     self.log.debug(message, exc_info=True)
-                    self.result.tests[-1].set_status(TestResult.ERROR, "Execute", message, error)
+                    self._mark_test_failed("Execute", message, sys.exc_info())
             else:
                 self.log.debug("No avocado crash files found in %s", crash_dir)
 
@@ -2272,16 +2296,16 @@ class Launch():
                         summary, data["hosts"].copy(), data["source"], data["pattern"],
                         data["destination"], data["depth"], threshold)
 
-                except LaunchException as error:
+                except LaunchException:
                     message = f"Error archiving {summary}"
                     self.log.debug(message, exc_info=True)
-                    self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                    self._mark_test_failed("Process", message, sys.exc_info())
                     return_code |= 16
 
-                except Exception as error:      # pylint: disable=broad-except
+                except Exception:       # pylint: disable=broad-except
                     message = f"Unexpected error archiving {summary}"
                     self.log.debug(message, exc_info=True)
-                    self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                    self._mark_test_failed("Process", message, sys.exc_info())
                     return_code |= 16
 
         # Optionally rename the test results directory for this test
@@ -2289,10 +2313,10 @@ class Launch():
             try:
                 self._rename_avocado_test_dir(test, jenkinslog)
 
-            except LaunchException as error:
+            except LaunchException:
                 message = "Error renaming test results"
                 self.log.debug(message, exc_info=True)
-                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                self._mark_test_failed("Process", message, sys.exc_info())
                 return_code |= 1024
 
         # Optionally process core files
@@ -2302,16 +2326,16 @@ class Launch():
                 if not core_file_processing.get_stacktraces(self.job_results_dir, test.hosts.all):
                     return_code |= 256
 
-            except LaunchException as error:
+            except LaunchException:
                 message = "Error processing test core files"
                 self.log.debug(message, exc_info=True)
-                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                self._mark_test_failed("Process", message, sys.exc_info())
                 return_code |= 256
 
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception:       # pylint: disable=broad-except
                 message = "Unhandled error processing test core files"
                 self.log.debug(message, exc_info=True)
-                self.result.tests[-1].set_status(TestResult.ERROR, "Process", message, error)
+                self._mark_test_failed("Process", message, sys.exc_info())
                 return_code |= 256
 
         return return_code
