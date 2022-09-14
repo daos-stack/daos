@@ -16,8 +16,9 @@ ARG CB0
 RUN dnf -y install dnf-plugins-core &&					\
     dnf config-manager --save --setopt=install_weak_deps=False &&	\
     dnf -y upgrade &&							\
-    dnf -y install diffutils file findutils git golang-bin		\
-	python3-pygithub python-unversioned-command ShellCheck &&	\
+    dnf -y install clang-tools-extra diffutils file findutils git       \
+	git-clang-format golang-bin python3-pygithub			\
+	python-unversioned-command ShellCheck &&			\
     dnf clean all
 
 ARG UID=1000
