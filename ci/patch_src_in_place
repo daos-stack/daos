@@ -28,4 +28,12 @@ fi
 # Correct any formatting of go code.
 find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
 
+env | grep amd
+
+clang-format --version
+
+git-clang-format master
+
+git diff
+
 exit 0

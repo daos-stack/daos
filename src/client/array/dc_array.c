@@ -29,7 +29,7 @@ struct dc_array {
 	/** DAOS object handle */
 	daos_handle_t		daos_oh;
 	/** Array cell size of each element */
-	daos_size_t		cell_size;
+	daos_size_t             		cell_size;
 	/** elems to store in 1 dkey before moving to the next one in the grp */
 	daos_size_t		chunk_size;
 	/** DAOS container handle of array */
