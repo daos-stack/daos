@@ -1403,7 +1403,7 @@ class DaosContProperties(ctypes.Structure):
                 ("srv_verify", ctypes.c_bool),
                 ("chksum_type", ctypes.c_uint64),
                 ("chunk_size", ctypes.c_uint64),
-                ("rf_lvl", ctypes.c_uint64)]
+                ("rd_lvl", ctypes.c_uint64)]
 
     def __init__(self):
         # Set some default values for
