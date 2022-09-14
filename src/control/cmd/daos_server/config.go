@@ -59,4 +59,3 @@ func (c *optCfgCmd) loadConfig(cfgPath string) error {
 	}
 	return err
 }
-
