@@ -855,7 +855,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            msg = 'dmg system stop failed with {}'.format(rc.returncode)
+            msg = f'dmg system stop failed with {rc.returncode}'
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
         if not self.valgrind:
@@ -3453,8 +3453,8 @@ def run_in_fg(server, conf):
     t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('export PATH={}:$PATH'.format(join(conf['PREFIX'], 'bin')))
-    print('export LD_PRELOAD={}'.format(join(conf['PREFIX'], 'lib64', 'libioil.so')))
+    print('export PATH={}:$PATH'.format(os.path.join(conf['PREFIX'], 'bin')))
+    print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('export D_IL_REPORT=-1')
     print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
