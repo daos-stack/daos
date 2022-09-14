@@ -61,7 +61,7 @@ run_test()
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
 
-    sudo chown $USER "${DAOS_BASE}"/test_results/*.xml
+    sudo chown "${USER}" "${DAOS_BASE}"/test_results/*.xml
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
                                                                   "${FILES[@]}"
