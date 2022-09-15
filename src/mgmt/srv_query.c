@@ -204,40 +204,6 @@ out:
 	return rc;
 }
 
-struct bio_list_devs_info {
-	d_list_t	dev_list;
-	int		dev_list_cnt;
-	uuid_t		devid;
-	int		*state;
-};
-
-static int
-bio_query_dev_list(void *arg)
-{
-	struct bio_list_devs_info	*list_devs_info = arg;
-	struct dss_module_info		*info = dss_get_module_info();
-	struct bio_xs_context		*bxc;
-	int				 rc;
-
-	D_ASSERT(info != NULL);
-
-	bxc = info->dmi_nvme_ctxt;
-	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-			info->dmi_xs_id, info->dmi_tgt_id);
-		return -DER_INVAL;
-	}
-
-	rc = bio_dev_list(bxc, &list_devs_info->dev_list,
-			  &list_devs_info->dev_list_cnt);
-	if (rc != 0) {
-		D_ERROR("Error getting BIO device list\n");
-		return rc;
-	}
-
-	return 0;
-}
-
 struct bio_led_manage_info {
 	uuid_t			 dev_uuid;
 	char			*tr_addr;
@@ -281,6 +247,40 @@ bio_storage_dev_manage_led(void *arg)
 	return rc;
 }
 
+struct bio_list_devs_info {
+	d_list_t	dev_list;
+	int		dev_list_cnt;
+	uuid_t		devid;
+	int		*state;
+};
+
+static int
+bio_query_dev_list(void *arg)
+{
+	struct bio_list_devs_info	*list_devs_info = arg;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	int				 rc;
+
+	D_ASSERT(info != NULL);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return -DER_INVAL;
+	}
+
+	rc = bio_dev_list(bxc, &list_devs_info->dev_list,
+			  &list_devs_info->dev_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Error getting BIO device list\n");
+		return rc;
+	}
+
+	return 0;
+}
+
 int
 ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
@@ -297,8 +297,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
-	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
-			     DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -310,8 +309,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		return -DER_NOMEM;
 	}
 
-	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list,
-				   bdi_link) {
+	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list, bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
 		if (resp->devices[i] == NULL) {
 			rc = -DER_NOMEM;
@@ -333,8 +331,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		uuid_unparse_lower(dev_info->bdi_dev_id,
-				   resp->devices[i]->uuid);
+		uuid_unparse_lower(dev_info->bdi_dev_id, resp->devices[i]->uuid);
 
 		state_str = nvme_state2str(dev_info->bdi_flags);
 		buflen = strlen(state_str) + 1;
@@ -351,17 +348,10 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		led_info.action = CTL__VMD_LED_ACTION__GET;
 		led_state = CTL__VMD_LED_STATE__NA;
 		led_info.state = &led_state;
-		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
-				     DSS_XS_VOS, 0, 0);
+		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
+				     0, 0);
 		if (rc != 0 && rc != -DER_NOSYS)
 			goto out;
-
-		/**
-		 * TODO: state should be "NA" by default and shouldn't be changed
-		 * if (rc == -DER_NOSYS)
-		 *	resp->devices[i]->led_state = CTL__VMD_LED_STATE__NA;
-		 * else
-		 */
 		resp->devices[i]->led_state = led_state;
 
 		if (dev_info->bdi_traddr != NULL) {
@@ -373,8 +363,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 				break;
 			}
 			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr,
-				buflen);
+			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr, buflen);
 		}
 
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
@@ -397,9 +386,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 	/* Free all devices if there was an error allocating any */
 	if (rc != 0) {
-		d_list_for_each_entry_safe(dev_info, tmp,
-					   &list_devs_info.dev_list,
-					   bdi_link) {
+		d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list, bdi_link) {
 			d_list_del(&dev_info->bdi_link);
 			bio_free_dev_info(dev_info);
 		}

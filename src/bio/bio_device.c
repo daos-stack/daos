@@ -737,16 +737,10 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 			LED_STATE_NAME(opts->led_state));
 		break;
 	case CTL__VMD_LED_ACTION__RESET:
-		/* If the current state of a device is FAULTY we do not want to reset */
-		if (cur_led_state == (enum spdk_vmd_led_state)CTL__VMD_LED_STATE__ON) {
-			D_DEBUG(DB_MGMT, "ignoring LED reset on %s as state is %s\n",
-				addr_buf, LED_STATE_NAME(cur_led_state));
-			opts->led_state = cur_led_state;
-			return;
-		}
-		D_DEBUG(DB_MGMT, "Resetting VMD device %s LED state to %s\n", addr_buf,
-			LED_STATE_NAME(opts->led_state));
-		break;
+		/* Reset intercepted earlier in call-stack and converted to set */
+		D_ERROR("Reset action is not supported");
+		opts->status = -DER_INVAL;
+		return;
 	default:
 		D_ERROR("Unrecognized LED action requested\n");
 		opts->status = -DER_INVAL;
@@ -785,9 +779,57 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 static int
+check_faulty_devs(struct bio_xs_context *xs_ctxt, bool *is_faulty, struct spdk_pci_addr pci_addr)
+{
+	struct bio_dev_info	*dev_info = NULL, *tmp;
+	d_list_t		 dev_list;
+	int			 dev_list_cnt, rc;
+	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
+
+	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Error getting BIO device list\n");
+		return rc;
+	}
+
+	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
+	if (rc != 0) {
+		D_ERROR("Failed to format PCI address (%s)\n", spdk_strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	*is_faulty = false;
+	D_INIT_LIST_HEAD(&dev_list);
+
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		if (dev_info->bdi_traddr == NULL) {
+			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
+				DP_UUID(dev_info->bdi_dev_id));
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
+			if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
+				*is_faulty = true;
+		}
+	}
+
+out:
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		d_list_del(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	return rc;
+}
+
+static int
 led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
 	   Ctl__VmdLedAction action, Ctl__VmdLedState *state) {
 	struct led_opts		opts = { 0 };
+	bool			is_faulty;
+	int			rc;
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
 
@@ -806,17 +848,29 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
 	/* Validate action value. */
 	switch (action) {
 	case CTL__VMD_LED_ACTION__GET:
+		opts.action = action;
 		break;
 	case CTL__VMD_LED_ACTION__SET:
+		opts.action = action;
 		opts.led_state = *state;
 		break;
 	case CTL__VMD_LED_ACTION__RESET:
+		/* Check if any relevant devs are faulty, if yes set faulty, if no set normal */
+		opts.action = CTL__VMD_LED_ACTION__SET;
+		rc = check_faulty_devs(xs_ctxt, &is_faulty, pci_addr);
+		if (rc != 0) {
+			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
+			return rc;
+		}
+		if (is_faulty)
+			opts.led_state = CTL__VMD_LED_STATE__ON;
+		else
+			opts.led_state = CTL__VMD_LED_STATE__OFF;
 		break;
 	default:
 		D_ERROR("invalid action supplied: %d\n", action);
 		return -DER_INVAL;
 	}
-	opts.action = action;
 
 	spdk_pci_for_each_device(&opts, led_device_action);
 

@@ -300,20 +300,14 @@ func getLEDReqIDs(log logging.Logger, ids string) (map[string]bool, map[string]b
 	uuids := make(map[string]bool)
 
 	for _, token := range tokens {
-		addr, err := hardware.NewPCIAddress(token)
-		if err == nil && addr.IsVMDBackingAddress() {
+		if addr, err := hardware.NewPCIAddress(token); err == nil && addr.IsVMDBackingAddress() {
 			addrs[addr.String()] = true
 			continue
-		} else {
-			log.Debugf("%q not a vmd backing device pci address: %s", token, err)
 		}
 
-		uuid, err := uuid.Parse(token)
-		if err == nil {
+		if uuid, err := uuid.Parse(token); err == nil {
 			uuids[uuid.String()] = true
 			continue
-		} else {
-			log.Debugf("%q not a uuid: %s", token, err)
 		}
 
 		return nil, nil, errors.Errorf("req id entry %q is neither a valid vmd backing "+
