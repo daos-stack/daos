@@ -536,7 +536,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 			  DAOS_PROP_LABEL_MAX_LEN);
 		if (entry_dup->dpe_str == NULL) {
-			D_ERROR("failed to dup label.\n");
 			return -DER_NOMEM;
 		}
 		break;
@@ -545,7 +544,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		acl_ptr = entry->dpe_val_ptr;
 		entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
 		if (entry_dup->dpe_val_ptr == NULL) {
-			D_ERROR("failed to dup ACL\n");
 			return -DER_NOMEM;
 		}
 		break;
@@ -556,7 +554,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 		if (entry_dup->dpe_str == NULL) {
-			D_ERROR("failed to dup ownership info.\n");
 			return -DER_NOMEM;
 		}
 		break;
@@ -565,7 +562,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 		rc = d_rank_list_dup(&dst_list, svc_list);
 		if (rc) {
-			D_ERROR("failed dup rank list\n");
+			D_ERROR("failed dup rank list "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
