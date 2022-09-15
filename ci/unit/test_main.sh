@@ -43,4 +43,4 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$SL_SRC_DIR     \
                                          SL_PREFIX=$SL_PREFIX      \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
-                                         ./build/test_main_node.sh
+                                         $(cat "$mydir/test_main_node.sh")"
