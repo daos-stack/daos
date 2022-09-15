@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -30,10 +29,14 @@ class EcodIorHardRebuild(ErasureCodeIor):
                   second server. Read and verify the data after second server killed.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_ior,ior_hard
-        :avocado: tags=ec_ior_hard_online_rebuild
+        :avocado: tags=test_ec_ior_hard_online_rebuild
         """
+        # Remove the extra container created by ErasureCodeIor.setUp() via the
+        # IorTestBase.update_ior_cmd_with_pool() method.
+        self.container[0].destroy()
+
         # This is IOR Hard so skip the warning messages
         self.fail_on_warning = False
 
