@@ -97,7 +97,7 @@ dfs_is_init()
 }
 
 int
-dfs_init()
+dfs_init(void)
 {
 	int	rc;
 
