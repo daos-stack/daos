@@ -1243,10 +1243,18 @@ class Launch():
         self._write_details_json()
 
         # Generate a results.xml for the this run
-        create_xml(self.job, self.result)
+        try:
+            create_xml(self.job, self.result)
+        except ModuleNotFoundError as error:
+            # When SRE-439 is fixed this should be an error
+            self.log.warning("Unable to create results.xml file: %s", str(error))
 
         # Generate a results.html for the this run
-        create_html(self.job, self.result)
+        try:
+            create_html(self.job, self.result)
+        except ModuleNotFoundError as error:
+            # When SRE-439 is fixed this should be an error
+            self.log.warning("Unable to create results.html file: %s", str(error))
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -1258,7 +1266,7 @@ class Launch():
         try:
             with open(details_json, "w", encoding="utf-8") as details:
                 details.write(json.dumps(self.details, indent=4))
-        except Exception as error:       # pylint: disable=broad-except
+        except TypeError as error:
             self.log.error("Error writing %s: %s", details_json, str(error))
 
     def do_stuff(self, args):
