@@ -25,6 +25,7 @@ import yaml
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
 # from avocado.core.version import MAJOR, MINOR
+# from avocado.utils.stacktrace import prepare_exc_info
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -34,6 +35,7 @@ from ClusterShell.Task import task_self
 # pylint: disable=import-error,no-name-in-module
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 
+FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
     [
@@ -181,528 +183,45 @@ def run_remote(log, hosts, command, timeout=120):
     return results
 
 
-def get_build_environment(args):
-    """Obtain DAOS build environment variables from the .build_vars.json file.
+def get_yaml_data(log, yaml_file):
+    """Get the contents of a yaml file as a dictionary.
+
+    Removes any mux tags and ignores any other tags present.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        yaml_file (str): yaml file to read
+
+    Raises:
+        Exception: if an error is encountered reading the yaml file
 
     Returns:
-        dict: a dictionary of DAOS build environment variable names and values
+        dict: the contents of the yaml file
 
     """
-    build_vars_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                   "../../.build_vars.json")
-    try:
-        with open(build_vars_file, encoding="utf-8") as vars_file:
-            return json.load(vars_file)
-    except ValueError:
-        if not args.list:
-            raise
-        return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
-    except IOError as error:
-        if error.errno == errno.ENOENT:
-            if not args.list:
-                raise
-            return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
-    # Pylint warns about possible return types if we take this path, so ensure we do not.
-    assert False
+    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+        """Helper class for parsing avocado yaml files."""
 
+        def forward_mux(self, node):
+            """Pass on mux tags unedited."""
+            return self.construct_mapping(node)
 
-def set_test_environment(log, args):
-    """Set up the test environment.
+        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+            """Drop any other tag."""
+            return None
 
-    Args:
-        log (logger): logger for the messages produced by this method
-        args (argparse.Namespace): command line arguments for this program
+    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
+    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
 
-    Raises:
-        LaunchException: if there is a problem setting up the test environment
-
-    """
-    base_dir = get_build_environment(args)["PREFIX"]
-    bin_dir = os.path.join(base_dir, "bin")
-    sbin_dir = os.path.join(base_dir, "sbin")
-    # /usr/sbin is not setup on non-root user for CI nodes.
-    # SCM formatting tool mkfs.ext4 is located under
-    # /usr/sbin directory.
-    usr_sbin = os.path.sep + os.path.join("usr", "sbin")
-    path = os.environ.get("PATH")
-
-    if not args.list:
-        # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
-        set_interface_environment(log, args)
-
-        # Get the default provider if CRT_PHY_ADDR_STR is not set
-        set_provider_environment(log, os.environ["DAOS_TEST_FABRIC_IFACE"], args)
-
-        # Set the default location for daos log files written during testing
-        # if not already defined.
-        if "DAOS_TEST_LOG_DIR" not in os.environ:
-            os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
-        os.environ["D_LOG_FILE"] = os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
-        os.environ["D_LOG_FILE_APPEND_PID"] = "1"
-
-        # Assign the default value for transport configuration insecure mode
-        os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
-
-    # Update PATH
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["COVFILE"] = "/tmp/test.cov"
-
-    # Python paths required for functional testing
-    set_python_environment(log)
-
-    log.debug("ENVIRONMENT VARIABLES")
-    for key in sorted(os.environ):
-        if not key.startswith("BASH_FUNC_"):
-            log.debug("  %s: %s", key, os.environ[key])
-
-
-def set_interface_environment(log, args):
-    """Set up the interface environment variables.
-
-    Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
-    interface on this host to define the DAOS_TEST_FABRIC_IFACE environment variable.
-
-    The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
-    configuration file.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        args (argparse.Namespace): command line arguments for this program
-
-    Raises:
-        LaunchException: if there is a problem obtaining the default interface
-
-    """
-    log.debug("-" * 80)
-    # Get the default interface to use if OFI_INTERFACE is not set
-    interface = os.environ.get("OFI_INTERFACE")
-    if interface is None:
-        # Find all the /sys/class/net interfaces on the launch node
-        # (excluding lo)
-        log.debug("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = get_available_interfaces(log, args)
-        try:
-            # Select the fastest active interface available by sorting
-            # the speed
-            interface = available_interfaces[sorted(available_interfaces)[-1]]
-        except IndexError as error:
-            raise LaunchException("Error obtaining a default interface!") from error
-
-    # Update env definitions
-    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-    os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-    log.info("Testing with interface:   %s", interface)
-    for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-        try:
-            log.debug("Testing with %s=%s", name, os.environ[name])
-        except KeyError:
-            log.debug("Testing with %s unset", name)
-
-
-def get_available_interfaces(log, args):
-    # pylint: disable=too-many-nested-blocks,too-many-branches,too-many-locals
-    """Get a dictionary of active available interfaces and their speeds.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        args (argparse.Namespace): command line arguments for this program
-
-    Raises:
-        LaunchException: if there is a problem finding active network interfaces
-
-    Returns:
-        dict: a dictionary of speeds with the first available active interface providing that speed
-
-    """
-    available_interfaces = {}
-    all_hosts = NodeSet()
-    all_hosts.update(args.test_servers)
-    all_hosts.update(args.test_clients)
-
-    # Find any active network interfaces on the server or client hosts
-    net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    operstate = os.path.join(net_path, "*", "operstate")
-    command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"])
-
-    result = run_remote(log, all_hosts, command)
-    if not result.passed:
-        raise LaunchException(
-            f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
-
-    # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
-    active_interfaces = {}
-    for data in result.output:
-        for line in data.stdout:
+    yaml_data = {}
+    if os.path.isfile(yaml_file):
+        with open(yaml_file, "r", encoding="utf-8") as open_file:
             try:
-                interface = line.split("/")[-2]
-                if interface not in active_interfaces:
-                    active_interfaces[interface] = data.hosts
-                else:
-                    active_interfaces[interface].update(data.hosts)
-            except IndexError:
-                pass
-
-    # From the active interface dictionary find all the interfaces that are common to all hosts
-    log.debug("Active network interfaces detected:")
-    common_interfaces = []
-    for interface, node_set in active_interfaces.items():
-        log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
-        if node_set == all_hosts:
-            common_interfaces.append(interface)
-
-    # Find the speed of each common active interface in order to be able to choose the fastest
-    interface_speeds = {}
-    for interface in common_interfaces:
-        command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-        result = run_remote(log, all_hosts, command)
-        # Verify each host has the same interface speed
-        if result.passed and result.homogeneous:
-            for line in result.output[0].stdout:
-                try:
-                    interface_speeds[interface] = int(line.strip())
-                except IOError as io_error:
-                    # KVM/Qemu/libvirt returns an EINVAL
-                    if io_error.errno == errno.EINVAL:
-                        interface_speeds[interface] = 1000
-                except ValueError:
-                    # Any line not containing a speed (integer)
-                    pass
-        elif not result.homogeneous:
-            log.error(
-                "Non-homogeneous interface speed detected for %s on %s.",
-                interface, str(all_hosts))
-        else:
-            log.error("Error detecting speed of %s on %s", interface, str(all_hosts))
-
-    if interface_speeds:
-        log.debug("Active network interface speeds on %s:", all_hosts)
-
-    for interface, speed in interface_speeds.items():
-        log.debug("  - %-8s (speed: %6s)", interface, speed)
-        # Only include the first active interface for each speed - first is
-        # determined by an alphabetic sort: ib0 will be checked before ib1
-        if speed is not None and speed not in available_interfaces:
-            available_interfaces[speed] = interface
-
-    log.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
-    return available_interfaces
-
-
-def set_provider_environment(log, interface, args):
-    """Set up the provider environment variables.
-
-    Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
-    select the appropriate provider based upon the interface driver.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        interface (str): the current interface being used.
-        args (argparse.Namespace): command line arguments for this program
-
-    Raises:
-        LaunchException: if there is a problem finding a provider for the interface
-
-    """
-    log.debug("-" * 80)
-    # Use the detected provider if one is not set
-    if args.provider:
-        provider = args.provider
-    else:
-        provider = os.environ.get("CRT_PHY_ADDR_STR")
-    if provider is None:
-        log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
-
-        # Check for a Omni-Path interface
-        log.debug("Checking for Omni-Path devices")
-        command = "sudo opainfo"
-        result = run_remote(log, args.test_servers, command)
-        if result.passed:
-            # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
-            log.debug("  Excluding verbs provider for Omni-Path adapters")
-            PROVIDER_KEYS.pop("verbs")
-
-        # Detect all supported providers
-        command = f"fi_info -d {interface} -l | grep -v 'version:'"
-        result = run_remote(log, args.test_servers, command)
-        if result.passed:
-            # Find all supported providers
-            keys_found = defaultdict(NodeSet)
-            for data in result.output:
-                for line in data.stdout:
-                    provider_name = line.replace(":", "")
-                    if provider_name in PROVIDER_KEYS:
-                        keys_found[provider_name].update(data.hosts)
-
-            # Only use providers available on all the server hosts
-            if keys_found:
-                log.debug("Detected supported providers:")
-            provider_name_keys = list(keys_found)
-            for provider_name in provider_name_keys:
-                log.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                if keys_found[provider_name] != args.test_servers:
-                    keys_found.pop(provider_name)
-
-            # Select the preferred found provider based upon PROVIDER_KEYS order
-            log.debug("Supported providers detected: %s", list(keys_found))
-            for key in PROVIDER_KEYS:
-                if key in keys_found:
-                    provider = PROVIDER_KEYS[key]
-                    break
-
-        # Report an error if a provider cannot be found
-        if not provider:
-            raise LaunchException(
-                f"Error obtaining a supported provider for {interface} from: {list(PROVIDER_KEYS)}")
-
-        log.debug("  Found %s provider for %s", provider, interface)
-
-    # Update env definitions
-    os.environ["CRT_PHY_ADDR_STR"] = provider
-    log.info("Testing with provider:    %s", provider)
-    log.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
-
-
-def set_python_environment(log):
-    """Set up the test python environment.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-    """
-    log.debug("-" * 80)
-    required_python_paths = [
-        os.path.abspath("util/apricot"),
-        os.path.abspath("util"),
-        os.path.abspath("cart"),
-    ]
-
-    # Include the cart directory paths when running from sources
-    for cart_dir in os.listdir(os.path.abspath("cart")):
-        cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
-        if os.path.isdir(cart_path):
-            required_python_paths.append(cart_path)
-
-    required_python_paths.extend(site.getsitepackages())
-
-    # Check the PYTHONPATH env definition
-    python_path = os.environ.get("PYTHONPATH")
-    if python_path is None or python_path == "":
-        # Use the required paths to define the PYTHONPATH env if it is not set
-        os.environ["PYTHONPATH"] = ":".join(required_python_paths)
-    else:
-        # Append any missing required paths to the existing PYTHONPATH env
-        defined_python_paths = [
-            os.path.abspath(os.path.expanduser(path))
-            for path in python_path.split(":")]
-        for required_path in required_python_paths:
-            if required_path not in defined_python_paths:
-                python_path += ":" + required_path
-        os.environ["PYTHONPATH"] = python_path
-    log.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
-
-
-def get_device_replacement(log, args):
-    """Determine the value to use for the '--nvme' command line argument.
-
-    Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
-    controlled) and use these values to replace placeholder devices in avocado test yaml files.
-
-    Supported auto '--nvme' arguments:
-        auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
-                              (connected to a VMD enabled NVMe device) in the homogeneous 'lspci -D'
-                              output from each server.  Optionally grep the list of NVMe or VMD
-                              enabled NVMe devices for 'filter'.
-        auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device in
-                              the homogeneous 'lspci -D' output from each server.  Optionally grep
-                              this output for 'filter'.
-        auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a VMD
-                              enabled NVMe device in the homogeneous 'lspci -D' output from each
-                              server.  Optionally grep the list of VMD enabled NVMe devices for
-                              'filter'.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        args (argparse.Namespace): command line arguments for this program
-
-    Raises:
-        LaunchException: if there is a problem finding a device replacement
-
-    Returns:
-        str: a comma-separated list of nvme device pci addresses available on all of the specified
-             test servers
-
-    """
-    log.debug("-" * 80)
-    log.debug("Detecting devices that match: %s", args.nvme)
-    devices = []
-    device_types = []
-
-    # Separate any optional filter from the key
-    dev_filter = None
-    nvme_args = args.nvme.split(":")
-    if len(nvme_args) > 1:
-        dev_filter = nvme_args[1]
-
-    # First check for any VMD disks, if requested
-    if nvme_args[0] in ["auto", "auto_vmd"]:
-        vmd_devices = auto_detect_devices(log, args.test_servers, "NVMe", "5", dev_filter)
-        if vmd_devices:
-            # Find the VMD controller for the matching VMD disks
-            vmd_controllers = auto_detect_devices(log, args.test_servers, "VMD", "4", None)
-            devices.extend(get_vmd_address_backed_nvme(
-                log, args.test_servers, vmd_devices, vmd_controllers))
-        elif not dev_filter:
-            # Use any VMD controller if no VMD disks found w/o a filter
-            devices = auto_detect_devices(log, args.test_servers, "VMD", "4", None)
-        if devices:
-            device_types.append("VMD")
-
-    # Second check for any non-VMD NVMe disks, if requested
-    if nvme_args[0] in ["auto", "auto_nvme"]:
-        dev_list = auto_detect_devices(log, args.test_servers, "NVMe", "4", dev_filter)
-        if dev_list:
-            devices.extend(dev_list)
-            device_types.append("NVMe")
-
-    # If no VMD or NVMe devices were found exit
-    if not devices:
-        raise LaunchException(
-            f"Error: Unable to auto-detect devices for the '--nvme {args.nvme}' argument")
-
-    log.debug(
-        "Auto-detected %s devices on %s: %s", " & ".join(device_types), args.test_servers, devices)
-    log.info("Testing with %s devices: %s", " & ".join(device_types), devices)
-    return ",".join(devices)
-
-
-def auto_detect_devices(log, hosts, device_type, length, device_filter=None):
-    """Get a list of NVMe/VMD devices found on each specified host.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to find the NVMe/VMD devices
-        device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
-        length (str): number of digits to match in the first PCI domain number
-        device_filter (str, optional): optional filter to apply to device searching. Defaults to
-            None.
-
-    Raises:
-        LaunchException: if there is a problem finding a devices
-
-    Returns:
-        list: A list of detected devices - empty if none found
-
-    """
-    found_devices = {}
-
-    # Find the devices on each host
-    if device_type == "VMD":
-        # Exclude the controller revision as this causes heterogeneous clush output
-        command_list = [
-            "/sbin/lspci -D",
-            f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-            "grep -E 'Volume Management Device NVMe RAID Controller'",
-            r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
-    elif device_type == "NVMe":
-        command_list = [
-            "/sbin/lspci -D",
-            f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-            "grep -E 'Non-Volatile memory controller:'"]
-        if device_filter and device_filter.startswith("-"):
-            command_list.append(f"grep -v '{device_filter[1:]}'")
-        elif device_filter:
-            command_list.append(f"grep '{device_filter}'")
-    else:
-        raise LaunchException(
-            f"ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {device_type}")
-    command = " | ".join(command_list) + " || :"
-
-    # Find all the VMD PCI addresses common to all hosts
-    result = run_remote(log, hosts, command)
-    if result.passed:
-        for data in result.output:
-            for line in data.stdout:
-                if line not in found_devices:
-                    found_devices[line] = NodeSet()
-                found_devices[line].update(data.hosts)
-
-        # Remove any non-homogeneous devices
-        for key in list(found_devices):
-            if found_devices[key] != hosts:
-                log.debug("  device '%s' not found on all hosts: %s", key, found_devices[key])
-                found_devices.pop(key)
-
-    if not found_devices:
-        raise LaunchException("Error: Non-homogeneous {device_type} PCI addresses.")
-
-    # Get the devices from the successful, homogeneous command output
-    return find_pci_address("\n".join(found_devices))
-
-
-def get_vmd_address_backed_nvme(log, hosts, vmd_disks, vmd_controllers):
-    """Find valid VMD address which has backing NVMe.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to find the VMD addresses
-        vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
-        vmd_controllers (list): list of PCI domain numbers for each VMD controller
-
-    Raises:
-        LaunchException: if there is a problem finding a devices
-
-    Returns:
-        list: a list of the VMD controller PCI domain numbers which are connected to the VMD disks
-
-    """
-    disk_controllers = {}
-    command_list = ["ls -l /sys/block/", "grep nvme"]
-    if vmd_disks:
-        command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
-    command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
-    command = " | ".join(command_list) + " || :"
-    result = run_remote(log, hosts, command)
-
-    # Verify the command was successful on each server host
-    if not result.passed:
-        raise LaunchException(f"Error issuing command '{command}'")
-
-    # Collect a list of NVMe devices behind the same VMD addresses on each host.
-    log.debug("Checking for %s in command output", vmd_controllers)
-    if result.passed:
-        for data in result.output:
-            for device in vmd_controllers:
-                if device in data.stdout:
-                    if device not in disk_controllers:
-                        disk_controllers[device] = NodeSet()
-                    disk_controllers[device].update(data.hosts)
-
-        # Remove any non-homogeneous devices
-        for key in list(disk_controllers):
-            if disk_controllers[key] != hosts:
-                log.debug("  device '%s' not found on all hosts: %s", key, disk_controllers[key])
-                disk_controllers.pop(key)
-
-    # Verify each server host has the same NVMe devices behind the same VMD addresses.
-    if not disk_controllers:
-        raise LaunchException("Error: Non-homogeneous NVMe device behind VMD addresses.")
-
-    return disk_controllers
-
-
-def find_pci_address(value):
-    """Find PCI addresses in the specified string.
-
-    Args:
-        value (str): string to search for PCI addresses
-
-    Returns:
-        list: a list of all the PCI addresses found in the string
-
-    """
-    digit = "0-9a-fA-F"
-    pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
-    return re.findall(pattern, str(value))
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
+            except yaml.YAMLError as error:
+                log.error("Error reading %s: %s", yaml_file, str(error))
+                sys.exit(1)
+    return yaml_data
 
 
 def find_values(obj, keys, key=None, val_type=str):
@@ -769,268 +288,6 @@ def find_values(obj, keys, key=None, val_type=str):
     return matches
 
 
-def setup_test_files(log, test_list, args, yaml_dir):
-    """Set up the test yaml files with any placeholder replacements.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test_list (list): list of test scripts to run
-        args (argparse.Namespace): command line arguments for this program
-        yaml_dir (str): directory in which to write the modified yaml files
-    """
-    # Replace any placeholders in the extra yaml file, if provided
-    if args.extra_yaml:
-        args.extra_yaml = [
-            replace_yaml_file(log, extra, args, yaml_dir) for extra in args.extra_yaml]
-
-    for test in test_list:
-        test.yaml_file = replace_yaml_file(log, test.yaml_file, args, yaml_dir)
-
-        # Display the modified yaml file variants with debug
-        command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
-        if args.extra_yaml:
-            command.extend(args.extra_yaml)
-        command.extend(["--summary", "3"])
-        run_local(log, command, check=False)
-
-        # Collect the host information from the updated test yaml
-        test.set_host_info(log, args.include_localhost)
-
-    # Log the test information
-    log.debug("-" * 80)
-    log.debug("Test information:")
-    log.debug("%3s  %-40s  %-50s  %-20s  %-20s", "UID", "Test", "Yaml File", "Servers", "Clients")
-    log.debug("%3s  %-40s  %-50s  %-20s  %-20s", "-" * 3, "-" * 40, "-" * 50, "-" * 20, "-" * 20)
-    for test in test_list:
-        log.debug(
-            "%3s  %-40s  %-50s  %-20s  %-20s",
-            test.name.order, test.test_file, test.yaml_file, test.hosts.servers, test.hosts.clients)
-
-
-def replace_yaml_file(log, yaml_file, args, yaml_dir):
-    # pylint: disable=too-many-nested-blocks,too-many-branches
-    """Create a temporary test yaml file with any requested values replaced.
-
-    Optionally replace the following test yaml file values if specified by the
-    user via the command line arguments:
-
-        test_servers:   Use the list specified by the --test_servers (-ts)
-                        argument to replace any host name placeholders listed
-                        under "test_servers:"
-
-        test_clients    Use the list specified by the --test_clients (-tc)
-                        argument (or any remaining names in the --test_servers
-                        list argument, if --test_clients is not specified) to
-                        replace any host name placeholders listed under
-                        "test_clients:".
-
-        bdev_list       Use the list specified by the --nvme (-n) argument to
-                        replace the string specified by the "bdev_list:" yaml
-                        parameter.  If multiple "bdev_list:" entries exist in
-                        the yaml file, evenly divide the list when making the
-                        replacements.
-
-    Any replacements are made in a copy of the original test yaml file.  If no
-    replacements are specified return the original test yaml file.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        yaml_file (str): test yaml file
-        args (argparse.Namespace): command line arguments for this program
-        yaml_dir (str): directory in which to write the modified yaml files
-
-    Returns:
-        str: the test yaml file; None if the yaml file contains placeholders
-            w/o replacements
-
-    """
-    log.debug("-" * 80)
-    replacements = {}
-
-    if args.test_servers or args.nvme or args.timeout_multiplier:
-        # Find the test yaml keys and values that match the replaceable fields
-        yaml_data = get_yaml_data(log, yaml_file)
-        log.debug("Detected yaml data: %s", yaml_data)
-        yaml_keys = list(YAML_KEYS.keys())
-        yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
-
-        # Generate a list of values that can be used as replacements
-        user_values = OrderedDict()
-        for key, value in list(YAML_KEYS.items()):
-            args_value = getattr(args, value)
-            if isinstance(args_value, NodeSet):
-                user_values[key] = list(args_value)
-            elif isinstance(args_value, str):
-                user_values[key] = args_value.split(",")
-            elif args_value:
-                user_values[key] = [args_value]
-            else:
-                user_values[key] = None
-
-        # Assign replacement values for the test yaml entries to be replaced
-        log.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
-        log.debug("  Found values: %s", yaml_find)
-        log.debug("  User values:  %s", dict(user_values))
-
-        node_mapping = {}
-        for key, user_value in user_values.items():
-            # If the user did not provide a specific list of replacement
-            # test_clients values, use the remaining test_servers values to
-            # replace test_clients placeholder values
-            if key == "test_clients" and not user_value:
-                user_value = user_values["test_servers"]
-
-            # Replace test yaml keys that were:
-            #   - found in the test yaml
-            #   - have a user-specified replacement
-            if key in yaml_find and user_value:
-                if key.startswith("test_"):
-                    # The entire server/client test yaml list entry is replaced
-                    # by a new test yaml list entry, e.g.
-                    #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
-                    #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
-                    if not isinstance(yaml_find[key], list):
-                        yaml_find[key] = [yaml_find[key]]
-
-                    for yaml_find_item in yaml_find[key]:
-                        replacement = NodeSet()
-                        try:
-                            # Replace integer placeholders with the number of nodes from the user
-                            # provided list equal to the quantity requested by the test yaml
-                            quantity = int(yaml_find_item)
-                            if args.override and args.test_clients:
-                                # When individual lists of server and client nodes are provided with
-                                # the override flag set use the full list of nodes specified by the
-                                # test_server/test_client arguments
-                                quantity = len(user_value)
-                            elif args.override:
-                                log.warn(
-                                    "Warning: In order to override the node quantity a "
-                                    "'--test_clients' argument must be specified: %s: %s",
-                                    key, yaml_find_item)
-                            for _ in range(quantity):
-                                try:
-                                    replacement.add(user_value.pop(0))
-                                except IndexError:
-                                    # Not enough nodes provided for the replacement
-                                    if not args.override:
-                                        replacement = None
-                                    break
-
-                        except ValueError:
-                            try:
-                                # Replace clush-style placeholders with nodes from the user provided
-                                # list using a mapping so that values used more than once yield the
-                                # same replacement
-                                for node in NodeSet(yaml_find_item):
-                                    if node not in node_mapping:
-                                        try:
-                                            node_mapping[node] = user_value.pop(0)
-                                        except IndexError:
-                                            # Not enough nodes provided for the replacement
-                                            if not args.override:
-                                                replacement = None
-                                            break
-                                        log.debug(
-                                            "  - %s replacement node mapping: %s -> %s",
-                                            key, node, node_mapping[node])
-                                    replacement.add(node_mapping[node])
-
-                            except TypeError:
-                                # Unsupported format
-                                replacement = None
-
-                        hosts_key = r":\s+".join([key, str(yaml_find_item)])
-                        hosts_key = hosts_key.replace("[", r"\[")
-                        hosts_key = hosts_key.replace("]", r"\]")
-                        if replacement:
-                            replacements[hosts_key] = ": ".join([key, str(replacement)])
-                        else:
-                            replacements[hosts_key] = None
-
-                elif key == "bdev_list":
-                    # Individual bdev_list NVMe PCI addresses in the test yaml
-                    # file are replaced with the new NVMe PCI addresses in the
-                    # order they are found, e.g.
-                    #   0000:81:00.0 --> 0000:12:00.0
-                    for yaml_find_item in yaml_find[key]:
-                        bdev_key = f"\"{yaml_find_item}\""
-                        if bdev_key in replacements:
-                            continue
-                        try:
-                            replacements[bdev_key] = f"\"{user_value.pop(0)}\""
-                        except IndexError:
-                            replacements[bdev_key] = None
-
-                else:
-                    # Timeouts - replace the entire timeout entry (key + value)
-                    # with the same key with its original value multiplied by the
-                    # user-specified value, e.g.
-                    #   timeout: 60 -> timeout: 600
-                    if isinstance(yaml_find[key], int):
-                        timeout_key = r":\s+".join([key, str(yaml_find[key])])
-                        timeout_new = max(1, round(yaml_find[key] * user_value[0]))
-                        replacements[timeout_key] = ": ".join([key, str(timeout_new)])
-                        log.debug(
-                            "  - Timeout adjustment (x %s): %s -> %s",
-                            user_value, timeout_key, replacements[timeout_key])
-                    elif isinstance(yaml_find[key], dict):
-                        for timeout_test, timeout_val in list(yaml_find[key].items()):
-                            timeout_key = r":\s+".join([timeout_test, str(timeout_val)])
-                            timeout_new = max(1, round(timeout_val * user_value[0]))
-                            replacements[timeout_key] = ": ".join([timeout_test, str(timeout_new)])
-                            log.debug(
-                                "  - Timeout adjustment (x %s): %s -> %s",
-                                user_value, timeout_key, replacements[timeout_key])
-
-        # Display the replacement values
-        for value, replacement in list(replacements.items()):
-            log.debug("  - Replacement: %s -> %s", value, replacement)
-
-    if replacements:
-        # Read in the contents of the yaml file to retain the !mux entries
-        log.debug("Reading %s", yaml_file)
-        with open(yaml_file, encoding="utf-8") as yaml_buffer:
-            yaml_data = yaml_buffer.read()
-
-        # Apply the placeholder replacements
-        missing_replacements = []
-        log.debug("Modifying contents: %s", yaml_file)
-        for key in sorted(replacements):
-            value = replacements[key]
-            if value:
-                # Replace the host entries with their mapped values
-                log.debug("  - Replacing: %s --> %s", key, value)
-                yaml_data = re.sub(key, value, yaml_data)
-            else:
-                # Keep track of any placeholders without a replacement value
-                log.debug("  - Missing:   %s", key)
-                missing_replacements.append(key)
-        if missing_replacements:
-            # Report an error for all of the placeholders w/o a replacement
-            log.error(
-                "Error: Placeholders missing replacements in %s:\n  %s",
-                yaml_file, ", ".join(missing_replacements))
-            sys.exit(1)
-
-        # Write the modified yaml file into a temporary file.  Use the path to
-        # ensure unique yaml files for tests with the same filename.
-        orig_yaml_file = yaml_file
-        yaml_name = get_test_category(yaml_file)
-        yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
-        log.debug("Creating copy: %s", yaml_file)
-        with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
-            yaml_buffer.write(yaml_data)
-
-        # Optionally display a diff of the yaml file
-        if args.verbose > 0:
-            command = ["diff", "-y", orig_yaml_file, yaml_file]
-            run_local(log, command, check=False)
-
-    # Return the untouched or modified yaml file
-    return yaml_file
-
-
 def generate_certs(log):
     """Generate the certificates for the test.
 
@@ -1080,47 +337,6 @@ def setup_test_directory(log, test, mode="all"):
         run_remote(log, test.hosts.all, f"chmod a+wr {test_dir}")
     if mode in ["all", "list"]:
         run_remote(log, test.hosts.all, f"ls -al {test_dir}")
-
-
-def get_yaml_data(log, yaml_file):
-    """Get the contents of a yaml file as a dictionary.
-
-    Removes any mux tags and ignores any other tags present.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        yaml_file (str): yaml file to read
-
-    Raises:
-        Exception: if an error is encountered reading the yaml file
-
-    Returns:
-        dict: the contents of the yaml file
-
-    """
-    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-        """Helper class for parsing avocado yaml files."""
-
-        def forward_mux(self, node):
-            """Pass on mux tags unedited."""
-            return self.construct_mapping(node)
-
-        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
-            """Drop any other tag."""
-            return None
-
-    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
-    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
-
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
-            except yaml.YAMLError as error:
-                log.error("Error reading %s: %s", yaml_file, str(error))
-                sys.exit(1)
-    return yaml_data
 
 
 def get_test_category(test_file):
@@ -1872,6 +1088,11 @@ class Launch():
             max_chars=max_chars)
         self.result = Results(self.logdir)
 
+        # Details about the run
+        self.details = OrderedDict()
+        self.details["avocado version"] = str(self.avocado)
+        self.details["launch host"] = get_local_host()
+
     @staticmethod
     def _get_file_handler(log_file):
         """Get a logging file handler.
@@ -1930,6 +1151,752 @@ class Launch():
             self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
         self.log.info("Launch log file: %s", self.logfile)
         self.log.info("-" * 80)
+
+    def _start_test(self, class_name, test_name, log_file):
+        """Start a new test result.
+
+        Args:
+            class_name (str): the test class name
+            test_name (TestName): the test uid, name, and variant
+            log_file (str): the log file for a single test
+
+        Returns:
+            TestResult: the test result for this test
+
+        """
+        # Create a new TestResult for this test
+        self.result.tests.append(TestResult(class_name, test_name, log_file, self.logdir))
+
+        # Mark the start of the processing of this test
+        self.result.tests[-1].start()
+
+        return self.result.tests[-1]
+
+    def _end_test(self, test_result, message, fail_class=None, exc_info=None):
+        """Mark the end of the test result.
+
+        Args:
+            test_result (TestResult): the test result to complete
+            message (str): exit message or reason for failure
+            fail_class (str, optional): failure category.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info().
+        """
+        if fail_class is None:
+            self._pass_test(test_result, message)
+        else:
+            self._fail_test(test_result, fail_class, message, exc_info)
+        test_result.end()
+
+    def _pass_test(self, test_result, message=None):
+        """Set the test result as passed.
+
+        Args:
+            test_result (TestResult): the test result to mark as passed
+            message (str, optional): explaination of test passing. Defaults to None.
+        """
+        if message is not None:
+            self.log.debug(message)
+        test_result.status = TestResult.PASS
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info):
+        """Set the test result as failed.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo): return value from sys.exc_info().
+        """
+        self.log.error(fail_reason)
+        self.log.debug("Stacktrace", exc_info=True)
+
+        test_result.status = TestResult.ERROR
+        test_result.fail_class = fail_class
+        test_result.fail_reason = fail_reason
+
+        try:
+            # pylint: disable=import-outside-toplevel
+            from avocado.utils.stacktrace import prepare_exc_info
+            test_result.traceback = prepare_exc_info(exc_info)
+        except Exception:       # pylint: disable=broad-except
+            pass
+
+    def get_exit_status(self, status, message, fail_class=None, exc_info=None):
+        """Get the exit status for the current mode.
+
+        Also update the overall test result.
+
+        Args:
+            status (int): the exit status to use for non-ci mode operation
+            message (str): exit message or reason for failure
+            fail_class (str, optional): failure category.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info().
+
+        Returns:
+            int: the exit status
+
+        """
+        # Mark the end of the test result for any non-test execution steps
+        self._end_test(self.result.tests[0], message, fail_class, exc_info)
+
+        # Write the details to a json file
+        self._write_details_json()
+
+        # Generate a results.xml for the this run
+        create_xml(self.job, self.result)
+
+        # Generate a results.html for the this run
+        create_html(self.job, self.result)
+
+        # Set the return code for the program based upon the mode and the provided status
+        #   - always return 0 in CI mode since errors will be reported via the results.xml file
+        return 0 if self.mode == "ci" else status
+
+    def _write_details_json(self):
+        """Write the details to a json file."""
+        details_json = os.path.join(self.logdir, "details.json")
+        try:
+            with open(details_json, "w", encoding="utf-8") as details:
+                details.write(json.dumps(self.details, indent=4))
+        except Exception as error:       # pylint: disable=broad-except
+            self.log.error("Error writing %s: %s", details_json, str(error))
+
+    def do_stuff(self, args):
+        """Perform the actions specified by the command line arguments.
+
+        Args:
+            args (argparse.Namespace): command line arguments for this program
+
+        Returns:
+            int: exit status for the steps executed
+
+        """
+        # Add a test result to account for any non-test execution steps
+        setup_result = self._start_test("FTEST_launch", TestName("launch.py", 0, 0), self.logfile)
+
+        # Record the command line arguments
+        self.log.debug("Arguments:")
+        for key in sorted(args.__dict__.keys()):
+            self.log.debug("  %s = %s", key, getattr(args, key))
+
+        # Convert host specifications into NodeSets
+        try:
+            servers = NodeSet(args.test_servers)
+        except TypeError:
+            message = f"Invalid '--test_servers={args.test_servers}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        try:
+            clients = NodeSet(args.test_clients)
+        except TypeError:
+            message = f"Invalid '--test_clients={args.test_clients}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # A list of server hosts is required
+        if not servers and not args.list:
+            return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
+        self.log.info("Testing with hosts:       %s", servers.union(clients))
+        self.details["test hosts"] = str(servers.union(clients))
+
+        # Setup the user environment
+        try:
+            self._set_test_environment(
+                servers, clients, args.list, args.provider, args.insecure_mode)
+        except LaunchException as error:
+            return self.get_exit_status(1, str(error), "Setup", sys.exc_info())
+
+        # Auto-detect nvme test yaml replacement values if requested
+        if args.nvme and args.nvme.startswith("auto") and not args.list:
+            try:
+                args.nvme = self._get_device_replacement(servers, args.nvme)
+            except LaunchException:
+                message = "Error auto-detecting NVMe test yaml file replacement values"
+                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        elif args.nvme and args.nvme.startswith("vmd:"):
+            args.nvme = args.nvme.replace("vmd:", "")
+
+        # Process the tags argument to determine which tests to run - populates self.tests
+        try:
+            self.set_test_list(args.tags)
+        except LaunchException:
+            message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # Verify at least one test was requested
+        if not self.tests:
+            message = f"No tests found for tags: {' '.join(args.tags)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # Done if just listing tests matching the tags
+        if args.list and not args.modify:
+            return self.get_exit_status(0, "Listing tests complete")
+
+        # Create a temporary directory
+        if args.yaml_directory is None:
+            # pylint: disable=consider-using-with
+            temp_dir = TemporaryDirectory()
+            yaml_dir = temp_dir.name
+        else:
+            yaml_dir = args.yaml_directory
+            if not os.path.exists(yaml_dir):
+                os.mkdir(yaml_dir)
+        self.log.info("Modified test yaml files being created in: %s", yaml_dir)
+
+        # Modify the test yaml files to run on this cluster
+        try:
+            self.setup_test_files(args, yaml_dir)
+        except LaunchException:
+            message = "Error modifying the test yaml files"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        if args.modify:
+            return self.get_exit_status(0, "Modifying test yaml files complete")
+
+        # Split the timer for the test result to account for any non-test execution steps as not to
+        # double report the test time accounted for in each individual test result
+        setup_result.end()
+
+        # Execute the tests
+        status = self.run_tests(
+            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
+            args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
+
+        # Restart the timer for the test result to account for any non-test execution steps
+        setup_result.start()
+
+        # Return the appropriate return code and mark the test result to account for any non-test
+        # execution steps complete
+        return self.get_exit_status(status, "Executing tests complete")
+
+    def _set_test_environment(self, servers, clients, list_tests, provider, insecure_mode):
+        """Set up the test environment.
+
+        Args:
+            servers (NodeSet): hosts designated for the server role in testing
+            clients (NodeSet): hosts designated for the client role in testing
+            list_tests (bool): whether or not the user has requested to just list the tests that
+                match the specified tags
+            provider (str): provider to use in testing
+            insecure_mode (bool): whether or not to run tests in insecure mode
+
+        Raises:
+            LaunchException: if there is a problem setting up the test environment
+
+        """
+        base_dir = self._get_build_environment(list_tests)["PREFIX"]
+        bin_dir = os.path.join(base_dir, "bin")
+        sbin_dir = os.path.join(base_dir, "sbin")
+        # /usr/sbin is not setup on non-root user for CI nodes.
+        # SCM formatting tool mkfs.ext4 is located under
+        # /usr/sbin directory.
+        usr_sbin = os.path.sep + os.path.join("usr", "sbin")
+        path = os.environ.get("PATH")
+
+        if not list_tests:
+            # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
+            self._set_interface_environment(servers, clients)
+
+            # Get the default provider if CRT_PHY_ADDR_STR is not set
+            self._set_provider_environment(servers, os.environ["DAOS_TEST_FABRIC_IFACE"], provider)
+
+            # Set the default location for daos log files written during testing
+            # if not already defined.
+            if "DAOS_TEST_LOG_DIR" not in os.environ:
+                os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+            os.environ["D_LOG_FILE"] = os.path.join(
+                os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+            os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+
+            # Assign the default value for transport configuration insecure mode
+            os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
+
+        # Update PATH
+        os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+        os.environ["COVFILE"] = "/tmp/test.cov"
+
+        # Python paths required for functional testing
+        self._set_python_environment()
+
+        self.log.debug("ENVIRONMENT VARIABLES")
+        for key in sorted(os.environ):
+            if not key.startswith("BASH_FUNC_"):
+                self.log.debug("  %s: %s", key, os.environ[key])
+
+    def _get_build_environment(self, list_tests):
+        """Obtain DAOS build environment variables from the .build_vars.json file.
+
+        Args:
+            list_tests (bool): whether or not the user has requested to just list the tests that
+                match the specified tags
+
+        Raises:
+            LaunchException: if there is an error obtaining the DAOS build environment variables
+
+        Returns:
+            dict: a dictionary of DAOS build environment variable names and values
+
+        """
+        build_vars_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
+        try:
+            with open(build_vars_file, encoding="utf-8") as vars_file:
+                return json.load(vars_file)
+
+        except ValueError as error:
+            if not list_tests:
+                raise LaunchException("Error setting test environment") from error
+
+        except IOError as error:
+            if error.errno == errno.ENOENT:
+                if not list_tests:
+                    raise LaunchException("Error setting test environment") from error
+
+        return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
+
+    def _set_interface_environment(self, servers, clients):
+        """Set up the interface environment variables.
+
+        Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
+        interface on this host to define the DAOS_TEST_FABRIC_IFACE environment variable.
+
+        The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
+        configuration file.
+
+        Args:
+            servers (NodeSet): hosts designated for the server role in testing
+            clients (NodeSet): hosts designated for the client role in testing
+
+        Raises:
+            LaunchException: if there is a problem obtaining the default interface
+
+        """
+        self.log.debug("-" * 80)
+        # Get the default interface to use if OFI_INTERFACE is not set
+        interface = os.environ.get("OFI_INTERFACE")
+        if interface is None:
+            # Find all the /sys/class/net interfaces on the launch node
+            # (excluding lo)
+            self.log.debug("Detecting network devices - OFI_INTERFACE not set")
+            available_interfaces = self._get_available_interfaces(servers, clients)
+            try:
+                # Select the fastest active interface available by sorting
+                # the speed
+                interface = available_interfaces[sorted(available_interfaces)[-1]]
+            except IndexError as error:
+                raise LaunchException("Error obtaining a default interface!") from error
+
+        # Update env definitions
+        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+        os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
+        self.log.info("Testing with interface:   %s", interface)
+        self.details["interface"] = interface
+        for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
+            try:
+                self.log.debug("Testing with %s=%s", name, os.environ[name])
+            except KeyError:
+                self.log.debug("Testing with %s unset", name)
+
+    def _get_available_interfaces(self, servers, clients):
+        # pylint: disable=too-many-nested-blocks,too-many-branches,too-many-locals
+        """Get a dictionary of active available interfaces and their speeds.
+
+        Args:
+            servers (NodeSet): hosts designated for the server role in testing
+            clients (NodeSet): hosts designated for the client role in testing
+
+        Raises:
+            LaunchException: if there is a problem finding active network interfaces
+
+        Returns:
+            dict: a dictionary of speeds with the first available active interface providing that
+                speed
+
+        """
+        available_interfaces = {}
+        all_hosts = NodeSet()
+        all_hosts.update(servers)
+        all_hosts.update(clients)
+
+        # Find any active network interfaces on the server or client hosts
+        net_path = os.path.join(os.path.sep, "sys", "class", "net")
+        operstate = os.path.join(net_path, "*", "operstate")
+        command = [f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"]
+
+        result = run_remote(self.log, all_hosts, " | ".join(command))
+        if not result.passed:
+            raise LaunchException(
+                f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
+
+        # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
+        active_interfaces = {}
+        for data in result.output:
+            for line in data.stdout:
+                try:
+                    interface = line.split("/")[-2]
+                    if interface not in active_interfaces:
+                        active_interfaces[interface] = data.hosts
+                    else:
+                        active_interfaces[interface].update(data.hosts)
+                except IndexError:
+                    pass
+
+        # From the active interface dictionary find all the interfaces that are common to all hosts
+        self.log.debug("Active network interfaces detected:")
+        common_interfaces = []
+        for interface, node_set in active_interfaces.items():
+            self.log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
+            if node_set == all_hosts:
+                common_interfaces.append(interface)
+
+        # Find the speed of each common active interface in order to be able to choose the fastest
+        interface_speeds = {}
+        for interface in common_interfaces:
+            command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
+            result = run_remote(self.log, all_hosts, command)
+            # Verify each host has the same interface speed
+            if result.passed and result.homogeneous:
+                for line in result.output[0].stdout:
+                    try:
+                        interface_speeds[interface] = int(line.strip())
+                    except IOError as io_error:
+                        # KVM/Qemu/libvirt returns an EINVAL
+                        if io_error.errno == errno.EINVAL:
+                            interface_speeds[interface] = 1000
+                    except ValueError:
+                        # Any line not containing a speed (integer)
+                        pass
+            elif not result.homogeneous:
+                self.log.error(
+                    "Non-homogeneous interface speed detected for %s on %s.",
+                    interface, str(all_hosts))
+            else:
+                self.log.error("Error detecting speed of %s on %s", interface, str(all_hosts))
+
+        if interface_speeds:
+            self.log.debug("Active network interface speeds on %s:", all_hosts)
+
+        for interface, speed in interface_speeds.items():
+            self.log.debug("  - %-8s (speed: %6s)", interface, speed)
+            # Only include the first active interface for each speed - first is
+            # determined by an alphabetic sort: ib0 will be checked before ib1
+            if speed is not None and speed not in available_interfaces:
+                available_interfaces[speed] = interface
+
+        self.log.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
+        return available_interfaces
+
+    def _set_provider_environment(self, servers, interface, provider):
+        """Set up the provider environment variables.
+
+        Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
+        select the appropriate provider based upon the interface driver.
+
+        Args:
+            servers (NodeSet): hosts designated for the server role in testing
+            interface (str): the current interface being used.
+            provider (str): provider to use in testing
+
+        Raises:
+            LaunchException: if there is a problem finding a provider for the interface
+
+        """
+        self.log.debug("-" * 80)
+        # Use the detected provider if one is not set
+        if not provider:
+            provider = os.environ.get("CRT_PHY_ADDR_STR")
+        if provider is None:
+            self.log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
+
+            # Check for a Omni-Path interface
+            self.log.debug("Checking for Omni-Path devices")
+            command = "sudo opainfo"
+            result = run_remote(self.log, servers, command)
+            if result.passed:
+                # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
+                self.log.debug("  Excluding verbs provider for Omni-Path adapters")
+                PROVIDER_KEYS.pop("verbs")
+
+            # Detect all supported providers
+            command = f"fi_info -d {interface} -l | grep -v 'version:'"
+            result = run_remote(self.log, servers, command)
+            if result.passed:
+                # Find all supported providers
+                keys_found = defaultdict(NodeSet)
+                for data in result.output:
+                    for line in data.stdout:
+                        provider_name = line.replace(":", "")
+                        if provider_name in PROVIDER_KEYS:
+                            keys_found[provider_name].update(data.hosts)
+
+                # Only use providers available on all the server hosts
+                if keys_found:
+                    self.log.debug("Detected supported providers:")
+                provider_name_keys = list(keys_found)
+                for provider_name in provider_name_keys:
+                    self.log.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
+                    if keys_found[provider_name] != servers:
+                        keys_found.pop(provider_name)
+
+                # Select the preferred found provider based upon PROVIDER_KEYS order
+                self.log.debug("Supported providers detected: %s", list(keys_found))
+                for key in PROVIDER_KEYS:
+                    if key in keys_found:
+                        provider = PROVIDER_KEYS[key]
+                        break
+
+            # Report an error if a provider cannot be found
+            if not provider:
+                raise LaunchException(
+                    f"Error obtaining a supported provider for {interface} "
+                    f"from: {list(PROVIDER_KEYS)}")
+
+            self.log.debug("  Found %s provider for %s", provider, interface)
+
+        # Update env definitions
+        os.environ["CRT_PHY_ADDR_STR"] = provider
+        self.log.info("Testing with provider:    %s", provider)
+        self.details["provider"] = provider
+        self.log.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
+
+    def _set_python_environment(self):
+        """Set up the test python environment.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+        """
+        self.log.debug("-" * 80)
+        required_python_paths = [
+            os.path.abspath("util/apricot"),
+            os.path.abspath("util"),
+            os.path.abspath("cart"),
+        ]
+
+        # Include the cart directory paths when running from sources
+        for cart_dir in os.listdir(os.path.abspath("cart")):
+            cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
+            if os.path.isdir(cart_path):
+                required_python_paths.append(cart_path)
+
+        required_python_paths.extend(site.getsitepackages())
+
+        # Check the PYTHONPATH env definition
+        python_path = os.environ.get("PYTHONPATH")
+        if python_path is None or python_path == "":
+            # Use the required paths to define the PYTHONPATH env if it is not set
+            os.environ["PYTHONPATH"] = ":".join(required_python_paths)
+        else:
+            # Append any missing required paths to the existing PYTHONPATH env
+            defined_python_paths = [
+                os.path.abspath(os.path.expanduser(path))
+                for path in python_path.split(":")]
+            for required_path in required_python_paths:
+                if required_path not in defined_python_paths:
+                    python_path += ":" + required_path
+            os.environ["PYTHONPATH"] = python_path
+        self.log.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+
+    def _get_device_replacement(self, servers, nvme):
+        """Determine the value to use for the '--nvme' command line argument.
+
+        Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
+        controlled) and use these values to replace placeholder devices in avocado test yaml files.
+
+        Supported auto '--nvme' arguments:
+            auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
+                                (connected to a VMD enabled NVMe device) in the homogeneous
+                                'lspci -D' output from each server.  Optionally grep the list of
+                                NVMe or VMD enabled NVMe devices for 'filter'.
+            auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device
+                                in the homogeneous 'lspci -D' output from each server.  Optionally
+                                grep this output for 'filter'.
+            auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a
+                                VMD enabled NVMe device in the homogeneous 'lspci -D' output from
+                                each server.  Optionally grep the list of VMD enabled NVMe devices
+                                for 'filter'.
+
+        Args:
+            servers (NodeSet): hosts designated for the server role in testing
+            nvme (str): the --nvme argument value
+
+        Raises:
+            LaunchException: if there is a problem finding a device replacement
+
+        Returns:
+            str: a comma-separated list of nvme device pci addresses available on all of the
+                specified test servers
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug("Detecting devices that match: %s", nvme)
+        devices = []
+        device_types = []
+
+        # Separate any optional filter from the key
+        dev_filter = None
+        nvme_args = nvme.split(":")
+        if len(nvme_args) > 1:
+            dev_filter = nvme_args[1]
+
+        # First check for any VMD disks, if requested
+        if nvme_args[0] in ["auto", "auto_vmd"]:
+            vmd_devices = self._auto_detect_devices(servers, "NVMe", "5", dev_filter)
+            if vmd_devices:
+                # Find the VMD controller for the matching VMD disks
+                vmd_controllers = self._auto_detect_devices(servers, "VMD", "4", None)
+                devices.extend(
+                    self._get_vmd_address_backed_nvme(servers, vmd_devices, vmd_controllers))
+            elif not dev_filter:
+                # Use any VMD controller if no VMD disks found w/o a filter
+                devices = self._auto_detect_devices(servers, "VMD", "4", None)
+            if devices:
+                device_types.append("VMD")
+
+        # Second check for any non-VMD NVMe disks, if requested
+        if nvme_args[0] in ["auto", "auto_nvme"]:
+            dev_list = self._auto_detect_devices(servers, "NVMe", "4", dev_filter)
+            if dev_list:
+                devices.extend(dev_list)
+                device_types.append("NVMe")
+
+        # If no VMD or NVMe devices were found exit
+        if not devices:
+            raise LaunchException(
+                f"Error: Unable to auto-detect devices for the '--nvme {nvme}' argument")
+
+        self.log.debug(
+            "Auto-detected %s devices on %s: %s", " & ".join(device_types), servers, devices)
+        self.log.info("Testing with %s devices: %s", " & ".join(device_types), devices)
+        self.details[f"{' & '.join(device_types)} devices"] = devices
+        return ",".join(devices)
+
+    def _auto_detect_devices(self, hosts, device_type, length, device_filter=None):
+        """Get a list of NVMe/VMD devices found on each specified host.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to find the NVMe/VMD devices
+            device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
+            length (str): number of digits to match in the first PCI domain number
+            device_filter (str, optional): optional filter to apply to device searching. Defaults to
+                None.
+
+        Raises:
+            LaunchException: if there is a problem finding a devices
+
+        Returns:
+            list: A list of detected devices - empty if none found
+
+        """
+        found_devices = {}
+
+        # Find the devices on each host
+        if device_type == "VMD":
+            # Exclude the controller revision as this causes heterogeneous clush output
+            command_list = [
+                "/sbin/lspci -D",
+                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
+                "grep -E 'Volume Management Device NVMe RAID Controller'",
+                r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
+        elif device_type == "NVMe":
+            command_list = [
+                "/sbin/lspci -D",
+                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
+                "grep -E 'Non-Volatile memory controller:'"]
+            if device_filter and device_filter.startswith("-"):
+                command_list.append(f"grep -v '{device_filter[1:]}'")
+            elif device_filter:
+                command_list.append(f"grep '{device_filter}'")
+        else:
+            raise LaunchException(
+                f"ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {device_type}")
+        command = " | ".join(command_list) + " || :"
+
+        # Find all the VMD PCI addresses common to all hosts
+        result = run_remote(self.log, hosts, command)
+        if result.passed:
+            for data in result.output:
+                for line in data.stdout:
+                    if line not in found_devices:
+                        found_devices[line] = NodeSet()
+                    found_devices[line].update(data.hosts)
+
+            # Remove any non-homogeneous devices
+            for key in list(found_devices):
+                if found_devices[key] != hosts:
+                    self.log.debug(
+                        "  device '%s' not found on all hosts: %s", key, found_devices[key])
+                    found_devices.pop(key)
+
+        if not found_devices:
+            raise LaunchException("Error: Non-homogeneous {device_type} PCI addresses.")
+
+        # Get the devices from the successful, homogeneous command output
+        return self._find_pci_address("\n".join(found_devices))
+
+    def _get_vmd_address_backed_nvme(self, hosts, vmd_disks, vmd_controllers):
+        """Find valid VMD address which has backing NVMe.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to find the VMD addresses
+            vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
+            vmd_controllers (list): list of PCI domain numbers for each VMD controller
+
+        Raises:
+            LaunchException: if there is a problem finding a devices
+
+        Returns:
+            list: a list of the VMD controller PCI domain numbers which are connected to the VMD
+                disks
+
+        """
+        disk_controllers = {}
+        command_list = ["ls -l /sys/block/", "grep nvme"]
+        if vmd_disks:
+            command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
+        command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
+        command = " | ".join(command_list) + " || :"
+        result = run_remote(self.log, hosts, command)
+
+        # Verify the command was successful on each server host
+        if not result.passed:
+            raise LaunchException(f"Error issuing command '{command}'")
+
+        # Collect a list of NVMe devices behind the same VMD addresses on each host.
+        self.log.debug("Checking for %s in command output", vmd_controllers)
+        if result.passed:
+            for data in result.output:
+                for device in vmd_controllers:
+                    if device in data.stdout:
+                        if device not in disk_controllers:
+                            disk_controllers[device] = NodeSet()
+                        disk_controllers[device].update(data.hosts)
+
+            # Remove any non-homogeneous devices
+            for key in list(disk_controllers):
+                if disk_controllers[key] != hosts:
+                    self.log.debug(
+                        "  device '%s' not found on all hosts: %s", key, disk_controllers[key])
+                    disk_controllers.pop(key)
+
+        # Verify each server host has the same NVMe devices behind the same VMD addresses.
+        if not disk_controllers:
+            raise LaunchException("Error: Non-homogeneous NVMe device behind VMD addresses.")
+
+        return disk_controllers
+
+    @staticmethod
+    def _find_pci_address(value):
+        """Find PCI addresses in the specified string.
+
+        Args:
+            value (str): string to search for PCI addresses
+
+        Returns:
+            list: a list of all the PCI addresses found in the string
+
+        """
+        digit = "0-9a-fA-F"
+        pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
+        return re.findall(pattern, str(value))
 
     def set_test_list(self, tags):
         """Define the list of tests and avocado tag filters from a list of tags.
@@ -1995,8 +1962,275 @@ class Launch():
             self.log.debug("  Fault injection is disabled")
         return False
 
-    def run(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-            core_files, threshold):
+    def setup_test_files(self, args, yaml_dir):
+        """Set up the test yaml files with any placeholder replacements.
+
+        Args:
+            args (argparse.Namespace): command line arguments for this program
+            yaml_dir (str): directory in which to write the modified yaml files
+
+        Raises:
+            LaunchException: if there is a problem updating the test ymal files
+
+        """
+        # Replace any placeholders in the extra yaml file, if provided
+        if args.extra_yaml:
+            args.extra_yaml = [
+                self._replace_yaml_file(extra, args, yaml_dir) for extra in args.extra_yaml]
+
+        for test in self.tests:
+            test.yaml_file = self._replace_yaml_file(test.yaml_file, args, yaml_dir)
+
+            # Display the modified yaml file variants with debug
+            command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
+            if args.extra_yaml:
+                command.extend(args.extra_yaml)
+            command.extend(["--summary", "3"])
+            run_local(self.log, command, check=False)
+
+            # Collect the host information from the updated test yaml
+            test.set_host_info(self.log, args.include_localhost)
+
+        # Log the test information
+        msg_format = "%3s  %-40s  %-50s  %-20s  %-20s"
+        self.log.debug("-" * 80)
+        self.log.debug("Test information:")
+        self.log.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        self.log.debug(msg_format, "-" * 3, "-" * 40, "-" * 50, "-" * 20, "-" * 20)
+        for test in self.tests:
+            self.log.debug(
+                msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
+                test.hosts.clients)
+
+    def _replace_yaml_file(self, yaml_file, args, yaml_dir):
+        # pylint: disable=too-many-nested-blocks,too-many-branches
+        """Create a temporary test yaml file with any requested values replaced.
+
+        Optionally replace the following test yaml file values if specified by the
+        user via the command line arguments:
+
+            test_servers:   Use the list specified by the --test_servers (-ts)
+                            argument to replace any host name placeholders listed
+                            under "test_servers:"
+
+            test_clients    Use the list specified by the --test_clients (-tc)
+                            argument (or any remaining names in the --test_servers
+                            list argument, if --test_clients is not specified) to
+                            replace any host name placeholders listed under
+                            "test_clients:".
+
+            bdev_list       Use the list specified by the --nvme (-n) argument to
+                            replace the string specified by the "bdev_list:" yaml
+                            parameter.  If multiple "bdev_list:" entries exist in
+                            the yaml file, evenly divide the list when making the
+                            replacements.
+
+        Any replacements are made in a copy of the original test yaml file.  If no
+        replacements are specified return the original test yaml file.
+
+        Args:
+            yaml_file (str): test yaml file
+            args (argparse.Namespace): command line arguments for this program
+            yaml_dir (str): directory in which to write the modified yaml files
+
+        Raises:
+            LaunchException: if a yaml file placeholder is missing a value
+
+        Returns:
+            str: the test yaml file; None if the yaml file contains placeholders
+                w/o replacements
+
+        """
+        self.log.debug("-" * 80)
+        replacements = {}
+
+        if args.test_servers or args.nvme or args.timeout_multiplier:
+            # Find the test yaml keys and values that match the replaceable fields
+            yaml_data = get_yaml_data(self.log, yaml_file)
+            self.log.debug("Detected yaml data: %s", yaml_data)
+            yaml_keys = list(YAML_KEYS.keys())
+            yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
+
+            # Generate a list of values that can be used as replacements
+            user_values = OrderedDict()
+            for key, value in list(YAML_KEYS.items()):
+                args_value = getattr(args, value)
+                if isinstance(args_value, NodeSet):
+                    user_values[key] = list(args_value)
+                elif isinstance(args_value, str):
+                    user_values[key] = args_value.split(",")
+                elif args_value:
+                    user_values[key] = [args_value]
+                else:
+                    user_values[key] = None
+
+            # Assign replacement values for the test yaml entries to be replaced
+            self.log.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
+            self.log.debug("  Found values: %s", yaml_find)
+            self.log.debug("  User values:  %s", dict(user_values))
+
+            node_mapping = {}
+            for key, user_value in user_values.items():
+                # If the user did not provide a specific list of replacement
+                # test_clients values, use the remaining test_servers values to
+                # replace test_clients placeholder values
+                if key == "test_clients" and not user_value:
+                    user_value = user_values["test_servers"]
+
+                # Replace test yaml keys that were:
+                #   - found in the test yaml
+                #   - have a user-specified replacement
+                if key in yaml_find and user_value:
+                    if key.startswith("test_"):
+                        # The entire server/client test yaml list entry is replaced
+                        # by a new test yaml list entry, e.g.
+                        #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
+                        #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
+                        if not isinstance(yaml_find[key], list):
+                            yaml_find[key] = [yaml_find[key]]
+
+                        for yaml_find_item in yaml_find[key]:
+                            replacement = NodeSet()
+                            try:
+                                # Replace integer placeholders with the number of nodes from the
+                                # user provided list equal to the quantity requested by the test
+                                # yaml
+                                quantity = int(yaml_find_item)
+                                if args.override and args.test_clients:
+                                    # When individual lists of server and client nodes are provided
+                                    # with the override flag set use the full list of nodes
+                                    # specified by the test_server/test_client arguments
+                                    quantity = len(user_value)
+                                elif args.override:
+                                    self.log.warning(
+                                        "Warning: In order to override the node quantity a "
+                                        "'--test_clients' argument must be specified: %s: %s",
+                                        key, yaml_find_item)
+                                for _ in range(quantity):
+                                    try:
+                                        replacement.add(user_value.pop(0))
+                                    except IndexError:
+                                        # Not enough nodes provided for the replacement
+                                        if not args.override:
+                                            replacement = None
+                                        break
+
+                            except ValueError:
+                                try:
+                                    # Replace clush-style placeholders with nodes from the user
+                                    # provided list using a mapping so that values used more than
+                                    # once yield the same replacement
+                                    for node in NodeSet(yaml_find_item):
+                                        if node not in node_mapping:
+                                            try:
+                                                node_mapping[node] = user_value.pop(0)
+                                            except IndexError:
+                                                # Not enough nodes provided for the replacement
+                                                if not args.override:
+                                                    replacement = None
+                                                break
+                                            self.log.debug(
+                                                "  - %s replacement node mapping: %s -> %s",
+                                                key, node, node_mapping[node])
+                                        replacement.add(node_mapping[node])
+
+                                except TypeError:
+                                    # Unsupported format
+                                    replacement = None
+
+                            hosts_key = r":\s+".join([key, str(yaml_find_item)])
+                            hosts_key = hosts_key.replace("[", r"\[")
+                            hosts_key = hosts_key.replace("]", r"\]")
+                            if replacement:
+                                replacements[hosts_key] = ": ".join([key, str(replacement)])
+                            else:
+                                replacements[hosts_key] = None
+
+                    elif key == "bdev_list":
+                        # Individual bdev_list NVMe PCI addresses in the test yaml
+                        # file are replaced with the new NVMe PCI addresses in the
+                        # order they are found, e.g.
+                        #   0000:81:00.0 --> 0000:12:00.0
+                        for yaml_find_item in yaml_find[key]:
+                            bdev_key = f"\"{yaml_find_item}\""
+                            if bdev_key in replacements:
+                                continue
+                            try:
+                                replacements[bdev_key] = f"\"{user_value.pop(0)}\""
+                            except IndexError:
+                                replacements[bdev_key] = None
+
+                    else:
+                        # Timeouts - replace the entire timeout entry (key + value)
+                        # with the same key with its original value multiplied by the
+                        # user-specified value, e.g.
+                        #   timeout: 60 -> timeout: 600
+                        if isinstance(yaml_find[key], int):
+                            timeout_key = r":\s+".join([key, str(yaml_find[key])])
+                            timeout_new = max(1, round(yaml_find[key] * user_value[0]))
+                            replacements[timeout_key] = ": ".join([key, str(timeout_new)])
+                            self.log.debug(
+                                "  - Timeout adjustment (x %s): %s -> %s",
+                                user_value, timeout_key, replacements[timeout_key])
+                        elif isinstance(yaml_find[key], dict):
+                            for timeout_test, timeout_val in list(yaml_find[key].items()):
+                                timeout_key = r":\s+".join([timeout_test, str(timeout_val)])
+                                timeout_new = max(1, round(timeout_val * user_value[0]))
+                                replacements[timeout_key] = ": ".join(
+                                    [timeout_test, str(timeout_new)])
+                                self.log.debug(
+                                    "  - Timeout adjustment (x %s): %s -> %s",
+                                    user_value, timeout_key, replacements[timeout_key])
+
+            # Display the replacement values
+            for value, replacement in list(replacements.items()):
+                self.log.debug("  - Replacement: %s -> %s", value, replacement)
+
+        if replacements:
+            # Read in the contents of the yaml file to retain the !mux entries
+            self.log.debug("Reading %s", yaml_file)
+            with open(yaml_file, encoding="utf-8") as yaml_buffer:
+                yaml_data = yaml_buffer.read()
+
+            # Apply the placeholder replacements
+            missing_replacements = []
+            self.log.debug("Modifying contents: %s", yaml_file)
+            for key in sorted(replacements):
+                value = replacements[key]
+                if value:
+                    # Replace the host entries with their mapped values
+                    self.log.debug("  - Replacing: %s --> %s", key, value)
+                    yaml_data = re.sub(key, value, yaml_data)
+                else:
+                    # Keep track of any placeholders without a replacement value
+                    self.log.debug("  - Missing:   %s", key)
+                    missing_replacements.append(key)
+            if missing_replacements:
+                # Report an error for all of the placeholders w/o a replacement
+                self.log.error(
+                    "Error: Placeholders missing replacements in %s:\n  %s",
+                    yaml_file, ", ".join(missing_replacements))
+                raise LaunchException(f"Error: Placeholders missing replacements in {yaml_file}")
+
+            # Write the modified yaml file into a temporary file.  Use the path to
+            # ensure unique yaml files for tests with the same filename.
+            orig_yaml_file = yaml_file
+            yaml_name = get_test_category(yaml_file)
+            yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
+            self.log.debug("Creating copy: %s", yaml_file)
+            with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
+                yaml_buffer.write(yaml_data)
+
+            # Optionally display a diff of the yaml file
+            if args.verbose > 0:
+                command = ["diff", "-y", orig_yaml_file, yaml_file]
+                run_local(self.log, command, check=False)
+
+        # Return the untouched or modified yaml file
+        return yaml_file
+
+    def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
+                  core_files, threshold):
         """Run all the tests.
 
         Args:
@@ -2034,11 +2268,7 @@ class Launch():
                 self.log.addHandler(test_file_handler)
 
                 # Create a new TestResult for this test
-                self.result.tests.append(
-                    TestResult(test.class_name, test.name.copy(), test_log_file, self.logdir))
-
-                # Mark the start of the processing of this test
-                self.result.tests[-1].start()
+                test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
 
                 # Prepare the hosts to run the tests
                 step_status = self.prepare(test, repeat)
@@ -2047,33 +2277,27 @@ class Launch():
                     continue
 
                 # Avoid counting the test execution time as part of the processing time of this test
-                self.result.tests[-1].end()
+                test_result.end()
 
                 # Run the test with avocado
                 return_code |= self.execute(test, repeat, sparse, fail_fast, extra_yaml)
 
                 # Mark the continuation of the processing of this test
-                self.result.tests[-1].start()
+                test_result.start()
 
                 # Archive the test results
                 return_code |= self.process(
                     test, repeat, stop_daos, archive, rename, jenkinslog, core_files, threshold)
 
                 # Mark the execution of the test as passed if nothing went wrong
-                if self.result.tests[-1].status is None:
-                    self.result.tests[-1].status = TestResult.PASS
+                if test_result.status is None:
+                    self._pass_test(test_result)
 
                 # Mark the end of the processing of this test
-                self.result.tests[-1].end()
+                test_result.end()
 
                 # Stop logging to the test log file
                 self.log.removeHandler(test_file_handler)
-
-        # Generate a results.xml for the this run
-        create_xml(self.job, self.result)
-
-        # Generate a results.html for the this run
-        create_html(self.job, self.result)
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -2111,7 +2335,7 @@ class Launch():
         except LaunchException:
             message = "Error setting up test directories"
             self.log.debug(message, exc_info=True)
-            self._mark_test_failed("Prepare", message, sys.exc_info())
+            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
             return 4
 
         # Generate certificate files for the test
@@ -2120,26 +2344,10 @@ class Launch():
         except LaunchException:
             message = "Error generating certificates"
             self.log.debug(message, exc_info=True)
-            self._mark_test_failed("Prepare", message, sys.exc_info())
+            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
             return 4
 
         return 0
-
-    def _mark_test_failed(self, fail_class, fail_reason, exc_info):
-        """Set the reason for the current test failure.
-
-        Args:
-            fail_class (str, optional): failure category.
-            fail_reason (str, optional): failure description.
-            exc_info (OptExcInfo, optional): return value from sys.exc_info().
-        """
-        # pylint: disable=import-outside-toplevel
-        from avocado.utils.stacktrace import prepare_exc_info
-
-        self.result.tests[-1].status = TestResult.ERROR
-        self.result.tests[-1].fail_class = fail_class
-        self.result.tests[-1].fail_reason = fail_reason
-        self.result.tests[-1].traceback = prepare_exc_info(exc_info)
 
     def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
         """Run the specified test.
@@ -2170,7 +2378,7 @@ class Launch():
         except LaunchException:
             message = f"Error executing {test} on repeat {repeat}"
             self.log.debug(message, exc_info=True)
-            self._mark_test_failed("Execute", message, sys.exc_info())
+            self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             return_code = 1
 
         end_time = int(time.time())
@@ -2201,7 +2409,7 @@ class Launch():
                 except LaunchException:
                     message = "Error collecting crash files"
                     self.log.debug(message, exc_info=True)
-                    self._mark_test_failed("Execute", message, sys.exc_info())
+                    self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             else:
                 self.log.debug("No avocado crash files found in %s", crash_dir)
 
@@ -2299,13 +2507,13 @@ class Launch():
                 except LaunchException:
                     message = f"Error archiving {summary}"
                     self.log.debug(message, exc_info=True)
-                    self._mark_test_failed("Process", message, sys.exc_info())
+                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                     return_code |= 16
 
                 except Exception:       # pylint: disable=broad-except
                     message = f"Unexpected error archiving {summary}"
                     self.log.debug(message, exc_info=True)
-                    self._mark_test_failed("Process", message, sys.exc_info())
+                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                     return_code |= 16
 
         # Optionally rename the test results directory for this test
@@ -2316,7 +2524,7 @@ class Launch():
             except LaunchException:
                 message = "Error renaming test results"
                 self.log.debug(message, exc_info=True)
-                self._mark_test_failed("Process", message, sys.exc_info())
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return_code |= 1024
 
         # Optionally process core files
@@ -2329,13 +2537,13 @@ class Launch():
             except LaunchException:
                 message = "Error processing test core files"
                 self.log.debug(message, exc_info=True)
-                self._mark_test_failed("Process", message, sys.exc_info())
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return_code |= 256
 
             except Exception:       # pylint: disable=broad-except
                 message = "Unhandled error processing test core files"
                 self.log.debug(message, exc_info=True)
-                self._mark_test_failed("Process", message, sys.exc_info())
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
                 return_code |= 256
 
         return return_code
@@ -2423,6 +2631,15 @@ class Launch():
             self.log.debug(message)
             raise LaunchException(message)
         for data in result.output:
+            # If a file is found containing the FAILURE_TRIGGER then report a failure. This feature
+            # can be used by avocado tests to verify that launch.py reports errors correctly in CI.
+            trigger_failure = re.findall(fr"{FAILURE_TRIGGER}", "\n".join(data.stdout))
+            if trigger_failure:
+                message = f"Detected {trigger_failure[0]} failure trigger file"
+                self.log.debug(message)
+                raise LaunchException(message)
+
+            # Verify that at least one file was found that matches the pattern
             for line in data.stdout:
                 if source in line:
                     return True
@@ -3022,7 +3239,6 @@ class CoreFileProcessing():
 
 def main():
     """Launch DAOS functional tests."""
-    # pylint: disable=too-many-branches
     # Parse the command line arguments
     description = [
         "DAOS functional test launcher",
@@ -3236,75 +3452,12 @@ def main():
         if not args.logs_threshold:
             args.logs_threshold = "1G"
 
-    # Record the command line arguments
-    launch.log.debug("Arguments:")
-    for key in sorted(args.__dict__.keys()):
-        launch.log.debug("  %s = %s", key, getattr(args, key))
-
-    # Convert host specifications into NodeSets
-    args.test_servers = NodeSet(args.test_servers)
-    args.test_clients = NodeSet(args.test_clients)
-
-    # A list of server hosts is required
-    if not args.test_servers and not args.list:
-        launch.log.error("Error: Missing a required '--test_servers' argument.")
-        sys.exit(1)
-    launch.log.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
-
-    # Setup the user environment
+    # Perform the steps defined by the arguments specified
     try:
-        set_test_environment(launch.log, args)
-    except LaunchException:
-        launch.log.error("Error setting test environment", exc_info=True)
-        sys.exit(1)
-
-    # Auto-detect nvme test yaml replacement values if requested
-    if args.nvme and args.nvme.startswith("auto") and not args.list:
-        try:
-            args.nvme = get_device_replacement(launch.log, args)
-        except LaunchException:
-            launch.log.error(
-                "Error auto-detecting NVMe test yaml file replacement values", exc_info=True)
-            sys.exit(1)
-    elif args.nvme and args.nvme.startswith("vmd:"):
-        args.nvme = args.nvme.replace("vmd:", "")
-
-    # Process the tags argument to determine which tests to run
-    try:
-        launch.set_test_list(args.tags)
-    except LaunchException:
-        launch.log.error("Error detecting tests that match tags: %s", args.tags, exc_info=True)
-        sys.exit(1)
-
-    # Verify at least one test was requested
-    if not launch.tests:
-        launch.log.error("Error: No tests found for tags '%s'", " ".join(args.tags), exc_info=True)
-        sys.exit(1)
-
-    # Done if just listing tests matching the tags
-    if args.list and not args.modify:
-        sys.exit(0)
-
-    # Create a temporary directory
-    if args.yaml_directory is None:
-        # pylint: disable=consider-using-with
-        temp_dir = TemporaryDirectory()
-        yaml_dir = temp_dir.name
-    else:
-        yaml_dir = args.yaml_directory
-        if not os.path.exists(yaml_dir):
-            os.mkdir(yaml_dir)
-    launch.log.info("Modified test yaml files being created in: %s", yaml_dir)
-
-    # Create a dictionary of test and their yaml files
-    setup_test_files(launch.log, launch.tests, args, yaml_dir)
-    if args.modify:
-        sys.exit(0)
-
-    # Execute the tests
-    status = launch.run(
-        args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-        args.rename, args.jenkinslog, args.process_cores, args.logs_threshold)
+        status = launch.do_stuff(args)
+    except Exception:       # pylint: disable=broad-except
+        message = "Unknown exception raised during launch.py execution"
+        status = launch.get_exit_status(1, message, "Unknown", sys.exc_info())
     sys.exit(status)
 
 

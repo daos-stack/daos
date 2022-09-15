@@ -50,8 +50,6 @@ class TestResult():
         Args:
             class_name (str): the test class name, e.g. FTEST_<name>
             name (TestName): the test uid, name, and variant
-            uid (str): the test uid
-            variant (str): the test variant
             log_file (str): the log file for a single test
             log_dir (str): the log file directory for a single test
         """

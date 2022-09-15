@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 from random import choice
 from re import findall
 
@@ -38,6 +39,7 @@ class HarnessAdvancedTest(TestWithServers):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_advanced_test,core_files
         :avocado: tags=test_core_files
         """
@@ -93,6 +95,7 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_advanced_test,pool_timeout
         :avocado: tags=test_pool_timeout
         """
@@ -132,3 +135,45 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=test_pool_timeout_hw
         """
         self.test_pool_timeout()
+
+    def test_launch_failures(self):
+        """Test to verify launch.py post processing error reporting.
+
+        The test will place uniquely named files in the paths where launch.py archives test results.
+        When these files are detected launch.py will trigger a fake failure for the archiving of
+        each file.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_advanced_test,launch_failures
+        :avocado: tags=test_launch_failures
+        """
+        host = NodeSet(choice(self.server_managers[0].hosts))
+        self.log.info("Creating launch.py failure trigger files on %s", host)
+        failure_trigger = "00_trigger-launch-failure_00"
+        failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
+        failure_trigger_files = [
+            os.path.join(self.base_test_dir, "{}.yaml".format(failure_trigger)),
+            os.path.join(os.sep, "etc", "daos", "daos_{}.yml".format(failure_trigger)),
+            os.path.join(self.base_test_dir, "{}.log".format(failure_trigger)),
+            os.path.join(failure_trigger_dir, "{}.log".format(failure_trigger)),
+            os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
+            os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),
+        ]
+        run_pcmd(host, "sudo mkdir -p {}".format(failure_trigger_dir))
+        for failure_trigger_file in failure_trigger_files:
+            run_pcmd(host, "sudo -n touch {}".format(failure_trigger_file))
+
+    def test_launch_failures_hw(self):
+        """Test to verify launch.py post processing error reporting.
+
+        The test will place uniquely named files in the paths where launch.py archives test results.
+        When these files are detected launch.py will trigger a fake failure for the archiving of
+        each file.
+
+        :avocado: tags=all
+        :avocado: tags=hw,small,medium,large
+        :avocado: tags=harness,harness_advanced_test,launch_failures
+        :avocado: tags=test_launch_failures_hw
+        """
+        self.test_launch_failures()
