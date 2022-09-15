@@ -30,18 +30,11 @@ fi
 
 # shellcheck disable=SC1091
 source ./.build_vars.sh
-find "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
-rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
-mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
-find "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
-ln -s ../../../../../../../../src/control \
-  "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
-DAOS_BASE=${SL_SRC_DIR}
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2029
-ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$SL_SRC_DIR     \
                                          HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          SL_PREFIX=$SL_PREFIX      \
