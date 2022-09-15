@@ -195,7 +195,7 @@ class IorCommand(ExecutableCommand):
 
         Args:
             group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -211,12 +211,15 @@ class IorCommand(ExecutableCommand):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             display (bool, optional): print updated params. Defaults to True.
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_pool.update(
-                pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+            try:
+                dfs_pool = pool.pool.get_uuid_str()
+            except AttributeError:
+                dfs_pool = pool
+            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
