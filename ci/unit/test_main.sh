@@ -33,6 +33,9 @@ source ./.build_vars.sh
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
+# Copy over the install tree and some of the build tree.
+rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
+
 # shellcheck disable=SC2029
 ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$SL_SRC_DIR     \
                                          HOSTNAME=$HOSTNAME        \
@@ -40,4 +43,4 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$SL_SRC_DIR     \
                                          SL_PREFIX=$SL_PREFIX      \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
-                                         $(cat "$mydir/test_main_node.sh")"
+                                         ./build/test_main_node.sh

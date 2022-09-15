@@ -8,13 +8,13 @@ set -uex
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 sudo bash -c 'echo 1024 > /proc/sys/vm/nr_hugepages'
 
-if grep /mnt/daos\  /proc/mounts; then
+if grep /mnt/daos\ /proc/mounts; then
     sudo umount /mnt/daos
 fi
 sudo mkdir -p /mnt/daos
 
-sudo mkdir -p "$DAOS_BASE"
-sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
+sudo mount --bind build "$DAOS_BASE"
+
 if [ -n "$BULLSEYE" ]; then
     pushd "$DAOS_BASE/bullseye"
     set +x
