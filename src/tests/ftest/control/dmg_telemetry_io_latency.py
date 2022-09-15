@@ -10,8 +10,6 @@ from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
-from apricot import skipForTicket
-
 
 def convert_to_number(size):
     """Convert string to int.
@@ -484,81 +482,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # Destroy the container and the pool.
             self.destroy_containers(containers=self.container[-1])
             self.destroy_pools(pools=self.pool)
-
-        if errors:
-            self.fail("Test FAILED")
-
-    @skipForTicket("DAOS-9031")
-    def test_ior_latency_telmetry_metrics(self):
-        """JIRA ID: DAOS-8624.
-
-            Create files with transfers sizes 512 to 4M to verify the
-            DAOS engine IO latency telemetry metrics infrastructure and
-            verify latency against the ior latency.  It is assumed that rpc io
-            latency should be less than the ior latency reported for each transfer
-            size.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry
-        :avocado: tags=test_ior_latency_telemetry
-
-        """
-        transfer_sizes = self.params.get("transfer_sizes", "/run/*")
-        self.iterations = self.params.get("repetitions", "/run/*")
-        self.container = []
-        ior_verification_results = []
-        metrics_data = {}
-        ior_latency = {}
-        # disable verbosity
-        self.telemetry.dmg.verbose = False
-        test_metrics = TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS + \
-                       TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
-
-        for transfer_size in transfer_sizes:
-            ior_latency[transfer_size] = {}
-            self.add_pool(connect=False)
-            oclass = self.ior_cmd.dfs_oclass.value
-            self.add_containers(self.pool, oclass)
-            for operation in ["update", "fetch"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info(
-                    "<<< Start ior %s transfer_size=%s", operation, transfer_size)
-                self.ior_cmd.transfer_size.update(transfer_size)
-                self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].uuid)
-                # Run ior command
-                ior_results = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
-                ior_latency[transfer_size][operation] = self.get_ior_latency(ior_results)
-                if operation in "update":
-                    metrics_data.update(self.telemetry.get_io_metrics(
-                        TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS))
-                else:
-                    metrics_data.update(self.telemetry.get_io_metrics(
-                        TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS))
-            # Destroy the container and the pool.
-            self.destroy_containers(containers=self.container[-1])
-            self.destroy_pools(pools=self.pool)
-
-        # check dmg latency metrics against ior latency metrics
-        for test_metric in test_metrics:
-            for transfer_size in transfer_sizes:
-                if self.verify_ior_latency_metrics(
-                        metrics_data, ior_latency, test_metric, str(transfer_size)):
-                    ior_verification_results.append(["PASSED", test_metric, transfer_size])
-                else:
-                    ior_verification_results.append(["FAILED", test_metric, transfer_size])
-        # check engine io latency rpc min, max, mean and stddev values for each transfer size
-        errors = False
-        self.log.error("Summary of io latency test results:")
-        # Check ior results
-        for item in ior_verification_results:
-            self.log.info("  %s  %s  %s", item[0], item[1], item[2])
-            if item[0] == "FAILED":
-                errors = True
 
         if errors:
             self.fail("Test FAILED")
