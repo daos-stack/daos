@@ -223,6 +223,8 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
+export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
+
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
@@ -231,13 +233,13 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
         rc=0
     fi
 
-    if ! mkdir -p "${DAOS_TEST_SHARED_DIR}/soak_apps"; then
+    if ! mkdir -p "${DAOS_APP_DIR}/soak/apps"; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
     fi
 
-    if ! cp -r /scratch/soak/apps/* "${DAOS_TEST_SHARED_DIR}/soak_apps/"; then
+    if ! cp -r /scratch/soak/apps/* "${DAOS_APP_DIR}/soak/apps/"; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0

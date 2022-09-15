@@ -1224,9 +1224,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
         return commands
 
-    if "DAOS_TEST_SHARED_DIR" not in os.environ:
-        os.environ["DAOS_TEST_SHARED_DIR"] = "/scratch/soak/apps"
-
     oclass_list = self.params.get("oclass", app_params)
     for oclass in oclass_list:
         add_containers(self, pool, oclass)
