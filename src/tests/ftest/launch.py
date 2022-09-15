@@ -1192,7 +1192,7 @@ class Launch():
 
         Args:
             test_result (TestResult): the test result to mark as passed
-            message (str, optional): explaination of test passing. Defaults to None.
+            message (str, optional): explanation of test passing. Defaults to None.
         """
         if message is not None:
             self.log.debug(message)
@@ -1269,7 +1269,8 @@ class Launch():
         except TypeError as error:
             self.log.error("Error writing %s: %s", details_json, str(error))
 
-    def do_stuff(self, args):
+    def run(self, args):
+        # pylint: disable=too-many-return-statements
         """Perform the actions specified by the command line arguments.
 
         Args:
@@ -1324,7 +1325,7 @@ class Launch():
 
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
-            self.set_test_list(args.tags)
+            self.list_tests(args.tags)
         except LaunchException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1906,11 +1907,14 @@ class Launch():
         pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
         return re.findall(pattern, str(value))
 
-    def set_test_list(self, tags):
-        """Define the list of tests and avocado tag filters from a list of tags.
+    def list_tests(self, tags):
+        """List the test files matching the tags.
+
+        Populates the self.tests list and defines the self.tag_filters list to use when running
+        tests.
 
         Args:
-            tags (list): a list of tag or test file names
+            tags (list): a list of tags or test file names
 
         Raises:
             LaunchException: if there is a problem listing tests
@@ -3462,7 +3466,7 @@ def main():
 
     # Perform the steps defined by the arguments specified
     try:
-        status = launch.do_stuff(args)
+        status = launch.run(args)
     except Exception:       # pylint: disable=broad-except
         message = "Unknown exception raised during launch.py execution"
         status = launch.get_exit_status(1, message, "Unknown", sys.exc_info())

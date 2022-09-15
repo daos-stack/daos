@@ -371,6 +371,7 @@ src
 srun
 ssd
 ssds
+stacktrace
 statfs
 statvfs
 stddev
