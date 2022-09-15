@@ -3,8 +3,6 @@
 # This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
-find build/
-
 set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
@@ -15,22 +13,24 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
-sudo mkdir -p "$DAOS_BASE"
-sudo mount --bind build "$DAOS_BASE"
+source build/.build_vars.sh
+
+sudo mkdir -p "${SL_SRC_DIR}"
+sudo mount --bind build "${SL_SRC_DIR}"
 
 if [ -n "$BULLSEYE" ]; then
-    pushd "$DAOS_BASE/bullseye"
+    pushd "${SL_SRC_DIR}/bullseye"
     set +x
     echo + sudo ./install --quiet --key "**********" --prefix /opt/BullseyeCoverage
     sudo ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage
     set -x
     popd
     rm -rf bullseye
-    export COVFILE="$DAOS_BASE/test.cov"
+    export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
 fi
 
-cd "$DAOS_BASE"
+cd ${SL_SRC_DIR}
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
