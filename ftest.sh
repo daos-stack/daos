@@ -119,7 +119,7 @@ trap 'set +e; cleanup' EXIT
 # shellcheck disable=SC2206
 CLUSH_ARGS=($CLUSH_ARGS)
 
-DAOS_BASE=${SL_PREFIX%/install}
+DAOS_BASE=${SL_SRC_DIR}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")"                                 \
     "FIRST_NODE=${nodes[0]}

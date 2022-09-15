@@ -157,7 +157,8 @@ if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
-DAOS_BASE=${DAOS_BASE:-${SL_PREFIX%/install*}}
+DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
+
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)

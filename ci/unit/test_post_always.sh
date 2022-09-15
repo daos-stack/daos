@@ -13,7 +13,7 @@ else
   exit 1
 fi
 
-DAOS_BASE="${SL_PREFIX%/install*}"
+DAOS_BASE=${SL_SRC_DIR}
 NODE="${NODELIST%%,*}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
