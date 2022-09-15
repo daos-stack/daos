@@ -45,10 +45,10 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 # set CMOCKA envs here
 export CMOCKA_MESSAGE_OUTPUT=xml
 if [[ -z ${WITH_VALGRIND} ]]; then
-    export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g.xml"
+    export CMOCKA_XML_FILE="${SL_SRC_DIR}/test_results/%g.xml"
 else
-    export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g_${WITH_VALGRIND}.xml"
+    export CMOCKA_XML_FILE="${SL_SRC_DIR}/test_results/%g_${WITH_VALGRIND}.xml"
 fi
 
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$DAOS_BASE" utils/run_test.sh
+IS_CI=true RUN_TEST_VALGRIND="$WITH_VALGRIND" DAOS_BASE="$SL_SRC_DIR" utils/run_test.sh
