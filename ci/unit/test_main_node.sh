@@ -3,6 +3,8 @@
 # This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
+find build/
+
 set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
@@ -13,6 +15,7 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
+sudo mkdir -p "$DAOS_BASE"
 sudo mount --bind build "$DAOS_BASE"
 
 if [ -n "$BULLSEYE" ]; then
