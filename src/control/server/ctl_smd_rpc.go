@@ -374,7 +374,7 @@ func (svc *ControlService) smdMapDevIDsToEngine(ctx context.Context, ids string,
 
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if useTrAddr && ds.TrAddr != "" {
+			if useTrAddr && dds.TrAddr != "" {
 				if trAddrs[dds.TrAddr] || (dds.Uuid != "" && devUUIDs[dds.Uuid]) {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
