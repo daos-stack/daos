@@ -21,6 +21,8 @@ failed=0
 failures=()
 log_num=0
 
+set -x
+
 if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi
@@ -59,8 +61,9 @@ run_test()
 
     ((log_num += 1))
 
+    FILES=("${DAOS_BASE}"/test_results/*.xml)
     ls -la "${FILES[@]}"
-    sudo chown -R "${FILES[@]}"
+    sudo chown -R "$USER" "${FILES[@]}"
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -118,7 +121,7 @@ if [ -d "/mnt/daos" ]; then
         sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
 
         export VOS_BDEV_CLASS="AIO"
-        run_test "xyz=1 ${SL_PREFIX}/bin/vos_tests" -a
+        run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"

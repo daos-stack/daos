@@ -11,6 +11,8 @@ if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
         exit 1
 fi
 
+exit 0
+
 # Try and use the gh command to work out the target branch, or if not installed
 # then assume master.
 if command -v gh > /dev/null 2>&1
