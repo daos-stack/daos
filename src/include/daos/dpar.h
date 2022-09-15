@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define DPAR_MAJOR 1
+#define DPAR_MAJOR 2
 #define DPAR_MINOR 0
 
 #define DPAR_VERSION_SHIFT	16
