@@ -62,7 +62,6 @@ run_test()
     ((log_num += 1))
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
-    ls -la "${FILES[@]}"
     sudo chown -R "$USER" "${FILES[@]}"
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
