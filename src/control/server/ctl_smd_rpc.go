@@ -326,7 +326,7 @@ type engineDevMap map[*Engine][]devID
 
 // Map requested device IDs provided in comma-separated string to the engine that controls the given
 // device. Device can be identified either by UUID or transport (PCI) address.
-func (svc *ControlService) smdMapDevIDsToEngine(ctx context.Context, ids string) (engineDevMap, error) {
+func (svc *ControlService) smdMapDevIDsToEngine(ctx context.Context, ids string, useTrAddr bool) (engineDevMap, error) {
 	// Special case for smdManage where list of IDs have been passed in UUID field.
 	trAddrs, devUUIDs, err := getLEDReqIDs(svc.log, ids)
 	if err != nil {
@@ -374,7 +374,7 @@ func (svc *ControlService) smdMapDevIDsToEngine(ctx context.Context, ids string)
 
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if dds.TrAddr != "" {
+			if useTrAddr && ds.TrAddr != "" {
 				if trAddrs[dds.TrAddr] || (dds.Uuid != "" && devUUIDs[dds.Uuid]) {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
@@ -399,8 +399,12 @@ func (svc *ControlService) smdMapDevIDsToEngine(ctx context.Context, ids string)
 
 func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	dmeth := drpc.MethodLedManage
+	useTrAddrInReq := true
 	if req.SetFaulty {
 		dmeth = drpc.MethodSetFaultyState
+		// Set faulty applies to a device-ID so don't replace with its parent NVMe
+		// controller address.
+		useTrAddrInReq = false
 	}
 
 	dreq, err := smdQueryToDevManageReq(req)
@@ -408,7 +412,7 @@ func (svc *ControlService) smdManage(ctx context.Context, req *ctlpb.SmdQueryReq
 		return nil, err
 	}
 
-	engineDevMap, err := svc.smdMapDevIDsToEngine(ctx, req.Uuid)
+	engineDevMap, err := svc.smdMapDevIDsToEngine(ctx, req.Uuid, useTrAddrInReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "mapping device identifiers to engine")
 	}

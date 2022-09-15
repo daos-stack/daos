@@ -786,20 +786,21 @@ check_faulty_devs(struct bio_xs_context *xs_ctxt, bool *is_faulty, struct spdk_p
 	int			 dev_list_cnt, rc;
 	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
 
-	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
-	if (rc != 0) {
-		D_ERROR("Error getting BIO device list\n");
-		return rc;
-	}
-
 	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
 	if (rc != 0) {
 		D_ERROR("Failed to format PCI address (%s)\n", spdk_strerror(-rc));
 		return -DER_INVAL;
 	}
 
-	*is_faulty = false;
 	D_INIT_LIST_HEAD(&dev_list);
+
+	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Error getting BIO device list\n");
+		return rc;
+	}
+
+	*is_faulty = false;
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		if (dev_info->bdi_traddr == NULL) {
