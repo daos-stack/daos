@@ -40,7 +40,7 @@ esac
 rm -rf $test_log_dir
 mkdir $test_log_dir
 
-rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ .
+rsync -v -rlpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ .
 
 # Copy any log files.  Use rsync filters here to allow us to specify
 # all files we want to copy, as it's much more flexible than using
