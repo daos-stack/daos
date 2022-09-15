@@ -8,7 +8,7 @@ set -uex
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 sudo bash -c 'echo 1024 > /proc/sys/vm/nr_hugepages'
 
-if grep /mnt/daos\ /proc/mounts; then
+if grep /mnt/daos\  /proc/mounts; then
     sudo umount /mnt/daos
 fi
 sudo mkdir -p /mnt/daos
