@@ -429,6 +429,7 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 static void
 dvt_dtx_end(struct dtx_handle *dth)
 {
+	vos_dtx_detach(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE(dth);
 }
@@ -485,9 +486,6 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 	/* end each dtx */
 	for (i = 0; i < nr; i++)
 		dvt_dtx_end(dth[i]);
-
-	/* Reindex the dtx tables */
-	vos_dtx_cache_reset(coh, true);
 
 	/* clean up */
 	daos_iov_free(&iod.iod_name);
