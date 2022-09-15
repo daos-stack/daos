@@ -1494,7 +1494,7 @@ class DaosContainer():
             num_prop = num_prop + 1
         if self.cont_input_values.enable_chksum is True:
             num_prop = num_prop + 3
-        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+        if self.cont_input_values.rd_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             num_prop = num_prop + 1
 
         if num_prop != 0:
@@ -1548,11 +1548,11 @@ class DaosContainer():
                     self.cont_input_values.chunk_size)
             idx = idx + 1
 
-        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+        if self.cont_input_values.rd_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
             self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                self.cont_input_values.rf_lvl)
+                self.cont_input_values.rd_lvl)
 
         func = self.context.get_function('create-cont')
 
