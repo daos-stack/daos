@@ -1129,12 +1129,96 @@ daos_oit_close(daos_handle_t oh, daos_event_t *ev);
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
  *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_NO_HDL	Invalid OIT open handle
  *			-DER_INVAL	Invalid parameter
  */
 int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev);
+
+#define DAOS_OIT_MARKER_MAX_LEN	(32)
+
+/**
+ * Mark an object ID in the Object Index Table (OIT).
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[in]	oid	object ID in the OIT.
+ * \param[in]	marker	the data/status to be marked for the OID, the max valid length (in bytes)
+ *			is DAOS_OIT_MARKER_MAX_LEN. NULL is invalid parameter.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid OIT open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	Input OID not in the OIT.
+ */
+int
+daos_oit_mark(daos_handle_t oh, daos_obj_id_t oid, d_iov_t *marker, daos_event_t *ev);
+
+/**
+ * Enumerate unmarked object IDs snapshotted by the Object Index Table (OIT)
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[out]	oids	Returned OIDs
+ * \param[out]	oids_nr	Number of returned OIDs
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid OIT open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_list_unmarked(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
+		       daos_anchor_t *anchor, daos_event_t *ev);
+
+/**
+ * OIT filter callback, will be called for each object ID when enumerates the OIT by calling
+ * daos_oit_list_filter().
+ *
+ * \param[in]	oid	the object ID.
+ * \param[in]	marker	the data/status marked for the \a oid. NULL if the OID was not marked.
+ *
+ * \return		1		the OID will be in the listed result.
+ *			0		the OID will be ignored.
+ *			negative value	the enumerate will be stopped and error code will be
+ *					returned.
+ */
+typedef int
+(daos_oit_filter_cb)(daos_obj_id_t oid, d_iov_t *marker);
+
+/**
+ * Enumerate object IDs snapshotted by the Object Index Table (OIT) with a filter.
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[out]	oids	Returned OIDs
+ * \param[out]	oids_nr	Number of returned OIDs
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	filter	OIT filter callback.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid OIT open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
+		     daos_anchor_t *anchor, daos_oit_filter_cb filter, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
