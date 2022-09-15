@@ -101,6 +101,12 @@ func (v Version) GreaterThan(other Version) bool {
 	return v.Patch > other.Patch
 }
 
+// GreaterThanOrEquals tests if the version is greater than or
+// equal to the other.
+func (v Version) GreaterThanOrEquals(other Version) bool {
+	return v.GreaterThan(other) || v.Equals(other)
+}
+
 // LessThan tests if the version is less than the other.
 func (v Version) LessThan(other Version) bool {
 	if v.Major < other.Major {
@@ -112,6 +118,12 @@ func (v Version) LessThan(other Version) bool {
 	}
 
 	return v.Patch < other.Patch
+}
+
+// LessThanOrEquals tests if the version is less than or
+// equal to the other.
+func (v Version) LessThanOrEquals(other Version) bool {
+	return v.LessThan(other) || v.Equals(other)
 }
 
 // PatchCompatible tests if the major and minor versions

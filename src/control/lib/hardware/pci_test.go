@@ -179,6 +179,15 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 				"0000:80:00.0", "0000:81:00.0", "5d0505:01:00.0",
 			},
 		},
+		"vmd backing device": {
+			addrStrs: []string{
+				"050505:03:00.0", "050505:01:00.0",
+			},
+			expAddrStr: "050505:01:00.0 050505:03:00.0",
+			expAddrStrs: []string{
+				"050505:01:00.0", "050505:03:00.0",
+			},
+		},
 		"invalid": {
 			addrStrs: []string{"0000:7f.00.0"},
 			expErr:   errors.New("bdf format"),
