@@ -1061,6 +1061,7 @@ class Launch():
         self.name = name
         self.repeat = repeat
         self.mode = mode
+        self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
         self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
         self.tests = []
@@ -1281,7 +1282,8 @@ class Launch():
 
         """
         # Add a test result to account for any non-test execution steps
-        setup_result = self._start_test("FTEST_launch", TestName("launch.py", 0, 0), self.logfile)
+        setup_result = self._start_test(
+            self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
         # Record the command line arguments
         self.log.debug("Arguments:")
