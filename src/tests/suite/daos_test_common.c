@@ -1273,8 +1273,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
-	if (line)
-		free(line);
+	free(line);
 	D_FREE(tmp);
 	return 0;
 }
