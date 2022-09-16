@@ -164,6 +164,8 @@ crt_swim_membs_add(struct crt_swim_membs *csm, struct crt_swim_target *cst)
 {
 	int rc;
 
+	D_ASSERTF(cst->cst_state.sms_incarnation > 0, "id="DF_U64"\n", cst->cst_id);
+
 	/* If the list is too small, double its capacity. */
 	if (csm->csm_list_cap < csm->csm_list_len + 1) {
 		d_rank_t	*list;
@@ -788,7 +790,7 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state_prev,
 	D_ASSERT(state_prev != NULL);
 	D_ASSERT(state != NULL);
 
-	D_DEBUG(DB_TRACE, "rank=%u: status=%c->%c incarnation="DF_X64"->"DF_X64"\n", rank,
+	D_INFO("rank=%u: status=%c->%c incarnation="DF_X64"->"DF_X64"\n", rank,
 		SWIM_STATUS_CHARS[state_prev->sms_status], SWIM_STATUS_CHARS[state->sms_status],
 		state_prev->sms_incarnation, state->sms_incarnation);
 

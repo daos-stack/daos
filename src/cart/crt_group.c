@@ -3320,6 +3320,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	struct crt_event_cb_priv	*cbs_event;
 	size_t				cbs_size;
 
+	D_INFO("begin: version=%u\n", version);
+
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (grp_priv == NULL) {
@@ -3435,6 +3437,7 @@ unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
+	D_INFO("end: version=%u rc=%d\n", version, rc);
 	return rc;
 
 cleanup:
@@ -3449,6 +3452,7 @@ cleanup:
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+	D_INFO("end: version=%u rc=%d\n", version, rc);
 	return rc;
 }
 

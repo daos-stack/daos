@@ -394,7 +394,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 static void
 crt_ctx_epi_mark_locked(struct crt_ep_inflight *epi, bool dead, int ctx_idx)
 {
-	D_DEBUG(DB_NET, "marking epi (idx=%d rank=%d): dead=%u\n", ctx_idx,
+	D_INFO("marking epi (idx=%d rank=%d): dead=%u\n", ctx_idx,
 		epi->epi_ep.ep_rank, dead);
 	epi->epi_dead = dead ? 1 : 0;
 }
@@ -1082,7 +1082,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_LOCK(&epi->epi_mutex);
 
 	if (epi->epi_dead) {
-		RPC_TRACE(DB_NET, rpc_priv, "cancel due to dead rank\n");
+		RPC_ERROR(rpc_priv, "cancel due to dead rank\n");
 		D_GOTO(out_unlock_epi, rc = -DER_CANCELED);
 	}
 
