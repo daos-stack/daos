@@ -19,3 +19,6 @@ container:
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   cores: '0-15'
+dfuse_vm:
+  mount_dir: "/tmp/daos_dfuse"
+  cores: '0-15'
