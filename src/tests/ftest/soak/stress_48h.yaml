@@ -1,6 +1,6 @@
 hosts:
     # servers if no server partition is defined
-    test_servers: 10
+    test_servers: 8
     # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
@@ -95,7 +95,7 @@ soak_stress:
     test_timeout: 48
     joblist:
         - fio_stress
-        - daos_racer
+        #- daos_racer
         - ior_stress
         - mdtest_stress
         - vpic_stress
@@ -183,11 +183,10 @@ vpic_stress:
     # Requires opeapi
     job_timeout: 20
     nodesperjob:
-        - 8
+        - 1
     taskspernode:
         - 32
-    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
-    module: mpi/latest
+    cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
     posix: true
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
@@ -200,7 +199,7 @@ lammps_stress:
         - 8
     taskspernode:
         - 32
-    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj"
+    cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj"
     posix: true
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:

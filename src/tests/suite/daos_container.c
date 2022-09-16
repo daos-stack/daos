@@ -2379,6 +2379,10 @@ co_rf_simple(void **state)
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 
+	daos_fail_loc_set(DAOS_CONT_G2L_FAIL | DAOS_FAIL_ONCE);
+	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
+	assert_rc_equal(rc, -DER_NO_HDL);
+	daos_fail_loc_set(0);
 	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_close(coh_g2l, NULL);

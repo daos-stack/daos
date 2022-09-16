@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,10 +370,9 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 	timeout /= 1000; /* ms to s */
 	if (timeout < timeout_min)
 		timeout = timeout_min;
-#if 0
 	rc = crt_req_set_timeout(rpc, timeout);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-#endif
+
 	rrpc->drc_sent = ABT_get_wtime();
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
