@@ -2950,18 +2950,17 @@ run_io_test(enum daos_otype_t type, int keys, bool nest_iterators, const char *c
 	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_LEXICAL))
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "# VOS IO tests (dkey=%-6s akey=%s) %s",
-		 dkey, akey, cfg);
+	snprintf(buf, VTS_BUF_SIZE, "IO# tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
 	init_type = type;
 	if (keys)
 		init_num_keys = keys;
 	D_PRINT("Running %s\n", buf);
 	if (type == DAOS_OT_MULTI_UINT64) {
-		buf[0] = '2';
+		buf[2] = '2';
 		rc = cmocka_run_group_tests_name(buf, int_tests, setup_io,
 						 teardown_io);
 	}
-	buf[0] = '1';
+	buf[2] = '1';
 
 	return rc + cmocka_run_group_tests_name(buf, io_tests,
 						setup_io, teardown_io);

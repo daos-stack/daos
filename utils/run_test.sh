@@ -21,6 +21,8 @@ failed=0
 failures=()
 log_num=0
 
+set -x
+
 if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi
@@ -60,6 +62,7 @@ run_test()
     ((log_num += 1))
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
+    sudo chown -R "$USER" "${FILES[@]}"
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -79,6 +82,7 @@ if [ -d "/mnt/daos" ]; then
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
+    chmod 777 "${DAOS_BASE}"/test_results/xml
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
