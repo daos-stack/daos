@@ -58,7 +58,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", True)
+        self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
 
     def test_dfuse_daos_build_metadata(self):
         """ This test builds DAOS on a dfuse filesystem.
@@ -88,7 +88,7 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("nocache")
 
-    def run_build_test(self, cache_mode, intercept=False):
+    def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
         """"Run an actual test from above"""
 
         # Create a pool, container and start dfuse.
@@ -105,7 +105,7 @@ class DaosBuild(DfuseTestBase):
         # commands which can both take a long time.
         build_time = 10
 
-        self.load_dfuse(self.hostlist_clients)
+        self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
