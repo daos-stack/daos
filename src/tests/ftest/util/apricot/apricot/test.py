@@ -679,6 +679,8 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.slurm_exclude_servers = False
+        self.slurm_exclude_nodes = NodeSet()
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
@@ -728,6 +730,10 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = self.params.get(
             "start_agents", "/run/setup/*", self.setup_start_agents)
 
+        # Support removing any servers from the client list
+        self.slurm_exclude_servers = self.params.get(
+            "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
         self.server_group = self.params.get(
@@ -741,6 +747,16 @@ class TestWithServers(TestWithoutServers):
             "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
         self.hostlist_clients = self.get_hosts_from_yaml(
             "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+
+        # Optionally remove any servers that may have ended up in the client list.  This can occur
+        # with tests using slurm partitions as they are setup with all hosts.
+        if self.slurm_exclude_servers:
+            self.log.debug(
+                "Excluding any %s servers from the current client list: %s",
+                self.hostlist_servers, self.hostlist_clients)
+            new_client_list = self.hostlist_clients.difference(self.hostlist_servers)
+            self.slurm_exclude_nodes = self.hostlist_clients.difference(new_client_list)
+            self.hostlist_clients = new_client_list
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(

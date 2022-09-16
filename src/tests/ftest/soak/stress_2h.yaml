@@ -5,7 +5,7 @@ hosts:
     # server_partition: daos_server
     client_partition: normal
     client_reservation: daos-test
-mpi_module: mpich/gnu-sockets
+mpi_module: mpich/gnu-tcp
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
 timeout: 2H15M
@@ -141,11 +141,10 @@ mdtest_stress:
 vpic_stress:
     job_timeout: 20
     nodesperjob:
-        - 4
+        - 1
     taskspernode:
         - 16
     cmdline: "/var/hit/daos/builds/vpic-install/bin/harris.Linux"
-    module: mpi/latest
     posix: true
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
