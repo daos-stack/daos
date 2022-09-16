@@ -93,6 +93,7 @@ function setup_environment()
 		echo "Unable to find .build_vars.sh" && exit 1
 	fi
 
+	# shellcheck disable=SC1090
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
