@@ -1004,7 +1004,7 @@ class Launch():
             self.log.debug("Stacktrace", exc_info=True)
 
         if test_result.fail_count == 0:
-            # Update the test result with the information abot the first error
+            # Update the test result with the information about the first error
             test_result.status = TestResult.ERROR
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
@@ -1810,11 +1810,11 @@ class Launch():
             test.set_host_info(self.log, args.include_localhost)
 
         # Log the test information
-        msg_format = "%3s  %-40s  %-50s  %-20s  %-20s"
+        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
         self.log.debug("-" * 80)
         self.log.debug("Test information:")
         self.log.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        self.log.debug(msg_format, "-" * 3, "-" * 40, "-" * 50, "-" * 20, "-" * 20)
+        self.log.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
         for test in self.tests:
             self.log.debug(
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
@@ -2323,6 +2323,7 @@ class Launch():
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
                 "depth": 1,
+                "timeout": 300,
             }
             remote_files["remote configuration files"] = {
                 "source": os.path.join(os.sep, "etc", "daos"),
@@ -2330,6 +2331,7 @@ class Launch():
                 "pattern": "daos_*.yml",
                 "hosts": test.hosts.all_remote,
                 "depth": 1,
+                "timeout": 300,
             }
             remote_files["daos log files"] = {
                 "source": daos_test_log_dir,
@@ -2337,6 +2339,7 @@ class Launch():
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
                 "depth": 1,
+                "timeout": 900,
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
@@ -2344,6 +2347,7 @@ class Launch():
                 "pattern": "*log*",
                 "hosts": test.hosts.all,
                 "depth": 2,
+                "timeout": 900,
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
@@ -2351,6 +2355,7 @@ class Launch():
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.hosts.servers,
                 "depth": 1,
+                "timeout": 900,
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME']),
@@ -2358,21 +2363,27 @@ class Launch():
                 "pattern": "valgrind*",
                 "hosts": test.hosts.servers,
                 "depth": 1,
+                "timeout": 900,
             }
+            if core_files:
+                remote_files["core files"] = {
+                    "source": os.path.join(os.sep, "var", "tmp"),
+                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                    "pattern": "core.*",
+                    "hosts": test.hosts.all,
+                    "depth": 1,
+                    "timeout": 1800,
+                }
             for summary, data in remote_files.items():
                 if not data["hosts"]:
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold)
+                    data["destination"], data["depth"], threshold, data["timeout"])
 
         # Optionally rename the test results directory for this test
         if rename:
             return_code |= self._rename_avocado_test_dir(test, jenkinslog)
-
-        # Optionally process core files
-        if core_files:
-            return_code |= self._process_core_files(test)
 
         return return_code
 
@@ -2526,7 +2537,8 @@ class Launch():
             self.log.debug("  Skipping resetting server storage - no server hosts")
         return 0
 
-    def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold):
+    def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
+                       timeout):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2537,6 +2549,7 @@ class Launch():
             destination (str): where the files should be moved to on this host
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
+            timeout (int): number of seconds to wait for the command to complete.
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2571,7 +2584,11 @@ class Launch():
         return_code |= self._compress_files(hosts, source, pattern, depth)
 
         # Move the test files to the test-results directory on this host
-        return_code |= self._move_files(hosts, source, pattern, destination, depth)
+        return_code |= self._move_files(hosts, source, pattern, destination, depth, timeout)
+
+        if pattern == "core.*":
+            # Process the core files
+            return_code |= self._process_core_files(os.path.split(destination)[0])
 
         return return_code
 
@@ -2728,7 +2745,7 @@ class Launch():
             return 16
         return 0
 
-    def _move_files(self, hosts, source, pattern, destination, depth):
+    def _move_files(self, hosts, source, pattern, destination, depth, timeout):
         """Move files from the source to the destination.
 
         Args:
@@ -2737,6 +2754,7 @@ class Launch():
             pattern (str): pattern used to limit which files are processed
             destination (str): where the files should be moved to on this host
             depth (int): max depth for find command
+            timeout (int): number of seconds to wait for the command to complete.
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2774,7 +2792,7 @@ class Launch():
         command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(self.log, command, check=True)
+            run_local(self.log, command, check=True, timeout=timeout)
 
         except LaunchException:
             message = f"Error copying remote files to {destination}"
@@ -2791,6 +2809,31 @@ class Launch():
 
         return return_code
 
+    def _process_core_files(self, test_job_results):
+        """Generate a stacktrace for each core file detected.
+
+        Args:
+            test_job_results (str): the location of the core files
+
+        Returns:
+            int: status code: 0 = success, 256 = failure
+
+        """
+        core_file_processing = CoreFileProcessing(self.log)
+        try:
+            error_count = core_file_processing.process_core_files(test_job_results)
+            if error_count:
+                message = f"Errors detected processing test core files: {error_count}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return 256
+
+        except Exception:       # pylint: disable=broad-except
+            message = "Unhandled error processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
+
+        return 0
+
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
 
@@ -2806,7 +2849,7 @@ class Launch():
         test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
         test_logs_dir = os.path.realpath(test_logs_lnk)
 
-        self.log.debug("-" * 80)
+        self.log.debug("=" * 80)
         self.log.info("Renaming the avocado job-results directory")
 
         # Create the new avocado job-results test directory name
@@ -2880,33 +2923,6 @@ class Launch():
 
         return 0
 
-    def _process_core_files(self, test):
-        """Generate stacktraces for any core files detected.
-
-        Args:
-            test (TestInfo): the test information
-
-        Returns:
-            int: status code: 0 = success, 256 = failure
-
-        """
-        core_file_processing = CoreFileProcessing(self.log)
-        try:
-            if not core_file_processing.get_stacktraces(self.job_results_dir, test.hosts.all):
-                return 256
-
-        except LaunchException:
-            message = "Error processing test core files"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-            return 256
-
-        except Exception:       # pylint: disable=broad-except
-            message = "Unhandled error processing test core files"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-            return 256
-
-        return 0
-
     def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.
 
@@ -2917,6 +2933,7 @@ class Launch():
             int: status code to use when exiting launch.py
 
         """
+        self.log.debug("=" * 80)
         return_code = 0
         if status == 0:
             self.log.info("All avocado tests passed!")
@@ -2965,131 +2982,136 @@ class CoreFileProcessing():
         self.log = log
         self.distro_info = detect()
 
-    def get_stacktraces(self, avocado_logs_dir, test_hosts):
-        """Copy all of the host test log files to the avocado results directory.
+    def process_core_files(self, directory):
+        """Process any core files found in the 'stacktrace*' sub-directories of the specified path.
+
+        Generate a stacktrace for each detected core file and then remove the core file.
 
         Args:
-            avocado_logs_dir (str): location of the avocado job logs
-            test_hosts (NodeSet): hosts from which to collect core files
+            directory (str): location of the stacktrace* directories containing the core files to
+                process
 
         Returns:
-            bool: True if everything was done as expected, False if there were
-                any issues processing core files
+            int: number of errors encountered
 
         """
-        status = True
-        daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
-        self.log.debug("=" * 80)
-        self.log.info("Processing cores from %s in %s", test_hosts, daos_cores_dir)
-
-        # Processing core files is broken on EL7 currently
+        errors = 0
+        self.log.debug("-" * 80)
+        self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
         if self.is_el7():
-            self.log.debug("  Generating stacktraces is currently not suppotrted on EL7")
-            return status
+            self.log.info("Generating stacktraces is currently not suppotrted on EL7")
 
-        # Create a subdirectory in the avocado logs directory for this test
-        os.makedirs(daos_cores_dir, exist_ok=True)
+        # Create a stacktrace for any core file archived from the hosts under test
+        core_files = defaultdict(list)
+        for dir_name in os.listdir(directory):
+            if not dir_name.startswith("stacktraces"):
+                continue
+            core_dir = os.path.join(directory, dir_name)
+            for core_name in os.listdir(core_dir):
+                if not fnmatch.fnmatch(core_name, 'core.*[0-9]'):
+                    continue
+                core_files[core_dir].append(core_dir)
 
-        # Copy any core files that exist on the test hosts and remove them from the
-        # test host if the copy is successful.  Attempt all of the commands and
-        # report status at the end of the loop.  Include a listing of the file
-        # related to any failed command.
-        commands = [
-            "set -eu",
-            "rc=0",
-            "copied=()",
-            "df -h /var/tmp",
-            "for file in /var/tmp/core.*",
-            "do if [ -e $file ]",
-            "then ls -al $file",
-            "if [ ! -s $file ]",
-            "then ((rc++))",
-            "else if sudo chmod 644 $file && "
-            f"scp $file {get_local_host()}:{daos_cores_dir}/${{file##*/}}-$(hostname -s)",
-            "then copied+=($file)",
-            "if ! sudo rm -fr $file",
-            "then ((rc++))",
-            "fi",
-            "else ((rc++))",
-            "fi",
-            "fi",
-            "fi",
-            "done",
-            "echo Copied ${copied[@]:-no files}",
-            "exit $rc",
-        ]
-        result = run_remote(self.log, test_hosts, "; ".join(commands), timeout=1800)
-        if not result.passed:
-            # we might have still gotten some core files, so don't return here
-            # but save a False return status for later
-            status = False
+        # Install the debug information needed for stacktrace generation
+        if core_files:
+            try:
+                self.install_debuginfos()
+            except LaunchException as error:
+                self.log.error(error)
+                self.log.debug("Stacktrace", exc_info=True)
+                errors += 1
+        else:
+            self.log.debug(
+                "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
 
-        cores = os.listdir(daos_cores_dir)
-        if not cores:
-            return True
+        # Create a stacktrace from each core file
+        if not self.is_el7() and errors == 0:
+            for core_dir, core_name_list in core_files.items():
+                for core_name in core_name_list:
+                    try:
+                        self._create_stacktrace(core_dir, core_name)
+                    except Exception as error:      # pylint: disable=broad-except
+                        self.log.error(error)
+                        self.log.debug("Stacktrace", exc_info=True)
+                        errors += 1
+
+        # Remove the stacktrace files
+        for core_dir, core_name_list in core_files.items():
+            for core_name in core_name_list:
+                core_full = os.path.join(core_dir, core_name)
+                self.log.debug("Removing %s", core_full)
+                os.remove(core_full)
+
+        return errors
+
+    def _create_stacktrace(self, core_dir, core_name):
+        """Create a stacktrace from the specified core file.
+
+        Args:
+            core_dir (str): location of the core file
+            core_name (str): name of the core file
+
+        Raises:
+            LaunchException: if there is an error creating a stacktrace
+
+        """
+        host = os.path.split(core_dir)[-1].split(".")[-1]
+        core_full = os.path.join(core_dir, core_name)
+        stack_trace_file = os.path.join(core_dir, f"{core_name}.stacktrace")
+
+        self.log.debug("Generating a stacktrace from the %s core file from %s", core_full, host)
+        run_local(self.log, ['ls', '-l', core_full])
 
         try:
-            self.install_debuginfos()
+            command = [
+                "gdb", f"-cd={core_dir}",
+                "-ex", "set pagination off",
+                "-ex", "thread apply all bt full",
+                "-ex", "detach",
+                "-ex", "quit",
+                self._get_exe_name(core_full), core_name
+            ]
+
         except LaunchException as error:
-            self.log.debug(error)
-            self.log.debug("Removing core files to avoid archiving them")
-            for corefile in cores:
-                os.remove(os.path.join(daos_cores_dir, corefile))
-            return False
+            raise LaunchException(f"Error obtaining the exe name from {core_name}") from error
 
-        for corefile in cores:
-            if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
-                continue
-            corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-            run_local(self.log, ['ls', '-l', corefile_fqpn])
-            # can't use the file python magic binding here due to:
-            # https://bugs.astron.com/view.php?id=225, fixed in:
-            # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
-            # but not available to us until that is in a released version
-            # revert the commit this comment is in to see use python magic instead
-            try:
-                result = run_local(
-                    self.log, ["gdb", "-c", corefile_fqpn, "-ex", "info proc exe", "-ex", "quit"])
-                last_line = result.stdout.splitlines()[-1]
-                cmd = last_line[7:-1]
-                # assume there are no arguments on cmd
-                find_char = "'"
-                if cmd.find(" ") > -1:
-                    # there are arguments on cmd
-                    find_char = " "
-                exe_name = cmd[0:cmd.find(find_char)]
-            except LaunchException:
-                self.log.debug("Error obtaining executable name for stacktrace", exc_info=True)
-                exe_name = None
+        try:
+            output = run_local(self.log, command, check=False)
+            with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
+                stack_trace.writelines(output.stdout)
 
-            if exe_name:
-                cmd = [
-                    "gdb", f"-cd={daos_cores_dir}",
-                    "-ex", "set pagination off",
-                    "-ex", "thread apply all bt full",
-                    "-ex", "detach",
-                    "-ex", "quit",
-                    exe_name, corefile
-                ]
-                stack_trace_file = os.path.join(daos_cores_dir, f"{corefile}.stacktrace")
-                try:
-                    output = run_local(self.log, cmd, check=False)
-                    with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
-                        stack_trace.writelines(output.stdout)
-                except IOError as error:
-                    self.log.debug("Error writing %s: %s", stack_trace_file, error)
-                    status = False
-                except LaunchException as error:
-                    self.log.debug("Error creating %s: %s", stack_trace_file, error)
-                    status = False
-            else:
-                self.log.debug("Unable to determine executable name from gdb output")
-                self.log.debug("Not creating stacktrace")
-                status = False
-            self.log.debug("Removing %s", corefile_fqpn)
-            os.unlink(corefile_fqpn)
+        except IOError as error:
+            raise LaunchException(f"Error writing {stack_trace_file}") from error
 
-        return status
+        except LaunchException as error:
+            raise LaunchException(f"Error creating {stack_trace_file}") from error
+
+    def _get_exe_name(self, core_file):
+        """Get the executable name from the core file.
+
+        Args:
+            core_file (str): fully qualified core filename
+
+        Raises:
+            LaunchException: if there is problem get the executable name from the core file
+
+        Returns:
+            str: the executable name
+
+        """
+        self.log.debug("Extracting the executable name from %s", core_file)
+        command = ["gdb", "-c", core_file, "-ex", "info proc exe", "-ex", "quit"]
+        result = run_local(self.log, command)
+        last_line = result.stdout.splitlines()[-1]
+        cmd = last_line[7:-1]
+        # assume there are no arguments on cmd
+        find_char = "'"
+        if cmd.find(" ") > -1:
+            # there are arguments on cmd
+            find_char = " "
+        exe_name = cmd[0:cmd.find(find_char)]
+        self.log.debug("  executable name: %s", exe_name)
+        return exe_name
 
     def install_debuginfos(self):
         """Install debuginfo packages.
