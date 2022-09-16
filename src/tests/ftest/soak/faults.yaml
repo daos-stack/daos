@@ -72,18 +72,18 @@ container_reserved:
     control_method: daos
 faults:
     fault_list:
-        #    - DAOS_DTX_LOST_RPC_REQUEST
-        #    - DAOS_DTX_LOST_RPC_REPLY
-        #    - DAOS_DTX_LONG_TIME_RESEND
+        # - DAOS_DTX_LOST_RPC_REQUEST
+        # - DAOS_DTX_LOST_RPC_REPLY
+        # - DAOS_DTX_LONG_TIME_RESEND
         - DAOS_SHARD_OBJ_UPDATE_TIMEOUT
         - DAOS_SHARD_OBJ_FETCH_TIMEOUT
-        #    - DAOS_SHARD_OBJ_FAIL
-        #    - DAOS_OBJ_UPDATE_NOSPACE
-        #    - DAOS_SHARD_OBJ_RW_CRT_ERROR
-        #    - DAOS_OBJ_REQ_CREATE_TIMEOUT
-        #    - DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE
-        #    - DAOS_OBJ_SPECIAL_SHARD
-        #    - DAOS_OBJ_TGT_IDX_CHANGE
+        # - DAOS_SHARD_OBJ_FAIL
+        # - DAOS_OBJ_UPDATE_NOSPACE
+        # - DAOS_SHARD_OBJ_RW_CRT_ERROR
+        # - DAOS_OBJ_REQ_CREATE_TIMEOUT
+        # - DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE
+        # - DAOS_OBJ_SPECIAL_SHARD
+        # - DAOS_OBJ_TGT_IDX_CHANGE
 
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
