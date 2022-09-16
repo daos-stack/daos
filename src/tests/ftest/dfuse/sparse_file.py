@@ -5,8 +5,8 @@
 """
 
 from getpass import getuser
-import paramiko
 import os
+import paramiko
 
 from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
