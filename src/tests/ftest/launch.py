@@ -35,8 +35,9 @@ from ClusterShell.Task import task_self
 # pylint: disable=import-error,no-name-in-module
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 
-FAILURE_TRIGGER = "00_trigger-launch-failure_00"
+DEFAULT_DAOS_APP_DIR = "/scratch"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 YAML_KEYS = OrderedDict(
     [
         ("test_servers", "test_servers"),
@@ -1211,6 +1212,8 @@ class Launch():
 
             # Set the default location for daos log files written during testing
             # if not already defined.
+            if "DAOS_APP_DIR" not in os.environ:
+                os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
             os.environ["D_LOG_FILE"] = os.path.join(
