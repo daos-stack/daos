@@ -295,6 +295,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %define conf_dir %{_sysconfdir}/daos
 %if (0%{?rhel} == 8)
 %define scons_exe scons-3
+%else
 %define scons_exe scons
 %endif
 %{scons_exe} %{?_smp_mflags} \
