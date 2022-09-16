@@ -1223,6 +1223,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         self.log.info(
             "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
         return commands
+
     oclass_list = self.params.get("oclass", app_params)
     for oclass in oclass_list:
         add_containers(self, pool, oclass)
@@ -1298,7 +1299,7 @@ def build_job_script(self, commands, job, nodesperjob):
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
-            "exclude": self.exclude_slurm_nodes,
+            "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
             "exclusive": None
