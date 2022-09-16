@@ -130,12 +130,42 @@ class TelemetryUtils():
         "engine_io_latency_fetch_mean",
         "engine_io_latency_fetch_min",
         "engine_io_latency_fetch_stddev"]
+    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = [
+        "engine_io_latency_bulk_fetch",
+        "engine_io_latency_bulk_fetch_max",
+        "engine_io_latency_bulk_fetch_mean",
+        "engine_io_latency_bulk_fetch_min",
+        "engine_io_latency_bulk_fetch_stddev"]
+    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = [
+        "engine_io_latency_vos_fetch",
+        "engine_io_latency_vos_fetch_max",
+        "engine_io_latency_vos_fetch_mean",
+        "engine_io_latency_vos_fetch_min",
+        "engine_io_latency_vos_fetch_stddev"]
     ENGINE_IO_LATENCY_UPDATE_METRICS = [
         "engine_io_latency_update",
         "engine_io_latency_update_max",
         "engine_io_latency_update_mean",
         "engine_io_latency_update_min",
         "engine_io_latency_update_stddev"]
+    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = [
+        "engine_io_latency_tgt_update",
+        "engine_io_latency_tgt_update_max",
+        "engine_io_latency_tgt_update_mean",
+        "engine_io_latency_tgt_update_min",
+        "engine_io_latency_tgt_update_stddev"]
+    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = [
+        "engine_io_latency_bulk_update",
+        "engine_io_latency_bulk_update_max",
+        "engine_io_latency_bulk_update_mean",
+        "engine_io_latency_bulk_update_min",
+        "engine_io_latency_bulk_update_stddev"]
+    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = [
+        "engine_io_latency_vos_update",
+        "engine_io_latency_vos_update_max",
+        "engine_io_latency_vos_update_mean",
+        "engine_io_latency_vos_update_min",
+        "engine_io_latency_vos_update_stddev"]
     ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
         "engine_io_ops_akey_enum_active",
         "engine_io_ops_akey_enum_active_max",
