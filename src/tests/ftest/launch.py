@@ -288,57 +288,6 @@ def find_values(obj, keys, key=None, val_type=str):
     return matches
 
 
-def generate_certs(log):
-    """Generate the certificates for the test.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-
-    Raises:
-        LaunchException: if there is an error generating the certificates
-
-    """
-    log.debug("-" * 80)
-    log.debug("Generating certificates")
-    daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    certs_dir = os.path.join(daos_test_log_dir, "daosCA")
-    certgen_dir = os.path.abspath(os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
-    run_local(log, ["/usr/bin/rm", "-rf", certs_dir])
-    run_local(log, [os.path.join(certgen_dir, "gen_certificates.sh"), daos_test_log_dir])
-
-
-def setup_test_directory(log, test, mode="all"):
-    """Set up the common test directory on all hosts.
-
-    Ensure the common test directory exists on each possible test node.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test information
-        mode (str, optional): setup mode. Defaults to "all".
-            "rm"    = remove the directory
-            "mkdir" = create the directory
-            "chmod" = change the permissions of the directory (a+rw)
-            "list"  = list the contents of the directory
-            "all"  = execute all of the mode options
-
-    Raises:
-        LaunchException: if there is an error setting up the test directory
-
-    """
-    log.debug("-" * 80)
-    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    log.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
-    if mode in ["all", "rm"]:
-        run_remote(log, test.hosts.all, f"sudo rm -fr {test_dir}")
-    if mode in ["all", "mkdir"]:
-        run_remote(log, test.hosts.all, f"mkdir -p {test_dir}")
-    if mode in ["all", "chmod"]:
-        run_remote(log, test.hosts.all, f"chmod a+wr {test_dir}")
-    if mode in ["all", "list"]:
-        run_remote(log, test.hosts.all, f"ls -al {test_dir}")
-
-
 def get_test_category(test_file):
     """Get a category for the specified test using its path and name.
 
@@ -351,165 +300,6 @@ def get_test_category(test_file):
     """
     file_parts = os.path.split(test_file)
     return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
-
-
-def stop_daos_agent_services(log, test):
-    """Stop any daos_agent.service running on the hosts running servers.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test information
-
-    Returns:
-        int: status code: 0 = success, 512 = failure
-
-    """
-    service = "daos_agent.service"
-    hosts = test.hosts.clients_with_localhost
-    log.debug("-" * 80)
-    log.debug("Verifying %s after running '%s'", service, test)
-    return stop_service(log, hosts, service)
-
-
-def stop_daos_server_service(log, test):
-    """Stop any daos_server.service running on the hosts running servers.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test information
-
-    Returns:
-        int: status code: 0 = success, 512 = failure
-
-    """
-    service = "daos_server.service"
-    hosts = test.hosts.servers
-    log.debug("-" * 80)
-    log.debug("Verifying %s after running '%s'", service, test)
-    return stop_service(log, hosts, service)
-
-
-def stop_service(log, hosts, service):
-    """Stop any daos_server.service running on the hosts running servers.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): list of hosts on which to stop the service.
-        service (str): name of the service
-
-    Returns:
-        int: status code: 0 = success, 512 = failure
-
-    """
-    result = {"status": 0}
-    if hosts:
-        status_keys = ["reset-failed", "stop", "disable"]
-        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-        check_hosts = NodeSet(hosts)
-        loop = 1
-        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
-        # has been resolved
-        max_loops = 3
-        while check_hosts:
-            # Check the status of the service on each host
-            result = get_service_status(log, check_hosts, service)
-            check_hosts = NodeSet()
-            for key in status_keys:
-                if result[key]:
-                    if loop == max_loops:
-                        # Exit the while loop if the service is still running
-                        log.error(" - Error %s still %s on %s", service, mapping[key], result[key])
-                        result["status"] = 512
-                    else:
-                        # Issue the appropriate systemctl command to remedy the
-                        # detected state, e.g. 'stop' for 'active'.
-                        command = ["sudo", "systemctl", key, service]
-                        run_remote(log, result[key], " ".join(command))
-
-                        # Run the status check again on this group of hosts
-                        check_hosts.add(result[key])
-            loop += 1
-    else:
-        log.debug("  Skipping stopping %s service - no hosts", service)
-
-    return result["status"]
-
-
-def get_service_status(log, hosts, service):
-    """Get the status of the daos_server.service.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to get the service state
-        service (str): name of the service
-
-    Returns:
-        dict: a dictionary with the following keys:
-            - "status":       status code: 0 = success, 512 = failure
-            - "stop":         NodeSet where to stop the daos_server.service
-            - "disable":      NodeSet where to disable the daos_server.service
-            - "reset-failed": NodeSet where to reset the daos_server.service
-
-    """
-    status = {
-        "status": 0,
-        "stop": NodeSet(),
-        "disable": NodeSet(),
-        "reset-failed": NodeSet()}
-    status_states = {
-        "stop": ["active", "activating", "deactivating"],
-        "disable": ["active", "activating", "deactivating"],
-        "reset-failed": ["failed"]}
-    command = ["systemctl", "is-active", service]
-    result = run_remote(log, hosts, " ".join(command))
-    for data in result.output:
-        if data.timeout:
-            status["status"] = 512
-            status["stop"].add(data.hosts)
-            status["disable"].add(data.hosts)
-            status["reset-failed"].add(data.hosts)
-            log.debug("  %s: TIMEOUT", data.hosts)
-            break
-        # log.debug(" %s: %s", data.hosts, "\n".join(data.stdout))
-        for key, state_list in status_states.items():
-            for line in data.stdout:
-                if line in state_list:
-                    status[key].add(data.hosts)
-                    break
-    return status
-
-
-def reset_server_storage(log, test):
-    """Reset the server storage for the hosts that ran servers in the test.
-
-    This is a workaround to enable binding devices back to nvme or vfio-pci after they are unbound
-    from vfio-pci to nvme.  This should resolve the "NVMe not found" error seen when attempting to
-    start daos engines in the test.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        test (TestInfo): the test information
-
-    Returns:
-        int: status code: 0 = success, 512 = failure
-
-    """
-    hosts = test.hosts.servers
-    log.debug("-" * 80)
-    log.debug("Resetting server storage after running %s", test)
-    if hosts:
-        commands = [
-            "if lspci | grep -i nvme",
-            "then daos_server storage prepare -n --reset && "
-            "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
-            "fi"]
-        log.info("Resetting server storage on %s after running '%s'", hosts, test)
-        result = run_remote(log, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
-        if not result.passed:
-            log.debug("Ignoring any errors from these workaround commands")
-    else:
-        log.debug("  Skipping resetting server storage - no server hosts")
-    return 0
 
 
 class AvocadoInfo():
@@ -1199,28 +989,39 @@ class Launch():
             self.log.debug(message)
         test_result.status = TestResult.PASS
 
-    def _fail_test(self, test_result, fail_class, fail_reason, exc_info):
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
             test_result (TestResult): the test result to mark as failed
             fail_class (str): failure category.
             fail_reason (str): failure description.
-            exc_info (OptExcInfo): return value from sys.exc_info().
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         self.log.error(fail_reason)
-        self.log.debug("Stacktrace", exc_info=True)
+        if exc_info is not None:
+            self.log.debug("Stacktrace", exc_info=True)
 
-        test_result.status = TestResult.ERROR
-        test_result.fail_class = fail_class
-        test_result.fail_reason = fail_reason
+        if test_result.fail_count == 0:
+            # Update the test result with the information abot the first error
+            test_result.status = TestResult.ERROR
+            test_result.fail_class = fail_class
+            test_result.fail_reason = fail_reason
+            if exc_info is not None:
+                try:
+                    # pylint: disable=import-outside-toplevel
+                    from avocado.utils.stacktrace import prepare_exc_info
+                    test_result.traceback = prepare_exc_info(exc_info)
+                except Exception:       # pylint: disable=broad-except
+                    pass
+        else:
+            # Additional errors only update the test result fail reason with a fail counter
+            plural = "s" if test_result.fail_count > 1 else ""
+            fail_reason = test_result.fail_reason.split(" (+")[0:1]
+            fail_reason.append(f"{test_result.fail_count} other failure{plural})")
+            test_result.fail_reason = " (+".join(fail_reason)
 
-        try:
-            # pylint: disable=import-outside-toplevel
-            from avocado.utils.stacktrace import prepare_exc_info
-            test_result.traceback = prepare_exc_info(exc_info)
-        except Exception:       # pylint: disable=broad-except
-            pass
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -2275,7 +2076,6 @@ class Launch():
             for test in self.tests:
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
-
                 self.log.info(
                     "Log file for repetition %s of running %s: %s", repeat, test, test_log_file)
                 test_file_handler = self._get_file_handler(test_log_file)
@@ -2287,7 +2087,9 @@ class Launch():
                 # Prepare the hosts to run the tests
                 step_status = self.prepare(test, repeat)
                 if step_status:
+                    # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
+                    self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
 
                 # Avoid counting the test execution time as part of the processing time of this test
@@ -2337,30 +2139,67 @@ class Launch():
             repeat (int): the test repetition number
 
         Returns:
-            int: status code: 0 = success, 4 = failure
+            int: status code: 0 = success, 128 = failure
 
         """
         self.log.debug("=" * 80)
         self.log.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
-        try:
-            setup_test_directory(self.log, test)
-        except LaunchException:
-            message = "Error setting up test directories"
-            self.log.debug(message, exc_info=True)
-            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-            return 4
+        status = self._setup_test_directory(test)
+        if status:
+            return status
 
         # Generate certificate files for the test
+        return self._generate_certs()
+
+    def _setup_test_directory(self, test):
+        """Set up the common test directory on all hosts.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        self.log.debug("-" * 80)
+        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        self.log.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
+        commands = [
+            f"sudo rm -fr {test_dir}",
+            f"mkdir -p {test_dir}",
+            f"chmod a+wr {test_dir}",
+            f"ls -al {test_dir}",
+        ]
+        for command in commands:
+            if not run_remote(self.log, test.hosts.all, command).passed:
+                message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
+                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                return 128
+        return 0
+
+    def _generate_certs(self):
+        """Generate the certificates for the test.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        self.log.debug("-" * 80)
+        self.log.debug("Generating certificates")
+        daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        certs_dir = os.path.join(daos_test_log_dir, "daosCA")
+        certgen_dir = os.path.abspath(
+            os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
+        command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            generate_certs(self.log)
+            run_local(self.log, ["/usr/bin/rm", "-rf", certs_dir])
+            run_local(self.log, [command, daos_test_log_dir])
         except LaunchException:
             message = "Error generating certificates"
-            self.log.debug(message, exc_info=True)
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-            return 4
-
+            return 128
         return 0
 
     def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
@@ -2386,12 +2225,20 @@ class Launch():
 
         try:
             return_code = run_local(self.log, command, capture_output=False, check=False).returncode
+            if return_code == 0:
+                self.log.debug("All avocado test variants passed")
+            elif return_code == 2:
+                self.log.debug("At least one avocado test variant failed")
+            elif return_code == 4:
+                message = "Failed avocado commands detected"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            elif return_code == 8:
+                self.log.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
 
         except LaunchException:
             message = f"Error executing {test} on repeat {repeat}"
-            self.log.debug(message, exc_info=True)
             self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             return_code = 1
 
@@ -2422,7 +2269,6 @@ class Launch():
                         run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
                 except LaunchException:
                     message = "Error collecting crash files"
-                    self.log.debug(message, exc_info=True)
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             else:
                 self.log.debug("No avocado crash files found in %s", crash_dir)
@@ -2458,9 +2304,9 @@ class Launch():
 
         # Stop any agents or servers running via systemd
         if stop_daos:
-            return_code |= stop_daos_agent_services(self.log, test)
-            return_code |= stop_daos_server_service(self.log, test)
-            return_code |= reset_server_storage(self.log, test)
+            return_code |= self._stop_daos_agent_services(test)
+            return_code |= self._stop_daos_server_service(test)
+            return_code |= self._reset_server_storage(test)
 
         # Optionally store all of the server and client config files and remote logs along with
         # this test's results. Also report an error if the test generated any log files with a
@@ -2513,54 +2359,169 @@ class Launch():
             for summary, data in remote_files.items():
                 if not data["hosts"]:
                     continue
-                try:
-                    self._archive_files(
-                        summary, data["hosts"].copy(), data["source"], data["pattern"],
-                        data["destination"], data["depth"], threshold)
-
-                except LaunchException:
-                    message = f"Error archiving {summary}"
-                    self.log.debug(message, exc_info=True)
-                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                    return_code |= 16
-
-                except Exception:       # pylint: disable=broad-except
-                    message = f"Unexpected error archiving {summary}"
-                    self.log.debug(message, exc_info=True)
-                    self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                    return_code |= 16
+                return_code |= self._archive_files(
+                    summary, data["hosts"].copy(), data["source"], data["pattern"],
+                    data["destination"], data["depth"], threshold)
 
         # Optionally rename the test results directory for this test
         if rename:
-            try:
-                self._rename_avocado_test_dir(test, jenkinslog)
-
-            except LaunchException:
-                message = "Error renaming test results"
-                self.log.debug(message, exc_info=True)
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return_code |= 1024
+            return_code |= self._rename_avocado_test_dir(test, jenkinslog)
 
         # Optionally process core files
         if core_files:
-            core_file_processing = CoreFileProcessing(self.log)
-            try:
-                if not core_file_processing.get_stacktraces(self.job_results_dir, test.hosts.all):
-                    return_code |= 256
-
-            except LaunchException:
-                message = "Error processing test core files"
-                self.log.debug(message, exc_info=True)
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return_code |= 256
-
-            except Exception:       # pylint: disable=broad-except
-                message = "Unhandled error processing test core files"
-                self.log.debug(message, exc_info=True)
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-                return_code |= 256
+            return_code |= self._process_core_files(test)
 
         return return_code
+
+    def _stop_daos_agent_services(self, test):
+        """Stop any daos_agent.service running on the hosts running servers.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 512 = failure
+
+        """
+        service = "daos_agent.service"
+        hosts = test.hosts.clients_with_localhost
+        self.log.debug("-" * 80)
+        self.log.debug("Verifying %s after running '%s'", service, test)
+        return self._stop_service(hosts, service)
+
+    def _stop_daos_server_service(self, test):
+        """Stop any daos_server.service running on the hosts running servers.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 512 = failure
+
+        """
+        service = "daos_server.service"
+        hosts = test.hosts.servers
+        self.log.debug("-" * 80)
+        self.log.debug("Verifying %s after running '%s'", service, test)
+        return self._stop_service(hosts, service)
+
+    def _stop_service(self, hosts, service):
+        """Stop any daos_server.service running on the hosts running servers.
+
+        Args:
+            hosts (NodeSet): list of hosts on which to stop the service.
+            service (str): name of the service
+
+        Returns:
+            int: status code: 0 = success, 512 = failure
+
+        """
+        result = {"status": 0}
+        if hosts:
+            status_keys = ["reset-failed", "stop", "disable"]
+            mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+            check_hosts = NodeSet(hosts)
+            loop = 1
+            # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+            # has been resolved
+            max_loops = 3
+            while check_hosts:
+                # Check the status of the service on each host
+                result = self._get_service_status(check_hosts, service)
+                check_hosts = NodeSet()
+                for key in status_keys:
+                    if result[key]:
+                        if loop == max_loops:
+                            # Exit the while loop if the service is still running
+                            self.log.error(
+                                " - Error %s still %s on %s", service, mapping[key], result[key])
+                            result["status"] = 512
+                        else:
+                            # Issue the appropriate systemctl command to remedy the
+                            # detected state, e.g. 'stop' for 'active'.
+                            command = ["sudo", "systemctl", key, service]
+                            run_remote(self.log, result[key], " ".join(command))
+
+                            # Run the status check again on this group of hosts
+                            check_hosts.add(result[key])
+                loop += 1
+        else:
+            self.log.debug("  Skipping stopping %s service - no hosts", service)
+
+        return result["status"]
+
+    def _get_service_status(self, hosts, service):
+        """Get the status of the daos_server.service.
+
+        Args:
+            hosts (NodeSet): hosts on which to get the service state
+            service (str): name of the service
+
+        Returns:
+            dict: a dictionary with the following keys:
+                - "status":       status code: 0 = success, 512 = failure
+                - "stop":         NodeSet where to stop the daos_server.service
+                - "disable":      NodeSet where to disable the daos_server.service
+                - "reset-failed": NodeSet where to reset the daos_server.service
+
+        """
+        status = {
+            "status": 0,
+            "stop": NodeSet(),
+            "disable": NodeSet(),
+            "reset-failed": NodeSet()}
+        status_states = {
+            "stop": ["active", "activating", "deactivating"],
+            "disable": ["active", "activating", "deactivating"],
+            "reset-failed": ["failed"]}
+        command = ["systemctl", "is-active", service]
+        result = run_remote(self.log, hosts, " ".join(command))
+        for data in result.output:
+            if data.timeout:
+                status["status"] = 512
+                status["stop"].add(data.hosts)
+                status["disable"].add(data.hosts)
+                status["reset-failed"].add(data.hosts)
+                self.log.debug("  %s: TIMEOUT", data.hosts)
+                break
+            self.log.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
+            for key, state_list in status_states.items():
+                for line in data.stdout:
+                    if line in state_list:
+                        status[key].add(data.hosts)
+                        break
+        return status
+
+    def _reset_server_storage(self, test):
+        """Reset the server storage for the hosts that ran servers in the test.
+
+        This is a workaround to enable binding devices back to nvme or vfio-pci after they are
+        unbound from vfio-pci to nvme.  This should resolve the "NVMe not found" error seen when
+        attempting to start daos engines in the test.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 512 = failure
+
+        """
+        hosts = test.hosts.servers
+        self.log.debug("-" * 80)
+        self.log.debug("Resetting server storage after running %s", test)
+        if hosts:
+            commands = [
+                "if lspci | grep -i nvme",
+                "then daos_server storage prepare -n --reset && "
+                "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
+                "fi"]
+            self.log.info("Resetting server storage on %s after running '%s'", hosts, test)
+            result = run_remote(self.log, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
+            if not result.passed:
+                self.log.debug("Ignoring any errors from these workaround commands")
+        else:
+            self.log.debug("  Skipping resetting server storage - no server hosts")
+        return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold):
         """Archive the files from the source to the destination.
@@ -2574,11 +2535,10 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
 
-        Raises:
-            LaunchException: if there was a problem archiving the files
+        Returns:
+            int: status code: 0 = success, 16 = failure
 
         """
-        errors = []
         self.log.debug("=" * 80)
         self.log.info(
             "Archiving %s from %s:%s to %s",
@@ -2587,38 +2547,30 @@ class Launch():
         self.log.debug("  Local host:   %s", hosts.intersection(self.local_host))
 
         # Get a list of remote files and their sizes
-        try:
-            if not self._list_files(hosts, source, pattern, depth):
-                # If no files are found then there is nothing else to do
-                self.log.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
-                return
-        except LaunchException:
-            errors.append("listing files")
+        return_code, files_found = self._list_files(hosts, source, pattern, depth)
+        if not files_found:
+            # If no files are found then there is nothing else to do
+            self.log.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
+            return return_code
 
         if "log" in pattern:
             # Report an error if any files sizes exceed the threshold
-            if not self._check_log_size(hosts, source, pattern, depth, threshold):
-                errors.append(f"verifying file sizes do not exceed {threshold}")
+            if threshold is not None:
+                return_code |= self._check_log_size(hosts, source, pattern, depth, threshold)
 
             # Run cart_logtest on log files
-            if not self._cart_log_test(hosts, source, pattern, depth):
-                errors.append("running cart_logtest")
+            return_code |= self._cart_log_test(hosts, source, pattern, depth)
 
         # Remove any empty files
-        if not self._remove_empty_files(hosts, source, pattern, depth):
-            errors.append("removing zero-length files")
+        return_code |= self._remove_empty_files(hosts, source, pattern, depth)
 
         # Compress any files larger than 1 MB
-        if not self._compress_files(hosts, source, pattern, depth):
-            errors.append("compressing files")
+        return_code |= self._compress_files(hosts, source, pattern, depth)
 
         # Move the test files to the test-results directory on this host
-        if not self._move_files(hosts, source, pattern, destination, depth):
-            errors.append("moving files")
+        return_code |= self._move_files(hosts, source, pattern, destination, depth)
 
-        # Report any errors
-        if errors:
-            raise LaunchException(f"Errors archiving: {', '.join(errors)}")
+        return return_code
 
     def _list_files(self, hosts, source, pattern, depth):
         """List the files in source with that match the pattern.
@@ -2629,35 +2581,37 @@ class Launch():
             pattern (str): pattern used to limit which files are processed
             depth (int): max depth for find command
 
-        Raises:
-            LaunchException: if there was a error running the command to get the list of files
-
         Returns:
-            bool: True if files where found; False otherwise
+            tuple: a tuple containing:
+                int: 0 = success, 16 = failure
+                bool: True if files where found; False otherwise
 
         """
+        source_files = os.path.join(source, pattern)
         self.log.debug("-" * 80)
-        self.log.debug("Listing any %s files on %s", os.path.join(source, pattern), hosts)
+        self.log.debug("Listing any %s files on %s", source_files, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
         result = run_remote(self.log, hosts, command)
         if not result.passed:
-            message = f"Error determining if {os.path.join(source, pattern)} files exist on {hosts}"
-            self.log.debug(message)
-            raise LaunchException(message)
+            message = f"Error determining if {source_files} files exist on {hosts}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16, False
+
         for data in result.output:
             # If a file is found containing the FAILURE_TRIGGER then report a failure. This feature
             # can be used by avocado tests to verify that launch.py reports errors correctly in CI.
             trigger_failure = re.findall(fr"{FAILURE_TRIGGER}", "\n".join(data.stdout))
             if trigger_failure:
-                message = f"Detected {trigger_failure[0]} failure trigger file"
-                self.log.debug(message)
-                raise LaunchException(message)
+                message = f"Error detected {trigger_failure[0]} failure trigger file"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return 16, True
 
             # Verify that at least one file was found that matches the pattern
             for line in data.stdout:
                 if source in line:
-                    return True
-        return False
+                    return 0, True
+
+        return 0, False
 
     def _check_log_size(self, hosts, source, pattern, depth, threshold):
         """Check if any file sizes exceed the threshold.
@@ -2670,28 +2624,30 @@ class Launch():
             threshold (str): optional upper size limit for test log files
 
         Returns:
-            bool: True if successful; False otherwise
+            int: status code: 0 = success, 32 = failure
 
         """
-        if threshold is None:
-            return True
+        source_files = os.path.join(source, pattern)
         self.log.debug("-" * 80)
         self.log.debug(
-            "Checking for any %s files in %s exceeding %s on %s", pattern, source, threshold, hosts)
+            "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +{threshold} "
                    "-printf '%p %k KB'")
         result = run_remote(self.log, hosts, command)
         if not result.passed:
-            return False
+            message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 32
 
         # The command output will include the source path if the threshold has been exceeded
         for data in result.output:
             if source in "\n".join(data.stdout):
-                self.log.debug("One or more log file sizes exceeds the %s threshold", threshold)
-                return False
+                message = f"One or more {source_files} files exceeded the {threshold} threshold"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return 32
 
-        self.log.debug("No log file sizes found exceeding the %s threshold", threshold)
-        return True
+        self.log.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
+        return 0
 
     def _cart_log_test(self, hosts, source, pattern, depth):
         """Run cart_logtest on the log files.
@@ -2703,17 +2659,22 @@ class Launch():
             depth (int): max depth for find command
 
         Returns:
-            bool: True if successful; False otherwise
+            int: status code: 0 = success, 16 = failure
 
         """
+        source_files = os.path.join(source, pattern)
         cart_logtest = os.path.abspath(os.path.join("cart", "cart_logtest.py"))
         self.log.debug("-" * 80)
-        self.log.debug(
-            "Running %s on any %s files in %s on %s", cart_logtest, pattern, source, hosts)
+        self.log.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
             f"xargs -0 -r0 -n1 -I % sh -c '{cart_logtest} % > %.cart_logtest 2>&1'")
-        return run_remote(self.log, hosts, command).passed
+        result = run_remote(self.log, hosts, command)
+        if not result.passed:
+            message = f"Error running {cart_logtest} on the {source_files} files"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16
+        return 0
 
     def _remove_empty_files(self, hosts, source, pattern, depth):
         """Remove any files with zero size.
@@ -2725,13 +2686,18 @@ class Launch():
             depth (int): max depth for find command
 
         Returns:
-            bool: True if successful; False otherwise
+            bint: status code: 0 = success, 16 = failure
 
         """
         self.log.debug("-" * 80)
         self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
-        return run_remote(self.log, hosts, command).passed
+        result = run_remote(self.log, hosts, command)
+        if not result.passed:
+            message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16
+        return 0
 
     def _compress_files(self, hosts, source, pattern, depth):
         """Compress any files larger than 1M.
@@ -2743,7 +2709,7 @@ class Launch():
             depth (int): max depth for find command
 
         Returns:
-            bool: True if successful; False otherwise
+            int: status code: 0 = success, 16 = failure
 
         """
         self.log.debug("-" * 80)
@@ -2752,7 +2718,12 @@ class Launch():
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
             "sudo xargs -0 -r0 lbzip2 -v")
-        return run_remote(self.log, hosts, command).passed
+        result = run_remote(self.log, hosts, command)
+        if not result.passed:
+            message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16
+        return 0
 
     def _move_files(self, hosts, source, pattern, destination, depth):
         """Move files from the source to the destination.
@@ -2765,7 +2736,7 @@ class Launch():
             depth (int): max depth for find command
 
         Returns:
-            bool: True if successful; False otherwise
+            int: status code: 0 = success, 16 = failure
 
         """
         self.log.debug("-" * 80)
@@ -2784,34 +2755,38 @@ class Launch():
         # Create a temporary remote directory
         command = f"{sudo}mkdir -p {tmp_copy_dir}"
         if not run_remote(self.log, hosts, command).passed:
-            self.log.debug("Error creating temporary remote copy directory %s", tmp_copy_dir)
-            return False
+            message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
                    f"xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
         if not run_remote(self.log, hosts, command).passed:
-            self.log.debug("Error moving files to temporary remote copy directory %s", tmp_copy_dir)
-            return False
+            message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return 16
 
         # Clush -rcopy the temporary remote directory to this host
         command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
-        status = True
+        return_code = 0
         try:
             run_local(self.log, command, check=True)
 
         except LaunchException:
-            self.log.debug("Error copying remote files to %s", destination, exc_info=True)
-            status = False
+            message = f"Error copying remote files to {destination}"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return_code = 16
 
         finally:
             # Remove the temporary remote directory on each host
             command = f"{sudo}rm -fr {tmp_copy_dir}"
             if not run_remote(self.log, hosts, command).passed:
-                self.log.debug("Error removing archived files temporary directory")
-                status = False
+                message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return_code = 16
 
-        return status
+        return return_code
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
@@ -2820,8 +2795,8 @@ class Launch():
             test (TestInfo): the test information
             jenkinslog (bool): whether to update the results.xml with the Jenkins test names
 
-        Raises:
-            LaunchException: if there is an error renaming the avocado test directory
+        Returns:
+            int: status code: 0 = success, 1024 = failure
 
         """
         avocado_logs_dir = self.avocado.get_logs_dir()
@@ -2842,10 +2817,10 @@ class Launch():
                     avocado_logs_dir, test.directory, test.python_file, test.name.repeat_str)
             try:
                 os.makedirs(new_test_logs_dir)
-            except OSError as error:
+            except OSError:
                 message = f"Error creating {new_test_logs_dir}"
-                self.log.debug(message, exc_info=True)
-                raise LaunchException(message) from error
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                return 1024
 
         # Rename the avocado job-results test directory and update the 'latest' symlink
         self.log.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
@@ -2854,10 +2829,10 @@ class Launch():
             os.remove(test_logs_lnk)
             os.symlink(new_test_logs_dir, test_logs_lnk)
             self.log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
-        except OSError as error:
+        except OSError:
             message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
-            self.log.debug(message, exc_info=True)
-            raise LaunchException(message) from error
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 1024
 
         # Update the results.xml file with the new functional test class name
         if jenkinslog:
@@ -2866,10 +2841,10 @@ class Launch():
             try:
                 with open(xml_file, encoding="utf-8") as xml_buffer:
                     xml_data = xml_buffer.read()
-            except OSError as error:
+            except OSError:
                 message = f"Error reading {xml_file}"
-                self.log.debug(message, exc_info=True)
-                raise LaunchException(message) from error
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                return 1024
 
             # Save it for the Launchable [de-]mangle
             org_xml_data = xml_data
@@ -2879,10 +2854,10 @@ class Launch():
             try:
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
-            except OSError as error:
+            except OSError:
                 message = f"Error writing {xml_file}"
-                self.log.debug(message, exc_info=True)
-                raise LaunchException(message) from error
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                return 1024
 
             # Now mangle (or rather unmangle back to canonical xunit1 format)
             # another copy for Launchable
@@ -2895,10 +2870,39 @@ class Launch():
             try:
                 with open(xml_file, "w", encoding="utf-8") as xml_buffer:
                     xml_buffer.write(xml_data)
-            except OSError as error:
+            except OSError:
                 message = f"Error writing {xml_file}"
-                self.log.debug(message, exc_info=True)
-                raise LaunchException(message) from error
+                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                return 1024
+
+        return 0
+
+    def _process_core_files(self, test):
+        """Generate stacktraces for any core files detected.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 256 = failure
+
+        """
+        core_file_processing = CoreFileProcessing(self.log)
+        try:
+            if not core_file_processing.get_stacktraces(self.job_results_dir, test.hosts.all):
+                return 256
+
+        except LaunchException:
+            message = "Error processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
+
+        except Exception:       # pylint: disable=broad-except
+            message = "Unhandled error processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
+
+        return 0
 
     def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.
@@ -2924,7 +2928,7 @@ class Launch():
             16: "ERROR: Failed archiving files after one or more tests!",
             32: "ERROR: Failed log size threshold check after one or more tests!",
             64: "ERROR: Failed to create a junit xml test error file!",
-            128: "ERROR: Failed to clean logs in preparation for test run!",
+            128: "ERROR: Failed to preparing the hosts before running the test!",
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",

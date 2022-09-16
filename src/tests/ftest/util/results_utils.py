@@ -64,6 +64,7 @@ class TestResult():
         self.status = None
         self.fail_class = None
         self.fail_reason = None
+        self.fail_count = 0
         self.traceback = None
 
     def __getitem__(self, name, default=None):
