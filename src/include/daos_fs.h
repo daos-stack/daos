@@ -101,7 +101,7 @@ typedef struct {
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_init();
+dfs_init(void);
 
 /**
  * Finalize the DAOS and DFS library. Typically this is called at the end of a user program or in IO
@@ -111,7 +111,7 @@ dfs_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_fini();
+dfs_fini(void);
 
 /**
  * Mount a DFS namespace over the specified pool and container. The container can be optionally
