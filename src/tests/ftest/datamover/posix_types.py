@@ -1,11 +1,12 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import basename, join
+
+from data_mover_test_base import DataMoverTestBase
+from duns_utils import format_path, parse_path
 
 
 class DmvrPosixTypesTest(DataMoverTestBase):
@@ -26,8 +27,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         super().setUp()
 
         # Get the parameters
-        self.ior_flags = self.params.get(
-            "ior_flags", "/run/ior/*")
+        self.ior_flags = self.params.get("ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
     def run_dm_posix_types(self, tool):
@@ -66,139 +66,82 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         self.start_dfuse(self.dfuse_hosts)
 
         # Create 2 pools
-        pool1 = self.create_pool()
-        pool2 = self.create_pool()
+        pool1 = self.create_pool(label='pool1')
+        pool2 = self.create_pool(label='pool2')
 
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Create all other containers
-        container1 = self.create_cont(pool1, True, pool1, uns_cont)
-        container2 = self.create_cont(pool1, True, pool1, uns_cont)
-        container3 = self.create_cont(pool2, True, pool1, uns_cont)
+        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1 = self.get_container(pool1, path=container1_path, label='container1')
+        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2 = self.get_container(pool1, path=container2_path, label='container2')
+        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3 = self.get_container(pool2, path=container3_path, label='container3')
 
         # Create each source location
-        p1_c1 = ["/", pool1, container1]
-        posix1 = [self.new_posix_test_path(), None, None]
+        p1_c1_uuid = format_path(pool1.uuid, container1.uuid, '/')
+        p1_c1_label = format_path(pool1.label.value, container1.label.value, '/')
+        p1_c1_uns = container1_path + '/'
+        posix1 = self.new_posix_test_path()
 
         # Create each destination location
-        p1_c2 = ["/", pool1, container2]
-        p2_c3 = ["/", pool2, container3]
-        posix2 = [self.new_posix_test_path(), None, None]
+        p1_c2_uuid = format_path(pool1.uuid, container2.uuid, '/')
+        p1_c2_label = format_path(pool1.label.value, container2.label.value, '/')
+        p1_c2_uns = container2_path + '/'
+        p2_c3_uuid = format_path(pool2.uuid, container3.uuid, '/')
+        p2_c3_uns = container3_path + '/'
+        posix2 = self.new_posix_test_path()
 
         # Create the source files
-        self.write_location("DAOS_UUID", *p1_c1)
-        self.write_location("POSIX", *posix1)
+        self.write_location(p1_c1_uuid)
+        self.write_location(posix1)
 
         # Make a list of each test case to run
         # [[test_desc, src, dst]]
-        # Each src or dst is a list of params:
-        #     [param_type, path, pool, cont]
-        # Since we can only have a prefix on *either*
-        # the source or destination, each path is specified
-        # as a directory, and the test file is appended
-        # to this path in write/read_location.
-        # This allows UNS -> UNS to be performed.
-        copy_list = []
+        copy_list = [
+            ["UUID -> UUID (same pool)", p1_c1_uuid, p1_c2_uuid],
+            ["LABEL -> LABEL (same pool)", p1_c1_label, p1_c2_label],
+            ["UUID -> UUID (different pool)", p1_c1_uuid, p2_c3_uuid],
+            ["UUID -> UNS (same pool)", p1_c1_uuid, p1_c2_uns],
+            ["UUID -> UNS (different pool)", p1_c1_uuid, p2_c3_uns],
+            ["UUID -> POSIX", p1_c1_uuid, posix2],
+            ["UNS -> UUID (same pool)", p1_c1_uns, p1_c2_uuid],
+            ["UNS -> UUID (different pool)", p1_c1_uns, p2_c3_uuid],
+            ["UNS -> UNS (same pool)", p1_c1_uns, p1_c2_uns],
+            ["UNS -> UNS (different pool)", p1_c1_uns, p2_c3_uns],
+            ["UNS -> POSIX", p1_c1_uns, posix2],
+            ["POSIX -> UUID", posix1, p1_c2_uuid],
+            ["POSIX -> UNS", posix1, p1_c2_uuid],
+            ["POSIX -> POSIX", posix1, posix2]
+        ]
 
-        copy_list.append([
-            "UUID -> UUID (same pool)",
-            ["DAOS_UUID"] + p1_c1,
-            ["DAOS_UUID"] + p1_c2])
-
-        copy_list.append([
-            "UUID -> UUID (different pool)",
-            ["DAOS_UUID"] + p1_c1,
-            ["DAOS_UUID"] + p2_c3])
-
-        copy_list.append([
-            "UUID -> UNS (same pool)",
-            ["DAOS_UUID"] + p1_c1,
-            ["DAOS_UNS"] + p1_c2])
-
-        copy_list.append([
-            "UUID -> UNS (different pool)",
-            ["DAOS_UUID"] + p1_c1,
-            ["DAOS_UNS"] + p2_c3])
-
-        copy_list.append([
-            "UUID -> POSIX",
-            ["DAOS_UUID"] + p1_c1,
-            ["POSIX"] + posix2])
-
-        copy_list.append([
-            "UNS -> UUID (same pool)",
-            ["DAOS_UNS"] + p1_c1,
-            ["DAOS_UUID"] + p1_c2])
-
-        copy_list.append([
-            "UNS -> UUID (different pool)",
-            ["DAOS_UNS"] + p1_c1,
-            ["DAOS_UUID"] + p2_c3])
-
-        copy_list.append([
-            "UNS -> UNS (same pool)",
-            ["DAOS_UNS"] + p1_c1,
-            ["DAOS_UNS"] + p1_c2])
-
-        copy_list.append([
-            "UNS -> UNS (different pool)",
-            ["DAOS_UNS"] + p1_c1,
-            ["DAOS_UNS"] + p2_c3])
-
-        copy_list.append([
-            "UNS -> POSIX",
-            ["DAOS_UNS"] + p1_c1,
-            ["POSIX"] + posix2])
-
-        copy_list.append([
-            "POSIX -> UUID",
-            ["POSIX"] + posix1,
-            ["DAOS_UUID"] + p1_c2])
-
-        copy_list.append([
-            "POSIX -> UNS",
-            ["POSIX"] + posix1,
-            ["DAOS_UNS"] + p1_c2])
-
-        copy_list.append([
-            "POSIX -> POSIX",
-            ["POSIX"] + posix1,
-            ["POSIX"] + posix2])
-
-        # Run and verify each copy.
-        # Each src or dst is a list of params:
-        #   [param_type, path, pool, cont]
-        #   where the path is a directory.
+        # Run and verify each copy
         for (test_desc, src, dst) in copy_list:
             # dir -> dir variation
-            self.run_datamover(
-                test_desc + " (dir->dir)",
-                src[0], src[1], src[2], src[3],
-                dst[0], dst[1], dst[2], dst[3])
+            self.run_datamover(test_desc + " (dir->dir)", src_path=src, dst_path=dst)
 
             if self.tool == "DSYNC":
                 # The source directory is synced TO the destination.
-                dst_path = dst[1]
+                dst_path = dst
             else:
                 # The source directory is created IN the destination
                 # so append the directory name to the destination path.
-                dst_path = join(dst[1], basename(src[1]))
-            self.read_verify_location(dst[0], dst_path, dst[2], dst[3])
-
-            # The cases below use a UNS sub path, which is
-            # not supported by FS_COPY
-            if (self.tool == "FS_COPY" and src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
-                continue
+                if 'daos:' in src:
+                    _, _, path = parse_path(src)
+                    path = path or '/'
+                else:
+                    path = src
+                dst_path = join(dst, basename(path))
+            self.read_verify_location(dst_path)
 
             # file -> file variation
-            # A UNS subset is not supported for both src and dst.
-            if not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS"):
-                self.run_datamover(
-                    test_desc + " (file->file)",
-                    src[0], join(src[1], self.test_file), src[2], src[3],
-                    dst[0], join(dst[1], self.test_file), dst[2], dst[3])
-                self.read_verify_location(dst[0], dst[1], dst[2], dst[3])
+            self.run_datamover(
+                test_desc + " (file->file)",
+                src_path=join(src, self.test_file),
+                dst_path=join(dst, self.test_file))
+            self.read_verify_location(dst)
 
             # file -> dir variation
             # This works because the destination dir is already created above.
@@ -206,19 +149,43 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             if self.tool != "DSYNC":
                 self.run_datamover(
                     test_desc + " (file->dir)",
-                    src[0], join(src[1], self.test_file), src[2], src[3],
-                    dst[0], dst[1], dst[2], dst[3])
-                self.read_verify_location(dst[0], dst[1], dst[2], dst[3])
+                    src_path=join(src, self.test_file),
+                    dst_path=dst)
+                self.read_verify_location(dst)
 
-    def write_location(self, param_type, path, pool=None, cont=None):
-        """Write the test data using ior."""
-        self.run_ior_with_params(param_type, path, pool, cont,
-                                 self.test_file, self.ior_flags[0])
+    def write_location(self, path):
+        """Write the test data using ior.
 
-    def read_verify_location(self, param_type, path, pool=None, cont=None):
-        """Read and verify the test data using ior."""
-        self.run_ior_with_params(param_type, path, pool, cont,
-                                 self.test_file, self.ior_flags[1])
+        Args:
+            path (str): POSIX or DAOS path to write to.
+
+        """
+        if path.startswith('daos:'):
+            param_type = 'DAOS'
+            pool, cont, path = parse_path(path)
+            path = path or '/'
+        else:
+            param_type = 'POSIX'
+            pool = None
+            cont = None
+        self.run_ior_with_params(param_type, path, pool, cont, self.test_file, self.ior_flags[0])
+
+    def read_verify_location(self, path):
+        """Read and verify the test data using ior.
+
+        Args:
+            path (str): POSIX or DAOS path to verify.
+
+        """
+        if path.startswith('daos:'):
+            param_type = 'DAOS'
+            pool, cont, path = parse_path(path)
+            path = path or '/'
+        else:
+            param_type = 'POSIX'
+            pool = None
+            cont = None
+        self.run_ior_with_params(param_type, path, pool, cont, self.test_file, self.ior_flags[1])
 
     def test_dm_posix_types_dcp(self):
         """
@@ -229,7 +196,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dcp
+        :avocado: tags=dm_posix_types,dm_posix_types_dcp,test_dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
 
@@ -241,7 +208,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dsync,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_dsync
+        :avocado: tags=dm_posix_types,dm_posix_types_dsync,test_dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
 
@@ -254,6 +221,6 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
-        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
+        :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

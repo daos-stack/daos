@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -20,7 +19,7 @@ class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
 
-def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hostlist_suffix=None):
     """Get a dmg command object.
 
     Args:
@@ -32,6 +31,8 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
             utilizes the file specified by config_file.
+        hostlist_suffix (str, optional): Suffix to append to each host name.
+            Defaults to None.
 
     Returns:
         DmgCommand: the dmg command object
@@ -39,7 +40,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """
     transport_config = DmgTransportCredentials(cert_dir)
     config = DmgYamlParameters(config_file, group, transport_config)
-    command = DmgCommand(bin_dir, config)
+    command = DmgCommand(bin_dir, config, hostlist_suffix)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -445,6 +446,26 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
+    def server_set_logmasks(self):
+        """Set engine log-masks at runtime.
+
+        Raises:
+            CommandFailure: if the dmg server set logmasks command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "host_errors": {}
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("server", "set-logmasks"))
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
@@ -589,22 +610,22 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("pool", "query"), pool=pool,
                                      show_enabled=show_enabled, show_disabled=show_disabled)
 
-    def pool_destroy(self, pool, force=True):
+    def pool_destroy(self, pool, force=True, recursive=True):
         """Destroy a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID to destroy.
             force (bool, optional): Force removal of pool. Defaults to True.
+            recursive (bool, optional): Remove pool with containers. Defaults to True.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: if the dmg pool destroy command fails.
 
         """
-        return self._get_result(("pool", "destroy"), pool=pool, force=force)
+        return self._get_result(("pool", "destroy"), pool=pool, force=force, recursive=recursive)
 
     def pool_get_acl(self, pool):
         """Get the ACL for a given pool.

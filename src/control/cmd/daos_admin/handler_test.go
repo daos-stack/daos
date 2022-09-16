@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package main
 
 import (
@@ -267,8 +268,19 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes: []*storage.ScmModule{},
+				PrepRes: &storage.ScmPrepareResponse{
+					Socket: storage.ScmSocketState{
+						State: storage.ScmNoModules,
+					},
+					Namespaces: storage.ScmNamespaces{},
+				},
+			},
 			expPayload: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateNoModules,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoModules,
+				},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},
@@ -282,12 +294,16 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 					storage.MockScmModule(0),
 				},
 				PrepRes: &storage.ScmPrepareResponse{
-					State:      storage.ScmStateFreeCapacity,
+					Socket: storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				State:      storage.ScmStateFreeCapacity,
+				Socket: storage.ScmSocketState{
+					State: storage.ScmFreeCap,
+				},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},
@@ -352,7 +368,8 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Payload: scmScanReqPayload,
 			},
 			expPayload: &storage.ScmScanResponse{
-				State: storage.ScmStateNoModules,
+				Namespaces: storage.ScmNamespaces{},
+				Modules:    storage.ScmModules{},
 			},
 		},
 		"ScmScan failure": {

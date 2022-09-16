@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
+%global mercury_version 2.2.0-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,11 +15,10 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
-URL:           https//github.com/daos-stack/daos
+URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 8)
@@ -30,7 +29,6 @@ BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 %endif
 BuildRequires: gcc-c++
@@ -52,7 +50,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.11
+BuildRequires: libpmemobj-devel >= 1.12.1~rc1
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -66,8 +64,8 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07
-%if (0%{?rhel} >= 8)
+BuildRequires: spdk-devel >= 22.01.1
+%if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
@@ -81,8 +79,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.14
-%if (0%{?rhel} >= 8)
+BuildRequires: go >= 1.16
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
@@ -150,17 +147,15 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07
+Requires: spdk-tools >= 22.01.1
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3.suse1500
+Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj = 1.11.0-3%{?dist}
+Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
@@ -473,7 +468,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/io_conf
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -492,11 +486,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
+%{_bindir}/daos_debug_set_params
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
-%{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
 %files client-tests-openmpi
@@ -510,6 +504,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
 %{_bindir}/srv_checksum_tests
+%{_bindir}/pool_scrubbing_tests
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -540,9 +535,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Jun 23 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-13
-- Distro cleanups for 2.4 release
-
 * Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-12
 - Make ucx required for build on all platforms
 

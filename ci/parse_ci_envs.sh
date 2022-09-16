@@ -10,18 +10,27 @@ if [ -n "${STAGE_NAME:?}" ]; then
     *CentOS\ 7*|*el7*|*centos7*)
       : "${CHROOT_NAME:=centos+epel-7-x86_64}"
       : "${TARGET:=centos7}"
+      : "${REPO_SPEC:=el-7}"
       ;;
     *CentOS\ 8*|*EL\ 8*|*el8*|*centos8*)
       : "${CHROOT_NAME:=rocky+epel-8-x86_64}"
       : "${TARGET:=centos8}"
+      : "${REPO_SPEC:=el-8}"
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
       : "${CHROOT_NAME:=opensuse-leap-15.3-x86_64}"
       : "${TARGET:=leap15}"
+      : "${REPO_SPEC:=sl-15}"
       ;;
     *Ubuntu\ 20.04*|*ubuntu2004*)
       : "${CHROOT_NAME:="not_applicable"}"
       : "${TARGET:=ubuntu20}"
+      : "${REPO_SPEC:=ubuntu-20.04}"
+      ;;
+    *Ubuntu\ 22.04*|*ubuntu2204*)
+      : "${CHROOT_NAME:="not_applicable"}"
+      : "${TARGET:=ubuntu22}"
+      : "${REPO_SPEC:=ubuntu-22.04}"
       ;;
     *Ubuntu\ 22.04*|*ubuntu2204*)
       : "${CHROOT_NAME:="not_applicable"}"

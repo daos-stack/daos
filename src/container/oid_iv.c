@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,7 +84,7 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
-	D_DEBUG(DB_TRACE, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
 	D_ASSERT(num_oids != 0);
 
 	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
@@ -107,6 +107,8 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	/** Set the number of oids to what was asked for. */
 	oids->num_oids = num_oids;
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu avail %zu/%zu\n", dss_self_rank(),
+		oids->oid, oids->num_oids, avail->oid, avail->num_oids);
 
 out:
 	ABT_mutex_unlock(entry->lock);
@@ -135,7 +137,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	num_oids = oids->num_oids;
 
 	D_DEBUG(DB_TRACE, "%u: ON UPDATE, num_oids = %zu\n", myrank, num_oids);
-	D_DEBUG(DB_TRACE, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
+	D_DEBUG(DB_MD, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
 		myrank, avail->num_oids, avail->oid);
 
 	if (ns_entry->ns->iv_master_rank == myrank) {
@@ -150,8 +152,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		}
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
-		D_DEBUG(DB_TRACE, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank,
-			avail->oid);
+		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank, avail->oid);
 		priv->num_oids = 0;
 		ABT_mutex_unlock(entry->lock);
 		return 0;
@@ -328,7 +329,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	oids->num_oids = num_oids;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
-			  CRT_IV_SYNC_BIDIRECTIONAL, false /* retry */);
+			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 

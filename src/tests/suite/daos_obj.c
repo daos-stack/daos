@@ -538,7 +538,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 /**
  * Helper function to fetch a single record (nr=1). Iod size is set to
  * DAOS_REC_ANY, which indicates that extent is unknown, and the entire record
- * should be returned in a single extent (as it most likey was inserted that
+ * should be returned in a single extent (as it most likely was inserted that
  * way). This lookup will only return 1 extent, therefore is not appropriate to
  * use if the record was inserted using insert_single_with_rxnr() in most cases.
  */
@@ -2780,7 +2780,7 @@ tx_discard(void **state)
 
 /**
  * Basic test to insert a few large and small records at different transactions,
- * commit only the first few TXs, and verfiy that all TXs remain after
+ * commit only the first few TXs, and verify that all TXs remain after
  * container close and non-committed TXs were successfully discarded.
  */
 static void
@@ -2933,7 +2933,7 @@ tx_commit(void **state)
 
 	/**
 	 * Check data after container close. Last tx was not committed and
-	 * should be discarded, therefore data should be from transaciton 2.
+	 * should be discarded, therefore data should be from transaction 2.
 	 */
 	print_message("verifying transaction after container re-open\n");
 	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
@@ -4210,7 +4210,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	daos_obj_id_t		oid;
 	daos_oclass_id_t        cid;
 	struct daos_oclass_attr	*attr;
-	char			name[10];
+	char			name[MAX_OBJ_CLASS_NAME_LEN];
 	int			rc;
 
 	oid.hi = 1;
@@ -4236,7 +4236,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		if (nr == 1 || nr == 2) {
 			if (domain_nr >= 18)
 				assert_int_equal(attr->u.ec.e_k, 16);
-			if (domain_nr >= 10)
+			else if (domain_nr >= 10)
 				assert_int_equal(attr->u.ec.e_k, 8);
 			else if (domain_nr >= 6)
 				assert_int_equal(attr->u.ec.e_k, 4);
@@ -4245,7 +4245,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		} else if (nr == 3) {
 			if (domain_nr >= 20)
 				assert_int_equal(attr->u.ec.e_k, 16);
-			if (domain_nr >= 12)
+			else if (domain_nr >= 12)
 				assert_int_equal(attr->u.ec.e_k, 8);
 			else if (domain_nr >= 8)
 				assert_int_equal(attr->u.ec.e_k, 4);
@@ -4259,7 +4259,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	/** need an easier way to determine grp nr. for now use fit for GX */
 	rc = compare_oclass(coh, oid, ecid);
 	if (rc) {
-		char ename[10];
+		char ename[MAX_OBJ_CLASS_NAME_LEN];
 
 		daos_oclass_id2name(ecid, ename);
 		fail_msg("Mismatch oclass %s vs %s\n", name, ename);
@@ -4279,7 +4279,7 @@ oclass_auto_setting(void **state)
 	daos_handle_t		coh;
 	char			str[37];
 	daos_pool_info_t	info = {0};
-	struct pl_map_attr	attr;
+	struct pl_map_attr	attr = {0};
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
 	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
@@ -4753,6 +4753,39 @@ io_tx_convert(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+obj_open_perf(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	*oh;
+	uint64_t	start_usec, end_usec;
+	float		opens_per_sec;
+	int		i, nr, rc;
+
+	nr = 10000;
+	D_ALLOC_ARRAY(oh, nr);
+	assert_non_null(oh);
+
+	start_usec = daos_getutime();
+	for (i = 0; i < nr; i++) {
+		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+		rc = daos_obj_open(arg->coh, oid, 0, &oh[i], NULL);
+		assert_rc_equal(rc, 0);
+	}
+	end_usec = daos_getutime();
+	opens_per_sec = (nr * 1000.0 * 1000) / (end_usec - start_usec);
+
+	print_message("opens per second %.2f (total #obj_opens %d)\n", opens_per_sec, nr);
+
+	for (i = 0; i < nr; i++) {
+		rc = daos_obj_close(oh[i], NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	D_FREE(oh);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4848,6 +4881,7 @@ static const struct CMUnitTest io_tests[] = {
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 	{ "IO46: tx convert",
 	  io_tx_convert, async_disable, test_case_teardown},
+	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 };
 
 int
@@ -4882,7 +4916,7 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
-	char oclass[16] = {0};
+	char oclass[MAX_OBJ_CLASS_NAME_LEN + 1] = {0};
 	char buf[32];
 
 	par_barrier(PAR_COMM_WORLD);

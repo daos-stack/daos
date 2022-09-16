@@ -2568,6 +2568,14 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				if (rc < 0)
 					D_GOTO(out, rc);
 
+				if (range_overlap == RT_OVERLAP_INCLUDED &&
+				    rect->rc_minor_epc == EVT_MINOR_EPC_MAX) {
+					D_ERROR("Ignore RT_OVERLAP_INCLUDED array remove "
+						DF_RECT" and "DF_RECT"\n", DP_RECT(rect),
+						DP_RECT(&rtmp));
+					rc = 0;
+					goto out;
+				}
 				/* NB: This is temporary to allow full overwrite
 				 * in same epoch to avoid breaking rebuild.
 				 * Without some sequence number and client
@@ -3893,7 +3901,7 @@ evt_drain(daos_handle_t toh, int *credits, bool *destroyed)
 	if (rc)
 		goto out;
 
-	if (tcx->tc_creds_on)
+	if (credits)
 		*credits = tcx->tc_creds;
 out:
 	rc = evt_tx_end(tcx, rc);

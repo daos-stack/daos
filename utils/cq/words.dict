@@ -131,6 +131,7 @@ del
 dependances
 deps
 dereference
+dereferencing
 deregister
 deserialize
 deserializing
@@ -159,6 +160,7 @@ enum
 env
 environ
 epcrange
+errored
 ethernet
 fchmod
 fcntl
@@ -170,6 +172,7 @@ fio
 fnctl
 fpp
 fs
+fstab
 fstat
 ftest
 fuseblk
@@ -284,6 +287,7 @@ openmpi
 orterun
 os
 outdata
+outputdir
 params
 patchelf
 pci
@@ -332,7 +336,6 @@ recurse
 redistributions
 refactor
 repo
-resizeable
 rf
 rmdir
 romio
@@ -372,12 +375,14 @@ stripesize
 struct
 su
 subcommand
+subcommands
 subdir
 subdirectories
 subdirectory
 sublicense
 submodules
 subprocess
+substring
 subtest
 sudo
 superblock
@@ -388,6 +393,7 @@ symlinks
 sys
 systemctl
 systemd
+taskset
 tcp
 teardown
 teardowns

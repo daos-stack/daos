@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -341,3 +340,6 @@ class Logfac:
 
 # Transaction handle to update for an independent transaction
 DAOS_TX_NONE = Daos_handle_t(0)
+
+# default fault domain level
+DAOS_PROP_CO_REDUN_DEFAULT = 2

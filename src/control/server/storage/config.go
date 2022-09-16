@@ -179,14 +179,57 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) CfgHasBdevs() bool {
+func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
+	bdevs := []string{}
+	for _, bc := range tcs.BdevConfigs() {
+		if nvmeOnly && bc.Class != ClassNvme {
+			continue
+		}
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
+	}
+
+	return MustNewBdevDeviceList(bdevs...)
+}
+
+func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	return tcs.getBdevs(false)
+}
+
+func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	return tcs.getBdevs(true)
+}
+
+func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
-			return true
+			switch {
+			case nvmeOnly:
+				if bc.Class == ClassNvme {
+					return true
+				}
+			case emulOnly:
+				if bc.Class != ClassNvme {
+					return true
+				}
+			default:
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func (tcs TierConfigs) HaveBdevs() bool {
+	return tcs.checkBdevs(false, false)
+}
+
+func (tcs TierConfigs) HaveRealNVMe() bool {
+	return tcs.checkBdevs(true, false)
+}
+
+func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) Validate() error {
@@ -198,7 +241,7 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
-func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -208,7 +251,7 @@ func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
 	return
 }
 
-func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) BdevConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
@@ -691,6 +734,14 @@ type Config struct {
 	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
 }
 
+func (c *Config) GetBdevs() *BdevDeviceList {
+	return c.Tiers.Bdevs()
+}
+
+func (c *Config) GetNVMeBdevs() *BdevDeviceList {
+	return c.Tiers.NVMeBdevs()
+}
+
 func (c *Config) Validate() error {
 	if err := c.Tiers.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
@@ -719,6 +770,10 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
+		return FaultBdevConfigTypeMismatch
+	}
 
 	fbc := bdevCfgs[0]
 

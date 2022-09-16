@@ -36,9 +36,7 @@ def consolidate_pp(env, parsed_targets):
     """Consolidate parsed headers"""
     sed_d = r"-e 's/\([{;]\) /\1\t/g' -e 's/\([{;]\)/\1\n/g'"
     grepv = r"'struct sockaddr_in {'"
-    year = date.today().year
-    sd = {'@YEAR@': year}
-    preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT=sd)
+    preamble = env.Substfile('macro_prefix.h_in', SUBST_DICT={'@YEAR@': date.today().year})
     parsed_sources = [x.abspath for x in parsed_targets]
     cmd = (f"cat {preamble[0].abspath} > $TARGET; cat {' '.join(parsed_sources)}"
            + f" | grep -v {grepv} | sort -u | sed {sed_d} >> $TARGET")
@@ -52,9 +50,11 @@ def scons():
 
     # Generate the common libraries used by everyone
     SConscript('swim/SConscript')
+    SConscript('utils/SConscript')
+
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION', 'conf_dir')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
 
     daos_build.add_build_rpath(env)
 
@@ -62,7 +62,6 @@ def scons():
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
     prereqs.require(env, 'mercury', headers_only=True)
 
@@ -94,9 +93,6 @@ def scons():
     Default(cart_lib)
     Export('cart_targets')
     Export('env', 'prereqs')
-
-    env.Install(conf_dir, ['utils/memcheck-cart.supp',
-                           'utils/fault-inject-cart.yaml'])
 
 
 if __name__ == "SCons.Script":

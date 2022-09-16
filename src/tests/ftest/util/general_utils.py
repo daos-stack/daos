@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -133,6 +132,146 @@ class SimpleProfiler():
         avg_time = sum(data) / len(data) if data else 0
 
         return max_time, min_time, avg_time
+
+
+class RemoteCommandResult():
+    """Stores the command result from a Task object."""
+
+    class ResultData():
+        # pylint: disable=too-few-public-methods
+        """Command result data for the set of hosts."""
+
+        def __init__(self, command, returncode, hosts, stdout, timeout):
+            """Initialize a ResultData object.
+
+            Args:
+                command (str): the executed command
+                returncode (int): the return code of the executed command
+                hosts (NodeSet): the host(s) on which the executed command yielded this result
+                stdout (list): the result of the executed command split by newlines
+                timeout (bool): indicator for a command timeout
+            """
+            self.command = command
+            self.returncode = returncode
+            self.hosts = hosts
+            self.stdout = stdout
+            self.timeout = timeout
+
+    def __init__(self, command, task):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            task (Task): object containing the results from an executed clush command
+        """
+        self.output = []
+        self._process_task(task, command)
+
+    @property
+    def homogeneous(self):
+        """Did all the hosts produce the same output.
+
+        Returns:
+            bool: if all the hosts produced the same output
+
+        """
+        return len(self.output) == 1
+
+    @property
+    def passed(self):
+        """Did the command pass on all the hosts.
+
+        Returns:
+            bool: if the command was successful on each host
+
+        """
+        all_zero = all(data.returncode == 0 for data in self.output)
+        return all_zero and not self.timeout
+
+    @property
+    def timeout(self):
+        """Did the command timeout on any hosts.
+
+        Returns:
+            bool: True if the command timed out on at least one set of hosts; False otherwise
+
+        """
+        return any(data.timeout for data in self.output)
+
+    def _process_task(self, task, command):
+        """Populate the output list and determine the passed result for the specified task.
+
+        Args:
+            task (Task): a ClusterShell.Task.Task object for the executed command
+            command (str): the executed command
+        """
+        # Get a dictionary of host list values for each unique return code key
+        results = dict(task.iter_retcodes())
+
+        # Get a list of any hosts that timed out
+        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+
+        # Populate the a list of unique output for each NodeSet
+        for code in sorted(results):
+            output_data = list(task.iter_buffers(results[code]))
+            if not output_data:
+                output_data = [["<NONE>", results[code]]]
+            for output, output_hosts in output_data:
+                # In run_remote(), task.run() is executed with the stderr=False default.
+                # As a result task.iter_buffers() will return combined stdout and stderr.
+                stdout = []
+                for line in output.splitlines():
+                    if isinstance(line, bytes):
+                        stdout.append(line.decode("utf-8"))
+                    else:
+                        stdout.append(line)
+                self.output.append(
+                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
+        if timed_out:
+            self.output.append(
+                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+
+    def log_output(self):
+        """Log the command result."""
+        log = getLogger()
+        for data in self.output:
+            if data.timeout:
+                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
+            elif len(data.stdout) == 1:
+                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
+            else:
+                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
+                for line in data.stdout:
+                    log.debug("    %s", line)
+
+
+def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False):
+    """Run the command on the remote hosts.
+
+    Args:
+        hosts (NodeSet): hosts on which to run the command
+        command (str): command from which to obtain the output
+        verbose (bool, optional): log the command output. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to 120 seconds.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+
+    Returns:
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+
+    """
+    task = task_self()
+    if task_debug:
+        task.set_info('debug', True)
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
+    getLogger().debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    task.run(command=command, nodes=hosts, timeout=timeout)
+    results = RemoteCommandResult(command, task)
+    if verbose:
+        results.log_output()
+    return results
 
 
 def human_to_bytes(size):
@@ -294,7 +433,7 @@ def run_task(hosts, command, timeout=None, verbose=False):
     """Create a task to run a command on each host in parallel.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         timeout (int, optional): command timeout in seconds. Defaults to None.
         verbose (bool, optional): display message for command execution. Defaults to False.
@@ -383,16 +522,35 @@ def display_task(task):
 
     Args:
         task (Task): a ClusterShell.Task.Task object for the executed command
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
     """
     log = getLogger()
     return check_task(task, log)
+
+
+def log_task(hosts, command, timeout=None):
+    """Display the output of the command executed on each host in parallel.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+
+    Returns:
+        bool: if the command returned an 0 exit status on every host
+
+    """
+    return display_task(run_task(hosts, command, timeout, True))
 
 
 def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the results.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -435,7 +593,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     task = run_task(hosts, command, timeout)
 
     # Get the exit status of each host
-    host_exit_status = {host: None for host in hosts}
+    host_exit_status = {str(host): None for host in hosts}
     for exit_status, host_list in task.iter_retcodes():
         for host in host_list:
             host_exit_status[host] = exit_status
@@ -500,6 +658,7 @@ def colate_results(command, results):
                         containing output, exit status, and interrupted
                         status common to each group of hosts (see run_pcmd()'s
                         return for details)
+
     Returns:
         str: a string colating run_pcmd()'s results
 
@@ -509,7 +668,7 @@ def colate_results(command, results):
     res += "Results:\n"
     for result in results:
         res += "  %s: exit_status=%s, interrupted=%s:" % (
-               result["hosts"], result["exit_status"], result["interrupted"])
+            result["hosts"], result["exit_status"], result["interrupted"])
         for line in result["stdout"]:
             res += "    %s\n" % line
 
@@ -520,7 +679,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): command used to obtain the data on each server
         text (str): data identification string
         error (str): data error string
@@ -551,7 +710,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                     result["interrupted"], result["command"])
                 for line in result["stdout"]:
                     log.info("        %s", line)
-        host_data.append({"hosts": NodeSet.fromlist(hosts), "data": DATA_ERROR})
+        host_data.append({"hosts": hosts, "data": DATA_ERROR})
     else:
         for result in results:
             host_data.append(
@@ -564,7 +723,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
@@ -592,7 +751,7 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     If specified, verify that the file exists and is owned by the user.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): hosts on which to run the command
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
@@ -622,6 +781,26 @@ def check_file_exists(hosts, filename, user=None, directory=False,
             missing_file.add(NodeSet.fromlist(node_list))
 
     return len(missing_file) == 0, missing_file
+
+
+def check_for_pool(host, uuid):
+    """Check if pool folder exist on server.
+
+    Args:
+        host (NodeSet): Server host name
+        uuid (str): Pool uuid to check if exists
+
+    Returns:
+        bool: True if pool folder exists, False otherwise
+
+    """
+    pool_dir = "/mnt/daos/{}".format(uuid)
+    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    if result[0]:
+        print("{} exists on {}".format(pool_dir, host))
+    else:
+        print("{} does not exist on {}".format(pool_dir, host))
+    return result[0]
 
 
 def process_host_list(hoststr):
@@ -714,7 +893,7 @@ def check_pool_files(log, hosts, uuid):
 
     Args:
         log (logging): logging object used to display messages
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
         uuid (str): uuid file name to look for in /mnt/daos.
 
     Returns:
@@ -723,7 +902,7 @@ def check_pool_files(log, hosts, uuid):
 
     """
     status = True
-    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    log.info("Checking for pool data on %s", hosts)
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
         result = check_file_exists(hosts, filename, sudo=True)
@@ -757,13 +936,12 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     """Signal the engines on each hosts to generate their ULT stacks dump.
 
     Args:
-        hosts (list): hosts on which to signal the engines
+        hosts (NodeSet): hosts on which to signal the engines
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
         added_filter (str, optional): negative filter to better identify
             engines.
-
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -797,8 +975,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout,
-                      None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
 
     return result
 
@@ -807,14 +984,13 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
-        hosts (list): hosts on which to stop the processes
+        hosts (NodeSet): hosts on which to stop the processes
         pattern (str): regular expression used to find process names to stop
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -862,6 +1038,7 @@ def get_partition_hosts(partition, reservation=None):
     Args:
         partition (str): name of the partition
         reservation (str): name of reservation
+
     Returns:
         list: list of hosts in the specified partition
 
@@ -1078,7 +1255,7 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     manager_class = get_module_class(name, "job_manager_utils")
     if name in ["Mpirun", "Orterun"]:
         manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
-    elif name == "Systemctl":
+    elif name in ["Systemctl", "Clush"]:
         manager = manager_class(job)
     else:
         manager = manager_class(job, subprocess=subprocess)
@@ -1110,7 +1287,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         directory (str): the directory to create
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
@@ -1147,7 +1324,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
     """Create the specified directory on the specified hosts.
 
     Args:
-        hosts (list): hosts on which to create the directory
+        hosts (NodeSet): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
@@ -1190,7 +1367,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     the specified hosts prior to copying the source.
 
     Args:
-        hosts (list): hosts on which to copy the source
+        hosts (NodeSet): hosts on which to copy the source
         source (str): the file to copy to the hosts
         destination (str): the host location in which to copy the source
         mkdir (bool, optional): whether or not to ensure the destination
@@ -1232,7 +1409,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
             localhost = gethostname().split(".")[0]
-            other_hosts = [host for host in hosts if host != localhost]
+            other_hosts = NodeSet.fromlist([host for host in hosts if host != localhost])
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
@@ -1487,3 +1664,19 @@ def set_avocado_config_value(section, key, value):
         settings.update_option(".".join([section, key]), value)
     else:
         settings.config.set(section, key, str(value))
+
+
+def nodeset_append_suffix(nodeset, suffix):
+    """Append a suffix to each element of a NodeSet/list.
+
+    Only appends if the element does not already end with the suffix.
+
+    Args:
+        nodeset (NodeSet/list): the NodeSet or list
+        suffix: the suffix to append
+
+    Returns:
+        NodeSet: a new NodeSet with the suffix
+    """
+    return NodeSet.fromlist(
+        map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
