@@ -30,7 +30,7 @@ if [ -n "$BULLSEYE" ]; then
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
 fi
 
-cd ${SL_SRC_DIR}
+cd "${SL_SRC_DIR}"
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar

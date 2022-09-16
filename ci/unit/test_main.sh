@@ -29,7 +29,6 @@ else
 fi
 
 NODE=${NODELIST%%,*}
-mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # Copy over the install tree and some of the build tree.
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
