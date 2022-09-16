@@ -13,6 +13,7 @@ from general_utils import report_errors, run_pcmd
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from network_utils import update_network_interface
+from dmg_utils import check_system_query_status
 
 
 class NetworkFailureTest(IorTestBase):
@@ -111,7 +112,15 @@ class NetworkFailureTest(IorTestBase):
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
+        ip_to_host = {}
+        for result in results:
+            ips_str = result["stdout"][0]
+            # There may be multiple IP addresses for one host.
+            ip_addresses = ips_str.split()
+            for ip_address in ip_addresses:
+                ip_to_host[ip_address] = NodeSet(str(result["hosts"]))
+
+        return ip_to_host
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered with some user interventions with
@@ -330,7 +339,7 @@ class NetworkFailureTest(IorTestBase):
         ip_to_host = self.create_ip_to_host()
         for member in members:
             ip_addr = member["addr"].split(":")[0]
-            if rank_0_ip != ip_addr:
+            if ip_to_host[rank_0_ip] != ip_to_host[ip_addr]:
                 self.network_down_host = ip_to_host[ip_addr]
                 break
         self.log.info("network_down_host = %s", self.network_down_host)
@@ -400,6 +409,21 @@ class NetworkFailureTest(IorTestBase):
             command = "sudo ip link set {} {}".format(self.interface, "up")
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
+
+        # Some ranks may be excluded after bringing up the network interface, so wait
+        # until they are up (joined).
+        server_crashed = True
+        for _ in range(6):
+            time.sleep(10)
+            if check_system_query_status(self.get_dmg_command().system_query()):
+                self.log.info("All ranks are joined after bringing up the interface.")
+                server_crashed = False
+                break
+            self.log.info("One or more servers crashed. Check system query again.")
+
+        if server_crashed:
+            msg = "One or more servers crashed after bringing up the network interface!"
+            errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)

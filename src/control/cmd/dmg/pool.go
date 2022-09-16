@@ -123,14 +123,6 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("size", "num-ranks")
 		}
 
-		// TODO (DAOS-9557) Update the protocol to allow filtering on ranks to use.  To
-		// implement this feature the procotol should be changed to define if a SCM
-		// namespace is associated with one rank or not. If yes, it should define with which
-		// rank the SCM namespace is associated.
-		if cmd.RankList != "" {
-			return errIncompatFlags("size", "ranks")
-		}
-
 		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
 		storageRatio, _ := strconv.ParseInt(storageRatioString, 10, 32)
 		if storageRatio <= 0 || storageRatio > 100 {
@@ -141,7 +133,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
-		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.Logger, cmd.ctlInvoker)
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(
+			context.Background(),
+			cmd.Logger,
+			cmd.ctlInvoker,
+			system.RankList(req.Ranks))
 		if err != nil {
 			return err
 		}
@@ -339,14 +335,19 @@ func (cmd *poolCmd) PoolID() *PoolID {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	Force bool `short:"f" long:"force" description:"Force removal of DAOS pool"`
+	Recursive bool `short:"r" long:"recursive" description:"Remove pool with existing containers"`
+	Force     bool `short:"f" long:"force" description:"Forcibly remove pool with active client connections"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (cmd *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &control.PoolDestroyReq{ID: cmd.PoolID().String(), Force: cmd.Force}
+	req := &control.PoolDestroyReq{
+		ID:        cmd.PoolID().String(),
+		Force:     cmd.Force,
+		Recursive: cmd.Recursive,
+	}
 
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

@@ -380,7 +380,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		daos_size_t	 rec_in_chunk;
 
 		if (sc_cont_is_stopping(ctx))
-			return 0;
+			D_GOTO(done, rc = 0);
 
 		orig_csum = ci_idx2csum(ctx->sc_csum_to_verify, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
@@ -450,6 +450,10 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	struct vos_iterator	*iter;
 	struct vos_obj_iter	*oiter;
 	int			 rc;
+
+	/* Don't verify a hole */
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return 0;
 
 	/*
 	 * Know that there will always only be 1 recx because verifying a

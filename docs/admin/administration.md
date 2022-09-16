@@ -10,24 +10,24 @@ communicated and logged within DAOS and syslog.
 The following table describes the structure of a DAOS RAS event, including
 descriptions of mandatory and optional fields.
 
-
 | Field             | Optional/Mandatory   | Description                                              |
 |:----|:----|:----|
 | ID                | Mandatory            | Unique event identifier referenced in the manual.        |
+| Timestamp (ts)    | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
+| Hostname (host)   | Optional             | Hostname of the node involved in the event.              |
 | Type              | Mandatory            | Event type of STATE\_CHANGE causes an update to the Management Service (MS) database in addition to event being written to SYSLOG. INFO\_ONLY type events are only written to SYSLOG.                                       |
-| Timestamp         | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
-| Severity          | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
+| Severity (sev)    | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
 | Msg               | Mandatory            | Human readable message.                                  |
-| HID               | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
-| Rank              | Optional             | DAOS rank involved in the event.                         |
 | PID               | Optional             | Identifier of the process involved in the RAS event      |
 | TID               | Optional             | Identifier of the thread involved in the RAS event.      |
+| Rank              | Optional             | DAOS rank involved in the event.                         |
+| Incarnation (inc) | Optional             | Incarnation version of DAOS rank involved in the event. An incarnation of an engine (engine is identified by a rank) is an internal sequence number used to order aliveness events related to an engine.           |
+| HWID              | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
 | JOBID             | Optional             | Identifier of the job involved in the RAS event.         |
-| Hostname          | Optional             | Hostname of the node involved in the event.              |
-| PUUID             | Optional             | Pool UUID involved in the event, if any.                 |
-| CUUID             | Optional             | Container UUID involved in the event, if relevant.       |
-| OID               | Optional             | Object identifier involved in the event, if relevant.                                                |
-| Control Operation | Optional             | Recommended automatic action, if any.                    |
+| PUUID (pool)      | Optional             | Pool UUID involved in the event, if any.                 |
+| CUUID (cont)      | Optional             | Container UUID involved in the event, if relevant.       |
+| OID (objid)       | Optional             | Object identifier involved in the event, if relevant.    |
+| Control Op (ctlop)| Optional             | Recommended automatic action, if any.                    |
 | Data              | Optional             | Specific instance data treated as a blob.                |
 
 Below is an example of a RAS event signaling an exclusion of an unresponsive
@@ -836,9 +836,9 @@ formatted again by running `dmg storage format`.
     The `/dev/pmemX` devices will remain mounted,
     and the PMem configuration will not be reset to Memory Mode.
     To completely unconfigure the SCM, it is advisable to run
-    `daos_server storage prepare --scm-only --reset` which will
-    completely reset the PMem. A reboot will be required to finalize
-    the change of the PMem allocation goals.
+    `daos_server scm reset` which will completely reset the PMem.
+    A reboot will be required to finalize the change of the PMem
+    allocation goals.
 
 
 ### System Extension

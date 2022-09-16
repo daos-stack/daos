@@ -57,7 +57,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
-/* The time threshold for triggerring DTX cleanup of stale entries.
+/* The time threshold for triggering DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
@@ -68,7 +68,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  */
 #define DTX_CLEANUP_THD_AGE_LO	45
 
-/* The count threshold (per pool) for triggerring DTX aggregation. */
+/* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
 #define DTX_AGG_THD_CNT_MIN	(1 << 20)
 #define DTX_AGG_THD_CNT_DEF	((1 << 19) * 7)
@@ -112,7 +112,7 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 /* The threshold for yield CPU when handle DTX RPC. */
 #define DTX_RPC_YIELD_THD	64
 
-/* The time threshold for triggerring DTX aggregation. If the oldest
+/* The time threshold for triggering DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  *

@@ -152,14 +152,6 @@ fetch_repo_config() {
         return 1
     fi
 
-    # ugly hackery for nexus repo naming
-    if [ "$repo_server" = "nexus" ]; then
-        local version
-        version="$(lsb_release -sr)"
-        version=${version%.*}
-        sed -i -e "s/\$releasever/$version/g" "$repopath"
-    fi
-
     return 0
 }
 
@@ -284,15 +276,16 @@ post_provision_config_nodes() {
             disable_gpg_check "$repo_url"
         done
     fi
+    inst_rpms=()
     if [ -n "$INST_RPMS" ]; then
-        # shellcheck disable=SC2086
-        time dnf -y erase $INST_RPMS
+        eval "inst_rpms=($INST_RPMS)"
+        time dnf -y erase "${inst_rpms[@]}"
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
         if ! rpm -q "$LSB_RELEASE"; then
-            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+            retry_dnf 360 install "$LSB_RELEASE"
         fi
     fi
 
@@ -300,10 +293,8 @@ post_provision_config_nodes() {
     if ! rpm -q "$(echo "$INST_RPMS" |
                    sed -e 's/--exclude [^ ]*//'                 \
                        -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
-        # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
-            # shellcheck disable=SC2154
-            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 install "${inst_rpms[@]}"; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"
@@ -317,7 +308,7 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     # shellcheck disable=SC2154
-    if ! RETRY_COUNT=4 retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         return 1
     fi
