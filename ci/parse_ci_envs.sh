@@ -32,10 +32,6 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=ubuntu22}"
       : "${REPO_SPEC:=ubuntu-22.04}"
       ;;
-    *Ubuntu\ 22.04*|*ubuntu2204*)
-      : "${CHROOT_NAME:="not_applicable"}"
-      : "${TARGET:=ubuntu22}"
-      ;;
   esac
 fi
 export CHROOT_NAME
