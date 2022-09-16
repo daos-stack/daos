@@ -35,7 +35,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
         """
         # Remove the extra container created by ErasureCodeIor.setUp() via the
         # IorTestBase.update_ior_cmd_with_pool() method.
-        self.container[0].destroy()
+        self.container.destroy()
 
         # This is IOR Hard so skip the warning messages
         self.fail_on_warning = False
