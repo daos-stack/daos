@@ -167,7 +167,6 @@ class OSAOfflineExtend(OSAUtils):
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
-    @skipForTicket("DAOS-7493")
     def test_osa_offline_extend_oclass(self):
         """Test ID: DAOS-6924
         Test Description: Validate Offline extend without
