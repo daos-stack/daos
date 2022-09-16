@@ -29,7 +29,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             DAOS DFuse unit tests
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=dfuse,dfuse_test
         :avocado: tags=dfuse_unit,test_daos_dfuse_unit
         """
