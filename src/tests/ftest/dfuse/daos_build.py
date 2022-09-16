@@ -11,6 +11,7 @@ import general_utils
 
 from dfuse_test_base import DfuseTestBase
 
+
 class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Build DAOS over dfuse

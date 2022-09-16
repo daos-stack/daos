@@ -15,6 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
+Release:       22%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -28,9 +29,6 @@ BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
-%if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: libpsm2-devel
-%endif
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 BuildRequires: openmpi-devel
@@ -65,7 +63,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.1
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
@@ -80,6 +78,7 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.16
+%if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
@@ -92,8 +91,6 @@ BuildRequires: Lmod
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libpsm2-compat
-BuildRequires: libpsm_infinipath1
 # prefer over libcurl4-mini
 BuildRequires: libcurl4
 BuildRequires: distribution-release
@@ -110,9 +107,6 @@ BuildRequires: systemd-rpm-macros
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
 # have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
 BuildRequires: libcurl4
-# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
-# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
-BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
@@ -220,16 +214,21 @@ This is the package is a metapackage to install all of the internal test package
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
+%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
+Requires: python36-distro
+Requires: python36-tabulate
+Requires: python36-defusedxml
+%else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+%endif
 Requires: fio
 Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
-Requires: libpsm_infinipath1
 Requires: lua-lmod
 %else
 Requires: Lmod
@@ -300,11 +299,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %build
 
 %define conf_dir %{_sysconfdir}/daos
-%if (0%{?rhel} >= 8)
-%define scons_exe scons-3
-%else
 %define scons_exe scons
-%endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
@@ -535,6 +530,36 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Sep 8 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-22
+- Move io_conf files from bin to TESTING
+
+* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-21
+- Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+* Thu Aug 11 2022 Wang Shilong <shilong.wang@intel.com> 2.3.100-20
+- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
+* Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-19
+- Update to mercury 2.2.0
+
+* Tue Jul 26 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.100-18
+- Bump min supported go version to 1.16
+
+* Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
+- Remove now unused openpa dependency
+
+* Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
+- Add pool_scrubbing_tests to test package
+
+* Wed Jul 13 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.100-15
+- Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+* Mon Jun 27 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-14
+- Update to mercury 2.2.0rc6
+
+* Fri Jun 17 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-13
+- Remove libdts.so, replace with build time static
+
 * Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-12
 - Make ucx required for build on all platforms
 

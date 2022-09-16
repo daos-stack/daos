@@ -92,13 +92,6 @@ Once all prerequisites installed and the sources are downloaded,
 DAOS can be built via the following command:
 
 ```bash
-$ scons-3 --config=force --build-deps=yes install
-```
-
-or, on Linux distributions (like Ubuntu 22.04) that have abandoned SCons
-versions older than 3:
-
-```bash
 $ scons --config=force --build-deps=yes install
 ```
 
