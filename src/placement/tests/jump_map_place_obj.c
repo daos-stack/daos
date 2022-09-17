@@ -1757,8 +1757,8 @@ test_non_standard_systems(const char *file, uint32_t line,
 		}
 		if (jtc_layout_has_duplicate(&ctx)) {
 			jtc_print_layout_force(&ctx);
-			fail_msg("%s:%d Found duplicate for i=%d\n",
-				 file, line, i);
+			print_message("%s:%d Found duplicate for i=%d\n",
+				      file, line, i);
 		}
 	}
 
@@ -1887,6 +1887,62 @@ large_shards_over_limited_targets(void **state)
 	jtc_fini(&ctx);
 }
 
+static bool
+layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t	i, j, dom, new_dom, tgt, new_tgt;
+
+	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt =  layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static void
+grp_colocated_shard_check(void **state)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		 num_fdom, nodes_per_fdom, vos_per_tgt;
+	uint32_t		 num_tgts, i;
+	daos_obj_id_t		 oid;
+	struct pl_obj_layout	*layout = NULL;
+
+	/* --------------------------------------------------------- */
+	num_fdom = 6;
+	nodes_per_fdom = 1;
+	vos_per_tgt = 8;
+	num_tgts = num_fdom * nodes_per_fdom * vos_per_tgt;
+	print_message("\nWith %d fdoms, %d node each domain, %d targets each node = %d targets\n",
+		      num_fdom, nodes_per_fdom, vos_per_tgt, num_tgts);
+
+	gen_maps(num_fdom, nodes_per_fdom, vos_per_tgt, &po_map, &pl_map);
+	print_message("place OC_EC_4P1G9\n");
+
+	for (i = 0; i < 1000; i++) {
+		layout = NULL;
+		print_message("layout of lo %d\n", i);
+		gen_oid(&oid, i, UINT64_MAX, OC_EC_4P1GX);
+		assert_success(plt_obj_place(oid, &layout, pl_map, true));
+		assert_true(layout_with_tgts_on_same_dom_for_same_grp(
+			    layout, nodes_per_fdom * vos_per_tgt) == false);
+		pl_obj_layout_free(layout);
+	}
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -1971,6 +2027,7 @@ static const struct CMUnitTest tests[] = {
 	  same_group_shards_not_in_same_domain),
 	T("large shards over limited targets",
 	  large_shards_over_limited_targets),
+	T("group co-located shards check", grp_colocated_shard_check),
 };
 
 int
