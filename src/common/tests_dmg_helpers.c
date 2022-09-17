@@ -130,6 +130,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
+	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
+
 	fp = popen(cmd_str, "r");
 	if (fp == NULL) {
 		D_ERROR("failed to run dmg command \"%s\": %s\n", cmd_str, strerror(errno));

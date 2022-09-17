@@ -126,6 +126,8 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
+        daos_test_env["IBV_FORK_SAFE"] = "1"
+        daos_test_env["RDMAV_FORK_SAFE"] = "1"
         daos_test_cmd = cmocka_utils.get_cmocka_command(
             " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)]))
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")
