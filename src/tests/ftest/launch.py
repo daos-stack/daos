@@ -2996,10 +2996,12 @@ class CoreFileProcessing():
 
         """
         errors = 0
+        create_stacktrace = True
         self.log.debug("-" * 80)
         self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
         if self.is_el7():
             self.log.info("Generating stacktraces is currently not suppotrted on EL7")
+            create_stacktrace = False
 
         # Create a stacktrace for any core file archived from the hosts under test
         core_files = defaultdict(list)
@@ -3008,9 +3010,8 @@ class CoreFileProcessing():
                 continue
             core_dir = os.path.join(directory, dir_name)
             for core_name in os.listdir(core_dir):
-                if not fnmatch.fnmatch(core_name, 'core.*[0-9]'):
-                    continue
-                core_files[core_dir].append(core_dir)
+                if fnmatch.fnmatch(core_name, 'core.*[0-9]'):
+                    core_files[core_dir].append(core_dir)
 
         # Install the debug information needed for stacktrace generation
         if core_files:
@@ -3020,27 +3021,25 @@ class CoreFileProcessing():
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
                 errors += 1
+                create_stacktrace = False
         else:
             self.log.debug(
                 "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
 
-        # Create a stacktrace from each core file
-        if not self.is_el7() and errors == 0:
-            for core_dir, core_name_list in core_files.items():
-                for core_name in core_name_list:
-                    try:
-                        self._create_stacktrace(core_dir, core_name)
-                    except Exception as error:      # pylint: disable=broad-except
-                        self.log.error(error)
-                        self.log.debug("Stacktrace", exc_info=True)
-                        errors += 1
-
-        # Remove the stacktrace files
+        # Create a stacktrace from each core file and then remove the core file
         for core_dir, core_name_list in core_files.items():
             for core_name in core_name_list:
-                core_full = os.path.join(core_dir, core_name)
-                self.log.debug("Removing %s", core_full)
-                os.remove(core_full)
+                try:
+                    if create_stacktrace:
+                        self._create_stacktrace(core_dir, core_name)
+                except Exception as error:      # pylint: disable=broad-except
+                    self.log.error(error)
+                    self.log.debug("Stacktrace", exc_info=True)
+                    errors += 1
+                finally:
+                    core_file = os.path.join(core_dir, core_name)
+                    self.log.debug("Removing %s", core_file)
+                    os.remove(core_file)
 
         return errors
 
