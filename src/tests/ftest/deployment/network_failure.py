@@ -153,6 +153,8 @@ class NetworkFailureTest(IorTestBase):
                 excluded, errored, unresponsive) after waiting for 2 min. True otherwise.
 
         """
+        time.sleep(60)
+
         for _ in range(12):
             time.sleep(10)
             if check_system_query_status(self.get_dmg_command().system_query()):
