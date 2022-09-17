@@ -38,6 +38,14 @@ from util.results_utils import create_html, create_xml, Job, Results, TestResult
 DEFAULT_DAOS_APP_DIR = "/scratch"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
+PROVIDER_KEYS = OrderedDict(
+    [
+        ("cxi", "ofi+cxi"),
+        ("verbs", "ofi+verbs"),
+        ("ucx", "ucx+dc_x"),
+        ("tcp", "ofi+tcp"),
+    ]
+)
 YAML_KEYS = OrderedDict(
     [
         ("test_servers", "test_servers"),
@@ -54,14 +62,6 @@ YAML_KEYS = OrderedDict(
         ("srv_timeout", "timeout_multiplier"),
         ("storage_prepare_timeout", "timeout_multiplier"),
         ("storage_format_timeout", "timeout_multiplier"),
-    ]
-)
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp"),
     ]
 )
 
