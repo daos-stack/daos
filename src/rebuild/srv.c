@@ -1120,6 +1120,13 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 			/* This task isn't for this pool - don't consider it */
 			continue;
 
+		/* Do not merge reclaim rebuild job */
+		if (task->dst_rebuild_op == RB_OP_RECLAIM)
+			continue;
+
+		/* Since the queue is sorted by map version, so we only need compare
+		 * the first non-reclaim job.
+		 */
 		if (task->dst_rebuild_op != rebuild_op)
 			/* Found a different operation. If we had found a task
 			 * to merge to before this, clear it, as that is no
