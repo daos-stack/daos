@@ -188,14 +188,16 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	sep_mode = crt_provider_is_sep(provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
 	if (sep_mode &&
 	    cur_ctx_num >= max_ctx_num) {
-		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
+		D_WARN("Number of active contexts (%d) reached limit (%d).\n",
 			cur_ctx_num, max_ctx_num);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
 
@@ -210,7 +212,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
 
