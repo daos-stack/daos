@@ -355,7 +355,7 @@ class AvocadoInfo():
         """
         try:
             # pylint: disable=import-outside-toplevel
-            from avocado.core.settings import settings
+            from avocado.core.settings import settings, SettingsError
             try:
                 # Newer versions of avocado use this approach
                 config = settings.as_dict()
@@ -366,7 +366,7 @@ class AvocadoInfo():
                 # pylint: disable=no-member
                 try:
                     return settings.get_value(section, key)
-                except settings.SettingsError:
+                except SettingsError:
                     # Setting not found
                     pass
 
