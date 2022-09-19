@@ -8,6 +8,7 @@ package main
 
 import (
 	"github.com/daos-stack/daos/src/control/server/config"
+	"os"
 )
 
 type cfgLoader interface {
@@ -22,6 +23,10 @@ type cliOverrider interface {
 type cfgCmd struct {
 	config       *config.Server
 	IgnoreConfig bool `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
+}
+
+type optCfgCmd struct {
+	cfgCmd
 }
 
 func (c *cfgCmd) configPath() string {
@@ -45,4 +50,12 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 	}
 
 	return c.config.Load()
+}
+
+func (c *optCfgCmd) loadConfig(cfgPath string) error {
+	err := c.cfgCmd.loadConfig(cfgPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
