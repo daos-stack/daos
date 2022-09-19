@@ -960,3 +960,54 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		})
 	}
 }
+
+func Test_Database_ResignLeadership(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cause     error
+		expErr    error
+		expLeader bool
+	}{
+		"nil cause": {
+			expLeader: false,
+		},
+		// For these next errors, we just want to verify that the
+		// method exits early, preventing the state from being toggled.
+		"cause: raft.ErrNotLeader": {
+			cause:     raft.ErrNotLeader,
+			expLeader: true,
+		},
+		"cause: raft.ErrLeadershipLost": {
+			cause:     raft.ErrLeadershipLost,
+			expLeader: true,
+		},
+		"cause: raft.ErrLeadershipTransferInProgress": {
+			cause:     raft.ErrLeadershipTransferInProgress,
+			expLeader: true,
+		},
+		// Also check to see what happens if we get a raft error during
+		// leadership transfer.
+		"leadership transfer fails": {
+			expErr:    errors.New("leadership transfer failed"),
+			expLeader: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.raft.setSvc(newMockRaftService(&mockRaftServiceConfig{
+				LeadershipTransferErr: tc.expErr,
+				State:                 raft.Leader,
+			}, (*fsm)(db)))
+
+			resignErr := db.ResignLeadership(tc.cause)
+			test.CmpErr(t, tc.expErr, resignErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expLeader, db.IsLeader(), "unexpected leader state")
+		})
+	}
+}
