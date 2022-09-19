@@ -43,6 +43,7 @@ dnf --nodocs install \
     lz4-devel \
     make \
     maven \
+    meson \
     ndctl \
     numactl \
     numactl-devel \
@@ -51,6 +52,7 @@ dnf --nodocs install \
     patch \
     patchelf \
     pciutils \
+    python-pyelftools \
     python3-devel \
     python3-pip \
     sg3_utils \
