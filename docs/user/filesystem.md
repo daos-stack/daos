@@ -70,7 +70,7 @@ The following features from POSIX are not supported:
     Commands like `ls -al` will not include these entries in their output.
     Those directory entries are not required by POSIX, so this is not a limitation to POSIX
     compliance. But scripts that parse directory listings under the assumption that those dot
-    directories are present may need to be adapted to to correctly handle this situation.
+    directories are present may need to be adapted to correctly handle this situation.
     Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
     containers.
 
@@ -217,6 +217,297 @@ dfuse           9.4G  326K  9.4G   1% /tmp/dfuse
 
 DFuse can be launched via fstab and the standard mount command, it will parse -o options
 and extract pool=<name>,container=<name> if provided and ignore any other filesystem options given.
+
+There are few use cases described below to explain how systemd or /etc/fstab can be used to mount
+the daos container using dfuse.
+
+#### 1> User can mount the file system using mount.fuse3 command
+
+```bash
+$ dmg pool create --scm-size=8G --nvme-size=64G --label=samirrav_pool -u samirrav@
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : 5d27e7b1-a4de-4cae-a2e9-92b8bad11347
+  Service Ranks        : [1-5]
+  Storage Ranks        : [0-7]
+  Total Size           : 576 GB
+  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+
+$ daos cont create samirrav_pool samirrav_cont --type=POSIX
+  Container UUID : 5091a6d5-f441-4ccc-8acb-5480ae879b33
+  Container Label: samirrav_cont
+  Container Type : POSIX
+
+Successfully created container 5091a6d5-f441-4ccc-8acb-5480ae879b33
+
+$ daos cont get-prop samirrav_pool samirrav_cont
+Properties for container samirrav_cont
+Name                                    Value
+----                                    -----
+Highest Allocated OID                   0
+Checksum                                off
+Checksum Chunk Size                     32 KiB
+Compression                             off
+Deduplication                           off
+Dedupe Threshold                        4.0 KiB
+EC Cell Size                            64 KiB
+Performance domain affinity level of EC 1
+Encryption                              off
+Global Version                          2
+Group                                   samirrav@
+Label                                   samirrav_cont
+Layout Type                             POSIX (1)
+Layout Version                          1
+Max Snapshot                            0
+Owner                                   samirrav@
+Redundancy Factor                       rf0
+Redundancy Level                        node (2)
+Performance domain affinity level of RP 3
+Server Checksumming                     off
+Health                                  HEALTHY
+Access Control List                     A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
+
+$ mount.fuse3 dfuse /tmp/daos_dfuse_samir -o pool=samirrav_pool,container=samirrav_cont
+$ touch /tmp/daos_dfuse_samir/foo
+$ ls -l /tmp/daos_dfuse_samir/
+total 0
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 16 21:24 foo
+$ df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /tmp/daos_dfuse_samir
+$
+```
+#### 2> Add dfs entry in /etc/fstab and mount as part of "mount -a" command.
+
+  Only root user can use "mount -a" command to mount the daos container mention in /etc/fstab file
+  so make sure pool has the correct root ownership.
+
+```bash
+$ dmg -o /home/samirrav/scripts/EC_Demo/test_daos_dmg.yaml pool create --scm-size=8G --nvme-size=64G --label=admin_pool
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : 13d340c1-34bc-4ada-991b-372572e85c57
+  Service Ranks        : [1-5]
+  Storage Ranks        : [0-7]
+  Total Size           : 576 GB
+  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+
+$ daos cont create admin_pool admin_cont --type=POSIX
+  Container UUID : c9fea19a-064e-4c0c-84e9-0ad752facb9e
+  Container Label: admin_cont
+  Container Type : POSIX
+
+Successfully created container c9fea19a-064e-4c0c-84e9-0ad752facb9e
+$ daos cont get-prop admin_pool admin_cont
+Properties for container admin_cont
+Name                                    Value
+----                                    -----
+Highest Allocated OID                   0
+Checksum                                off
+Checksum Chunk Size                     32 KiB
+Compression                             off
+Deduplication                           off
+Dedupe Threshold                        4.0 KiB
+EC Cell Size                            64 KiB
+Performance domain affinity level of EC 1
+Encryption                              off
+Global Version                          2
+Group                                   root@
+Label                                   admin_cont
+Layout Type                             POSIX (1)
+Layout Version                          1
+Max Snapshot                            0
+Owner                                   root@
+Redundancy Factor                       rf0
+Redundancy Level                        node (2)
+Performance domain affinity level of RP 3
+Server Checksumming                     off
+Health                                  HEALTHY
+Access Control List                     A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
+
+$ echo '/usr/bin/dfuse /tmp/root_dfuse fuse3 pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service    0 0' >> /etc/fstab
+$ df -h | grep fuse
+$ mount -a
+$ df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /tmp/root_dfuse
+```
+
+#### 3> Use systemd service to mount the dfs container.
+
+User can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
+Consider the previous example /etc/fstab entry which has the admin_pool and admin_cont.
+Steps mention below will explain, how to generate the systemd file and start/stop the dfuse service.
+
+```bash
+$ cat /etc/fstab | grep fuse
+/usr/bin/dfuse /tmp/root_dfuse fuse3 pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service    0 0
+$ /usr/lib/systemd/system-generators/systemd-fstab-generator
+Failed to create unit file /tmp/-.mount, as it already exists. Duplicate entry in /etc/fstab?
+Failed to create unit file /tmp/var-tmp.mount, as it already exists. Duplicate entry in /etc/fstab?
+Failed to create unit file /tmp/dev-sda2.swap, as it already exists. Duplicate entry in /etc/fstab?
+# # Please ignore this Failed Error
+
+$ cat /tmp/tmp-root_dfuse.mount
+# Automatically generated by systemd-fstab-generator
+
+[Unit]
+SourcePath=/etc/fstab
+Documentation=man:fstab(5) man:systemd-fstab-generator(8)
+Before=local-fs.target
+After=daos_agent.service
+Requires=daos_agent.service
+
+[Mount]
+Where=/tmp/root_dfuse
+What=/usr/bin/dfuse
+Type=fuse3
+Options=pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service
+$ cp -rf /tmp/tmp-root_dfuse.mount /usr/lib/systemd/system/
+$ systemctl daemon-reload
+$ systemctl status tmp-root_dfuse.mount
+● tmp-root_dfuse.mount - /tmp/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: inactive (dead)
+    Where: /tmp/root_dfuse
+     What: /usr/bin/dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+
+Sep 16 21:43:14 wolf-170.wolf.hpdd.intel.com systemd[1]: tmp-root_dfuse.mount: Succeeded.
+$ systemctl start tmp-root_dfuse.mount
+$ df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /tmp/root_dfuse
+$ ls -l /tmp/root_dfuse/
+total 0
+$ systemctl status tmp-root_dfuse.mount
+● tmp-root_dfuse.mount - /tmp/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: active (mounted) since Fri 2022-09-16 22:58:40 UTC; 2min 10s ago
+    Where: /tmp/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 63 (limit: 1648282)
+   Memory: 55.7M
+   CGroup: /system.slice/tmp-root_dfuse.mount
+           └─10228 /usr/bin/dfuse /tmp/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+
+Sep 16 22:58:39 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /tmp/root_dfuse...
+Sep 16 22:58:40 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /tmp/root_dfuse.
+$ systemctl stop tmp-root_dfuse.mount
+$ df -h | grep fuse
+$ systemctl status tmp-root_dfuse.mount
+● tmp-root_dfuse.mount - /tmp/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: inactive (dead) since Fri 2022-09-16 23:01:22 UTC; 7s ago
+    Where: /tmp/root_dfuse
+     What: /usr/bin/dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 0 (limit: 1648282)
+   Memory: 776.0K
+   CGroup: /system.slice/tmp-root_dfuse.mount
+
+Sep 16 22:58:39 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /tmp/root_dfuse...
+Sep 16 22:58:40 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /tmp/root_dfuse.
+Sep 16 23:01:22 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounting /tmp/root_dfuse...
+Sep 16 23:01:22 wolf-170.wolf.hpdd.intel.com systemd[1]: tmp-root_dfuse.mount: Succeeded.
+Sep 16 23:01:22 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /tmp/root_dfuse.
+```
+
+#### 4> systemd to mount the dfs container during system boot.
+
+  During system boot, fuse service will fail to start as daos agent service will also trying
+  to start at the same time. So add below line in daos_agent.service file to avoid fuse to fail the mount
+  during system boot.
+  Add "ExecStartPost=/bin/sleep 1" in /usr/lib/systemd/system/daos_agent.service under [Service] section
+  as mention below.
+
+```bash
+[Unit]
+Description=DAOS Agent
+StartLimitIntervalSec=60
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=daos_agent
+Group=daos_agent
+RuntimeDirectory=daos_agent
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/daos_agent
+ExecStartPost=/bin/sleep 1
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=10
+LimitMEMLOCK=infinity
+LimitCORE=infinity
+StartLimitBurst=5
+
+[Install]
+WantedBy = multi-user.target
+```
+
+  Same systemd file mention in previous example is used to mount the fuse during system power ON.
+
+```bash
+$ echo -e '\n[Install]\nWantedBy = multi-user.target' >> /usr/lib/systemd/system/tmp-root_dfuse.mount
+$ cat /usr/lib/systemd/system/tmp-root_dfuse.mount
+# Automatically generated by systemd-fstab-generator
+
+[Unit]
+SourcePath=/etc/fstab
+Documentation=man:fstab(5) man:systemd-fstab-generator(8)
+Before=local-fs.target
+After=daos_agent.service
+Requires=daos_agent.service
+
+[Mount]
+Where=/tmp/root_dfuse
+What=/usr/bin/dfuse
+Type=fuse3
+Options=pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service
+
+[Install]
+WantedBy = multi-user.target
+
+$ systemctl is-enabled tmp-root_dfuse.mount
+generated
+$ systemctl daemon-reload
+$ systemctl enable tmp-root_dfuse.mount
+Created symlink /etc/systemd/system/multi-user.target.wants/tmp-root_dfuse.mount → /usr/lib/systemd/system/tmp-root_dfuse.mount.
+$ systemctl is-enabled tmp-root_dfuse.mount
+enabled
+$
+
+# # reboot the system
+$ dmesg | grep fuse
+[   18.163474] systemd[1]: systemd-machine-id-commit.service: Found dependency on tmp-root_dfuse.mount/start
+[   28.651165] fuse: init (API version 7.33)
+# df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /tmp/root_dfuse
+# systemctl status tmp-root_dfuse.mount
+● tmp-root_dfuse.mount - /tmp/root_dfuse
+   Loaded: loaded (/etc/fstab; enabled; vendor preset: disabled)
+   Active: active (mounted) since Mon 2022-09-19 20:46:08 UTC; 7min ago
+    Where: /tmp/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 63 (limit: 1648282)
+   Memory: 62.2M
+   CGroup: /system.slice/tmp-root_dfuse.mount
+           └─3198 /usr/bin/dfuse /tmp/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+
+Sep 19 20:46:07 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /tmp/root_dfuse...
+Sep 19 20:46:08 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /tmp/root_dfuse.
+#
+```
 
 ### Links into other Containers
 
