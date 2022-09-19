@@ -269,8 +269,8 @@ crt_swim_membs_next_target(struct crt_swim_membs *csm)
 	if (csm->csm_list_len == 0)
 		return NULL;
 
-	D_ASSERTF(csm->csm_target >= 0 && csm->csm_target < csm->csm_list_len,
-		  "csm_target=%u csm_list_len=%u\n", csm->csm_target, csm->csm_list_len);
+	D_ASSERTF(csm->csm_target < csm->csm_list_len, "csm_target=%u csm_list_len=%u\n",
+		  csm->csm_target, csm->csm_list_len);
 	rank = csm->csm_list[csm->csm_target];
 
 	cst = crt_swim_membs_find(csm, rank);

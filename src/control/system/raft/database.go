@@ -493,7 +493,9 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
-				_ = db.ResignLeadership(err)
+				if err = db.ResignLeadership(err); err != nil {
+					db.log.Errorf("raft ResignLeadership() failed: %s", err)
+				}
 				break
 			}
 			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
@@ -504,7 +506,9 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				if err := fn(gainedCtx); err != nil {
 					db.log.Errorf("failure in onLeadershipGained callback: %s", err)
 					cancelGainedCtx()
-					_ = db.ResignLeadership(err)
+					if err = db.ResignLeadership(err); err != nil {
+						db.log.Errorf("raft ResignLeadership() failed: %s", err)
+					}
 					break
 				}
 			}

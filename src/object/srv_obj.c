@@ -108,6 +108,34 @@ out:
 	return 0;
 }
 
+static inline void
+obj_update_vos_latency(uint32_t opc, uint64_t start_time, uint64_t io_size)
+{
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+	uint64_t		time;
+
+	/**
+	 * Measure latency of successful bulk transfer only.
+	 * Use bit shift for performance and tolerate some inaccuracy.
+	 */
+	time = daos_get_ntime() - start_time;
+	time >>= 10;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
+		break;
+	case DAOS_OBJ_RPC_FETCH:
+		lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
+		break;
+	default:
+		D_ASSERTF(0, "invalid opc %u\n", opc);
+	}
+	d_tm_set_gauge(lat, time);
+}
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -122,12 +150,17 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool update = obj_rpc_is_update(rpc);
 
 		if (update) {
+			uint64_t time;
+
 			if (status == 0)
 				status = dtx_sub_init(dth, &orwi->orw_oid,
 						      orwi->orw_dkey_hash);
+			time = daos_get_ntime();
 			rc = vos_update_end(ioh, ioc->ioc_map_ver,
 					    &orwi->orw_dkey, status,
 					    &ioc->ioc_io_size, dth);
+			if (rc == 0)
+				obj_update_vos_latency(ioc->ioc_opc, time, ioc->ioc_io_size);
 		} else {
 			rc = vos_fetch_end(ioh, &ioc->ioc_io_size, status);
 		}
@@ -218,10 +251,11 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 }
 
 struct obj_bulk_args {
+	ABT_eventual	eventual;
+	uint64_t	bulk_size;
 	int		bulks_inflight;
 	int		result;
 	bool		inited;
-	ABT_eventual	eventual;
 	ABT_mutex	lock;
 };
 
@@ -550,6 +584,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		bulk_desc.bd_local_off	= local_off;
 
 		obj_bulk_inflights(p_arg, rpc, 1);
+		p_arg->bulk_size += length;
 		if (bulk_bind)
 			rc = crt_bulk_bind_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
@@ -579,6 +614,35 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	return rc;
 }
 
+static inline void
+obj_bulk_update_latency(uint32_t opc, uint64_t start_time, uint64_t io_size)
+{
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+	uint64_t		time;
+
+	/**
+	 * Measure latency of successful bulk transfer only.
+	 * Use bit shift for performance and tolerate some inaccuracy.
+	 */
+	time = daos_get_ntime() - start_time;
+	time >>= 10;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
+		break;
+	case DAOS_OBJ_RPC_FETCH:
+		lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
+		break;
+	default:
+		/* Only record update/fetch bulk latency */
+		return;
+	}
+	d_tm_set_gauge(lat, time);
+}
+
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
@@ -588,6 +652,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc;
 	bool			async = true;
+	uint64_t		time = daos_get_ntime();
 
 	if (remote_bulks == NULL) {
 		D_ERROR("No remote bulks provided\n");
@@ -653,6 +718,8 @@ done:
 
 	rc = obj_bulk_args_fini(p_arg);
 
+	if (rc == 0)
+		obj_bulk_update_latency(opc_get(rpc->cr_opc), time, arg.bulk_size);
 	if (rc == 0 && coh != NULL && unlikely(coh->sch_closed)) {
 		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
 			DP_UUID(coh->sch_uuid));
@@ -1437,10 +1504,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 	} else {
-		uint32_t			 fetch_flags = 0;
-		bool				 ec_deg_fetch;
-		bool				 ec_recov;
-		bool				 is_parity_shard;
+		uint32_t			fetch_flags = 0;
+		uint64_t			time;
+		bool				ec_deg_fetch;
+		bool				ec_recov;
+		bool				is_parity_shard;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1526,6 +1594,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 		}
 
+		time = daos_get_ntime();
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
 				     cond_flags | fetch_flags, shadows, &ioh, dth);
@@ -1537,6 +1606,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
+
+		obj_update_vos_latency(ioc->ioc_opc, time, vos_get_io_size(ioh));
 
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
@@ -1864,7 +1935,7 @@ out:
 	ioc->ioc_vos_coh = coc->sc_hdl;
 	ioc->ioc_coc	 = coc;
 	ioc->ioc_coh	 = coh;
-	ioc->ioc_ec_rotate_parity = 0;
+	ioc->ioc_ec_rotate_parity = 1;
 	return 0;
 failed:
 	if (coc != NULL)
@@ -1967,24 +2038,6 @@ out:
 	return rc;
 }
 
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr =  __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
-}
-
 static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
@@ -2011,9 +2064,12 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_TGT_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
 		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		break;
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
+		lat = tls->ot_tgt_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
 		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
