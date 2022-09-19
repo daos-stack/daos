@@ -3479,9 +3479,6 @@ def main():
              "command - is used by default.")
     args = parser.parse_args()
 
-    # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
-
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
@@ -3496,6 +3493,8 @@ def main():
 
     # Perform the steps defined by the arguments specified
     try:
+        # Setup the Launch object and run the specified action
+        launch = Launch(args.name, args.repeat, args.mode)
         status = launch.run(args)
     except Exception:       # pylint: disable=broad-except
         message = "Unknown exception raised during launch.py execution"
