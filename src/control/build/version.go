@@ -98,7 +98,7 @@ func (v Version) GreaterThan(other Version) bool {
 
 	if v.Minor > other.Minor {
 		return true
-	} else if v.Minor < other.Major {
+	} else if v.Minor < other.Minor {
 		return false
 	}
 
