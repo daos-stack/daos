@@ -202,13 +202,16 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	}
 
 	D_ALLOC_PTR(ctx);
-	if (ctx == NULL)
+	if (ctx == NULL) {
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE(ctx);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc);
 	}
 
