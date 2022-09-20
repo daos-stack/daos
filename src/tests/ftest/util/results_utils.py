@@ -302,6 +302,7 @@ class Job():
             "stdout_claimed_by": None,
         }
         self.logdir = log_dir
+        self.args = None
 
         # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"
