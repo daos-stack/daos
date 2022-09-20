@@ -278,13 +278,14 @@ out_release:
 out_free:
 	D_FREE(ie);
 out:
-	dh_hash_decrefx(fs_handle, save);
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
 		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
 }

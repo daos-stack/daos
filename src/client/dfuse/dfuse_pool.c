@@ -148,14 +148,15 @@ decref:
 	D_FREE(ie);
 	daos_prop_free(prop);
 err:
-	dh_hash_decrefx(fs_handle, save);
-
 	if (rc == ENOENT) {
 		struct fuse_entry_param entry = {0};
 
 		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
+
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
 }

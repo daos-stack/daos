@@ -114,7 +114,8 @@ dh_hash_find(struct dfuse_projection_info *fs_handle, fuse_ino_t parent, struct 
 void
 dh_hash_decref(struct dfuse_projection_info *fs_handle, d_list_t *rlink, struct dht_call *save)
 {
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	D_ASSERT(rlink == save->rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, save->rlink);
 }
 
 void
@@ -649,13 +650,13 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 					      flags);
 
 	if (newparent_inode)
-		dh_hash_decref(fs_handle, rlink, &save2);
+		dh_hash_decref(fs_handle, rlink2, &save2);
 
 	dh_hash_decref(fs_handle, rlink, &save);
 
 	return;
 decref_both:
-	dh_hash_decref(fs_handle, rlink, &save2);
+	dh_hash_decref(fs_handle, rlink2, &save2);
 decref:
 	dh_hash_decref(fs_handle, rlink, &save);
 err:
