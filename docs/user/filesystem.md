@@ -420,39 +420,6 @@ Sep 16 23:01:22 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /tmp/root_dfu
 
 #### 4> systemd to mount the dfs container during system boot.
 
-  During system boot, fuse service will fail to start as daos agent service will also trying
-  to start at the same time. So add below line in daos_agent.service file to avoid fuse to fail the mount
-  during system boot.
-  Add "ExecStartPost=/bin/sleep 1" in /usr/lib/systemd/system/daos_agent.service under [Service] section
-  as mention below.
-
-```bash
-[Unit]
-Description=DAOS Agent
-StartLimitIntervalSec=60
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=simple
-User=daos_agent
-Group=daos_agent
-RuntimeDirectory=daos_agent
-RuntimeDirectoryMode=0755
-ExecStart=/usr/bin/daos_agent
-ExecStartPost=/bin/sleep 1
-StandardOutput=journal
-StandardError=journal
-Restart=always
-RestartSec=10
-LimitMEMLOCK=infinity
-LimitCORE=infinity
-StartLimitBurst=5
-
-[Install]
-WantedBy = multi-user.target
-```
-
   Same systemd file mention in previous example is used to mount the fuse during system power ON.
 
 ```bash
@@ -485,13 +452,13 @@ $ systemctl is-enabled tmp-root_dfuse.mount
 enabled
 $
 
-# # reboot the system
+$ # reboot the system
 $ dmesg | grep fuse
 [   18.163474] systemd[1]: systemd-machine-id-commit.service: Found dependency on tmp-root_dfuse.mount/start
 [   28.651165] fuse: init (API version 7.33)
-# df -h | grep fuse
+$ df -h | grep fuse
 dfuse                         537G  5.1G  532G   1% /tmp/root_dfuse
-# systemctl status tmp-root_dfuse.mount
+$ systemctl status tmp-root_dfuse.mount
 ● tmp-root_dfuse.mount - /tmp/root_dfuse
    Loaded: loaded (/etc/fstab; enabled; vendor preset: disabled)
    Active: active (mounted) since Mon 2022-09-19 20:46:08 UTC; 7min ago
@@ -506,7 +473,7 @@ dfuse                         537G  5.1G  532G   1% /tmp/root_dfuse
 
 Sep 19 20:46:07 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /tmp/root_dfuse...
 Sep 19 20:46:08 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /tmp/root_dfuse.
-#
+$
 ```
 
 ### Links into other Containers
