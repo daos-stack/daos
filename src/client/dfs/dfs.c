@@ -26,6 +26,12 @@
 
 #include "dfs_internal.h"
 
+static int dfs_4k_counter;
+static int dfs_128k_counter;
+static int dfs_other_counter;
+static int dfs_stat_counter;
+static int dfs_lookup_counter;
+
 /** D-key name of SB metadata */
 #define SB_DKEY		"DFS_SB_METADATA"
 
@@ -2151,6 +2157,11 @@ dfs_umount(dfs_t *dfs)
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
 
+	D_ERROR("lookup count = %d", dfs_lookup_counter);
+	D_ERROR("stat count = %d", dfs_stat_counter);
+	D_ERROR("4k count = %d", dfs_4k_counter);
+	D_ERROR("128k count = %d", dfs_128k_counter);
+	D_ERROR("other count = %d", dfs_other_counter);
 	return 0;
 }
 
@@ -3426,6 +3437,9 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		path += dfs->prefix_len;
 	}
 
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs_lookup_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
 	return lookup_rel_path(dfs, &dfs->root, path, flags, _obj,
 			       mode, stbuf, 0);
 }
@@ -3613,6 +3627,9 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (daos_mode == -1)
 		return EINVAL;
 
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs_lookup_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
 	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists,
 			 &entry, xnr, xnames, xvals, xsizes);
 	if (rc)
@@ -4266,6 +4283,15 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 	D_DEBUG(DB_TRACE, "DFS Read: Off %"PRIu64", Len %zu\n", off, buf_size);
 
+	D_MUTEX_LOCK(&dfs->lock);
+	if (buf_size == 4096)
+		dfs_4k_counter++;
+	else if (buf_size == 131072)
+		dfs_128k_counter++;
+	else
+		dfs_other_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
 	if (ev == NULL) {
 		daos_array_iod_t	iod;
 		daos_range_t		rg;
@@ -4477,6 +4503,9 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs_stat_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
 	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, true, stbuf, NULL);
 }
 
@@ -4496,6 +4525,9 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs_stat_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, true, stbuf,
 			NULL);
 	if (rc)
@@ -4877,6 +4909,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	len = strlen(obj->name);
 
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs_stat_counter++;
+	D_MUTEX_UNLOCK(&dfs->lock);
 	/*
 	 * Fetch the remote entry first so we can check the oid, then keep track locally of what has
 	 * been updated. If we are setting the file size, there is no need to query it.

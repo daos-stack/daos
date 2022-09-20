@@ -1274,6 +1274,9 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 		ref = atomic_load_relaxed(&ie->ie_ref);
 
+		atomic_store_relaxed(&ie->ie_il_count, 0);
+		atomic_store_relaxed(&ie->ie_open_count, 0);
+
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
