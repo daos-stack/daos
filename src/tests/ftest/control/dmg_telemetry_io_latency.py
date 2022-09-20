@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -11,6 +10,7 @@ from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
 
+
 def convert_to_number(size):
     """Convert string to int.
 
@@ -22,14 +22,14 @@ def convert_to_number(size):
 
     """
     num = 0
-    SIZE_DICT = {"B": 1,
+    size_dict = {"B": 1,
                  "K": 1024,
                  "M": 1024 * 1024,
                  "G": 1024 * 1024 * 1024,
                  "T": 1024 * 1024 * 1024 * 1024}
     # Convert string to bytes
     suffix = str(size)[-1]
-    for key, value in SIZE_DICT.items():
+    for key, value in size_dict.items():
         if suffix == key:
             num = int(value) * int(size[:-1])
     return int(num)
@@ -58,19 +58,19 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
 
         """
-        rf = None
+        rd_fac = None
         # Create a container and add it to the overall list of containers
         self.container.append(
             TestContainer(pool, daos_command=self.get_daos_command()))
         self.container[-1].namespace = path
         self.container[-1].get_params(self)
-        # include rf based on the class
+        # include rd_fac based on the class
         if oclass:
             self.container[-1].oclass.update(oclass)
             redundancy_factor = extract_redundancy_factor(oclass)
-            rf = 'rf:{}'.format(str(redundancy_factor))
+            rd_fac = 'rf:{}'.format(str(redundancy_factor))
         properties = self.container[-1].properties.value
-        cont_properties = (",").join(filter(None, [properties, rf]))
+        cont_properties = (",").join(filter(None, [properties, rd_fac]))
         if cont_properties is not None:
             self.container[-1].properties.update(cont_properties)
         self.container[-1].create()
@@ -108,8 +108,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # read   107.84    27.1 0.036824   4096  4096      0.000252 0.036824 0.000015 0.037091
             self.log.info(
                 "Latency for ior %s with transfer size %s(KiB) is %.2fus"
-                "", ior_results[0], ior_results[5], (float(ior_results[3])*float(10**6)))
-            latency.append(float(ior_results[3])*float(10**6))
+                "", ior_results[0], ior_results[5], (float(ior_results[3]) * float(10**6)))
+            latency.append(float(ior_results[3]) * float(10**6))
         return latency
 
     def verify_rpc_latency_metrics(self, metrics_data, test_metrics, transfer_size):
@@ -142,18 +142,18 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         max_value = metrics["engine_io_latency_fetch_max"]
         mean_value = metrics["engine_io_latency_fetch_mean"]
         stddev_value = metrics["engine_io_latency_fetch_stddev"]
-        if ((max_value >= metrics["engine_io_latency_fetch"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+        if ((max_value >= metrics["engine_io_latency_fetch"] >= min_value)
+                and (max_value > mean_value > min_value)
+                and (stddev_value < (max_value - min_value))):
             status["fetch"] = True
 
         min_value = metrics["engine_io_latency_update_min"]
         max_value = metrics["engine_io_latency_update_max"]
         mean_value = metrics["engine_io_latency_update_mean"]
         stddev_value = metrics["engine_io_latency_update_stddev"]
-        if ((max_value >= metrics["engine_io_latency_update"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+        if ((max_value >= metrics["engine_io_latency_update"] >= min_value)
+                and (max_value > mean_value > min_value)
+                and (stddev_value < (max_value - min_value))):
             status["update"] = True
         return status
 
@@ -164,9 +164,9 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=telemetry
-        :avocado: tags=test_io_latency_telemetry
+        :avocado: tags=test_io_latency_telmetry_metrics
 
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
@@ -178,7 +178,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         test_metrics = TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS + \
-                       TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
+            TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
 
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
@@ -186,17 +186,14 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             oclass = self.ior_cmd.dfs_oclass.value
             self.add_containers(self.pool, oclass)
             for operation in ["update", "fetch"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info(
-                    "<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))
+                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].uuid)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                    timeout=200, create_pool=False, create_cont=False)
                 ior_latency[transfer_size][operation] = self.get_ior_latency(ior_results)
                 if operation in "update":
                     metrics_data.update(self.telemetry.get_io_metrics(
@@ -337,9 +334,9 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             verify values using IOR.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=telemetry,control
-        :avocado: tags=test_ior_dtx_telemetry
+        :avocado: tags=test_ior_dtx_telemetry_metrics
 
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
@@ -364,17 +361,13 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             oclass = self.ior_cmd.dfs_oclass.value
             self.add_containers(self.pool, oclass)
             for operation in ["rw"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info(
-                        "<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))
+                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                        self.server_group, self.pool, self.container[-1].uuid)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command to populate IO dtx metrics
-                _ = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                _ = self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
                 # _ = self.ior_with_transfer_size(transfer_size, operation)
                 # Get IO dtx telemetry metrics
                 metrics_data.update(self.telemetry.get_io_metrics(
