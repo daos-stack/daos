@@ -2064,6 +2064,8 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
+        "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, "/scratch/bfaccini/"),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
