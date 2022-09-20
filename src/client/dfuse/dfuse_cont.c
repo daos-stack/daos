@@ -11,7 +11,8 @@
 
 /* Lookup a container within a pool */
 void
-dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		  struct dht_call *save)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
@@ -34,6 +35,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
@@ -100,13 +102,15 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, save, req);
 	return;
 close:
 	D_FREE(ie);
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:
+	dh_hash_decrefx(fs_handle, save);
+
 	if (rc == ENOENT) {
 		struct fuse_entry_param entry = {0};
 

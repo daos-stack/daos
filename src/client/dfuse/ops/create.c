@@ -98,8 +98,8 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 }
 
 void
-dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name, mode_t mode, struct fuse_file_info *fi)
+dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode,
+		struct fuse_file_info *fi, struct dht_call *save)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
@@ -206,12 +206,14 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
+	dfuse_reply_entry(fs_handle, ie, &fi_out, true, save, req);
 
 	return;
 release:
 	dfs_release(oh->doh_obj);
 err:
+	dh_hash_decrefx(fs_handle, save);
+
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);
 	D_FREE(ie);

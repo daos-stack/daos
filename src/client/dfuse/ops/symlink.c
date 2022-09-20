@@ -8,9 +8,8 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_symlink(fuse_req_t req, const char *link,
-		 struct dfuse_inode_entry *parent,
-		 const char *name)
+dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *parent,
+		 const char *name, struct dht_call *save)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
@@ -44,10 +43,12 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
 			    &ie->ie_stat.st_ino);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, save, req);
 
 	return;
 err:
+	dh_hash_decrefx(fs_handle, save);
+
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 	D_FREE(ie);
 }

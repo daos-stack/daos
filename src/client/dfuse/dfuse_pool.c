@@ -12,8 +12,8 @@
 
 /* Lookup a pool */
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name)
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		  struct dht_call *save)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
@@ -42,6 +42,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (uuid_parse(name, pool) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
+		dh_hash_decrefx(fs_handle, save);
 		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
@@ -77,6 +78,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
+		dh_hash_decrefx(fs_handle, save);
+
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 		return;
 	}
@@ -137,7 +140,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_stat.st_ino = dfc->dfs_ino;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, save, req);
 
 	return;
 decref:
@@ -145,6 +148,8 @@ decref:
 	D_FREE(ie);
 	daos_prop_free(prop);
 err:
+	dh_hash_decrefx(fs_handle, save);
+
 	if (rc == ENOENT) {
 		struct fuse_entry_param entry = {0};
 

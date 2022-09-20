@@ -116,17 +116,22 @@ struct dfuse_obj_hdl {
 void
 dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie);
 
+struct dht_call {
+	int       position;
+	int       bucket_length;
+	d_list_t *rlink;
+};
+
 struct dfuse_inode_ops {
-	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		       const char *name, mode_t mode,
-		       struct fuse_file_info *fi);
+	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		       mode_t mode, struct fuse_file_info *fi, struct dht_call *save);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
-	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		       const char *name);
-	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		      const char *name, mode_t mode);
+	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		       struct dht_call *save);
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		      mode_t mode, struct dht_call *save);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -135,8 +140,8 @@ struct dfuse_inode_ops {
 		       const char *name,
 		       struct dfuse_inode_entry *newparent_inode,
 		       const char *newname, unsigned int flags);
-	void (*symlink)(fuse_req_t req, const char *link,
-			struct dfuse_inode_entry *parent, const char *name);
+	void (*symlink)(fuse_req_t req, const char *link, struct dfuse_inode_entry *parent,
+			const char *name, struct dht_call *save);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
 	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -293,6 +298,9 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
 /* Drain and free resources used by a projection */
 int
 dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
+
+void
+dh_hash_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save);
 
 /* dfuse_thread.c */
 
@@ -624,7 +632,8 @@ dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 /* ops/...c */
 
 void
-dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		struct dht_call *save);
 
 void
 dfuse_cb_forget(fuse_req_t, fuse_ino_t, uint64_t);
@@ -639,8 +648,8 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
-	       const char *, mode_t);
+dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode,
+	       struct dht_call *save);
 
 void
 dfuse_cb_opendir(fuse_req_t, struct dfuse_inode_entry *,
@@ -651,8 +660,8 @@ dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 		    struct fuse_file_info *fi);
 
 void
-dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
-		const char *, mode_t, struct fuse_file_info *);
+dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode,
+		struct fuse_file_info *fi, struct dht_call *save);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
@@ -680,8 +689,8 @@ dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 	       struct fuse_file_info *);
 
 void
-dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
-		 const char *);
+dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *parent,
+		 const char *name, struct dht_call *save);
 
 void
 dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
@@ -718,10 +727,8 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
  * Adds inode to the hash table and calls fuse_reply_entry()
  */
 void
-dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
-		  struct dfuse_inode_entry *inode,
-		  struct fuse_file_info *fi_out,
-		  bool is_new,
+dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *inode,
+		  struct fuse_file_info *fi_out, bool is_new, struct dht_call *save,
 		  fuse_req_t req);
 
 int
@@ -734,16 +741,12 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 
 /* dfuse_cont.c */
 void
-dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name);
-
-void
-dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
-		 const char *name, mode_t mode);
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		  struct dht_call *save);
 
 /* dfuse_pool.c */
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name);
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
+		  struct dht_call *save);
 
 #endif /* __DFUSE_H__ */
