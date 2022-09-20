@@ -335,7 +335,7 @@ class CoreFileProcessing():
 
 
 def main():
-    """Generate stacktraces from a provided directoy of core files."""
+    """Generate stacktraces from a provided directory of core files."""
     parser = ArgumentParser(
         prog="process_core_files.py",
         description="Generate stacktrace files from the core files in the specified directory.")
