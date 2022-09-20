@@ -237,6 +237,16 @@ if [[ $MPI_FILE_UTILS_PATH ]] ; then
 	popd > /dev/null
 fi
 
+info "Updating DAOS libraries install"
+for filepath in $(find "$DAOS_INSTALL_DIR/lib64" -maxdepth 1 -type l)
+do
+	filename=$(basename $filepath)
+	run $CLUSH_EXE -l root -w $SERVERS_LIST -w $CLIENTS_LIST ln -fvs "$(readlink -f "$filepath")" "/lib64/$filename"
+done
+
+info "Updating dynamic linker configuration"
+run $CLUSH_EXE -l root -w $SERVERS_LIST -w $CLIENTS_LIST ldconfig
+
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
 do
@@ -250,8 +260,3 @@ run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin"
 run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
 run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
 run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
-
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-info "Updating dynamic linker configuration"
-run $CLUSH_EXE -l root -w $CLIENTS_LIST ldconfig
-{% endif %}

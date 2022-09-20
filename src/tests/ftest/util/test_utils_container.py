@@ -269,6 +269,7 @@ class TestContainer(TestDaosApiBase):
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
+        self.label = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -361,15 +362,14 @@ class TestContainer(TestDaosApiBase):
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": acl_file,
+                "label": self.label.value
             }
 
             self._log_method("daos.container_create", kwargs)
             try:
-                uuid = self.daos.container_create(
-                    **kwargs)["response"]["container_uuid"]
+                uuid = self.daos.container_create(**kwargs)["response"]["container_uuid"]
             except KeyError as error:
-                raise CommandFailure(
-                    "Error: Unexpected daos container create output") from error
+                raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
