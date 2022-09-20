@@ -34,6 +34,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 		smsc        *scm.MockSysConfig
 		inResp      *storage.ScmScanResponse
 		storageCfgs []storage.TierConfigs
+		nilRank     bool
 		expErr      error
 		expOutResp  *storage.ScmScanResponse
 	}{
@@ -105,6 +106,31 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 				},
 			},
 			expErr: errors.New("unknown"),
+		},
+		"get rank fails": {
+			smsc: &scm.MockSysConfig{
+				GetfsUsageResps: []scm.GetfsUsageRetval{
+					{
+						Total: mockScmNs0wMount.Mount.TotalBytes,
+						Avail: mockScmNs0wMount.Mount.AvailBytes,
+					},
+				},
+			},
+			inResp: &storage.ScmScanResponse{
+				Namespaces: storage.ScmNamespaces{
+					mockScmNs0,
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockScmMountPath0).
+						WithScmDeviceList(mockScmNs0.BlockDevice),
+				},
+			},
+			nilRank: true,
+			expErr:  errors.New("nil rank in superblock"),
 		},
 		"get usage": {
 			smsc: &scm.MockSysConfig{
@@ -180,11 +206,18 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			var engineCfgs []*engine.Config
-			for _, sc := range tc.storageCfgs {
-				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
+			for i, sc := range tc.storageCfgs {
+				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...).WithRank(uint32(i)))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, nil, nil, tc.smsc)
+
+			if tc.nilRank {
+				for _, ei := range cs.harness.Instances() {
+					srv := ei.(*EngineInstance)
+					srv._superblock.Rank = nil
+				}
+			}
 
 			cs.harness.started.SetTrue()
 
