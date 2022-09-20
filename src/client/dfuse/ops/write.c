@@ -21,19 +21,23 @@ void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	       off_t position, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx		*fc = fuse_req_ctx(req);
-	int				rc;
-	struct dfuse_event		*ev;
-	size_t				len = fuse_buf_size(bufv);
-	struct fuse_bufvec		ibuf = FUSE_BUFVEC_INIT(len);
+	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
+	int                           rc;
+	struct dfuse_event           *ev;
+	size_t                        len  = fuse_buf_size(bufv);
+	struct fuse_bufvec            ibuf = FUSE_BUFVEC_INIT(len);
 
 	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d",
 			position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
 
-	atomic_fetch_add_relaxed(&oh->doh_write_count, 1);
+	if (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0) {
+		if (atomic_fetch_add_relaxed(&oh->doh_ie->ie_open_write_count, 1) == 0) {
+			dfuse_cache_evict(oh->doh_ie);
+		}
+	}
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)

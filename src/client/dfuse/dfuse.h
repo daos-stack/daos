@@ -578,6 +578,8 @@ struct dfuse_inode_entry {
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
 
+	ATOMIC uint32_t          ie_open_write_count;
+
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
 
