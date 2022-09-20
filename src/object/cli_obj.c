@@ -569,7 +569,7 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 	 * modification via distributed tranasaction.
 	 */
 	if (cond_modify)
-		return -DER_NEED_TX;
+		D_GOTO(unlock, rc = -DER_NEED_TX);
 
 	/* Choose one from data shards within bit_map, and also make sure there are
 	 * no further data shards failed.
@@ -985,16 +985,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	D_DEBUG(DB_TRACE, DF_OID" query shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
-	/* Disable inflight I/O during reintegration for the moment */
-	if (rc == 0 &&
-	    obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_shard->do_reintegrating) {
-		D_ERROR(DF_OID" shard is being reintegrated: %d\n",
-			DP_OID(obj->cob_md.omd_id), -DER_IO);
-		D_GOTO(close, rc = -DER_IO);
-	}
-
 	if (rc != 0) {
-		D_ERROR(DF_OID" obj_shard_open %u, rc "DF_RC".\n",
+		D_DEBUG(DB_IO, DF_OID" obj_shard_open %u, rc "DF_RC".\n",
 			DP_OID(obj->cob_md.omd_id), shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
