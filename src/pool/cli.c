@@ -3095,6 +3095,10 @@ int dc_pool_get_redunc(daos_handle_t poh)
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
+	/* RF property supported by engines with protocol >= 5 ; default for older versions. */
+	if (dc_pool_proto_version <= 4)
+		return DAOS_PROP_PO_REDUN_FAC_DEFAULT;
+
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	if (pool->dp_rf_valid) {
 		rf = pool->dp_rf;
