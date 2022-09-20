@@ -656,8 +656,11 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
 		"start EC "DF_U64"\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash,
 		obj_ec_shard_off(io->ui_dkey_hash, obj_get_oca(obj), io->ui_oid.id_shard));
-	if (nr == 0 || is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj)))
+	if (nr == 0 ||
+	    is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj))) {
+		obj_decref(obj);
 		return 0;
+	}
 
 	for (i = 0; i < nr; i++) {
 		daos_size_t	size;
@@ -701,6 +704,7 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	if (idx == 0) {
 		D_DEBUG(DB_TRACE, "all punched "DF_KEY" nr %d shard "DF_U64"\n",
 			DP_KEY(&io->ui_dkey), nr, shard);
+		obj_decref(obj);
 		return 0;
 	}
 
@@ -759,6 +763,7 @@ out:
 
 		D_FREE(iovs_verify[i].iov_buf);
 	}
+	obj_decref(obj);
 
 	return rc;
 }
