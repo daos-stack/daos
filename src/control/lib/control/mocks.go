@@ -580,6 +580,7 @@ type (
 
 	MockScmConfig struct {
 		MockStorageConfig
+		Rank system.Rank
 	}
 
 	MockNvmeConfig struct {
@@ -627,6 +628,7 @@ func MockStorageScanResp(t *testing.T,
 				DeviceList: []string{fmt.Sprintf("pmem%d", index)},
 				TotalBytes: mockScmConfig.TotalBytes,
 				AvailBytes: mockScmConfig.AvailBytes,
+				Rank:       mockScmConfig.Rank,
 			}
 		}
 		scmNamespaces = append(scmNamespaces, scmNamespace)
@@ -655,6 +657,10 @@ func MockStorageScanResp(t *testing.T,
 }
 
 func mockRanks(rankSet string) (ranks []uint32) {
+	if rankSet == "" {
+		return
+	}
+
 	for _, item := range strings.Split(rankSet, ",") {
 		rank, err := strconv.ParseUint(item, 10, 32)
 		if err != nil {

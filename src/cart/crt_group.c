@@ -875,7 +875,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 	}
 
 	ctx_idx = crt_ctx->cc_idx;
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
 	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
@@ -2518,7 +2518,7 @@ crt_rank_self_set(d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
 

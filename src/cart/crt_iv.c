@@ -2520,7 +2520,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 		transfer_back_to_child(&input->ivu_key, iv_info, true,
-				       cb_info->cci_rc);
+				       cb_info->cci_rc ?: output->rc);
 		D_GOTO(exit, 0);
 	}
 
