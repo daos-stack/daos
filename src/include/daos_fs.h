@@ -57,19 +57,6 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
-/** DFS Hints for Redundancy and Sharding */
-enum {
-	/** small files: 1 shard - RP */
-	DFS_HINT_FILE_SINGLE	= (1 << 0),
-	/** large files: all shards - EC */
-	DFS_HINT_FILE_MAX	= (1 << 1),
-
-	/** small dirs: 1 shard - RP */
-	DFS_HINT_DIR_SINGLE	= (1 << 2),
-	/** large dirs: all shards - RP */
-	DFS_HINT_DIR_MAX	= (1 << 3),
-};
-
 /** struct holding attributes for a DFS container - all optional */
 typedef struct {
 	/** User ID for DFS container. */
@@ -81,15 +68,17 @@ typedef struct {
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
 	/**
-	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
-	 * If set to 0 or more generally not set to balanced explicitly, relaxed
-	 * mode will be used. In the future, Balanced mode will be the default.
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.  If set to 0 or more
+	 * generally not set to balanced explicitly, relaxed mode will be used
 	 */
 	uint32_t		da_mode;
 	/** Default Object Class for all directories in the container */
 	daos_oclass_id_t	da_dir_oclass_id;
-	/** hints for POSIX container creation DFS_DIRS/FILES_LARGE/SMALL */
-	uint64_t		da_hints;
+	/*
+	 * Comma separated hints for POSIX container creation of the format: "type:hint".
+	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
+	 */
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */

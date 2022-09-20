@@ -209,7 +209,7 @@ type containerCreateCmd struct {
 	ChunkSize      ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass    ObjClassFlag         `long:"oclass" short:"o" description:"default file object class"`
 	DirObjectClass ObjClassFlag         `long:"dir_oclass" short:"a" description:"default directory object class"`
-	CHints         ContHintsFlag        `long:"hints" short:"h" description:"container hints"`
+	CHints         string               `long:"hints" short:"h" description:"container hints"`
 	Properties     CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode           ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile        string               `long:"acl-file" short:"A" description:"input file containing ACL"`
@@ -299,8 +299,9 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
 		}
-		if cmd.CHints.Set {
-			ap.hints = cmd.CHints.Hints
+		if cmd.CHints != "" {
+			ap.hints = C.CString(cmd.CHints)
+			defer freeString(ap.hints)
 		}
 	}
 

@@ -90,12 +90,26 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		strcpy(str, "UNKNOWN");
 		return -1;
 	}
+
 	if (nr_grps == oc->oc_grp_nr) {
 		strcpy(str, oc->oc_name);
 	} else {
 		/** update oclass name with group number */
 		char *p = oc->oc_name;
 		int i = 0;
+
+		if (p[i] == 'S') {
+			str[i++] = 'S';
+			p = &str[i];
+			str[i] = 0;
+			i = snprintf(p, MAX_OBJ_CLASS_NAME_LEN - strlen(str), "%u", nr_grps);
+			if (i < 0) {
+				D_ERROR("Failed to encode object class name\n");
+				strcpy(str, "UNKNOWN");
+				return -1;
+			}
+			return 0;
+		}
 
 		while (p[i] != 'G') {
 			str[i] = p[i];

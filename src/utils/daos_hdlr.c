@@ -572,7 +572,8 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
-
+		if (ap->hints)
+			strncpy(attr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
 		rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
@@ -615,7 +616,8 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_dir_oclass_id = ap->dir_oclass;
 	dattr.da_chunk_size = ap->chunk_size;
-	dattr.da_hints = ap->hints;
+	if (ap->hints)
+		strncpy(dattr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
 	dattr.da_props = ap->props;
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
