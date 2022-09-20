@@ -193,6 +193,7 @@ run_cmd(const char *command, int *outputfd)
 	int	stderrfd[2];
 	char	**cmd_tokens = NULL;
 	int	tokens_len = 0;
+	int	i;
 
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
 
@@ -214,6 +215,10 @@ run_cmd(const char *command, int *outputfd)
 		D_ERROR("failed to split command into tokens: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_stderr, rc);
 	}
+
+	D_DEBUG(DB_TEST, "parent command tokens (%d):\n", tokens_len);
+	for (i = 0; i < tokens_len; i++)
+		D_DEBUG(DB_TEST, "token[%d]=\"%s\"\n", i, cmd_tokens[i]);
 
 	D_DEBUG(DB_TEST, "forking to run dmg command\n");
 
@@ -237,6 +242,10 @@ run_cmd(const char *command, int *outputfd)
 
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
+
+		fprintf(stderr, "child command tokens (%d):\n", tokens_len);
+		for (i = 0; i < tokens_len; i++)
+			fprintf(stderr, "token[%d]=\"%s\"\n", i, cmd_tokens[i]);
 
 		rc = execvp(cmd_tokens[0], cmd_tokens);
 
