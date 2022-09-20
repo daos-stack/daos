@@ -316,6 +316,12 @@ func PoolProperties() PoolPropertyMap {
 	}
 }
 
+func PoolDeprecatedProperties() map[string]string {
+	return map[string]string{
+		"rf": "rd_fac",
+	}
+}
+
 // GetProperty returns a *PoolProperty for the property name, if valid.
 func (m PoolPropertyMap) GetProperty(name string) (*PoolProperty, error) {
 	h, found := m[name]

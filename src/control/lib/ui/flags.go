@@ -101,12 +101,21 @@ func propError(fs string, args ...interface{}) *flags.Error {
 // CompletionMap is a map of key to a list of possible completions.
 type CompletionMap map[string][]string
 
+type PropertiesFlag struct {
+	completions      CompletionMap
+	deprecatedKeyMap map[string]string
+}
+
+// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
+func (f *PropertiesFlag) DeprecatedKeyMap(deprKeyMap map[string]string) {
+	f.deprecatedKeyMap = deprKeyMap
+}
+
 // SetPropertiesFlag is used to hold a list of properties to set.
 type SetPropertiesFlag struct {
-	ParsedProps            map[string]string
-	settableKeys           common.StringSet
-	settableDeprecatedKeys common.StringSet
-	completions            CompletionMap
+	PropertiesFlag
+	ParsedProps  map[string]string
+	settableKeys common.StringSet
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -114,14 +123,6 @@ func (f *SetPropertiesFlag) SettableKeys(keys ...string) {
 	f.settableKeys = make(common.StringSet)
 	for _, key := range keys {
 		f.settableKeys.Add(key)
-	}
-}
-
-// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
-func (f *SetPropertiesFlag) SettableDeprecatedKeys(keys ...string) {
-	f.settableDeprecatedKeys = make(common.StringSet)
-	for _, key := range keys {
-		f.settableDeprecatedKeys.Add(key)
 	}
 }
 
@@ -142,11 +143,11 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 		return true
 	}
 
-	if len(f.settableDeprecatedKeys) == 0 {
+	if len(f.deprecatedKeyMap) == 0 {
 		return false
 	}
 
-	_, isSettable := f.settableDeprecatedKeys[key]
+	_, isSettable := f.deprecatedKeyMap[key]
 	return isSettable
 }
 
@@ -171,6 +172,9 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if len(key) > MaxPropKeyLen {
 			return propError("key too long (%d > %d)", len(key), MaxPropKeyLen)
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 		if len(value) == 0 {
 			return propError("value must not be empty")
@@ -227,9 +231,9 @@ func (f *SetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 
 // GetPropertiesFlag is used to hold a list of property keys to get.
 type GetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // GettableKeys accepts a list of property keys that are gettable.
@@ -253,7 +257,15 @@ func (f *GetPropertiesFlag) IsGettable(key string) bool {
 		return true
 	}
 
-	_, isGettable := f.gettableKeys[key]
+	if _, isGettable := f.gettableKeys[key]; isGettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isGettable := f.deprecatedKeyMap[key]
 	return isGettable
 }
 
@@ -275,6 +287,9 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if strings.Contains(key, propKvSep) {
 			return propError("key cannot contain '" + propKvSep + "'")
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 
 		f.ParsedProps.Add(key)

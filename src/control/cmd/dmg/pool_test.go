@@ -589,6 +589,12 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("can't set redundancy factor on existing pool."),
 		},
 		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
 			"Set pool ec_pda property is not allowed",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
 			"",
