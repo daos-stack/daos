@@ -317,6 +317,17 @@ class AvocadoInfo():
             return ["avocado", "--paginator=off", "list"]
         return ["avocado", "list", "--paginator=off"]
 
+    def get_list_regex(self):
+        """Get the regular expression used to get the test file from the avocado list command.
+
+        Returns:
+            str: regular expression to use to get the test file from the avocado list command output
+
+        """
+        if self.major >= 92:
+            return r"avocado-instrumented\s+(.*):"
+        return r"INSTRUMENTED\s+(.*):"
+
     def get_run_command(self, test, tag_filters, sparse, failfast, extra_yaml):
         """Get the avocado run command for this version of avocado.
 
@@ -899,7 +910,7 @@ class Launch():
         self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
 
-        # Rename the launch log drectory if one exists
+        # Rename the launch log directory if one exists
         renamed_log_dir = self._create_log_dir()
         self.log.addHandler(get_file_handler(self.logfile))
         self.log.info("-" * 80)
@@ -1531,7 +1542,8 @@ class Launch():
         # Find all the test files that contain tests matching the tags
         self.log.info("Detecting tests matching tags: %s", " ".join(command))
         output = run_local(self.log, command, check=True)
-        for index, test_file in enumerate(set(re.findall(r"INSTRUMENTED\s+(.*):", output.stdout))):
+        unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
+        for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
             self.log.info("  %s", self.tests[-1])
 
