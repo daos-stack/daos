@@ -112,9 +112,8 @@ dh_hash_find(struct dfuse_projection_info *fs_handle, fuse_ino_t parent, struct 
 }
 
 void
-dh_hash_decref(struct dfuse_projection_info *fs_handle, d_list_t *rlink, struct dht_call *save)
+dh_hash_decref(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 {
-	D_ASSERT(rlink == save->rlink);
 	d_hash_rec_decref(&fs_handle->dpi_iet, save->rlink);
 }
 
@@ -151,11 +150,13 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	if (!parent_inode->ie_dfs->dfs_ops->create)
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(decref, rc = ENOTSUP);
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode, fi, &save);
 
 	return;
+decref:
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -178,11 +179,13 @@ df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, de
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	if (!parent_inode->ie_dfs->dfs_ops->mknod)
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(decref, rc = ENOTSUP);
 
 	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode, &save);
 
 	return;
+decref:
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -217,7 +220,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 	if (rlink)
-		dh_hash_decref(fs_handle, rlink, &save);
+		dh_hash_decref(fs_handle, &save);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -255,11 +258,11 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		D_GOTO(out, rc = ENOTSUP);
 
 	if (rlink)
-		dh_hash_decref(fs_handle, rlink, &save);
+		dh_hash_decref(fs_handle, &save);
 	return;
 out:
 	if (rlink)
-		dh_hash_decref(fs_handle, rlink, &save);
+		dh_hash_decrefx(fs_handle, &save);
 
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -313,7 +316,7 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
 }
@@ -340,10 +343,10 @@ df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	inode->ie_dfs->dfs_ops->opendir(req, inode, fi);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -370,10 +373,10 @@ df_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	inode->ie_dfs->dfs_ops->releasedir(req, inode, fi);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -401,11 +404,11 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -468,7 +471,7 @@ df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *n
 
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -502,10 +505,10 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 
 	inode->ie_dfs->dfs_ops->setxattr(req, inode, name, value, size, flags);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -532,10 +535,10 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -570,10 +573,10 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 	inode->ie_dfs->dfs_ops->removexattr(req, inode, name);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -600,10 +603,10 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -650,15 +653,15 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 					      flags);
 
 	if (newparent_inode)
-		dh_hash_decref(fs_handle, rlink2, &save2);
+		dh_hash_decref(fs_handle, &save2);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 
 	return;
 decref_both:
-	dh_hash_decref(fs_handle, rlink2, &save2);
+	dh_hash_decrefx(fs_handle, &save2);
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -685,10 +688,10 @@ df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 
 	inode->ie_dfs->dfs_ops->statfs(req, inode);
 
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decref(fs_handle, &save);
 	return;
 decref:
-	dh_hash_decref(fs_handle, rlink, &save);
+	dh_hash_decrefx(fs_handle, &save);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
