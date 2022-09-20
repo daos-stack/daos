@@ -16,7 +16,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, run_remote
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
+from run_utils import run_remote
 from write_host_file import write_host_file
 
 

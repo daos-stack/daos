@@ -10,13 +10,10 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
-import fnmatch
 import json
 import logging
 import os
 import re
-import socket
-import subprocess   # nosec
 import site
 import sys
 import time
@@ -27,13 +24,14 @@ import yaml
 # from avocado.core.version import MAJOR, MINOR
 # from avocado.utils.stacktrace import prepare_exc_info
 from ClusterShell.NodeSet import NodeSet
-from ClusterShell.Task import task_self
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
-# from util.general_utils import run_remote, RemoteCommandResult
 # pylint: disable=import-error,no-name-in-module
+from process_core_files import CoreFileProcessing
+from util.logger_utils import get_console_logger, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
+from util.run_utils import get_local_host, run_local, run_remote, RunException
 
 DEFAULT_DAOS_APP_DIR = "/scratch"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
@@ -68,120 +66,6 @@ YAML_KEYS = OrderedDict(
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
-
-
-def get_local_host():
-    """Get the local host name.
-
-    Returns:
-        str: name of the local host
-    """
-    return socket.gethostname().split(".")[0]
-
-
-def run_local(log, command, capture_output=True, timeout=None, check=False):
-    """Run the command locally.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        command (list): command from which to obtain the output
-        capture_output(bool, optional): whether or not to include the command output in the
-            subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
-        timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to None.
-        check (bool, optional): if set the method will raise an exception if the command does not
-            yield a return code equal to zero. Defaults to False.
-
-    Raises:
-        LaunchException: if the command fails: times out (timeout must be specified),
-            yields a non-zero exit status (check must be True), is interrupted by the user, or
-            encounters some other exception.
-
-    Returns:
-        subprocess.CompletedProcess: an object representing the result of the command execution with
-            the following properties:
-                - args (the command argument)
-                - returncode
-                - stdout (only set if capture_output=True)
-                - stderr (not used; included in stdout)
-
-    """
-    local_host = get_local_host()
-    command_str = " ".join(command)
-    kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
-    if capture_output:
-        kwargs["stdout"] = subprocess.PIPE
-        kwargs["stderr"] = subprocess.STDOUT
-    if timeout:
-        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
-    else:
-        log.debug("Running on %s: %s", local_host, command_str)
-
-    try:
-        # pylint: disable=subprocess-run-check
-        result = subprocess.run(command, **kwargs)
-
-    except subprocess.TimeoutExpired as error:
-        # Raised if command times out
-        log.debug(str(error))
-        log.debug("  output: %s", error.output)
-        log.debug("  stderr: %s", error.stderr)
-        raise LaunchException(f"Command '{command_str}' exceed {timeout}s timeout") from error
-
-    except subprocess.CalledProcessError as error:
-        # Raised if command yields a non-zero return status with check=True
-        log.debug(str(error))
-        log.debug("  output: %s", error.output)
-        log.debug("  stderr: %s", error.stderr)
-        raise LaunchException(f"Command '{command_str}' returned non-zero status") from error
-
-    except KeyboardInterrupt as error:
-        # User Ctrl-C
-        message = f"Command '{command_str}' interrupted by user"
-        log.debug(message)
-        raise LaunchException(message) from error
-
-    except Exception as error:
-        # Catch all
-        message = f"Command '{command_str}' encountered unknown error"
-        log.debug(message)
-        log.debug(str(error))
-        raise LaunchException(message) from error
-
-    if capture_output:
-        # Log the output of the command
-        log.debug("  %s (rc=%s):", local_host, result.returncode)
-        if result.stdout:
-            for line in result.stdout.splitlines():
-                log.debug("    %s", line)
-
-    return result
-
-
-def run_remote(log, hosts, command, timeout=120):
-    """Run the command on the remote hosts.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to run the command
-        command (str): command from which to obtain the output
-        timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to 120 seconds.
-
-    Returns:
-        RemoteCommandResult: a grouping of the command results from the same hosts with the same
-            return status
-
-    """
-    task = task_self()
-    # task.set_info('debug', True)
-    # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", "-oForwardAgent=yes")
-    log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
-    task.run(command=command, nodes=hosts, timeout=timeout)
-    results = RemoteCommandResult(command, task)
-    results.log_output(log)
-    return results
 
 
 def get_yaml_data(log, yaml_file):
@@ -307,10 +191,25 @@ class AvocadoInfo():
     """Information about this version of avocado."""
 
     def __init__(self):
-        """Initialize an AvocadoInfo object.
+        """Initialize an AvocadoInfo object."""
+        self.major = 0
+        self.minor = 0
+
+    def __str__(self):
+        """Get the avocado version as a string.
+
+        Returns:
+            str: the avocado version
+
+        """
+        return f"Avocado {str(self.major)}.{str(self.minor)}"
+
+    def set_version(self):
+        """Set the avocado major and minor versions.
 
         Raises:
-            LaunchException: _description_
+            RunException: if there is an error running 'avocado -v'
+
         """
         try:
             # pylint: disable=import-outside-toplevel
@@ -329,15 +228,6 @@ class AvocadoInfo():
             except IndexError as error:
                 raise LaunchException("Error extracting avocado version from command") from error
 
-    def __str__(self):
-        """Get the avocado version as a string.
-
-        Returns:
-            str: the avocado version
-
-        """
-        return f"Avocado {str(self.major)}.{str(self.minor)}"
-
     def get_setting(self, section, key, default=None):
         """Get the value for the specified avocado setting.
 
@@ -347,7 +237,7 @@ class AvocadoInfo():
             default (object): default value to use if setting is undefined
 
         Raises:
-            LaunchException: if there is an error getting the setting from the avocado command
+            RunException: if there is an error getting the setting from the avocado command
 
         Returns:
             object: value for the avocado setting or None if not defined
@@ -393,8 +283,8 @@ class AvocadoInfo():
             str: the directory used by avocado to log test results
 
         """
-        default_base_dir = os.path.expanduser(os.path.join("~", "avocado", "job-results"))
-        return self.get_setting("datadir.paths", "logs_dir", default_base_dir)
+        default_base_dir = os.path.join("~", "avocado", "job-results")
+        return os.path.expanduser(self.get_setting("datadir.paths", "logs_dir", default_base_dir))
 
     def get_directory(self, directory, create=True):
         """Get the avocado test directory for the test.
@@ -465,120 +355,6 @@ class AvocadoInfo():
             command.extend(extra_yaml)
         command.extend(["--", str(test)])
         return command
-
-
-class RemoteCommandResult():
-    """Stores the command result from a Task object."""
-
-    class ResultData():
-        # pylint: disable=too-few-public-methods
-        """Command result data for the set of hosts."""
-
-        def __init__(self, command, returncode, hosts, stdout, timeout):
-            """Initialize a ResultData object.
-
-            Args:
-                command (str): the executed command
-                returncode (int): the return code of the executed command
-                hosts (NodeSet): the host(s) on which the executed command yielded this result
-                stdout (list): the result of the executed command split by newlines
-                timeout (bool): indicator for a command timeout
-            """
-            self.command = command
-            self.returncode = returncode
-            self.hosts = hosts
-            self.stdout = stdout
-            self.timeout = timeout
-
-    def __init__(self, command, task):
-        """Create a RemoteCommandResult object.
-
-        Args:
-            command (str): command executed
-            task (Task): object containing the results from an executed clush command
-        """
-        self.output = []
-        self._process_task(task, command)
-
-    @property
-    def homogeneous(self):
-        """Did all the hosts produce the same output.
-
-        Returns:
-            bool: if all the hosts produced the same output
-
-        """
-        return len(self.output) == 1
-
-    @property
-    def passed(self):
-        """Did the command pass on all the hosts.
-
-        Returns:
-            bool: if the command was successful on each host
-
-        """
-        all_zero = all(data.returncode == 0 for data in self.output)
-        return all_zero and not self.timeout
-
-    @property
-    def timeout(self):
-        """Did the command timeout on any hosts.
-
-        Returns:
-            bool: True if the command timed out on at least one set of hosts; False otherwise
-
-        """
-        return any(data.timeout for data in self.output)
-
-    def _process_task(self, task, command):
-        """Populate the output list and determine the passed result for the specified task.
-
-        Args:
-            task (Task): a ClusterShell.Task.Task object for the executed command
-            command (str): the executed command
-        """
-        # Get a dictionary of host list values for each unique return code key
-        results = dict(task.iter_retcodes())
-
-        # Get a list of any hosts that timed out
-        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-
-        # Populate the a list of unique output for each NodeSet
-        for code in sorted(results):
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-            for output, output_hosts in output_data:
-                # In run_remote(), task.run() is executed with the stderr=False default.
-                # As a result task.iter_buffers() will return combined stdout and stderr.
-                stdout = []
-                for line in output.splitlines():
-                    if isinstance(line, bytes):
-                        stdout.append(line.decode("utf-8"))
-                    else:
-                        stdout.append(line)
-                self.output.append(
-                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
-        if timed_out:
-            self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
-
-    def log_output(self, log):
-        """Log the command result.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
-        for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.stdout:
-                    log.debug("    %s", line)
 
 
 class TestName():
@@ -853,96 +629,22 @@ class Launch():
         self.repeat = repeat
         self.mode = mode
         self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
-        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
-        self.logfile = os.path.join(self.logdir, "job.log")
+        self.logdir = None
+        self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.local_host = NodeSet(get_local_host())
 
         # Setup a logger
-        renamed_log_dir = self._create_log_dir()
-        console_format = "%(message)s"
-        console = logging.StreamHandler()
-        console.setFormatter(logging.Formatter(console_format))
-        console.setLevel(logging.INFO)
-        logging.basicConfig(
-            format=console_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG,
-            handlers=[console])
-        self.log = logging.getLogger(__name__)
-        self.log.addHandler(self._get_file_handler(self.logfile))
-        self._start_logging(renamed_log_dir)
+        self.log = get_console_logger()
 
         # Results tracking settings
-        self.job_results_dir = self.avocado.get_logs_dir()
-        self.local_host = NodeSet(get_local_host())
-        max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
-        self.job = Job(
-            self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
-            max_chars=max_chars)
-        self.result = Results(self.logdir)
+        self.job_results_dir = None
+        self.job = None
+        self.result = None
 
         # Details about the run
         self.details = OrderedDict()
-        self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = get_local_host()
-
-    @staticmethod
-    def _get_file_handler(log_file):
-        """Get a logging file handler.
-
-        Args:
-            log_file (str): file in which to log debug messages
-
-        Returns
-            str: a logging.FileHandler setup to log debug messages to the log file
-
-        """
-        log_format = logging.Formatter("%(asctime)s %(levelname)-5s %(funcName)27s: %(message)s")
-        log_handler = logging.FileHandler(log_file, encoding='utf-8')
-        log_handler.setLevel(logging.DEBUG)
-        log_handler.setFormatter(log_format)
-        return log_handler
-
-    def _create_log_dir(self):
-        """Create the log directory and rename it if it already exists.
-
-        Returns:
-            str: name of the old log directory if renamed, otherwise None
-
-        """
-        # When running manually save the previous log if one exists
-        old_launch_log_dir = None
-        if os.path.exists(self.logdir):
-            old_launch_log_dir = "_".join([self.logdir, "old"])
-            if os.path.exists(old_launch_log_dir):
-                for file in os.listdir(old_launch_log_dir):
-                    rm_file = os.path.join(old_launch_log_dir, file)
-                    if os.path.isdir(rm_file):
-                        for file2 in os.listdir(rm_file):
-                            os.remove(os.path.join(rm_file, file2))
-                        os.rmdir(rm_file)
-                    else:
-                        os.remove(rm_file)
-                os.rmdir(old_launch_log_dir)
-            os.rename(self.logdir, old_launch_log_dir)
-        os.makedirs(self.logdir)
-
-        return old_launch_log_dir
-
-    def _start_logging(self, renamed_log_dir=None):
-        """Log the information to the start of the log file.
-
-        Args:
-            renamed_log_dir (str, optional): name of the renamed log directory. Defaults to None.
-        """
-        self.log.info("-" * 80)
-        self.log.info("DAOS functional test launcher")
-        self.log.info("")
-        self.log.info("Running with %s", self.avocado)
-        self.log.info("Logging launch results to: %s", self.logdir)
-        if renamed_log_dir is not None:
-            self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
-        self.log.info("Launch log file: %s", self.logfile)
-        self.log.info("-" * 80)
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -1040,24 +742,26 @@ class Launch():
 
         """
         # Mark the end of the test result for any non-test execution steps
-        self._end_test(self.result.tests[0], message, fail_class, exc_info)
+        if self.result and self.result.tests:
+            self._end_test(self.result.tests[0], message, fail_class, exc_info)
 
         # Write the details to a json file
         self._write_details_json()
 
-        # Generate a results.xml for the this run
-        try:
-            create_xml(self.job, self.result)
-        except ModuleNotFoundError as error:
-            # When SRE-439 is fixed this should be an error
-            self.log.warning("Unable to create results.xml file: %s", str(error))
+        if self.job and self.result:
+            # Generate a results.xml for the this run
+            try:
+                create_xml(self.job, self.result)
+            except ModuleNotFoundError as error:
+                # When SRE-439 is fixed this should be an error
+                self.log.warning("Unable to create results.xml file: %s", str(error))
 
-        # Generate a results.html for the this run
-        try:
-            create_html(self.job, self.result)
-        except ModuleNotFoundError as error:
-            # When SRE-439 is fixed this should be an error
-            self.log.warning("Unable to create results.html file: %s", str(error))
+            # Generate a results.html for the this run
+            try:
+                create_html(self.job, self.result)
+            except ModuleNotFoundError as error:
+                # When SRE-439 is fixed this should be an error
+                self.log.warning("Unable to create results.html file: %s", str(error))
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -1065,12 +769,13 @@ class Launch():
 
     def _write_details_json(self):
         """Write the details to a json file."""
-        details_json = os.path.join(self.logdir, "details.json")
-        try:
-            with open(details_json, "w", encoding="utf-8") as details:
-                details.write(json.dumps(self.details, indent=4))
-        except TypeError as error:
-            self.log.error("Error writing %s: %s", details_json, str(error))
+        if self.logdir:
+            details_json = os.path.join(self.logdir, "details.json")
+            try:
+                with open(details_json, "w", encoding="utf-8") as details:
+                    details.write(json.dumps(self.details, indent=4))
+            except TypeError as error:
+                self.log.error("Error writing %s: %s", details_json, str(error))
 
     def run(self, args):
         # pylint: disable=too-many-return-statements
@@ -1083,6 +788,9 @@ class Launch():
             int: exit status for the steps executed
 
         """
+        # Setup launch to log and run the requested action
+        self._configure()
+
         # Add a test result to account for any non-test execution steps
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
@@ -1130,7 +838,7 @@ class Launch():
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
             self.list_tests(args.tags)
-        except LaunchException:
+        except RunException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
@@ -1157,7 +865,7 @@ class Launch():
         # Modify the test yaml files to run on this cluster
         try:
             self.setup_test_files(args, yaml_dir)
-        except LaunchException:
+        except RunException:
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
@@ -1178,6 +886,70 @@ class Launch():
         # Return the appropriate return code and mark the test result to account for any non-test
         # execution steps complete
         return self.get_exit_status(status, "Executing tests complete")
+
+    def _configure(self):
+        """Configure launch to start logging and track test results.
+
+        Raises:
+            RunException: if there are any issues obtaining data from avocado commands
+
+        """
+        # Configure the logfile
+        self.avocado.set_version()
+        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
+        self.logfile = os.path.join(self.logdir, "job.log")
+
+        # Rename the launch log drectory if one exists
+        renamed_log_dir = self._create_log_dir()
+        self.log.addHandler(get_file_handler(self.logfile))
+        self.log.info("-" * 80)
+        self.log.info("DAOS functional test launcher")
+        self.log.info("")
+        self.log.info("Running with %s", self.avocado)
+        self.log.info("Logging launch results to: %s", self.logdir)
+        if renamed_log_dir is not None:
+            self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
+        self.log.info("Launch log file: %s", self.logfile)
+        self.log.info("-" * 80)
+
+        # Results tracking settings
+        self.job_results_dir = self.avocado.get_logs_dir()
+        max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
+        self.job = Job(
+            self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
+            max_chars=max_chars)
+        self.result = Results(self.logdir)
+
+        # Add details about the run
+        self.details["avocado version"] = str(self.avocado)
+        self.details["launch host"] = get_local_host()
+
+    def _create_log_dir(self):
+        """Create the log directory and rename it if it already exists.
+
+        Returns:
+            str: name of the old log directory if renamed, otherwise None
+
+        """
+        # When running manually save the previous log if one exists
+        old_launch_log_dir = None
+        print(f"self.logdir: {self.logdir}")
+        if os.path.exists(self.logdir):
+            old_launch_log_dir = "_".join([self.logdir, "old"])
+            if os.path.exists(old_launch_log_dir):
+                for file in os.listdir(old_launch_log_dir):
+                    rm_file = os.path.join(old_launch_log_dir, file)
+                    if os.path.isdir(rm_file):
+                        for file2 in os.listdir(rm_file):
+                            os.remove(os.path.join(rm_file, file2))
+                        os.rmdir(rm_file)
+                    else:
+                        os.remove(rm_file)
+                os.rmdir(old_launch_log_dir)
+            os.rename(self.logdir, old_launch_log_dir)
+        os.makedirs(self.logdir)
+
+        return old_launch_log_dir
 
     def _set_test_environment(self, servers, clients, list_tests, provider, insecure_mode):
         """Set up the test environment.
@@ -1335,7 +1107,7 @@ class Launch():
         operstate = os.path.join(net_path, "*", "operstate")
         command = [f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"]
 
-        result = run_remote(self.log, all_hosts, " | ".join(command))
+        result = run_remote(all_hosts, " | ".join(command))
         if not result.passed:
             raise LaunchException(
                 f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
@@ -1365,7 +1137,7 @@ class Launch():
         interface_speeds = {}
         for interface in common_interfaces:
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-            result = run_remote(self.log, all_hosts, command)
+            result = run_remote(all_hosts, command)
             # Verify each host has the same interface speed
             if result.passed and result.homogeneous:
                 for line in result.output[0].stdout:
@@ -1423,7 +1195,7 @@ class Launch():
             # Check for a Omni-Path interface
             self.log.debug("Checking for Omni-Path devices")
             command = "sudo opainfo"
-            result = run_remote(self.log, servers, command)
+            result = run_remote(servers, command)
             if result.passed:
                 # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
                 self.log.debug("  Excluding verbs provider for Omni-Path adapters")
@@ -1431,7 +1203,7 @@ class Launch():
 
             # Detect all supported providers
             command = f"fi_info -d {interface} -l | grep -v 'version:'"
-            result = run_remote(self.log, servers, command)
+            result = run_remote(servers, command)
             if result.passed:
                 # Find all supported providers
                 keys_found = defaultdict(NodeSet)
@@ -1625,7 +1397,7 @@ class Launch():
         command = " | ".join(command_list) + " || :"
 
         # Find all the VMD PCI addresses common to all hosts
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if result.passed:
             for data in result.output:
                 for line in data.stdout:
@@ -1669,7 +1441,7 @@ class Launch():
             command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
         command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
         command = " | ".join(command_list) + " || :"
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
 
         # Verify the command was successful on each server host
         if not result.passed:
@@ -1723,7 +1495,7 @@ class Launch():
             tags (list): a list of tags or test file names
 
         Raises:
-            LaunchException: if there is a problem listing tests
+            RunException: if there is a problem listing tests
 
         """
         self.log.debug("-" * 80)
@@ -1775,7 +1547,7 @@ class Launch():
             run_local(self.log, ["fault_status"], check=True)
             self.log.debug("  Fault injection is enabled")
             return True
-        except LaunchException:
+        except RunException:
             # Command failed or yielded a non-zero return status
             self.log.debug("  Fault injection is disabled")
         return False
@@ -1788,7 +1560,7 @@ class Launch():
             yaml_dir (str): directory in which to write the modified yaml files
 
         Raises:
-            LaunchException: if there is a problem updating the test ymal files
+            RunException: if there is a problem updating the test ymal files
 
         """
         # Replace any placeholders in the extra yaml file, if provided
@@ -1852,7 +1624,7 @@ class Launch():
             yaml_dir (str): directory in which to write the modified yaml files
 
         Raises:
-            LaunchException: if a yaml file placeholder is missing a value
+            RunException: if a yaml file placeholder is missing a value
 
         Returns:
             str: the test yaml file; None if the yaml file contains placeholders
@@ -2081,7 +1853,7 @@ class Launch():
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
                 self.log.info(
                     "Log file for repetition %s of running %s: %s", repeat, test, test_log_file)
-                test_file_handler = self._get_file_handler(test_log_file)
+                test_file_handler = get_file_handler(test_log_file)
                 self.log.addHandler(test_file_handler)
 
                 # Create a new TestResult for this test
@@ -2131,7 +1903,7 @@ class Launch():
         self.log.debug("Current disk space usage of %s", path)
         try:
             run_local(self.log, ["df", "-h", path], check=False)
-        except LaunchException:
+        except RunException:
             pass
 
     def prepare(self, test, repeat):
@@ -2176,7 +1948,7 @@ class Launch():
             f"ls -al {test_dir}",
         ]
         for command in commands:
-            if not run_remote(self.log, test.hosts.all, command).passed:
+            if not run_remote(test.hosts.all, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2199,7 +1971,7 @@ class Launch():
         try:
             run_local(self.log, ["/usr/bin/rm", "-rf", certs_dir])
             run_local(self.log, [command, daos_test_log_dir])
-        except LaunchException:
+        except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
             return 128
@@ -2240,7 +2012,7 @@ class Launch():
             if return_code:
                 self._collect_crash_files()
 
-        except LaunchException:
+        except RunException:
             message = f"Error executing {test} on repeat {repeat}"
             self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             return_code = 1
@@ -2270,7 +2042,7 @@ class Launch():
                     run_local(self.log, ["mkdir", "-p", latest_crash_dir], check=True)
                     for crash_file in crash_files:
                         run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
-                except LaunchException:
+                except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             else:
@@ -2454,7 +2226,7 @@ class Launch():
                             # Issue the appropriate systemctl command to remedy the
                             # detected state, e.g. 'stop' for 'active'.
                             command = ["sudo", "systemctl", key, service]
-                            run_remote(self.log, result[key], " ".join(command))
+                            run_remote(result[key], " ".join(command))
 
                             # Run the status check again on this group of hosts
                             check_hosts.add(result[key])
@@ -2489,7 +2261,7 @@ class Launch():
             "disable": ["active", "activating", "deactivating"],
             "reset-failed": ["failed"]}
         command = ["systemctl", "is-active", service]
-        result = run_remote(self.log, hosts, " ".join(command))
+        result = run_remote(hosts, " ".join(command))
         for data in result.output:
             if data.timeout:
                 status["status"] = 512
@@ -2530,7 +2302,7 @@ class Launch():
                 "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
                 "fi"]
             self.log.info("Resetting server storage on %s after running '%s'", hosts, test)
-            result = run_remote(self.log, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
+            result = run_remote(hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
             if not result.passed:
                 self.log.debug("Ignoring any errors from these workaround commands")
         else:
@@ -2611,7 +2383,7 @@ class Launch():
         self.log.debug("-" * 80)
         self.log.debug("Listing any %s files on %s", source_files, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2653,7 +2425,7 @@ class Launch():
             "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +{threshold} "
                    "-printf '%p %k KB'")
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if not result.passed:
             message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2689,7 +2461,7 @@ class Launch():
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
             f"xargs -0 -r0 -n1 -I % sh -c '{cart_logtest} % > %.cart_logtest 2>&1'")
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2712,7 +2484,7 @@ class Launch():
         self.log.debug("-" * 80)
         self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if not result.passed:
             message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2738,7 +2510,7 @@ class Launch():
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
             "sudo xargs -0 -r0 lbzip2 -v")
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if not result.passed:
             message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2775,7 +2547,7 @@ class Launch():
 
         # Create a temporary remote directory
         command = f"{sudo}mkdir -p {tmp_copy_dir}"
-        if not run_remote(self.log, hosts, command).passed:
+        if not run_remote(hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2783,7 +2555,7 @@ class Launch():
         # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
                    f"xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
-        if not run_remote(self.log, hosts, command).passed:
+        if not run_remote(hosts, command).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2794,7 +2566,7 @@ class Launch():
         try:
             run_local(self.log, command, check=True, timeout=timeout)
 
-        except LaunchException:
+        except RunException:
             message = f"Error copying remote files to {destination}"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return_code = 16
@@ -2802,7 +2574,7 @@ class Launch():
         finally:
             # Remove the temporary remote directory on each host
             command = f"{sudo}rm -fr {tmp_copy_dir}"
-            if not run_remote(self.log, hosts, command).passed:
+            if not run_remote(hosts, command).passed:
                 message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return_code = 16
@@ -2821,7 +2593,7 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(self.log)
         try:
-            error_count = core_file_processing.process_core_files(test_job_results)
+            error_count = core_file_processing.process_core_files(test_job_results, True)
             if error_count:
                 message = f"Errors detected processing test core files: {error_count}"
                 self._fail_test(self.result.tests[-1], "Process", message)
@@ -2963,320 +2735,6 @@ class Launch():
                     continue
                 return_code = 1
         return return_code
-
-
-class CoreFileProcessing():
-    """Process core files generated by tests."""
-
-    USE_DEBUGINFO_INSTALL = True
-
-    def __init__(self, log):
-        """Initialize a CoreFileProcessing object.
-
-        Args:
-            log (logger): object configured to log messages
-        """
-        # pylint: disable=import-outside-toplevel,import-error,no-name-in-module
-        from util.distro_utils import detect
-
-        self.log = log
-        self.distro_info = detect()
-
-    def process_core_files(self, directory):
-        """Process any core files found in the 'stacktrace*' sub-directories of the specified path.
-
-        Generate a stacktrace for each detected core file and then remove the core file.
-
-        Args:
-            directory (str): location of the stacktrace* directories containing the core files to
-                process
-
-        Returns:
-            int: number of errors encountered
-
-        """
-        errors = 0
-        create_stacktrace = True
-        self.log.debug("-" * 80)
-        self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
-        if self.is_el7():
-            self.log.info("Generating stacktraces is currently not suppotrted on EL7")
-            create_stacktrace = False
-
-        # Create a stacktrace for any core file archived from the hosts under test
-        core_files = defaultdict(list)
-        for dir_name in os.listdir(directory):
-            if not dir_name.startswith("stacktraces"):
-                continue
-            core_dir = os.path.join(directory, dir_name)
-            for core_name in os.listdir(core_dir):
-                if fnmatch.fnmatch(core_name, 'core.*[0-9]'):
-                    core_files[core_dir].append(core_dir)
-
-        # Install the debug information needed for stacktrace generation
-        if core_files:
-            try:
-                self.install_debuginfos()
-            except LaunchException as error:
-                self.log.error(error)
-                self.log.debug("Stacktrace", exc_info=True)
-                errors += 1
-                create_stacktrace = False
-        else:
-            self.log.debug(
-                "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
-
-        # Create a stacktrace from each core file and then remove the core file
-        for core_dir, core_name_list in core_files.items():
-            for core_name in core_name_list:
-                try:
-                    if create_stacktrace:
-                        self._create_stacktrace(core_dir, core_name)
-                except Exception as error:      # pylint: disable=broad-except
-                    self.log.error(error)
-                    self.log.debug("Stacktrace", exc_info=True)
-                    errors += 1
-                finally:
-                    core_file = os.path.join(core_dir, core_name)
-                    self.log.debug("Removing %s", core_file)
-                    os.remove(core_file)
-
-        return errors
-
-    def _create_stacktrace(self, core_dir, core_name):
-        """Create a stacktrace from the specified core file.
-
-        Args:
-            core_dir (str): location of the core file
-            core_name (str): name of the core file
-
-        Raises:
-            LaunchException: if there is an error creating a stacktrace
-
-        """
-        host = os.path.split(core_dir)[-1].split(".")[-1]
-        core_full = os.path.join(core_dir, core_name)
-        stack_trace_file = os.path.join(core_dir, f"{core_name}.stacktrace")
-
-        self.log.debug("Generating a stacktrace from the %s core file from %s", core_full, host)
-        run_local(self.log, ['ls', '-l', core_full])
-
-        try:
-            command = [
-                "gdb", f"-cd={core_dir}",
-                "-ex", "set pagination off",
-                "-ex", "thread apply all bt full",
-                "-ex", "detach",
-                "-ex", "quit",
-                self._get_exe_name(core_full), core_name
-            ]
-
-        except LaunchException as error:
-            raise LaunchException(f"Error obtaining the exe name from {core_name}") from error
-
-        try:
-            output = run_local(self.log, command, check=False)
-            with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
-                stack_trace.writelines(output.stdout)
-
-        except IOError as error:
-            raise LaunchException(f"Error writing {stack_trace_file}") from error
-
-        except LaunchException as error:
-            raise LaunchException(f"Error creating {stack_trace_file}") from error
-
-    def _get_exe_name(self, core_file):
-        """Get the executable name from the core file.
-
-        Args:
-            core_file (str): fully qualified core filename
-
-        Raises:
-            LaunchException: if there is problem get the executable name from the core file
-
-        Returns:
-            str: the executable name
-
-        """
-        self.log.debug("Extracting the executable name from %s", core_file)
-        command = ["gdb", "-c", core_file, "-ex", "info proc exe", "-ex", "quit"]
-        result = run_local(self.log, command)
-        last_line = result.stdout.splitlines()[-1]
-        cmd = last_line[7:-1]
-        # assume there are no arguments on cmd
-        find_char = "'"
-        if cmd.find(" ") > -1:
-            # there are arguments on cmd
-            find_char = " "
-        exe_name = cmd[0:cmd.find(find_char)]
-        self.log.debug("  executable name: %s", exe_name)
-        return exe_name
-
-    def install_debuginfos(self):
-        """Install debuginfo packages.
-
-        NOTE: This does assume that the same daos packages that are installed
-            on the nodes that could have caused the core dump are installed
-            on this node also.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        Raises:
-            LaunchException: if there is an error installing debuginfo packages
-
-        """
-        install_pkgs = [{'name': 'gdb'}]
-        if self.is_el():
-            install_pkgs.append({'name': 'python3-debuginfo'})
-
-        cmds = []
-
-        # -debuginfo packages that don't get installed with debuginfo-install
-        for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
-                    'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
-                    'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
-            try:
-                debug_pkg = self.resolve_debuginfo(pkg)
-            except LaunchException as error:
-                self.log.error("Failed trying to install_debuginfos(): %s", str(error))
-                raise
-
-            if debug_pkg and debug_pkg not in install_pkgs:
-                install_pkgs.append(debug_pkg)
-
-        # remove any "source tree" test hackery that might interfere with RPM installation
-        path = os.path.join(os.path.sep, "usr", "share", "spdk", "include")
-        if os.path.islink(path):
-            cmds.append(["sudo", "rm", "-f", path])
-
-        if self.USE_DEBUGINFO_INSTALL:
-            dnf_args = ["--exclude", "ompi-debuginfo"]
-            if os.getenv("TEST_RPMS", 'false') == 'true':
-                if "suse" in self.distro_info.name.lower():
-                    dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
-                elif "centos" in self.distro_info.name.lower() and self.distro_info.version == "7":
-                    dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
-                         "python36", "openmpi3", "gcc"])
-                elif self.is_el() and self.distro_info.version == "8":
-                    dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
-                else:
-                    raise LaunchException(
-                        f"install_debuginfos(): Unsupported distro: {self.distro_info}")
-                cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
-            output = run_local(self.log, ["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
-            rpm_version = output.stdout
-            cmds.append(
-                ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
-                + ["daos-client-" + rpm_version, "daos-server-" + rpm_version,
-                   "daos-tests-" + rpm_version])
-        # else:
-        #     # We're not using the yum API to install packages
-        #     # See the comments below.
-        #     kwargs = {'name': 'gdb'}
-        #     yum_base.install(**kwargs)
-
-        # This is how you normally finish up a yum transaction, but
-        # again, we need to employ sudo
-        # yum_base.resolveDeps()
-        # yum_base.buildTransaction()
-        # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
-
-        # Now install a few pkgs that debuginfo-install wouldn't
-        cmd = ["sudo", "dnf", "-y"]
-        if self.is_el() or "suse" in self.distro_info.name.lower():
-            cmd.append("--enablerepo=*debug*")
-        cmd.append("install")
-        for pkg in install_pkgs:
-            try:
-                cmd.append(f"{pkg['name']}-{pkg['version']}-{pkg['release']}")
-            except KeyError:
-                cmd.append(pkg['name'])
-
-        cmds.append(cmd)
-
-        retry = False
-        for cmd in cmds:
-            try:
-                run_local(self.log, cmd, check=True)
-            except LaunchException:
-                # got an error, so abort this list of commands and re-run
-                # it with a dnf clean, makecache first
-                retry = True
-                break
-        if retry:
-            self.log.debug("Going to refresh caches and try again")
-            cmd_prefix = ["sudo", "dnf"]
-            if self.is_el() or "suse" in self.distro_info.name.lower():
-                cmd_prefix.append("--enablerepo=*debug*")
-            cmds.insert(0, cmd_prefix + ["clean", "all"])
-            cmds.insert(1, cmd_prefix + ["makecache"])
-            for cmd in cmds:
-                try:
-                    run_local(self.log, cmd)
-                except LaunchException:
-                    break
-
-    def is_el(self):
-        """Determine if the distro EL based.
-
-        Args:
-            distro (str): distribution to verify
-
-        Returns:
-            list: type of EL distribution
-
-        """
-        el_distros = ["almalinux", "rocky", "centos", "rhel"]
-        return [d for d in el_distros if d in self.distro_info.name.lower()]
-
-    def is_el7(self):
-        """Determine if the distribution is CentOS 7.
-
-        Returns:
-            bool: True if the distribution is CentOS 7
-
-        """
-        return self.is_el() and self.distro_info.version == "7"
-
-    def resolve_debuginfo(self, pkg):
-        """Return the debuginfo package for a given package name.
-
-        Args:
-            pkg (str): a package name
-
-        Raises:
-            LaunchException: if there is an error searching for RPMs
-
-        Returns:
-            dict: dictionary of debug package information
-
-        """
-        package_info = None
-        try:
-            # Eventually use python libraries for this rather than exec()ing out
-            output = run_local(
-                self.log, ["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg],
-                check=False)
-            name, version, release, epoch = output.stdout.split()
-
-            debuginfo_map = {"glibc": "glibc-debuginfo-common"}
-            try:
-                debug_pkg = debuginfo_map[name]
-            except KeyError:
-                debug_pkg = f"{name}-debuginfo"
-            package_info = {
-                "name": debug_pkg,
-                "version": version,
-                "release": release,
-                "epoch": epoch
-            }
-        except ValueError:
-            self.log.debug("Package %s not installed, skipping debuginfo", pkg)
-
-        return package_info
 
 
 def main():
@@ -3479,6 +2937,9 @@ def main():
              "command - is used by default.")
     args = parser.parse_args()
 
+    # Setup the Launch object
+    launch = Launch(args.name, args.repeat, args.mode)
+
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
@@ -3493,8 +2954,6 @@ def main():
 
     # Perform the steps defined by the arguments specified
     try:
-        # Setup the Launch object and run the specified action
-        launch = Launch(args.name, args.repeat, args.mode)
         status = launch.run(args)
     except Exception:       # pylint: disable=broad-except
         message = "Unknown exception raised during launch.py execution"

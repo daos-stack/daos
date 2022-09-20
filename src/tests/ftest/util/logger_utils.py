@@ -1,10 +1,10 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import DEBUG, INFO, WARNING, ERROR, StreamHandler, Formatter, basicConfig, getLogger
+from logging import DEBUG, INFO, WARNING, ERROR, StreamHandler, FileHandler, Formatter, \
+    basicConfig, getLogger
 import sys
 
 
@@ -15,12 +15,29 @@ def get_console_logger():
         logger: logger for console messages
 
     """
-    log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-30s: %(message)s"
+    log_format = "%(message)s"
     console = StreamHandler()
-    console.setLevel(DEBUG)
+    console.setLevel(INFO)
     console.setFormatter(Formatter(log_format))
     basicConfig(format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=DEBUG, handlers=[console])
-    return getLogger()
+    return getLogger(__name__)
+
+
+def get_file_handler(log_file):
+    """Get a logging file handler.
+
+    Args:
+        log_file (str): file in which to log debug messages
+
+    Returns
+        str: a logging.FileHandler setup to log debug messages to the log file
+
+    """
+    log_format = Formatter("%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s")
+    log_handler = FileHandler(log_file, encoding='utf-8')
+    log_handler.setLevel(DEBUG)
+    log_handler.setFormatter(log_format)
+    return log_handler
 
 
 class TestLogger():
