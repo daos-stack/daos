@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2018-2022 Intel Corporation.
 
@@ -345,7 +344,7 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=30):
+    def check_ior_subprocess_status(self, sub_process, pattern_timeout=60):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -355,54 +354,56 @@ class IorCommand(ExecutableCommand):
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
-            command (str): ior command being looked for
-            pattern_timeout: (int): check pattern until this timeout limit is
-                                    reached.
+            pattern_timeout: (int): check pattern until this timeout limit is reached.
+
         Returns:
             bool: whether or not the command progress has been detected
 
         """
+        if not self.pattern:
+            self.log.error("No output pattern set")
+            return False
+
         complete = True
         self.log.info(
             "Checking status of the %s command in %s with a %s second timeout",
-            command, sub_process, pattern_timeout)
+            self, sub_process, pattern_timeout)
 
-        if self.pattern is not None:
-            detected = 0
-            complete = False
-            timed_out = False
-            start = time.time()
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+        elapsed = 0.0
 
-            # Search for patterns in the subprocess output until:
-            #   - the expected number of pattern matches are detected (success)
-            #   - the time out is reached (failure)
-            #   - the subprocess is no longer running (failure)
-            while not complete and not timed_out and sub_process.poll() is None:
-                output = get_subprocess_stdout(sub_process)
-                detected = len(re.findall(self.pattern, output))
-                complete = detected == self.pattern_count
-                timed_out = time.time() - start > pattern_timeout
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the subprocess is no longer running (failure)
+        while not complete and not timed_out and sub_process.poll() is None:
+            output = get_subprocess_stdout(sub_process)
+            detected = len(re.findall(self.pattern, output))
+            complete = detected == self.pattern_count
+            elapsed = time.time() - start
+            timed_out = elapsed > pattern_timeout
 
-            # Summarize results
-            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
-                detected, self.pattern_count, self.pattern,
-                time.time() - start, pattern_timeout)
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
+            detected, self.pattern_count, self.pattern, elapsed, pattern_timeout)
 
-            if not complete:
-                # Report the error / timeout
-                self.log.info(
-                    "%s detected - %s:\n%s",
-                    "Time out" if timed_out else "Error",
-                    msg,
-                    get_subprocess_stdout(sub_process))
+        if not complete:
+            # Report the error / timeout
+            self.log.info(
+                "%s detected - %s:\n%s",
+                "Time out" if timed_out else "Error",
+                msg,
+                get_subprocess_stdout(sub_process))
 
-                # Stop the timed out process
-                if timed_out:
-                    self.stop()
-            else:
-                # Report the successful start
-                self.log.info(
-                    "%s subprocess startup detected - %s", command, msg)
+            # Stop the timed out process
+            if timed_out:
+                self.stop()
+        else:
+            # Report the successful start
+            self.log.info("%s subprocess startup detected - %s", self, msg)
 
         return complete
 

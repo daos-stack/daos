@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -41,9 +40,9 @@ class IorCrash(IorTestBase):
             Verify IOR completes successfully.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,ior,dfs
-        :avocado: tags=ior_crash
+        :avocado: tags=test_ior_crash
         """
         # Run IOR and crash it in the middle of Write
         self.run_ior_with_pool()
