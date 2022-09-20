@@ -10,12 +10,9 @@ from fnmatch import fnmatch
 import os
 import sys
 
+# pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_logger
 from util.run_utils import run_local, RunException
-
-
-# class CoreFileException(Exception):
-#     """Base exception for this module."""
 
 
 class CoreFileProcessing():
@@ -54,7 +51,7 @@ class CoreFileProcessing():
         self.log.debug("-" * 80)
         self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
         if self.is_el7():
-            self.log.info("Generating stacktraces is currently not suppotrted on EL7")
+            self.log.info("Generating a stacktrace is currently not supported on EL7")
             create_stacktrace = False
 
         # Create a stacktrace for any core file archived from the hosts under test
@@ -70,7 +67,7 @@ class CoreFileProcessing():
         # Install the debug information needed for stacktrace generation
         if core_files:
             try:
-                self.install_debuginfos()
+                self.install_debuginfo_packages()
             except RunException as error:
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
@@ -167,7 +164,7 @@ class CoreFileProcessing():
         self.log.debug("  executable name: %s", exe_name)
         return exe_name
 
-    def install_debuginfos(self):
+    def install_debuginfo_packages(self):
         """Install debuginfo packages.
 
         NOTE: This does assume that the same daos packages that are installed
@@ -191,12 +188,7 @@ class CoreFileProcessing():
         for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
                     'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
                     'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
-            try:
-                debug_pkg = self.resolve_debuginfo(pkg)
-            except RunException as error:
-                self.log.error("Failed trying to install_debuginfos(): %s", str(error))
-                raise
-
+            debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
                 install_pkgs.append(debug_pkg)
 
@@ -218,8 +210,7 @@ class CoreFileProcessing():
                     dnf_args.extend(
                         ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
                 else:
-                    raise RunException(
-                        f"install_debuginfos(): Unsupported distro: {self.distro_info}")
+                    raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
             output = run_local(self.log, ["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
             rpm_version = output.stdout
@@ -284,8 +275,8 @@ class CoreFileProcessing():
             list: type of EL distribution
 
         """
-        el_distros = ["almalinux", "rocky", "centos", "rhel"]
-        return [d for d in el_distros if d in self.distro_info.name.lower()]
+        distro_names = ["almalinux", "rocky", "centos", "rhel"]
+        return [d for d in distro_names if d in self.distro_info.name.lower()]
 
     def is_el7(self):
         """Determine if the distribution is CentOS 7.
@@ -335,7 +326,7 @@ class CoreFileProcessing():
 
 
 def main():
-    """Generate stacktraces from a provided directory of core files."""
+    """Generate a stacktrace for each core file in the provided directory."""
     parser = ArgumentParser(
         prog="process_core_files.py",
         description="Generate stacktrace files from the core files in the specified directory.")
