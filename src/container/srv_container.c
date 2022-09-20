@@ -1099,13 +1099,19 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 	if (rc != 0)
 		goto out;
 
-	if (arg.fha_buf.rb_nrecs == 0)
+	if (arg.fha_buf.rb_nrecs == 0) {
+		D_DEBUG(DB_MD, DF_CONT": %sdestroy, no open handles\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), force ? "force ": "");
 		goto out;
+	}
 
 	if (!force) {
 		rc = -DER_BUSY;
 		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
+	} else {
+		D_DEBUG(DB_MD, DF_CONT": force destroy, found %d open handles to close\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), arg.fha_buf.rb_nrecs);
 	}
 
 	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx);
@@ -1164,26 +1170,41 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		goto out_prop;
 
+	D_DEBUG(DB_MD, DF_CONT": evict handles done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
 
+	D_DEBUG(DB_MD, DF_CONT": cont_ec_agg_delete() done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
 	if (rc != 0)
 		goto out_prop;
+
+	D_DEBUG(DB_MD, DF_CONT": handle index KVS destroy done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
 
 	/* Destroy the user attribute KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_attr_user);
 	if (rc != 0)
 		goto out_prop;
 
+	D_DEBUG(DB_MD, DF_CONT": user attribute KVS destroy done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+
 	/* Destroy the snapshot KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		goto out_prop;
+
+	D_DEBUG(DB_MD, DF_CONT": snapshot KVS destroy done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
 
 	/* Delete entry in container UUIDs KVS (if added during create) */
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
@@ -1211,6 +1232,9 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* Destroy the container attribute KVS. */
 	d_iov_set(&key, cont->c_uuid, sizeof(uuid_t));
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_svc->cs_conts, &key);
+
+	D_DEBUG(DB_MD, DF_CONT": container attribute KVS destroy done\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
 
 out_prop:
 	daos_prop_free(prop);
@@ -1960,7 +1984,6 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	rc = cont_close_recs(ctx, svc, recs, nrecs);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		goto out;
@@ -1969,7 +1992,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
 		if (rc != 0)
 			goto out_tx;
-
+		D_DEBUG(DB_MD, DF_CONT": closed handle %d/%d\n", DP_CONT(svc->cs_pool_uuid, NULL),
+			(i + 1), nrecs);
 		/*
 		 * Yield frequently, in order to cope with the slow
 		 * vos_obj_punch operations invoked by rdb_tx_commit for
@@ -1982,6 +2006,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 			if (rc != 0)
 				goto out_tx;
 			rdb_tx_end(&tx);
+			D_DEBUG(DB_MD, DF_CONT": yield %d/%d hdls\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), (i + 1), nrecs);
 			ABT_thread_yield();
 			rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 			if (rc != 0)
@@ -1994,8 +2020,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 out_tx:
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT": leaving: %d\n",
-		DP_CONT(svc->cs_pool_uuid, NULL), rc);
+	D_DEBUG(DB_MD, DF_CONT": leaving: "DF_RC"\n",
+		DP_CONT(svc->cs_pool_uuid, NULL), DP_RC(rc));
 	return rc;
 }
 
@@ -3307,9 +3333,12 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 	if (rc != 0)
 		goto out_buf;
 
-	if (arg.cia_buf.rb_nrecs > 0)
+	if (arg.cia_buf.rb_nrecs > 0) {
+		D_DEBUG(DB_MD, DF_CONT": closing %d container handles\n", DP_CONT(pool_uuid, NULL),
+			arg.cia_buf.rb_nrecs);
 		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs,
 				     arg.cia_buf.rb_nrecs, ctx);
+	}
 
 out_buf:
 	recs_buf_fini(&arg.cia_buf);

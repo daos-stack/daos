@@ -12,12 +12,12 @@ server_config:
   servers:
     0:
       targets_count: !mux
-        1_target:
-          targets: 1
-        2_targets:
-          targets: 2
-        3_targets:
-          targets: 3
+        #1_target:
+        #  targets: 1
+        #2_targets:
+        #  targets: 2
+        #3_targets:
+        #  targets: 3
         4_targets:
           targets: 4
       bdev_class: nvme
