@@ -1,3 +1,9 @@
+daos (2.2.0-2) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Pin Mercury version to 2.2.0-1.
+
+ -- Joseph Moore <joseph.moore@intel.com>  Tue, 20 Sep 2022 12:28:00 -0500
+
 daos (2.2.0-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * First release candidate for 2.2.0
