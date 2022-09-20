@@ -142,9 +142,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_CENTOS7_TARGET',
-               defaultValue: '',
-               description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
@@ -180,7 +177,7 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the functional CentOS 8 CI tests' +
+                     description: 'Run the functional EL 8 CI tests' +
                                   ' with Valgrind')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
@@ -756,20 +753,20 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
+                stage('Coverity on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
+                                                quickBuildDeps('el8', true) + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -790,7 +787,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Coverity on CentOS 7')
+                } // stage('Coverity on EL 8')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
