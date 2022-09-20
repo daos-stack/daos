@@ -341,6 +341,7 @@ ch_rec_insert(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 	      d_list_t *link)
 {
 	d_list_add(link, &bucket->hb_head);
+	bucket->hb_insert_count++;
 #if D_HASH_DEBUG
 	htable->ht_nr++;
 	if (htable->ht_nr > htable->ht_nr_max)
@@ -373,9 +374,11 @@ ch_rec_insert_addref(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 }
 
 static inline void
-ch_rec_delete(struct d_hash_table *htable, d_list_t *link)
+ch_rec_delete(struct d_hash_table *htable, int bucket, d_list_t *link)
 {
 	d_list_del_init(link);
+	htable->ht_buckets[bucket].hb_remove_count++;
+
 #if D_HASH_DEBUG
 	htable->ht_nr--;
 	if (htable->ht_ops->hop_rec_hash) {
@@ -392,11 +395,11 @@ ch_rec_delete(struct d_hash_table *htable, d_list_t *link)
  * "ephemeral" is not set.
  */
 static inline bool
-ch_rec_del_decref(struct d_hash_table *htable, d_list_t *link)
+ch_rec_del_decref(struct d_hash_table *htable, int bucket, d_list_t *link)
 {
 	bool zombie = false;
 
-	ch_rec_delete(htable, link);
+	ch_rec_delete(htable, bucket, link);
 	if (!(htable->ht_feats & D_HASH_FT_EPHEMERAL))
 		zombie = ch_rec_decref(htable, link);
 
@@ -429,6 +432,25 @@ ch_rec_find(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 	return NULL;
 }
 
+static inline d_list_t *
+ch_rec_findx(struct d_hash_table *htable, struct d_hash_bucket *bucket, const void *key,
+	     unsigned int ksize, int *_position)
+{
+	d_list_t *link;
+	int       position = 0;
+
+	d_list_for_each(link, &bucket->hb_head)
+	{
+		if (ch_key_cmp(htable, link, key, ksize)) {
+			*_position = position;
+			return link;
+		}
+		position++;
+	}
+
+	return NULL;
+}
+
 bool
 d_hash_rec_unlinked(d_list_t *link)
 {
@@ -455,6 +477,33 @@ d_hash_rec_find(struct d_hash_table *htable, const void *key,
 		ch_rec_addref(htable, link);
 
 	ch_bucket_unlock(htable, idx, !is_lru);
+	return link;
+}
+
+d_list_t *
+d_hash_rec_findx(struct d_hash_table *htable, const void *key, unsigned int ksize, int *cookie,
+		 int *bucket_length, int *position)
+{
+	struct d_hash_bucket *bucket;
+	d_list_t             *link;
+	uint32_t              idx;
+	bool                  is_lru = (htable->ht_feats & D_HASH_FT_LRU);
+
+	D_ASSERT(key != NULL && ksize != 0);
+	idx    = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
+
+	ch_bucket_lock(htable, idx, !is_lru);
+
+	link = ch_rec_findx(htable, bucket, key, ksize, position);
+	if (link != NULL)
+		ch_rec_addref(htable, link);
+
+	if (cookie)
+		*cookie = bucket->hb_insert_count;
+	*bucket_length = bucket->hb_insert_count - bucket->hb_remove_count;
+	ch_bucket_unlock(htable, idx, !is_lru);
+
 	return link;
 }
 
@@ -506,6 +555,35 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 		ch_rec_addref(htable, tmp);
 		link = tmp;
 		D_GOTO(out_unlock, 0);
+	}
+	ch_rec_insert_addref(htable, bucket, link);
+
+out_unlock:
+	ch_bucket_unlock(htable, idx, false);
+	return link;
+}
+
+d_list_t *
+d_hash_rec_find_insertx(struct d_hash_table *htable, const void *key, unsigned int ksize,
+			int cookie, d_list_t *link)
+{
+	struct d_hash_bucket *bucket;
+	d_list_t             *tmp;
+	uint32_t              idx;
+
+	D_ASSERT(key != NULL && ksize != 0);
+	idx    = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
+
+	ch_bucket_lock(htable, idx, false);
+
+	if (cookie != bucket->hb_insert_count) {
+		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_HEAD);
+		if (tmp) {
+			ch_rec_addref(htable, tmp);
+			link = tmp;
+			D_GOTO(out_unlock, 0);
+		}
 	}
 	ch_rec_insert_addref(htable, bucket, link);
 
@@ -579,7 +657,7 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 
 	link = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
 	if (link != NULL) {
-		zombie  = ch_rec_del_decref(htable, link);
+		zombie  = ch_rec_del_decref(htable, idx, link);
 		deleted = true;
 	}
 
@@ -604,7 +682,7 @@ d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *link)
 	}
 
 	if (!d_list_empty(link)) {
-		zombie  = ch_rec_del_decref(htable, link);
+		zombie  = ch_rec_del_decref(htable, idx, link);
 		deleted = true;
 	}
 
@@ -683,19 +761,19 @@ d_hash_rec_addref(struct d_hash_table *htable, d_list_t *link)
 void
 d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	uint32_t idx = 0;
+	uint32_t idx = ch_rec_hash(htable, link);
+
 	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
 	bool	 zombie;
 
 	if (need_lock) {
-		idx = ch_rec_hash(htable, link);
 		ch_bucket_lock(htable, idx, !ephemeral);
 	}
 
 	zombie = ch_rec_decref(htable, link);
 	if (zombie && ephemeral && !d_list_empty(link))
-		ch_rec_delete(htable, link);
+		ch_rec_delete(htable, idx, link);
 
 	D_ASSERT(!zombie || d_list_empty(link));
 
@@ -706,17 +784,44 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 		ch_rec_free(htable, link);
 }
 
+void
+d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote)
+{
+	uint32_t              idx    = ch_rec_hash(htable, link);
+	struct d_hash_bucket *bucket = &htable->ht_buckets[idx];
+	bool                  zombie;
+	bool                  read_only = true;
+
+	D_ASSERT(htable->ht_feats & D_HASH_FT_NOLOCK);
+	D_ASSERT(htable->ht_feats & D_HASH_FT_NOLOCK);
+
+	if (promote)
+		read_only = false;
+
+	ch_bucket_lock(htable, idx, read_only);
+
+	if (promote)
+		d_list_move(link, &bucket->hb_head);
+
+	zombie = ch_rec_decref(htable, link);
+	D_ASSERT(!zombie);
+
+	ch_bucket_unlock(htable, idx, read_only);
+
+	if (zombie)
+		ch_rec_free(htable, link);
+}
+
 int
 d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 {
-	uint32_t idx = 0;
+	uint32_t idx       = ch_rec_hash(htable, link);
 	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
 	bool	 zombie = false;
 	int	 rc = 0;
 
 	if (need_lock) {
-		idx = ch_rec_hash(htable, link);
 		ch_bucket_lock(htable, idx, !ephemeral);
 	}
 
@@ -737,7 +842,7 @@ d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 
 	if (rc == 0) {
 		if (zombie && ephemeral && !d_list_empty(link))
-			ch_rec_delete(htable, link);
+			ch_rec_delete(htable, idx, link);
 
 		D_ASSERT(!zombie || d_list_empty(link));
 	}

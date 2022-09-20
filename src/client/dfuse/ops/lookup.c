@@ -18,11 +18,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  bool is_new,
 		  fuse_req_t req)
 {
-	struct fuse_entry_param	entry = {0};
-	d_list_t		*rlink;
-	ino_t			wipe_parent = 0;
-	char			wipe_name[NAME_MAX + 1];
-	int			rc;
+	struct fuse_entry_param entry = {0};
+	d_list_t               *rlink;
+	ino_t                   wipe_parent = 0;
+	char                    wipe_name[NAME_MAX + 1];
+	int                     rc;
+	int                     cookie;
+	int                     bucket_length;
+	int                     position;
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
@@ -35,10 +38,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
 			entry.ino, ie->ie_stat.st_mode);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
-				       &ie->ie_stat.st_ino,
-				       sizeof(ie->ie_stat.st_ino),
-				       &ie->ie_htl);
+	rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+				 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length, &position);
+
+	if (!rlink) {
+		rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+						sizeof(ie->ie_stat.st_ino), cookie, &ie->ie_htl);
+	}
 
 	if (rlink != &ie->ie_htl) {
 		struct dfuse_inode_entry *inode;

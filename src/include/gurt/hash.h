@@ -220,6 +220,8 @@ union d_hash_lock {
 
 struct d_hash_bucket {
 	d_list_t		hb_head;
+	int                     hb_insert_count;
+	int                     hb_remove_count;
 #if D_HASH_DEBUG
 	unsigned int		hb_dep;
 #endif
@@ -351,6 +353,23 @@ d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
 			  unsigned int ksize);
 
 /**
+ * lookup \p key in the hash table, the found chain link is returned on
+ * success.  Does not use lru.
+ *
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to search
+ * \param[in] ksize		Size of the key
+ * \param[out] cookie		Cookie
+ * \param[out] bucket_length	Size of the bucket key was found in.
+ * \param[out] position		Location of key within bucket.
+ *
+ * \return			found chain link
+ */
+d_list_t *
+d_hash_rec_findx(struct d_hash_table *htable, const void *key, unsigned int ksize, int *cookie,
+		 int *bucket_length, int *position);
+
+/**
  * Lookup \p key in the hash table, if there is a matched record, it should be
  * returned, otherwise \p link will be inserted into the hash table. In the
  * later case, the returned link chain is the input \p link.
@@ -365,6 +384,22 @@ d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
 d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
 				 const void *key, unsigned int ksize,
 				 d_list_t *link);
+
+/**
+ * Lookup \p key in the hash table, if there is a matched record, it should be
+ * returned, otherwise \p link will be inserted into the hash table. In the
+ * later case, the returned link chain is the input \p link.
+ *
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to be inserted
+ * \param[in] ksize		Size of the key
+ * \param[in] cookie		Cookie
+ * \param[in] link		The link chain of the record being inserted
+ *
+ * \return			matched record
+ */
+d_list_t *d_hash_rec_find_insertx(struct d_hash_table *htable, const void *key, unsigned int ksize,
+				  int cookie, d_list_t *link);
 
 /**
  * Insert a new key and its record chain \p link into the hash table. The hash
@@ -468,6 +503,20 @@ void d_hash_rec_addref(struct d_hash_table *htable, d_list_t *link);
  * \param[in] link		Chain link of the hash record
  */
 void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link);
+
+/**
+ * Decrease the refcount of the record.
+ * Should only be called if the EPMEMERAL is set, this allows the decref to work with read locks.
+ * If promote is true then will use write lock and move key to front of bucket (LRU).
+ * else will use read lock only.
+ * Will assert if hop_decref() returns true.
+ *
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] link		Chain link of the hash record
+ * \param[in] promote		True if should move key.
+ */
+void
+d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote);
 
 /**
  * Decrease the refcount of the record by count.
