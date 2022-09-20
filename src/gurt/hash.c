@@ -792,8 +792,8 @@ d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote)
 	bool                  zombie;
 	bool                  read_only = true;
 
-	D_ASSERT(htable->ht_feats & D_HASH_FT_NOLOCK);
-	D_ASSERT(htable->ht_feats & D_HASH_FT_NOLOCK);
+	D_ASSERT(!(htable->ht_feats & D_HASH_FT_NOLOCK));
+	D_ASSERT(htable->ht_feats & D_HASH_FT_EPHEMERAL);
 
 	if (promote)
 		read_only = false;
