@@ -15,7 +15,7 @@ server_config:
 
 pool:
     name: daos_server
-    size: 10%
+    size: 50%
     control_method: dmg
 
 container:

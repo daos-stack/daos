@@ -1408,6 +1408,12 @@ out:
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_io_size;
+}
+
 int
 vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err)
 {

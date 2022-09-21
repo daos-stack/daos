@@ -1502,6 +1502,12 @@ vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_
 int
 vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoch_t epoch);
 
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov);
+
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)
 {

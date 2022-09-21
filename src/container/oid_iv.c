@@ -107,7 +107,8 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	/** Set the number of oids to what was asked for. */
 	oids->num_oids = num_oids;
-	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu\n", dss_self_rank(), oids->oid, oids->num_oids);
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu avail %zu/%zu\n", dss_self_rank(),
+		oids->oid, oids->num_oids, avail->oid, avail->num_oids);
 
 out:
 	ABT_mutex_unlock(entry->lock);
@@ -328,7 +329,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	oids->num_oids = num_oids;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
-			  CRT_IV_SYNC_BIDIRECTIONAL, false /* retry */);
+			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
