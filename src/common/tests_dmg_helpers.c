@@ -274,8 +274,13 @@ run_cmd(const char *command, int *outputfd)
 
 	if (child_rc != 0) {
 		D_ERROR("child process failed, exit status=%d\n", WEXITSTATUS(child_rc));
-		if (WIFSIGNALED(child_rc))
+		if (WIFSIGNALED(child_rc)) {
 			D_ERROR("child signal: %d\n", WTERMSIG(child_rc));
+			if (WCOREDUMP(child_rc) && child_rc == SIGSEGV) {
+				D_ERROR("aborting father to get its corefile\n");
+				abort();
+			}
+		}
 		close(stdoutfd[0]);
 		return -DER_MISC;
 	}
