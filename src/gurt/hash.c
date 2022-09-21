@@ -238,9 +238,25 @@ ch_bucket_lock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 	if (htable->ht_feats & D_HASH_FT_MUTEX) {
 		D_MUTEX_LOCK(&lock->mutex);
 	} else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
-		if (read_only)
+		if (read_only) {
+			uint32_t count;
+			uint32_t old_max;
+			bool     updated = false;
+
 			D_RWLOCK_RDLOCK(&lock->rwlock);
-		else
+			count = atomic_fetch_add_relaxed(
+			    &htable->ht_buckets[idx].hb_read_lock_count, 1);
+			do {
+				old_max = atomic_load_relaxed(
+				    &htable->ht_buckets[idx].hb_read_lock_count_max);
+				if (old_max >= count)
+					updated = true;
+				else
+					updated = atomic_compare_exchange(
+					    &htable->ht_buckets[idx].hb_read_lock_count_max,
+					    old_max, count);
+			} while (!updated);
+		} else
 			D_RWLOCK_WRLOCK(&lock->rwlock);
 	} else {
 		D_SPIN_LOCK(&lock->spin);
@@ -260,9 +276,12 @@ ch_bucket_unlock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 		? &htable->ht_lock : &htable->ht_locks[idx];
 	if (htable->ht_feats & D_HASH_FT_MUTEX)
 		D_MUTEX_UNLOCK(&lock->mutex);
-	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+	else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
+		uint32_t count = atomic_load_relaxed(&htable->ht_buckets[idx].hb_read_lock_count);
+		if (count != 0)
+			atomic_fetch_sub_relaxed(&htable->ht_buckets[idx].hb_read_lock_count, 1);
 		D_RWLOCK_UNLOCK(&lock->rwlock);
-	else
+	} else
 		D_SPIN_UNLOCK(&lock->spin);
 }
 
@@ -1081,9 +1100,14 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 		for (i = 0; i < nr; i++) {
 			if (htable->ht_feats & D_HASH_FT_MUTEX)
 				D_MUTEX_DESTROY(&htable->ht_locks[i].mutex);
-			else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+			else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
+				uint32_t count = atomic_load_relaxed(
+				    &htable->ht_buckets[i].hb_read_lock_count_max);
 				D_RWLOCK_DESTROY(&htable->ht_locks[i].rwlock);
-			else
+
+				if (count > 1)
+					D_INFO("Max readers on %p/%d was %d\n", htable, i, count);
+			} else
 				D_SPIN_DESTROY(&htable->ht_locks[i].spin);
 		}
 		D_FREE(htable->ht_locks);
