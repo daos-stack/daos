@@ -82,15 +82,26 @@ type InteropRule struct {
 
 // defaultRules are a set of default rules which should apply regardless
 // of release or caller.
-var defaultRules = []InteropRule{
+var defaultRules = []*InteropRule{
+	// Allow older agents to talk to newer servers, or newer agents to talk
+	// to older servers, but only up to the allowed minor delta.
+	{
+		Self:          ComponentServer,
+		Other:         ComponentAgent,
+		Description:   "server and agent must be within 2 minor versions",
+		StopOnSuccess: true,
+		Check: func(self, other *VersionedComponent) bool {
+			return (self.Version.MajorDelta(other.Version) == 0 &&
+				self.Version.MinorDelta(other.Version) <= MaxMinorDelta)
+		},
+	},
 	// Should never happen, but just in case. We know that releases
 	// prior to 2.0.0 will never be compatible with 2.0.0 or above.
 	{
 		Description: "no backward compatibility prior to 2.0.0",
 		Check: func(self, other *VersionedComponent) bool {
 			v2_0 := MustNewVersion("2.0.0")
-			return !((self.Version.Equals(v2_0) || self.Version.GreaterThan(v2_0)) &&
-				other.Version.LessThan(v2_0))
+			return !(self.Version.GreaterThanOrEquals(v2_0) && other.Version.LessThan(v2_0))
 		},
 	},
 	// The default DAOS compatibility rule, which is:
@@ -103,6 +114,25 @@ var defaultRules = []InteropRule{
 	},
 }
 
+var (
+	Server22xAgent20x = &InteropRule{
+		Self:          ComponentServer,
+		Other:         ComponentAgent,
+		Description:   "server v2.2.x is compatible with agent v2.0.x",
+		StopOnSuccess: true,
+		Check: func(self, other *VersionedComponent) bool {
+			// We assume that an unversioned agent is 2.0.x.
+			v0_0_0 := MustNewVersion("0.0.0")
+			v2_2_0 := MustNewVersion("2.1.100")
+			v2_3_0 := MustNewVersion("2.3.0")
+			return (self.Version.GreaterThanOrEquals(v2_2_0) &&
+				self.Version.LessThan(v2_3_0)) &&
+				(other.Version.GreaterThanOrEquals(v0_0_0) &&
+					other.Version.LessThan(v2_2_0))
+		},
+	}
+)
+
 // CheckCompatibility checks a pair of versioned components
 // for compatibility based on specific interoperability constraints
 // or general rules.
@@ -112,7 +142,7 @@ var defaultRules = []InteropRule{
 // for specific requirements at the call site.
 //
 // e.g. "I am server v2.0.0. Am I compatible with agent v1.2.0?"
-func CheckCompatibility(self, other *VersionedComponent, customRules ...InteropRule) error {
+func CheckCompatibility(self, other *VersionedComponent, customRules ...*InteropRule) error {
 	if self == nil || other == nil {
 		return errors.New("nil components")
 	}
@@ -124,6 +154,9 @@ func CheckCompatibility(self, other *VersionedComponent, customRules ...InteropR
 
 	// Apply custom rules first (if any), then apply the default rules.
 	for _, rule := range append(customRules, defaultRules...) {
+		if rule == nil {
+			return errors.New("nil rule")
+		}
 		if rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component) {
 			if !rule.Check(self, other) {
 				return errors.Wrap(errIncompatComponents(self, other), rule.Description)

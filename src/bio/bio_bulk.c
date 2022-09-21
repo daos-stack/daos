@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,6 +180,8 @@ bulk_grp_add(struct bio_dma_buffer *bdb, unsigned int pgs)
 		bbc->bbc_sorted[grp_idx] = bbg;
 
 		bbc->bbc_grp_cnt++;
+		if (bdb->bdb_stats.bds_bulk_grps)
+			d_tm_set_gauge(bdb->bdb_stats.bds_bulk_grps, bbc->bbc_grp_cnt);
 		goto done;
 	}
 
@@ -508,9 +510,6 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 
 	bbg = bulk_grp_get(bdb, pg_cnt);
 	if (bbg == NULL) {
-		D_ERROR("Failed to get bulk group (%u pages)\n", pg_cnt);
-		dump_dma_info(bdb);
-
 		biod->bd_retry = 1;
 		return NULL;
 	}
@@ -520,12 +519,11 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 
 	rc = bulk_grp_grow(bdb, bbg, arg);
 	if (rc) {
-		D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
-			pg_cnt, DP_RC(rc));
-		dump_dma_info(bdb);
-
 		if (rc == -DER_AGAIN)
 			biod->bd_retry = 1;
+		else
+			D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
+				pg_cnt, DP_RC(rc));
 
 		return NULL;
 	}

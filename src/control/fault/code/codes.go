@@ -85,6 +85,7 @@ const (
 	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+	BdevConfigTypeMismatch
 )
 
 // DAOS system fault codes
@@ -159,6 +160,7 @@ const (
 	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
+	ServerConfigVMDSettingDuplicate
 )
 
 // SPDK library bindings codes

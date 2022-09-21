@@ -1,3 +1,57 @@
+daos (2.2.0-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * First release candidate for 2.2.0
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 2 Sep 2022 12:00:00 -0100
+
+daos (2.1.104-5) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Add dfuse unit-test binary to call from ftest.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Thu, 25 Aug 2022 09:03:00 -0100
+
+daos (2.1.104-4) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+  -- Jeff Olivier <jeffrey.v.olivier@intel.com> Tue, 16 Aug 2022 15:58:09 -0500
+
+daos (2.1.104-3) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
+ -- Wang Shilong <shilong.wang@intel.com>  Thu, 11 Aug 2022 09:52:00 -0400
+
+daos (2.1.104-2) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Fri, 5 Aug 2022 17:30:00 -0600
+
+daos (2.1.104-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.104
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 02 Aug 2022 08:00:00 -0100
+
+daos (2.1.103-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Remove now unused openpa dependency
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
+
+daos (2.1.103-3) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 15 Jul 2022 12:43:00 -0400
+
+daos (2.1.103-2) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Update to mercury 2.2.0rc6
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 27 Jun 2022 18:26:02 -0600
+
 daos (2.1.103-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.1.103

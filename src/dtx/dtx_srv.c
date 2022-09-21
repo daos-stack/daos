@@ -140,6 +140,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	uint32_t		 committed = 0;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -165,13 +166,18 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 			break;
 
+		if (unlikely(din->di_epoch == 1))
+			D_GOTO(out, rc = -DER_IO);
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
-			if (rc == 0 && rc1 < 0)
+			if (rc1 > 0)
+				committed += rc1;
+			else if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -212,15 +218,20 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL);
-		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
-			rc = -DER_INPROGRESS;
-		else if (rc == DTX_ST_INITED)
+				   NULL, NULL, NULL, NULL, false);
+		if (rc == DTX_ST_INITED) {
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
 			 * request is from old server.
 			 */
 			rc = -DER_NONEXIST;
+		} else if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont)) {
+			/* Trigger DTX re-index for subsequent (retry) DTX_CHECK. */
+			rc1 = start_dtx_reindex_ult(cont);
+			if (rc1 != 0)
+				D_ERROR(DF_UUID": Failed to trigger DTX reindex: "DF_RC"\n",
+					DP_UUID(cont->sc_uuid), DP_RC(rc));
+		}
 
 		break;
 	case DTX_REFRESH:
@@ -249,12 +260,8 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i]);
-			/* The DTX status may be changes by DTX resync soon. */
-			if ((*ptr == DTX_ST_PREPARED && cont->sc_dtx_resyncing) ||
-			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
-				*ptr = -DER_INPROGRESS;
-
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i],
+					     true);
 			if (*ptr == -DER_NONEXIST) {
 				struct dtx_stat		stat = { 0 };
 
@@ -296,6 +303,8 @@ out:
 		(int)din->di_dtx_array.ca_count, din->di_epoch, DP_RC(rc));
 
 	dout->do_status = rc;
+	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
+	dout->do_misc = committed;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
@@ -330,7 +339,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j);
+		rc = dtx_commit(cont, pdte, dcks, j, 0);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,

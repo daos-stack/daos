@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,6 +16,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
+
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
@@ -28,8 +29,10 @@ class CreateContainterACLTest(ContSecurityTestBase):
                file passed.
             7. Remove all files created
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_create_acl
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container_acl
+        :avocado: tags=cont_create_acl,test_container_basics
         """
         acl_args = {"tmp_dir": self.tmp,
                     "user": self.current_user,

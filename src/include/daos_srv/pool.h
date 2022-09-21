@@ -25,11 +25,6 @@
 #include <daos_srv/policy.h>
 
 /*
- * Aggregation of pool/container/object/keys disk format change.
- */
-#define DS_POOL_GLOBAL_VERSION		1
-
-/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -172,10 +167,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    const d_rank_list_t *target_addrs, int ndomains,
+			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t *svc_addrs);
+int ds_pool_svc_stop(uuid_t pool_uuid);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -188,7 +183,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   const char *principal_name);
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info);
+		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		      uint32_t *upgrade_layout_ver);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
@@ -234,14 +230,8 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 int
-map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       d_rank_list_t *ranks);
+map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 
 void
 map_ranks_fini(d_rank_list_t *ranks);
@@ -295,10 +285,11 @@ ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 static inline uint32_t
 ds_pool_get_version(struct ds_pool *pool)
 {
-	uint32_t	ver;
+	uint32_t	ver = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	ver = pool_map_get_version(pool->sp_map);
+	if (pool->sp_map != NULL)
+		ver = pool_map_get_version(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return ver;

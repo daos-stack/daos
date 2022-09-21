@@ -156,8 +156,6 @@ struct obj_reasb_req {
 	uint32_t			 orr_tgt_nr;
 	/* number of targets that with IOM handled */
 	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -171,6 +169,8 @@ struct obj_reasb_req {
 	/* parity recx list (to compare parity ext/epoch when data recovery) */
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
+	/* number of iom extends */
+	uint32_t			 orr_iom_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
@@ -296,6 +296,10 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_resent;
 	/** Total number of retry update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_partial;
 };
 
 struct obj_tls {
@@ -597,7 +601,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX ||
+	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
 	       daos_crt_network_error(err);
 }
 
@@ -616,9 +620,9 @@ shard_task_abort(tse_task_t *task, void *arg)
 	int	rc = *((int *)arg);
 
 	tse_task_list_del(task);
-	tse_task_decref(task);
 	tse_task_complete(task, rc);
 
+	tse_task_decref(task);
 	return 0;
 }
 
@@ -943,7 +947,7 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 enum dc_tx_get_epoch_rc {
 	DC_TX_GE_CHOSEN,
 	DC_TX_GE_CHOOSING,
-	DC_TX_GE_REINIT
+	DC_TX_GE_REINITED
 };
 
 int

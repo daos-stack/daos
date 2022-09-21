@@ -27,8 +27,8 @@ class OSAOfflineExtend(OSAUtils):
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
@@ -167,7 +167,6 @@ class OSAOfflineExtend(OSAUtils):
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
-    @skipForTicket("DAOS-7493")
     def test_osa_offline_extend_oclass(self):
         """Test ID: DAOS-6924
         Test Description: Validate Offline extend without

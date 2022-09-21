@@ -100,7 +100,8 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		       daos_pool_info_t *pool_info);
+		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		       uint32_t *upgrade_layout_ver);
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);
@@ -141,8 +142,7 @@ int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
-int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
-			 int nservers, uint32_t version);
+int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

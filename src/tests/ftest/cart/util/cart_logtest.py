@@ -363,7 +363,7 @@ class LogTest():
                     server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
-                    if self.hide_fi_calls:
+                    if self.hide_fi_calls and line.fac != 'external':
                         if line.is_fi_site():
                             show = False
                         elif line.is_fi_alloc_fail():

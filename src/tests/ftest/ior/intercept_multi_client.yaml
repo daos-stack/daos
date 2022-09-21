@@ -1,10 +1,6 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - client-A
-        - client-B
-        - client-C
+    test_servers: 2
+    test_clients: 6
 timeout: 1000
 server_config:
   engines_per_host: 2
@@ -44,6 +40,8 @@ container:
     type: POSIX
     control_method: daos
 ior:
+    env_vars:
+        - D_LOG_MASK=INFO
     client_processes:
         np: 96
     test_file: testFile

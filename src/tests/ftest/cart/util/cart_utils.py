@@ -16,6 +16,8 @@ import re
 import glob
 
 from apricot import TestWithoutServers
+from ClusterShell.NodeSet import NodeSet
+
 from general_utils import stop_processes
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
@@ -156,7 +158,7 @@ class CartTest(TestWithoutServers):
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
-        localhost = socket.gethostname().split(".")[0:1]
+        localhost = NodeSet(socket.gethostname().split(".")[0])
         processes = r"'\<(crt_launch|orterun)\>'"
         retry_count = 0
         while retry_count < 2:
@@ -354,7 +356,7 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
-        # Return 0 on memory leaks while suppresion file is completed
+        # Return 0 on memory leaks while suppression file is completed
         # (CART-975 and CART-977)
         memcheck_error_code = 0
 
@@ -383,19 +385,15 @@ class CartTest(TestWithoutServers):
         tst_slt = self.get_yaml_list_elem(_tst_slt, index)
         tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
 
-        tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
+        tst_host = NodeSet(self.params.get("{}".format(host), "/run/hosts/*/"))
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_slt)
+            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_slt)
         else:
-            hostfile = write_host_file(tst_host,
-                                       daos_test_shared_dir,
-                                       tst_ppn)
+            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
@@ -429,6 +427,7 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         job = Orterun(tst_cmd)
+        job.get_params(self)
         job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)

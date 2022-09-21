@@ -40,32 +40,28 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const scanMinHugePageCount = 128
 
-func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
+func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceList {
 	bdevs := []string{}
-	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+	for _, bc := range bdevCfgs {
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
 	return storage.MustNewBdevDeviceList(bdevs...)
 }
 
-func cfgGetBdevs(cfg *config.Server) *storage.BdevDeviceList {
-	bdevs := []string{}
+func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
+	bdevCfgs := []*storage.TierConfig{}
 	for _, engineCfg := range cfg.Engines {
-		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg).Devices()...)
+		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
 
-	return storage.MustNewBdevDeviceList(bdevs...)
+	return bdevCfgs
 }
 
-func cfgHasBdevs(cfg *config.Server) bool {
-	return cfgGetBdevs(cfg).Len() != 0
-}
-
-func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolver("tcp", ap)
+		apAddr, err := resolve("tcp", ap)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -128,9 +124,9 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 	return ctlAddr, nil
 }
 
-func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
+func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
+	lis, err := listen("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
@@ -186,7 +182,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	for _, ec := range engineCfgs {
 		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
 		if nodeMap[nn] {
-			log.Infof("Multiple engines assigned to NUMA node %s, "+
+			log.Noticef("Multiple engines assigned to NUMA node %s, "+
 				"allocating all hugepages on this node.", nn)
 			nodes = []string{nn}
 			break
@@ -198,26 +194,27 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	return nodes
 }
 
+// Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
+// are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
+// required for emulated NVMe.
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
-	hasBdevs := cfgHasBdevs(srv.cfg)
-
-	if hasBdevs {
-		// Perform these checks to avoid even trying a prepare if the system isn't
-		// configured properly.
-		if srv.runningUser.Username != "root" {
-			if srv.cfg.DisableVFIO {
-				return FaultVfioDisabled
-			}
-
-			if !iommuEnabled {
-				return FaultIommuDisabled
-			}
-		}
-	} else if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
+	if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as disable_hugepages: true in config")
 		return nil
+	}
+
+	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
+
+	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
+	if bdevCfgs.HaveRealNVMe() && srv.runningUser.Username != "root" {
+		if srv.cfg.DisableVFIO {
+			return FaultVfioDisabled
+		}
+		if !iommuEnabled {
+			return FaultIommuDisabled
+		}
 	}
 
 	prepReq := storage.BdevPrepareRequest{
@@ -227,16 +224,24 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
 
-	switch {
-	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
-		srv.log.Info("VMD not enabled because VFIO disabled in config")
-	case !srv.cfg.DisableVMD && !iommuEnabled:
-		srv.log.Info("VMD not enabled because IOMMU disabled on system")
-	default:
-		prepReq.EnableVMD = !srv.cfg.DisableVMD
+	enableVMD := true
+	if srv.cfg.DisableVMD != nil && *srv.cfg.DisableVMD {
+		enableVMD = false
 	}
 
-	if hasBdevs {
+	switch {
+	case enableVMD && srv.cfg.DisableVFIO:
+		srv.log.Info("VMD not enabled because VFIO disabled in config")
+	case enableVMD && !iommuEnabled:
+		srv.log.Info("VMD not enabled because IOMMU disabled on platform")
+	case enableVMD && bdevCfgs.HaveEmulatedNVMe():
+		srv.log.Info("VMD not enabled because emulated NVMe devices found in config")
+	default:
+		// If no case above matches, set enable VMD flag in request otherwise leave false.
+		prepReq.EnableVMD = enableVMD
+	}
+
+	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
 		// of hugepages equally across each engine's numa node (as validation ensures that
 		// TargetsCount is equal for each engine).
@@ -290,7 +295,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  cfgGetBdevs(srv.cfg),
+		DeviceList:  getBdevDevicesFromCfgs(getBdevCfgsFromSrvCfg(srv.cfg)),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
@@ -300,48 +305,6 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	return nvmeScanResp, nil
-}
-
-// Minimum recommended number of hugepages has already been calculated and set in config so verify
-// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
-// hugepage_size parameters for engine.
-func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
-	ei.RLock()
-	engineCfg := ei.runner.GetConfig()
-	engineIdx := engineCfg.Index
-	if engineCfgGetBdevs(engineCfg).Len() == 0 {
-		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
-		ei.RUnlock()
-		return nil
-	}
-	ei.RUnlock()
-
-	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	hpi, err := getHugePageInfo()
-	if err != nil {
-		return err
-	}
-
-	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
-	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
-	pageSizeMb := hpi.PageSizeKb >> 10
-	memSizeReqMb := nrPagesRequired * pageSizeMb
-	memSizeFreeMb := hpi.Free * pageSizeMb
-
-	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
-	if memSizeFreeMb < memSizeReqMb {
-		srv.log.Errorf("huge page info: %+v", *hpi)
-
-		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,
-			nrPagesRequired, hpi.Free)
-	}
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
-
-	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
-	ei.setMemSize(memSizeReqMb)
-	ei.setHugePageSz(pageSizeMb)
-
-	return nil
 }
 
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
@@ -360,38 +323,71 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func cleanEngineHugePagesFn(log logging.Logger, username string, svc *ControlService) onInstanceExitFn {
-	return func(ctx context.Context, engineIdx uint32, _ system.Rank, _ error, exPid uint64) error {
-		msg := fmt.Sprintf("cleaning engine %d (pid %d) hugepages after exit", engineIdx, exPid)
+// Minimum recommended number of hugepages has already been calculated and set in config so verify
+// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
+// hugepage_size parameters for engine.
+func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+	engine.RLock()
+	ec := engine.runner.GetConfig()
+	ei := ec.Index
 
-		prepReq := storage.BdevPrepareRequest{
-			CleanHugePagesOnly: true,
-			CleanHugePagesPID:  exPid,
-			TargetUser:         username,
-		}
-
-		resp, err := svc.NvmePrepare(prepReq)
-		if err != nil {
-			err = errors.Wrap(err, msg)
-			log.Errorf(err.Error())
-			return err
-		}
-
-		log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
-
+	if getBdevDevicesFromCfgs(ec.Storage.Tiers.BdevConfigs()).Len() == 0 {
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
+		engine.RUnlock()
 		return nil
 	}
+	engine.RUnlock()
+
+	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
+	hpi, err := getHugePageInfo()
+	if err != nil {
+		return err
+	}
+
+	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
+	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeReqMb := nrPagesRequired * pageSizeMb
+	memSizeFreeMb := hpi.Free * pageSizeMb
+
+	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
+		pageSizeMb, *hpi)
+	if memSizeFreeMb < memSizeReqMb {
+		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
+			nrPagesRequired, hpi.Free)
+	}
+
+	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
+	engine.setMemSize(memSizeReqMb)
+	engine.setHugePageSz(pageSizeMb)
+
+	return nil
+}
+
+func cleanEngineHugePages(srv *server) error {
+	req := storage.BdevPrepareRequest{
+		CleanHugePagesOnly: true,
+	}
+
+	msg := "cleanup hugepages via bdev backend"
+
+	resp, err := srv.ctlSvc.NvmePrepare(req)
+	if err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+
+	return nil
 }
 
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
-
-	// Register callback to clear hugepages used by engine process after it has exited.
-	engine.OnInstanceExit(cleanEngineHugePagesFn(srv.log, srv.runningUser.Username, srv.ctlSvc))
+	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))
+	engine.OnAwaitFormat(createPublishFormatRequiredFunc(srv.pubSub.Publish, srv.hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
@@ -400,19 +396,25 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		onceReady.Do(func() {
 			allStarted.Done()
 		})
-
 		return nil
 	})
 
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
-		// Retrieve up-to-date hugepage info to evaluate and assign available memory.
+		srv.log.Debugf("engine %d: storage ready", engine.Index())
+
+		// Attempt to remove unused hugepages, log error only.
+		if err := cleanEngineHugePages(srv); err != nil {
+			srv.log.Errorf(err.Error())
+		}
+
+		// Update engine memory related config parameters before starting.
 		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
 			"updating engine memory parameters")
 	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, join systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
@@ -447,7 +449,7 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *sy
 			sb.Rank = system.NewRankPtr(0)
 		}
 
-		return joinFn(ctx, req)
+		return join(ctx, req)
 	}
 }
 
@@ -499,9 +501,18 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+					if system.IsNotLeader(err) {
+						// If we've lost leadership while processing the event,
+						// attempt to re-forward it to the new leader.
+						evt = evt.WithForwarded(false).WithForwardable(true)
+						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
+						srv.evtForwarder.OnEvent(ctx, evt)
+					}
+					return
 				}
+				srv.mgmtSvc.reqGroupUpdate(ctx, false)
 			}
 		}))
 

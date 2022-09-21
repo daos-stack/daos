@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -97,15 +97,14 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_free_space()[1] -
-                              nvme_free_space_before_snap_destroy)
+            returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
             counter += 1
 
         self.log.info("#####Starting FS_COPY Test")
-        self.run_dm_activities_with_ior("FS_COPY", pool=self.pool)
+        self.run_dm_activities_with_ior("FS_COPY", self.pool, self.container[-1])
         self.log.info("#####Starting DCP Test")
-        self.run_dm_activities_with_ior("DCP", pool=self.pool)
+        self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
         self.log.info("#####Starting DSERIAL Test")
-        self.run_dm_activities_with_ior("DSERIAL", pool=self.pool)
+        self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)

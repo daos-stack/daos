@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
+%global mercury_version 2.2.0-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -14,12 +14,12 @@
 %endif
 
 Name:          daos
-Version:       2.1.103
+Version:       2.2.0
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
-URL:           https//github.com/daos-stack/daos
+URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)
@@ -34,7 +34,6 @@ BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
 %endif
 BuildRequires: gcc-c++
@@ -60,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.11
+BuildRequires: libpmemobj-devel >= 1.12.1~rc1
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -74,7 +73,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07, spdk-devel < 22
+BuildRequires: spdk-devel >= 22.01.1
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -162,17 +161,15 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07, spdk-tools < 22
+Requires: spdk-tools >= 22.01.1
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3.suse1500
+Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj = 1.11.0-3%{?dist}
+Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
@@ -510,8 +507,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
+%{_bindir}/daos_debug_set_params
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
+%{_bindir}/dfuse_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
@@ -572,6 +571,33 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Sep 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-1
+- First release candidate for 2.2.0.
+
+* Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
+- Add dfuse unit-test binary to call from ftest.
+
+* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-4
+- Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+* Thu Aug 11 2022 Wang Shilong <shilong.wang@intel.com> 2.1.104-3
+- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
+* Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
+- Update to mercury 2.2.0
+
+* Tue Aug 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.104-1
+- Bump version to 2.1.104
+
+* Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-4
+- Remove now unused openpa dependency
+
+* Fri Jul 15 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.103-3
+- Update SPDK dependency requirement to greater than or equal to 22.01.1.
+
+* Mon Jun 27 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.103-2
+- Update to mercury 2.2.0rc6
+
 * Mon Jun 13 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-1
 - Bump version to 2.1.103
 

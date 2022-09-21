@@ -354,8 +354,6 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 {
-	D_MUTEX_DESTROY(&dfc->dfs_read_mutex);
-
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -405,6 +403,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	daos_pool_info_t        p_info = {};
 	d_list_t		*rlink;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
@@ -451,7 +450,9 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 	*_dfp = dfp;
 	return rc;
 err_disconnect:
-	daos_pool_disconnect(dfp->dfp_poh, NULL);
+	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
@@ -733,6 +734,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	daos_cont_info_t	c_info = {};
 	int			dfs_flags = O_RDWR;
 	int			rc;
+	int			ret;
 
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
@@ -788,7 +790,9 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 	return 0;
 
 err_close:
-	daos_cont_close(dfc->dfs_coh, NULL);
+	ret = daos_cont_close(dfc->dfs_coh, NULL);
+	if (ret)
+		DFUSE_TRA_WARNING(dfc, "daos_cont_close() failed: " DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfc);
 	return rc;
@@ -910,7 +914,6 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
-	D_MUTEX_INIT(&dfc->dfs_read_mutex, NULL);
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
@@ -1046,7 +1049,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 4;
+	args.argc = 5;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -1070,6 +1073,10 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argv[3] = strdup("-odefault_permissions");
 	if (!args.argv[3])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	args.argv[4] = strdup("-onoatime");
+	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	/* Create the root inode and insert into table */

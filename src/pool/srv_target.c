@@ -795,7 +795,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_rebuild_abort(pool->sp_uuid, -1, -1);
+	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
@@ -1274,7 +1274,8 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
+	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
+				 PO_COMP_ST_DRAIN | PO_COMP_ST_NEW, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1470,8 +1471,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool			*pool = (struct ds_pool *)in;
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
-	int				ret = 0;
-	uint64_t			features = 0;
+	int                              ret         = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1480,9 +1480,11 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (pool->sp_global_version >= 1)
-		features = VOS_POOL_FEAT_AGG_OPT;
-	vos_pool_features_set(child->spc_hdl, features);
+	if (ret == 0 && pool->sp_global_version >= 1) {
+		/** If necessary, upgrade the vos pool format */
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	}
+
 	ds_pool_child_put(child);
 
 	return ret;

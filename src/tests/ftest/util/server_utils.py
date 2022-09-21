@@ -187,7 +187,7 @@ class DaosServerManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Copy certificates
@@ -804,7 +804,7 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         # Try to dump all server's ULTs stacks before kill.
-        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
+        result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
             print("No remote {} server processes killed (none found), done.".format(regex))
         else:
@@ -894,7 +894,7 @@ class DaosServerManager(SubprocessManager):
         """Get the list of ranks for the specified hosts.
 
         Args:
-            hosts (list): a list of host names.
+            hosts (NodeSet): host from which to get ranks.
 
         Returns:
             list: a list of integer ranks matching the hosts provided
