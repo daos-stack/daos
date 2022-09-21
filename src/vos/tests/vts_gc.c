@@ -630,7 +630,7 @@ run_gc_tests(const char *cfg)
 		dkey_per_obj = 3;
 	}
 
-	dts_create_config(test_name, "Garbage collector %s", cfg);
+	dts_create_config(test_name, "GC tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   gc_tests, gc_setup, gc_teardown);
 }

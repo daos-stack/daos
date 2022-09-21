@@ -10,7 +10,6 @@ usr/bin/dfuse_th
 usr/bin/job_tests
 usr/bin/eq_tests
 usr/bin/security_test
-usr/bin/io_conf
 usr/bin/fault_status
 usr/lib64/libdaos_tests.so
 etc/daos/fault-inject-cart.yaml

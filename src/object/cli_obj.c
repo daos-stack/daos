@@ -569,7 +569,7 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 	 * modification via distributed tranasaction.
 	 */
 	if (cond_modify)
-		return -DER_NEED_TX;
+		D_GOTO(unlock, rc = -DER_NEED_TX);
 
 	/* Choose one from data shards within bit_map, and also make sure there are
 	 * no further data shards failed.
@@ -985,16 +985,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	D_DEBUG(DB_TRACE, DF_OID" query shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
-	/* Disable inflight I/O during reintegration for the moment */
-	if (rc == 0 &&
-	    obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_shard->do_reintegrating) {
-		D_ERROR(DF_OID" shard is being reintegrated: %d\n",
-			DP_OID(obj->cob_md.omd_id), -DER_IO);
-		D_GOTO(close, rc = -DER_IO);
-	}
-
 	if (rc != 0) {
-		D_ERROR(DF_OID" obj_shard_open %u, rc "DF_RC".\n",
+		D_DEBUG(DB_IO, DF_OID" obj_shard_open %u, rc "DF_RC".\n",
 			DP_OID(obj->cob_md.omd_id), shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -1421,7 +1413,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc)
 		D_GOTO(fail_layout_created, rc);
 
-	obj->cob_ec_parity_rotate = 0;
+	obj->cob_ec_parity_rotate = 1;
 	obj_hdl_link(obj);
 	*args->oh = obj_ptr2hdl(obj);
 	obj_decref(obj);
@@ -2976,10 +2968,11 @@ out_task:
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
 
+		/* abort/complete sub-tasks will complete obj_task */
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(obj_task, rc);
 	}
-
-	tse_task_complete(obj_task, rc);
 
 	return rc;
 }
@@ -3261,8 +3254,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 		kds[i] = shard_arg->la_kds[i];
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
-		obj_arg->sgl->sg_iovs[0].iov_len);
+	D_DEBUG(DB_TRACE, "shard %u shard nr %u merge_nr %d/"DF_U64"\n", shard_auxi->shard,
+		shard_arg->la_nr, iter_arg->merge_nr, obj_arg->sgl->sg_iovs[0].iov_len);
 	return 0;
 }
 
@@ -3528,6 +3521,7 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 						shard_auxi->shard, obj_arg->kds[0].kd_key_len,
 						shard_arg->la_kds[0].kd_key_len);
 					obj_arg->kds[0] = shard_arg->la_kds[0];
+					iter_arg->merge_nr++;
 				}
 			}
 
@@ -6512,11 +6506,11 @@ out_task:
 	if (head != NULL && !d_list_empty(head)) {
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
-
+		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
+	} else {
+		tse_task_complete(api_task, rc);
 	}
-
-	tse_task_complete(api_task, rc);
 
 	return rc;
 }
@@ -6662,7 +6656,7 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 
 		dova[i].fetch_buf = NULL;
 		dova[i].fetch_buf_len = 0;
-		dova[i].ec_parity_rotate = 0;
+		dova[i].ec_parity_rotate = 1;
 	}
 
 	for (i = 0; i < obj->cob_grp_nr && rc == 0; i++) {

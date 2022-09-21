@@ -3017,14 +3017,14 @@ run_pm_tests(const char *cfg)
 	char	test_name[DTS_CFG_MAX];
 	int	rc;
 
-	dts_create_config(test_name, "VOS Universal Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Punch tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
 
-	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Conditional tests %s", cfg);
 
 	rc += cmocka_run_group_tests_name(test_name, punch_model_tests_pmdk,
 					  setup_io, teardown_io);
