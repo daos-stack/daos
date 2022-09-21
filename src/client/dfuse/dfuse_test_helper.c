@@ -45,13 +45,13 @@ main()
 	rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
 		DFUSE_TRA_DEBUG(dfuse_info, "dfuse_cont_open() failed: %d", rc);
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
 	rc = dfuse_fs_start(dfuse_info, dfs);
 	if (rc != 0) {
 		DFUSE_TRA_DEBUG(dfuse_info, "dfuse_fs_start() failed:" DF_RC, DP_RC(rc));
-		D_GOTO(out_daos, rc);
+		D_GOTO(out_cont, rc);
 	}
 
 	d_hash_rec_decref(&dfuse_info->dpi_pool_table, &dfp->dfp_entry);
@@ -68,6 +68,10 @@ main()
 		rc = rc2;
 
 	goto out_fini;
+out_cont:
+	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+out_pool:
+	d_hash_rec_decref(&dfuse_info->dpi_pool_table, &dfp->dfp_entry);
 out_daos:
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)

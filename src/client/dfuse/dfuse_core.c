@@ -417,9 +417,11 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 	*_dfp = dfp;
 	return rc;
 err_disconnect:
-	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
-	if (ret)
-		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
+	if (daos_handle_is_valid(dfp->dfp_poh)) {
+		ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
+		if (ret)
+			DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: " DF_RC, DP_RC(ret));
+	}
 err_free:
 	D_FREE(dfp);
 err:
