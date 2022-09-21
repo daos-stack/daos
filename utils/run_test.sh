@@ -157,7 +157,7 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
-    COMP="UTEST_vos.cmd"
+    COMP="UTEST_vos"
     cmd="-c pool -w key@0-4 key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"
     run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
     cmd="-c pool -w key@0-3 key@3-4 -w key@5-1 -w key@5-4 -R key@5-3 -a -i -d -D"
