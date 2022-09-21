@@ -168,8 +168,9 @@ type cliOptions struct {
 	Version        versionCmd     `command:"version" description:"Print dmg version"`
 	Telemetry      telemCmd       `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
 	Check          checkCmdRoot   `command:"check" description:"Check system health"`
-	firmwareOption                // build with tag "firmware" to enable
 	ManPage        cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	faultsCmdRoot                 // compiled out for release builds
+	firmwareOption                // build with tag "firmware" to enable
 }
 
 type versionCmd struct{}

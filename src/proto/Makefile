@@ -51,6 +51,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/ctl/ranks.pb.go\
 		   common/proto/chk/chk.pb.go\
+		   common/proto/chk/faults.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
