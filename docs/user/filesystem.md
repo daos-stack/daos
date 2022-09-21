@@ -278,6 +278,7 @@ $ df -h | grep fuse
 dfuse                         537G  5.1G  532G   1% /tmp/daos_dfuse_samir
 $
 ```
+
 #### 2> Add dfs entry in /etc/fstab and mount as part of "mount -a" command.
 
   Only root user can use "mount -a" command to mount the daos container mention in /etc/fstab file
