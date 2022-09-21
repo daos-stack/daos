@@ -12,7 +12,6 @@ from dmg_utils import check_system_query_status
 
 
 class NvmePoolExtend(OSAUtils):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     NVME Pool Extend test cases.
@@ -24,101 +23,116 @@ class NvmePoolExtend(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.dmg_command = self.get_dmg_command()
-        self.daos_command = self.get_daos_command()
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
-        # Start an additional server.
-        self.extra_servers = self.get_hosts_from_yaml(
-            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
 
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
-        self.pool = None
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_extend(self, num_pool, oclass=None):
-        """Run Pool Extend
+        """Run Pool Extend.
+
         Args:
             num_pool (int) : total pools to create for testing purposes.
             oclass (str) : object class (eg: RP_2G8,etc)
                            Defaults to None.
         """
-        self.pool = []
+        extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
+        ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
+
+        daos_command = self.get_daos_command()
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
 
-        for val in range(0, num_pool):
-            # Create a pool
-            self.pool.append(self.get_pool())
-            self.pool[-1].set_property("reclaim", "disabled")
+        # Create the pools
+        pools = []
+        for _ in range(0, num_pool):
+            pools.append(self.get_pool(properties="reclaim:disabled"))
+            # pools[-1].set_property("reclaim", "disabled")
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
-        for val in range(0, num_pool):
-            test = self.ior_test_sequence[val]
+        for index, pool in enumerate(pools):
+            test = ior_test_sequence[index]
             threads = []
-            threads.append(threading.Thread(target=self.run_ior_thread,
-                                            kwargs={"action": "Write",
-                                                    "oclass": oclass,
-                                                    "test": test,
-                                                    "pool": self.pool[val]}))
+            threads.append(
+                threading.Thread(
+                    target=self.run_ior_thread,
+                    kwargs={"action": "Write", "oclass": oclass, "test": test, "pool": pool}))
+
             # Launch the IOR threads
-            for thrd in threads:
-                self.log.info("Thread : %s", thrd)
-                thrd.start()
+            for thread in threads:
+                self.log.info("Thread : %s", thread)
+                thread.start()
                 time.sleep(1)
 
-            self.pool[val].display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
+            # Get the pool version before the extend
+            pool.display_pool_daos_space("Pool space: Beginning")
+            version_start = pool.get_version()
+            self.log.info("Pool Version at the beginning %s", version_start)
 
             # Start the additional servers and extend the pool
-            if val == 0:
-                self.log.info("Extra Servers = %s", self.extra_servers)
-                self.start_additional_servers(self.extra_servers)
+            if index == 0:
+                self.log.info("Extra Servers = %s", extra_servers)
+                self.start_additional_servers(extra_servers)
+
                 # Check the system map extra servers are in joined state.
-                for retry in range(0, 10):
-                    scan_info = self.get_dmg_command().system_query()
-                    if not check_system_query_status(scan_info):
-                        if retry == 9:
-                            self.fail("One/More servers status not correct")
-                    else:
-                        break
-            self.log.info("Pool Version at the beginning %s", pver_begin)
+                all_joined = False
+                retry = 0
+                while not all_joined and retry < 10:
+                    all_joined = check_system_query_status(self.get_dmg_command().system_query())
+                    retry += 1
+                if not all_joined:
+                    self.fail("One or more extra servers failed to join: {}".format(extra_servers))
+
             # Extend ranks (4,5), (6,7), (8,9)
-            ranks_extended = "{},{}".format((val * 2) + 4, (val * 2) + 5)
-            output = self.dmg_command.pool_extend(self.pool[val].uuid,
-                                                  ranks_extended)
-            self.print_and_assert_on_rebuild_failure(output)
-            pver_extend = self.get_pool_version()
-            self.log.info("Pool Version after extend %s", pver_extend)
+            ranks_extended = "{},{}".format((index * 2) + 4, (index * 2) + 5)
+            output = pool.extend(ranks_extended)
+
+            # Wait for rebuild to complete
+            pool.wait_for_rebuild(False, interval=3)
+            rebuild_status = pool.get_rebuild_status()
+            self.log.info("Rebuild Status: %s", rebuild_status)
+            if rebuild_status in ["failed", "scanning", "aborted", "busy"]:
+                self.fail("Rebuild failed after pool extend: status={}".format(rebuild_status))
+
+            # Get the pool version after the extend
+            pool.display_pool_daos_space("Pool space: After extend and rebuild")
+            version_after = pool.get_version()
+            self.log.info("Pool Version after extend %s", version_after)
+
             # Check pool version incremented after pool extend
-            self.assertTrue(pver_extend > pver_begin,
-                            "Pool Version Error:  After extend")
+            self.log.info("Pool Version change %s -> %s", version_start, version_after)
+            if version_after <= version_start:
+                self.fail(
+                    "Pool version did not increment after pool extend: before={}, after={}".format(
+                        version_start, version_after))
+
             # Wait to finish the threads
-            for thrd in threads:
-                thrd.join()
+            for thread in threads:
+                thread.join()
                 if not self.out_queue.empty():
                     self.assert_on_exception()
+
             # Verify the data after pool extend
             self.run_ior_thread("Read", oclass, test)
+
             # Get the pool space at the end of the test
-            display_string = "Pool{} space at the End".format(val)
-            self.pool[val].display_pool_daos_space(display_string)
-            self.container = self.pool_cont_dict[self.pool[val]][0]
-            kwargs = {"pool": self.pool[val].uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
+            display_string = "Pool{} space at the End".format(index)
+            pool.display_pool_daos_space(display_string)
+            self.container = self.pool_cont_dict[pool][0]
+            output = daos_command.container_check(pool=pool.identifier, cont=self.container.uuid)
             self.log.info(output)
 
     def test_nvme_pool_extend(self):
-        """Test ID: DAOS-2086
+        """Test ID: DAOS-2086.
+
         Test Description: NVME Pool Extend
 
         :avocado: tags=all,full_regression

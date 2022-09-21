@@ -1071,3 +1071,66 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild(to_start=False, interval=interval)
         duration = float(time()) - start
         self.log.info("%s duration: %.1f sec", operation, duration)
+
+    @fail_on(CommandFailure)
+    def extend(self, ranks):
+        """Extend the pool to additional ranks.
+
+        Args:
+            ranks (list): a list daos server ranks (int) to exclude
+
+        """
+        return self.dmg.pool_extend(self.identifier, ranks)
+
+    def _get_query_data(self, *keys, refresh=False):
+        """Get the pool version from the dmg pool query output.
+
+        Args:
+            keys (list): dmg pool query dictionary keys to use to access the data
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys 
+
+        Returns:
+            object: the requested dmg pool query data subset
+
+        """
+        if not self.query_data or refresh:
+            self.set_query_data()
+        try:
+            value = self.query_data.copy()
+            for key in keys:
+                value = value[key]
+            return value
+        except KeyError as error:
+            keys_str = ".".join(map(str, keys))
+            raise CommandFailure(
+                "The dmg pool query key does not exist: {}".format(keys_str)) from error
+
+    def get_version(self, refresh=False):
+        """Get the pool version from the dmg pool query output.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+            int: pool version value
+
+        """
+        return int(self._get_query_data("response", "version", refresh=refresh))
+
+    def get_rebuild_status(self, refresh=False):
+        """Get the pool rebuild status from the dmg pool query output.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+            str: rebuild status
+
+        """
+        return int(self._get_query_data("response", "rebuild", "status", refresh=refresh))
