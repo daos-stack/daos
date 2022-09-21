@@ -905,9 +905,18 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		struct statfs   fs;
-		char            *dir, *dirp;
-		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+		struct statfs fs;
+		char         *dir, *dirp;
+		mode_t        mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+
+#ifdef LUSTRE_INCLUDE
+		if (fs.f_type == LL_SUPER_MAGIC) {
+			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
+			if (rc == 0)
+				return 0;
+			/* if Lustre specific method fails, fallback to try the normal way... */
+		}
+#endif
 
 		D_STRNDUP(dir, path, path_len);
 		if (dir == NULL) {
@@ -916,6 +925,16 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		dirp = dirname(dir);
+
+		/** create a new directory if POSIX/MPI-IO container */
+		rc = mkdir(path, mode);
+		if (rc == -1) {
+			rc = errno;
+
+			D_ERROR("Failed to create dir %s: %s\n", path, strerror(rc));
+			return rc;
+		}
+
 		rc = statfs(dirp, &fs);
 		if (rc == -1) {
 			int err = errno;
@@ -925,13 +944,17 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return err;
 		}
 
+		/* Open the parent directory for the new container so we can call a dfuse iotcl
+		 * to discover the user running dfuse.
+		 */
 		if (fs.f_type == FUSE_SUPER_MAGIC) {
 			int fd;
 
-			fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+			fd = open(dirp, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 			if (fd == -1) {
 				int err = errno;
 
+				D_ERROR("Dfuse open failed '%s': %s\n", dirp, strerror(err));
 				D_FREE(dir);
 				return err;
 			}
@@ -950,23 +973,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		D_FREE(dir);
 
-#ifdef LUSTRE_INCLUDE
-		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
-			if (rc == 0)
-				return 0;
-			/* if Lustre specific method fails, fallback to try the normal way... */
-		}
-#endif
-
-		/** create a new directory if POSIX/MPI-IO container */
-		rc = mkdir(path, mode);
-		if (rc == -1) {
-			rc = errno;
-
-			D_ERROR("Failed to create dir %s: %s\n", path, strerror(rc));
-			return rc;
-		}
 	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
