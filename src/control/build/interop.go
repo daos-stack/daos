@@ -78,6 +78,22 @@ type InteropRule struct {
 	Description   string
 	StopOnSuccess bool // If set, and the rule is satisfied, stop checking rules.
 	Check         func(self, other *VersionedComponent) bool
+	Match         func(self, other *VersionedComponent) bool
+}
+
+// Matches returns true if the rule matches the components.
+func (rule *InteropRule) Matches(self, other *VersionedComponent) bool {
+	// Basic test.
+	if !(rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component)) {
+		return false
+	}
+
+	// Apply custom match logic if the rule has it.
+	if rule.Match != nil {
+		return rule.Match(self, other)
+	}
+
+	return true
 }
 
 // defaultRules are a set of default rules which should apply regardless
@@ -142,10 +158,10 @@ func CheckCompatibility(self, other *VersionedComponent, customRules ...*Interop
 
 	// Apply custom rules first (if any), then apply the default rules.
 	for _, rule := range append(customRules, append(releaseRules, defaultRules...)...) {
-		if rule == nil {
-			return errors.New("nil rule")
+		if rule == nil && rule.Check == nil {
+			return errors.New("nil rule or check")
 		}
-		if rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component) {
+		if rule.Matches(self, other) {
 			if !rule.Check(self, other) {
 				return errors.Wrap(errIncompatComponents(self, other), rule.Description)
 			}

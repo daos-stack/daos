@@ -108,13 +108,8 @@ daos_tests:
     test_rebuild_28: -s3 -u subtests="28"
     test_rebuild_29: -s5 -u subtests="29"
   stopped_ranks:
-    test_rebuild_22: [7]
-    test_rebuild_23: [7]
-    test_rebuild_24: [7]
-    test_rebuild_25: [5, 6, 7]
     test_rebuild_26: ["random"]
     test_rebuild_27: ["random"]
-    test_rebuild_28: [7]
     test_rebuild_29: ["random"]
   pools_created:
     test_rebuild_0to10: 16
