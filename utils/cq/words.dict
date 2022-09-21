@@ -94,6 +94,7 @@ centric
 chdir
 checksum
 chgrp
+chk
 chmod
 chowned
 clush
@@ -163,6 +164,7 @@ environ
 epcrange
 errored
 ethernet
+fallocate
 fchmod
 fcntl
 filename
