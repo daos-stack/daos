@@ -108,6 +108,14 @@ dh_hash_find(struct dfuse_projection_info *fs_handle, fuse_ino_t parent, struct 
 	save->rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &parent, sizeof(parent), NULL,
 				       &save->bucket_length, &save->position);
 
+	if (save->rlink) {
+		save->promote = false;
+
+		if (save->position > 100)
+			save->promote = true;
+		else if (save->bucket_length > 20 && (save->position * 2 > save->bucket_length))
+			save->promote = true;
+	}
 	return save->rlink;
 }
 
@@ -120,15 +128,7 @@ dh_hash_decref(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 void
 dh_hash_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 {
-	bool promote = false;
-
-	if (save->position > 100)
-		promote = true;
-
-	/* Doesn't work as this needs to be called before replying to fuse or it might end up
-	 * closing the handle
-	 */
-	d_hash_rec_decrefx(&fs_handle->dpi_iet, save->rlink, promote);
+	d_hash_rec_decrefx(&fs_handle->dpi_iet, save->rlink, save->promote);
 }
 
 void

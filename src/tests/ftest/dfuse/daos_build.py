@@ -75,6 +75,20 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("metadata")
 
+    def test_dfuse_daos_build_data(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_data
+        """
+        self.run_build_test("data")
+
     def test_dfuse_daos_build_nocache(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
@@ -109,12 +123,12 @@ class DaosBuild(DfuseTestBase):
         self.load_dfuse(self.hostlist_clients)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = True
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = True
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
@@ -122,16 +136,25 @@ class DaosBuild(DfuseTestBase):
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
-            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-data-cache'] = False
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
+        elif cache_mode == 'data':
+            build_time = 60
+            cont_attrs['dfuse-data-cache'] = True
+            cont_attrs['dfuse-attr-time'] = '0'
+            cont_attrs['dfuse-dentry-time'] = '0'
+            cont_attrs['dfuse-ndentry-time'] = '0'
+            if intercept:
+                build_time = 120
+            self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
             build_time = 60
-            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-data-cache'] = False
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'

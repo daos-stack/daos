@@ -490,6 +490,7 @@ d_hash_rec_findx(struct d_hash_table *htable, const void *key, unsigned int ksiz
 	bool                  is_lru = (htable->ht_feats & D_HASH_FT_LRU);
 
 	D_ASSERT(key != NULL && ksize != 0);
+	D_ASSERT(!is_lru);
 	idx    = ch_key_hash(htable, key, ksize);
 	bucket = &htable->ht_buckets[idx];
 
@@ -804,7 +805,10 @@ d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote)
 		d_list_move(link, &bucket->hb_head);
 
 	zombie = ch_rec_decref(htable, link);
-	D_ASSERT(!zombie);
+	if (zombie && !d_list_empty(link)) {
+		D_ASSERT(!read_only);
+		ch_rec_delete(htable, idx, link);
+	}
 
 	ch_bucket_unlock(htable, idx, read_only);
 

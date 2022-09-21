@@ -120,6 +120,7 @@ struct dht_call {
 	int       position;
 	int       bucket_length;
 	d_list_t *rlink;
+	bool      promote;
 };
 
 struct dfuse_inode_ops {
