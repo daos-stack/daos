@@ -93,9 +93,12 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	     daos_size_t attr_len,
 	     d_list_t **rlinkp)
 {
-	struct dfuse_inode_entry	*ie;
-	d_list_t			 *rlink;
-	int				 rc = 0;
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+	int                       rc = 0;
+	int                       cookie;
+	int                       bucket_length;
+	int                       position;
 
 	D_ALLOC_PTR(ie);
 	if (!ie) {
@@ -143,10 +146,13 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
 			entry->ino, ie->ie_stat.st_mode);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
-				       &ie->ie_stat.st_ino,
-				       sizeof(ie->ie_stat.st_ino),
-				       &ie->ie_htl);
+	rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+				 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length, &position);
+
+	if (!rlink) {
+		rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+						sizeof(ie->ie_stat.st_ino), cookie, &ie->ie_htl);
+	}
 
 	if (rlink != &ie->ie_htl) {
 		struct dfuse_inode_entry *inode;

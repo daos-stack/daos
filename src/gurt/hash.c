@@ -278,6 +278,7 @@ ch_bucket_unlock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 		D_MUTEX_UNLOCK(&lock->mutex);
 	else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
 		uint32_t count = atomic_load_relaxed(&htable->ht_buckets[idx].hb_read_lock_count);
+
 		if (count != 0)
 			atomic_fetch_sub_relaxed(&htable->ht_buckets[idx].hb_read_lock_count, 1);
 		D_RWLOCK_UNLOCK(&lock->rwlock);
