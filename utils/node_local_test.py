@@ -4097,7 +4097,7 @@ def test_dfuse_start(server, conf, wf):
     return rc
 
 
-def test_dfuse_th(server, conf, wf):
+def test_dfuse_th(_, conf, wf):
     """Run dfuse test helper under fault injection."""
 
     cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th')]
@@ -4397,22 +4397,22 @@ def run(wf, args):
                 fatal_errors.add_result(test_dfuse_th(server, conf, wf_client))
 
                 # dfuse startup, uses custom fault to force exit if no other faults injected.
-#                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-#                fatal_errors.add_result(test_alloc_fail(server, conf))
+                fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-#                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-#                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-#                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-#                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
                 # filesystem copy test.
-#                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 wf_client.close()
 
