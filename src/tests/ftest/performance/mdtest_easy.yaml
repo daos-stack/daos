@@ -1,7 +1,7 @@
 hosts:
   test_servers: 3
   test_clients: 5
-timeout: 300 # Additional 180s timeout for each rank stopped
+timeout: 360 # Additional 180s timeout for each rank stopped
 timeouts:
   test_performance_mdtest_easy_dfs_rp_2gx_stop: 480
   test_performance_mdtest_easy_dfs_ec_16p2gx_stop: 480
@@ -49,7 +49,6 @@ mdtest: &mdtest_base
   test_dir: "/"
   manager: "MPICH"
   flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -u -L"
-  api: "DFS"
   read_bytes: 0
   write_bytes: 0
   num_of_files_dirs: 100000000
@@ -58,6 +57,7 @@ mdtest: &mdtest_base
   dfs_destroy: False
 mdtest_dfs_s1:
   <<: *mdtest_base
+  api: DFS
   dfs_oclass: S1
   dfs_dir_oclass: SX
   dfs_chunk: 1MiB
@@ -69,9 +69,19 @@ mdtest_dfs_ec_4p2g1:
   dfs_chunk: 4MiB
 mdtest_dfs_ec_16p2g1:
   <<: *mdtest_base
+  api: DFS
   dfs_oclass: EC_16P2G1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB
+mdtest_dfuse_s1:
+  <<: *mdtest_base
+  api: POSIX
+  dfs_oclass: S1
+  dfs_dir_oclass: SX  # Unused. Cannot be set at the container level
+  dfs_chunk: 1MiB
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
+  disable_caching: True
 performance:
   env:
     - D_LOG_MASK=ERR
