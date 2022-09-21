@@ -699,7 +699,6 @@ out_daos:
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);

@@ -4096,6 +4096,21 @@ def test_dfuse_start(server, conf, wf):
     os.rmdir(mount_point)
     return rc
 
+
+def test_dfuse_th(server, conf, wf):
+    """Run dfuse test helper under fault injection."""
+
+    cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th')]
+
+    test_cmd = AllocFailTest(conf, 'dfuse_th', cmd)
+    test_cmd.wf = wf
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = True
+    test_cmd.check_stderr = True
+
+    return test_cmd.launch()
+
+
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -4377,6 +4392,9 @@ def run(wf, args):
                 # so can be performed in parallel.
 
                 wf_client = WarningsFactory('nlt-client-leaks.json')
+
+                # dfuse test helper. A specific binary to simulate dfuse.
+                fatal_errors.add_result(test_dfuse_th(server, conf, wf_client))
 
                 # dfuse startup, uses custom fault to force exit if no other faults injected.
                 fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))

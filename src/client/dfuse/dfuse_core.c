@@ -1134,12 +1134,15 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
-	fs_handle->dpi_shutdown = true;
-	sem_post(&fs_handle->dpi_sem);
+	if (fs_handle->dpi_thread) {
+		fs_handle->dpi_shutdown = true;
 
-	pthread_join(fs_handle->dpi_thread, NULL);
+		sem_post(&fs_handle->dpi_sem);
 
-	sem_destroy(&fs_handle->dpi_sem);
+		pthread_join(fs_handle->dpi_thread, NULL);
+
+		sem_destroy(&fs_handle->dpi_sem);
+	}
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
