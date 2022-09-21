@@ -740,18 +740,25 @@ abort_dkey_ilog_tests(void **state)
 	vos_cont_close(coh);
 }
 
-int entry_handler_called;
+int committed_entry_handler_called;
+struct dv_dtx_committed_entry committed_entry_handler_entry;
 static int
 committed_entry_handler(struct dv_dtx_committed_entry *entry, void *cb_arg)
 {
-	entry_handler_called++;
+	committed_entry_handler_called++;
+	committed_entry_handler_entry = *entry;
+
 	return 0;
 }
 
+int active_entry_handler_called;
+struct dv_dtx_active_entry active_entry_handler_entry;
 static int
 active_entry_handler(struct dv_dtx_active_entry *entry, void *cb_arg)
 {
-	entry_handler_called++;
+	active_entry_handler_called++;
+	active_entry_handler_entry = *entry;
+
 	return 0;
 }
 
@@ -761,22 +768,21 @@ get_dtx_tables_tests(void **state)
 	struct dt_vos_pool_ctx	*tctx = *state;
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 
-	assert_rc_equal(-DER_INVAL, dv_committed_dtx(coh, committed_entry_handler, NULL));
-	assert_int_equal(0, entry_handler_called);
+	assert_rc_equal(-DER_INVAL, dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL));
+	assert_int_equal(0, committed_entry_handler_called);
 
-	assert_rc_equal(-DER_INVAL, dv_active_dtx(coh, active_entry_handler, NULL));
-	assert_int_equal(0, entry_handler_called);
+	assert_rc_equal(-DER_INVAL, dv_dtx_get_act_table(coh, active_entry_handler, NULL));
+	assert_int_equal(0, active_entry_handler_called);
 
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
 
 	dvt_vos_insert_2_records_with_dtx(coh);
 
-	assert_success(dv_committed_dtx(coh, committed_entry_handler, NULL));
-	assert_int_equal(1, entry_handler_called);
+	assert_success(dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL));
+	assert_int_equal(1, committed_entry_handler_called);
 
-	entry_handler_called = 0;
-	assert_success(dv_active_dtx(coh, active_entry_handler, NULL));
-	assert_int_equal(1, entry_handler_called);
+	assert_success(dv_dtx_get_act_table(coh, active_entry_handler, NULL));
+	assert_int_equal(1, active_entry_handler_called);
 
 	vos_cont_close(coh);
 }
@@ -894,15 +900,74 @@ clear_committed_table(void **state)
 
 	dvt_vos_insert_2_records_with_dtx(coh);
 
-	assert_int_equal(1, dv_clear_committed_table(coh));
+	assert_int_equal(1, dv_dtx_clear_cmt_table(coh));
 
-	entry_handler_called = 0;
-	dv_committed_dtx(coh, committed_entry_handler, NULL);
+	committed_entry_handler_called = 0;
+	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
 
-	assert_int_equal(0, entry_handler_called);
+	assert_int_equal(0, committed_entry_handler_called);
 
 	dv_cont_close(&coh);
+}
 
+static void
+dtx_commit_active_table(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	daos_handle_t		coh;
+
+	dv_cont_open(poh, g_uuids[6], &coh);
+
+	dvt_vos_insert_dtx_records(coh, 2, 0);
+
+	/* Make sure there are no committed entries when starting */
+	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
+	assert_int_equal(0, committed_entry_handler_called);
+
+	/* get a dtx_id. entry_handler_committed_entry is set when dv_dtx_get_act_table is called */
+	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
+	assert_int_equal(2, active_entry_handler_called);
+	assert_int_equal(1, dv_dtx_commit_active_entry(coh, &active_entry_handler_entry.ddtx_id));
+
+	/* Should be 1 committed entry in the table now */
+	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
+	assert_int_equal(1, committed_entry_handler_called);
+
+	/* Should still be 1 active */
+	active_entry_handler_called = 0;
+	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
+	assert_int_equal(1, active_entry_handler_called);
+
+	dv_cont_close(&coh);
+}
+
+static void
+dtx_abort_active_table(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	daos_handle_t		coh;
+
+	dv_cont_open(poh, g_uuids[7], &coh);
+
+	dvt_vos_insert_dtx_records(coh, 2, 0);
+
+	/* get a dtx_id. entry_handler_committed_entry is set when dv_dtx_get_act_table is called */
+	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
+	assert_int_equal(2, active_entry_handler_called);
+	assert_success(dv_dtx_abort_active_entry(coh, &active_entry_handler_entry.ddtx_id));
+
+	/* Should still be 0 committed entries in table */
+	dv_dtx_get_cmt_table(coh, committed_entry_handler, NULL);
+	assert_int_equal(0, committed_entry_handler_called);
+
+	/* Should still be 1 active */
+	active_entry_handler_called = 0;
+	dv_dtx_get_act_table(coh, active_entry_handler, NULL);
+	assert_int_equal(1, active_entry_handler_called);
+
+	dv_cont_close(&coh);
 }
 
 #define DELETE_SUCCESS(poh, vtp) assert_success(dv_delete(poh, &vtp))
@@ -999,6 +1064,8 @@ dv_test_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
 
+	active_entry_handler_called = 0;
+	committed_entry_handler_called = 0;
 	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
 	return 0;
 }
@@ -1042,6 +1109,8 @@ const struct CMUnitTest dv_test_cases[] = {
 	TEST(update_value_to_modify_tests),
 	TEST(update_value_to_insert_tests),
 	TEST(clear_committed_table),
+	TEST(dtx_commit_active_table),
+	TEST(dtx_abort_active_table),
 };
 
 int
