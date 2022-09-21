@@ -68,6 +68,9 @@ class MdtestBase(DfuseTestBase):
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes, out_queue=out_queue)
 
+        if self.subprocess:
+            return
+
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:
             self.container = None

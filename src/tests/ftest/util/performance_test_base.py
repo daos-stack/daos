@@ -433,8 +433,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         # Performance with POSIX/DFUSE is tricky because we can't just set
         # dfs_dir_oclass and dfs_oclass. This needs more work before running non-DFS.
-        if self.mdtest_cmd.api.value != 'DFS':
-            self.fail("Only DFS API supported")
+        # if self.mdtest_cmd.api.value != 'DFS':
+        #     self.fail("Only DFS API supported")
 
         stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
 
@@ -449,8 +449,12 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_dir_oclass.value)])
 
         # Create pool and container upfront so rank stop timing is more accurate
-        self.add_pool(connect=False)
-        self.add_container(self.pool, create=False)
+        self.pool = self.get_pool(connect=False)
+        self.container = self.get_container(
+            self.pool,
+            create=False,
+            oclass=self.mdtest_cmd.dfs_oclass.value,
+            chunk_size=self.mdtest_cmd.dfs_chunk.value)
         properties = "rf:{}".format(cont_rf)
         current_properties = self.container.properties.value
         if current_properties:
