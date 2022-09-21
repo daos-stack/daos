@@ -947,8 +947,7 @@ class DaosServer():
         return self.test_pool.uuid
 
     def get_test_pool_id(self):
-        """Return a pool label to be used for testing
-
+        """Return a pool label or uuid to be used for testing
         Create a pool as required"""
 
         if self.test_pool is None:
@@ -4063,7 +4062,7 @@ class AllocFailTest():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
         if callable(self.cmd):
-            cmd = self.cmd()
+            cmd = self.cmd(loc)
         else:
             cmd = self.cmd
 
@@ -4120,7 +4119,7 @@ def test_alloc_fail_copy(server, conf, wf):
 
     # pylint: disable=consider-using-with
 
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_id()
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     sub_dir = join(src_dir.name, 'new_dir')
     os.mkdir(sub_dir)
@@ -4131,8 +4130,8 @@ def test_alloc_fail_copy(server, conf, wf):
     os.symlink('broken', join(sub_dir, 'broken_s'))
     os.symlink('file.0', join(sub_dir, 'link'))
 
-    def get_cmd():
-        container = str(uuid.uuid4())
+    def get_cmd(cont_id):
+        container = 'container_' + str(cont_id)
         cmd = [join(conf['PREFIX'], 'bin', 'daos'),
                'filesystem',
                'copy',
@@ -4151,6 +4150,7 @@ def test_alloc_fail_copy(server, conf, wf):
 
     rc = test_cmd.launch()
     return rc
+
 
 def test_alloc_fail_cat(server, conf):
     """Run the Interception library with fault injection
