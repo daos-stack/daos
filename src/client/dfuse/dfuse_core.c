@@ -1001,23 +1001,27 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
+	/* Set the inode data to something sensible, for cases where the root represents a
+	 * container than some of this will be overwritten by dfs_lookup().
+	 */
+	dfs->dfs_ino        = 1;
 	ie->ie_dfs          = dfs;
 	ie->ie_root         = true;
 	ie->ie_parent       = 1;
-	ie->ie_stat.st_ino  = 1;
 	ie->ie_stat.st_uid  = geteuid();
 	ie->ie_stat.st_gid  = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	atomic_store_relaxed(&ie->ie_ref, 1);
-	dfs->dfs_ino = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
 	}
+
+	ie->ie_stat.st_ino = dfs->dfs_ino;
 
 	rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino),
 			       &ie->ie_htl, false);
