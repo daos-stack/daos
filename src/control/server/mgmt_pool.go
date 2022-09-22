@@ -541,7 +541,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
 		// and persist the update(s).
-		if req.Force || ds != drpc.DaosBusy {
+		if req.Force || (ds != drpc.DaosBusy && ds != drpc.DaosNoService) {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
