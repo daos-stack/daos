@@ -40,7 +40,7 @@ class MdtestEasy(PerformanceTestBase):
         :avocado: tags=all,manual
         :avocado: tags=hw,large
         :avocado: tags=performance,performance_mdtest,performance_mdtest_easy,performance_dfuse
-        :avocado: tags=performance_mdtest_easy_dfuse_s1
+        :avocado: tags=performance_mdtest_easy_dfuse_s1,dfuse
         """
         self.run_performance_mdtest(namespace="/run/mdtest_dfuse_s1/*")
 
