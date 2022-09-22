@@ -12,13 +12,13 @@ import os
 import sys
 
 # pylint: disable=import-error,no-name-in-module
-from util.logger_utils import get_console_logger
+from util.logger_utils import get_console_handler
 from util.run_utils import run_local, RunException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_logger("%(message)s", logging.DEBUG))
+logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 
 class CoreFileProcessing():

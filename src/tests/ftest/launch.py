@@ -29,7 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_logger, get_file_handler
+from util.logger_utils import get_console_handler, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
 
@@ -68,7 +68,7 @@ YAML_KEYS = OrderedDict(
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_logger("%(message)s", logging.INFO))
+logger.addHandler(get_console_handler("%(message)s", logging.INFO))
 
 
 class LaunchException(Exception):
@@ -880,7 +880,8 @@ class Launch():
 
         # Setup the core file pattern
         if args.process_cores:
-            all_hosts = servers | clients | self.local_host
+            all_hosts = servers | clients
+            all_hosts |= self.local_host
             pattern = "/var/tmp/core.%e.%t.%p"
             logger.info("Configuring the core_pattern to be '%s' on %s", pattern, all_hosts)
             command = f"sudo bash -c \"echo \"{pattern}\" > /proc/sys/kernel/core_pattern\""

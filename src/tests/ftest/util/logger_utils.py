@@ -9,7 +9,7 @@ import sys
 DATE_FORMAT = r"%Y/%m/%d %I:%M:%S"
 
 
-def get_console_logger(log_format, log_level):
+def get_console_handler(log_format, log_level):
     """Get a logging console (stream) handler.
 
     Args:
