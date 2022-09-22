@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -832,12 +832,14 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 }
 
 static void
-free_strings(char **str, size_t str_count)
+free_strings(char **str, size_t str_count, bool free_array)
 {
 	int i;
 
 	for (i = 0; i < str_count; i++)
 		D_FREE(str[i]);
+	if (free_array)
+		D_FREE(str);
 }
 
 static int
@@ -851,7 +853,7 @@ convert_aces_to_strs(struct daos_acl *acl, size_t ace_nr, char **result)
 		current = daos_acl_get_next_ace(acl, current);
 		rc = alloc_str_for_ace(current, &(result[i]));
 		if (rc != 0) {
-			free_strings(result, i);
+			free_strings(result, i, false);
 			return rc;
 		}
 	}
@@ -960,8 +962,7 @@ daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
 
 out:
 	if (aces != NULL) {
-		free_strings(aces, aces_nr);
-		D_FREE(aces);
+		free_strings(aces, aces_nr, true);
 	}
 	return rc;
 }

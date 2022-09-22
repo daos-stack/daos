@@ -4262,6 +4262,28 @@ def test_fi_list_attr(server, conf, wf):
     return rc
 
 
+def test_fi_get_prop(server, conf, wf):
+    """Run daos cont list-attr with fault injection"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool, ctype='POSIX')
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'get-prop',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
+    test_cmd.wf = wf
+    test_cmd.check_stderr = False
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+
 def test_fi_get_attr(server, conf, wf):
     """Run daos cont get-attr with fault injection"""
 
@@ -4453,6 +4475,8 @@ def run(wf, args):
                 # Container attribute tests
                 fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
                 fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+
+                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
