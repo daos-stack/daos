@@ -521,10 +521,14 @@ main(int argc, char **argv)
 		array();
 
 	/** close container */
-	daos_cont_close(coh, NULL);
+	rc = daos_cont_close(coh, NULL);
+	if (rc)
+		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
 
 	/** disconnect from pool & destroy it */
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc)
+		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
 	if (rank == 0)
 		/** free allocated storage */
 		pool_destroy();

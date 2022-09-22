@@ -4455,3 +4455,41 @@ out_put:
 	cont_svc_put_leader(svc);
 	return rc;
 }
+
+int
+ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid, struct container_hdl *chdl)
+{
+	d_iov_t		key;
+	d_iov_t		value;
+	struct rdb_tx	tx;
+	struct cont_svc *svc;
+	int		rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": find leader: %d\n",
+			DP_CONT(pool_uuid, cont_hdl_uuid), rc);
+		return rc;
+	}
+
+	/* check if it is server container hdl */
+	if (uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) == 0)
+		D_GOTO(put, rc);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	/* See if this container handle already exists. */
+	d_iov_set(&key, cont_hdl_uuid, sizeof(uuid_t));
+	d_iov_set(&value, chdl, sizeof(*chdl));
+	rc = rdb_tx_lookup(&tx, &svc->cs_hdls, &key, &value);
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+put:
+	D_DEBUG(DB_MD, DF_CONT "lookup rc %d.\n", DP_CONT(pool_uuid, cont_hdl_uuid), rc);
+	cont_svc_put_leader(svc);
+	return rc;
+}

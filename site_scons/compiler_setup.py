@@ -1,6 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Exit, Configure
+from SCons.Script import GetOption, Exit
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -72,13 +72,6 @@ def base_setup(env):
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
-
-    cenv = env.Clone()
-    cenv.Append(CFLAGS='-Werror')
-    config = Configure(cenv)
-    if config.CheckHeader('stdatomic.h'):
-        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC': '1'})
-    config.Finish()
 
     if compiler == 'icx' and not GetOption('no_rpath'):
         # Hack to add rpaths
