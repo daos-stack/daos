@@ -23,7 +23,7 @@
 #define CRT_HG_ONEWAY_RPCID	(0xDA036869)
 
 /** MAX number of HG handles in pool */
-#define CRT_HG_POOL_MAX_NUM	(512)
+#define CRT_HG_POOL_MAX_NUM	(32)
 /** number of prepost HG handles when enable pool */
 #define CRT_HG_POOL_PREPOST_NUM	(16)
 

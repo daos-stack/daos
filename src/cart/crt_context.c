@@ -877,6 +877,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
+
+		D_ASSERT(rpc_priv->crp_completed == 0);
+
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
