@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -16,8 +15,7 @@ from ior_utils import IorMetrics
 from command_utils_base import EnvironmentVariables
 import oclass_utils
 
-# TODO dmg system query as non-json to reduce log clutter
-
+# TODO dmg system query as non-json to reduce log clutter # pylint: disable=fixme
 
 class PerformanceTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors

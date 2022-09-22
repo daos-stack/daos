@@ -3415,7 +3415,7 @@ def run_dfuse(server, conf):
     return fatal_errors.errors
 
 
-def run_in_fg(server, conf):
+def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
     Block until Control-C is pressed.
@@ -3463,10 +3463,20 @@ def run_in_fg(server, conf):
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool.label))
     try:
-        dfuse.wait_for_exit()
+        if args.launch_cmd:
+            start = time.time()
+            rc = subprocess.run(args.launch_cmd, cwd=t_dir)
+            elapsed = time.time() - start
+            dfuse.stop()
+            (minutes, seconds) = divmod(elapsed, 60)
+            print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
+            print(rc)
+        else:
+            dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
     dfuse = None
+
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
@@ -4345,7 +4355,7 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server, fe=fatal_errors) as server:
             if args.mode == 'launch':
-                run_in_fg(server, conf)
+                run_in_fg(server, conf, args)
             elif args.mode == 'kv':
                 test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':
@@ -4443,6 +4453,7 @@ def run(wf, args):
     print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
     return fatal_errors
 
+
 def main():
     """Wrap the core function, and catch/report any exceptions
 
@@ -4462,8 +4473,19 @@ def main():
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
+    parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    if args.mode:
+        mode_list = args.mode
+        args.mode = mode_list.pop(0)
+
+        if args.mode != 'launch' and mode_list:
+            print(f"unrecognized arguments: {' '.join(mode_list)}")
+            sys.exit(1)
+        args.launch_cmd = mode_list
+    else:
+        args.mode = None
 
     if args.mode and args.test:
         print('Cannot use mode and test')
@@ -4471,10 +4493,10 @@ def main():
 
     if args.test == 'list':
         tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
+        for method in dir(posix_tests):
+            if method.startswith('test'):
+                tests.append(method[5:])
+        print(f"Tests are: {','.join(sorted(tests))}")
         sys.exit(1)
 
     wf = WarningsFactory('nlt-errors.json',
