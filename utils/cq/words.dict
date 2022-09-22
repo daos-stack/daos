@@ -172,6 +172,7 @@ fio
 fnctl
 fpp
 fs
+fstab
 fstat
 ftest
 fuseblk
@@ -286,6 +287,7 @@ openmpi
 orterun
 os
 outdata
+outputdir
 params
 patchelf
 pci

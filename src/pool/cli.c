@@ -307,16 +307,16 @@ dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 choose:
 	rc = rsvc_client_choose(cli, ep);
 	if ((rc == -DER_NOTREPLICA) && !sys->sy_server) {
-		d_rank_list_t	*ranklist = NULL;
+		d_rank_list_t *ranklist = NULL;
 
 		/* Query MS for replica ranks. Not under client lock. */
 		if (cli_lock)
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_pool_find(sys, label, puuid, &ranklist);
 		if (rc) {
-			D_ERROR(DF_UUID":%s: dc_mgmt_pool_find() failed, "
-				DF_RC"\n", DP_UUID(puuid), label ? label : "",
-				DP_RC(rc));
+			D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
+				 DF_UUID ":%s: dc_mgmt_pool_find() failed, " DF_RC "\n",
+				 DP_UUID(puuid), label ? label : "", DP_RC(rc));
 			return rc;
 		}
 		if (cli_lock)
@@ -686,12 +686,12 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	pool = dc_task_get_priv(task);
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client,
-				     &pool->dp_client_lock, pool->dp_sys, &ep);
+	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client, &pool->dp_client_lock,
+				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID":%s: cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool),
-			label ? label : "", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
+			 DF_UUID ":%s: cannot find pool service: " DF_RC "\n",
+			 DP_UUID(pool->dp_pool), label ? label : "", DP_RC(rc));
 		goto out;
 	}
 

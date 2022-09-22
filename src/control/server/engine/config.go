@@ -135,17 +135,6 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-type LegacyStorage struct {
-	storage.ScmConfig  `yaml:",inline,omitempty"`
-	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
-	storage.BdevConfig `yaml:",inline,omitempty"`
-	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
-}
-
-func (ls *LegacyStorage) WasDefined() bool {
-	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
 	Rank              *system.Rank   `yaml:"rank,omitempty"`
@@ -449,5 +438,11 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
 	c.Storage.AccelProps.Engine = name
 	c.Storage.AccelProps.Options = mask
+	return c
+}
+
+// WithIndex sets the I/O Engine instance index.
+func (c *Config) WithIndex(i uint32) *Config {
+	c.Index = i
 	return c
 }

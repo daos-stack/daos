@@ -2036,6 +2036,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 			  bool changed)
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
+	d_iov_t			*dkey = &okqo->okqo_dkey;
 	daos_recx_t		*result_recx = cb_args->recx;
 	daos_recx_t		 tmp_recx = {0};
 	uint64_t		 tmp_end;
@@ -2051,7 +2052,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj, cb_args->dkey_hash);
+	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj,
+					 obj_dkey2hash(cb_args->obj->cob_md.omd_id, dkey));
 	from_data_tgt = is_ec_data_shard(shard, dkey_hash, oca);
 	tgt_off = obj_ec_shard_off(dkey_hash, oca, shard);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
