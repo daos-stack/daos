@@ -17,6 +17,7 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+/* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
 void job_status_write() {
@@ -65,8 +66,8 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
-   currentBuild.result = 'SUCCESS'
-   return
+    currentBuild.result = 'SUCCESS'
+    return
      }
 
 // The docker agent setup and the provisionNodes step need to know the
@@ -262,7 +263,7 @@ pipeline {
                             pragmas[key.toLowerCase()] = value
                         /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
                         } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
+                        // ignore and move on to the next line
                         }
                     }
                     env.pragmas = pragmas
@@ -385,8 +386,8 @@ pipeline {
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -647,8 +648,8 @@ pipeline {
             parallel {
                 stage('Unit Test on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -667,8 +668,8 @@ pipeline {
                 }
                 stage('NLT on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -700,8 +701,8 @@ pipeline {
                 }
                 stage('Unit Test Bullseye on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -727,8 +728,8 @@ pipeline {
                 } // stage('Unit test Bullseye on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1051,8 +1052,8 @@ pipeline {
             parallel {
                 stage('Bullseye Report on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {

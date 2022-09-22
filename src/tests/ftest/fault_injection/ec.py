@@ -6,6 +6,7 @@
 from ior_test_base import IorTestBase
 from fio_test_base import FioBase
 
+
 class EcodFaultInjection(IorTestBase, FioBase):
     # pylint: disable=too-many-ancestors
     """EC Fault domains Test class.

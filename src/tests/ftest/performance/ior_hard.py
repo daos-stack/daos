@@ -5,6 +5,7 @@
 """
 from performance_test_base import PerformanceTestBase
 
+
 class IorHard(PerformanceTestBase):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods

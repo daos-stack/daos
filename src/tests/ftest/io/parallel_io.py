@@ -5,7 +5,7 @@
 """
 
 import threading
-import subprocess #nosec
+import subprocess  # nosec
 import time
 from getpass import getuser
 import general_utils

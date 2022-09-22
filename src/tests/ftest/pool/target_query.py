@@ -5,6 +5,7 @@
 '''
 from ior_test_base import IorTestBase
 
+
 class PoolTargetQueryTest(IorTestBase):
     # pylint: disable=too-many-ancestors
     """

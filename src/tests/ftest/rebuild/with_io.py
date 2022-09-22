@@ -6,6 +6,7 @@
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 
+
 class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
 

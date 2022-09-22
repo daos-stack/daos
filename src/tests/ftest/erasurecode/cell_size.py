@@ -5,6 +5,7 @@
 '''
 from ior_test_base import IorTestBase
 
+
 class EcodCellSize(IorTestBase):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods

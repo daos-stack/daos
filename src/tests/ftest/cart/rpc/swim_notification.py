@@ -7,6 +7,7 @@ import os
 
 from cart_utils import CartTest
 
+
 class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
     # pylint: disable=too-few-public-methods
     """Run basic CaRT RPC tests.

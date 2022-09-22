@@ -6,6 +6,7 @@
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
 
+
 class EcodDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """

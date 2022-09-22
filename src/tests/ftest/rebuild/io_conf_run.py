@@ -5,6 +5,7 @@
 """
 from daos_io_conf import IoConfTestBase
 
+
 class RbldRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf.
 

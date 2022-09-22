@@ -5,6 +5,7 @@
 """
 from daos_io_conf import IoConfTestBase
 
+
 class EcodRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf with EC object class.
 

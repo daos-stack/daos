@@ -7,6 +7,7 @@
 
 from control_test_base import ControlTestBase
 
+
 class DmgServerSetLogmasksTest(ControlTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:

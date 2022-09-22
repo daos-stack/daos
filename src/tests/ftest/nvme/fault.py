@@ -6,6 +6,7 @@
 from nvme_utils import ServerFillUp
 from exception_utils import CommandFailure
 
+
 class NvmeFault(ServerFillUp):
     # pylint: disable=too-many-ancestors
     """

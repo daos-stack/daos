@@ -5,6 +5,7 @@
 '''
 from ec_utils import ErasureCodeIor, check_aggregation_status
 
+
 class EcodAggregationOff(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """

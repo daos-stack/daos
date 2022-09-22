@@ -9,7 +9,7 @@ import json
 import os
 import struct
 import codecs
-import subprocess #nosec
+import subprocess  # nosec
 import shlex
 
 from cart_utils import CartTest

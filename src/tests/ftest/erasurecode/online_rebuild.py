@@ -6,6 +6,7 @@
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
+
 class EcodOnlineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """

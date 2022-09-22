@@ -6,6 +6,7 @@
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 
+
 class RbldBasic(TestWithServers):
     """Test class for rebuild tests.
 

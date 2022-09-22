@@ -5,6 +5,7 @@
 '''
 from ec_utils import ErasureCodeIor
 
+
 class EcodOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """

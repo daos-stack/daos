@@ -6,6 +6,7 @@
 import time
 from ec_utils import ErasureCodeSingle
 
+
 class EcodDisabledRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
     """

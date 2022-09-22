@@ -6,6 +6,7 @@
 
 from performance_test_base import PerformanceTestBase
 
+
 class MdtestHard(PerformanceTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Run MdTest Hard

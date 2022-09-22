@@ -5,6 +5,7 @@
 '''
 from ec_utils import ErasureCodeFio, check_aggregation_status
 
+
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
     # pylint: disable=protected-access
