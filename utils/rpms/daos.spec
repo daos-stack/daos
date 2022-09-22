@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.2.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel >= %{mercury_version}
+BuildRequires: mercury-devel = %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: libpsm2-devel
 %endif
@@ -144,7 +144,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 
 
 %description
@@ -171,7 +171,7 @@ Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 Requires: ipmctl > 02.00.00.3816
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -191,7 +191,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -571,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 20 2022 Joseph Moore <joseph.moore@intel.com> 2.2.0-2
+- Pin Mercury version to 2.2.0-1.
+
 * Fri Sep 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-1
 - First release candidate for 2.2.0.
 
