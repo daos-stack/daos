@@ -87,7 +87,7 @@ static pthread_rwlock_t		psfl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /* tracking failed pool service */
 D_LIST_HEAD(pool_svc_failed_list);
 
-static bool pool_disable_exclude = false;
+bool pool_disable_exclude;
 static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
 static int pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc,

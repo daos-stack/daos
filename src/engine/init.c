@@ -721,9 +721,14 @@ server_init(int argc, char *argv[])
 		goto exit_init_state;
 	D_INFO("Modules successfully set up\n");
 
-	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
-	if (rc)
-		D_GOTO(exit_init_state, rc);
+	bool use_swim = true;
+	d_getenv_bool("DAOS_USE_SWIM", &use_swim);
+	D_INFO("%s SWIM", use_swim ? "using" : "not using");
+	if (use_swim) {
+		rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+		if (rc)
+			D_GOTO(exit_init_state, rc);
+	}
 
 	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
 	if (rc)

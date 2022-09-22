@@ -116,6 +116,7 @@ struct pool_map_refresh_ult_arg {
 /*
  * srv_pool.c
  */
+extern bool pool_disable_exclude;
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
 int ds_pool_start_all(void);

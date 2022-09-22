@@ -25,6 +25,10 @@ init(void)
 {
 	int rc;
 
+	bool use_swim = true;
+	d_getenv_bool("DAOS_USE_SWIM", &use_swim);
+	pool_disable_exclude = !use_swim;
+
 	rc = ds_pool_cache_init();
 	if (rc != 0)
 		D_GOTO(err, rc);
