@@ -211,9 +211,11 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	if resp.Status > 0 {
+		svc.log.Debug("resetting checker findings DB")
 		if err := svc.sysdb.ResetCheckerData(); err != nil {
 			return nil, errors.Wrap(err, "failed to reset checker finding database")
 		}
+		resp.Status = 0 // reset status to indicate success
 	}
 
 	return resp, nil
