@@ -2620,7 +2620,7 @@ ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
 				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
-	if (rc != 0)
+	if (rc < 0)
 		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
 
 	resp.status = rc;
