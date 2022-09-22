@@ -677,9 +677,8 @@ oclass_ident2cl(daos_oclass_id_t oc_id, uint32_t *nr_grps)
 }
 
 int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      enum daos_otype_t otype, daos_oclass_hints_t hints,
-	      enum daos_obj_redun *ord, uint32_t *nr)
+dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
+	      daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr)
 {
 	uint16_t shd;
 	uint16_t rdd;
@@ -690,7 +689,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	shd = hints & DAOS_OCH_SHD_MASK;
 
 	/** first set a reasonable default based on RF & RDD hint (if set) */
-	switch (rf_factor) {
+	switch (rf) {
 	default:
 	case DAOS_PROP_CO_REDUN_RF0:
 		if (rdd == DAOS_OCH_RDD_RP) {
@@ -716,7 +715,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 18) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
@@ -736,7 +735,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 20) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;

@@ -341,6 +341,71 @@ check_tx(daos_handle_t th, int rc)
 }
 
 static int
+decode_one_hint(char *hint, uint32_t rf, daos_oclass_hints_t *obj_hint, enum daos_otype_t *type)
+{
+	char *name;
+	char *val;
+	char *save = NULL;
+
+	/** get object type (file or dir) */
+	name = strtok_r(hint, ":", &save);
+	if (name == NULL) {
+		D_ERROR("Invalid object type in hint: %s\n", hint);
+		return EINVAL;
+	}
+	if (strcasecmp(name, "dir") == 0 || strcasecmp(name, "directory") == 0) {
+		*type = DAOS_OT_MULTI_HASHED;
+		/** get hint value */
+		val = strtok_r(NULL, "", &save);
+		if (val == NULL) {
+			D_ERROR("Invalid Hint value for directory type (%s)\n", hint);
+			return EINVAL;
+		}
+		if (strcasecmp(val, "single") == 0) {
+			if (rf == 0)
+				*obj_hint = DAOS_OCH_SHD_TINY;
+			else
+				*obj_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+		} else if (strcasecmp(val, "max") == 0) {
+			if (rf == 0)
+				*obj_hint = DAOS_OCH_SHD_MAX;
+			else
+				*obj_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
+		} else {
+			D_ERROR("Invalid directory hint: %s\n", val);
+			return EINVAL;
+		}
+	} else if (strcasecmp(name, "file") == 0) {
+		*type = DAOS_OT_ARRAY_BYTE;
+		/** get hint value */
+		val = strtok_r(NULL, "", &save);
+		if (val == NULL) {
+			D_ERROR("Invalid Hint value for file type (%s)\n", hint);
+			return EINVAL;
+		}
+		if (strcasecmp(val, "single") == 0) {
+			if (rf == 0)
+				*obj_hint = DAOS_OCH_SHD_TINY;
+			else
+				*obj_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+		} else if (strcasecmp(val, "max") == 0) {
+			if (rf == 0)
+				*obj_hint = DAOS_OCH_SHD_MAX;
+			else
+				*obj_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
+		} else {
+			D_ERROR("Invalid file hint: %s\n", val);
+			return EINVAL;
+		}
+	} else {
+		D_ERROR("Invalid object type in hint: %s\n", name);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static int
 get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_hints_t *file_hints,
 		 uint64_t rf)
 {
@@ -358,11 +423,24 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 	/** get a hint value pair */
 	t = strtok_r(local, ",", &end_token);
 	if (t == NULL) {
-		D_DEBUG(DB_TRACE, "Invalid hint format: %s\n", hints);
+		D_ERROR("Invalid hint format: %s\n", hints);
 		D_GOTO(out, rc = EINVAL);
 	}
 
 	while (t != NULL) {
+		daos_oclass_hints_t	obj_hint = 0;
+		enum daos_otype_t	type;
+
+		rc = decode_one_hint(t, rf, &obj_hint, &type);
+		if (rc)
+			D_GOTO(out, rc);
+
+		if (type == DAOS_OT_ARRAY_BYTE)
+			*file_hints = obj_hint;
+		else
+			*dir_hints = obj_hint;
+		t = strtok_r(NULL, ",", &end_token);
+#if 0
 		char *name;
 		char *val;
 		char *save = NULL;
@@ -370,7 +448,7 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 		/** get object type (file or dir) */
 		name = strtok_r(t, ":", &save);
 		if (name == NULL) {
-			D_DEBUG(DB_TRACE, "Invalid object type in hint: %s\n", hints);
+			D_ERROR("Invalid object type in hint: %s\n", hints);
 			D_GOTO(out, rc = EINVAL);
 		}
 
@@ -378,7 +456,7 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 			/** get prop value */
 			val = strtok_r(NULL, ",", &save);
 			if (val == NULL) {
-				D_DEBUG(DB_TRACE, "Invalid Hint value for directory type (%s)\n",
+				D_ERROR("Invalid Hint value for directory type (%s)\n",
 					hints);
 				D_GOTO(out, rc = EINVAL);
 			}
@@ -393,14 +471,14 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 				else
 					*dir_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
 			} else {
-				D_DEBUG(DB_TRACE, "Invalid directory hint: %s\n", val);
+				D_ERROR("Invalid directory hint: %s\n", val);
 				D_GOTO(out, rc = EINVAL);
 			}
 		} else if (strcasecmp(name, "file") == 0) {
 			/** get prop value */
 			val = strtok_r(NULL, ",", &save);
 			if (val == NULL) {
-				D_DEBUG(DB_TRACE, "Invalid Hint value for file type (%s)\n", hints);
+				D_ERROR("Invalid Hint value for file type (%s)\n", hints);
 				D_GOTO(out, rc = EINVAL);
 			}
 			if (strcasecmp(val, "single") == 0) {
@@ -414,13 +492,53 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 				else
 					*file_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
 			} else {
-				D_DEBUG(DB_TRACE, "Invalid file hint: %s\n", val);
+				D_ERROR("Invalid file hint: %s\n", val);
 				D_GOTO(out, rc = EINVAL);
 			}
 		}
 		t = strtok_r(NULL, ";", &end_token);
+#endif
 	}
 
+out:
+	D_FREE(local);
+	return rc;
+}
+
+int
+dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid)
+{
+	daos_oclass_hints_t	obj_hint = 0;
+	char			*local;
+	uint32_t		rf;
+	enum daos_otype_t	type;
+	int			rc;
+
+	if (hint == NULL)
+		return EINVAL;
+	if (strnlen(hint, DAOS_CONT_HINT_MAX_LEN) > DAOS_CONT_HINT_MAX_LEN + 1)
+		return EINVAL;
+
+	/** get the Redundancy Factor */
+	rc = dc_cont_hdl2redunfac(dfs->coh, &rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	D_STRNDUP(local, hint, DAOS_CONT_HINT_MAX_LEN);
+	if (!local)
+		return ENOMEM;
+
+	rc = decode_one_hint(local, rf, &obj_hint, &type);
+	if (rc)
+		D_GOTO(out, rc);
+
+	*cid = daos_obj_get_oclass(dfs->coh, type, obj_hint, 0);
+	if (*cid < 0) {
+		D_ERROR("Failed to generate object class from hints %s\n", hint);
+		return EINVAL;
+	}
 out:
 	D_FREE(local);
 	return rc;
@@ -1677,7 +1795,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	struct dfs_entry	entry = {0};
 	daos_prop_t		*prop = NULL;
 	daos_oclass_hints_t	dir_oclass_hint = 0;
-	uint64_t		rf_factor;
+	uint64_t		rf;
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
 	dfs_attr_t		dattr = {0};
@@ -1742,9 +1860,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		rc = dc_pool_get_redunc(poh);
 		if (rc < 0)
 			D_GOTO(err_prop, rc = daos_der2errno(rc));
-		rf_factor = rc;
+		rf = rc;
 	} else {
-		rf_factor = dpe->dpe_val;
+		rf = dpe->dpe_val;
 	}
 	pa_domain = daos_cont_prop2redunlvl(prop);
 
@@ -1752,7 +1870,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	if (dattr.da_hints[0] != 0) {
 		daos_oclass_hints_t file_hints;
 
-		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf_factor);
+		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf);
 		if (rc)
 			D_GOTO(err_prop, rc);
 	}
@@ -1760,8 +1878,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0], 0,
-					 dattr.da_dir_oclass_id, dir_oclass_hint, 0, pa_domain);
+	rc = daos_obj_generate_oid_by_rf(poh, rf, &roots.cr_oids[0], 0, dattr.da_dir_oclass_id,
+					 dir_oclass_hint, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1770,8 +1888,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/* select oclass and generate ROOT OID */
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1], 0,
-					 dattr.da_dir_oclass_id, dir_oclass_hint, 0, pa_domain);
+	rc = daos_obj_generate_oid_by_rf(poh, rf, &roots.cr_oids[1], 0, dattr.da_dir_oclass_id,
+					 dir_oclass_hint, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));

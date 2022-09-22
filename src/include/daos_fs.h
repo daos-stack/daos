@@ -408,6 +408,21 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
 
 /**
+ * Suggest an oclass for creating DFS objects given a hint from the user of the format: obj:val
+ * where obj can be either file or dir/directory and val from:
+ * single: tiny files or directories to be single sharded.
+ * max: large files or directories to be max shared.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	hint	hint from user for a file or directory
+ * \param[out]	cid	object class suggested to use
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid);
+
+/**
  * Create/Open a directory, file, or Symlink.
  * The object must be released with dfs_release().
  *
