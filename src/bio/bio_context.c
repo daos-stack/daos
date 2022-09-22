@@ -8,6 +8,7 @@
 #include <spdk/blob.h>
 #include <spdk/thread.h>
 #include "bio_internal.h"
+#include "bio_wal.h"
 #include "smd/smd_internal.h"
 
 #define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
@@ -162,12 +163,12 @@ blob_unmap_cb(void *arg, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
-	struct bio_xs_context	*xs_ctxt;
+	struct bio_xs_blobstore	*bxb;
 
-	xs_ctxt = bma->bma_ioc->bic_xs_ctxt;
-	D_ASSERT(xs_ctxt != NULL);
-	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
-	xs_ctxt->bxc_blob_rw--;
+	bxb = bma->bma_ioc->bic_xs_blobstore;
+	D_ASSERT(bxb != NULL);
+	D_ASSERT(bxb->bxb_blob_rw > 0);
+	bxb->bxb_blob_rw--;
 
 	blob_common_cb(ba, rc);
 }
@@ -276,8 +277,8 @@ out:
 	return rc;
 }
 
-int
-bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
+static int
+bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_type st)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
@@ -310,7 +311,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	if (rc != 0)
 		return rc;
 
-	bbs = xs_ctxt->bxc_blobstore;
+	bbs = xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore;
 	rc = bio_bs_hold(bbs);
 	if (rc) {
 		blob_cp_arg_fini(ba);
@@ -348,8 +349,28 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	return rc;
 }
 
-int
-bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
+int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
+{
+	int			 rc = 0;
+	enum smd_type		 st;
+	struct bio_xs_blobstore *bxb;
+
+	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (bxb != NULL && bxb->bxb_blobstore != NULL) {
+			rc = bio_blob_delete(pool_id, xs_ctxt, st);
+			if (rc)
+				return rc;
+			bxb->bxb_blobstore = NULL;
+		}
+	}
+
+	return 0;
+}
+
+static int
+bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
+		enum smd_type st)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
@@ -359,7 +380,10 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	bbs = xs_ctxt->bxc_blobstore;
+	bbs = xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore;
+	if (bbs == NULL)
+		return -DER_NO_HDL;
+
 	cluster_sz = bbs->bb_bs != NULL ?
 		spdk_bs_get_cluster_size(bbs->bb_bs) : 0;
 
@@ -424,7 +448,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
 				xs_ctxt->bxc_tgt_id, rc);
 			/* Delete newly created blob */
-			if (bio_blob_delete(uuid, xs_ctxt))
+			if (bio_blob_delete(uuid, xs_ctxt, st))
 				D_ERROR("Unable to delete newly created blobID "
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
@@ -437,6 +461,41 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 
 	bio_bs_unhold(bbs);
 	blob_cp_arg_fini(ba);
+	return rc;
+}
+
+int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
+		  uint64_t wal_sz, uint64_t data_sz, uint16_t csum_type, enum bio_mc_flags flags)
+{
+	int rc = 0;
+
+	if (data_sz > 0) {
+		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_TYPE_DATA);
+		if (rc)
+			return rc;
+	}
+
+	if (meta_sz > 0) {
+		rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_TYPE_META);
+		if (rc)
+			goto delete_data;
+	}
+
+	if (wal_sz > 0) {
+		rc = bio_blob_create(pool_id, xs_ctxt, wal_sz, SMD_TYPE_META);
+		if (rc)
+			goto delete_meta;
+	}
+
+	return rc;
+delete_meta:
+	if (bio_blob_delete(pool_id, xs_ctxt, SMD_TYPE_META))
+		D_ERROR("Unable to delete newly created meta blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
+delete_data:
+	if (bio_blob_delete(pool_id, xs_ctxt, SMD_TYPE_DATA))
+		D_ERROR("Unable to delete newly created data blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
 	return rc;
 }
 
@@ -460,7 +519,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	D_ASSERT(!ctxt->bic_closing);
 
 	D_ASSERT(xs_ctxt != NULL);
-	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
+	bbs = ctxt->bic_xs_blobstore->bxb_blobstore;
 	ctxt->bic_io_unit = spdk_bs_get_io_unit_size(bbs->bb_bs);
 	D_ASSERT(ctxt->bic_io_unit > 0 && ctxt->bic_io_unit <= BIO_DMA_PAGE_SZ);
 
@@ -515,9 +574,10 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	return rc;
 }
 
-int
+static int
 bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		struct umem_instance *umem, uuid_t uuid, bool skip_blob)
+		struct umem_instance *umem, uuid_t uuid, enum bio_mc_flags flags,
+		enum smd_type st)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
@@ -533,26 +593,75 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	uuid_copy(ctxt->bic_pool_id, uuid);
 
 	/* NVMe isn't configured or pool doesn't have NVMe partition */
-	if (!bio_nvme_configured() || skip_blob) {
+	if (!bio_nvme_configured() || flags & BIO_MC_FL_NO_DATABLOB) {
 		*pctxt = ctxt;
 		return 0;
 	}
 
-	rc = bio_bs_hold(xs_ctxt->bxc_blobstore);
+	rc = bio_bs_hold(xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore);
 	if (rc) {
 		D_FREE(ctxt);
 		return rc;
 	}
 
+	ctxt->bic_xs_blobstore = xs_ctxt->bxc_xs_blobstores[st];
 	rc = bio_blob_open(ctxt, false);
 	if (rc) {
 		D_FREE(ctxt);
 	} else {
-		d_list_add_tail(&ctxt->bic_link, &xs_ctxt->bxc_io_ctxts);
+		d_list_add_tail(&ctxt->bic_link,
+				&xs_ctxt->bxc_xs_blobstores[st]->bxb_io_ctxts);
 		*pctxt = ctxt;
 	}
 
-	bio_bs_unhold(xs_ctxt->bxc_blobstore);
+	bio_bs_unhold(xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore);
+	return rc;
+}
+
+int bio_data_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+			 struct umem_instance *umem, uuid_t uuid)
+{
+	return bio_ioctxt_open(pctxt, xs_ctxt, umem, uuid, 0, SMD_TYPE_DATA);
+}
+
+int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_instance *umm,
+		enum bio_mc_flags flags, struct bio_meta_context **mc)
+{
+	struct bio_meta_context	*bio_mc;
+	int			 rc;
+
+	D_ALLOC_PTR(bio_mc);
+	if (bio_mc == NULL)
+		return -DER_NOMEM;
+
+	rc = bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, umm, pool_id, flags, SMD_TYPE_DATA);
+	if (rc)
+		goto failed;
+
+	if (flags & BIO_MC_FL_NO_DATABLOB)
+		goto out;
+
+	if (xs_ctxt->bxc_xs_blobstores[SMD_TYPE_META]) {
+		rc = bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, umm, pool_id,
+				     flags, SMD_TYPE_META);
+		if (rc)
+			goto failed;
+	}
+
+	if (xs_ctxt->bxc_xs_blobstores[SMD_TYPE_WAL]) {
+		rc = bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, umm, pool_id,
+				     flags, SMD_TYPE_WAL);
+		if (rc)
+			goto failed;
+	}
+
+out:
+	*mc = bio_mc;
+	return 0;
+
+failed:
+	bio_mc_close(bio_mc, flags);
+
 	return rc;
 }
 
@@ -583,7 +692,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 	ba = &bma->bma_cp_arg;
 
 	D_ASSERT(ctxt->bic_xs_ctxt != NULL);
-	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
+	bbs = ctxt->bic_xs_blobstore->bxb_blobstore;
 
 	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->bic_blob,
 		ctxt->bic_xs_ctxt);
@@ -616,20 +725,18 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 }
 
 int
-bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob)
+bio_ioctxt_close(struct bio_io_context *ctxt, enum bio_mc_flags flags)
 {
-	struct bio_xs_context	*xs_ctxt;
 	int			 rc;
 
-	xs_ctxt = ctxt->bic_xs_ctxt;
 	/* NVMe isn't configured or pool doesn't have NVMe partition */
-	if (!bio_nvme_configured() || skip_blob) {
+	if (!bio_nvme_configured() || flags & BIO_MC_FL_NO_DATABLOB) {
 		d_list_del_init(&ctxt->bic_link);
 		D_FREE(ctxt);
 		return 0;
 	}
 
-	rc = bio_bs_hold(xs_ctxt->bxc_blobstore);
+	rc = bio_bs_hold(ctxt->bic_xs_blobstore->bxb_blobstore);
 	if (rc)
 		return rc;
 
@@ -637,8 +744,34 @@ bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob)
 
 	/* Free the io context no matter if close succeeded */
 	d_list_del_init(&ctxt->bic_link);
+	bio_bs_unhold(ctxt->bic_xs_blobstore->bxb_blobstore);
 	D_FREE(ctxt);
-	bio_bs_unhold(xs_ctxt->bxc_blobstore);
+
+	return rc;
+}
+
+int bio_mc_close(struct bio_meta_context *bio_mc, enum bio_mc_flags flags)
+{
+	int	rc = 0;
+	int	rc1;
+
+	if (bio_mc->mc_data) {
+		rc1 = bio_ioctxt_close(bio_mc->mc_data, flags);
+		if (rc1)
+			rc = rc1;
+	}
+	if (bio_mc->mc_meta) {
+		rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
+		if (rc1 && !rc)
+			rc = rc1;
+	}
+	if (bio_mc->mc_wal) {
+		rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
+		if (rc1 && !rc)
+			rc = rc1;
+	}
+
+	D_FREE(bio_mc);
 
 	return rc;
 }
@@ -677,7 +810,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	pg_cnt = len >> BIO_DMA_PAGE_SHIFT;
 
 	D_ASSERT(ioctxt->bic_xs_ctxt != NULL);
-	channel = ioctxt->bic_xs_ctxt->bxc_io_channel;
+	channel = ioctxt->bic_xs_blobstore->bxb_io_channel;
 
 	if (!is_blob_valid(ioctxt)) {
 		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
@@ -711,7 +844,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 		if (mem == NULL)
 			goto skip_media_error;
 		mem->mem_err_type = MET_UNMAP;
-		mem->mem_bs = ioctxt->bic_xs_ctxt->bxc_blobstore;
+		mem->mem_bs = ioctxt->bic_xs_blobstore->bxb_blobstore;
 		mem->mem_tgt_id = ioctxt->bic_xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
@@ -736,10 +869,12 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 	d_iov_t			*unmap_iov;
 	uint64_t		 pg_off, pg_cnt;
 	int			 i, rc;
+	struct bio_xs_blobstore *bxb;
 
 	xs_ctxt = ioctxt->bic_xs_ctxt;
 	D_ASSERT(xs_ctxt != NULL);
-	channel = xs_ctxt->bxc_io_channel;
+	bxb = ioctxt->bic_xs_blobstore;
+	channel = ioctxt->bic_xs_blobstore->bxb_io_channel;
 
 	if (!is_blob_valid(ioctxt)) {
 		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
@@ -761,10 +896,10 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		i++;
 		unmap_cnt--;
 
-		drain_inflight_ios(xs_ctxt);
+		drain_inflight_ios(xs_ctxt, bxb);
 
 		ba->bca_inflights++;
-		xs_ctxt->bxc_blob_rw++;
+		bxb->bxb_blob_rw++;
 
 		pg_off = (uint64_t)unmap_iov->iov_buf;
 		pg_cnt = unmap_iov->iov_len;
@@ -788,14 +923,14 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		struct media_error_msg	*mem;
 
 		D_ERROR("Unmap blob %p for xs: %p failed. "DF_RC"\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, DP_RC(rc));
+			ioctxt->bic_blob, xs_ctxt, DP_RC(rc));
 
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto done;
 
 		mem->mem_err_type = MET_UNMAP;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_bs = bxb->bxb_blobstore;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
@@ -881,4 +1016,9 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	rc = bio_write(ioctxt, addr, &iov);
 
 	return rc;
+}
+
+struct bio_io_context *bio_mc2data(struct bio_meta_context *mc)
+{
+	return mc->mc_data;
 }

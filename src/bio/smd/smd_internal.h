@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,13 @@
 #define TABLE_POOL	"pool"
 
 #define SMD_MAX_TGT_CNT		64
+
+enum smd_type {
+	SMD_TYPE_DATA = 0,
+	SMD_TYPE_META,
+	SMD_TYPE_WAL,
+	SMD_TYPE_MAX = 3,
+};
 
 /** callback parameter for smd_db_traverse */
 struct smd_trav_data {

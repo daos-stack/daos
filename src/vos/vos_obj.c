@@ -1507,7 +1507,7 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	 * size in bio_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
-	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
+	bioc = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
 	D_ASSERT(bioc != NULL);
 
 	return bio_read(bioc, biov->bi_addr, iov_out);

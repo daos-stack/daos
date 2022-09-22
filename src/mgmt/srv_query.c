@@ -14,12 +14,17 @@
 #include "srv_internal.h"
 
 
+struct bs_state_query_arg {
+	int	bs_arg_state;
+	uuid_t	bs_arg_uuid;
+};
+
 static void
 bs_state_query(void *arg)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
-	int			*bs_state = arg;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc;
+	struct bs_state_query_arg	*bs_arg = arg;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO blobstore state query on xs:%d, tgt:%d\n",
@@ -32,7 +37,7 @@ bs_state_query(void *arg)
 		return;
 	}
 
-	bio_get_bs_state(bs_state, bxc);
+	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
 }
 
 /*
@@ -46,6 +51,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	ABT_thread			 thread;
 	int				 tgt_id;
 	int				 rc;
+	struct bs_state_query_arg	 bs_arg;
 
 	/*
 	 * Query per-server metadata (SMD) to get target ID(s) for given device.
@@ -71,12 +77,14 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_XS_VOS,
+	uuid_copy(bs_arg.bs_arg_uuid, bs_uuid);
+	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
 	}
+	*bs_state = bs_arg.bs_arg_state;
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
@@ -133,7 +141,7 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	rc = bio_get_dev_state(&mbh->mb_dev_state, bxc);
+	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid, bxc);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
@@ -561,9 +569,10 @@ bio_faulty_led_set(void *arg)
 static void
 bio_faulty_state_set(void *arg)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
-	int			 rc;
+	struct dss_module_info		*info = dss_get_module_info();
+	struct bio_xs_context		*bxc = arg;
+	struct bio_faulty_dev_info	*bfdi = arg;
+	int				 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
@@ -576,7 +585,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_dev_set_faulty(bxc);
+	rc = bio_dev_set_faulty(bxc, bfdi->devid);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -628,8 +637,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS,
-			    tgt_id, 0, &thread);
+	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info,
+			    DSS_XS_VOS, tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;

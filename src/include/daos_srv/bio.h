@@ -477,51 +477,33 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
 int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
- * Create per VOS instance blob.
- *
- * \param[IN] uuid	Pool UUID
- * \param[IN] xs_ctxt	Per-xstream NVMe context
- * \param[IN] blob_sz	Size of the blob to be created
- *
- * \returns		Zero on success, negative value on error
- */
-int bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt,
-		    uint64_t blob_sz);
-
-/*
- * Delete per VOS instance blob.
- *
- * \param[IN] uuid	Pool UUID
- * \param[IN] xs_ctxt	Per-xstream NVMe context
- *
- * \returns		Zero on success, negative value on error
- */
-int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
-
-/*
- * Open per VOS instance I/O context.
+ * Open per VOS instance data I/O blob context.
  *
  * \param[OUT] pctxt	I/O context to be returned
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
- * \param[IN] skip_blob	Skip blob open since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_open(struct bio_io_context **pctxt,
-		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
+int bio_data_ioctxt_open(struct bio_io_context **pctxt,
+			 struct bio_xs_context *xs_ctxt,
+			 struct umem_instance *umem, uuid_t uuid);
+
+enum bio_mc_flags {
+	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
+	BIO_MC_FL_NO_DATABLOB	= (1UL << 1),	/* No associated data blob */
+};
 
 /*
  * Finalize per VOS instance I/O context.
  *
  * \param[IN] ctxt	I/O context
- * \param[IN] skip_blob	Skip blob close since no NVMe partition
+ * \param[IN] flags	bio_mc_flags
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
+int bio_ioctxt_close(struct bio_io_context *ctxt, enum bio_mc_flags flags);
 
 /*
  * Unmap (TRIM) the extent being freed.
@@ -733,10 +715,11 @@ bio_yield(void)
  *
  * \param dev_state	[OUT]	BIO device health state
  * \param xs		[IN]	xstream context
+ * \param uuid		[IN]	blob dev uuid
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct nvme_stats *dev_state,
+int bio_get_dev_state(struct nvme_stats *dev_state, uuid_t uuid,
 		      struct bio_xs_context *xs);
 
 /*
@@ -744,10 +727,11 @@ int bio_get_dev_state(struct nvme_stats *dev_state,
  * Used for daos_test validation in the daos_mgmt_get_bs_state() C API.
  *
  * \param dev_state	[OUT]	BIO blobstore state
+ * \param bs_uuid	[IN]	blobstore uuid
  * \param xs		[IN]	xstream context
  *
  */
-void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
+void bio_get_bs_state(int *blobstore_state, uuid_t bs_uuid, struct bio_xs_context *xs);
 
 
 /*
@@ -755,13 +739,14 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
  * state transition.
  *
  * \param xs		[IN]	xstream context
+ * \param dev_uuid	[IN]	dev uuid
  *
  * \return			Zero on success, negative value on error
  */
-int bio_dev_set_faulty(struct bio_xs_context *xs);
+int bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid);
 
-/* Function to increment CSUM media error. */
-void bio_log_csum_err(struct bio_xs_context *xs);
+/* Function to increment data CSUM media error. */
+void bio_log_data_csum_err(struct bio_xs_context *xs);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
@@ -909,11 +894,6 @@ int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
 	     struct bio_csum_desc *csum_desc);
 
-enum bio_mc_flags {
-	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
-	BIO_MC_FL_NO_DATABLOB	= (1UL << 1),	/* No associated data blob */
-};
-
 /*
  * Create Meta/Data/WAL blobs, format Meta & WAL blob
  *
@@ -939,7 +919,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags);
+int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id);
 
 /* Opaque meta context */
 struct bio_meta_context;
@@ -965,6 +945,9 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
  *
  * \return			N/A
  */
-void bio_mc_close(struct bio_meta_context *mc);
+int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
+
+/* Function to return current data io context */
+struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
 
 #endif /* __BIO_API_H__ */

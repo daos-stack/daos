@@ -340,6 +340,7 @@ bio_bdev_list(void)
 inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
+
 	D_ASSERT(ctxt != NULL);
 	return ctxt->bxc_thread == nvme_glb.bd_init_thread;
 }
@@ -347,15 +348,26 @@ is_init_xstream(struct bio_xs_context *ctxt)
 bool
 bio_need_nvme_poll(struct bio_xs_context *ctxt)
 {
+	enum smd_type		st;
+	struct bio_xs_blobstore	*bxb;
+
 	if (ctxt == NULL)
 		return false;
-	return ctxt->bxc_blob_rw > BIO_BS_POLL_WATERMARK;
+
+	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+		bxb = ctxt->bxc_xs_blobstores[st];
+		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
+			return true;
+	}
+
+	return false;
 }
 
 void
-drain_inflight_ios(struct bio_xs_context *ctxt)
+drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bxb)
 {
-	if (ctxt == NULL || ctxt->bxc_blob_rw <= BIO_BS_POLL_WATERMARK)
+
+	if (ctxt == NULL || bxb == NULL || bxb->bxb_blob_rw <= BIO_BS_POLL_WATERMARK)
 		return;
 
 	do {
@@ -363,7 +375,7 @@ drain_inflight_ios(struct bio_xs_context *ctxt)
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 		else
 			bio_yield();
-	} while (ctxt->bxc_blob_rw >= BIO_BS_STOP_WATERMARK);
+	} while (bxb->bxb_blob_rw >= BIO_BS_STOP_WATERMARK);
 }
 
 struct common_cp_arg {
@@ -903,47 +915,48 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 }
 
 static void
-put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
+put_bio_blobstore(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
 {
+	struct bio_blobstore	*bbs = bxb->bxb_blobstore;
 	struct spdk_blob_store	*bs = NULL;
 	struct bio_io_context	*ioc, *tmp;
 	int			i, xs_cnt_max = BIO_XS_CNT_MAX;
 
-	d_list_for_each_entry_safe(ioc, tmp, &ctxt->bxc_io_ctxts, bic_link) {
+	d_list_for_each_entry_safe(ioc, tmp, &bxb->bxb_io_ctxts, bic_link) {
 		d_list_del_init(&ioc->bic_link);
 		if (ioc->bic_blob != NULL)
 			D_WARN("Pool isn't closed. tgt:%d\n", ctxt->bxc_tgt_id);
 	}
 
-	ABT_mutex_lock(bb->bb_mutex);
+	ABT_mutex_lock(bbs->bb_mutex);
 	/* Unload the blobstore in the same xstream where it was loaded. */
-	if (is_bbs_owner(ctxt, bb) && bb->bb_bs != NULL) {
-		if (!bb->bb_unloading)
-			bs = bb->bb_bs;
-		bb->bb_bs = NULL;
+	if (is_bbs_owner(ctxt, bbs) && bbs->bb_bs != NULL) {
+		if (!bbs->bb_unloading)
+			bs = bbs->bb_bs;
+		bbs->bb_bs = NULL;
 	}
 
 	for (i = 0; i < xs_cnt_max; i++) {
-		if (bb->bb_xs_ctxts[i] == ctxt) {
-			bb->bb_xs_ctxts[i] = NULL;
+		if (bbs->bb_xs_ctxts[i] == ctxt) {
+			bbs->bb_xs_ctxts[i] = NULL;
 			break;
 		}
 	}
 	D_ASSERT(i < xs_cnt_max);
 
-	D_ASSERT(bb->bb_ref > 0);
-	bb->bb_ref--;
+	D_ASSERT(bbs->bb_ref > 0);
+	bbs->bb_ref--;
 
 	/* Wait for other xstreams to put_bio_blobstore() first */
-	if (bs != NULL && bb->bb_ref)
-		ABT_cond_wait(bb->bb_barrier, bb->bb_mutex);
-	else if (bb->bb_ref == 0)
-		ABT_cond_broadcast(bb->bb_barrier);
+	if (bs != NULL && bbs->bb_ref)
+		ABT_cond_wait(bbs->bb_barrier, bbs->bb_mutex);
+	else if (bbs->bb_ref == 0)
+		ABT_cond_broadcast(bbs->bb_barrier);
 
-	ABT_mutex_unlock(bb->bb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	if (bs != NULL) {
-		D_ASSERT(bb->bb_holdings == 0);
+		D_ASSERT(bbs->bb_holdings == 0);
 		unload_blobstore(ctxt, bs);
 	}
 }
@@ -1067,29 +1080,32 @@ assign_device(int tgt_id)
 	return 0;
 }
 
-static int
-init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
+struct bio_xs_blobstore *
+alloc_xs_blobstore(void)
 {
-	struct bio_bdev		*d_bdev;
-	struct bio_blobstore	*bbs;
-	struct spdk_blob_store	*bs;
-	struct smd_dev_info	*dev_info = NULL;
+	struct bio_xs_blobstore *bxb;
+
+	D_ALLOC_PTR(bxb);
+	if (bxb == NULL)
+		return NULL;
+
+	D_INIT_LIST_HEAD(&bxb->bxb_io_ctxts);
+
+	return bxb;
+}
+
+int
+find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_type st,
+		struct bio_bdev **ret_d_bdev, struct smd_dev_info **ret_dev_info)
+{
 	bool			 assigned = false;
+	struct bio_bdev		*d_bdev;
+	struct smd_dev_info	*dev_info = NULL;
 	int			 rc;
 
-	D_ASSERT(!ctxt->bxc_ready);
-	D_ASSERT(ctxt->bxc_blobstore == NULL);
-	D_ASSERT(ctxt->bxc_io_channel == NULL);
-
-	if (d_list_empty(&nvme_glb.bd_bdevs)) {
-		D_ERROR("No available SPDK bdevs, please check whether "
-			"VOS_BDEV_CLASS is set properly.\n");
-		return -DER_UNINIT;
-	}
-
 	/*
-	 * Lookup device mapped to @tgt_id in the per-server metadata,
-	 * if found, create blobstore on the mapped device.
+	 * Lookup device mapped to @tgt_id and @st in the per-server
+	 * metadata, if found, create blobstore on the mapped device.
 	 */
 retry:
 	rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
@@ -1100,13 +1116,13 @@ retry:
 		assigned = true;
 		goto retry;
 	} else if (rc) {
-		D_ERROR("Failed to get dev for tgt %d. "DF_RC"\n", tgt_id,
-			DP_RC(rc));
+		D_ERROR("Failed to get dev for tgt %d type %d "DF_RC"\n",
+			tgt_id, st, DP_RC(rc));
 		return rc;
 	}
 
-	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d.\n",
-		DP_UUID(dev_info->sdi_id), tgt_id);
+	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d type %d\n",
+		DP_UUID(dev_info->sdi_id), tgt_id, st);
 
 	/*
 	 * Two cases leading to the inconsistency between SMD information and
@@ -1120,9 +1136,9 @@ retry:
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
 	if (d_bdev == NULL) {
-		D_ERROR("Device "DF_UUID" for target %d isn't plugged or the "
+		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
 			"SMD table is stale/corrupted.\n",
-			DP_UUID(dev_info->sdi_id), tgt_id);
+			DP_UUID(dev_info->sdi_id), tgt_id, st);
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -1140,13 +1156,54 @@ retry:
 		}
 	}
 
-	/* Hold bbs refcount for current xstream */
-	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
-	if (ctxt->bxc_blobstore == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
+	*ret_d_bdev = d_bdev;
+	*ret_dev_info = dev_info;
+
+	return 0;
+out:
+	D_ASSERT(dev_info != NULL);
+	smd_dev_free_info(dev_info);
+
+	return rc;
+}
+
+static int
+init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_type st)
+{
+	struct bio_bdev		*d_bdev;
+	struct bio_blobstore	*bbs;
+	struct spdk_blob_store	*bs;
+	struct bio_xs_blobstore	*bxb;
+	struct smd_dev_info	*dev_info = NULL;
+	int			 rc;
+
+	D_ASSERT(!ctxt->bxc_ready);
+	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
+
+	if (d_list_empty(&nvme_glb.bd_bdevs)) {
+		D_ERROR("No available SPDK bdevs, please check whether "
+			"VOS_BDEV_CLASS is set properly.\n");
+		return -DER_UNINIT;
 	}
-	bbs = ctxt->bxc_blobstore;
+
+	ctxt->bxc_xs_blobstores[st] = alloc_xs_blobstore();
+	if (ctxt->bxc_xs_blobstores[st] == NULL) {
+		D_ERROR("Failed to allocate memory for xs blobstore\n");
+		return -DER_NOMEM;
+	}
+
+	rc = find_xs_bio_dev(ctxt, tgt_id, st, &d_bdev, &dev_info);
+	if (rc)
+		return rc;
+
+	bxb = ctxt->bxc_xs_blobstores[st];
+	/* Hold bbs refcount for current xstream */
+	bxb->bxb_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
+	if (bxb->bxb_blobstore == NULL) {
+		rc = -DER_NOMEM;
+		goto free_dev;
+	}
+	bbs = bxb->bxb_blobstore;
 
 	/*
 	 * bbs owner xstream is responsible to initialize monitoring context
@@ -1161,7 +1218,7 @@ retry:
 		} else {
 			D_ERROR("Invalid SMD state:%d\n", dev_info->sdi_state);
 			rc = -DER_INVAL;
-			goto out;
+			goto free_dev;
 		}
 
 		/* Initialize health monitor */
@@ -1169,18 +1226,18 @@ retry:
 		if (rc != 0) {
 			D_ERROR("BIO health monitor init failed. "DF_RC"\n",
 				DP_RC(rc));
-			goto out;
+			goto free_dev;
 		}
 
 		if (bbs->bb_state == BIO_BS_STATE_OUT)
-			goto out;
+			goto free_dev;
 
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
 				    false, false, NULL, NULL);
 		if (bs == NULL) {
 			rc = -DER_INVAL;
-			goto out;
+			goto free_dev;
 		}
 		bbs->bb_bs = bs;
 
@@ -1190,25 +1247,40 @@ retry:
 	}
 
 	if (bbs->bb_state == BIO_BS_STATE_OUT)
-		goto out;
+		goto free_dev;
 
 	/* Open IO channel for current xstream */
 	bs = bbs->bb_bs;
 	D_ASSERT(bs != NULL);
-	ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bs);
-	if (ctxt->bxc_io_channel == NULL) {
+	D_ASSERT(bxb->bxb_io_channel == NULL);
+	bxb->bxb_io_channel = spdk_bs_alloc_io_channel(bs);
+	if (bxb->bxb_io_channel == NULL) {
 		D_ERROR("Failed to create io channel\n");
 		rc = -DER_NOMEM;
-		goto out;
+		goto free_dev;
 	}
-	ctxt->bxc_ready = 1;
 
-out:
+free_dev:
 	D_ASSERT(dev_info != NULL);
 	smd_dev_free_info(dev_info);
+
 	return rc;
 }
 
+
+static void
+bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
+{
+
+	struct bio_blobstore *bbs = bxb->bxb_blobstore;
+
+	if (bbs == NULL)
+		return;
+
+	put_bio_blobstore(bxb, ctxt);
+	if (is_bbs_owner(ctxt, bbs))
+		bio_fini_health_monitoring(bbs);
+}
 /*
  * Finalize per-xstream NVMe context and SPDK env.
  *
@@ -1219,25 +1291,30 @@ out:
 void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
-	int	rc = 0;
+	int			 rc = 0;
+	enum smd_type		 st;
+	struct bio_xs_blobstore	*bxb;
 
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
 
 	ctxt->bxc_ready = 0;
-	if (ctxt->bxc_io_channel != NULL) {
-		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
-		ctxt->bxc_io_channel = NULL;
-	}
+	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+		bxb = ctxt->bxc_xs_blobstores[st];
+		if (bxb == NULL)
+			continue;
 
-	if (ctxt->bxc_blobstore != NULL) {
-		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
-
-		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-			bio_fini_health_monitoring(ctxt->bxc_blobstore);
-
-		ctxt->bxc_blobstore = NULL;
+		if (bxb->bxb_io_channel != NULL) {
+			spdk_bs_free_io_channel(bxb->bxb_io_channel);
+			bxb->bxb_io_channel = NULL;
+		}
+		if (bxb->bxb_blobstore != NULL) {
+			bio_blobstore_free(bxb, ctxt);
+			bxb->bxb_blobstore = NULL;
+		}
+		D_FREE(bxb);
+		ctxt->bxc_xs_blobstores[st] = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
@@ -1312,12 +1389,12 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc;
+	enum smd_type		 st;
 
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
 	ctxt->bxc_self_polling = self_polling;
 
@@ -1395,9 +1472,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	}
 
 	/* Initialize per-xstream blobstore context */
-	rc = init_blobstore_ctxt(ctxt, tgt_id);
-	if (rc)
-		goto out;
+	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+		/* only data blob now */
+		if (st != SMD_TYPE_DATA)
+			continue;
+		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
+		if (rc)
+			goto out;
+	}
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
@@ -1405,6 +1487,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	ctxt->bxc_ready = 1;
+
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 	if (rc != 0)
@@ -1603,8 +1687,10 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-	uint64_t now = d_timeus_secdiff(0);
-	int rc;
+	uint64_t		now = d_timeus_secdiff(0);
+	enum smd_type		st;
+	int			rc;
+	struct bio_xs_blobstore	*bxb;
 
 	/* NVMe context setup was skipped */
 	if (!bio_nvme_configured())
@@ -1626,9 +1712,12 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 * Query and print the SPDK device health stats for only the device
 	 * owner xstream.
 	 */
-	if (ctxt->bxc_blobstore != NULL &&
-	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-		bio_bs_monitor(ctxt, now);
+	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+		bxb = ctxt->bxc_xs_blobstores[st];
+		if (bxb && bxb->bxb_blobstore &&
+		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
+			bio_bs_monitor(bxb->bxb_blobstore, now);
+	}
 
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);

@@ -1044,7 +1044,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc);
+	bio_log_data_csum_err(bxc);
 }
 
 /**
