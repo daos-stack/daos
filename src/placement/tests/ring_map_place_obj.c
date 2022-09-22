@@ -48,7 +48,7 @@ main(int argc, char **argv)
 
 	po_ver = 1;
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
+	if (rc)
 		goto out;
 
 	rc = obj_class_init();
