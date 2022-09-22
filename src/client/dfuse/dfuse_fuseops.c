@@ -198,7 +198,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_inode_entry     *inode     = NULL;
 	d_list_t                     *rlink     = NULL;
 	struct dht_call               save;
-	int rc;
+	int                           rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
@@ -214,11 +214,23 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
+	if (inode->ie_dfs->dfc_attr_timeout &&
+	    (atomic_load_relaxed(&inode->ie_open_write_count) == 0) &&
+	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
+		double timeout;
+
+		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+			D_GOTO(done, 0);
+		}
+	}
+
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
+done:
 	if (rlink)
 		dh_hash_decref(fs_handle, &save);
 	return;
