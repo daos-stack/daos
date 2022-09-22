@@ -7,6 +7,24 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+static inline d_list_t *
+dh_hash_find(struct dfuse_projection_info *fs_handle, fuse_ino_t parent, struct dht_call *save)
+{
+	save->rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &parent, sizeof(parent), NULL,
+				       &save->bucket_length, &save->position);
+
+	if (save->rlink) {
+		save->promote = false;
+		save->dropped = false;
+
+		if (save->position > 10)
+			save->promote = true;
+		else if (save->bucket_length > 10 && (save->position * 2 > save->bucket_length))
+			save->promote = true;
+	}
+	return save->rlink;
+}
+
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
@@ -15,9 +33,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	d_list_t		     *rlink;
 	struct dfuse_obj_hdl         *oh     = NULL;
 	struct fuse_file_info         fi_out = {0};
+	struct dht_call               save;
 	int                           rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	rlink = dh_hash_find(fs_handle, ino, &save);
 	if (!rlink) {
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOENT);
 		return;
@@ -81,12 +100,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	dh_hash_decrefx(fs_handle, &save);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
 err:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	dh_hash_decrefx(fs_handle, &save);
 	D_FREE(oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }

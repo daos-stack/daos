@@ -154,6 +154,7 @@ void
 dh_hash_try_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 {
 	enum d_hash_decrec_arg arg = DH_DECREF_NONE;
+
 	if (save->dropped)
 		return;
 	if (save->promote)
