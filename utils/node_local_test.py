@@ -1514,6 +1514,8 @@ def needs_dfuse(method):
 
     return _helper
 
+
+# pylint: disable-next=invalid-name
 class needs_dfuse_with_opt():
     """Decorator class for starting dfuse under posix_tests class
 
@@ -1524,8 +1526,9 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, single_threaded=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False):
         self.caching = caching
+        self.wbcache = wbcache
         self.single_threaded = single_threaded
 
     def __call__(self, method):
@@ -1538,13 +1541,14 @@ class needs_dfuse_with_opt():
                 if obj.call_index == 0:
                     caching = True
                     obj.needs_more = True
-                    obj.test_name = '{}_with_caching'.format(method.__name__)
+                    obj.test_name = f'{method.__name__}_with_caching'
                 else:
                     caching = False
 
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
+                              wbcache=self.wbcache,
                               pool=obj.pool.dfuse_mount_name(),
                               container=obj.container)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
@@ -1556,7 +1560,8 @@ class needs_dfuse_with_opt():
             return rc
         return _helper
 
-class print_stat():
+
+class PrintStat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""
 
     headers = ['uid', 'gid', 'size', 'mode', 'filename']
@@ -2008,7 +2013,21 @@ class posix_tests():
 
             xattr.set(fd, 'user.Xfuse.ids', b'other_value')
             for (key, value) in xattr.get_all(fd):
-                print('xattr is {}:{}'.format(key, value))
+                print(f'xattr is {key}:{value}')
+
+    @needs_dfuse_with_opt(wbcache=True, caching=True)
+    def test_stat_before_open(self):
+        """Run open/close in a loop on the same file
+
+        This only runs a reproducer, it does not trawl the logs to ensure the feature is working"""
+
+        test_file = join(self.dfuse.dir, 'test_file')
+        with open(test_file, 'w'):
+            pass
+
+        for _ in range(100):
+            with open(test_file, 'r'):
+                pass
 
     @needs_dfuse
     def test_chmod(self):
@@ -2286,22 +2305,22 @@ class posix_tests():
 
         dfuse.start(v_hint='cont_rw_1')
 
-        ps = print_stat(dfuse.dir)
+        stat_log = PrintStat(dfuse.dir)
         testfile = join(dfuse.dir, 'testfile')
         with open(testfile, 'w') as fd:
-            ps.add(testfile, attr=os.fstat(fd.fileno()))
+            stat_log.add(testfile, attr=os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         os.mkdir(dirname)
 
-        ps.add(dirname)
+        stat_log.add(dirname)
 
         dir_perms = os.stat(dirname).st_mode
         base_perms = stat.S_IMODE(dir_perms)
 
         os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
-        ps.add(dirname)
-        print(ps)
+        stat_log.add(dirname)
+        print(stat_log)
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2334,19 +2353,19 @@ class posix_tests():
                       caching=False)
         dfuse.start(v_hint='cont_rw_2')
 
-        ps = print_stat()
-        ps.add(dfuse.dir, show_dir=True)
+        stat_log = PrintStat()
+        stat_log.add(dfuse.dir, show_dir=True)
 
         with open(join(dfuse.dir, 'testfile'), 'r') as fd:
-            ps.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+            stat_log.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         testfile = join(dirname, 'new_file')
         fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
         os.write(fd, b'read-only-data')
-        ps.add(testfile, attr=os.fstat(fd))
+        stat_log.add(testfile, attr=os.fstat(fd))
         os.close(fd)
-        print(ps)
+        print(stat_log)
 
         fd = os.open(testfile, os.O_RDONLY)
         # previous code was using stream/file methods and it appears that
