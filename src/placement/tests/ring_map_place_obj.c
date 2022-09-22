@@ -49,13 +49,15 @@ main(int argc, char **argv)
 	po_ver = 1;
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
-		return rc;
+		goto out;
+
+	rc = obj_class_init();
+	if (rc)
+		goto out_debug;
 
 	rc = pl_init();
-	if (rc != 0) {
-		daos_debug_fini();
-		return rc;
-	}
+	if (rc)
+		goto out_class;
 
 	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
 				   VOS_PER_TARGET, PL_TYPE_RING,
@@ -72,7 +74,7 @@ main(int argc, char **argv)
 
 	/* initial placement when all nodes alive */
 	rc = daos_obj_set_oid_by_class(&oid, 0, OC_RP_4G2, 0);
-	assert_success(rc == 0);
+	assert_success(rc);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
@@ -200,7 +202,12 @@ main(int argc, char **argv)
 
 	free_pool_and_placement_map(po_map, pl_map);
 	pl_fini();
-	daos_debug_fini();
 	D_PRINT("\nall tests passed!\n");
+
+out_class:
+	obj_class_fini();
+out_debug:
+	daos_debug_fini();
+out:
 	return 0;
 }
