@@ -7,6 +7,7 @@
 
 from performance_test_base import PerformanceTestBase
 
+
 class MdtestEasy(PerformanceTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Run MDTest Easy

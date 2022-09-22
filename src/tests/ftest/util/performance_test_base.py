@@ -18,6 +18,7 @@ import oclass_utils
 
 # TODO dmg system query as non-json to reduce log clutter # pylint: disable=fixme
 
+
 class PerformanceTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Base performance class.
@@ -97,7 +98,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         old_get_default_env = cmd.get_default_env
         performance_env = self.performance_env
 
-        def new_get_default_env(self, *args, **kwargs): # pylint: disable=unused-argument
+        def new_get_default_env(self, *args, **kwargs):  # pylint: disable=unused-argument
             env = old_get_default_env(*args, **kwargs)
             for key, val in performance_env.items():
                 env[key] = val
@@ -432,9 +433,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.set_processes_ppn(namespace)
 
         # Performance with POSIX/DFUSE is tricky because we can't just set
-        # dfs_dir_oclass and dfs_oclass. This needs more work before running non-DFS.
-        # if self.mdtest_cmd.api.value != 'DFS':
-        #     self.fail("Only DFS API supported")
+        # dfs_dir_oclass and dfs_oclass. This needs more work to get good results on non-DFS.
+        if self.mdtest_cmd.api.value not in ('DFS', 'POSIX'):
+            self.fail("Only DFS API supported")
 
         stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
 
