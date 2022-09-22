@@ -23,8 +23,7 @@ class Label(TestWithServers):
 
         Args:
             pool (TestPool): Pool to destroy.
-            failure_expected (bool): Whether failure is expected from pool
-                destroy.
+            failure_expected (bool): Whether failure is expected from pool destroy.
             use_dmg (bool): Whether to use dmg object. Defaults to False.
 
         Returns:
