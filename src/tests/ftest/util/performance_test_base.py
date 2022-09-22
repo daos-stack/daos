@@ -16,7 +16,7 @@ from ior_utils import IorMetrics
 from command_utils_base import EnvironmentVariables
 import oclass_utils
 
-# TODO dmg system query as non-json to reduce log clutter # pylint: disable=fixme
+# TODO dmg system query as non-json to reduce log clutter
 
 
 class PerformanceTestBase(IorTestBase, MdtestBase):
