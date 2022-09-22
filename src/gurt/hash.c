@@ -805,32 +805,72 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 		ch_rec_free(htable, link);
 }
 
+bool
+d_hash_rec_try_decrefx(struct d_hash_table *htable, d_list_t *link, enum d_hash_decrec_arg arg)
+{
+	uint32_t              idx    = ch_rec_hash(htable, link);
+	struct d_hash_bucket *bucket = &htable->ht_buckets[idx];
+	union d_hash_lock    *lock   = &htable->ht_locks[idx];
+	int                   rc;
+	bool                  zombie;
+	bool                  locked = false;
+
+	D_ASSERT(!(htable->ht_feats & D_HASH_FT_NOLOCK));
+	D_ASSERT(htable->ht_feats & D_HASH_FT_EPHEMERAL);
+	D_ASSERT((htable->ht_feats & D_HASH_FT_RWLOCK));
+
+	if (arg != DH_DECREF_NONE) {
+		rc = pthread_rwlock_trywrlock(&lock->rwlock);
+		if (rc == 0) {
+			locked = true;
+		} else {
+			if (arg == DH_DECREF_LRU_REQUIRED)
+				return false;
+		}
+	}
+
+	if (locked && arg != DH_DECREF_NONE)
+		d_list_move(link, &bucket->hb_head);
+
+	zombie = ch_rec_decref(htable, link);
+	D_ASSERT(!zombie);
+	if (zombie && !d_list_empty(link)) {
+		ch_rec_delete(htable, idx, link);
+	}
+
+	if (locked)
+		ch_bucket_unlock(htable, idx, true);
+
+	if (zombie)
+		ch_rec_free(htable, link);
+	return true;
+}
+
 void
 d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote)
 {
 	uint32_t              idx    = ch_rec_hash(htable, link);
 	struct d_hash_bucket *bucket = &htable->ht_buckets[idx];
 	bool                  zombie;
-	bool                  read_only = true;
 
 	D_ASSERT(!(htable->ht_feats & D_HASH_FT_NOLOCK));
 	D_ASSERT(htable->ht_feats & D_HASH_FT_EPHEMERAL);
 
-	if (promote)
-		read_only = false;
+	D_ASSERT((htable->ht_feats & D_HASH_FT_RWLOCK));
 
-	ch_bucket_lock(htable, idx, read_only);
-
-	if (promote)
+	if (promote) {
+		ch_bucket_lock(htable, idx, false);
 		d_list_move(link, &bucket->hb_head);
+	}
 
 	zombie = ch_rec_decref(htable, link);
 	if (zombie && !d_list_empty(link)) {
-		D_ASSERT(!read_only);
+		D_ASSERT(promote);
 		ch_rec_delete(htable, idx, link);
 	}
 
-	ch_bucket_unlock(htable, idx, read_only);
+	if (promote)
+		ch_bucket_unlock(htable, idx, false);
 
 	if (zombie)
 		ch_rec_free(htable, link);

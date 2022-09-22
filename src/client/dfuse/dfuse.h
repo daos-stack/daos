@@ -122,12 +122,13 @@ struct dht_call {
 	int       bucket_length;
 	d_list_t *rlink;
 	bool      promote;
+	bool      dropped;
 };
 
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
 		       mode_t mode, struct fuse_file_info *fi, struct dht_call *save);
-	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
+	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode, struct dht_call *save);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name,
@@ -303,6 +304,9 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
 
 void
 dh_hash_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save);
+
+void
+dh_hash_try_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save);
 
 /* dfuse_thread.c */
 
@@ -656,7 +660,7 @@ void
 dfuse_cb_forget_multi(fuse_req_t, size_t, struct fuse_forget_data *);
 
 void
-dfuse_cb_getattr(fuse_req_t, struct dfuse_inode_entry *);
+dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct dht_call *save);
 
 void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);

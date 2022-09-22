@@ -16,7 +16,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 		  struct fuse_file_info *fi_out, bool is_new, struct dht_call *save, fuse_req_t req)
 {
 	struct fuse_entry_param entry = {0};
-	d_list_t               *rlink;
+	d_list_t               *rlink       = NULL;
 	ino_t                   wipe_parent = 0;
 	char                    wipe_name[NAME_MAX + 1];
 	int                     rc;
@@ -35,8 +35,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
 			entry.ino, ie->ie_stat.st_mode);
 
-	rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
-				 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length, &position);
+	if (!is_new)
+		rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+					 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length,
+					 &position);
 
 	if (!rlink) {
 		rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
@@ -127,8 +129,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	if (!save->promote)
-		dh_hash_decrefx(fs_handle, save);
+	dh_hash_try_decrefx(fs_handle, save);
 
 	if (fi_out)
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
@@ -143,8 +144,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
 
-	if (save->promote)
-		dh_hash_decrefx(fs_handle, save);
+	dh_hash_decrefx(fs_handle, save);
 
 	return;
 out_err:

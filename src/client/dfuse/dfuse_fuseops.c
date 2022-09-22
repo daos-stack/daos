@@ -110,25 +110,70 @@ dh_hash_find(struct dfuse_projection_info *fs_handle, fuse_ino_t parent, struct 
 
 	if (save->rlink) {
 		save->promote = false;
+		save->dropped = false;
 
-		if (save->position > 100)
+		if (save->position > 10)
 			save->promote = true;
-		else if (save->bucket_length > 20 && (save->position * 2 > save->bucket_length))
+		else if (save->bucket_length > 10 && (save->position * 2 > save->bucket_length))
 			save->promote = true;
 	}
 	return save->rlink;
 }
 
+/* There are several options for dropping references in dfuse hash tables, and they differ in
+ * where the item resides within the bucket (it's position) and if the decref could possibly
+ * drop the reference.
+ *
+ * Manipulating the list for LRU or removal requires a write lock, decref where at least one
+ * reference is guaranteed to remain can be done lockless.
+ *
+ * For decref which may result in a deletion then a write lock is always required, otherwise the
+ * following rules apply.
+ *
+ * If a LRU promotion is required then try to get a write lock first, and if that fails then
+ * reply to the kernel before blocking on a write lock.
+ *
+ * If a LRU lock is desired then try a to get a write lock first and if that fails then decref
+ * without any lock.
+ *
+ * If a LRU is not required then decref without a lock.
+ *
+ */
+
+/* Plain decref, will use write lock */
 void
 dh_hash_decref(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 {
+	save->dropped = true;
+
 	d_hash_rec_decref(&fs_handle->dpi_iet, save->rlink);
 }
 
+/* Called before kernel reply so should try promote */
+void
+dh_hash_try_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save)
+{
+	enum d_hash_decrec_arg arg = DH_DECREF_NONE;
+	if (save->dropped)
+		return;
+	if (save->promote)
+		arg = DH_DECREF_LRU_REQUIRED;
+	else if (save->position > 1)
+		arg = DH_DECREF_LRU_TRY;
+	save->dropped = d_hash_rec_try_decrefx(&fs_handle->dpi_iet, save->rlink, arg);
+}
+
+/*
+ * Can be called after reply if promote is true.
+ * Will wait for write lock if previous try_decrefx failed
+ */
 void
 dh_hash_decrefx(struct dfuse_projection_info *fs_handle, struct dht_call *save)
 {
+	if (save->dropped)
+		return;
 	d_hash_rec_decrefx(&fs_handle->dpi_iet, save->rlink, save->promote);
+	save->dropped = true;
 }
 
 void
@@ -221,18 +266,19 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+			if (rlink)
+				dh_hash_decref(fs_handle, &save);
+
 			D_GOTO(done, 0);
 		}
 	}
 
 	if (inode->ie_dfs->dfs_ops->getattr)
-		inode->ie_dfs->dfs_ops->getattr(req, inode);
+		inode->ie_dfs->dfs_ops->getattr(req, inode, rlink ? &save : NULL);
 	else
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 done:
-	if (rlink)
-		dh_hash_decref(fs_handle, &save);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

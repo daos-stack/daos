@@ -8,14 +8,17 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
+dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct dht_call *save)
 {
-	struct stat	attr = {};
-	int		rc;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct stat                   attr      = {};
+	int                           rc;
 
 	if (ie->ie_unlinked) {
 		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
 		DFUSE_REPLY_ATTR(ie, req, &ie->ie_stat);
+		if (save)
+			dh_hash_decrefx(fs_handle, save);
 		return;
 	}
 
@@ -27,9 +30,17 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 
 	ie->ie_stat = attr;
 
+	if (save)
+		dh_hash_try_decrefx(fs_handle, save);
+
 	DFUSE_REPLY_ATTR(ie, req, &attr);
+
+	if (save)
+		dh_hash_decrefx(fs_handle, save);
 
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
+	if (save)
+		dh_hash_decrefx(fs_handle, save);
 }

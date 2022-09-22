@@ -521,6 +521,15 @@ void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link);
 void
 d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote);
 
+enum d_hash_decrec_arg {
+	DH_DECREF_NONE,
+	DH_DECREF_LRU_TRY,
+	DH_DECREF_LRU_REQUIRED,
+};
+
+bool
+d_hash_rec_try_decrefx(struct d_hash_table *htable, d_list_t *link, enum d_hash_decrec_arg arg);
+
 /**
  * Decrease the refcount of the record by count.
  * The record will be freed if hop_decref() returns true.
