@@ -98,7 +98,7 @@ struct cmd_args_s {
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_oclass_id_t	dir_oclass;	/* --dir_oclass object class */
 	uint32_t		mode;		/* --posix consistency mode */
-	uint64_t		hints;		/* --posix hints */
+	char			*hints;		/* --posix hints */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
 
 	/* Container snapshot/rollback related */

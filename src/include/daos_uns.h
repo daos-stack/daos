@@ -117,7 +117,7 @@ struct duns_attr_t {
 	/** IN: (Optional) For a POSIX container, set a default object class for all directories. */
 	daos_oclass_id_t	da_dir_oclass_id;
 	/** IN: (Optional) For a POSIX container, set hints for file and dir object classes. */
-	daos_size_t		da_hints;
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 };
 
 /** extended attribute name that will store the UNS info */
