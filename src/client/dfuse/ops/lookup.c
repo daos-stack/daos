@@ -133,7 +133,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		 */
 		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
 			fi_out->keep_cache = 1;
-		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
 			fi_out->keep_cache = 1;
 		}
 
