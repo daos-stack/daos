@@ -26,18 +26,20 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd   `command:"leader-query" description:"Query for current Management Service leader"`
-	Query       systemQueryCmd   `command:"query" description:"Query DAOS system status"`
-	Stop        systemStopCmd    `command:"stop" description:"Perform controlled shutdown of DAOS system"`
-	Start       systemStartCmd   `command:"start" description:"Perform start of stopped DAOS system"`
-	Erase       systemEraseCmd   `command:"erase" description:"Erase system metadata prior to reformat"`
-	ListPools   PoolListCmd      `command:"list-pools" description:"List all pools in the DAOS system"`
-	Cleanup     systemCleanupCmd `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
-	SetAttr     systemSetAttrCmd `command:"set-attr" description:"Set system attributes"`
-	GetAttr     systemGetAttrCmd `command:"get-attr" description:"Get system attributes"`
-	DelAttr     systemDelAttrCmd `command:"del-attr" description:"Delete system attributes"`
-	SetProp     systemSetPropCmd `command:"set-prop" description:"Set system properties"`
-	GetProp     systemGetPropCmd `command:"get-prop" description:"Get system properties"`
+	LeaderQuery  leaderQueryCmd        `command:"leader-query" description:"Query for current Management Service leader"`
+	Query        systemQueryCmd        `command:"query" description:"Query DAOS system status"`
+	Stop         systemStopCmd         `command:"stop" description:"Perform controlled shutdown of DAOS system"`
+	Start        systemStartCmd        `command:"start" description:"Perform start of stopped DAOS system"`
+	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
+	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
+	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
+	ListPools    PoolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
+	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
+	SetAttr      systemSetAttrCmd      `command:"set-attr" description:"Set system attributes"`
+	GetAttr      systemGetAttrCmd      `command:"get-attr" description:"Get system attributes"`
+	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
+	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
+	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
 }
 
 type leaderQueryCmd struct {
@@ -206,6 +208,65 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	}
 
 	return resp.Errors()
+}
+
+type baseExcludeCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	rankListCmd
+}
+
+func (cmd *baseExcludeCmd) execute(clear bool) error {
+	hostSet, rankSet, err := cmd.validateHostsRanks()
+	if err != nil {
+		return err
+	}
+	if rankSet.Count() == 0 && hostSet.Count() == 0 {
+		return errors.New("no ranks or hosts specified")
+	}
+
+	req := &control.SystemExcludeReq{Clear: clear}
+	req.Hosts.Replace(hostSet)
+	req.Ranks.Replace(rankSet)
+
+	resp, err := control.SystemExclude(context.Background(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	updated := system.NewRankSet()
+	for _, result := range resp.Results {
+		updated.Add(result.Rank)
+	}
+
+	if resp.Errors() != nil {
+		cmd.Errorf("Errors: %s", resp.Errors())
+	}
+	cmd.Infof("updated ranks: %s", updated)
+
+	return nil
+}
+
+type systemExcludeCmd struct {
+	baseExcludeCmd
+}
+
+func (cmd *systemExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(false)
+}
+
+type systemClearExcludeCmd struct {
+	baseExcludeCmd
+}
+
+func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
+	return cmd.execute(true)
 }
 
 // systemStartCmd is the struct representing the command to start system.
