@@ -10,7 +10,6 @@ struct ad_blob;
 struct ad_tx {
 	struct ad_blob		*tx_blob;
 	uint64_t		 tx_id;
-	bool			 tx_redo_only;
 	d_list_t		 tx_redo;
 	d_list_t		 tx_undo;
 };
@@ -28,7 +27,7 @@ ad_tx_end(struct ad_tx *tx, int err);
  * the region if @reset is true.
  */
 int
-ad_tx_touch_region(void *addr, daos_size_t size, bool reset, struct ad_tx *tx);
+ad_tx_touch_region(struct ad_tx *tx, void *addr, daos_size_t size, bool reset);
 
 /** finished the change */
 int

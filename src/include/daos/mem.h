@@ -635,17 +635,15 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 
 /*********************************************************************************/
 
-typedef uint64_t	daos_addr_t;
-
 /** Describing a storage region for I/O */
 struct umem_store_region {
 	/** start offset of the region */
-	daos_addr_t	sr_addr;
+	daos_off_t	sr_addr;
 	/** size of the region */
 	daos_size_t	sr_size;
 };
 
-/** I/O descripter, it can include arbitrary number of storage regions */
+/** I/O descriptor, it can include arbitrary number of storage regions */
 struct umem_store_iod {
 	/* number of regions */
 	int				 io_nr;
@@ -661,7 +659,7 @@ enum {
 	UMEM_ACT_COPY,
 	/** copy payload addressed by @ptr to specified storage address */
 	UMEM_ACT_COPY_PTR,
-	/** assign 8/16/32/64 bits integer to specified storage address */
+	/** assign 8/16/32 bits integer to specified storage address */
 	UMEM_ACT_ASSIGN,
 	/** move specified bytes from source address to destination address */
 	UMEM_ACT_MOVE,
@@ -675,7 +673,6 @@ enum {
 	UMEM_ACT_CSUM,
 };
 
-#define UMEM_ACT_PAYLOAD		24
 /**
  * Memory operations for redo/undo.
  * 16 bytes for bit operation (set/clr) and integer assignment, 32+ bytes for other operations.
@@ -702,15 +699,14 @@ struct umem_action {
 		struct {
 			uint16_t		num;
 			uint32_t		pos;
-			uint64_t		bmap;
-		} ac_op_bits;	/**< set or clear the @pos bit in bitmap @bmap */
+			uint64_t		addr;
+		} ac_op_bits;	/**< set or clear the @pos bit in bitmap @addr */
 		struct {
-			uint16_t		val;
+			uint8_t			val;
 			uint32_t		size;
 			uint64_t		addr;
 		} ac_set;	/**< memset(addr, val, size) */
 		struct {
-			uint16_t		pad16;
 			uint32_t		size;
 			uint64_t		src;
 			uint64_t		dst;
@@ -749,8 +745,9 @@ struct umem_store {
 	 * Base address and size of the umem storage, umem allocator manages space within
 	 * this range.
 	 */
-	daos_addr_t		 stor_addr;
+	daos_off_t		 stor_addr;
 	daos_size_t		 stor_size;
+	daos_size_t		 stor_blk_size;
 	/** private data passing between layers */
 	void			*stor_priv;
 	/**
