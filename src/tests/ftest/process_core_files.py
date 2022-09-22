@@ -7,12 +7,18 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 from fnmatch import fnmatch
+import logging
 import os
 import sys
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_logger
 from util.run_utils import run_local, RunException
+
+# Set up a logger for the console messages
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(get_console_logger("%(message)s", logging.DEBUG))
 
 
 class CoreFileProcessing():
@@ -340,17 +346,15 @@ def main():
         help="directory containing the core files to process")
     args = parser.parse_args()
 
-    log = get_console_logger()
-
-    core_file_processing = CoreFileProcessing(log)
+    core_file_processing = CoreFileProcessing(logger)
     try:
         error_count = core_file_processing.process_core_files(args.directory, args.delete)
         if error_count:
-            log.error("Errors detected processing test core files: %s", error_count)
+            logger.error("Errors detected processing test core files: %s", error_count)
             sys.exit(1)
 
     except Exception:       # pylint: disable=broad-except
-        log.error("Unhandled error processing test core files",)
+        logger.error("Unhandled error processing test core files",)
         sys.exit(1)
 
     sys.exit(0)

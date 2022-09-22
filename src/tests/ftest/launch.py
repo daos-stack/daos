@@ -36,6 +36,7 @@ from util.run_utils import get_local_host, run_local, run_remote, RunException
 DEFAULT_DAOS_APP_DIR = "/scratch"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
+LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -64,17 +65,22 @@ YAML_KEYS = OrderedDict(
 )
 
 
+# Set up a logger for the console messages
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(get_console_logger("%(message)s", logging.INFO))
+
+
 class LaunchException(Exception):
     """Exception for launch.py execution."""
 
 
-def get_yaml_data(log, yaml_file):
+def get_yaml_data(yaml_file):
     """Get the contents of a yaml file as a dictionary.
 
     Removes any mux tags and ignores any other tags present.
 
     Args:
-        log (logger): logger for the messages produced by this method
         yaml_file (str): yaml file to read
 
     Raises:
@@ -104,7 +110,7 @@ def get_yaml_data(log, yaml_file):
             try:
                 yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
-                log.error("Error reading %s: %s", yaml_file, str(error))
+                logger.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
     return yaml_data
 
@@ -219,8 +225,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            log = logging.getLogger(__name__)
-            result = run_local(log, ["avocado", "-v"], check=True)
+            result = run_local(logger, ["avocado", "-v"], check=True)
             try:
                 version = re.findall(r"(\d+)\.(\d+)", result.stdout)[0]
                 self.major = int(version[0])
@@ -266,8 +271,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            log = logging.getLogger(__name__)
-            result = run_local(log, ["avocado", "config"], check=True)
+            result = run_local(logger, ["avocado", "config"], check=True)
             try:
                 return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
             except IndexError:
@@ -529,33 +533,31 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_host_info(self, log, include_localhost=False):
+    def set_host_info(self, include_localhost=False):
         """Set the test host information using the test yaml file.
 
         Args:
-            log (logger): logger for the messages produced by this method
             include_localhost (bool, optional): should the local host be included in the list of
                 client matches. Defaults to False.
         """
         self.hosts.all.clear()
-        self.hosts.all.update(self._get_hosts_from_yaml(log, include_localhost))
+        self.hosts.all.update(self._get_hosts_from_yaml(include_localhost))
 
         self.hosts.servers.clear()
         self.hosts.servers.update(
-            self._get_hosts_from_yaml(log, include_localhost, YAML_KEYS["test_servers"]))
+            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_servers"]))
 
         self.hosts.clients.clear()
         self.hosts.clients.update(
-            self._get_hosts_from_yaml(log, include_localhost, YAML_KEYS["test_clients"]))
+            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_clients"]))
 
-    def _get_hosts_from_yaml(self, log, include_localhost=False, key_match=None):
+    def _get_hosts_from_yaml(self, include_localhost=False, key_match=None):
         """Extract the list of hosts from the test yaml file.
 
         This host will be included in the list if no clients are explicitly called
         out in the test's yaml file.
 
         Args:
-            log (logger): logger for the messages produced by this method
             include_localhost (bool, optional): should the local host be included in the list of
                 client matches. Defaults to False.
             key_match (str, optional): test yaml key used to filter which hosts to
@@ -565,16 +567,16 @@ class TestInfo():
             NodeSet: hosts specified in the test's yaml file
 
         """
-        log.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
+        logger.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
         local_host = NodeSet(get_local_host())
         yaml_hosts = NodeSet()
         if include_localhost and key_match != YAML_KEYS["test_servers"]:
             yaml_hosts.add(local_host)
         found_client_key = False
-        for key, value in list(self._find_yaml_hosts(log).items()):
-            log.debug("  Found %s: %s", key, value)
+        for key, value in list(self._find_yaml_hosts().items()):
+            logger.debug("  Found %s: %s", key, value)
             if key_match is None or key == key_match:
-                log.debug("    Adding %s", value)
+                logger.debug("    Adding %s", value)
                 if isinstance(value, list):
                     yaml_hosts.add(NodeSet.fromlist(value))
                 else:
@@ -584,24 +586,20 @@ class TestInfo():
 
         # Include this host as a client if no clients are specified
         if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-            log.debug("    Adding the localhost: %s", local_host)
+            logger.debug("    Adding the localhost: %s", local_host)
             yaml_hosts.add(local_host)
 
         return yaml_hosts
 
-    def _find_yaml_hosts(self, log):
+    def _find_yaml_hosts(self):
         """Find the all the host values in the specified yaml file.
-
-        Args:
-            log (logger): logger for the messages produced by this method
 
         Returns:
             dict: a dictionary of each host key and its host values
 
         """
         return find_values(
-            get_yaml_data(log, self.yaml_file),
-            [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+            get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -635,19 +633,17 @@ class Launch():
             repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
         """
-        self.avocado = AvocadoInfo()
         self.name = name
         self.repeat = repeat
         self.mode = mode
+
+        self.avocado = AvocadoInfo()
         self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
         self.logdir = None
         self.logfile = None
         self.tests = []
         self.tag_filters = []
         self.local_host = NodeSet(get_local_host())
-
-        # Setup a logger
-        self.log = get_console_logger()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -700,7 +696,7 @@ class Launch():
             message (str, optional): explanation of test passing. Defaults to None.
         """
         if message is not None:
-            self.log.debug(message)
+            logger.debug(message)
         test_result.status = TestResult.PASS
 
     def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
@@ -712,9 +708,9 @@ class Launch():
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
-        self.log.error(fail_reason)
+        logger.error(fail_reason)
         if exc_info is not None:
-            self.log.debug("Stacktrace", exc_info=True)
+            logger.debug("Stacktrace", exc_info=True)
 
         if test_result.fail_count == 0:
             # Update the test result with the information about the first error
@@ -765,14 +761,14 @@ class Launch():
                 create_xml(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
-                self.log.warning("Unable to create results.xml file: %s", str(error))
+                logger.warning("Unable to create results.xml file: %s", str(error))
 
             # Generate a results.html for the this run
             try:
                 create_html(self.job, self.result)
             except ModuleNotFoundError as error:
                 # When SRE-439 is fixed this should be an error
-                self.log.warning("Unable to create results.html file: %s", str(error))
+                logger.warning("Unable to create results.html file: %s", str(error))
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -786,7 +782,7 @@ class Launch():
                 with open(details_json, "w", encoding="utf-8") as details:
                     details.write(json.dumps(self.details, indent=4))
             except TypeError as error:
-                self.log.error("Error writing %s: %s", details_json, str(error))
+                logger.error("Error writing %s: %s", details_json, str(error))
 
     def run(self, args):
         # pylint: disable=too-many-return-statements
@@ -807,9 +803,9 @@ class Launch():
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
         # Record the command line arguments
-        self.log.debug("Arguments:")
+        logger.debug("Arguments:")
         for key in sorted(args.__dict__.keys()):
-            self.log.debug("  %s = %s", key, getattr(args, key))
+            logger.debug("  %s = %s", key, getattr(args, key))
 
         # Convert host specifications into NodeSets
         try:
@@ -826,7 +822,7 @@ class Launch():
         # A list of server hosts is required
         if not servers and not args.list:
             return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
-        self.log.info("Testing with hosts:       %s", servers.union(clients))
+        logger.info("Testing with hosts:       %s", servers.union(clients))
         self.details["test hosts"] = str(servers.union(clients))
 
         # Setup the user environment
@@ -871,7 +867,7 @@ class Launch():
             yaml_dir = args.yaml_directory
             if not os.path.exists(yaml_dir):
                 os.mkdir(yaml_dir)
-        self.log.info("Modified test yaml files being created in: %s", yaml_dir)
+        logger.info("Modified test yaml files being created in: %s", yaml_dir)
 
         # Modify the test yaml files to run on this cluster
         try:
@@ -881,6 +877,15 @@ class Launch():
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
             return self.get_exit_status(0, "Modifying test yaml files complete")
+
+        # Setup the core file pattern
+        if args.process_cores:
+            all_hosts = servers | clients | self.local_host
+            pattern = "/var/tmp/core.%e.%t.%p"
+            logger.info("Configuring the core_pattern to be '%s' on %s", pattern, all_hosts)
+            command = f"sudo bash -c \"echo \"{pattern}\" > /proc/sys/kernel/core_pattern\""
+            if not run_remote(logger, all_hosts, command).passed:
+                return self.get_exit_status(1, "Error configuring core file pattern", "Setup")
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
@@ -912,16 +917,16 @@ class Launch():
 
         # Rename the launch log directory if one exists
         renamed_log_dir = self._create_log_dir()
-        self.log.addHandler(get_file_handler(self.logfile))
-        self.log.info("-" * 80)
-        self.log.info("DAOS functional test launcher")
-        self.log.info("")
-        self.log.info("Running with %s", self.avocado)
-        self.log.info("Logging launch results to: %s", self.logdir)
+        logger.addHandler(get_file_handler(self.logfile, LOG_FILE_FORMAT, logging.DEBUG))
+        logger.info("-" * 80)
+        logger.info("DAOS functional test launcher")
+        logger.info("")
+        logger.info("Running with %s", self.avocado)
+        logger.info("Logging launch results to: %s", self.logdir)
         if renamed_log_dir is not None:
-            self.log.info("  Renamed existing launch log directory to %s", renamed_log_dir)
-        self.log.info("Launch log file: %s", self.logfile)
-        self.log.info("-" * 80)
+            logger.info("  Renamed existing launch log directory to %s", renamed_log_dir)
+        logger.info("Launch log file: %s", self.logfile)
+        logger.info("-" * 80)
 
         # Results tracking settings
         self.job_results_dir = self.avocado.get_logs_dir()
@@ -1013,10 +1018,10 @@ class Launch():
         # Python paths required for functional testing
         self._set_python_environment()
 
-        self.log.debug("ENVIRONMENT VARIABLES")
+        logger.debug("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             if not key.startswith("BASH_FUNC_"):
-                self.log.debug("  %s: %s", key, os.environ[key])
+                logger.debug("  %s: %s", key, os.environ[key])
 
     def _get_build_environment(self, list_tests):
         """Obtain DAOS build environment variables from the .build_vars.json file.
@@ -1066,13 +1071,13 @@ class Launch():
             LaunchException: if there is a problem obtaining the default interface
 
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         # Get the default interface to use if OFI_INTERFACE is not set
         interface = os.environ.get("OFI_INTERFACE")
         if interface is None:
             # Find all the /sys/class/net interfaces on the launch node
             # (excluding lo)
-            self.log.debug("Detecting network devices - OFI_INTERFACE not set")
+            logger.debug("Detecting network devices - OFI_INTERFACE not set")
             available_interfaces = self._get_available_interfaces(servers, clients)
             try:
                 # Select the fastest active interface available by sorting
@@ -1084,13 +1089,13 @@ class Launch():
         # Update env definitions
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
         os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-        self.log.info("Testing with interface:   %s", interface)
+        logger.info("Testing with interface:   %s", interface)
         self.details["interface"] = interface
         for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
             try:
-                self.log.debug("Testing with %s=%s", name, os.environ[name])
+                logger.debug("Testing with %s=%s", name, os.environ[name])
             except KeyError:
-                self.log.debug("Testing with %s unset", name)
+                logger.debug("Testing with %s unset", name)
 
     def _get_available_interfaces(self, servers, clients):
         # pylint: disable=too-many-nested-blocks,too-many-branches,too-many-locals
@@ -1118,7 +1123,7 @@ class Launch():
         operstate = os.path.join(net_path, "*", "operstate")
         command = [f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"]
 
-        result = run_remote(all_hosts, " | ".join(command))
+        result = run_remote(logger, all_hosts, " | ".join(command))
         if not result.passed:
             raise LaunchException(
                 f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
@@ -1137,10 +1142,10 @@ class Launch():
                     pass
 
         # From the active interface dictionary find all the interfaces that are common to all hosts
-        self.log.debug("Active network interfaces detected:")
+        logger.debug("Active network interfaces detected:")
         common_interfaces = []
         for interface, node_set in active_interfaces.items():
-            self.log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
+            logger.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
             if node_set == all_hosts:
                 common_interfaces.append(interface)
 
@@ -1148,7 +1153,7 @@ class Launch():
         interface_speeds = {}
         for interface in common_interfaces:
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-            result = run_remote(all_hosts, command)
+            result = run_remote(logger, all_hosts, command)
             # Verify each host has the same interface speed
             if result.passed and result.homogeneous:
                 for line in result.output[0].stdout:
@@ -1162,23 +1167,23 @@ class Launch():
                         # Any line not containing a speed (integer)
                         pass
             elif not result.homogeneous:
-                self.log.error(
+                logger.error(
                     "Non-homogeneous interface speed detected for %s on %s.",
                     interface, str(all_hosts))
             else:
-                self.log.error("Error detecting speed of %s on %s", interface, str(all_hosts))
+                logger.error("Error detecting speed of %s on %s", interface, str(all_hosts))
 
         if interface_speeds:
-            self.log.debug("Active network interface speeds on %s:", all_hosts)
+            logger.debug("Active network interface speeds on %s:", all_hosts)
 
         for interface, speed in interface_speeds.items():
-            self.log.debug("  - %-8s (speed: %6s)", interface, speed)
+            logger.debug("  - %-8s (speed: %6s)", interface, speed)
             # Only include the first active interface for each speed - first is
             # determined by an alphabetic sort: ib0 will be checked before ib1
             if speed is not None and speed not in available_interfaces:
                 available_interfaces[speed] = interface
 
-        self.log.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
+        logger.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
         return available_interfaces
 
     def _set_provider_environment(self, servers, interface, provider):
@@ -1196,25 +1201,25 @@ class Launch():
             LaunchException: if there is a problem finding a provider for the interface
 
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         # Use the detected provider if one is not set
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
-            self.log.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
+            logger.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
 
             # Check for a Omni-Path interface
-            self.log.debug("Checking for Omni-Path devices")
+            logger.debug("Checking for Omni-Path devices")
             command = "sudo opainfo"
-            result = run_remote(servers, command)
+            result = run_remote(logger, servers, command)
             if result.passed:
                 # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
-                self.log.debug("  Excluding verbs provider for Omni-Path adapters")
+                logger.debug("  Excluding verbs provider for Omni-Path adapters")
                 PROVIDER_KEYS.pop("verbs")
 
             # Detect all supported providers
             command = f"fi_info -d {interface} -l | grep -v 'version:'"
-            result = run_remote(servers, command)
+            result = run_remote(logger, servers, command)
             if result.passed:
                 # Find all supported providers
                 keys_found = defaultdict(NodeSet)
@@ -1226,15 +1231,15 @@ class Launch():
 
                 # Only use providers available on all the server hosts
                 if keys_found:
-                    self.log.debug("Detected supported providers:")
+                    logger.debug("Detected supported providers:")
                 provider_name_keys = list(keys_found)
                 for provider_name in provider_name_keys:
-                    self.log.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
+                    logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
                     if keys_found[provider_name] != servers:
                         keys_found.pop(provider_name)
 
                 # Select the preferred found provider based upon PROVIDER_KEYS order
-                self.log.debug("Supported providers detected: %s", list(keys_found))
+                logger.debug("Supported providers detected: %s", list(keys_found))
                 for key in PROVIDER_KEYS:
                     if key in keys_found:
                         provider = PROVIDER_KEYS[key]
@@ -1246,13 +1251,13 @@ class Launch():
                     f"Error obtaining a supported provider for {interface} "
                     f"from: {list(PROVIDER_KEYS)}")
 
-            self.log.debug("  Found %s provider for %s", provider, interface)
+            logger.debug("  Found %s provider for %s", provider, interface)
 
         # Update env definitions
         os.environ["CRT_PHY_ADDR_STR"] = provider
-        self.log.info("Testing with provider:    %s", provider)
+        logger.info("Testing with provider:    %s", provider)
         self.details["provider"] = provider
-        self.log.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
+        logger.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
 
     def _set_python_environment(self):
         """Set up the test python environment.
@@ -1260,7 +1265,7 @@ class Launch():
         Args:
             log (logger): logger for the messages produced by this method
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         required_python_paths = [
             os.path.abspath("util/apricot"),
             os.path.abspath("util"),
@@ -1289,7 +1294,7 @@ class Launch():
                 if required_path not in defined_python_paths:
                     python_path += ":" + required_path
             os.environ["PYTHONPATH"] = python_path
-        self.log.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+        logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
     def _get_device_replacement(self, servers, nvme):
         """Determine the value to use for the '--nvme' command line argument.
@@ -1322,8 +1327,8 @@ class Launch():
                 specified test servers
 
         """
-        self.log.debug("-" * 80)
-        self.log.debug("Detecting devices that match: %s", nvme)
+        logger.debug("-" * 80)
+        logger.debug("Detecting devices that match: %s", nvme)
         devices = []
         device_types = []
 
@@ -1359,9 +1364,9 @@ class Launch():
             raise LaunchException(
                 f"Error: Unable to auto-detect devices for the '--nvme {nvme}' argument")
 
-        self.log.debug(
+        logger.debug(
             "Auto-detected %s devices on %s: %s", " & ".join(device_types), servers, devices)
-        self.log.info("Testing with %s devices: %s", " & ".join(device_types), devices)
+        logger.info("Testing with %s devices: %s", " & ".join(device_types), devices)
         self.details[f"{' & '.join(device_types)} devices"] = devices
         return ",".join(devices)
 
@@ -1408,7 +1413,7 @@ class Launch():
         command = " | ".join(command_list) + " || :"
 
         # Find all the VMD PCI addresses common to all hosts
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if result.passed:
             for data in result.output:
                 for line in data.stdout:
@@ -1419,7 +1424,7 @@ class Launch():
             # Remove any non-homogeneous devices
             for key in list(found_devices):
                 if found_devices[key] != hosts:
-                    self.log.debug(
+                    logger.debug(
                         "  device '%s' not found on all hosts: %s", key, found_devices[key])
                     found_devices.pop(key)
 
@@ -1452,14 +1457,14 @@ class Launch():
             command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
         command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
         command = " | ".join(command_list) + " || :"
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
 
         # Verify the command was successful on each server host
         if not result.passed:
             raise LaunchException(f"Error issuing command '{command}'")
 
         # Collect a list of NVMe devices behind the same VMD addresses on each host.
-        self.log.debug("Checking for %s in command output", vmd_controllers)
+        logger.debug("Checking for %s in command output", vmd_controllers)
         if result.passed:
             for data in result.output:
                 for device in vmd_controllers:
@@ -1471,7 +1476,7 @@ class Launch():
             # Remove any non-homogeneous devices
             for key in list(disk_controllers):
                 if disk_controllers[key] != hosts:
-                    self.log.debug(
+                    logger.debug(
                         "  device '%s' not found on all hosts: %s", key, disk_controllers[key])
                     disk_controllers.pop(key)
 
@@ -1509,7 +1514,7 @@ class Launch():
             RunException: if there is a problem listing tests
 
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         self.tests = []
         self.tag_filters = []
 
@@ -1540,12 +1545,12 @@ class Launch():
             command.append("./")
 
         # Find all the test files that contain tests matching the tags
-        self.log.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(self.log, command, check=True)
+        logger.info("Detecting tests matching tags: %s", " ".join(command))
+        output = run_local(logger, command, check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
-            self.log.info("  %s", self.tests[-1])
+            logger.info("  %s", self.tests[-1])
 
     def _faults_enabled(self):
         """Determine if fault injection is enabled.
@@ -1554,14 +1559,14 @@ class Launch():
             bool: whether or not fault injection is enabled
 
         """
-        self.log.debug("Checking for fault injection enablement via 'fault_status':")
+        logger.debug("Checking for fault injection enablement via 'fault_status':")
         try:
-            run_local(self.log, ["fault_status"], check=True)
-            self.log.debug("  Fault injection is enabled")
+            run_local(logger, ["fault_status"], check=True)
+            logger.debug("  Fault injection is enabled")
             return True
         except RunException:
             # Command failed or yielded a non-zero return status
-            self.log.debug("  Fault injection is disabled")
+            logger.debug("  Fault injection is disabled")
         return False
 
     def setup_test_files(self, args, yaml_dir):
@@ -1588,19 +1593,19 @@ class Launch():
             if args.extra_yaml:
                 command.extend(args.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(self.log, command, check=False)
+            run_local(logger, command, check=False)
 
             # Collect the host information from the updated test yaml
-            test.set_host_info(self.log, args.include_localhost)
+            test.set_host_info(args.include_localhost)
 
         # Log the test information
         msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
-        self.log.debug("-" * 80)
-        self.log.debug("Test information:")
-        self.log.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        self.log.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
+        logger.debug("-" * 80)
+        logger.debug("Test information:")
+        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
         for test in self.tests:
-            self.log.debug(
+            logger.debug(
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
                 test.hosts.clients)
 
@@ -1643,13 +1648,13 @@ class Launch():
                 w/o replacements
 
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         replacements = {}
 
         if args.test_servers or args.nvme or args.timeout_multiplier:
             # Find the test yaml keys and values that match the replaceable fields
-            yaml_data = get_yaml_data(self.log, yaml_file)
-            self.log.debug("Detected yaml data: %s", yaml_data)
+            yaml_data = get_yaml_data(yaml_file)
+            logger.debug("Detected yaml data: %s", yaml_data)
             yaml_keys = list(YAML_KEYS.keys())
             yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
 
@@ -1667,9 +1672,9 @@ class Launch():
                     user_values[key] = None
 
             # Assign replacement values for the test yaml entries to be replaced
-            self.log.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
-            self.log.debug("  Found values: %s", yaml_find)
-            self.log.debug("  User values:  %s", dict(user_values))
+            logger.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
+            logger.debug("  Found values: %s", yaml_find)
+            logger.debug("  User values:  %s", dict(user_values))
 
             node_mapping = {}
             for key, user_value in user_values.items():
@@ -1704,7 +1709,7 @@ class Launch():
                                     # specified by the test_server/test_client arguments
                                     quantity = len(user_value)
                                 elif args.override:
-                                    self.log.warning(
+                                    logger.warning(
                                         "Warning: In order to override the node quantity a "
                                         "'--test_clients' argument must be specified: %s: %s",
                                         key, yaml_find_item)
@@ -1731,7 +1736,7 @@ class Launch():
                                                 if not args.override:
                                                     replacement = None
                                                 break
-                                            self.log.debug(
+                                            logger.debug(
                                                 "  - %s replacement node mapping: %s -> %s",
                                                 key, node, node_mapping[node])
                                         replacement.add(node_mapping[node])
@@ -1771,7 +1776,7 @@ class Launch():
                             timeout_key = r":\s+".join([key, str(yaml_find[key])])
                             timeout_new = max(1, round(yaml_find[key] * user_value[0]))
                             replacements[timeout_key] = ": ".join([key, str(timeout_new)])
-                            self.log.debug(
+                            logger.debug(
                                 "  - Timeout adjustment (x %s): %s -> %s",
                                 user_value, timeout_key, replacements[timeout_key])
                         elif isinstance(yaml_find[key], dict):
@@ -1780,36 +1785,36 @@ class Launch():
                                 timeout_new = max(1, round(timeout_val * user_value[0]))
                                 replacements[timeout_key] = ": ".join(
                                     [timeout_test, str(timeout_new)])
-                                self.log.debug(
+                                logger.debug(
                                     "  - Timeout adjustment (x %s): %s -> %s",
                                     user_value, timeout_key, replacements[timeout_key])
 
             # Display the replacement values
             for value, replacement in list(replacements.items()):
-                self.log.debug("  - Replacement: %s -> %s", value, replacement)
+                logger.debug("  - Replacement: %s -> %s", value, replacement)
 
         if replacements:
             # Read in the contents of the yaml file to retain the !mux entries
-            self.log.debug("Reading %s", yaml_file)
+            logger.debug("Reading %s", yaml_file)
             with open(yaml_file, encoding="utf-8") as yaml_buffer:
                 yaml_data = yaml_buffer.read()
 
             # Apply the placeholder replacements
             missing_replacements = []
-            self.log.debug("Modifying contents: %s", yaml_file)
+            logger.debug("Modifying contents: %s", yaml_file)
             for key in sorted(replacements):
                 value = replacements[key]
                 if value:
                     # Replace the host entries with their mapped values
-                    self.log.debug("  - Replacing: %s --> %s", key, value)
+                    logger.debug("  - Replacing: %s --> %s", key, value)
                     yaml_data = re.sub(key, value, yaml_data)
                 else:
                     # Keep track of any placeholders without a replacement value
-                    self.log.debug("  - Missing:   %s", key)
+                    logger.debug("  - Missing:   %s", key)
                     missing_replacements.append(key)
             if missing_replacements:
                 # Report an error for all of the placeholders w/o a replacement
-                self.log.error(
+                logger.error(
                     "Error: Placeholders missing replacements in %s:\n  %s",
                     yaml_file, ", ".join(missing_replacements))
                 raise LaunchException(f"Error: Placeholders missing replacements in {yaml_file}")
@@ -1819,14 +1824,14 @@ class Launch():
             orig_yaml_file = yaml_file
             yaml_name = get_test_category(yaml_file)
             yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
-            self.log.debug("Creating copy: %s", yaml_file)
+            logger.debug("Creating copy: %s", yaml_file)
             with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
                 yaml_buffer.write(yaml_data)
 
             # Optionally display a diff of the yaml file
             if args.verbose > 0:
                 command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(self.log, command, check=False)
+                run_local(logger, command, check=False)
 
         # Return the untouched or modified yaml file
         return yaml_file
@@ -1853,20 +1858,20 @@ class Launch():
         return_code = 0
 
         # Determine the location of the avocado logs for archiving or renaming
-        self.log.info("Avocado logs stored in %s", self.job_results_dir)
+        logger.info("Avocado logs stored in %s", self.job_results_dir)
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
-            self.log.info("-" * 80)
-            self.log.info("Starting test repetition %s/%s", repeat, self.repeat)
+            logger.info("-" * 80)
+            logger.info("Starting test repetition %s/%s", repeat, self.repeat)
 
             for test in self.tests:
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
-                self.log.info(
+                logger.info(
                     "Log file for repetition %s of running %s: %s", repeat, test, test_log_file)
-                test_file_handler = get_file_handler(test_log_file)
-                self.log.addHandler(test_file_handler)
+                test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
+                logger.addHandler(test_file_handler)
 
                 # Create a new TestResult for this test
                 test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
@@ -1900,7 +1905,7 @@ class Launch():
                 test_result.end()
 
                 # Stop logging to the test log file
-                self.log.removeHandler(test_file_handler)
+                logger.removeHandler(test_file_handler)
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -1912,9 +1917,9 @@ class Launch():
             log (logger): logger for the messages produced by this method
             path (str): path to directory to print disk space for.
         """
-        self.log.debug("Current disk space usage of %s", path)
+        logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(self.log, ["df", "-h", path], check=False)
+            run_local(logger, ["df", "-h", path], check=False)
         except RunException:
             pass
 
@@ -1929,8 +1934,8 @@ class Launch():
             int: status code: 0 = success, 128 = failure
 
         """
-        self.log.debug("=" * 80)
-        self.log.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
+        logger.debug("=" * 80)
+        logger.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
@@ -1950,9 +1955,9 @@ class Launch():
             int: status code: 0 = success, 128 = failure
 
         """
-        self.log.debug("-" * 80)
+        logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        self.log.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
+        logger.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
         commands = [
             f"sudo rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
@@ -1960,7 +1965,7 @@ class Launch():
             f"ls -al {test_dir}",
         ]
         for command in commands:
-            if not run_remote(test.hosts.all, command).passed:
+            if not run_remote(logger, test.hosts.all, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -1973,16 +1978,16 @@ class Launch():
             int: status code: 0 = success, 128 = failure
 
         """
-        self.log.debug("-" * 80)
-        self.log.debug("Generating certificates")
+        logger.debug("-" * 80)
+        logger.debug("Generating certificates")
         daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
         certs_dir = os.path.join(daos_test_log_dir, "daosCA")
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(self.log, ["/usr/bin/rm", "-rf", certs_dir])
-            run_local(self.log, [command, daos_test_log_dir])
+            run_local(logger, ["/usr/bin/rm", "-rf", certs_dir])
+            run_local(logger, [command, daos_test_log_dir])
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2003,24 +2008,24 @@ class Launch():
             int: status code: 0 = success, >0 = failure
 
         """
-        self.log.debug("=" * 80)
+        logger.debug("=" * 80)
         command = self.avocado.get_run_command(
             test, self.tag_filters, sparse, fail_fast, extra_yaml)
-        self.log.info(
+        logger.info(
             "Running the %s test on repeat %s/%s: %s", test, repeat, self.repeat, " ".join(command))
         start_time = int(time.time())
 
         try:
-            return_code = run_local(self.log, command, capture_output=False, check=False).returncode
+            return_code = run_local(logger, command, capture_output=False, check=False).returncode
             if return_code == 0:
-                self.log.debug("All avocado test variants passed")
+                logger.debug("All avocado test variants passed")
             elif return_code == 2:
-                self.log.debug("At least one avocado test variant failed")
+                logger.debug("At least one avocado test variant failed")
             elif return_code == 4:
                 message = "Failed avocado commands detected"
                 self._fail_test(self.result.tests[-1], "Process", message)
             elif return_code == 8:
-                self.log.debug("At least one avocado test variant was interrupted")
+                logger.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
 
@@ -2030,7 +2035,7 @@ class Launch():
             return_code = 1
 
         end_time = int(time.time())
-        self.log.info("Total test time: %ss", end_time - start_time)
+        logger.info("Total test time: %ss", end_time - start_time)
         return return_code
 
     def _collect_crash_files(self):
@@ -2051,14 +2056,14 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(self.log, ["mkdir", "-p", latest_crash_dir], check=True)
+                    run_local(logger, ["mkdir", "-p", latest_crash_dir], check=True)
                     for crash_file in crash_files:
-                        run_local(self.log, ["mv", crash_file, latest_crash_dir], check=True)
+                        run_local(logger, ["mv", crash_file, latest_crash_dir], check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
             else:
-                self.log.debug("No avocado crash files found in %s", crash_dir)
+                logger.debug("No avocado crash files found in %s", crash_dir)
 
     def process(self, test, repeat, stop_daos, archive, rename, jenkinslog, core_files, threshold):
         """Process the test results.
@@ -2085,8 +2090,8 @@ class Launch():
 
         """
         return_code = 0
-        self.log.debug("=" * 80)
-        self.log.info(
+        logger.debug("=" * 80)
+        logger.info(
             "Processing the %s test after the run on repeat %s/%s", test, repeat, self.repeat)
 
         # Stop any agents or servers running via systemd
@@ -2183,8 +2188,8 @@ class Launch():
         """
         service = "daos_agent.service"
         hosts = test.hosts.clients_with_localhost
-        self.log.debug("-" * 80)
-        self.log.debug("Verifying %s after running '%s'", service, test)
+        logger.debug("-" * 80)
+        logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
 
     def _stop_daos_server_service(self, test):
@@ -2199,8 +2204,8 @@ class Launch():
         """
         service = "daos_server.service"
         hosts = test.hosts.servers
-        self.log.debug("-" * 80)
-        self.log.debug("Verifying %s after running '%s'", service, test)
+        logger.debug("-" * 80)
+        logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
 
     def _stop_service(self, hosts, service):
@@ -2231,20 +2236,20 @@ class Launch():
                     if result[key]:
                         if loop == max_loops:
                             # Exit the while loop if the service is still running
-                            self.log.error(
+                            logger.error(
                                 " - Error %s still %s on %s", service, mapping[key], result[key])
                             result["status"] = 512
                         else:
                             # Issue the appropriate systemctl command to remedy the
                             # detected state, e.g. 'stop' for 'active'.
                             command = ["sudo", "systemctl", key, service]
-                            run_remote(result[key], " ".join(command))
+                            run_remote(logger, result[key], " ".join(command))
 
                             # Run the status check again on this group of hosts
                             check_hosts.add(result[key])
                 loop += 1
         else:
-            self.log.debug("  Skipping stopping %s service - no hosts", service)
+            logger.debug("  Skipping stopping %s service - no hosts", service)
 
         return result["status"]
 
@@ -2273,16 +2278,16 @@ class Launch():
             "disable": ["active", "activating", "deactivating"],
             "reset-failed": ["failed"]}
         command = ["systemctl", "is-active", service]
-        result = run_remote(hosts, " ".join(command))
+        result = run_remote(logger, hosts, " ".join(command))
         for data in result.output:
             if data.timeout:
                 status["status"] = 512
                 status["stop"].add(data.hosts)
                 status["disable"].add(data.hosts)
                 status["reset-failed"].add(data.hosts)
-                self.log.debug("  %s: TIMEOUT", data.hosts)
+                logger.debug("  %s: TIMEOUT", data.hosts)
                 break
-            self.log.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
+            logger.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
             for key, state_list in status_states.items():
                 for line in data.stdout:
                     if line in state_list:
@@ -2305,20 +2310,20 @@ class Launch():
 
         """
         hosts = test.hosts.servers
-        self.log.debug("-" * 80)
-        self.log.debug("Resetting server storage after running %s", test)
+        logger.debug("-" * 80)
+        logger.debug("Resetting server storage after running %s", test)
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
                 "then daos_server storage prepare -n --reset && "
                 "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
                 "fi"]
-            self.log.info("Resetting server storage on %s after running '%s'", hosts, test)
-            result = run_remote(hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
+            logger.info("Resetting server storage on %s after running '%s'", hosts, test)
+            result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
             if not result.passed:
-                self.log.debug("Ignoring any errors from these workaround commands")
+                logger.debug("Ignoring any errors from these workaround commands")
         else:
-            self.log.debug("  Skipping resetting server storage - no server hosts")
+            logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
@@ -2339,18 +2344,18 @@ class Launch():
             int: status code: 0 = success, 16 = failure
 
         """
-        self.log.debug("=" * 80)
-        self.log.info(
+        logger.debug("=" * 80)
+        logger.info(
             "Archiving %s from %s:%s to %s",
             summary, hosts, os.path.join(source, pattern), destination)
-        self.log.debug("  Remote hosts: %s", hosts.difference(self.local_host))
-        self.log.debug("  Local host:   %s", hosts.intersection(self.local_host))
+        logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
+        logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
 
         # Get a list of remote files and their sizes
         return_code, files_found = self._list_files(hosts, source, pattern, depth)
         if not files_found:
             # If no files are found then there is nothing else to do
-            self.log.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
+            logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
             return return_code
 
         if "log" in pattern:
@@ -2392,10 +2397,10 @@ class Launch():
 
         """
         source_files = os.path.join(source, pattern)
-        self.log.debug("-" * 80)
-        self.log.debug("Listing any %s files on %s", source_files, hosts)
+        logger.debug("-" * 80)
+        logger.debug("Listing any %s files on %s", source_files, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2432,12 +2437,12 @@ class Launch():
 
         """
         source_files = os.path.join(source, pattern)
-        self.log.debug("-" * 80)
-        self.log.debug(
+        logger.debug("-" * 80)
+        logger.debug(
             "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +{threshold} "
                    "-printf '%p %k KB'")
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2450,7 +2455,7 @@ class Launch():
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return 32
 
-        self.log.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
+        logger.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
         return 0
 
     def _cart_log_test(self, hosts, source, pattern, depth):
@@ -2468,12 +2473,12 @@ class Launch():
         """
         source_files = os.path.join(source, pattern)
         cart_logtest = os.path.abspath(os.path.join("cart", "cart_logtest.py"))
-        self.log.debug("-" * 80)
-        self.log.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
+        logger.debug("-" * 80)
+        logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
             f"xargs -0 -r0 -n1 -I % sh -c '{cart_logtest} % > %.cart_logtest 2>&1'")
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2493,10 +2498,10 @@ class Launch():
             bint: status code: 0 = success, 16 = failure
 
         """
-        self.log.debug("-" * 80)
-        self.log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
+        logger.debug("-" * 80)
+        logger.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
         command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2516,13 +2521,13 @@ class Launch():
             int: status code: 0 = success, 16 = failure
 
         """
-        self.log.debug("-" * 80)
-        self.log.debug(
+        logger.debug("-" * 80)
+        logger.debug(
             "Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
             "sudo xargs -0 -r0 lbzip2 -v")
-        result = run_remote(hosts, command)
+        result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2544,8 +2549,8 @@ class Launch():
             int: status code: 0 = success, 16 = failure
 
         """
-        self.log.debug("-" * 80)
-        self.log.debug("Moving files from %s to %s on %s", source, destination, hosts)
+        logger.debug("-" * 80)
+        logger.debug("Moving files from %s to %s on %s", source, destination, hosts)
         os.makedirs(destination, exist_ok=True)
 
         # Use the last directory in the destination path to create a temporary sub-directory on the
@@ -2559,7 +2564,7 @@ class Launch():
 
         # Create a temporary remote directory
         command = f"{sudo}mkdir -p {tmp_copy_dir}"
-        if not run_remote(hosts, command).passed:
+        if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2567,7 +2572,7 @@ class Launch():
         # Move all the source files matching the pattern into the temporary remote directory
         command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
                    f"xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
-        if not run_remote(hosts, command).passed:
+        if not run_remote(logger, hosts, command).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2576,7 +2581,7 @@ class Launch():
         command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(self.log, command, check=True, timeout=timeout)
+            run_local(logger, command, check=True, timeout=timeout)
 
         except RunException:
             message = f"Error copying remote files to {destination}"
@@ -2586,7 +2591,7 @@ class Launch():
         finally:
             # Remove the temporary remote directory on each host
             command = f"{sudo}rm -fr {tmp_copy_dir}"
-            if not run_remote(hosts, command).passed:
+            if not run_remote(logger, hosts, command).passed:
                 message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return_code = 16
@@ -2603,7 +2608,7 @@ class Launch():
             int: status code: 0 = success, 256 = failure
 
         """
-        core_file_processing = CoreFileProcessing(self.log)
+        core_file_processing = CoreFileProcessing(logger)
         try:
             error_count = core_file_processing.process_core_files(test_job_results, True)
             if error_count:
@@ -2633,8 +2638,8 @@ class Launch():
         test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
         test_logs_dir = os.path.realpath(test_logs_lnk)
 
-        self.log.debug("=" * 80)
-        self.log.info("Renaming the avocado job-results directory")
+        logger.debug("=" * 80)
+        logger.info("Renaming the avocado job-results directory")
 
         # Create the new avocado job-results test directory name
         new_test_logs_dir = "-".join([test_logs_dir, get_test_category(test.test_file)])
@@ -2653,12 +2658,12 @@ class Launch():
                 return 1024
 
         # Rename the avocado job-results test directory and update the 'latest' symlink
-        self.log.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
+        logger.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
         try:
             os.rename(test_logs_dir, new_test_logs_dir)
             os.remove(test_logs_lnk)
             os.symlink(new_test_logs_dir, test_logs_lnk)
-            self.log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
+            logger.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
         except OSError:
             message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
@@ -2667,7 +2672,7 @@ class Launch():
         # Update the results.xml file with the new functional test class name
         if jenkinslog:
             xml_file = os.path.join(new_test_logs_dir, "results.xml")
-            self.log.debug("Updating the 'classname' field in the %s", xml_file)
+            logger.debug("Updating the 'classname' field in the %s", xml_file)
             try:
                 with open(xml_file, encoding="utf-8") as xml_buffer:
                     xml_data = xml_buffer.read()
@@ -2692,7 +2697,7 @@ class Launch():
             # Now mangle (or rather unmangle back to canonical xunit1 format)
             # another copy for Launchable
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
-            self.log.debug("Updating the xml data for the Launchable %s file", xml_file)
+            logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
             org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
@@ -2717,10 +2722,10 @@ class Launch():
             int: status code to use when exiting launch.py
 
         """
-        self.log.debug("=" * 80)
+        logger.debug("=" * 80)
         return_code = 0
         if status == 0:
-            self.log.info("All avocado tests passed!")
+            logger.info("All avocado tests passed!")
             return return_code
 
         # Log any of errors that occurred during the run and determine an overall exit code
@@ -2739,7 +2744,7 @@ class Launch():
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
-                self.log.info(error_message)
+                logger.info(error_message)
                 if self.mode == "ci" or (self.mode == "normal" and bit_code == 1) or bit_code == 8:
                     # In CI mode the errors are reported in the results.xml, so always return 0
                     # In normal mode avocado test failures do not yield a non-zero exit status

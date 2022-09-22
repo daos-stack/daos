@@ -18,7 +18,7 @@ from run_utils import run_remote
 class CmockaUtils():
     """Utilities for running test that generate cmocka xml results."""
 
-    def __init__(self, hosts, test_name, outputdir, test_dir):
+    def __init__(self, hosts, test_name, outputdir, test_dir, log):
         """Initialize a CmockaUtils object.
 
         Args:
@@ -26,6 +26,7 @@ class CmockaUtils():
             test_name (str): simple name for the test
             outputdir (str): final location for cmocka xml files on this host
             test_dir (str): directory common to all hosts for storing remote cmocka xml files
+            log (logger): logger for the messages produced by this method
         """
         self.hosts = hosts
         self.test_name = test_name
@@ -37,9 +38,9 @@ class CmockaUtils():
             self.hosts = include_local_host(self.hosts)
             self._using_local_host = True
 
-        self.cmocka_dir = self._get_cmocka_dir(test_dir)
+        self.cmocka_dir = self._get_cmocka_dir(test_dir, log)
 
-    def _get_cmocka_dir(self, test_dir):
+    def _get_cmocka_dir(self, test_dir, log):
         """Get the directory in which to write cmocka xml results.
 
         For tests running locally use a directory that will place the cmocka results directly in
@@ -52,6 +53,7 @@ class CmockaUtils():
 
         Args:
             test_dir (str): directory common to all hosts
+            log (logger): logger for the messages produced by this method
 
         Returns:
             str: the cmocka directory to use with the CMOCKA_XML_FILE env
@@ -61,7 +63,7 @@ class CmockaUtils():
         if not self._using_local_host:
             cmocka_dir = os.path.join(test_dir, "cmocka")
             command = " ".join(["mkdir", "-p", cmocka_dir])
-            run_remote(include_local_host(self.hosts), command)
+            run_remote(log, include_local_host(self.hosts), command)
         return cmocka_dir
 
     def get_cmocka_env(self):
@@ -135,7 +137,7 @@ class CmockaUtils():
         # List any remote cmocka files
         test.log.debug("Remote %s directories:", self.cmocka_dir)
         ls_command = "ls -alR {0}".format(self.cmocka_dir)
-        run_remote(self.hosts, ls_command)
+        run_remote(test.log, self.hosts, ls_command)
 
         # Copy any remote cmocka files back to this host
         command = "{0} --rcopy {1} --dest {1}".format(

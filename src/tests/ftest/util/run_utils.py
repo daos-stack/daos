@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 from socket import gethostname
 import subprocess   # nosec
 
@@ -112,9 +111,13 @@ class RemoteCommandResult():
             self.output.append(
                 self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
 
-    def log_output(self):
-        """Log the command result."""
-        log = getLogger()
+    def log_output(self, log):
+        """Log the command result.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+
+        """
         for data in self.output:
             if data.timeout:
                 log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
@@ -214,10 +217,11 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
     return result
 
 
-def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False):
+def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False):
     """Run the command on the remote hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         command (str): command from which to obtain the output
         verbose (bool, optional): log the command output. Defaults to True.
@@ -235,9 +239,9 @@ def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False):
         task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    getLogger().debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
-        results.log_output()
+        results.log_output(log)
     return results
