@@ -1669,12 +1669,27 @@ err:
 	return rc;
 }
 
+static void
+obj_task_complete(tse_task_t *task, int rc)
+{
+	/* in tse_task_complete only over-write task->dt_result if it is zero, but for some
+	 * cases need to overwrite task->dt_result's retry-able result if get new different
+	 * failure to avoid possible dead loop of retry or assertion.
+	 */
+	if (rc != 0 && task->dt_result != 0 &&
+	    (obj_retry_error(task->dt_result) || task->dt_result == -DER_FETCH_AGAIN ||
+	     task->dt_result == -DER_TGT_RETRY))
+		task->dt_result = rc;
+
+	tse_task_complete(task, rc);
+}
+
 static int
 recov_task_abort(tse_task_t *task, void *arg)
 {
 	int	rc = *((int *)arg);
 
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return 0;
 }
 
@@ -2616,7 +2631,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 
 out:
 	if (rc != 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -2686,7 +2701,7 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 	if (rc != 0) {
 		D_ERROR(DF_OID" shard %u open: %d\n",
 			DP_OID(obj->cob_md.omd_id), shard_auxi->shard, rc);
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 		return rc;
 	}
 
@@ -2734,7 +2749,7 @@ shard_io_task(tse_task_t *task)
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
 		if (rc < 0) {
-			tse_task_complete(task, rc);
+			obj_task_complete(task, rc);
 			return rc;
 		} else if (rc == DC_TX_GE_REINITED) {
 			return 0;
@@ -2934,13 +2949,13 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		shard_auxi->shard_io_cb = io_cb;
 		rc = io_prep_cb(shard_auxi, obj, obj_auxi, shard_auxi->grp_idx);
 		if (rc) {
-			tse_task_complete(shard_task, rc);
+			obj_task_complete(shard_task, rc);
 			goto out_task;
 		}
 
 		rc = tse_task_register_deps(obj_task, 1, &shard_task);
 		if (rc != 0) {
-			tse_task_complete(shard_task, rc);
+			obj_task_complete(shard_task, rc);
 			goto out_task;
 		}
 		/* decref and delete from head at shard_task_remove */
@@ -2959,7 +2974,7 @@ task_sched:
 	if (!d_list_empty(&obj_auxi->shard_task_head))
 		obj_shard_task_sched(obj_auxi, epoch);
 	else
-		tse_task_complete(obj_task, rc);
+		obj_task_complete(obj_task, rc);
 
 	return 0;
 
@@ -2971,7 +2986,7 @@ out_task:
 		/* abort/complete sub-tasks will complete obj_task */
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
 	} else {
-		tse_task_complete(obj_task, rc);
+		obj_task_complete(obj_task, rc);
 	}
 
 	return rc;
@@ -5290,7 +5305,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -5466,7 +5481,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -5494,7 +5509,7 @@ dc_obj_update_task(tse_task_t *task)
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
 comp:
 	if (rc <= 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -6039,7 +6054,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6181,7 +6196,7 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6206,7 +6221,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
 comp:
 	if (rc <= 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -6271,7 +6286,7 @@ shard_query_key_task(tse_task_t *task)
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
 		if (rc < 0) {
-			tse_task_complete(task, rc);
+			obj_task_complete(task, rc);
 			return rc;
 		} else if (rc == DC_TX_GE_REINITED) {
 			return 0;
@@ -6285,7 +6300,7 @@ shard_query_key_task(tse_task_t *task)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 		return rc;
 	}
 
@@ -6349,7 +6364,7 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 
 out_task:
 	if (rc)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6509,7 +6524,7 @@ out_task:
 		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	} else {
-		tse_task_complete(api_task, rc);
+		obj_task_complete(api_task, rc);
 	}
 
 	return rc;
@@ -6604,7 +6619,7 @@ dc_obj_sync(tse_task_t *task)
 			      shard_sync_prep, dc_obj_shard_sync, task);
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
