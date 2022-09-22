@@ -135,9 +135,7 @@ class CmockaUtils():
         # List any remote cmocka files
         test.log.debug("Remote %s directories:", self.cmocka_dir)
         ls_command = "ls -alR {0}".format(self.cmocka_dir)
-        clush_ls_command = "{0} {1}".format(
-            get_clush_command(self.hosts, "-B -S"), ls_command)
-        run_remote(self.hosts, clush_ls_command)
+        run_remote(self.hosts, ls_command)
 
         # Copy any remote cmocka files back to this host
         command = "{0} --rcopy {1} --dest {1}".format(
