@@ -111,39 +111,57 @@ func AnnotateFinding(f *Finding) *Finding {
 
 	// Pad out the list of details as necessary to match
 	// the length of the action list.
-	if len(f.ActDetails) != len(f.ActChoices) {
-		for i := len(f.ActDetails); i < len(f.ActChoices); i++ {
-			f.ActDetails = append(f.ActDetails, "")
+	if len(f.ActChoices) > 0 {
+		if len(f.ActDetails) != len(f.ActChoices) {
+			for i := len(f.ActDetails); i < len(f.ActChoices); i++ {
+				f.ActDetails = append(f.ActDetails, "")
+			}
 		}
+		f.ActMsgs = make([]string, len(f.ActChoices))
+	} else {
+		f.ActMsgs = make([]string, 1)
 	}
-	f.ActMsgs = make([]string, len(f.ActChoices))
 
 	switch f.Class {
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS:
-		if f.Msg == "" {
-			f.Msg = fmt.Sprintf("Scanned pool service %s missing from MS", f.PoolUuid)
-		}
-		for i, act := range f.ActChoices {
-			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
+		f.Msg = fmt.Sprintf("Scanned pool service %s missing from MS", f.PoolUuid)
+		if len(f.ActChoices) == 0 {
+			switch f.Action {
+			case chkpb.CheckInconsistAction_CIA_TRUST_PS:
+				f.ActMsgs[0] = fmt.Sprintf("Recreate the MS entry for %s", f.PoolUuid)
+			default:
+				f.ActMsgs[0] = descAction(f.Action, poolObj, f.PoolUuid)
+			}
+		} else {
+			for i, act := range f.ActChoices {
+				f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
+			}
 		}
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE:
-		if f.Msg == "" {
-			f.Msg = fmt.Sprintf("MS pool service %s missing on engines", f.PoolUuid)
-		}
-		for i, act := range f.ActChoices {
-			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
+		f.Msg = fmt.Sprintf("MS pool service %s missing on engines", f.PoolUuid)
+		if len(f.ActChoices) == 0 {
+			switch f.Action {
+			case chkpb.CheckInconsistAction_CIA_TRUST_PS:
+				f.ActMsgs[0] = fmt.Sprintf("Remove the MS entry for %s", f.PoolUuid)
+			default:
+				f.ActMsgs[0] = descAction(f.Action, poolObj, f.PoolUuid)
+			}
+		} else {
+			for i, act := range f.ActChoices {
+				f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
+			}
 		}
 	case chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL:
-		if f.Msg == "" {
-			f.Msg = fmt.Sprintf("The pool label for %s does not match MS", f.PoolUuid)
-		}
-		for i, act := range f.ActChoices {
-			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid, f.ActDetails[i])
+		f.Msg = fmt.Sprintf("The pool label for %s does not match MS", f.PoolUuid)
+		if len(f.ActChoices) == 0 {
+			f.ActMsgs[0] = descAction(f.Action, poolObj, f.PoolUuid)
+		} else {
+			for i, act := range f.ActChoices {
+				f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid, f.ActDetails[i])
+			}
 		}
 	default:
-		if f.Msg == "" {
-			f.Msg = fmt.Sprintf("Inconsistency found: %s (details: %+v)", f.Class, f.ActDetails)
-		}
+		f.Msg = fmt.Sprintf("Inconsistency found: %s (details: %+v)", f.Class, f.ActDetails)
 	}
 
 	return f

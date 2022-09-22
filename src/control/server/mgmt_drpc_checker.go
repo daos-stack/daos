@@ -161,6 +161,7 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 	}()
 
 	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
+	mod.log.Debugf("annotated finding: %+v", finding)
 	if err := mod.checkerDB.AddCheckerFinding(finding); err != nil {
 		mod.log.Errorf("failed to add checker finding %+v: %s", finding, err)
 		resp.Status = int32(daos.MiscError)
