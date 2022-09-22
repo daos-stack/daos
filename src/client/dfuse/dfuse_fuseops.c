@@ -310,7 +310,6 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct dfuse_inode_entry     *parent_inode = NULL;
 	d_list_t                     *rlink;
 	struct dht_call               save;
-
 	int                           rc;
 
 	rlink = dh_hash_find(fs_handle, parent, &save);
@@ -417,7 +416,6 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
 	dh_hash_decref(fs_handle, &save);
-
 	return;
 decref:
 	dh_hash_decrefx(fs_handle, &save);
@@ -496,7 +494,6 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	struct dfuse_inode_entry     *inode;
 	d_list_t                     *rlink;
 	struct dht_call               save;
-
 	int                           rc;
 
 	/* Don't allow setting of uid/gid extended attribute */
@@ -668,7 +665,6 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		dh_hash_decref(fs_handle, &save2);
 
 	dh_hash_decref(fs_handle, &save);
-
 	return;
 decref_both:
 	dh_hash_decrefx(fs_handle, &save2);

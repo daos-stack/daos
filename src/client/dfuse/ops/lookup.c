@@ -127,7 +127,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	dh_hash_decrefx(fs_handle, save);
+	if (!save->promote)
+		dh_hash_decrefx(fs_handle, save);
 
 	if (fi_out)
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
@@ -141,6 +142,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 					      wipe_name, strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+
+	if (save->promote)
+		dh_hash_decrefx(fs_handle, save);
 
 	return;
 out_err:
