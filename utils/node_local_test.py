@@ -3465,7 +3465,7 @@ def run_in_fg(server, conf, args):
     try:
         if args.launch_cmd:
             start = time.time()
-            rc = subprocess.run(args.launch_cmd, cwd=t_dir)
+            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
             elapsed = time.time() - start
             dfuse.stop()
             (minutes, seconds) = divmod(elapsed, 60)
