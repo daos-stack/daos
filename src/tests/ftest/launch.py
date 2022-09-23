@@ -2382,6 +2382,28 @@ class Launch():
 
         return return_code
 
+    @staticmethod
+    def find_command(source, pattern, depth, other=None):
+        """Get the find command.
+
+        Args:
+            source (str): where the files are currently located
+            pattern (str): pattern used to limit which files are processed
+            depth (int): max depth for find command
+            other (object, optional): other commands, as a list or str, to include at the end of the
+                base find command. Defaults to None.
+
+        Returns:
+            str: the find command
+
+        """
+        command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+        if isinstance(other, list):
+            command.extend(other)
+        elif isinstance(other, str):
+            command.append(other)
+        return " ".join(command)
+
     def _list_files(self, hosts, source, pattern, depth):
         """List the files in source with that match the pattern.
 
@@ -2400,10 +2422,8 @@ class Launch():
         source_files = os.path.join(source, pattern)
         logger.debug("-" * 80)
         logger.debug("Listing any %s files on %s", source_files, hosts)
-        command = (
-            f"find {source} -maxdepth {depth} -type f -name '{pattern}' "
-            "-printf '%M %n %-12u %-12g %12k %t %p\n'")
-        result = run_remote(logger, hosts, command)
+        other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
+        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2443,9 +2463,8 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug(
             "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
-        command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +{threshold} "
-                   "-printf '%p %k KB'")
-        result = run_remote(logger, hosts, command)
+        other = ["-size", f"+{threshold}", "-printf", "'%p %k KB'"]
+        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2478,10 +2497,10 @@ class Launch():
         cart_logtest = os.path.abspath(os.path.join("cart", "cart_logtest.py"))
         logger.debug("-" * 80)
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
-        command = (
-            f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-            f"xargs -0 -r0 -n1 -I % sh -c '{cart_logtest} % > %.cart_logtest 2>&1'")
-        result = run_remote(logger, hosts, command)
+        sudo = "sudo -n " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
+        other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
+                 f"'{sudo}{cart_logtest} % > %.cart_logtest 2>&1'"]
+        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2503,8 +2522,8 @@ class Launch():
         """
         logger.debug("-" * 80)
         logger.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
-        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -empty -print -delete"
-        result = run_remote(logger, hosts, command)
+        other = ["-empty", "-print", "-delete"]
+        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2527,10 +2546,8 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug(
             "Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
-        command = (
-            f"find {source} -maxdepth {depth} -type f -name '{pattern}' -size +1M -print0 | "
-            "sudo xargs -0 -r0 lbzip2 -v")
-        result = run_remote(logger, hosts, command)
+        other = ["-size", "+1M", "-print0", "|", "sudo", "xargs", "-0", "-r0", "lbzip2", "-v"]
+        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2563,28 +2580,25 @@ class Launch():
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
-        sudo = ["sudo", "-n"] if source[0:5] in ["/etc/", "/tmp/", "/var/"] else []
+        sudo = "sudo -n " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
 
         # Create a temporary remote directory
-        command = sudo + ["mkdir", "-p", tmp_copy_dir]
-        if not run_remote(logger, hosts, " ".join(command)).passed:
+        command = f"{sudo}mkdir -p {tmp_copy_dir}"
+        if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
-        command = [
-            "find", source, "-maxdepth", depth, "-type", "f", "-name", f"'{pattern}'", "-print0",
-            "|", "xargs", "-0", "-r0", "-I", "'{}'"] + sudo + ["mv", "'{}'", f"{tmp_copy_dir}/"]
-        if not run_remote(logger, hosts, " ".join(command)).passed:
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/"
+        if not run_remote(logger, hosts, self.find_command(source, pattern, depth, other)).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = sudo + [
-            "clush", "-w", str(hosts), "-v", "-B", "-S", "--rcopy", tmp_copy_dir, "--dest",
-            rcopy_dest]
+        command = ["clush", "-w", str(hosts), "-v", "-B", "-S", "--rcopy", tmp_copy_dir, "--dest",
+                   rcopy_dest]
         return_code = 0
         try:
             run_local(logger, command, check=True, timeout=timeout)
