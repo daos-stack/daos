@@ -653,6 +653,7 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
+	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
 }
 
 static bool
