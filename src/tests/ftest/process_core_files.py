@@ -68,7 +68,7 @@ class CoreFileProcessing():
             core_dir = os.path.join(directory, dir_name)
             for core_name in os.listdir(core_dir):
                 if fnmatch(core_name, 'core.*[0-9]'):
-                    core_files[core_dir].append(core_dir)
+                    core_files[core_dir].append(core_name)
 
         # Install the debug information needed for stacktrace generation
         if core_files:

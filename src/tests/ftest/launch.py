@@ -2402,7 +2402,7 @@ class Launch():
         logger.debug("Listing any %s files on %s", source_files, hosts)
         command = (
             f"find {source} -maxdepth {depth} -type f -name '{pattern}' "
-            "-printf '%M %12g %12u %12k %a %p\n'")
+            "-printf '%M %n %-12u %-12g %12k %t %p\n'")
         result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
