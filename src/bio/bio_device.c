@@ -730,7 +730,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	switch (opts->action) {
 	case CTL__VMD_LED_ACTION__GET:
 		/* Return early with current device state set */
-		opts->led_state = cur_led_state;
+		opts->led_state = (Ctl__VmdLedState)cur_led_state;
 		return;
 	case CTL__VMD_LED_ACTION__SET:
 		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
@@ -754,7 +754,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	}
 
 	/* Set the LED to the new state */
-	rc = spdk_vmd_set_led_state(pci_device, opts->led_state);
+	rc = spdk_vmd_set_led_state(pci_device, (enum spdk_vmd_led_state)opts->led_state);
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
 			spdk_strerror(-rc));
