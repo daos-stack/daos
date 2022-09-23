@@ -85,7 +85,7 @@ struct wal_super_info {
 	uint64_t		si_ckp_id;	/* Last check-pointed ID */
 	uint64_t		si_commit_id;	/* Last committed ID */
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
-	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */	
+	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
 	uint64_t		si_unused_id;	/* Next unused ID */
 	ABT_cond		si_submit_wq;	/* Wait-queue for WAL trans submission */
 	ABT_cond		si_reserve_wq;	/* Wait-queue for WAL ID reserving */
