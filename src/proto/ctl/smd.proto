@@ -72,24 +72,42 @@ message BioHealthResp {
 	uint64 cluster_size = 46; // blobstore cluster size in bytes
 }
 
-message SmdDevReq {
+enum NvmeDevState {
+	NORMAL = 0;	// Device is in a normal operational state
+	NEW = 1;	// Device is new and is not yet in-use
+	EVICTED = 2;	// Device is faulty and has been evicted
 }
+
+enum VmdLedState {
+	OFF = 0;		// Equivalent to SPDK_VMD_LED_STATE_OFF
+	QUICK_BLINK = 1;	// Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
+	ON = 2;			// Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
+	SLOW_BLINK = 3;		// Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
+	NA = 4;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
+}
+
+// SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
+// SPDK blobstore created on a NVMe namespace. Multiple SmdDevices may exist per NVMe controller.
+message SmdDevice {
+	string uuid = 1;		// UUID of blobstore
+	repeated int32 tgt_ids = 2;	// VOS target IDs
+	string tr_addr = 3;		// Transport address of blobstore
+	NvmeDevState dev_state = 4;	// NVMe device state
+	VmdLedState led_state = 5;	// VMD LED state
+	uint64 total_bytes = 6;		// blobstore clusters total bytes
+	uint64 avail_bytes = 7;		// blobstore clusters available bytes
+	uint64 cluster_size = 8;	// blobstore cluster size in bytes
+	uint32 rank = 9;		// DAOS I/O Engine using controller
+}
+
+message SmdDevReq {}
 
 message SmdDevResp {
-	message Device {
-		reserved 3;
-		reserved "state";
-		string uuid = 1; // UUID of blobstore
-		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		string dev_state = 5; // NVMe device state
-	}
 	int32 status = 1;
-	repeated Device devices = 2;
+	repeated SmdDevice devices = 2;
 }
 
-message SmdPoolReq {
-}
+message SmdPoolReq {}
 
 message SmdPoolResp {
 	message Pool {
@@ -101,15 +119,22 @@ message SmdPoolResp {
 	repeated Pool pools = 2;
 }
 
-message DevStateReq {
-	string dev_uuid = 1; // UUID of blobstore
+enum VmdLedAction {
+	GET = 0;
+	SET = 1;
+	RESET = 2;
 }
 
-message DevStateResp {
-	reserved 3;
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of blobstore
-	string dev_state = 4; // NVMe device state
+message DevManageReq {
+	string uuid = 1;
+	string tr_addr = 2;
+	VmdLedAction led_action = 3;
+	VmdLedState led_state = 4;
+}
+
+message DevManageResp {
+	int32 status = 1;
+	SmdDevice device = 2; // Details of device that has been managed
 }
 
 message DevReplaceReq {
@@ -119,26 +144,13 @@ message DevReplaceReq {
 }
 
 message DevReplaceResp {
-	reserved 3;
+	reserved 3, 5;
 	int32 status = 1; // DAOS error code
-	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 4; // NVMe device state
-}
-
-message DevIdentifyReq {
-	string dev_uuid = 1; // UUID of VMD uuid
-}
-
-message DevIdentifyResp {
-	reserved 3;
-	reserved "led_state";
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of VMD uuid
-	string dev_state = 4; // NVMe device state
+	SmdDevice device = 2; // Details of new (hot-plugged) blobstore/device
 }
 
 message SmdQueryReq {
-	reserved 8;
+	reserved 8, 11;
 	reserved "replaceUUID";
 	bool omit_devices = 1; // query should omit devices
 	bool omit_pools = 2; // query should omit pools
@@ -149,19 +161,17 @@ message SmdQueryReq {
 	string target = 7; // response should only include information about this VOS target
 	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
 	bool identify = 10; // set the VMD LED state to quickly blink
-	uint32 state_mask = 11; // show only devices with state matching bit-mask
 	string replace_uuid = 12; // UUID of new device to replace storage with
+	bool reset_led = 13; // for resetting VMD LED, debug only
+	bool get_led = 14; // get LED state of VMD devices
+	string tr_addr = 15; // constrain query to this PCI address (device only)
 }
 
 message SmdQueryResp {
-	message Device {
-		reserved 3;
-		reserved "state";
-		string uuid = 1; // UUID of blobstore
-		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		BioHealthResp health = 5; // optional BIO health
-		string dev_state = 6; // NVMe device state
+	message SmdDeviceWithHealth {
+		int32 status = 1; // DAOS error code
+		SmdDevice details = 2;
+		BioHealthResp health = 3; // optional BIO health
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
@@ -170,7 +180,7 @@ message SmdQueryResp {
 	}
 	message RankResp {
 		uint32 rank = 1; // rank to which this response corresponds
-		repeated Device devices = 2; // List of devices on the rank
+		repeated SmdDeviceWithHealth devices = 2; // List of devices on the rank
 		repeated Pool pools = 3; // List of pools on the rank
 	}
 	int32 status = 1; // DAOS error code
