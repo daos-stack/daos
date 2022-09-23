@@ -5,8 +5,8 @@
  */
 
 /**
-* Primitives to share between data and control planes.
-*/
+ * Primitives to share between data and control planes.
+ */
 
 #ifndef __CONTROL_H__
 #define __CONTROL_H__
@@ -18,9 +18,9 @@
 #include <daos/common.h>
 
 /**
-* Space separated string of CLI options to pass to DPDK when started during
-* spdk_env_init(). These options will override the DPDK defaults.
-*/
+ * Space separated string of CLI options to pass to DPDK when started during
+ * spdk_env_init(). These options will override the DPDK defaults.
+ */
 extern const char *
 dpdk_cli_override_opts;
 
