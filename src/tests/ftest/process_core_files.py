@@ -87,13 +87,14 @@ class CoreFileProcessing():
         for core_dir, core_name_list in core_files.items():
             for core_name in core_name_list:
                 try:
-                    if create_stacktrace:
-                        if os.path.splitext(core_name)[-1] == ".bz2":
-                            # Decompress the file
-                            command = f"lbzip2 -d -v {os.path.join(core_dir, core_name)}"
-                            run_local(self.log, command)
-                            core_name = os.path.splitext(core_name)[0]
-                        self._create_stacktrace(core_dir, core_name)
+                    if not create_stacktrace:
+                        continue
+                    if os.path.splitext(core_name)[-1] == ".bz2":
+                        # Decompress the file
+                        command = f"lbzip2 -d -v {os.path.join(core_dir, core_name)}"
+                        run_local(self.log, command)
+                        core_name = os.path.splitext(core_name)[0]
+                    self._create_stacktrace(core_dir, core_name)
                 except Exception as error:      # pylint: disable=broad-except
                     self.log.error(error)
                     self.log.debug("Stacktrace", exc_info=True)
