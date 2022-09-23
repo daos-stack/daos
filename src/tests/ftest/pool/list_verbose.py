@@ -176,7 +176,7 @@ class ListVerboseTest(IorTestBase):
             # Verify scm_size using the threshold rather than the exact match.
             rank_count = len(pool.target_list.value)
             if scm_size[index] is None:
-                created = pool.scm_size.value * rank_count
+                created = pool.scm_per_rank * rank_count
             else:
                 created = scm_size[index]
             self.verify_scm_size(
