@@ -1468,7 +1468,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 				int			already_in_map;
 
 				already_in_map = pool_map_find_domain(map,
-									PO_COMP_TP_NODE,
+								      PO_COMP_TP_NODE,
 									map_comp.co_id,
 									&current);
 				if (already_in_map > 0) {
