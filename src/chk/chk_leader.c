@@ -628,6 +628,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -777,6 +778,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_exist_on_ms = 1;
 			}
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		/* Fall through. */
@@ -796,6 +798,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 		 * whether it is destroyed successfully or not.
 		 */
 		cpr->cpr_skip = 1;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -987,6 +990,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * whether it is destroyed successfully or not.
 			 */
 			cpr->cpr_skip = 1;
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 			/* Report the inconsistency without repair. */
@@ -1049,6 +1053,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
 			 *	We need to start the PS under DICTATE mode in subsequent step.
 			 */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 			seq = ++(ins->ci_seq);
@@ -1364,6 +1369,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 
 		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
 		cpr->cpr_delay_label = 1;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		goto out;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 
@@ -1380,6 +1386,7 @@ try_ps:
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		cbk->cb_statistics.cs_total++;

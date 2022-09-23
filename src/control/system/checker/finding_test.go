@@ -58,6 +58,44 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 					},
 				}),
 		},
+		"action report: orphaned pool restored to MS": {
+			rpt: &chkpb.CheckReport{
+				Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS,
+				Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+				PoolUuid: test.MockUUID(),
+				Msg:      "Check leader detects orphan pool",
+				ActMsgs:  []string{"Trust the information recorded in PS DB."},
+			},
+			expFinding: checker.NewFinding(
+				&chkpb.CheckReport{
+					Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS,
+					Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+					PoolUuid: test.MockUUID(),
+					Msg:      fmt.Sprintf("Scanned pool service %s missing from MS", test.MockUUID()),
+					ActMsgs: []string{
+						fmt.Sprintf("Recreate the MS entry for %s", test.MockUUID()),
+					},
+				}),
+		},
+		"action report: dangling pool removed from MS": {
+			rpt: &chkpb.CheckReport{
+				Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
+				Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+				PoolUuid: test.MockUUID(),
+				Msg:      "Check leader detects dangling pool",
+				ActMsgs:  []string{"Trust the information recorded in PS DB."},
+			},
+			expFinding: checker.NewFinding(
+				&chkpb.CheckReport{
+					Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
+					Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+					PoolUuid: test.MockUUID(),
+					Msg:      fmt.Sprintf("MS pool service %s missing on engines", test.MockUUID()),
+					ActMsgs: []string{
+						fmt.Sprintf("Remove the MS entry for %s", test.MockUUID()),
+					},
+				}),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := checker.NewFinding(tc.rpt)
