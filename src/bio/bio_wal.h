@@ -24,9 +24,7 @@ struct meta_header {
 	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
 	uint32_t	mh_vos_id;		/* Associated per-engine target ID */
 	uint32_t	mh_padding[6];		/* Reserved */
-	uint16_t	mh_csum_type;
-	uint16_t	mh_csum_len;
-	uint8_t		mh_csum[0];		/* Checksum of this header */
+	uint32_t	mh_csum;		/* Checksum of this header */
 };
 
 /* WAL blob header */
@@ -34,17 +32,15 @@ struct wal_header {
 	uint32_t	wh_magic;
 	uint32_t	wh_version;
 	uint32_t	wh_gen;		/* WAL re-format timestamp */
-	uint16_t	wh_csum_type;	/* Checksum type used for transaction integrity check */
 	uint16_t	wh_blk_bytes;	/* WAL block size in bytes, usually 4k */
+	uint16_t	wh_padding1;	/* Reserved */
 	uint64_t	wh_tot_blks;	/* WAL blob capacity, in blocks */
 	uint64_t	wh_ckp_id;	/* Last check-pointed transaction ID */
 	uint64_t	wh_commit_id;	/* Last committed transaction ID */
-	uint64_t	wh_next_id;	/* Next unused transaction ID */
-	uint64_t	wh_padding1;	/* Reserved */
-	uint32_t	wh_padding2;	/* Reserved */
-	uint16_t	wh_padding3;	/* Reserved */
-	uint16_t	wh_csum_len;
-	uint8_t		wh_csum[0];	/* Checksum of this header */
+	uint64_t	wh_unused_id;	/* Next unused transaction ID */
+	uint64_t	wh_padding2;	/* Reserved */
+	uint32_t	wh_padding3;	/* Reserved */
+	uint32_t	wh_csum;	/* Checksum of this header */
 };
 
 enum wal_hdr_flags {
@@ -60,6 +56,7 @@ struct wal_trans_head {
 	uint64_t	th_id;		/* Transaction ID */
 };
 
+/* XXX to be adjusted according to umem action types */
 enum wal_op_type {
 	WAL_OP_MEMCPY	= 0,		/* memcpy data to meta blob */
 	WAL_OP_MEMMOVE,			/* memmove data on meta blob */
@@ -79,20 +76,28 @@ struct wal_trans_entry {
 
 /* WAL transaction tail */
 struct wal_trans_tail {
-	uint16_t	tt_csum_len;	/* Checksum length in bytes */
-	uint16_t	tt_padding1;	/* Reserved */
-	uint32_t	tt_padding2;	/* Reserved */
-	uint8_t		tt_csum[0];	/* Checksum of WAL transaction */
+	uint32_t	tt_csum;	/* Checksum of WAL transaction */
 };
 
-/* Meta context */
+/* In-memory WAL super information */
+struct wal_super_info {
+	struct wal_header	si_header;
+	uint64_t		si_ckp_id;	/* Last check-pointed ID */
+	uint64_t		si_commit_id;	/* Last committed ID */
+	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
+	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */	
+	uint64_t		si_unused_id;	/* Next unused ID */
+	ABT_cond		si_submit_wq;	/* Wait-queue for WAL trans submission */
+	ABT_cond		si_reserve_wq;	/* Wait-queue for WAL ID reserving */
+	unsigned int		si_dirty:1;	/* Header is dirty or not */
+};
+
+/* In-memory Meta context, exported as opaque data structure */
 struct bio_meta_context {
 	struct bio_io_context	*mc_data;	/* Data blob I/O context */
 	struct bio_io_context	*mc_meta;	/* Meta blob I/O context */
 	struct bio_io_context	*mc_wal;	/* WAL blob I/O context */
-	struct wal_header	 mc_wal_header;	/* WAL header */
-	ABT_cond		 mc_commit_wq;	/* FIFO waitqueue for trans commit */
-	ABT_cond		 mc_begin_wq;	/* FIFO waitqueue for trans begin */
+	struct wal_super_info	 mc_wal_info;
 };
 
 #endif /* __BIO_WAL_H__*/
