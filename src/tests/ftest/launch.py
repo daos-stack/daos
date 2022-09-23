@@ -923,10 +923,10 @@ class Launch():
         logger.info("DAOS functional test launcher")
         logger.info("")
         logger.info("Running with %s", self.avocado)
-        logger.info("Logging launch results to: %s", self.logdir)
+        logger.info("Launch job results directory:  %s", self.logdir)
         if renamed_log_dir is not None:
-            logger.info("  Renamed existing launch log directory to %s", renamed_log_dir)
-        logger.info("Launch log file: %s", self.logfile)
+            logger.info("  Renamed existing launch job results directory to %s", renamed_log_dir)
+        logger.info("Launch log file:               %s", self.logfile)
         logger.info("-" * 80)
 
         # Results tracking settings
@@ -1858,8 +1858,8 @@ class Launch():
         """
         return_code = 0
 
-        # Determine the location of the avocado logs for archiving or renaming
-        logger.info("Avocado logs stored in %s", self.job_results_dir)
+        # Display the location of the avocado logs
+        logger.info("Avocado job results directory: %s", self.job_results_dir)
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -2400,7 +2400,9 @@ class Launch():
         source_files = os.path.join(source, pattern)
         logger.debug("-" * 80)
         logger.debug("Listing any %s files on %s", source_files, hosts)
-        command = f"find {source} -maxdepth {depth} -type f -name '{pattern}' -printf '%p %k KB\n'"
+        command = (
+            f"find {source} -maxdepth {depth} -type f -name '{pattern}' "
+            "-printf '%M %12g %12u %12k %a %p\n'")
         result = run_remote(logger, hosts, command)
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
@@ -2561,7 +2563,7 @@ class Launch():
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
-        sudo = "sudo " if source.startswith("/etc") or source.startswith("/tmp") else ""
+        sudo = "sudo " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
 
         # Create a temporary remote directory
         command = f"{sudo}mkdir -p {tmp_copy_dir}"
