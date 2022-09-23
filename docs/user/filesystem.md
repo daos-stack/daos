@@ -121,8 +121,8 @@ support.  Additionally, DFuse provides an Interception Library `libioil` to
 transparently allow POSIX clients to talk directly to DAOS servers, providing
 OS-Bypass for I/O without modifying or recompiling of the application.
 
-DFuse builds heavily on DFS. Data written via DFuse can be accessed by DFS and
-vice versa.
+DFuse is layered on to of DFS.  Data written via DFuse can be accessed by DFS and
+vice versa, even simultaneously from different client applications.
 
 ### DFuse Daemon
 
@@ -143,18 +143,16 @@ number of cores then overcommiting via the `--thread-count` option is desirable.
 
 ### Restrictions
 
-DFuse is limited to a single user. Access to the filesystem from other users,
+DFuse by default is limited to a single user. Access to the filesystem from other users,
 including root, will not be honored. As a consequence of this, the `chown`
 and `chgrp` calls are not supported.  Hard links and special device files,
-except symbolic links, are not supported, nor are any ACLs.
+except symbolic links, are not supported, nor are any ACLs beyond standand
+POSIX permissions.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
-daemonize to run like a system daemon.
-However, to do this and still be able to access DAOS it needs to daemonize
-before calling `daos_init()`. This in turns means it cannot report some kinds
-of startup errors either on stdout/stderr or via its return code.
-When initially starting with DFuse it is recommended to run in foreground mode
-(`--foreground`) to better observe any failures.
+daemonize to run like a system daemon.  The default is to run in the background
+and when doing this it will remain attached to the terminal until after
+initialization to be able to report back status or failure to start to the user.
 
 Inodes are managed on the local node by DFuse. So while inode numbers
 will be consistent on a node for the duration of the session, they are not
@@ -168,12 +166,8 @@ So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 DFuse should be run with the credentials (user/group) of the user who will
 be accessing it, and who owns any pools that will be used.
 
-There are two mandatory command-line options, these are:
-
-| **Command-line Option**  | **Description**     |
-| ------------------------ | ------------------- |
-| --mountpoint=<path\>     | path to mount dfuse |
-
+There is one mandatory command-line options, this is a mount point to start dfuse and can be
+supplied either via the positional `--mountpoint` option or the first positional argument.
 The mount point specified should be an empty directory on the local node that
 is owned by the user.
 
@@ -187,6 +181,9 @@ Additionally, there are several optional command-line options:
 | --foreground               | run in foreground                |
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
+
+The `--pool` and `--container` options can also be passed as the second and third positional
+arguments.
 
 When DFuse starts, it will register a single mount with the kernel, at the
 location specified by the `--mountpoint` option. This mount will be
@@ -332,7 +329,7 @@ and ndentry timeouts will be 5 seconds, and data caching will be enabled.
 Readdir caching is available when supported by libfuse; however, on many distributions the system
 libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is required at both
 compile and run-time.  Use `dfuse --version` or the runtime logs to see the fuse version used and if
-the feature is compiled into dfuse.  Readir caching is controlled by the dfuse-dentry-time setting.
+the feature is compiled into dfuse.  Readdir caching is controlled by the dfuse-dentry-time setting.
 
 These are two command line options to control the DFuse process itself.
 
