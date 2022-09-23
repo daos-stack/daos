@@ -91,11 +91,12 @@ func FaultBdevAccelEngineUnknown(input string, options ...string) *fault.Fault {
 			options))
 }
 
-// FaultBdevAccelOptUnknown creates a Fault when an unrecognized acceleration option is detected.
-func FaultBdevAccelOptionUnknown(input string, options ...string) *fault.Fault {
+// FaultBdevConfigOptFlagUnknown creates a Fault when an unrecognized option flag (string) is detected
+// in the engine storage section of the config file.
+func FaultBdevConfigOptFlagUnknown(input string, options ...string) *fault.Fault {
 	return storageFault(
-		code.BdevAccelOptionUnknown,
-		fmt.Sprintf("unknown acceleration option %q", input),
+		code.BdevConfigOptFlagUnknown,
+		fmt.Sprintf("unknown option flag given: %q", input),
 		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
 			options))
 }

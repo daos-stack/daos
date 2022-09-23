@@ -89,7 +89,7 @@ const (
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
-	BdevAccelOptionUnknown
+	BdevConfigOptFlagUnknown
 	BdevConfigTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU

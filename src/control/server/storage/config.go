@@ -41,6 +41,10 @@ const (
 
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
+
+	bdevRoleDataName  = "data"
+	bdevRoleIndexName = "index"
+	bdevRoleWALName   = "wal"
 )
 
 // Class indicates a specific type of storage.
@@ -177,6 +181,12 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	return tc
 }
 
+// WithBdevDeviceRoles sets the role assignments for the bdev tier.
+func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
+	tc.Bdev.DeviceRoles = BdevDeviceRoles{OptionBits(bits)}
+	return tc
+}
+
 type TierConfigs []*TierConfig
 
 func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
@@ -239,6 +249,94 @@ func (tcs TierConfigs) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (tcs TierConfigs) validateBdevTierRoles() error {
+	sc := tcs.ScmConfigs()[0]
+	bcs := tcs.BdevConfigs()
+
+	nrWALTiers := 1
+	nrIndexTiers := 1
+	if sc.Class == ClassDcpm {
+		nrWALTiers = 0
+		nrIndexTiers = 0
+		if len(bcs) > 1 {
+			return errors.Errorf("more than 1 bdev tiers not allowed with dcpm scm class")
+		}
+	}
+
+	var foundWALTiers, foundIndexTiers, foundDataTiers int
+	for _, bc := range bcs {
+		bits := bc.Bdev.DeviceRoles.OptionBits
+		if (bits & BdevRoleWAL) != 0 {
+			foundWALTiers++
+		}
+		if (bits & BdevRoleIndex) != 0 {
+			foundIndexTiers++
+		}
+		if (bits & BdevRoleData) != 0 {
+			foundDataTiers++
+		}
+	}
+
+	if foundWALTiers != nrWALTiers {
+		return errors.Errorf("found %d WAL tiers, wanted %d", foundWALTiers, nrWALTiers)
+	}
+	if foundIndexTiers != nrIndexTiers {
+		return errors.Errorf("found %d Index tiers, wanted %d", foundIndexTiers, nrIndexTiers)
+	}
+	// When bdev NVMe tiers exist, there should always be at least one Data tier.
+	if foundDataTiers == 0 {
+		return errors.New("found 0 Data tiers, wanted at least 1")
+	}
+
+	return nil
+}
+
+// Set NVME class tier roles either based on explicit settings or heuristics.
+func (tcs TierConfigs) assignBdevTierRoles() error {
+	scs := tcs.ScmConfigs()
+	bcs := tcs.BdevConfigs()
+
+	// Require tier-0 to be a SCM tier.
+	if len(scs) != 1 || scs[0].Tier != 0 {
+		return errors.New("first storage tier is not scm")
+	}
+
+	// Skip role assignment and validation no NVMe tiers exist.
+	if !tcs.HaveRealNVMe() {
+		return nil
+	}
+
+	// Skip implicit role assignment if any roles have already been explicitly assigned.
+	for _, bc := range bcs {
+		if !bc.Bdev.DeviceRoles.IsEmpty() {
+			return tcs.validateBdevTierRoles()
+		}
+	}
+
+	// First bdev tier should be data if scm tier is DCPM.
+	if scs[0].Class == ClassDcpm {
+		tcs[1].WithBdevDeviceRoles(BdevRoleData)
+		return tcs.validateBdevTierRoles()
+	}
+
+	// Apply role assignments.
+	switch len(bcs) {
+	case 1:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleIndex | BdevRoleData)
+	case 2:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleIndex)
+		tcs[2].WithBdevDeviceRoles(BdevRoleData)
+	default:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleIndex)
+		for i := 3; i < len(tcs); i++ {
+			tcs[i].WithBdevDeviceRoles(BdevRoleData)
+		}
+	}
+
+	return tcs.validateBdevTierRoles()
 }
 
 func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
@@ -532,12 +630,92 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 	return br
 }
 
+// OptionBits is a type alias representing option flags as a bitset.
+type OptionBits uint16
+
+type optFlagMap map[string]OptionBits
+
+func (ofm optFlagMap) keys() []string {
+	keys := common.NewStringSet()
+	for k := range ofm {
+		keys.Add(k)
+	}
+
+	return keys.ToSlice()
+}
+
+// toStrings returns a slice of option names that have been set.
+func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
+	opts := common.NewStringSet()
+	for str, flag := range optStr2Flag {
+		if obs&flag == flag {
+			opts.Add(str)
+		}
+	}
+
+	return opts.ToSlice()
+}
+
+// fromStrings generates bitset referenced by the function receiver from the option names provided.
+func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error {
+	if obs == nil {
+		return errors.New("fromStrings() called on nil OptionBits")
+	}
+
+	for _, opt := range opts {
+		flag, exists := optStr2Flag[opt]
+		if !exists {
+			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
+		}
+		*obs |= flag
+	}
+
+	return nil
+}
+
+// IsEmpty returns true if no options have been set.
+func (obs *OptionBits) IsEmpty() bool {
+	return obs == nil || *obs == 0
+}
+
+var roleOptFlags = optFlagMap{
+	bdevRoleDataName:  BdevRoleData,
+	bdevRoleIndexName: BdevRoleIndex,
+	bdevRoleWALName:   BdevRoleWAL,
+}
+
+// BdevDeviceRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).
+type BdevDeviceRoles struct {
+	OptionBits
+}
+
+func (bdr BdevDeviceRoles) MarshalYAML() (interface{}, error) {
+	return bdr.toStrings(roleOptFlags), nil
+}
+
+func (bdr *BdevDeviceRoles) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var opts []string
+	if err := unmarshal(&opts); err != nil {
+		return err
+	}
+
+	return bdr.fromStrings(roleOptFlags, opts...)
+}
+
+func (bdr *BdevDeviceRoles) String() string {
+	if bdr == nil {
+		return "0"
+	}
+	return fmt.Sprintf("%d", bdr.OptionBits)
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList  *BdevDeviceList `yaml:"bdev_list,omitempty"`
 	DeviceCount int             `yaml:"bdev_number,omitempty"`
 	FileSize    int             `yaml:"bdev_size,omitempty"`
 	BusidRange  *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	DeviceRoles BdevDeviceRoles `yaml:"bdev_roles,omitempty"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -618,40 +796,16 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
-// AccelOptionBits is a type alias representing optional capabilities as a bit-set.
-type AccelOptionBits uint16
-
-// toStrings returns a slice of option names that have been set.
-func (obs AccelOptionBits) toStrings() []string {
-	opts := common.NewStringSet()
-	for str, flag := range accelOptStr2Flag {
-		if obs&flag == flag {
-			opts.Add(str)
-		}
-	}
-
-	return opts.ToSlice()
+var accelOptFlags = optFlagMap{
+	accelOptCRCName:  AccelOptCRCFlag,
+	accelOptMoveName: AccelOptMoveFlag,
 }
 
-// fromStrings generates bit-set referenced by the function receiver from the option names provided.
-func (obs *AccelOptionBits) fromStrings(opts ...string) error {
-	if obs == nil {
-		return errors.New("fromStrings() called on nil AccelOptionBits")
-	}
-
-	for _, opt := range opts {
-		flag, exists := accelOptStr2Flag[opt]
-		if !exists {
-			return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
-		}
-		*obs |= flag
-	}
-
-	return nil
-}
+// AccelOptionBits is a type alias representing acceleration capabilities as a bitset.
+type AccelOptionBits = OptionBits
 
 func (obs AccelOptionBits) MarshalYAML() (interface{}, error) {
-	return obs.toStrings(), nil
+	return obs.toStrings(accelOptFlags), nil
 }
 
 func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -660,35 +814,14 @@ func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) err
 		return err
 	}
 
-	return obs.fromStrings(opts...)
-}
-
-// IsEmpty returns true if no options have been set.
-func (obs *AccelOptionBits) IsEmpty() bool {
-	return obs == nil || *obs == 0
+	return obs.fromStrings(accelOptFlags, opts...)
 }
 
 // AccelProps struct describes acceleration engine setting and optional capabilities expressed
-// as a bit mask. AccelProps is used both in YAML server config and JSON NVMe config files.
+// as a bitset. AccelProps is used both in YAML server config and JSON NVMe config files.
 type AccelProps struct {
 	Engine  string          `yaml:"engine,omitempty" json:"accel_engine"`
 	Options AccelOptionBits `yaml:"options,omitempty" json:"accel_opts"`
-}
-
-type optFlagMap map[string]AccelOptionBits
-
-func (aosf optFlagMap) keys() []string {
-	keys := common.NewStringSet()
-	for k := range aosf {
-		keys.Add(k)
-	}
-
-	return keys.ToSlice()
-}
-
-var accelOptStr2Flag = optFlagMap{
-	accelOptCRCName:  AccelOptCRCFlag,
-	accelOptMoveName: AccelOptMoveFlag,
 }
 
 func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -712,7 +845,7 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	case AccelEngineSPDK, AccelEngineDML:
 		if out.Options == 0 {
 			// If no options have been specified, all capabilities should be enabled.
-			if err := out.Options.fromStrings(accelOptStr2Flag.keys()...); err != nil {
+			if err := out.Options.fromStrings(accelOptFlags, accelOptFlags.keys()...); err != nil {
 				return err
 			}
 		}
@@ -789,5 +922,5 @@ func (c *Config) Validate() error {
 
 	c.VosEnv = "NVME"
 
-	return nil
+	return errors.Wrapf(c.Tiers.assignBdevTierRoles(), "invalid bdev tier roles requested")
 }
