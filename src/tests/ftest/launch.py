@@ -2563,25 +2563,28 @@ class Launch():
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
-        sudo = "sudo " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
+        sudo = ["sudo", "-n"] if source[0:5] in ["/etc/", "/tmp/", "/var/"] else []
 
         # Create a temporary remote directory
-        command = f"{sudo}mkdir -p {tmp_copy_dir}"
-        if not run_remote(logger, hosts, command).passed:
+        command = sudo + ["mkdir", "-p", tmp_copy_dir]
+        if not run_remote(logger, hosts, " ".join(command)).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
-        command = (f"find {source} -maxdepth {depth} -type f -name '{pattern}' -print0 | "
-                   f"xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/")
-        if not run_remote(logger, hosts, command).passed:
+        command = [
+            "find", source, "-maxdepth", depth, "-type", "f", "-name", f"'{pattern}'", "-print0",
+            "|", "xargs", "-0", "-r0", "-I", "'{}'"] + sudo + ["mv", "'{}'", f"{tmp_copy_dir}/"]
+        if not run_remote(logger, hosts, " ".join(command)).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-v", "-w", str(hosts), "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
+        command = sudo + [
+            "clush", "-w", str(hosts), "-v", "-B", "-S", "--rcopy", tmp_copy_dir, "--dest",
+            rcopy_dest]
         return_code = 0
         try:
             run_local(logger, command, check=True, timeout=timeout)
