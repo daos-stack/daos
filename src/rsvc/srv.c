@@ -864,8 +864,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 		if (caller_term != RDB_NIL_TERM) {
 			rc = rdb_ping(svc->s_db, caller_term);
 			if (rc != 0) {
-				if (rc != -DER_STALE)
-					D_ERROR("%s: failed to ping local replica\n", svc->s_name);
+				D_CDEBUG(rc == -DER_STALE, DB_MD, DLOG_ERR,
+					 "%s: failed to ping local replica\n", svc->s_name);
 				ds_rsvc_put(svc);
 				goto out;
 			}
@@ -962,8 +962,8 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, boo
 	if (caller_term != RDB_NIL_TERM) {
 		rc = rdb_ping(svc->s_db, caller_term);
 		if (rc != 0) {
-			if (rc != -DER_STALE)
-				D_ERROR("%s: failed to ping local replica\n", svc->s_name);
+			D_CDEBUG(rc == -DER_STALE, DB_MD, DLOG_ERR,
+				 "%s: failed to ping local replica\n", svc->s_name);
 			ds_rsvc_put(svc);
 			return rc;
 		}

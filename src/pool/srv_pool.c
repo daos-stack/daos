@@ -1514,6 +1514,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 }
 
 static void pool_svc_schedule_reconf(struct pool_svc *svc);
+static void pool_svc_cancel_and_wait_reconf(struct pool_svc *svc);
 
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
@@ -1526,6 +1527,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
+	bool			reconf_scheduled = false;
 	d_rank_t		rank;
 	int			rc;
 
@@ -1574,6 +1576,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 */
 	svc->ps_reconf.psc_force_notify = true;
 	pool_svc_schedule_reconf(svc);
+	reconf_scheduled = true;
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
@@ -1617,6 +1620,8 @@ out:
 	if (rc != 0) {
 		if (events_initialized)
 			fini_events(svc);
+		if (reconf_scheduled)
+			pool_svc_cancel_and_wait_reconf(svc);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1632,8 +1637,6 @@ out:
 		ds_pool_failed_remove(svc->ps_uuid);
 	return rc;
 }
-
-static void pool_svc_cancel_and_wait_reconf(struct pool_svc *svc);
 
 static void
 pool_svc_step_down_cb(struct ds_rsvc *rsvc)
@@ -5149,6 +5152,9 @@ pool_svc_reconf_ult(void *arg)
 	int			 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
+
+	if (reconf->psc_canceled)
+		goto out;
 
 	/* When there are pending events, the pool map may be unstable. */
 	while (events_pending(svc)) {
