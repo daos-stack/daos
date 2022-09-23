@@ -633,7 +633,7 @@ server_init(int argc, char *argv[])
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
 	rc = crt_init_opt(daos_sysname,
-			  CRT_FLAG_BIT_SERVER,
+			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
 			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
