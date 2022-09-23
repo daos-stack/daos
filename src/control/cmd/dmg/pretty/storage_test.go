@@ -1399,28 +1399,32 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateNormal,
+									NvmeState: storage.NvmeStateNew,
+									LedState:  storage.LedStateNormal,
 								},
 								{
 									UUID:      test.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateEvicted,
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateFaulty,
 								},
 								{
 									UUID:      test.MockUUID(2),
 									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									NvmeState: storage.NvmeDevState(0),
+									NvmeState: storage.NvmeDevState(99),
+									LedState:  storage.LedStateUnknown,
 								},
 								{
 									UUID:      test.MockUUID(3),
 									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.MockNvmeStateIdentify,
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateIdentify,
 								},
 							},
 						},
@@ -1433,13 +1437,13 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NORMAL
+      Targets:[0 1 2] Rank:0 State:NEW LED:OFF
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[3 4 5] Rank:0 State:EVICTED
+      Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNPLUGGED
+      Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
+      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
 		"list-devices (none found)": {
@@ -1475,7 +1479,8 @@ host1
 									UUID:      test.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.MockNvmeStateNormal,
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
@@ -1489,7 +1494,7 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Targets:[0 1 2] Rank:0 State:NORMAL
+      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s
@@ -1549,6 +1554,67 @@ host1
 				mockController.HealthStats.PllLockLossCnt,
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
 			),
+		},
+		"identify led": {
+			req: &control.SmdQueryReq{
+				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify:  true,
+				OmitPools: true,
+			},
+			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*storage.SmdDevice{
+								{
+									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+									TrAddr:   "0000:8a:00.0",
+									LedState: storage.LedStateIdentify,
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Devices
+    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+`,
+		},
+		"identify led; transport address specified": {
+			req: &control.SmdQueryReq{
+				UUID:      "0000:8a:00.0",
+				Identify:  true,
+				OmitPools: true,
+			},
+			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*storage.SmdDevice{
+								{
+									TrAddr:   "0000:8a:00.0",
+									LedState: storage.LedStateIdentify,
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Devices
+    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
+`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
