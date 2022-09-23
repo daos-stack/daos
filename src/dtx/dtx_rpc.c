@@ -719,7 +719,7 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 }
 
 static int
-dtx_rpc_post(d_list_t *head, daos_handle_t tree_hdl, struct dtx_req_args *dra,
+dtx_rpc_post(d_list_t *head, daos_handle_t *tree_hdl, struct dtx_req_args *dra,
 	     ABT_thread *helper, int ret)
 {
 	struct dtx_req_rec	*drr;
@@ -732,8 +732,8 @@ dtx_rpc_post(d_list_t *head, daos_handle_t tree_hdl, struct dtx_req_args *dra,
 	if (dra->dra_future != ABT_FUTURE_NULL)
 		rc = dtx_req_wait(dra);
 
-	if (daos_handle_is_valid(tree_hdl)) {
-		dbtree_destroy(tree_hdl, NULL);
+	if (daos_handle_is_valid(*tree_hdl)) {
+		dbtree_destroy(*tree_hdl, NULL);
 		free_dti = true;
 	}
 
@@ -821,7 +821,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 out:
-	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
+	rc2 = dtx_rpc_post(&head, &tree_hdl, &dra, &helper, rc);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
 		rc2 = 0;
 
@@ -875,7 +875,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	if (rc1 > 0 || rc1 == -DER_NONEXIST)
 		rc1 = 0;
 
-	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
+	rc2 = dtx_rpc_post(&head, &tree_hdl, &dra, &helper, rc);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
 		rc2 = 0;
 
@@ -905,7 +905,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	rc = dtx_rpc_prep(cont, &head, &tree_root, &tree_hdl, &dra, &helper, NULL,
 			  &dte, epoch, 1, DTX_CHECK, NULL);
 
-	rc1 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
+	rc1 = dtx_rpc_post(&head, &tree_hdl, &dra, &helper, rc);
 
 	D_CDEBUG(rc1 < 0, DLOG_ERR, DB_IO, "Check DTX "DF_DTI": rc %d %d\n",
 		 DP_DTI(&dte->dte_xid), rc, rc1);
