@@ -538,26 +538,19 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 }
 
 int
-ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp)
+ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 {
 	return 0;
 }
 
 int
-ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp)
 {
 	return 0;
 }
 
 int
-ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-		    Ctl__DevReplaceResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
+ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevReplaceResp *resp)
 {
 	return 0;
 }

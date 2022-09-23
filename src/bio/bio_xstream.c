@@ -1569,7 +1569,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev         *d_bdev;
+	struct bio_bdev		*d_bdev;
+	unsigned int		 led_state;
 
 	/*
 	 * Check VMD_LED_PERIOD environment variable, if not set use default
@@ -1584,8 +1585,11 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
-			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
-					      true/*reset*/) != 0)
+			/* LED will be reset to the original saved state */
+			led_state = (unsigned int)d_bdev->bb_led_state;
+			if (bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+					   (unsigned int)CTL__VMD_LED_ACTION__SET,
+					   &led_state) != 0)
 				D_ERROR("Failed resetting LED state\n");
 		}
 	}
