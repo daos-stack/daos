@@ -8,16 +8,16 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -58,56 +58,102 @@ const (
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
-// NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
-type NvmeDevState uint32
+// NvmeDevState represents the operation state of an NVMe device.
+type NvmeDevState int32
 
-// NvmeDevState values representing individual bit-flags.
+// NvmeDevState values representing the operational device state.
 const (
-	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
-	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
-	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
-	NvmeStateUnknown  NvmeDevState = C.NVME_DEV_STATE_INVALID
+	NvmeStateNormal NvmeDevState = iota
+	NvmeStateNew
+	NvmeStateFaulty
 )
 
-// IsNew returns true if SSD is not in use by DAOS.
-func (bs NvmeDevState) IsNew() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateInUse == 0
+func (nds NvmeDevState) String() string {
+	ndss, ok := ctlpb.NvmeDevState_name[int32(nds)]
+	if !ok {
+		return "UNKNOWN"
+	}
+	return strings.ToUpper(ndss)
 }
 
-// IsNormal returns true if SSD is in a normal, non-faulty state.
-func (bs NvmeDevState) IsNormal() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse != 0
+func (nds NvmeDevState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.NvmeDevState_name[int32(nds)]
+	if !ok {
+		return nil, errors.Errorf("invalid nvme dev state %d", nds)
+	}
+	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
-// IsFaulty returns true if SSD is in a faulty state.
-func (bs NvmeDevState) IsFaulty() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
+func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
+
+	state, ok := ctlpb.NvmeDevState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid nvme dev state number parse %q", stateStr)
+		}
+
+		if _, ok = ctlpb.NvmeDevState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid nvme dev state name lookup %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*nds = NvmeDevState(state)
+
+	return nil
 }
 
-func (bs NvmeDevState) String() string {
-	return C.GoString(C.nvme_state2str(C.int(bs)))
+// VmdLedState represents the LED state of VMD device.
+type VmdLedState int32
+
+// VmdLedState values representing the VMD LED state (see include/spdk/vmd.h).
+const (
+	LedStateNormal VmdLedState = iota
+	LedStateIdentify
+	LedStateFaulty
+	LedStateRebuild
+	LedStateUnknown
+)
+
+func (vls VmdLedState) String() string {
+	vlss, ok := ctlpb.VmdLedState_name[int32(vls)]
+	if !ok {
+		return "UNKNOWN"
+	}
+	return strings.ToUpper(vlss)
 }
 
-// States lists each flag in state bitset.
-func (bs NvmeDevState) States() string {
-	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
-		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
-		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
+func (vls VmdLedState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.VmdLedState_name[int32(vls)]
+	if !ok {
+		return nil, errors.Errorf("invalid vmd led state %d", vls)
+	}
+	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
-// Uint32 returns uint32 representation of BIO device state.
-func (bs NvmeDevState) Uint32() uint32 {
-	return uint32(bs)
-}
+func (vls *VmdLedState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
 
-// NvmeDevStateFromString converts a status string into a state bitset.
-func NvmeDevStateFromString(status string) NvmeDevState {
-	cStr := C.CString(status)
-	defer C.free(unsafe.Pointer(cStr))
+	state, ok := ctlpb.VmdLedState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid vmd led state number parse %q", stateStr)
+		}
 
-	return NvmeDevState(C.nvme_str2state(cStr))
+		if _, ok = ctlpb.VmdLedState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid vmd led state name lookup %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*vls = VmdLedState(state)
 
+	return nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -181,7 +227,8 @@ type NvmeNamespace struct {
 type SmdDevice struct {
 	UUID        string       `json:"uuid"`
 	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState `json:"-"`
+	NvmeState   NvmeDevState `json:"dev_state"`
+	LedState    VmdLedState  `json:"led_state"`
 	Rank        system.Rank  `json:"rank"`
 	TotalBytes  uint64       `json:"total_bytes"`
 	AvailBytes  uint64       `json:"avail_bytes"`
@@ -190,47 +237,11 @@ type SmdDevice struct {
 	TrAddr      string       `json:"tr_addr"`
 }
 
-// MarshalJSON marshals SmdDevice to JSON.
-func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+func (sd *SmdDevice) String() string {
 	if sd == nil {
-		return nil, errors.New("tried to marshal nil SmdDevice")
+		return "<nil>"
 	}
-
-	// use a type alias to leverage the default marshal for
-	// most fields
-	type toJSON SmdDevice
-	return json.Marshal(&struct {
-		NvmeStateStr string `json:"dev_state"`
-		*toJSON
-	}{
-		NvmeStateStr: sd.NvmeState.String(),
-		toJSON:       (*toJSON)(sd),
-	})
-}
-
-// UnmarshalJSON unmarshals SmaDevice from JSON.
-func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-
-	// use a type alias to leverage the default unmarshal for
-	// most fields
-	type fromJSON SmdDevice
-	from := &struct {
-		NvmeStateStr string `json:"dev_state"`
-		*fromJSON
-	}{
-		fromJSON: (*fromJSON)(sd),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
-
-	return nil
+	return fmt.Sprintf("%+v", *sd)
 }
 
 // NvmeController represents a NVMe device controller which includes health

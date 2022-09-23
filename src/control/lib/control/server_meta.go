@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -41,17 +42,19 @@ type (
 	// operation.
 	SmdQueryReq struct {
 		unaryRequest
-		OmitDevices      bool                 `json:"omit_devices"`
-		OmitPools        bool                 `json:"omit_pools"`
-		IncludeBioHealth bool                 `json:"include_bio_health"`
-		SetFaulty        bool                 `json:"set_faulty"`
-		UUID             string               `json:"uuid"` // UUID of pool or device for single result
-		Rank             system.Rank          `json:"rank"`
-		Target           string               `json:"target"`
-		ReplaceUUID      string               `json:"replace_uuid"` // UUID of new device to replace storage
-		NoReint          bool                 `json:"no_reint"`     // for device replacement
-		Identify         bool                 `json:"identify"`     // for VMD LED device identification
-		StateMask        storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
+		OmitDevices      bool        `json:"omit_devices"`
+		OmitPools        bool        `json:"omit_pools"`
+		IncludeBioHealth bool        `json:"include_bio_health"`
+		SetFaulty        bool        `json:"set_faulty"`
+		UUID             string      `json:"uuid"`
+		Rank             system.Rank `json:"rank"`
+		Target           string      `json:"target"`
+		ReplaceUUID      string      `json:"replace_uuid"` // UUID of new device to replace storage
+		NoReint          bool        `json:"no_reint"`     // for device replacement
+		Identify         bool        `json:"identify"`     // for VMD LED device identification
+		ResetLED         bool        `json:"reset_led"`    // for resetting VMD LED, debug only
+		GetLED           bool        `json:"get_led"`      // get LED state of VMD devices
+		FaultyDevsOnly   bool        `json:"-"`            // only show faulty devices
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -72,7 +75,11 @@ func (si *SmdInfo) addRankPools(rank system.Rank, pools []*SmdPool) {
 	}
 }
 
-func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
+func (si *SmdInfo) String() string {
+	return fmt.Sprintf("[Devices: %v, Pools: %v]", si.Devices, si.Pools)
+}
+
+func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse, faultyOnly bool) error {
 	pbResp, ok := hr.Message.(*ctlpb.SmdQueryResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -86,21 +93,32 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 	for _, rResp := range pbResp.GetRanks() {
 		rank := system.Rank(rResp.Rank)
 
-		rDevices := make([]*storage.SmdDevice, len(rResp.GetDevices()))
-		if err = convert.Types(rResp.GetDevices(), &rDevices); err != nil {
-			return
-		}
-		for _, dev := range rDevices {
-			dev.Rank = rank
-			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, dev)
+		for _, pbDev := range rResp.GetDevices() {
+			if faultyOnly && (pbDev.Details.DevState != ctlpb.NvmeDevState_EVICTED) {
+				continue
+			}
+
+			sd := new(storage.SmdDevice)
+			if err := convert.Types(pbDev.Details, sd); err != nil {
+				return errors.Wrapf(err, "converting %T to %T", pbDev.Details, sd)
+			}
+			sd.Rank = rank
+
+			if pbDev.Health != nil {
+				sd.Health = new(storage.NvmeHealth)
+				if err := convert.Types(pbDev.Health, sd.Health); err != nil {
+					return errors.Wrapf(err, "converting %T to %T", pbDev.Health, sd.Health)
+				}
+			}
+
+			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, sd)
 		}
 
 		rPools := make([]*SmdPool, len(rResp.GetPools()))
-		if err = convert.Types(rResp.GetPools(), &rPools); err != nil {
-			return
+		if err := convert.Types(rResp.GetPools(), &rPools); err != nil {
+			return errors.Wrapf(err, "converting %T to %T", rResp.Pools, &rPools)
 		}
 		hs.SmdInfo.addRankPools(rank, rPools)
-
 	}
 
 	if sqr.HostStorage == nil {
@@ -110,7 +128,7 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 		return err
 	}
 
-	return
+	return nil
 }
 
 // SmdQuery concurrently performs per-server metadata operations across all
@@ -124,7 +142,8 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if req.UUID != "" {
+	// Defer UUID validation until SmdQueryReq processing for LED requests.
+	if !req.Identify && !req.ResetLED && !req.GetLED && req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
 			return nil, errors.Wrap(err, "bad device UUID")
 		}
@@ -167,7 +186,7 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 			continue
 		}
 
-		if err := sqr.addHostResponse(hostResp); err != nil {
+		if err := sqr.addHostResponse(hostResp, req.FaultyDevsOnly); err != nil {
 			return nil, err
 		}
 	}
