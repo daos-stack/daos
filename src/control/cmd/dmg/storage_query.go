@@ -89,7 +89,7 @@ func (cmd *devHealthQueryCmd) Execute(_ []string) error {
 		OmitPools:        true,
 		IncludeBioHealth: true,
 		Rank:             system.NilRank,
-		UUID:             cmd.UUID,
+		IDs:              cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req)
 }
@@ -126,7 +126,7 @@ func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 		OmitPools:        true,
 		IncludeBioHealth: cmd.Health,
 		Rank:             cmd.GetRank(),
-		UUID:             cmd.UUID,
+		IDs:              cmd.UUID,
 		FaultyDevsOnly:   cmd.EvictedOnly,
 	}
 	return cmd.makeRequest(ctx, req)
@@ -144,7 +144,7 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		OmitDevices: true,
 		Rank:        cmd.GetRank(),
-		UUID:        cmd.UUID,
+		IDs:         cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req, pretty.PrintWithVerboseOutput(cmd.Verbose))
 }
@@ -202,17 +202,14 @@ type nvmeSetFaultyCmd struct {
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	cmd.Notice("This command will permanently mark the device as unusable!")
-	if !cmd.Force {
-		if cmd.jsonOutputEnabled() {
-			return errors.New("Cannot use --json without --force")
-		}
+	if !cmd.Force && !cmd.jsonOutputEnabled() {
 		if !common.GetConsent(cmd.Logger) {
 			return errors.New("consent not given")
 		}
 	}
 
 	req := &control.SmdQueryReq{
-		UUID:      cmd.UUID,
+		IDs:       cmd.UUID,
 		SetFaulty: true,
 		OmitPools: true,
 	}
@@ -241,11 +238,11 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 	// TODO: Implement no-reint flag option
 	if cmd.NoReint {
-		cmd.Info("NoReint is not currently implemented")
+		return errors.New("NoReint is not currently implemented")
 	}
 
 	req := &control.SmdQueryReq{
-		UUID:        cmd.OldDevUUID,
+		IDs:         cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 		NoReint:     cmd.NoReint,
 		OmitPools:   true,
@@ -271,7 +268,7 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
 	req := &control.SmdQueryReq{
-		UUID:      cmd.Args.IDs,
+		IDs:       cmd.Args.IDs,
 		OmitPools: true,
 	}
 	if cmd.Reset {
@@ -294,7 +291,7 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
 	req := &control.SmdQueryReq{
-		UUID:      cmd.Args.IDs,
+		IDs:       cmd.Args.IDs,
 		GetLED:    true,
 		OmitPools: true,
 	}

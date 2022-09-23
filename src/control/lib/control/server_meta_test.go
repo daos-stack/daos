@@ -105,7 +105,7 @@ func TestControl_SmdQuery(t *testing.T) {
 		},
 		"invalid UUID": {
 			req: &SmdQueryReq{
-				UUID: "bad",
+				IDs: "bad",
 			},
 			expErr: errors.New("invalid UUID"),
 		},

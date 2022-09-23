@@ -46,7 +46,7 @@ type (
 		OmitPools        bool        `json:"omit_pools"`
 		IncludeBioHealth bool        `json:"include_bio_health"`
 		SetFaulty        bool        `json:"set_faulty"`
-		UUID             string      `json:"uuid"`
+		IDs              string      `json:"uuid"` // comma separated list of IDs
 		Rank             system.Rank `json:"rank"`
 		Target           string      `json:"target"`
 		ReplaceUUID      string      `json:"replace_uuid"` // UUID of new device to replace storage
@@ -143,8 +143,9 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 		return nil, errors.New("nil request")
 	}
 	// Defer UUID validation until SmdQueryReq processing for LED requests.
-	if !req.Identify && !req.ResetLED && !req.GetLED && req.UUID != "" {
-		if err := checkUUID(req.UUID); err != nil {
+	if req.IDs != "" && !req.Identify && !req.ResetLED && !req.GetLED {
+		// In cases other than LED requests, UUID is expected.
+		if err := checkUUID(req.IDs); err != nil {
 			return nil, errors.Wrap(err, "bad device UUID")
 		}
 	}

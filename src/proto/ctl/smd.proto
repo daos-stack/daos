@@ -144,7 +144,6 @@ message DevReplaceReq {
 }
 
 message DevReplaceResp {
-	reserved 3, 5;
 	int32 status = 1; // DAOS error code
 	SmdDevice device = 2; // Details of new (hot-plugged) blobstore/device
 }

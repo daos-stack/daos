@@ -265,7 +265,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
 		if err != nil {
-			// Log the error if it indicaes non-existent health and the SMD entity has
+			// Log the error if it indicates non-existent health and the SMD entity has
 			// an abnormal state. Otherwise it is expected that health may be missing.
 			status, ok := errors.Cause(err).(daos.Status)
 			if ok && status == daos.Nonexistent && smdDev.NvmeState != storage.NvmeStateNormal {

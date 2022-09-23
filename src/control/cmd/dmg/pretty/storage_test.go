@@ -1557,7 +1557,7 @@ host1
 		},
 		"identify led": {
 			req: &control.SmdQueryReq{
-				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				Identify:  true,
 				OmitPools: true,
 			},
@@ -1588,7 +1588,7 @@ host1
 		},
 		"identify led; transport address specified": {
 			req: &control.SmdQueryReq{
-				UUID:      "0000:8a:00.0",
+				IDs:       "0000:8a:00.0",
 				Identify:  true,
 				OmitPools: true,
 			},
