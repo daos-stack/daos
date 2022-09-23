@@ -279,8 +279,7 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/daos_dfuse_samir
 $
 ```
 
-#### 2> Add dfuse entry in /etc/fstab and mount as part of "mount -a" command.
-
+#### 2> Use dfuse entry in /etc/fstab to mount the container.
 
 ```bash
 $  dmg -o /home/samirrav/scripts/EC_Demo/test_daos_dmg.yaml pool create --scm-size=8G --nvme-size=64G --label=admin_pool
