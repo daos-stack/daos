@@ -753,41 +753,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Coverity on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: 'daos-stack/daos',
-                                   parallel_build: parallelBuild()
-                    }
-                    post {
-                        success {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Coverity on EL 8')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
