@@ -11,7 +11,8 @@ from re import findall
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import run_pcmd, get_avocado_config_value
+from general_utils import get_avocado_config_value
+from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
@@ -48,22 +49,17 @@ class HarnessAdvancedTest(TestWithServers):
         ranks = self.server_managers[0].get_host_ranks(host)
         self.log.info("Obtaining pid of the daos_engine process on %s (rank %s)", host, ranks)
         pid = None
-        result = run_pcmd(host, "pgrep --list-full daos_engine", 20)
-        index = 0
-        while not pid and index < len(result):
-            output = "\n".join(result[index]["stdout"])
-            match = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", output)
-            if match:
-                pid = match[0]
-            index += 1
+        result = run_remote(self.log, host, "pgrep --list-full daos_engine", timeout=20)
+        if not result.passed:
+            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
+        pid = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", "\n".join(result.output[0].stdout))[0]
         if pid is None:
             self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
         self.log.info("Found pid %s", pid)
 
         # Send a signal 6 to its daos_engine process
         self.log.info("Sending a signal 6 to %s", pid)
-        result = run_pcmd(host, "sudo kill -6 {}".format(pid))
-        if len(result) > 1 or result[0]["exit_status"] != 0:
+        if not run_remote(self.log, host, "sudo -n kill -6 {}".format(pid)).passed:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
 
         # Simplify resolving the host name to rank by marking all ranks as
@@ -173,9 +169,15 @@ class HarnessAdvancedTest(TestWithServers):
             os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
             os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),
         ]
-        run_pcmd(host, "sudo mkdir -p {}".format(failure_trigger_dir))
+        if not run_remote(self.log, host, "sudo mkdir -p {}".format(failure_trigger_dir)).passed:
+            self.fail("Error creating directory {}".format(failure_trigger_dir))
         for failure_trigger_file in failure_trigger_files:
-            run_pcmd(host, "sudo -n touch {}".format(failure_trigger_file))
+            if failure_trigger_file.startswith("/etc/"):
+                command = "sudo -n touch {}".format(failure_trigger_file)
+            else:
+                command = "sudo -n echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file)
+            if not run_remote(self.log, host, command).passed:
+                self.fail("Error creating file {}".format(failure_trigger_file))
 
     def test_launch_failures_hw(self):
         """Test to verify launch.py post processing error reporting.
