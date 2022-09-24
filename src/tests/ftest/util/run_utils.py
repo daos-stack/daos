@@ -138,7 +138,7 @@ def get_local_host():
     return gethostname().split(".")[0]
 
 
-def run_local(log, command, capture_output=True, timeout=None, check=False):
+def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
     """Run the command locally.
 
     Args:
@@ -150,6 +150,8 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
             Defaults to None.
         check (bool, optional): if set the method will raise an exception if the command does not
             yield a return code equal to zero. Defaults to False.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
 
     Raises:
         RunException: if the command fails: times out (timeout must be specified),
@@ -207,7 +209,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False):
         log.debug(str(error))
         raise RunException(message) from error
 
-    if capture_output:
+    if capture_output and verbose:
         # Log the output of the command
         log.debug("  %s (rc=%s):", local_host, result.returncode)
         if result.stdout:

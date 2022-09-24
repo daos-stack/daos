@@ -91,7 +91,7 @@ class CoreFileProcessing():
                         continue
                     if os.path.splitext(core_name)[-1] == ".bz2":
                         # Decompress the file
-                        command = f"lbzip2 -d -v {os.path.join(core_dir, core_name)}"
+                        command = ["lbzip2", "-d", "-v", os.path.join(core_dir, core_name)]
                         run_local(self.log, command)
                         core_name = os.path.splitext(core_name)[0]
                     self._create_stacktrace(core_dir, core_name)
@@ -139,7 +139,7 @@ class CoreFileProcessing():
             raise RunException(f"Error obtaining the exe name from {core_name}") from error
 
         try:
-            output = run_local(self.log, command, check=False)
+            output = run_local(self.log, command, check=False, verbose=False)
             with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
                 stack_trace.writelines(output.stdout)
 
@@ -164,9 +164,11 @@ class CoreFileProcessing():
         """
         self.log.debug("Extracting the executable name from %s", core_file)
         command = ["gdb", "-c", core_file, "-ex", "info proc exe", "-ex", "quit"]
-        result = run_local(self.log, command)
+        result = run_local(self.log, command, verbose=False)
         last_line = result.stdout.splitlines()[-1]
+        self.log.debug("  last line:       %s", last_line)
         cmd = last_line[7:-1]
+        self.log.debug("  last_line[7:-1]: %s", cmd)
         # assume there are no arguments on cmd
         find_char = "'"
         if cmd.find(" ") > -1:
@@ -190,6 +192,7 @@ class CoreFileProcessing():
             RunException: if there is an error installing debuginfo packages
 
         """
+        self.log.info("Installing debuginfo packages for stacktrace creation")
         install_pkgs = [{'name': 'gdb'}]
         if self.is_el():
             install_pkgs.append({'name': 'python3-debuginfo'})

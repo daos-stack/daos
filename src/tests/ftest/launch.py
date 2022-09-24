@@ -2352,9 +2352,9 @@ class Launch():
         logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
         logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
 
-        # Get a list of remote files and their sizes
-        return_code, files_found = self._list_files(hosts, source, pattern, depth)
-        if not files_found:
+        # List any remote files and their sizes and determine which hosts contain these files
+        return_code, file_hosts = self._list_files(hosts, source, pattern, depth)
+        if not file_hosts:
             # If no files are found then there is nothing else to do
             logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
             return return_code
@@ -2362,19 +2362,19 @@ class Launch():
         if "log" in pattern:
             # Report an error if any files sizes exceed the threshold
             if threshold is not None:
-                return_code |= self._check_log_size(hosts, source, pattern, depth, threshold)
+                return_code |= self._check_log_size(file_hosts, source, pattern, depth, threshold)
 
             # Run cart_logtest on log files
-            return_code |= self._cart_log_test(hosts, source, pattern, depth)
+            return_code |= self._cart_log_test(file_hosts, source, pattern, depth)
 
         # Remove any empty files
-        return_code |= self._remove_empty_files(hosts, source, pattern, depth)
+        return_code |= self._remove_empty_files(file_hosts, source, pattern, depth)
 
         # Compress any files larger than 1 MB
-        return_code |= self._compress_files(hosts, source, pattern, depth)
+        return_code |= self._compress_files(file_hosts, source, pattern, depth)
 
         # Move the test files to the test-results directory on this host
-        return_code |= self._move_files(hosts, source, pattern, destination, depth, timeout)
+        return_code |= self._move_files(file_hosts, source, pattern, destination, depth, timeout)
 
         if pattern == "core.*":
             # Process the core files
@@ -2416,9 +2416,11 @@ class Launch():
         Returns:
             tuple: a tuple containing:
                 int: 0 = success, 16 = failure
-                bool: True if files where found; False otherwise
+                NodeSet: hosts with at least one file matching the pattern in the source directory
 
         """
+        status = 0
+        hosts_with_files = NodeSet()
         source_files = os.path.join(source, pattern)
         logger.debug("-" * 80)
         logger.debug("Listing any %s files on %s", source_files, hosts)
@@ -2427,23 +2429,22 @@ class Launch():
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
             self._fail_test(self.result.tests[-1], "Process", message)
-            return 16, False
+            return 16, hosts_with_files
 
         for data in result.output:
-            # If a file is found containing the FAILURE_TRIGGER then report a failure. This feature
-            # can be used by avocado tests to verify that launch.py reports errors correctly in CI.
-            trigger_failure = re.findall(fr"{FAILURE_TRIGGER}", "\n".join(data.stdout))
-            if trigger_failure:
-                message = f"Error detected {trigger_failure[0]} failure trigger file"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 16, True
-
-            # Verify that at least one file was found that matches the pattern
             for line in data.stdout:
+                if FAILURE_TRIGGER in line:
+                    # If a file is found containing the FAILURE_TRIGGER then report a failure. This
+                    # feature can be used by avocado tests to verify that launch.py reports errors
+                    # correctly in CI.
+                    hosts_with_files.add(data.hosts)
+                    status = 16
+                    break
                 if source in line:
-                    return 0, True
+                    hosts_with_files.add(data.hosts)
+                    break
 
-        return 0, False
+        return status, hosts_with_files
 
     def _check_log_size(self, hosts, source, pattern, depth, threshold):
         """Check if any file sizes exceed the threshold.
@@ -2580,25 +2581,32 @@ class Launch():
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
-        sudo = "sudo -n " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
+
+        # Core and dump files require a file permission change before they can be copied
+        if "stacktrace" in destination or "daos_dumps" in destination:
+            other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", "chmod", "644"]
+            command = self.find_command(source, pattern, depth, other)
+            if not run_remote(logger, hosts, command).passed:
+                message = f"Error changing {os.path.join(source, pattern)} file permissions"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return 16
 
         # Create a temporary remote directory
-        command = f"{sudo}mkdir -p {tmp_copy_dir}"
+        command = f"sudo -n mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
-        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo}mv '{{}}' {tmp_copy_dir}/"
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' sudo -n mv '{{}}' {tmp_copy_dir}/"
         if not run_remote(logger, hosts, self.find_command(source, pattern, depth, other)).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-w", str(hosts), "-v", "-B", "-S", "--rcopy", tmp_copy_dir, "--dest",
-                   rcopy_dest]
+        command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
             run_local(logger, command, check=True, timeout=timeout)
@@ -2610,7 +2618,7 @@ class Launch():
 
         finally:
             # Remove the temporary remote directory on each host
-            command = f"{sudo}rm -fr {tmp_copy_dir}"
+            command = f"sudo -n rm -fr {tmp_copy_dir}"
             if not run_remote(logger, hosts, command).passed:
                 message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
                 self._fail_test(self.result.tests[-1], "Process", message)

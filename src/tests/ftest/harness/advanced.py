@@ -45,13 +45,14 @@ class HarnessAdvancedTest(TestWithServers):
         """
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
-        self.log.info("Obtaining pid of the daos_engine process on %s", host)
+        ranks = self.server_managers[0].get_host_ranks(host)
+        self.log.info("Obtaining pid of the daos_engine process on %s (rank %s)", host, ranks)
         pid = None
         result = run_pcmd(host, "pgrep --list-full daos_engine", 20)
         index = 0
         while not pid and index < len(result):
             output = "\n".join(result[index]["stdout"])
-            match = findall(r"(\d+)\s+[A-Za-z0-9/]+", output)
+            match = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", output)
             if match:
                 pid = match[0]
             index += 1
@@ -65,12 +66,24 @@ class HarnessAdvancedTest(TestWithServers):
         if len(result) > 1 or result[0]["exit_status"] != 0:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
 
-        # Display the journalctl log for the process that was sent the signal
-        self.server_managers[0].manager.dump_logs(host)
-
         # Simplify resolving the host name to rank by marking all ranks as
         # expected to be either running or errored (sent a signal 6)
-        self.server_managers[0].update_expected_states(None, ["Joined", "Errored"])
+        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored"])
+
+        # Wait for the engine to create the core file
+        ranks = self.server_managers[0].get_host_ranks(host)
+        state = ["errored"]
+        try:
+            self.log.info(
+                "Waiting for the engine on %s (rank %s) to move to the %s state",
+                host, ranks, state)
+            if self.server_managers[0].check_rank_state(ranks, state, 25):
+                self.fail("Rank {} state not {} after sending signal 6".format(ranks, state))
+        finally:
+            # Display the journalctl log for the process that was sent the signal
+            self.server_managers[0].manager.dump_logs(host)
+
+        self.log.info("Test passed")
 
     def test_core_files_hw(self):
         """Test to verify core file creation.
