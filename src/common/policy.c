@@ -107,7 +107,7 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 		/* tokenize left and right items of "name=value" */
 		str2 = tok;
 
-		for (int j = 0; ; j++, str2 = NULL) {
+		for ( ; ; str2 = NULL) {
 			tok = strtok_r(str2, delim2, &saveptr2);
 			if (tok == NULL)
 				break;
