@@ -1184,7 +1184,7 @@ type SmdQueryReq struct {
 	ReplaceUuid      string `protobuf:"bytes,12,opt,name=replace_uuid,json=replaceUuid,proto3" json:"replace_uuid,omitempty"`                  // UUID of new device to replace storage with
 	ResetLed         bool   `protobuf:"varint,13,opt,name=reset_led,json=resetLed,proto3" json:"reset_led,omitempty"`                          // for resetting VMD LED, debug only
 	GetLed           bool   `protobuf:"varint,14,opt,name=get_led,json=getLed,proto3" json:"get_led,omitempty"`                                // get LED state of VMD devices
-	TrAddr           string `protobuf:"bytes,15,opt,name=tr_addr,json=trAddr,proto3" json:"tr_addr,omitempty"`                                 // constrain query to this PCI address (device only)
+	TrAddr           string `protobuf:"bytes,15,opt,name=tr_addr,json=trAddr,proto3" json:"tr_addr,omitempty"`                                 // constrain query to this transport (PCI) address (device only)
 }
 
 func (x *SmdQueryReq) Reset() {

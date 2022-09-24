@@ -163,7 +163,7 @@ message SmdQueryReq {
 	string replace_uuid = 12; // UUID of new device to replace storage with
 	bool reset_led = 13; // for resetting VMD LED, debug only
 	bool get_led = 14; // get LED state of VMD devices
-	string tr_addr = 15; // constrain query to this PCI address (device only)
+	string tr_addr = 15; // constrain query to this transport (PCI) address (device only)
 }
 
 message SmdQueryResp {

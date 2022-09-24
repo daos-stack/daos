@@ -426,7 +426,7 @@ struct  _Ctl__SmdQueryReq
    */
   protobuf_c_boolean get_led;
   /*
-   * constrain query to this PCI address (device only)
+   * constrain query to this transport (PCI) address (device only)
    */
   char *tr_addr;
 };
