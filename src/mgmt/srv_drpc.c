@@ -2228,7 +2228,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__DevManageReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
-	uint8_t			*body;
+	uint8_t			*body = NULL;
 	uuid_t			 dev_uuid;
 	int			 rc = 0;
 
@@ -2279,7 +2279,7 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__DevManageReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
-	uint8_t			*body;
+	uint8_t			*body = NULL;
 	int			 rc = 0;
 
 	req = ctl__dev_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
