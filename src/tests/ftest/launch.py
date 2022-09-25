@@ -1076,7 +1076,6 @@ class Launch():
         """
         # When running manually save the previous log if one exists
         old_launch_log_dir = None
-        print(f"self.logdir: {self.logdir}")
         if os.path.exists(self.logdir):
             old_launch_log_dir = "_".join([self.logdir, "old"])
             if os.path.exists(old_launch_log_dir):
@@ -1980,8 +1979,8 @@ class Launch():
             for test in self.tests:
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
-                logger.info(
-                    "Log file for repetition %s of running %s: %s", repeat, test, test_log_file)
+                logger.info("-" * 80)
+                logger.info("Log file for repetition %s of %s: %s", repeat, test, test_log_file)
                 test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
                 logger.addHandler(test_file_handler)
 
@@ -2015,6 +2014,9 @@ class Launch():
 
                 # Mark the end of the processing of this test
                 test_result.end()
+
+                # Display disk usage after the test is complete
+                self.display_disk_space(self.logdir)
 
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)

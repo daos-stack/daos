@@ -217,6 +217,8 @@ fi
 # shellcheck disable=SC2086
 export WITH_VALGRIND
 export STAGE_NAME
+export TEST_RPMS
+export DAOS_BASE
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
