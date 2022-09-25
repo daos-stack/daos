@@ -14,6 +14,7 @@ from general_utils import report_errors, run_pcmd
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from network_utils import update_network_interface
+from dmg_utils import check_system_query_status
 
 
 class NetworkFailureTest(IorTestBase):
@@ -114,7 +115,8 @@ class NetworkFailureTest(IorTestBase):
 
         return {result["stdout"][0]: NodeSet(str(result["hosts"])) for result in results}
 
-    def create_host_to_ranks(self, ip_to_host, system_query_members):
+    @staticmethod
+    def create_host_to_ranks(ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
         Args:
