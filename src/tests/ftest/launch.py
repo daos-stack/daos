@@ -193,6 +193,43 @@ def get_test_category(test_file):
     return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
+def find_pci_address(value):
+    """Find PCI addresses in the specified string.
+
+    Args:
+        value (str): string to search for PCI addresses
+
+    Returns:
+        list: a list of all the PCI addresses found in the string
+
+    """
+    digit = "0-9a-fA-F"
+    pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
+    return re.findall(pattern, str(value))
+
+
+def find_command(source, pattern, depth, other=None):
+    """Get the find command.
+
+    Args:
+        source (str): where the files are currently located
+        pattern (str): pattern used to limit which files are processed
+        depth (int): max depth for find command
+        other (object, optional): other commands, as a list or str, to include at the end of the
+            base find command. Defaults to None.
+
+    Returns:
+        str: the find command
+
+    """
+    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    if isinstance(other, list):
+        command.extend(other)
+    elif isinstance(other, str):
+        command.append(other)
+    return " ".join(command)
+
+
 class AvocadoInfo():
     """Information about this version of avocado."""
 
@@ -272,7 +309,7 @@ class AvocadoInfo():
             except IOError as error:
                 raise LaunchException(f"Error writing avocado config file {config_file}") from error
 
-        # Create the avocado sysinfo files file. If one exists do not overwrite it.
+        # Create the avocado system info files file. If one exists do not overwrite it.
         if not os.path.exists(sysinfo_files_file) or overwrite:
             try:
                 with open(sysinfo_files_file, "w", encoding="utf-8") as sysinfo_files_handle:
@@ -281,7 +318,7 @@ class AvocadoInfo():
                 raise LaunchException(
                     f"Error writing avocado config file {sysinfo_files_file}") from error
 
-        # Create the avocado sysinfo commands file. If one exists do not overwrite it.
+        # Create the avocado system info commands file. If one exists do not overwrite it.
         if not os.path.exists(sysinfo_commands_file) or overwrite:
             try:
                 with open(sysinfo_commands_file, "w", encoding="utf-8") as sysinfo_commands_handle:
@@ -1522,7 +1559,7 @@ class Launch():
             raise LaunchException("Error: Non-homogeneous {device_type} PCI addresses.")
 
         # Get the devices from the successful, homogeneous command output
-        return self._find_pci_address("\n".join(found_devices))
+        return find_pci_address("\n".join(found_devices))
 
     def _get_vmd_address_backed_nvme(self, hosts, vmd_disks, vmd_controllers):
         """Find valid VMD address which has backing NVMe.
@@ -1575,21 +1612,6 @@ class Launch():
             raise LaunchException("Error: Non-homogeneous NVMe device behind VMD addresses.")
 
         return disk_controllers
-
-    @staticmethod
-    def _find_pci_address(value):
-        """Find PCI addresses in the specified string.
-
-        Args:
-            value (str): string to search for PCI addresses
-
-        Returns:
-            list: a list of all the PCI addresses found in the string
-
-        """
-        digit = "0-9a-fA-F"
-        pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
-        return re.findall(pattern, str(value))
 
     def list_tests(self, tags):
         """List the test files matching the tags.
@@ -2471,28 +2493,6 @@ class Launch():
 
         return return_code
 
-    @staticmethod
-    def find_command(source, pattern, depth, other=None):
-        """Get the find command.
-
-        Args:
-            source (str): where the files are currently located
-            pattern (str): pattern used to limit which files are processed
-            depth (int): max depth for find command
-            other (object, optional): other commands, as a list or str, to include at the end of the
-                base find command. Defaults to None.
-
-        Returns:
-            str: the find command
-
-        """
-        command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
-        if isinstance(other, list):
-            command.extend(other)
-        elif isinstance(other, str):
-            command.append(other)
-        return " ".join(command)
-
     def _list_files(self, hosts, source, pattern, depth):
         """List the files in source with that match the pattern.
 
@@ -2514,7 +2514,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Listing any %s files on %s", source_files, hosts)
         other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
-        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
+        result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2562,7 +2562,7 @@ class Launch():
         logger.debug(
             "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
         other = ["-size", f"+{threshold}", "-printf", "'%p %k KB'"]
-        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
+        result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2598,8 +2598,7 @@ class Launch():
         sudo = "sudo -n " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{sudo}{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
-        if not result.passed:
+        if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2621,8 +2620,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
         other = ["-empty", "-print", "-delete"]
-        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
-        if not result.passed:
+        if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
@@ -2645,7 +2643,7 @@ class Launch():
         logger.debug(
             "Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
         other = ["-size", "+1M", "-print0", "|", "sudo", "xargs", "-0", "-r0", "lbzip2", "-v"]
-        result = run_remote(logger, hosts, self.find_command(source, pattern, depth, other))
+        result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2682,8 +2680,7 @@ class Launch():
         # Core and dump files require a file permission change before they can be copied
         if "stacktrace" in destination or "daos_dumps" in destination:
             other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", "chmod", "644"]
-            command = self.find_command(source, pattern, depth, other)
-            if not run_remote(logger, hosts, command).passed:
+            if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
                 message = f"Error changing {os.path.join(source, pattern)} file permissions"
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return 16
@@ -2697,7 +2694,7 @@ class Launch():
 
         # Move all the source files matching the pattern into the temporary remote directory
         other = f"-print0 | xargs -0 -r0 -I '{{}}' sudo -n mv '{{}}' {tmp_copy_dir}/"
-        if not run_remote(logger, hosts, self.find_command(source, pattern, depth, other)).passed:
+        if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
