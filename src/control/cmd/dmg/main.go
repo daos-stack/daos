@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -24,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -151,7 +151,7 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool           `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string         `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	HostList       ui.HostSetFlag `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
 	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
 	LogFile        string         `long:"log-file" description:"Log command output to the specified file"`
@@ -278,9 +278,9 @@ and access control settings, along with system wide operations.`
 			ctlCmd.setInvoker(invoker)
 		}
 
-		if opts.HostList != "" {
+		if !opts.HostList.Empty() {
 			if hlCmd, ok := cmd.(hostListSetter); ok {
-				hl := strings.Split(opts.HostList, ",")
+				hl := opts.HostList.Slice()
 				hlCmd.setHostList(hl)
 				ctlCfg.HostList = hl
 			} else {

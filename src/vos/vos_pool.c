@@ -1064,3 +1064,23 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 
 	return 0;
 }
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return NULL;
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+		return NULL;
+
+	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));
+}

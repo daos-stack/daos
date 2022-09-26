@@ -291,6 +291,7 @@ openmpi
 orterun
 os
 outdata
+outputdir
 params
 patchelf
 pci

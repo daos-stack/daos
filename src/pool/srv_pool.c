@@ -1450,11 +1450,11 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	int			rc = 0;
 
 	if (pool_disable_exclude) {
-		D_DEBUG(DB_REBUILD, DF_UUID" disable swim exclude.\n",
-			DP_UUID(svc->ps_uuid));
+		D_DEBUG(DB_MD, DF_UUID": skip: exclusion disabled\n", DP_UUID(svc->ps_uuid));
 		return 0;
 	}
 
+	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
 				       &doms);
@@ -1496,6 +1496,15 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	return rc;
 }
 
+/*
+ * Log a NOTE of as well as print a message. Arguments may be evaluated more
+ * than once.
+ */
+#define DS_POOL_NOTE_PRINT(fmt, ...) do {							\
+	D_NOTE(fmt, ## __VA_ARGS__);								\
+	D_PRINT(fmt, ## __VA_ARGS__);								\
+} while (0)
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -1507,7 +1516,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	d_rank_t		rank;
+	d_rank_t		rank = dss_self_rank();
 	int			rc;
 
 	/*
@@ -1570,10 +1579,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	D_PRINT(DF_UUID": pool/cont hdl uuid "DF_UUID"/"DF_UUID"\n",
-		DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl_uuid),
-		DP_UUID(cont_hdl_uuid));
-
 	/* resume pool upgrade if needed */
 	rc = ds_pool_upgrade_if_needed(svc->ps_uuid, NULL, svc, NULL);
 	if (rc != 0)
@@ -1583,10 +1588,9 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	D_PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
-		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
+	DS_POOL_NOTE_PRINT(DF_UUID": rank %u became pool service leader "DF_U64": srv_pool_hdl="
+			   DF_UUID" srv_cont_hdl="DF_UUID"\n", DP_UUID(svc->ps_uuid), rank,
+			   svc->ps_rsvc.s_term, DP_UUID(pool_hdl_uuid), DP_UUID(cont_hdl_uuid));
 out:
 	if (rc != 0) {
 		if (events_initialized)
@@ -1611,8 +1615,7 @@ static void
 pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
-	d_rank_t		rank;
-	int			rc;
+	d_rank_t		rank = dss_self_rank();
 
 	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 
@@ -1620,10 +1623,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
 
-	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	D_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
-		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
+	DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
+			   DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 }
 
 static void

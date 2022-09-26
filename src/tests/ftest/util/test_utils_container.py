@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
 from logging import getLogger
 from time import time
 
@@ -268,6 +269,7 @@ class TestContainer(TestDaosApiBase):
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
+        self.label = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -329,14 +331,19 @@ class TestContainer(TestDaosApiBase):
                 kwargs["con_uuid"] = uuid
 
             # Refer daos_api for setting input params for DaosContainer.
+            cop = self.input_params.get_con_create_params()
             if con_in is not None:
-                cop = self.input_params.get_con_create_params()
                 cop.type = con_in[0]
                 cop.enable_chksum = con_in[1]
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
-                kwargs["con_prop"] = cop
+                cop.rf_lvl = con_in[5]
+            else:
+                # Default to RANK fault domain (rf_lvl:1) when not specified
+                cop.rf_lvl = ctypes.c_uint64(1)
+
+            kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
 
@@ -355,15 +362,14 @@ class TestContainer(TestDaosApiBase):
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": acl_file,
+                "label": self.label.value
             }
 
             self._log_method("daos.container_create", kwargs)
             try:
-                uuid = self.daos.container_create(
-                    **kwargs)["response"]["container_uuid"]
+                uuid = self.daos.container_create(**kwargs)["response"]["container_uuid"]
             except KeyError as error:
-                raise CommandFailure(
-                    "Error: Unexpected daos container create output") from error
+                raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
