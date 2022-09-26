@@ -31,6 +31,7 @@ import stack_analyzer
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
+        print("Getting version")
         return version_file.read().rstrip()
 
 API_VERSION_MAJOR = "2"
