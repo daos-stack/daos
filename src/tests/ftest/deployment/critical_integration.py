@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -100,7 +99,10 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
             all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
-        same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
+        if len(all_nodes) == 1:
+            same_libfab_nodes = 1
+        else:
+            same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
         libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
 
         result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
@@ -155,7 +157,7 @@ class CriticalIntegrationWithServers(TestWithServers):
             # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
-                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                if (not (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
                         self.server_managers[0].check_rank_state(rank, "excluded", 5))):
                     self.fail("Rank {} failed to stop".format(rank))
             # restart stopped ranks and verify if they are joined

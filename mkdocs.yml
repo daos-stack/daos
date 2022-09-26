@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.1 - dev
+site_name: DAOS v2.2
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -59,11 +59,12 @@ nav:
         - 'Community Wiki': 'https://wiki.daos.io/'
         - 'Community Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
+        - 'DAOS in the Cloud': 'cloud/index.md'
         - 'Issue tracker': 'https://jira.daos.io/'
     - Release Information:
         - 'Release Notes v2.2': 'release/release_notes.md'
         - 'Support Matrix v2.2': 'release/support_matrix.md'
-        - 'Upgrading to v2.2': 'release/upgrading.md'
+        - 'Updating to v2.2': 'release/updating.md'
         - 'Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Overview:
         - 'Architecture': 'overview/architecture.md'
@@ -78,6 +79,7 @@ nav:
         - 'RHEL and clones': 'QSG/setup_rhel.md'
         - 'SUSE': 'QSG/setup_suse.md'
         - 'DAOS in Docker': 'QSG/docker.md'
+        - 'DAOS in the Cloud': 'QSG/cloud.md'
         - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:

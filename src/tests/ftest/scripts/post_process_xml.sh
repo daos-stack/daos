@@ -58,14 +58,20 @@ for file in "${FILES[@]}"; do
 
         if ! grep "<testcase classname" "$file" >/dev/null; then
             if ! SUITE=$(grep "testsuite " "$file" | \
-                grep -Po "name=\"\K.*(?=\" time=)"); then
+                grep -Po "name=\"\K.*(?=\" time=)" | uniq); then
                 echo "Failed to process XML $file. Cannot determine SUITE."
             else
-                sed -i \
-                "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
+                for suite_name in ${SUITE}; do
+                    sed -i \
+                    "s/case name/case classname=\"${COMP}.${suite_name}\" name/" "$file"
+                done
             fi
         else
             sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
+        fi
+        if grep "<testsuites>" "$file" >/dev/null; then
+            sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
+            echo "</testsuites>" >> "$file"
         fi
     fi
 done

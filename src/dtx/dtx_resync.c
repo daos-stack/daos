@@ -407,9 +407,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
 
-		if (mbs->dm_dte_flags & DTE_LEADER)
-			goto commit;
-
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
@@ -504,29 +501,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_ORPHAN)
 		return 0;
 
-	if (dra->resync_all) {
-		/* For open container. */
-		if (ent->ie_dtx_flags & DTE_LEADER) {
-			/* Leader: handle the DTX that happened before current DTX resync. */
-			if (ent->ie_epoch < dra->epoch)
-				return 0;
-		} else {
-			/* Non-leader: handle the DTX with old version. */
-			if (ent->ie_dtx_ver >= dra->resync_version)
-				return 0;
-		}
-	} else {
-		/* For pool map refresh. */
-		/* Leader: do nothing. */
-		if (ent->ie_dtx_flags & DTE_LEADER)
-			return 0;
-
-		/* Non-leader: handle the DTX with old version. */
-		if (ent->ie_dtx_ver >= dra->resync_version)
-			return 0;
-	}
-
-	/* The entry to be discarded. */
+	/* The entry to be discarded, in spite of it is the (old) leader or not. */
 	if (ent->ie_dtx_ver < dra->discard_version) {
 		D_ALLOC_PTR(dre);
 		if (dre == NULL)
@@ -536,12 +511,20 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		goto out;
 	}
 
-	/* For discard case, skip new added entry. */
+	/* Current DTX resync is only for discarding old DTX entries. */
 	if (dra->resync_version == dra->discard_version)
 		return 0;
 
-	/* For non-discard case, skip unprepared entry. */
+	/* Skip unprepared entry which version is at least not older than discard version. */
 	if (ent->ie_dtx_tgt_cnt == 0)
+		return 0;
+
+	/*
+	 * Current DTX resync may be shared by pool map refresh and container open. If it is
+	 * sponsored by pool map refresh, then it is possible that resync version is smaller
+	 * than some DTX entries that also need to be resynced. So here, we only trust epoch.
+	 */
+	if (ent->ie_epoch > dra->epoch)
 		return 0;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
@@ -656,6 +639,19 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
+	/*
+	 * Trigger DTX reindex. That will avoid DTX_CHECK from others being blocked.
+	 * It is harmless even if (committed) DTX entries have already been re-indexed.
+	 */
+	if (!dtx_cont_opened(cont)) {
+		rc = start_dtx_reindex_ult(cont);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": Failed to trigger DTX reindex, ver %u/%u: "DF_RC"\n",
+				DP_UUID(cont->sc_uuid), dra.discard_version, ver, DP_RC(rc));
+			goto fail;
+		}
+	}
+
 	D_INFO("Start DTX resync scan for "DF_UUID"/"DF_UUID" with version %u\n",
 	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
@@ -674,12 +670,16 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_INFO("Stop DTX resync scan for "DF_UUID"/"DF_UUID" with version %u: rc = %d\n",
 	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
+fail:
 	ABT_mutex_lock(cont->sc_mutex);
 	cont->sc_dtx_resyncing = 0;
 	ABT_cond_broadcast(cont->sc_dtx_resync_cond);
 	ABT_mutex_unlock(cont->sc_mutex);
 
 out:
+	if (!dtx_cont_opened(cont))
+		stop_dtx_reindex_ult(cont);
+
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;
 }
