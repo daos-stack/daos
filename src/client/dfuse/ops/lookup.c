@@ -127,9 +127,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (fi_out) {
 		/* Now set the value of keep_cache, this is for creat where we need to do the hash
 		 * table lookup before setting this value.
-		 *
-		 * TODO: Is there a bug where where ie_open_count is set before the lookup so may be
-		 * set wrong?
 		 */
 		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
 			fi_out->keep_cache = 1;

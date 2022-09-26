@@ -180,8 +180,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
 
-		/* keep_cache cannot be set here as ie is new, we need to search the hash table
-		 * for any existing inode before we can set it's value.
+		/* keep_cache cannot be set here as ie is new and create might be being called
+		 * to open an existing file so the check needs to happen in reply_create()
+		 * after the hash table lookup.
 		 */
 	} else {
 		fi_out.direct_io = 1;

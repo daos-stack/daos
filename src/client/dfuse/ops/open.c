@@ -108,7 +108,10 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
+	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
+
 	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
+		dfuse_cache_set_time(oh->doh_ie);
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	}
 

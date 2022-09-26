@@ -571,7 +571,7 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache update.
 	 * For directories this is the time of the most recent closedir for a handle which may
 	 * have populated the cache.
-	 * For files this is when the file was last written to.
+	 * For files this is when the file was last closed after been written to.
 	 */
 	struct timespec          ie_cache_last_update;
 
