@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from getpass import getuser
 import os
 from random import choice
 from re import findall
@@ -11,7 +12,7 @@ from re import findall
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import get_avocado_config_value
+from general_utils import get_avocado_config_value, get_primary_group
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
@@ -158,6 +159,7 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=test_launch_failures
         """
         host = NodeSet(choice(self.server_managers[0].hosts))
+        user = getuser()
         self.log.info("Creating launch.py failure trigger files on %s", host)
         failure_trigger = "00_trigger-launch-failure_00"
         failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
@@ -169,15 +171,27 @@ class HarnessAdvancedTest(TestWithServers):
             os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
             os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),
         ]
-        if not run_remote(self.log, host, "sudo mkdir -p {}".format(failure_trigger_dir)).passed:
-            self.fail("Error creating directory {}".format(failure_trigger_dir))
+        self.log.debug("Creating %s", failure_trigger_dir)
+        commands = [
+            "sudo -n mkdir -p {}".format(failure_trigger_dir),
+            "sudo -n chown -R {}:{} {}".format(user, get_primary_group(user), failure_trigger_dir),
+        ]
+        for command in commands:
+            if not run_remote(self.log, host, command, timeout=20).passed:
+                self.fail("Error creating directory {}".format(failure_trigger_dir))
+
         for failure_trigger_file in failure_trigger_files:
-            if failure_trigger_file[0:5] in ["/etc/", "/var/"]:
-                command = "sudo -n touch {}".format(failure_trigger_file)
-            else:
-                command = "sudo -n echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file)
-            if not run_remote(self.log, host, command).passed:
-                self.fail("Error creating file {}".format(failure_trigger_file))
+            self.log.debug("Creating %s", failure_trigger_file)
+            sudo_command = "" if failure_trigger_file.startswith(self.tmp) else "sudo -n "
+            commands = [
+                "{}touch {}".format(sudo_command, failure_trigger_file),
+                "{}chown -R {}:{} {}".format(
+                    sudo_command, user, get_primary_group(user), failure_trigger_file),
+                "echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file),
+            ]
+            for command in commands:
+                if not run_remote(self.log, host, command, timeout=20).passed:
+                    self.fail("Error creating file {}".format(failure_trigger_file))
 
     def test_launch_failures_hw(self):
         """Test to verify launch.py post processing error reporting.

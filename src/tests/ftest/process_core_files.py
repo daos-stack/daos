@@ -281,7 +281,7 @@ class CoreFileProcessing():
                     break
 
     def is_el(self):
-        """Determine if the distro EL based.
+        """Determine if the distro is EL based.
 
         Args:
             distro (str): distribution to verify
