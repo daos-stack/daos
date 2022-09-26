@@ -47,6 +47,10 @@ func act2state(a string) string {
 		return stateString(system.MemberStateReady)
 	case "reset format":
 		return stateString(system.MemberStateAwaitFormat)
+	case "set admin-excluded state":
+		return stateString(system.MemberStateAdminExcluded)
+	case "clear admin-excluded state":
+		return stateString(system.MemberStateExcluded)
 	default:
 		return ""
 	}
@@ -434,16 +438,17 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	t.Helper()
 
 	state := map[string]system.MemberState{
-		"awaitformat":  system.MemberStateAwaitFormat,
-		"errored":      system.MemberStateErrored,
-		"excluded":     system.MemberStateExcluded,
-		"joined":       system.MemberStateJoined,
-		"ready":        system.MemberStateReady,
-		"starting":     system.MemberStateStarting,
-		"stopped":      system.MemberStateStopped,
-		"stopping":     system.MemberStateStopping,
-		"unknown":      system.MemberStateUnknown,
-		"unresponsive": system.MemberStateUnresponsive,
+		"awaitformat":   system.MemberStateAwaitFormat,
+		"errored":       system.MemberStateErrored,
+		"excluded":      system.MemberStateExcluded,
+		"joined":        system.MemberStateJoined,
+		"ready":         system.MemberStateReady,
+		"starting":      system.MemberStateStarting,
+		"stopped":       system.MemberStateStopped,
+		"stopping":      system.MemberStateStopping,
+		"unknown":       system.MemberStateUnknown,
+		"unresponsive":  system.MemberStateUnresponsive,
+		"adminexcluded": system.MemberStateAdminExcluded,
 	}[s]
 
 	if state == system.MemberStateUnknown && s != "unknown" {
@@ -1639,6 +1644,151 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 			mi := svc.rpcClient.(*control.MockInvoker)
 			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+		})
+	}
+}
+
+func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *mgmtpb.SystemExcludeReq
+		members    system.Members
+		mResps     []*control.HostResponse
+		expMembers system.Members
+		expResults []*sharedpb.RankResult
+		expAPIErr  error
+	}{
+		"nil req": {
+			req:       (*mgmtpb.SystemExcludeReq)(nil),
+			expAPIErr: errors.New("nil request"),
+		},
+		"not system leader": {
+			req: &mgmtpb.SystemExcludeReq{
+				Sys: "quack",
+			},
+			expAPIErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"no hosts or ranks": {
+			req: &mgmtpb.SystemExcludeReq{},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expAPIErr: errors.New("no hosts or ranks"),
+		},
+		"hosts and ranks": {
+			req: &mgmtpb.SystemExcludeReq{
+				Hosts: "host1,host2",
+				Ranks: "0,1",
+			},
+			expAPIErr: errors.New("ranklist and hostlist"),
+		},
+		"invalid ranks": {
+			req:       &mgmtpb.SystemExcludeReq{Ranks: "41,42"},
+			expAPIErr: errors.New("invalid"),
+		},
+		"invalid hosts": {
+			req:       &mgmtpb.SystemExcludeReq{Hosts: "host-[1-2]"},
+			expAPIErr: errors.New("invalid"),
+		},
+		"exclude ranks": {
+			req: &mgmtpb.SystemExcludeReq{Ranks: "0-1"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("set admin-excluded state", 0, 1),
+				mockRankSuccess("set admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"exclude hosts": {
+			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String()},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("set admin-excluded state", 0, 1),
+				mockRankSuccess("set admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"unexclude ranks": {
+			req: &mgmtpb.SystemExcludeReq{Ranks: "0-1", Clear: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("clear admin-excluded state", 0, 1),
+				mockRankSuccess("clear admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+		"unexclude hosts": {
+			req: &mgmtpb.SystemExcludeReq{Hosts: test.MockHostAddr(1).String(), Clear: true},
+			members: system.Members{
+				mockMember(t, 0, 1, "adminexcluded"),
+				mockMember(t, 1, 1, "adminexcluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("clear admin-excluded state", 0, 1),
+				mockRankSuccess("clear admin-excluded state", 1, 1),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			gotResp, gotAPIErr := svc.SystemExclude(ctx, tc.req)
+			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
+			if tc.expAPIErr != nil {
+				return
+			}
+
+			checkRankResults(t, tc.expResults, gotResp.Results)
+			checkMembers(t, tc.expMembers, svc.membership)
 		})
 	}
 }

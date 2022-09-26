@@ -30,7 +30,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -204,7 +204,9 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateExcluded {
+	}
+	switch resp.State {
+	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)

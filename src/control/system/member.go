@@ -115,7 +115,7 @@ func memberStateFromString(in string) MemberState {
 // Map state combinations to true (illegal) or false (legal) and return negated
 // value.
 func (ms MemberState) isTransitionIllegal(to MemberState) bool {
-	if ms == MemberStateUnknown {
+	if ms == MemberStateUnknown || ms == MemberStateAdminExcluded {
 		return true // no legal transitions
 	}
 	if ms == to {
