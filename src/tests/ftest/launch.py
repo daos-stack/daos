@@ -2031,6 +2031,7 @@ class Launch():
             log (logger): logger for the messages produced by this method
             path (str): path to directory to print disk space for.
         """
+        logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
             run_local(logger, ["df", "-h", path], check=False)
@@ -2524,23 +2525,22 @@ class Launch():
         else:
             for data in result.output:
                 for line in data.stdout:
-                    if FAILURE_TRIGGER in line:
-                        # If a file is found containing the FAILURE_TRIGGER then report a failure.
-                        # This feature is used by avocado tests to verify that launch.py reports
-                        # errors correctly in CI. See test_launch_failures in harness/basic.py for
-                        # more details.
-                        logger.debug(
-                            "Found a file matching the '%s' failure trigger on %s: %s",
-                            FAILURE_TRIGGER, data.hosts, line)
-                        message = "Error trigger failure file detected (for error handling testing)"
-                        self._fail_test(self.result.tests[-1], "Process", message)
-                        hosts_with_files.add(data.hosts)
-                        status = 16
-                        break
                     if source in line:
                         logger.debug("Found at least one file match on %s: %s", data.hosts, line)
                         hosts_with_files.add(data.hosts)
                         break
+                if re.findall(fr"{FAILURE_TRIGGER}", "\n".join(data.stdout)):
+                    # If a file is found containing the FAILURE_TRIGGER then report a failure.
+                    # This feature is used by avocado tests to verify that launch.py reports
+                    # errors correctly in CI. See test_launch_failures in harness/basic.py for
+                    # more details.
+                    logger.debug(
+                        "Found a file matching the '%s' failure trigger on %s",
+                        FAILURE_TRIGGER, data.hosts)
+                    message = "Error trigger failure file detected (testing error handling)"
+                    self._fail_test(self.result.tests[-1], "Process", message)
+                    hosts_with_files.add(data.hosts)
+                    status = 16
 
         logger.debug("List files results: status=%s, hosts_with_files=%s", status, hosts_with_files)
         return status, hosts_with_files
@@ -2600,7 +2600,8 @@ class Launch():
         sudo = "sudo -n " if source[0:5] in ["/etc/", "/tmp/", "/var/"] else ""
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{sudo}{cart_logtest} % > %.cart_logtest 2>&1'"]
-        if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
+        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=300)
+        if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16

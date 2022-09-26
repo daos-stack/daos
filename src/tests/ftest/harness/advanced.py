@@ -172,7 +172,7 @@ class HarnessAdvancedTest(TestWithServers):
         if not run_remote(self.log, host, "sudo mkdir -p {}".format(failure_trigger_dir)).passed:
             self.fail("Error creating directory {}".format(failure_trigger_dir))
         for failure_trigger_file in failure_trigger_files:
-            if failure_trigger_file.startswith("/etc/"):
+            if failure_trigger_file[0:5] in ["/etc/", "/var/"]:
                 command = "sudo -n touch {}".format(failure_trigger_file)
             else:
                 command = "sudo -n echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file)
