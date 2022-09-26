@@ -29,6 +29,8 @@ enum {
 	 * released or repurposed after corresponding operations complete.
 	 */
 	DAOS_TF_ZERO_COPY	= (1 << 1),
+	/** Reserved for internal usage */
+	DAOS_TF_RESESRVE_1	= (1 << 2),
 };
 
 /**

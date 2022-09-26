@@ -65,6 +65,11 @@ struct obj_iod_array {
 	 * one for each iod, NULL for replica.
 	 */
 	uint64_t		*oia_offs;
+	/* low epoch, only used for the case of compound TX for EC aggregation
+	 * with both (ORF_FOR_EC_AGG | ORF_EC_AGG_REMOVE) flags, as the low epoch
+	 * of the epoch range for vos_obj_array_remove().
+	 */
+	uint64_t		 oia_epoch_lo;
 };
 
 /** Evenly distributed for EC full-stripe-only mode */
@@ -727,7 +732,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 /* cli_ec.c */
 int obj_ec_req_reasb(daos_iod_t *iods, uint64_t dkey_hash, d_sg_list_t *sgls,
 		     daos_obj_id_t oid, struct daos_oclass_attr *oca,
-		     struct obj_reasb_req *reasb_req, uint32_t iod_nr, bool update);
+		     struct obj_reasb_req *reasb_req, uint32_t iod_nr, bool update, uint32_t flags);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);

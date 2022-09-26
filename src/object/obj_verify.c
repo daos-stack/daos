@@ -915,7 +915,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	daos_handle_t	th;
 	int		rc;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, 0, &th);
+	rc = dc_tx_local_open(obj->cob_coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc != 0) {
 		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
 		return rc;

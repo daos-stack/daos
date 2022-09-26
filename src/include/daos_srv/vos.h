@@ -629,6 +629,14 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
 		     const daos_key_t *akey, const daos_recx_t *recx);
 
+int
+vos_obj_array_remove_begin(daos_handle_t coh, daos_unit_oid_t oid, const daos_epoch_range_t *epr,
+			   const daos_key_t *dkey, daos_iod_t *iod, daos_handle_t *ioh,
+			   struct dtx_handle *dth);
+int
+vos_obj_array_remove_end(daos_handle_t ioh, const daos_epoch_range_t *epr, const daos_key_t *dkey,
+			 int err, struct dtx_handle *dth);
+
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
  *

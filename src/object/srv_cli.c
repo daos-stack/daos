@@ -66,7 +66,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, 0, &th);
+	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -96,7 +96,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, 0, &th);
+	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
 	if (rc)
 		return rc;
 
@@ -117,14 +117,15 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 }
 
 int
-dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
-	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls)
+dsc_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, uint32_t extra_flags, daos_iod_t *iods, d_sg_list_t *sgls,
+	       void *extra_args)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_update_task_create(oh, DAOS_TX_NONE, flags, dkey, nr, iods,
-				       sgls, NULL, dsc_scheduler(), &task);
+	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, extra_flags, iods, sgls,
+				       extra_args, NULL, dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 
@@ -170,4 +171,42 @@ dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
 	}
 
 	return 0;
+}
+
+int
+dsc_tx_open(daos_handle_t coh, daos_epoch_t epoch, uint32_t flags, daos_handle_t *th)
+{
+	return dc_tx_local_open(coh, epoch, flags, th);
+}
+
+int
+dsc_tx_commit(daos_handle_t th, uint32_t flags)
+{
+	tse_task_t	*task;
+	int		 rc;
+
+	rc = dc_tx_commit_task_create(th, flags, NULL, dsc_scheduler(), &task);
+	if (rc)
+		return rc;
+
+	return dsc_task_run(task, NULL, NULL, 0, true);
+}
+
+int
+dsc_tx_restart(daos_handle_t th)
+{
+	tse_task_t	*task;
+	int		 rc;
+
+	rc = dc_tx_restart_task_create(th, NULL, dsc_scheduler(), &task);
+	if (rc)
+		return rc;
+
+	return dsc_task_run(task, NULL, NULL, 0, true);
+}
+
+int
+dsc_tx_close(daos_handle_t th)
+{
+	return dc_tx_local_close(th);
 }

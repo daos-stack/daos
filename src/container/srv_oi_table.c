@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,8 +84,8 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	 * for many times in different epochs and consume way more space.
 	 */
 	D_DEBUG(DB_IO, "Store %d OIDs\n", bucket->ob_nr);
-	rc = dsc_obj_update(oa->oa_oh, 0, &oa->oa_dkey, bucket->ob_nr,
-			    oa->oa_iods, oa->oa_sgls);
+	rc = dsc_obj_update(oa->oa_oh, DAOS_TX_NONE, 0, &oa->oa_dkey, bucket->ob_nr, 0,
+			    oa->oa_iods, oa->oa_sgls, NULL);
 	if (rc)
 		goto failed;
 

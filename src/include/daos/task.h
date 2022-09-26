@@ -211,10 +211,9 @@ dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 			 tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-			  daos_key_t *dkey, unsigned int nr,
-			  daos_iod_t *iods, d_sg_list_t *sgls,
-			  daos_event_t *ev, tse_sched_t *tse,
-			  tse_task_t **task);
+			  daos_key_t *dkey, unsigned int nr, uint32_t extra_flags,
+			  daos_iod_t *iods, d_sg_list_t *sgls, void *extra_arg,
+			  daos_event_t *ev, tse_sched_t *tse, tse_task_t **task);
 
 int
 dc_obj_list_dkey_task_create(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
@@ -245,6 +244,12 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_anchor_t *akey_anchor, bool incr_order,
 			    daos_event_t *ev, tse_sched_t *tse,
 			    d_iov_t *csum, tse_task_t **task);
+
+int
+dc_tx_commit_task_create(daos_handle_t th, uint32_t flags, daos_event_t *ev, tse_sched_t *tse,
+			 tse_task_t **task);
+int
+dc_tx_restart_task_create(daos_handle_t th, daos_event_t *ev, tse_sched_t *tse, tse_task_t **task);
 
 void *
 dc_task_get_args(tse_task_t *task);

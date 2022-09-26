@@ -31,7 +31,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 9
+#define DAOS_OBJ_VERSION 10
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -182,6 +182,8 @@ enum obj_rpc_flags {
 	ORF_DESCENDING_ORDER	= (1 << 21),
 	/* send to reintegrating target */
 	ORF_REINTEGRATING_IO	= (1 << 22),
+	/* For EC aggregation, remove exts (replica or parity) on all parity shards */
+	ORF_EC_AGG_REMOVE	= (1 << 23),
 };
 
 /* common for update/fetch */
