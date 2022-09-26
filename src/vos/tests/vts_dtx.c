@@ -69,6 +69,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
+	dth->dth_need_validation = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -897,7 +898,7 @@ run_dtx_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS DTX Test %s", cfg);
+	dts_create_config(test_name, "DTX Test %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   dtx_tests, setup_io,
 					   teardown_io);

@@ -187,6 +187,7 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 		iod->iod_recxs = recxs;
 	} else {
 		iod->iod_nr = 1;
+		iod->iod_recxs = NULL;
 	}
 }
 
@@ -4210,7 +4211,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	daos_obj_id_t		oid;
 	daos_oclass_id_t        cid;
 	struct daos_oclass_attr	*attr;
-	char			name[10];
+	char			name[MAX_OBJ_CLASS_NAME_LEN];
 	int			rc;
 
 	oid.hi = 1;
@@ -4259,7 +4260,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	/** need an easier way to determine grp nr. for now use fit for GX */
 	rc = compare_oclass(coh, oid, ecid);
 	if (rc) {
-		char ename[10];
+		char ename[MAX_OBJ_CLASS_NAME_LEN];
 
 		daos_oclass_id2name(ecid, ename);
 		fail_msg("Mismatch oclass %s vs %s\n", name, ename);
@@ -4363,6 +4364,12 @@ oclass_auto_setting(void **state)
 			  DAOS_RES_REPL, 2, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Array oid with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_array,
+			  DAOS_RES_REPL, 2, OC_RP_2GX);
+	assert_rc_equal(rc, 0);
+
 	/** object with EC hint should use OC_EC_NP1G1 */
 	print_message("oid with DAOS_OCH_RDD_EC hint:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
@@ -4425,6 +4432,12 @@ oclass_auto_setting(void **state)
 	print_message("BYTE ARRAY oid class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, 0, feat_byte_array,
 			  DAOS_RES_EC, 2, ecidx);
+	assert_rc_equal(rc, 0);
+
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Byte Array with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_byte_array,
+			  DAOS_RES_REPL, 2, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
 	print_message("KV oid with DAOS_OCH_RDD_EC hint:\t");
@@ -4490,6 +4503,12 @@ oclass_auto_setting(void **state)
 	print_message("BYTE ARRAY oid class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, 0, feat_byte_array,
 			  DAOS_RES_EC, 3, ecidx);
+	assert_rc_equal(rc, 0);
+
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Byte Array with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_byte_array,
+			  DAOS_RES_REPL, 3, OC_RP_3GX);
 	assert_rc_equal(rc, 0);
 
 	print_message("KV oid with DAOS_OCH_RDD_EC hint:\t");
@@ -4753,6 +4772,39 @@ io_tx_convert(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+obj_open_perf(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	*oh;
+	uint64_t	start_usec, end_usec;
+	float		opens_per_sec;
+	int		i, nr, rc;
+
+	nr = 10000;
+	D_ALLOC_ARRAY(oh, nr);
+	assert_non_null(oh);
+
+	start_usec = daos_getutime();
+	for (i = 0; i < nr; i++) {
+		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+		rc = daos_obj_open(arg->coh, oid, 0, &oh[i], NULL);
+		assert_rc_equal(rc, 0);
+	}
+	end_usec = daos_getutime();
+	opens_per_sec = (nr * 1000.0 * 1000) / (end_usec - start_usec);
+
+	print_message("opens per second %.2f (total #obj_opens %d)\n", opens_per_sec, nr);
+
+	for (i = 0; i < nr; i++) {
+		rc = daos_obj_close(oh[i], NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	D_FREE(oh);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4848,6 +4900,7 @@ static const struct CMUnitTest io_tests[] = {
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 	{ "IO46: tx convert",
 	  io_tx_convert, async_disable, test_case_teardown},
+	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 };
 
 int
@@ -4882,7 +4935,7 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
-	char oclass[16] = {0};
+	char oclass[MAX_OBJ_CLASS_NAME_LEN + 1] = {0};
 	char buf[32];
 
 	par_barrier(PAR_COMM_WORLD);

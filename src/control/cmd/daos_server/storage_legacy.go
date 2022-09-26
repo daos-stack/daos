@@ -129,7 +129,7 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 }
 
 func (cmd *legacyPrepCmd) Execute(args []string) error {
-	cmd.Info("storage prepare subcommand is deprecated, use nvme or pmem subcommands instead")
+	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
 	// This is a little ugly, but allows for easier unit testing.
 	// FIXME: With the benefit of hindsight, it seems apparent
@@ -151,7 +151,7 @@ type legacyScanCmd struct {
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
-	cmd.Notice("storage scan subcommand is deprecated, use nvme or pmem subcommands instead")
+	cmd.Notice("storage scan subcommand is deprecated, use nvme or scm subcommands instead")
 
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {

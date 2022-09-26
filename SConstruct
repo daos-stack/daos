@@ -43,10 +43,9 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "3"
+API_VERSION_MINOR = "4"
 API_VERSION_FIX = "0"
-API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
-                                API_VERSION_FIX)
+API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
 
 def update_rpm_version(version, tag):
@@ -337,6 +336,11 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             value = os.environ.get(key, None)
             if value is not None:
                 env['ENV'][key] = value
+
+    config = Configure(env)
+    if not config.CheckHeader('stdatomic.h'):
+        Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
+    config.Finish()
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)

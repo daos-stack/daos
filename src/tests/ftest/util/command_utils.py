@@ -174,6 +174,7 @@ class ExecutableCommand(CommandWithParameters):
         status = True
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
+            self.log.debug("Checking the command output for any bad keywords: %s", regex)
             for output in (self.result.stdout_text, self.result.stderr_text):
                 match = re.findall(regex, output)
                 if match:
@@ -439,7 +440,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self.env = env.copy()
+        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):

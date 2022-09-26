@@ -10,8 +10,8 @@ on:
 jobs:
 
   Doxygen:
-    name: Run doxygen
-    runs-on: ubuntu-20.04
+    name: Doxygen
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2.3.4
@@ -23,3 +23,9 @@ jobs:
         run: echo -n "::add-matcher::ci/daos-doxygen-matcher.json"
       - name: Run check
         run: doxygen Doxyfile
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: API Documentation
+          path: docs/doxygen/html/
+          retention-days: 1

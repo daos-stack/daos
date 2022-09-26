@@ -549,24 +549,6 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	resp := &mgmtpb.PoolDestroyResp{}
 
-	// If recursive flag is unset, refuse to destroy pool if resident containers exist.
-	if !req.Recursive {
-		hasContainers, err := svc.poolHasContainers(ctx, req)
-		if err != nil {
-			// Check if error is related to response status code.
-			if dStatus, ok := err.(daos.Status); ok {
-				svc.log.Errorf("ListContainers during pool destroy failed: %s", dStatus)
-				resp.Status = int32(dStatus)
-				return resp, nil
-			}
-			return nil, err
-		}
-
-		if hasContainers {
-			return nil, FaultPoolHasContainers
-		}
-	}
-
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
@@ -575,6 +557,24 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
+		// If recursive flag is unset, refuse to destroy pool if resident containers exist.
+		if !req.Recursive {
+			hasContainers, err := svc.poolHasContainers(ctx, req)
+			if err != nil {
+				// Check if error is related to response status code.
+				if dStatus, ok := err.(daos.Status); ok {
+					svc.log.Errorf("ListContainers during pool destroy failed: %s", dStatus)
+					resp.Status = int32(dStatus)
+					return resp, nil
+				}
+				return nil, err
+			}
+
+			if hasContainers {
+				return nil, FaultPoolHasContainers
+			}
+		}
+
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
 		evStatus, err := svc.poolEvictConnections(ctx, req)
 		if err != nil {
@@ -582,9 +582,9 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		}
 
 		// If the request is being forced, or the evict request did not fail
-		// due to the pool being busy, then transition to the destroying state
-		// and persist the update(s).
-		if req.Force || evStatus != daos.Busy {
+		// due to the pool being busy or service not up, then transition to the
+		// destroying state and persist the update(s).
+		if req.Force || (evStatus != daos.Busy && evStatus != daos.NoService) {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)

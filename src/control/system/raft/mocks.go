@@ -25,9 +25,10 @@ type (
 		response interface{}
 	}
 	mockRaftServiceConfig struct {
-		LeaderCh      <-chan bool
-		ServerAddress raft.ServerAddress
-		State         raft.RaftState
+		LeaderCh              <-chan bool
+		ServerAddress         raft.ServerAddress
+		State                 raft.RaftState
+		LeadershipTransferErr error
 	}
 	mockRaftService struct {
 		cfg mockRaftServiceConfig
@@ -66,7 +67,10 @@ func (mrs *mockRaftService) LeaderCh() <-chan bool {
 }
 
 func (mrs *mockRaftService) LeadershipTransfer() raft.Future {
-	return &mockRaftFuture{}
+	if mrs.cfg.LeadershipTransferErr == nil {
+		mrs.cfg.State = raft.Follower
+	}
+	return &mockRaftFuture{err: mrs.cfg.LeadershipTransferErr}
 }
 
 func (mrs *mockRaftService) Shutdown() raft.Future {
@@ -76,6 +80,10 @@ func (mrs *mockRaftService) Shutdown() raft.Future {
 
 func (mrs *mockRaftService) State() raft.RaftState {
 	return mrs.cfg.State
+}
+
+func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
+	return &mockRaftFuture{}
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
@@ -102,7 +110,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	}
 
 	db := MockDatabaseWithCfg(t, log, dbCfg)
-	db.replicaAddr.Addr = addr
+	db.replicaAddr = addr
 	return db
 }
 
@@ -147,7 +155,7 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, db.raftTransport = raft.NewInmemTransport(raft.ServerAddress(db.replicaAddr.String()))
+	_, db.raftTransport = raft.NewInmemTransport(db.serverAddress())
 
 	return db, cleanup
 }
