@@ -58,10 +58,12 @@ class ContainerAsync(TestWithServers):
         self.container[1].container = DaosContainer(self.pool.context)
 
         try:
+            print("###>>> Starting waiting for container creation...")
             self.container[0].create()
             self.assertEqual(
                 cbh1.ret_code, RC_SUCCESS,
                 "Async create failed! RC = {}".format(cbh1.ret_code))
+            print("###>>> Container created")
 
             # Destroy pool and try to create the second container. TestContainer
             # calls wait, but we're using DaosContainer, so we need to manually
