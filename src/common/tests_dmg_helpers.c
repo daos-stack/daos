@@ -66,7 +66,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	char		*cmd_str = NULL;
 	size_t		size, old;
 	int		i;
-	void 		*addr;
+	void		*addr;
 
 	if (cmd_base == NULL)
 		return NULL;
