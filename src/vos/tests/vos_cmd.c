@@ -101,6 +101,7 @@ create_const_uuid(uuid_t dest_uuid, const char *name)
 	int  stridx = 0;
 	int  i;
 	char buf[37] = {0};
+	int  rc;
 
 	for (i = 0; i < 36; i++) {
 		if (i == 8 || i == 13 || i == 18 || i == 23) {
@@ -111,7 +112,8 @@ create_const_uuid(uuid_t dest_uuid, const char *name)
 		stridx = (stridx + 1) % len;
 	}
 
-	uuid_parse(buf, dest_uuid);
+	rc = uuid_parse(buf, dest_uuid);
+	assert_int_equal(rc, 0);
 }
 
 void
@@ -243,6 +245,7 @@ create_pool(struct cmd_info *cinfo)
 	struct known_pool *known_pool;
 	int                fd;
 	int                rc = 0;
+	int                rc2;
 
 	rc = alloc_pool(&cinfo->key[0], true, &known_pool);
 	if (rc < 0) {
@@ -304,11 +307,11 @@ create_pool(struct cmd_info *cinfo)
 close_pool:
 	vos_pool_close(known_pool->kp_poh);
 destroy_pool:
-	vos_pool_destroy(known_pool->kp_path, known_pool->kp_uuid);
+	rc2 = vos_pool_destroy(known_pool->kp_path, known_pool->kp_uuid);
+	if (rc2 != 0)
+		printf("Could not destroy pool: " DF_RC "\n", DP_RC(rc));
 free_mem:
 	free_pool(known_pool);
-	known_pool->kp_poh = DAOS_HDL_INVAL;
-	known_pool->kp_coh = DAOS_HDL_INVAL;
 
 	return rc;
 }
@@ -670,7 +673,7 @@ run_many_tests(struct cmd_info *pinfo)
 	struct timespec    end_time;
 	struct ult_info   *ult_info;
 	struct cmd_info   *cinfo = NULL;
-	unsigned int       seed  = (unsigned int)time(NULL);
+	unsigned int       seed  = (unsigned int)(time(NULL) & 0x0FFFFFFFFULL);
 	int               *run_counts;
 	int                rc;
 	int                i;
@@ -911,14 +914,18 @@ free_pools(void)
 {
 	struct known_pool *known_pool;
 	struct known_pool *tmp;
+	int                rc;
 
 	d_list_for_each_entry_safe(known_pool, tmp, &pool_list, kp_link) {
 		if (daos_handle_is_valid(known_pool->kp_coh))
 			vos_cont_close(known_pool->kp_coh);
 		if (daos_handle_is_valid(known_pool->kp_poh))
 			vos_pool_close(known_pool->kp_poh);
-		if (args.a_clean_all)
-			vos_pool_destroy(known_pool->kp_path, known_pool->kp_uuid);
+		if (args.a_clean_all) {
+			rc = vos_pool_destroy(known_pool->kp_path, known_pool->kp_uuid);
+			if (rc != 0)
+				printf("Failed to destroy pool: rc=" DF_RC "\n", DP_RC(rc));
+		}
 		free_pool(known_pool);
 	}
 }
