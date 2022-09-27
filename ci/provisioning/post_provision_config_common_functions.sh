@@ -13,7 +13,7 @@ retry_dnf() {
     local monitor_threshold="$1"
     shift
 
-    local args=("dnf" "-y" "${@}")
+    local args=("dnf" "-y" "--nobest" "${@}")
     local attempt=0
     local rc=0
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
