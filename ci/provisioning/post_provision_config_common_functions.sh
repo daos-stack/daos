@@ -13,7 +13,7 @@ retry_dnf() {
     local monitor_threshold="$1"
     shift
 
-    local args=("dnf" "-y" "--nobest" "${@}")
+    local args=("dnf" "-y" "${@}")
     local attempt=0
     local rc=0
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
@@ -309,7 +309,7 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     # shellcheck disable=SC2154
-    if ! retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_dnf 600 --setopt=nobest upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         return 1
     fi
