@@ -2637,6 +2637,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
+	return 0;
+
 	D_ALLOC_PTR(ad);
 	if (ad == NULL)
 		return -DER_NOMEM;
