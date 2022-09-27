@@ -33,7 +33,10 @@ char		iops[32];
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
 #define OUTPUT_IOPS(x) ({\
-		if (x < 1000.0) {\
+		/* negative value is unexpected*/\
+		if (x < 0.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2leG IO/sec", (x)*0.000001);\
+		} else if (x < 1000.0) {\
 			snprintf(iops, sizeof(iops)-1, "%7.2lfK IO/sec", (x));\
 		} else if (x < 1000000.0) {\
 			snprintf(iops, sizeof(iops)-1, "%7.2lfM IO/sec", (x)*0.001);\
