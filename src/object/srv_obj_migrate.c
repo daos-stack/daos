@@ -2187,6 +2187,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	uint32_t		shard = arg->arg->shard;
 	struct migrate_one	*mo;
 	bool			merged = false;
+	bool			create_migrate_one = false;
 	int			rc = 0;
 	int			i;
 
@@ -2206,20 +2207,23 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 
 	if (rc == 1 &&
 	    is_ec_data_shard(io->ui_oid.id_shard, io->ui_dkey_hash, &arg->oc_attr)) {
-		D_DEBUG(DB_REBUILD, DF_UOID" ignore data shard "DF_KEY"/%u/"DF_U64".\n",
-			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
+		D_DEBUG(DB_REBUILD, DF_UOID" ignore data shard "DF_KEY"/"DF_U64"/%u/"DF_U64".\n",
+			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), io->ui_dkey_hash, shard,
 			obj_ec_shard_off(io->ui_dkey_hash, &arg->oc_attr, 0));
 		return 0;
 	}
 	rc = 0;
 
 	/* Convert EC object offset to DAOS offset. */
-	for (i = 0; i <= io->ui_iods_top; i++) {
+	for (i = 0; i <= io->ui_iods_top && io->ui_dkey_punch_eph == 0 &&
+	     io->ui_obj_punch_eph == 0; i++) {
 		daos_iod_t	*iod = &io->ui_iods[i];
 		daos_epoch_t	**ephs = &io->ui_recx_ephs[i];
 
-		if (iod->iod_type == DAOS_IOD_SINGLE)
+		if (iod->iod_type == DAOS_IOD_SINGLE || io->ui_akey_punch_ephs[i] != 0) {
+			create_migrate_one = true;
 			continue;
+		}
 
 		D_DEBUG(DB_REBUILD, DF_UOID" unpack for shard %u start EC "DF_U64"/"DF_X64"\n",
 			DP_UOID(io->ui_oid), shard,
@@ -2251,10 +2255,16 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 					DP_UOID(io->ui_oid), shard, DP_RC(rc));
 				return rc;
 			}
-			/* No data needs to be migrate. */
-			if (iod->iod_nr == 0)
-				continue;
 		}
+
+		if (iod->iod_nr > 0)
+			create_migrate_one = true;
+	}
+
+	if (!create_migrate_one) {
+		D_DEBUG(DB_REBUILD, DF_UOID"/"DF_KEY" does not need rebuild.\n",
+			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
+		return 0;
 	}
 
 	/* Check if some IODs from this unpack can be merged to the exist mrone, mostly for EC
@@ -2423,7 +2433,9 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_pool, rc);
 	}
 
-	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RO, &oh);
+	/* Only open with RW flag, reintegrating flag will be set, which is needed
+	 * during unpack_cb to check if parity shard alive. */
+	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc) {
 		D_ERROR("dsc_obj_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);

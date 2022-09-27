@@ -472,7 +472,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
 	idx = grp_start + d_rand() % grp_size;
-	for (i = 0; i < grp_size; i++, idx++) {
+	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
 		uint32_t tgt_id;
 		int index;
 
@@ -1746,11 +1746,14 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
 		uint32_t shard;
 
 		shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
-		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d\n", shard,
+		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", shard,
 			obj->cob_shards->do_shards[shard].do_rebuilding,
+			obj->cob_shards->do_shards[shard].do_reintegrating,
 			obj->cob_shards->do_shards[shard].do_target_id,
-			obj->cob_shards->do_shards[shard].do_shard);
-		if (!obj_shard_is_invalid(obj, shard, DAOS_OBJ_RPC_FETCH))
+			obj->cob_shards->do_shards[shard].do_shard,
+			obj->cob_shards->do_shards[shard].do_shard_idx);
+		if (!obj_shard_is_invalid(obj, shard, DAOS_OBJ_RPC_FETCH) &&
+		    !obj->cob_shards->do_shards[shard].do_reintegrating)
 			D_GOTO(out_put, rc = 1);
 	}
 
