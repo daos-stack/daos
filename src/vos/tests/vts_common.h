@@ -130,6 +130,8 @@ int run_ts_tests(const char *cfg);
 int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
+int
+run_vos_command(const char *arg0, const char *cmd);
 
 void
 vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,

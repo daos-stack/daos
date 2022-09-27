@@ -821,7 +821,7 @@ dtx_20(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 
 	D_FREE(fetch_buf);
 	D_FREE(update_buf);
