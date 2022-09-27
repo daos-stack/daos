@@ -285,7 +285,7 @@ out:
  *
  * Case1: META && WAL share same blobstore with DATA.
  * Case2: WAL share same blobstore with META.
- * Case3: DATA, META, WAL have own blobstore seperately.
+ * Case3: DATA, META, WAL have own blobstore separately.
  */
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
@@ -674,7 +674,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
 		return -DER_NOMEM;
 
 	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, umm, pool_id, flags,
-			     SMD_DEV_TYPE_DATA);
+			       SMD_DEV_TYPE_DATA);
 	if (rc)
 		goto failed;
 
@@ -683,14 +683,14 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
 
 	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_META) != NULL) {
 		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, umm, pool_id,
-				     flags, SMD_DEV_TYPE_META);
+				       flags, SMD_DEV_TYPE_META);
 		if (rc)
 			goto failed;
 	}
 
 	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_WAL) != NULL) {
 		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, umm, pool_id,
-				     flags, SMD_DEV_TYPE_WAL);
+				       flags, SMD_DEV_TYPE_WAL);
 		if (rc)
 			goto failed;
 	}
