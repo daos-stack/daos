@@ -669,6 +669,9 @@ class TestWithServers(TestWithoutServers):
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
+        # Option to skip destroying containers during tearDown (default: destroy containers)
+        self.skip_destroy_containers = False
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -1426,7 +1429,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         error_list = []
-        if containers:
+        if containers and not self.skip_destroy_containers:
             if not isinstance(containers, (list, tuple)):
                 containers = [containers]
             self.test_log.info("Destroying containers")
@@ -1452,6 +1455,8 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying container: {}".format(error))
+        elif self.skip_destroy_containers:
+            self.test_log.info("SKIP Destroying containers as requested by test")
         return error_list
 
     def destroy_pools(self, pools):

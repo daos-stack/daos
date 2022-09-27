@@ -421,6 +421,7 @@ class TestPool(TestDaosApiBase):
         status = False
         if self.pool:
             if disconnect:
+                self.log.info("Disconnecting from pool %s", self.identifier)
                 self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.identifier)
