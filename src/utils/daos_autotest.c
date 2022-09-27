@@ -34,16 +34,16 @@ char		iops[32];
 #define MAX_INFLIGHT 16
 #define OUTPUT_IOPS(x) ({\
 		/* negative value is unexpected*/\
-		if (x < 0.0) {\
-			snprintf(iops, sizeof(iops)-1, "%7.2leG IO/sec", (x)*0.000001);\
-		} else if (x < 1000.0) {\
+		if ((x) < 0.0 || (x) > 1.0E12 ) {\
+			snprintf(iops, sizeof(iops)-1, "Unexpected IO/sec value");\
+		} else if ((x) < 1000.0) {\
 			snprintf(iops, sizeof(iops)-1, "%7.2lfK IO/sec", (x));\
-		} else if (x < 1000000.0) {\
+		} else if ((x) < 1000000.0) {\
 			snprintf(iops, sizeof(iops)-1, "%7.2lfM IO/sec", (x)*0.001);\
-		} else if (x < 1000000000.0) {\
+		} else if ((x) < 1000000000.0) {\
 			snprintf(iops, sizeof(iops)-1, "%7.2lfG IO/sec", (x)*0.000001);\
 		} else {\
-			snprintf(iops, sizeof(iops)-1, "%7.2leG IO/sec", (x)*0.000001);\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfT IO/sec", (x)*0.000000001);\
 		}\
 		step_success(iops);\
 		})
