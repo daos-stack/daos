@@ -2201,6 +2201,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	struct enum_unpack_arg	*arg = data;
 	struct migrate_one	*mo;
 	bool			merged = false;
+	bool			create_migrate_one = false;
 	int			rc = 0;
 	int			i;
 
@@ -2208,13 +2209,16 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 		return migrate_one_create(arg, io);
 
 	/* Convert EC object offset to DAOS offset. */
-	for (i = 0; i <= io->ui_iods_top; i++) {
+	for (i = 0; i <= io->ui_iods_top && io->ui_dkey_punch_eph == 0 &&
+	     io->ui_obj_punch_eph == 0; i++) {
 		daos_iod_t	*iod = &io->ui_iods[i];
 		daos_epoch_t	**ephs = &io->ui_recx_ephs[i];
 		uint32_t	shard;
 
-		if (iod->iod_type == DAOS_IOD_SINGLE)
+		if (iod->iod_type == DAOS_IOD_SINGLE || io->ui_akey_punch_ephs[i] != 0) {
+			create_migrate_one = true;
 			continue;
+		}
 
 		shard = arg->arg->shard % obj_ec_tgt_nr(&arg->oc_attr);
 		/* For data shard, convert to single shard offset */
@@ -2235,13 +2239,24 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 			/* No data needs to be migrate. */
 			if (iod->iod_nr == 0)
 				continue;
+			else
+				create_migrate_one = true;
 		} else {
 			/* parity shard */
 			rc = obj_recx_ec2_daos(&arg->oc_attr, io->ui_oid.id_shard,
 					       &iod->iod_recxs, ephs, &iod->iod_nr, false);
 			if (rc != 0)
 				return rc;
+
+			if (iod->iod_nr > 0)
+				create_migrate_one = true;
 		}
+	}
+
+	if (!create_migrate_one) {
+		D_DEBUG(DB_REBUILD, DF_UOID"/"DF_KEY" does not need rebuild.\n",
+			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
+		return 0;
 	}
 
 	/* Check if some IODs from this unpack can be merged to the exist mrone, mostly for EC
