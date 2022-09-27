@@ -48,7 +48,6 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 }
 
 
-/* NOTE: Only 1 ping hanlder per server for now */
 static int
 handler_ping(crt_rpc_t *rpc)
 {
@@ -111,6 +110,7 @@ handler_ping(crt_rpc_t *rpc)
 
 	return 0;
 }
+
 static void
 test_run(d_rank_t my_rank)
 {

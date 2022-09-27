@@ -16,7 +16,7 @@ rpc_cb_common(const struct crt_cb_info *info)
 	crt_bulk_t	*p_blk;
 	int		rc;
 
-	p_blk = (crt_bulk_t*)info->cci_arg;
+	p_blk = (crt_bulk_t *)info->cci_arg;
 
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
 
@@ -55,14 +55,14 @@ test_run()
 	struct timeval		 tv_end;
 	int			 i, ctx_idx;
 	int			 rc;
-	
+
 	if (test.tg_save_cfg) {
 		rc = crt_group_config_path_set(test.tg_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
 	DBG_PRINT("Client starting with %d contexts\n", test.tg_num_ctx);
-	
+
 	rc = crtu_cli_start_basic(test.tg_local_group_name,
 				  test.tg_remote_group_name,
 				  &grp, &rank_list, &test.tg_crt_ctx[0],
@@ -164,15 +164,14 @@ test_run()
 		}
 	}
 
-
-	
 	gettimeofday(&tv_end, NULL);
-	time_delta = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 + (tv_end.tv_usec - tv_start.tv_usec);
+	time_delta = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 +
+		     (tv_end.tv_usec - tv_start.tv_usec);
 
 	DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %d kb each took %ld usec\n",
-		test.tg_test_mode == 1 ? "Synchronous" : "Asynchronous",
-		test.tg_do_put == true ? "PUT" : "GET",
-		num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations);
+		  test.tg_test_mode == 1 ? "Synchronous" : "Asynchronous",
+		  test.tg_do_put == true ? "PUT" : "GET",
+		  num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations);
 
 	/* SHUTDOWN servers */
 
