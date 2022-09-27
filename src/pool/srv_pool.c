@@ -535,7 +535,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct daos_prop_entry *entry;
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
-			  domains, ranks, dss_tgt_nr);
+			  domains, dss_tgt_nr);
 	if (rc != 0) {
 		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -5531,7 +5531,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  rank_list, dss_tgt_nr);
+			  dss_tgt_nr);
 	if (rc != 0)
 		D_GOTO(out_map_buf, rc);
 

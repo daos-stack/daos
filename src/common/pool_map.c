@@ -125,13 +125,13 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 	},
 	{
 		.td_type	= PO_COMP_TP_RANK,
-		.td_abbr	= 'n',
-		.td_name	= "node",
+		.td_abbr	= 'r',
+		.td_name	= "rank",
 	},
 	{
 		.td_type	= PO_COMP_TP_NODE, /** for testing */
-		.td_abbr	= 'r',
-		.td_name	= "rack",
+		.td_abbr	= 'n',
+		.td_name	= "node",
 	},
 	{
 		.td_type	= PO_COMP_TP_ROOT,
@@ -1527,8 +1527,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
-	     uint32_t dss_tgt_nr)
+	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
