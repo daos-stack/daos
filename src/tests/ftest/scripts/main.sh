@@ -190,6 +190,20 @@ fi
 
 export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
 
+# Create two test users in the same group
+if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_groupx -u daos_test_userx1,daos_test_userx2 -s; then
+    exit "${PIPESTATUS[0]}"
+else
+    rc=0
+fi
+
+# Create a third test user in a different group
+if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_groupy -u daos_test_usery1 -s; then
+    exit "${PIPESTATUS[0]}"
+else
+    rc=0
+fi
+
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
