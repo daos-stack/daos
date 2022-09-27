@@ -75,6 +75,7 @@ class DaosServerManager(SubprocessManager):
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
                  namespace="/run/server_manager/*", access_points_suffix=None):
+        # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
         Args:

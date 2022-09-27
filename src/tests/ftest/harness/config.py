@@ -1,6 +1,5 @@
 """
 (C) Copyright 2021-2022 Intel Corporation.
-
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import yaml
@@ -13,13 +12,11 @@ from dmg_utils import DmgCommand
 
 class HarnessConfigTest(TestWithServers):
     """Harness config test cases.
-
     :avocado: recursive
     """
 
     def test_harness_config_access_points(self):
         """Verify the TestWithServers.access_points handling.
-
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness
@@ -29,8 +26,8 @@ class HarnessConfigTest(TestWithServers):
         access_points_suffix = self.params.get("access_points_suffix", "/run/setup/*")
         self.assertEqual(self.access_points_suffix, access_points_suffix)
 
-        self.log.info('Verify access_points_suffix is appended to hostlist_servers exactly once')
-        access_points = nodeset_append_suffix(self.hostlist_servers, access_points_suffix)
+        self.log.info('Verify access_points_suffix is appended exactly once')
+        access_points = nodeset_append_suffix(self.access_points, access_points_suffix)
         self.assertEqual(sorted(self.access_points), sorted(access_points))
         access_points = nodeset_append_suffix(access_points, access_points_suffix)
         self.assertEqual(sorted(self.access_points), sorted(access_points))
@@ -38,16 +35,17 @@ class HarnessConfigTest(TestWithServers):
         self.log.info('Verify self.get_dmg_command().hostlist_suffix and hostlist')
         dmg = self.get_dmg_command()
         self.assertEqual(dmg.hostlist_suffix, self.access_points_suffix)
-        self.assertEqual(sorted(dmg.hostlist), sorted(self.access_points))
+        expected_hostlist = sorted(nodeset_append_suffix(dmg.hostlist, self.access_points_suffix))
+        self.assertEqual(sorted(dmg.hostlist), expected_hostlist)
 
         self.log.info('Verify self.get_dmg_command().yaml.get_yaml_data()["hostlist"]')
-        self.assertEqual(sorted(dmg.yaml.get_yaml_data()['hostlist']), sorted(self.access_points))
+        self.assertEqual(sorted(dmg.yaml.get_yaml_data()['hostlist']), expected_hostlist)
 
         self.log.info('Verify DmgCommand().hostlist_suffix and hostlist')
-        dmg = DmgCommand(self.bin, hostlist_suffix=access_points_suffix)
-        dmg.hostlist = self.hostlist_servers
-        self.assertEqual(dmg.hostlist_suffix, self.access_points_suffix)
-        self.assertEqual(sorted(dmg.hostlist), sorted(self.access_points))
+        dmg2 = DmgCommand(self.bin, hostlist_suffix=access_points_suffix)
+        dmg2.hostlist = dmg.hostlist
+        self.assertEqual(dmg2.hostlist_suffix, self.access_points_suffix)
+        self.assertEqual(sorted(dmg2.hostlist), expected_hostlist)
 
         self.log.info('Verify server_manager...get_yaml_data...access_points"]')
         yaml_data = self.server_managers[0].manager.job.yaml.get_yaml_data()
@@ -61,7 +59,7 @@ class HarnessConfigTest(TestWithServers):
         self.log.info('Verify daos_control.yaml hostlist')
         with open(self.get_dmg_command().temporary_file, 'r') as yaml_file:
             daos_agent_yaml = yaml.safe_load(yaml_file.read())
-        self.assertEqual(sorted(daos_agent_yaml['hostlist']), sorted(self.access_points))
+        self.assertEqual(sorted(daos_agent_yaml['hostlist']), expected_hostlist)
 
         self.log.info('Verify daos_agent.yaml access_points')
         with open(self.agent_managers[0].manager.job.temporary_file, 'r') as yaml_file:

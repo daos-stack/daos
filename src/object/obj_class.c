@@ -101,6 +101,17 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		char *p = oc->oc_name;
 		int i = 0;
 
+		if (p[i] == 'S') {
+			str[0] = 'S';
+			i = snprintf(&str[1], MAX_OBJ_CLASS_NAME_LEN - 1, "%u", nr_grps);
+			if (i < 0) {
+				D_ERROR("Failed to encode object class name\n");
+				strcpy(str, "UNKNOWN");
+				return -1;
+			}
+			return 0;
+		}
+
 		while (p[i] != 'G') {
 			str[i] = p[i];
 			i++;

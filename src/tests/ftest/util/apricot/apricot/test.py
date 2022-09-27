@@ -768,8 +768,8 @@ class TestWithServers(TestWithoutServers):
         self.access_points_suffix = self.params.get(
             "access_points_suffix", "/run/setup/*", self.access_points_suffix)
         if self.access_points_suffix:
-            self.access_points = list(nodeset_append_suffix(
-                self.access_points, self.access_points_suffix))
+            self.access_points = nodeset_append_suffix(
+                self.access_points, self.access_points_suffix)
 
         # Display host information
         self.log.info("-" * 100)
