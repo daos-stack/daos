@@ -284,7 +284,7 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
         if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360 install "$LSB_RELEASE"
+            retry_dnf 360 --nobest install "$LSB_RELEASE"
         fi
     fi
 
@@ -309,7 +309,7 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     # shellcheck disable=SC2154
-    if ! retry_dnf 600 --setopt=nobest upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         return 1
     fi
