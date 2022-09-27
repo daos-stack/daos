@@ -29,11 +29,17 @@ struct cmd_args_s *autotest_ap;
 
 /* The start and end time in ns for individual test*/
 uint64_t	t_start, t_end;
-char		iops[32];
+char		iops[64];
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
 #define OUTPUT_IOPS(x) ({\
-		snprintf(iops, sizeof(iops)-1, "%6.1lfK IO/sec", (x));\
+		if (x < 1000.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfK IO/sec", (x));\
+		} else if (x < 1000000.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfM IO/sec", (x)*0.001);\
+		} else {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfG IO/sec", (x)*0.000001);\
+		}\
 		step_success(iops);\
 		})
 
