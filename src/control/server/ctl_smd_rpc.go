@@ -248,19 +248,19 @@ func (svc *ControlService) smdGetEngine(ctx context.Context, req *ctlpb.SmdQuery
 // Convert SmdQueryReq to DevManageReq by setting LED state and action based on request modifiers.
 func smdQueryToDevManageReq(req *ctlpb.SmdQueryReq) (*ctlpb.DevManageReq, error) {
 	dreq := &ctlpb.DevManageReq{
-		LedState: ctlpb.VmdLedState_NA,
+		LedState: ctlpb.LedState_NA,
 	}
 
 	switch {
 	case req.GetLed:
-		dreq.LedAction = ctlpb.VmdLedAction_GET
+		dreq.LedAction = ctlpb.LedAction_GET
 	case req.SetFaulty:
 		// LED action and target state will be populated in dRPC handler.
 	case req.Identify:
-		dreq.LedState = ctlpb.VmdLedState_QUICK_BLINK
-		dreq.LedAction = ctlpb.VmdLedAction_SET
+		dreq.LedState = ctlpb.LedState_QUICK_BLINK
+		dreq.LedAction = ctlpb.LedAction_SET
 	case req.ResetLed:
-		dreq.LedAction = ctlpb.VmdLedAction_RESET
+		dreq.LedAction = ctlpb.LedAction_RESET
 	default:
 		return nil, errors.New("smd manage called without modifier set in request")
 	}

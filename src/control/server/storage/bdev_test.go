@@ -60,9 +60,9 @@ func Test_NvmeDevState(t *testing.T) {
 	}
 }
 
-func Test_VmdLedState(t *testing.T) {
+func Test_LedState(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state  VmdLedState
+		state  LedState
 		expStr string
 		expErr error
 	}{
@@ -87,19 +87,19 @@ func Test_VmdLedState(t *testing.T) {
 			expStr: "NA",
 		},
 		"unexpected state": {
-			state:  VmdLedState(99),
+			state:  LedState(99),
 			expErr: errors.New("invalid vmd led state 99"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			spb := new(ctlpb.VmdLedState)
+			spb := new(ctlpb.LedState)
 			gotErr := convert.Types(tc.state, spb)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
-			ns := new(VmdLedState)
+			ns := new(LedState)
 			if err := convert.Types(spb, ns); err != nil {
 				t.Fatal(err)
 			}

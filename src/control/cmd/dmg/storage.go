@@ -25,7 +25,7 @@ type storageCmd struct {
 	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
 	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
 	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	LedManage     ledManageCmd      `command:"led" description:"Manage status LEDs of VMD enabled NVMe SSDs."`
+	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.

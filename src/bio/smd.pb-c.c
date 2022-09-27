@@ -1309,7 +1309,7 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[9] =
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdDevice, led_state),
-    &ctl__vmd_led_state__descriptor,
+    &ctl__led_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1629,7 +1629,7 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevManageReq, led_action),
-    &ctl__vmd_led_action__descriptor,
+    &ctl__led_action__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1641,7 +1641,7 @@ static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] 
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevManageReq, led_state),
-    &ctl__vmd_led_state__descriptor,
+    &ctl__led_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -2308,18 +2308,18 @@ const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
   ctl__nvme_dev_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue ctl__vmd_led_state__enum_values_by_number[5] =
+static const ProtobufCEnumValue ctl__led_state__enum_values_by_number[5] =
 {
-  { "OFF", "CTL__VMD_LED_STATE__OFF", 0 },
-  { "QUICK_BLINK", "CTL__VMD_LED_STATE__QUICK_BLINK", 1 },
-  { "ON", "CTL__VMD_LED_STATE__ON", 2 },
-  { "SLOW_BLINK", "CTL__VMD_LED_STATE__SLOW_BLINK", 3 },
-  { "NA", "CTL__VMD_LED_STATE__NA", 4 },
+  { "OFF", "CTL__LED_STATE__OFF", 0 },
+  { "QUICK_BLINK", "CTL__LED_STATE__QUICK_BLINK", 1 },
+  { "ON", "CTL__LED_STATE__ON", 2 },
+  { "SLOW_BLINK", "CTL__LED_STATE__SLOW_BLINK", 3 },
+  { "NA", "CTL__LED_STATE__NA", 4 },
 };
-static const ProtobufCIntRange ctl__vmd_led_state__value_ranges[] = {
+static const ProtobufCIntRange ctl__led_state__value_ranges[] = {
 {0, 0},{0, 5}
 };
-static const ProtobufCEnumValueIndex ctl__vmd_led_state__enum_values_by_name[5] =
+static const ProtobufCEnumValueIndex ctl__led_state__enum_values_by_name[5] =
 {
   { "NA", 4 },
   { "OFF", 0 },
@@ -2327,48 +2327,48 @@ static const ProtobufCEnumValueIndex ctl__vmd_led_state__enum_values_by_name[5] 
   { "QUICK_BLINK", 1 },
   { "SLOW_BLINK", 3 },
 };
-const ProtobufCEnumDescriptor ctl__vmd_led_state__descriptor =
+const ProtobufCEnumDescriptor ctl__led_state__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "ctl.VmdLedState",
-  "VmdLedState",
-  "Ctl__VmdLedState",
+  "ctl.LedState",
+  "LedState",
+  "Ctl__LedState",
   "ctl",
   5,
-  ctl__vmd_led_state__enum_values_by_number,
+  ctl__led_state__enum_values_by_number,
   5,
-  ctl__vmd_led_state__enum_values_by_name,
+  ctl__led_state__enum_values_by_name,
   1,
-  ctl__vmd_led_state__value_ranges,
+  ctl__led_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue ctl__vmd_led_action__enum_values_by_number[3] =
+static const ProtobufCEnumValue ctl__led_action__enum_values_by_number[3] =
 {
-  { "GET", "CTL__VMD_LED_ACTION__GET", 0 },
-  { "SET", "CTL__VMD_LED_ACTION__SET", 1 },
-  { "RESET", "CTL__VMD_LED_ACTION__RESET", 2 },
+  { "GET", "CTL__LED_ACTION__GET", 0 },
+  { "SET", "CTL__LED_ACTION__SET", 1 },
+  { "RESET", "CTL__LED_ACTION__RESET", 2 },
 };
-static const ProtobufCIntRange ctl__vmd_led_action__value_ranges[] = {
+static const ProtobufCIntRange ctl__led_action__value_ranges[] = {
 {0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex ctl__vmd_led_action__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex ctl__led_action__enum_values_by_name[3] =
 {
   { "GET", 0 },
   { "RESET", 2 },
   { "SET", 1 },
 };
-const ProtobufCEnumDescriptor ctl__vmd_led_action__descriptor =
+const ProtobufCEnumDescriptor ctl__led_action__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "ctl.VmdLedAction",
-  "VmdLedAction",
-  "Ctl__VmdLedAction",
+  "ctl.LedAction",
+  "LedAction",
+  "Ctl__LedAction",
   "ctl",
   3,
-  ctl__vmd_led_action__enum_values_by_number,
+  ctl__led_action__enum_values_by_number,
   3,
-  ctl__vmd_led_action__enum_values_by_name,
+  ctl__led_action__enum_values_by_name,
   1,
-  ctl__vmd_led_action__value_ranges,
+  ctl__led_action__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

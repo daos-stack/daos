@@ -205,10 +205,10 @@ out:
 }
 
 struct bio_led_manage_info {
-	uuid_t			 dev_uuid;
-	char			*tr_addr;
-	Ctl__VmdLedAction	 action;
-	Ctl__VmdLedState	*state;
+	uuid_t		 dev_uuid;
+	char		*tr_addr;
+	Ctl__LedAction	 action;
+	Ctl__LedState	*state;
 };
 
 static int
@@ -236,13 +236,13 @@ bio_storage_dev_manage_led(void *arg)
 	if (rc != 0)
 		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s)\n",
 			DP_UUID(led_info->dev_uuid),
-			ctl__vmd_led_action__descriptor.values[led_info->action].name,
-			ctl__vmd_led_state__descriptor.values[*led_info->state].name);
+			ctl__led_action__descriptor.values[led_info->action].name,
+			ctl__led_state__descriptor.values[*led_info->state].name);
 	else
 		D_DEBUG(DB_MGMT, "bio_led_manage on device:"DF_UUID" (action: %s, state %s)\n",
 			DP_UUID(led_info->dev_uuid),
-			ctl__vmd_led_action__descriptor.values[led_info->action].name,
-			ctl__vmd_led_state__descriptor.values[*led_info->state].name);
+			ctl__led_action__descriptor.values[led_info->action].name,
+			ctl__led_state__descriptor.values[*led_info->state].name);
 
 	return rc;
 }
@@ -287,7 +287,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	struct bio_dev_info		*dev_info = NULL, *tmp;
 	struct bio_list_devs_info	 list_devs_info = { 0 };
 	struct bio_led_manage_info	 led_info = { 0 };
-	Ctl__VmdLedState		 led_state;
+	Ctl__LedState		 led_state;
 	int				 buflen;
 	int				 rc = 0;
 	int				 i = 0, j;
@@ -344,8 +344,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		/* Fetch LED State */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
-		led_info.action = CTL__VMD_LED_ACTION__GET;
-		led_state = CTL__VMD_LED_STATE__NA;
+		led_info.action = CTL__LED_ACTION__GET;
+		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
 		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
 				     0, 0);
@@ -543,7 +543,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	struct bio_led_manage_info	 led_info = { 0 };
 	struct smd_dev_info		*dev_info;
 	ABT_thread			 thread;
-	Ctl__VmdLedState		 led_state;
+	Ctl__LedState		 led_state;
 	int				 tgt_id;
 	int				 rc = 0;
 
@@ -602,8 +602,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	uuid_unparse_lower(dev_uuid, resp->device->uuid);
 
 	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = CTL__VMD_LED_ACTION__SET;
-	led_state = CTL__VMD_LED_STATE__ON;
+	led_info.action = CTL__LED_ACTION__SET;
+	led_state = CTL__LED_STATE__ON;
 	led_info.state = &led_state;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
@@ -611,7 +611,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	if (rc != 0) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
 		if (rc == -DER_NOSYS)
-			resp->device->led_state = CTL__VMD_LED_STATE__NA;
+			resp->device->led_state = CTL__LED_STATE__NA;
 		else
 			goto out;
 	}
@@ -627,7 +627,7 @@ int
 ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 {
 	struct bio_led_manage_info	led_info = { 0 };
-	Ctl__VmdLedState		led_state;
+	Ctl__LedState			led_state;
 	uuid_t				dev_uuid;
 	int				rc = 0;
 
@@ -686,9 +686,9 @@ ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 	/* Manage the VMD LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
 	if (rc == -DER_NOSYS)
-		resp->device->led_state = CTL__VMD_LED_STATE__NA;
+		resp->device->led_state = CTL__LED_STATE__NA;
 	else if (rc == 0)
-		resp->device->led_state = (Ctl__VmdLedState)led_state;
+		resp->device->led_state = (Ctl__LedState)led_state;
 
 	return rc;
 }

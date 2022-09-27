@@ -50,10 +50,10 @@ func TestControl_SmdQuery(t *testing.T) {
 	devStateNormal := ctlpb.NvmeDevState_NORMAL
 	devStateFaulty := ctlpb.NvmeDevState_EVICTED
 
-	ledStateIdentify := ctlpb.VmdLedState_QUICK_BLINK
-	ledStateNormal := ctlpb.VmdLedState_OFF
-	ledStateFault := ctlpb.VmdLedState_ON
-	ledStateUnknown := ctlpb.VmdLedState_NA
+	ledStateIdentify := ctlpb.LedState_QUICK_BLINK
+	ledStateNormal := ctlpb.LedState_OFF
+	ledStateFault := ctlpb.LedState_ON
+	ledStateUnknown := ctlpb.LedState_NA
 
 	newMockInvokerWRankResps := func(rankResps ...*ctlpb.SmdQueryResp_RankResp) *MockInvokerConfig {
 		return &MockInvokerConfig{

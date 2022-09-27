@@ -106,38 +106,38 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// VmdLedState represents the LED state of VMD device.
-type VmdLedState int32
+// LedState represents the LED state of device.
+type LedState int32
 
-// VmdLedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see include/spdk/vmd.h).
 const (
-	LedStateNormal VmdLedState = iota
+	LedStateNormal LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
 	LedStateUnknown
 )
 
-func (vls VmdLedState) String() string {
-	vlss, ok := ctlpb.VmdLedState_name[int32(vls)]
+func (vls LedState) String() string {
+	vlss, ok := ctlpb.LedState_name[int32(vls)]
 	if !ok {
 		return "UNKNOWN"
 	}
 	return strings.ToUpper(vlss)
 }
 
-func (vls VmdLedState) MarshalJSON() ([]byte, error) {
-	stateStr, ok := ctlpb.VmdLedState_name[int32(vls)]
+func (vls LedState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.LedState_name[int32(vls)]
 	if !ok {
 		return nil, errors.Errorf("invalid vmd led state %d", vls)
 	}
 	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
-func (vls *VmdLedState) UnmarshalJSON(data []byte) error {
+func (vls *LedState) UnmarshalJSON(data []byte) error {
 	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
 
-	state, ok := ctlpb.VmdLedState_value[stateStr]
+	state, ok := ctlpb.LedState_value[stateStr]
 	if !ok {
 		// Try converting the string to an int32, to handle the
 		// conversion from protobuf message using convert.Types().
@@ -146,12 +146,12 @@ func (vls *VmdLedState) UnmarshalJSON(data []byte) error {
 			return errors.Errorf("invalid vmd led state number parse %q", stateStr)
 		}
 
-		if _, ok = ctlpb.VmdLedState_name[int32(si)]; !ok {
+		if _, ok = ctlpb.LedState_name[int32(si)]; !ok {
 			return errors.Errorf("invalid vmd led state name lookup %q", stateStr)
 		}
 		state = int32(si)
 	}
-	*vls = VmdLedState(state)
+	*vls = LedState(state)
 
 	return nil
 }
@@ -228,7 +228,7 @@ type SmdDevice struct {
 	UUID        string       `json:"uuid"`
 	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
 	NvmeState   NvmeDevState `json:"dev_state"`
-	LedState    VmdLedState  `json:"led_state"`
+	LedState    LedState     `json:"led_state"`
 	Rank        system.Rank  `json:"rank"`
 	TotalBytes  uint64       `json:"total_bytes"`
 	AvailBytes  uint64       `json:"avail_bytes"`

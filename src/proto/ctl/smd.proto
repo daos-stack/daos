@@ -78,7 +78,7 @@ enum NvmeDevState {
 	EVICTED = 2;	// Device is faulty and has been evicted
 }
 
-enum VmdLedState {
+enum LedState {
 	OFF = 0;		// Equivalent to SPDK_VMD_LED_STATE_OFF
 	QUICK_BLINK = 1;	// Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
 	ON = 2;			// Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
@@ -93,7 +93,7 @@ message SmdDevice {
 	repeated int32 tgt_ids = 2;	// VOS target IDs
 	string tr_addr = 3;		// Transport address of blobstore
 	NvmeDevState dev_state = 4;	// NVMe device state
-	VmdLedState led_state = 5;	// VMD LED state
+	LedState led_state = 5;		// LED state
 	uint64 total_bytes = 6;		// blobstore clusters total bytes
 	uint64 avail_bytes = 7;		// blobstore clusters available bytes
 	uint64 cluster_size = 8;	// blobstore cluster size in bytes
@@ -119,7 +119,7 @@ message SmdPoolResp {
 	repeated Pool pools = 2;
 }
 
-enum VmdLedAction {
+enum LedAction {
 	GET = 0;
 	SET = 1;
 	RESET = 2;
@@ -128,8 +128,8 @@ enum VmdLedAction {
 message DevManageReq {
 	string uuid = 1;
 	string tr_addr = 2;
-	VmdLedAction led_action = 3;
-	VmdLedState led_state = 4;
+	LedAction led_action = 3;
+	LedState led_state = 4;
 }
 
 message DevManageResp {
@@ -159,10 +159,10 @@ message SmdQueryReq {
 	uint32 rank = 6; // response should only include information about this rank
 	string target = 7; // response should only include information about this VOS target
 	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
-	bool identify = 10; // set the VMD LED state to quickly blink
+	bool identify = 10; // set the LED state to quickly blink
 	string replace_uuid = 12; // UUID of new device to replace storage with
-	bool reset_led = 13; // for resetting VMD LED, debug only
-	bool get_led = 14; // get LED state of VMD devices
+	bool reset_led = 13; // for resetting LED, debug only
+	bool get_led = 14; // get LED state of devices
 	string tr_addr = 15; // constrain query to this transport (PCI) address (device only)
 }
 

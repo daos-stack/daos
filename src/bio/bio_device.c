@@ -14,15 +14,15 @@
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 
-#define LED_STATE_NAME(s) (ctl__vmd_led_state__descriptor.values[s].name)
-#define LED_ACTION_NAME(a) (ctl__vmd_led_action__descriptor.values[a].name)
+#define LED_STATE_NAME(s) (ctl__led_state__descriptor.values[s].name)
+#define LED_ACTION_NAME(a) (ctl__led_action__descriptor.values[a].name)
 
 struct led_opts {
 	struct spdk_pci_addr	pci_addr;
 	bool			all_devices;
 	bool			finished;
-	Ctl__VmdLedAction	action;
-	Ctl__VmdLedState	led_state;
+	Ctl__LedAction		action;
+	Ctl__LedState		led_state;
 	int			status;
 };
 
@@ -30,7 +30,7 @@ static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore	*bbs;
-	unsigned int		 led_state = (unsigned int)CTL__VMD_LED_STATE__OFF;
+	unsigned int		 led_state = (unsigned int)CTL__LED_STATE__OFF;
 	int			 rc;
 
 	D_ASSERT(d_bdev);
@@ -54,7 +54,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__VMD_LED_ACTION__SET,
+	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
 			    &led_state);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
@@ -728,15 +728,15 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		LED_STATE_NAME(opts->led_state));
 
 	switch (opts->action) {
-	case CTL__VMD_LED_ACTION__GET:
+	case CTL__LED_ACTION__GET:
 		/* Return early with current device state set */
-		opts->led_state = (Ctl__VmdLedState)cur_led_state;
+		opts->led_state = (Ctl__LedState)cur_led_state;
 		return;
-	case CTL__VMD_LED_ACTION__SET:
+	case CTL__LED_ACTION__SET:
 		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
 			LED_STATE_NAME(opts->led_state));
 		break;
-	case CTL__VMD_LED_ACTION__RESET:
+	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
 		D_ERROR("Reset action is not supported");
 		opts->status = -DER_INVAL;
@@ -826,8 +826,8 @@ out:
 }
 
 static int
-led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
-	   Ctl__VmdLedAction action, Ctl__VmdLedState *state) {
+led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__LedAction action,
+	   Ctl__LedState *state) {
 	struct led_opts		opts = { 0 };
 	bool			is_faulty;
 	int			rc;
@@ -842,31 +842,31 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
 	/* Init context to be used by led_device_action() */
 	opts.all_devices = false;
 	opts.finished = false;
-	opts.led_state = CTL__VMD_LED_STATE__NA;
+	opts.led_state = CTL__LED_STATE__NA;
 	opts.status = 0;
 	opts.pci_addr = pci_addr;
 
 	/* Validate action value. */
 	switch (action) {
-	case CTL__VMD_LED_ACTION__GET:
+	case CTL__LED_ACTION__GET:
 		opts.action = action;
 		break;
-	case CTL__VMD_LED_ACTION__SET:
+	case CTL__LED_ACTION__SET:
 		opts.action = action;
 		opts.led_state = *state;
 		break;
-	case CTL__VMD_LED_ACTION__RESET:
+	case CTL__LED_ACTION__RESET:
 		/* Check if any relevant devs are faulty, if yes set faulty, if no set normal */
-		opts.action = CTL__VMD_LED_ACTION__SET;
+		opts.action = CTL__LED_ACTION__SET;
 		rc = check_faulty_devs(xs_ctxt, &is_faulty, pci_addr);
 		if (rc != 0) {
 			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
 			return rc;
 		}
 		if (is_faulty)
-			opts.led_state = CTL__VMD_LED_STATE__ON;
+			opts.led_state = CTL__LED_STATE__ON;
 		else
-			opts.led_state = CTL__VMD_LED_STATE__OFF;
+			opts.led_state = CTL__LED_STATE__OFF;
 		break;
 	default:
 		D_ERROR("invalid action supplied: %d\n", action);
@@ -958,5 +958,5 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 		}
 	}
 
-	return led_manage(xs_ctxt, pci_addr, (Ctl__VmdLedAction)action, (Ctl__VmdLedState *)state);
+	return led_manage(xs_ctxt, pci_addr, (Ctl__LedAction)action, (Ctl__LedState *)state);
 }

@@ -51,35 +51,35 @@ typedef enum _Ctl__NvmeDevState {
   CTL__NVME_DEV_STATE__EVICTED = 2
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__NVME_DEV_STATE)
 } Ctl__NvmeDevState;
-typedef enum _Ctl__VmdLedState {
+typedef enum _Ctl__LedState {
   /*
    * Equivalent to SPDK_VMD_LED_STATE_OFF
    */
-  CTL__VMD_LED_STATE__OFF = 0,
+  CTL__LED_STATE__OFF = 0,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
    */
-  CTL__VMD_LED_STATE__QUICK_BLINK = 1,
+  CTL__LED_STATE__QUICK_BLINK = 1,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
    */
-  CTL__VMD_LED_STATE__ON = 2,
+  CTL__LED_STATE__ON = 2,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
    */
-  CTL__VMD_LED_STATE__SLOW_BLINK = 3,
+  CTL__LED_STATE__SLOW_BLINK = 3,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
    */
-  CTL__VMD_LED_STATE__NA = 4
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__VMD_LED_STATE)
-} Ctl__VmdLedState;
-typedef enum _Ctl__VmdLedAction {
-  CTL__VMD_LED_ACTION__GET = 0,
-  CTL__VMD_LED_ACTION__SET = 1,
-  CTL__VMD_LED_ACTION__RESET = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__VMD_LED_ACTION)
-} Ctl__VmdLedAction;
+  CTL__LED_STATE__NA = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__LED_STATE)
+} Ctl__LedState;
+typedef enum _Ctl__LedAction {
+  CTL__LED_ACTION__GET = 0,
+  CTL__LED_ACTION__SET = 1,
+  CTL__LED_ACTION__RESET = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__LED_ACTION)
+} Ctl__LedAction;
 
 /* --- messages --- */
 
@@ -219,9 +219,9 @@ struct  _Ctl__SmdDevice
    */
   Ctl__NvmeDevState dev_state;
   /*
-   * VMD LED state
+   * LED state
    */
-  Ctl__VmdLedState led_state;
+  Ctl__LedState led_state;
   /*
    * blobstore clusters total bytes
    */
@@ -241,7 +241,7 @@ struct  _Ctl__SmdDevice
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__VMD_LED_STATE__OFF, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__LED_STATE__OFF, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq
@@ -314,12 +314,12 @@ struct  _Ctl__DevManageReq
   ProtobufCMessage base;
   char *uuid;
   char *tr_addr;
-  Ctl__VmdLedAction led_action;
-  Ctl__VmdLedState led_state;
+  Ctl__LedAction led_action;
+  Ctl__LedState led_state;
 };
 #define CTL__DEV_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, CTL__VMD_LED_ACTION__GET, CTL__VMD_LED_STATE__OFF }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF }
 
 
 struct  _Ctl__DevManageResp
@@ -410,7 +410,7 @@ struct  _Ctl__SmdQueryReq
    */
   protobuf_c_boolean no_reint;
   /*
-   * set the VMD LED state to quickly blink
+   * set the LED state to quickly blink
    */
   protobuf_c_boolean identify;
   /*
@@ -418,11 +418,11 @@ struct  _Ctl__SmdQueryReq
    */
   char *replace_uuid;
   /*
-   * for resetting VMD LED, debug only
+   * for resetting LED, debug only
    */
   protobuf_c_boolean reset_led;
   /*
-   * get LED state of VMD devices
+   * get LED state of devices
    */
   protobuf_c_boolean get_led;
   /*
@@ -836,8 +836,8 @@ typedef void (*Ctl__SmdQueryResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCEnumDescriptor    ctl__nvme_dev_state__descriptor;
-extern const ProtobufCEnumDescriptor    ctl__vmd_led_state__descriptor;
-extern const ProtobufCEnumDescriptor    ctl__vmd_led_action__descriptor;
+extern const ProtobufCEnumDescriptor    ctl__led_state__descriptor;
+extern const ProtobufCEnumDescriptor    ctl__led_action__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_device__descriptor;

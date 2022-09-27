@@ -30,10 +30,10 @@ const (
 )
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
-	ledStateIdentify := ctlpb.VmdLedState_QUICK_BLINK
-	ledStateNormal := ctlpb.VmdLedState_OFF
-	ledStateFault := ctlpb.VmdLedState_ON
-	ledStateUnknown := ctlpb.VmdLedState_NA
+	ledStateIdentify := ctlpb.LedState_QUICK_BLINK
+	ledStateNormal := ctlpb.LedState_OFF
+	ledStateFault := ctlpb.LedState_ON
+	ledStateUnknown := ctlpb.LedState_NA
 
 	pbNormDev := &ctlpb.SmdDevice{
 		Uuid:     test.MockUUID(),
