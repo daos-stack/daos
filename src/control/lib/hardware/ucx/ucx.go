@@ -132,31 +132,13 @@ func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, fis *h
 		osDev := strings.Split(dev.device, ":")[0]
 
 		fis.Update(&hardware.FabricInterface{
-			Name:      getExternalName(comp, dev.device, allDevs.ToSlice()),
+			Name:      dev.device,
 			OSName:    osDev,
 			Providers: p.getProviderSet(dev.transport),
 		})
 	}
 
 	return nil
-}
-
-// getExternalName constructs the name that must be used by DAOS to specify the fabric device.
-func getExternalName(comp, dev string, allDevs []string) string {
-	if comp != compInfiniband {
-		return dev
-	}
-
-	// Infiniband device names need to include the full list of devices for the component.
-	// To ensure unique names, each list has the main device string first.
-	ordered := []string{dev}
-	for _, d := range allDevs {
-		if d != dev {
-			ordered = append(ordered, d)
-		}
-	}
-
-	return strings.Join(ordered, ",")
 }
 
 func (p *Provider) getProviderSet(transport string) common.StringSet {

@@ -219,7 +219,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			}
 
 			var cancel context.CancelFunc
-			ctx := context.Background()
+			ctx, outerCancel := context.WithCancel(context.Background())
+			t.Cleanup(outerCancel)
 			if tc.ctxTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
 				defer cancel()
@@ -252,7 +253,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		req               *ctlpb.RanksReq
 		timeout           time.Duration
 		signal            os.Signal
-		signalErr         error
 		expSignalsSent    map[uint32]os.Signal
 		expResults        []*sharedpb.RankResult
 		expErr            error
@@ -273,13 +273,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"missing ranks": {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
 			expResults: []*sharedpb.RankResult{},
-		},
-		"kill signal send error": {
-			req: &ctlpb.RanksReq{
-				Ranks: "0-3", Force: true,
-			},
-			signalErr: errors.New("sending signal failed"),
-			expErr:    errors.New("sending killed: sending signal failed"),
 		},
 		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
@@ -336,13 +329,14 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			ctx := context.Background()
-			ctx, cancel := context.WithCancel(ctx)
+			ctx, outerCancel := context.WithCancel(context.Background())
+			t.Cleanup(outerCancel)
+			var cancel context.CancelFunc
 			if tc.timeout != time.Duration(0) {
 				t.Logf("timeout of %s being applied", tc.timeout)
 				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
 			}
-			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
@@ -369,12 +363,11 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 						return
 					}
 					// simulate process exit which will call onInstanceExit handlers
-					ei.exit(ctx, common.NormalExit)
+					ei.handleExit(ctx, 0, common.NormalExit)
 					// set false on test runner so IsStarted on engine returns false
 					ei.runner.(*engine.TestRunner).GetRunnerConfig().Running.SetFalse()
 					log.Debugf("mock handling signal %v on engine %d", sig, idx)
 				}
-				trc.SignalErr = tc.signalErr
 				ei.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				ei.setIndex(uint32(i))
 
@@ -382,7 +375,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*ei._superblock.Rank = system.Rank(i + 1)
 
 				ei.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
+					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ int) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})
@@ -592,13 +585,15 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			var cancel context.CancelFunc
-			ctx := context.Background()
+			ctx, outerCancel := context.WithCancel(context.Background())
+			t.Cleanup(outerCancel)
 			if tc.ctxTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+				inner, cancel := context.WithTimeout(ctx, tc.ctxTimeout)
 				defer cancel()
+				ctx = inner
 			} else if tc.ctxCancel != 0 {
-				ctx, cancel = context.WithCancel(ctx)
+				inner, cancel := context.WithCancel(ctx)
+				ctx = inner
 				go func() {
 					<-time.After(tc.ctxCancel)
 					cancel()
@@ -668,12 +663,13 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx := context.Background()
+			ctx, outerCancel := context.WithCancel(context.Background())
+			t.Cleanup(outerCancel)
 			if tc.timeout != time.Duration(0) {
 				t.Logf("timeout of %s being applied", tc.timeout)
-				newCtx, cancel := context.WithTimeout(context.Background(), tc.timeout)
-				ctx = newCtx
+				inner, cancel := context.WithTimeout(ctx, tc.timeout)
 				defer cancel()
+				ctx = inner
 			}
 
 			cfg := config.DefaultServer().WithEngines(
@@ -737,7 +733,10 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				// Unblock requestStart() called from ResetFormatRanks() by reading
 				// from startRequested channel.
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startRequested
+					select {
+					case <-ctx.Done():
+					case <-s.startRequested:
+					}
 				}(ei, tc.startFails)
 			}
 
@@ -813,13 +812,14 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx := context.Background()
-			ctx, cancel := context.WithCancel(ctx)
+			ctx, outerCancel := context.WithCancel(context.Background())
+			t.Cleanup(outerCancel)
 			if tc.timeout != time.Duration(0) {
 				t.Logf("timeout of %s being applied", tc.timeout)
-				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+				inner, cancel := context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+				ctx = inner
 			}
-			defer cancel()
 
 			cfg := config.DefaultServer().WithEngines(
 				engine.MockConfig().WithTargetCount(1),
@@ -854,12 +854,10 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					}
 
 					// set instance runner started and ready
-					ch := make(chan error, 1)
-					if err := s.runner.Start(ctx, ch); err != nil {
+					if _, err := s.runner.Start(ctx); err != nil {
 						t.Logf("failed to start runner: %s", err)
 						return
 					}
-					<-ch
 					s.ready.SetTrue()
 					t.Log("ready set to true")
 				}(srv, tc.startFails)
@@ -888,8 +886,6 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		junkResp         bool
 		drpcResps        []proto.Message
 		responseDelay    time.Duration
-		ctxTimeout       time.Duration
-		ctxCancel        time.Duration
 		expResp          *ctlpb.SetLogMasksResp
 		expErr           error
 	}{
@@ -991,18 +987,8 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			var cancel context.CancelFunc
-			ctx := context.Background()
-			if tc.ctxTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-			} else if tc.ctxCancel != 0 {
-				ctx, cancel = context.WithCancel(ctx)
-				go func() {
-					<-time.After(tc.ctxCancel)
-					cancel()
-				}()
-			}
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
 
 			gotResp, gotErr := svc.SetEngineLogMasks(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
