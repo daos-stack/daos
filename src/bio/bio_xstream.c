@@ -348,14 +348,14 @@ is_init_xstream(struct bio_xs_context *ctxt)
 bool
 bio_need_nvme_poll(struct bio_xs_context *ctxt)
 {
-	enum smd_type		st;
+	enum smd_dev_type	 st;
 	struct bio_xs_blobstore	*bxb;
 
 	if (ctxt == NULL)
 		return false;
 
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
-		bxb = ctxt->bxc_xs_blobstores[st];
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = bio_xs_context2xs_blobstore(ctxt, st);
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
 	}
@@ -1095,7 +1095,7 @@ alloc_xs_blobstore(void)
 }
 
 int
-find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_type st,
+find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 		struct bio_bdev **ret_d_bdev, struct smd_dev_info **ret_dev_info)
 {
 	bool			 assigned = false;
@@ -1168,7 +1168,7 @@ out:
 }
 
 static int
-init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_type st)
+init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st)
 {
 	struct bio_bdev		*d_bdev;
 	struct bio_blobstore	*bbs;
@@ -1292,7 +1292,7 @@ void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
 	int			 rc = 0;
-	enum smd_type		 st;
+	enum smd_dev_type	 st;
 	struct bio_xs_blobstore	*bxb;
 
 	/* NVMe context setup was skipped */
@@ -1300,7 +1300,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		return;
 
 	ctxt->bxc_ready = 0;
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb == NULL)
 			continue;
@@ -1389,7 +1389,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc;
-	enum smd_type		 st;
+	enum smd_dev_type	 st;
 
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
@@ -1472,9 +1472,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	}
 
 	/* Initialize per-xstream blobstore context */
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		/* only data blob now */
-		if (st != SMD_TYPE_DATA)
+		if (st != SMD_DEV_TYPE_DATA)
 			continue;
 		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
 		if (rc)
@@ -1488,6 +1488,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		goto out;
 	}
 	ctxt->bxc_ready = 1;
+	/* metadata on ssd not enabled for now */
+	ctxt->bxc_meta_on_ssd = 0;
 
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
@@ -1687,9 +1689,9 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-	uint64_t		now = d_timeus_secdiff(0);
-	enum smd_type		st;
-	int			rc;
+	uint64_t		 now = d_timeus_secdiff(0);
+	enum smd_dev_type	 st;
+	int			 rc;
 	struct bio_xs_blobstore	*bxb;
 
 	/* NVMe context setup was skipped */
@@ -1712,7 +1714,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 * Query and print the SPDK device health stats for only the device
 	 * owner xstream.
 	 */
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blobstore &&
 		    is_bbs_owner(ctxt, bxb->bxb_blobstore))

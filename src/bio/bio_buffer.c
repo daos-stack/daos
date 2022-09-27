@@ -1043,7 +1043,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
 	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 	blob = biod->bd_ctxt->bic_blob;
-	channel = xs_ctxt->bxc_xs_blobstores[SMD_TYPE_DATA]->bxb_io_channel;
+	channel = bxb->bxb_io_channel;
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
 	if (daos_io_bypass & IOBP_NVME)

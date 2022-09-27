@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,13 @@
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,
 	SMD_DEV_FAULTY,
+};
+
+enum smd_dev_type {
+	SMD_DEV_TYPE_DATA = 0,
+	SMD_DEV_TYPE_META,
+	SMD_DEV_TYPE_WAL,
+	SMD_DEV_TYPE_MAX = 3,
 };
 
 struct smd_dev_info {

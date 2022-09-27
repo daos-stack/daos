@@ -60,14 +60,14 @@ collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * stats->cluster_size;
 }
 
-static enum smd_type
+static enum smd_dev_type
 bio_get_xs_blobstore_type(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 {
 	struct bio_xs_blobstore	 *bxb;
-	enum smd_type		  st;
+	enum smd_dev_type		  st;
 
-	for (st = 0; st < SMD_TYPE_MAX; st++) {
-		bxb = xs_ctxt->bxc_xs_blobstores[st];
+	for (st = 0; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 		if (bxb != NULL && bxb->bxb_blobstore) {
 			if (uuid_compare(uuid,
 					 bxb->bxb_blobstore->bb_dev->bb_uuid) == 0)
@@ -82,17 +82,17 @@ bio_get_xs_blobstore_type(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
-	struct dev_state_msg_arg *dsm = msg_arg;
-	enum smd_type		  st;
-	struct bio_xs_blobstore	 *bxb;
+	struct dev_state_msg_arg	*dsm = msg_arg;
+	enum smd_dev_type		 st;
+	struct bio_xs_blobstore		 *bxb;
 
 	st = bio_get_xs_blobstore_type(dsm->dev_uuid, dsm->xs);
 	/* not found */
-	if (st >= SMD_TYPE_MAX)
+	if (st >= SMD_DEV_TYPE_MAX)
 		return;
 
 	D_ASSERT(dsm != NULL);
-	bxb = dsm->xs->bxc_xs_blobstores[st];
+	bxb = bio_xs_context2xs_blobstore(dsm->xs, st);
 
 	dsm->devstate = bxb->bxb_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(bxb->bxb_blobstore->bb_bs, &dsm->devstate);
@@ -105,15 +105,15 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	struct dev_state_msg_arg	*dsm = msg_arg;
 	int				 rc;
 	struct bio_xs_blobstore		*bxb;
-	enum smd_type			 st;
+	enum smd_dev_type		 st;
 
 	D_ASSERT(dsm != NULL);
 	st = bio_get_xs_blobstore_type(dsm->dev_uuid, dsm->xs);
 	/* not found */
-	if (st >= SMD_TYPE_MAX)
+	if (st >= SMD_DEV_TYPE_MAX)
 		return;
 
-	bxb = dsm->xs->bxc_xs_blobstores[st];
+	bxb = bio_xs_context2xs_blobstore(dsm->xs, st);
 	rc = bio_bs_state_set(bxb->bxb_blobstore, BIO_BS_STATE_FAULTY);
 	if (rc)
 		D_ERROR("BIO FAULTY state set failed, rc=%d\n", rc);
@@ -126,12 +126,12 @@ bio_dev_set_faulty_internal(void *msg_arg)
 }
 
 static void
-bio_log_csum_err(struct bio_xs_context *bxc, enum smd_type st)
+bio_log_csum_err(struct bio_xs_context *bxc, enum smd_dev_type st)
 {
 	struct media_error_msg	*mem;
 	struct bio_xs_blobstore	*bxb;
 
-	bxb = bxc->bxc_xs_blobstores[st];
+	bxb = bio_xs_context2xs_blobstore(bxc, st);
 	if (bxb == NULL || bxb->bxb_blobstore == NULL)
 		return;
 	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
@@ -146,7 +146,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, enum smd_type st)
 inline void
 bio_log_data_csum_err(struct bio_xs_context *bxc)
 {
-	bio_log_csum_err(bxc, SMD_TYPE_DATA);
+	bio_log_csum_err(bxc, SMD_DEV_TYPE_DATA);
 }
 
 
@@ -165,7 +165,7 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t uuid,
 
 	dsm.xs = xs;
 	uuid_copy(dsm.dev_uuid, uuid);
-	bxb = xs->bxc_xs_blobstores[SMD_TYPE_DATA];
+	bxb = bio_xs_context2xs_blobstore(xs, SMD_DEV_TYPE_DATA);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_get_dev_state_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, NULL);
@@ -187,13 +187,15 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t uuid,
 void
 bio_get_bs_state(int *bs_state, uuid_t bs_uuid, struct bio_xs_context *xs)
 {
-	enum smd_type		 st;
+	enum smd_dev_type		 st;
+	struct bio_xs_blobstore		*bxb;
 
 	st = bio_get_xs_blobstore_type(bs_uuid, xs);
-	if (st >= SMD_TYPE_MAX)
+	if (st >= SMD_DEV_TYPE_MAX)
 		return;
 
-	*bs_state = xs->bxc_xs_blobstores[st]->bxb_blobstore->bb_state;
+	bxb = bio_xs_context2xs_blobstore(xs, st);
+	*bs_state = bxb->bxb_blobstore->bb_state;
 
 	return;
 }
@@ -209,10 +211,10 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t uuid)
 	int				rc;
 	int				*dsm_rc;
 	struct bio_xs_blobstore		*bxb;
-	enum smd_type			 st;
+	enum smd_dev_type		 st;
 
 	st = bio_get_xs_blobstore_type(uuid, xs);
-	if (st >= SMD_TYPE_MAX)
+	if (st >= SMD_DEV_TYPE_MAX)
 		return -DER_NONEXIST;
 
 	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
@@ -221,7 +223,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t uuid)
 
 	dsm.xs = xs;
 
-	bxb = xs->bxc_xs_blobstores[st];
+	bxb = bio_xs_context2xs_blobstore(xs, st);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_dev_set_faulty_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, (void **)&dsm_rc);

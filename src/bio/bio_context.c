@@ -9,7 +9,6 @@
 #include <spdk/thread.h>
 #include "bio_internal.h"
 #include "bio_wal.h"
-#include "smd/smd_internal.h"
 
 #define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
 
@@ -277,12 +276,44 @@ out:
 	return rc;
 }
 
+/**
+ * There might be few cases with SSD on metata enabled.
+ *	DATA		META		WAL
+ *	Y		N		N
+ *	Y		Y		N
+ *	Y		Y		Y
+ *
+ * Case1: META && WAL share same blobstore with DATA.
+ * Case2: WAL share same blobstore with META.
+ * Case3: DATA, META, WAL have own blobstore seperately.
+ */
+struct bio_xs_blobstore *
+bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
+{
+	struct bio_xs_blobstore *bxb;
+
+	bxb = xs_ctxt->bxc_xs_blobstores[st];
+	/* metadata on ssd not enabled */
+	if (bxb == NULL && xs_ctxt->bxc_meta_on_ssd == 0) {
+		return NULL;
+	} else if (bxb == NULL) {
+		/* Meta && Wal share same blobstore */
+		if (xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META] != NULL)
+			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META];
+		else /* Meta, Wal && data share same blobstore */
+			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_DATA];
+	}
+
+	return bxb;
+}
+
 static int
-bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_type st)
+bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
 	struct bio_blobstore		*bbs;
+	struct bio_xs_blobstore		*bxb;
 	spdk_blob_id			 blob_id;
 	int				 rc;
 
@@ -311,7 +342,10 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_type st)
 	if (rc != 0)
 		return rc;
 
-	bbs = xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore;
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	D_ASSERT(bxb != NULL);
+	bbs = bxb->bxb_blobstore;
+	D_ASSERT(bbs != NULL);
 	rc = bio_bs_hold(bbs);
 	if (rc) {
 		blob_cp_arg_fini(ba);
@@ -352,11 +386,11 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_type st)
 int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 {
 	int			 rc = 0;
-	enum smd_type		 st;
-	struct bio_xs_blobstore *bxb;
+	enum smd_dev_type	 st;
+	struct bio_xs_blobstore	*bxb;
 
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
-		bxb = xs_ctxt->bxc_xs_blobstores[st];
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 		if (bxb != NULL && bxb->bxb_blobstore != NULL) {
 			rc = bio_blob_delete(pool_id, xs_ctxt, st);
 			if (rc)
@@ -370,20 +404,22 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 
 static int
 bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
-		enum smd_type st)
+		enum smd_dev_type st)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
+	struct bio_xs_blobstore		*bxb;
 	struct bio_blobstore		*bbs;
 	uint64_t			 cluster_sz;
 	spdk_blob_id			 blob_id;
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	bbs = xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore;
-	if (bbs == NULL)
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	if (bxb == NULL || bxb->bxb_blobstore == NULL)
 		return -DER_NO_HDL;
 
+	bbs = bxb->bxb_blobstore;
 	cluster_sz = bbs->bb_bs != NULL ?
 		spdk_bs_get_cluster_size(bbs->bb_bs) : 0;
 
@@ -470,30 +506,30 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 	int rc = 0;
 
 	if (data_sz > 0) {
-		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_TYPE_DATA);
+		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_DEV_TYPE_DATA);
 		if (rc)
 			return rc;
 	}
 
 	if (meta_sz > 0) {
-		rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_TYPE_META);
+		rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META);
 		if (rc)
 			goto delete_data;
 	}
 
 	if (wal_sz > 0) {
-		rc = bio_blob_create(pool_id, xs_ctxt, wal_sz, SMD_TYPE_META);
+		rc = bio_blob_create(pool_id, xs_ctxt, wal_sz, SMD_DEV_TYPE_META);
 		if (rc)
 			goto delete_meta;
 	}
 
 	return rc;
 delete_meta:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_TYPE_META))
+	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META))
 		D_ERROR("Unable to delete newly created meta blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 delete_data:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_TYPE_DATA))
+	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA))
 		D_ERROR("Unable to delete newly created data blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 	return rc;
@@ -575,12 +611,13 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 }
 
 static int
-bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		struct umem_instance *umem, uuid_t uuid, enum bio_mc_flags flags,
-		enum smd_type st)
+__bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+		  struct umem_instance *umem, uuid_t uuid, enum bio_mc_flags flags,
+		  enum smd_dev_type st)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
+	struct bio_xs_blobstore	*bxb;
 
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
@@ -598,30 +635,32 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		return 0;
 	}
 
-	rc = bio_bs_hold(xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore);
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	D_ASSERT(bxb != NULL);
+	rc = bio_bs_hold(bxb->bxb_blobstore);
 	if (rc) {
 		D_FREE(ctxt);
 		return rc;
 	}
 
-	ctxt->bic_xs_blobstore = xs_ctxt->bxc_xs_blobstores[st];
+	ctxt->bic_xs_blobstore = bxb;
 	rc = bio_blob_open(ctxt, false);
 	if (rc) {
 		D_FREE(ctxt);
 	} else {
 		d_list_add_tail(&ctxt->bic_link,
-				&xs_ctxt->bxc_xs_blobstores[st]->bxb_io_ctxts);
+				&bxb->bxb_io_ctxts);
 		*pctxt = ctxt;
 	}
 
-	bio_bs_unhold(xs_ctxt->bxc_xs_blobstores[st]->bxb_blobstore);
+	bio_bs_unhold(bxb->bxb_blobstore);
 	return rc;
 }
 
-int bio_data_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-			 struct umem_instance *umem, uuid_t uuid)
+int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+		    struct umem_instance *umem, uuid_t uuid)
 {
-	return bio_ioctxt_open(pctxt, xs_ctxt, umem, uuid, 0, SMD_TYPE_DATA);
+	return __bio_ioctxt_open(pctxt, xs_ctxt, umem, uuid, 0, SMD_DEV_TYPE_DATA);
 }
 
 int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_instance *umm,
@@ -634,23 +673,24 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
 	if (bio_mc == NULL)
 		return -DER_NOMEM;
 
-	rc = bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, umm, pool_id, flags, SMD_TYPE_DATA);
+	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, umm, pool_id, flags,
+			     SMD_DEV_TYPE_DATA);
 	if (rc)
 		goto failed;
 
 	if (flags & BIO_MC_FL_NO_DATABLOB)
 		goto out;
 
-	if (xs_ctxt->bxc_xs_blobstores[SMD_TYPE_META]) {
-		rc = bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, umm, pool_id,
-				     flags, SMD_TYPE_META);
+	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_META) != NULL) {
+		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, umm, pool_id,
+				     flags, SMD_DEV_TYPE_META);
 		if (rc)
 			goto failed;
 	}
 
-	if (xs_ctxt->bxc_xs_blobstores[SMD_TYPE_WAL]) {
-		rc = bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, umm, pool_id,
-				     flags, SMD_TYPE_WAL);
+	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_WAL) != NULL) {
+		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, umm, pool_id,
+				     flags, SMD_DEV_TYPE_WAL);
 		if (rc)
 			goto failed;
 	}

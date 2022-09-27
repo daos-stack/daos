@@ -486,9 +486,9 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_data_ioctxt_open(struct bio_io_context **pctxt,
-			 struct bio_xs_context *xs_ctxt,
-			 struct umem_instance *umem, uuid_t uuid);
+int bio_ioctxt_open(struct bio_io_context **pctxt,
+		    struct bio_xs_context *xs_ctxt,
+		    struct umem_instance *umem, uuid_t uuid);
 
 enum bio_mc_flags {
 	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */

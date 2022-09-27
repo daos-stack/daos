@@ -58,11 +58,11 @@ on_faulty(struct bio_blobstore *bbs)
 }
 
 static void
-teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_type st)
+teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 {
 	struct bio_io_context	*ioc;
 	int			 opened_blobs = 0;
-	struct bio_xs_blobstore	*bxb = xs_ctxt->bxc_xs_blobstores[st];
+	struct bio_xs_blobstore	*bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 
 	/* This blobstore is torndown */
 	if (bxb == NULL || bxb->bxb_io_channel == NULL)
@@ -97,7 +97,6 @@ static void
 teardown_xstream(void *arg)
 {
 	struct bio_xs_context	*xs_ctxt = arg;
-	enum smd_type		 st;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
@@ -106,8 +105,8 @@ teardown_xstream(void *arg)
 	}
 
 	xs_ctxt->bxc_ready = 0;
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++)
-		teardown_blobstore(xs_ctxt, st);
+	/* only teardown data blobstore for now */
+	teardown_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
 }
 
 static void
@@ -138,14 +137,12 @@ unload_bs_cp(void *arg, int rc)
 static inline bool
 is_xstream_torndown(struct bio_xs_context *xs_ctxt)
 {
-	enum smd_type		 st;
 	struct bio_xs_blobstore	*bxb;
 
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
-		bxb = xs_ctxt->bxc_xs_blobstores[st];
-		if (bxb != NULL && bxb->bxb_io_channel != NULL)
-			return false;
-	}
+	/* only check data blobstore for now */
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
+	if (bxb != NULL && bxb->bxb_io_channel != NULL)
+		return false;
 
 	return true;
 }
@@ -222,14 +219,14 @@ on_teardown(struct bio_blobstore *bbs)
 }
 
 static void
-setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_type st,
+setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 		int *closed_blobs)
 {
 	struct bio_io_context	*ioc;
 	struct bio_blobstore	*bbs;
 	struct bio_xs_blobstore	*bxb;
 
-	bxb = xs_ctxt->bxc_xs_blobstores[st];
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 	if (bxb == NULL)
 		return;
 
@@ -275,7 +272,6 @@ setup_xstream(void *arg)
 {
 	struct bio_xs_context	*xs_ctxt = arg;
 	int			 closed_blobs;
-	enum smd_type		 st;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
@@ -283,12 +279,11 @@ setup_xstream(void *arg)
 		return;
 	}
 
-	for (st = SMD_TYPE_DATA; st < SMD_TYPE_MAX; st++) {
-		closed_blobs = 0;
-		setup_blobstore(xs_ctxt, st, &closed_blobs);
-		if (closed_blobs > 0)
-			goto failed;
-	}
+	/* only support data blobstore for now */
+	closed_blobs = 0;
+	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
+	if (closed_blobs > 0)
+		goto failed;
 
 	xs_ctxt->bxc_ready = 1;
 	return;

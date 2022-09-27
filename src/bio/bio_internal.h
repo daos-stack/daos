@@ -373,10 +373,11 @@ struct bio_xs_blobstore {
 struct bio_xs_context {
 	int			 bxc_tgt_id;
 	struct spdk_thread	*bxc_thread;
-	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_TYPE_MAX];
+	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_ready:1,		/* xstream setup finished */
-				 bxc_self_polling;	/* for standalone VOS */
+				 bxc_self_polling,	/* for standalone VOS */
+				 bxc_meta_on_ssd;	/* metatadata on ssd enabled */
 };
 
 /* Per VOS instance I/O context */
@@ -600,6 +601,8 @@ void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
 int bio_blob_open(struct bio_io_context *ctxt, bool async);
+struct bio_xs_blobstore *
+bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);
