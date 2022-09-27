@@ -852,6 +852,56 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	return resp, nil
 }
 
+// SystemExclude marks the specified ranks as administratively excluded from the system.
+func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExcludeReq) (*mgmtpb.SystemExcludeResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemExclude RPC: %s", mgmtpb.Debug(req))
+
+	if req.Hosts == "" && req.Ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	fReq, fResp, err := svc.getFanout(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if fResp.AbsentHosts.Count() > 0 {
+		return nil, errors.Errorf("invalid host(s): %s", fResp.AbsentHosts.String())
+	}
+	if fResp.AbsentRanks.Count() > 0 {
+		return nil, errors.Errorf("invalid rank(s): %s", fResp.AbsentRanks.String())
+	}
+
+	resp := new(mgmtpb.SystemExcludeResp)
+	for _, r := range fReq.Ranks.Ranks() {
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return nil, err
+		}
+		action := "set admin-excluded state"
+		m.State = system.MemberStateAdminExcluded
+		if req.Clear {
+			action = "clear admin-excluded state"
+			m.State = system.MemberStateExcluded // cleared on rejoin
+		}
+		if err := svc.sysdb.UpdateMember(m); err != nil {
+			return nil, err
+		}
+		resp.Results = append(resp.Results, &sharedpb.RankResult{
+			Rank:   r.Uint32(),
+			Action: action,
+			State:  strings.ToLower(m.State.String()),
+			Addr:   m.Addr.String(),
+		})
+	}
+	svc.log.Debugf("Responding to SystemExclude RPC: %+v", resp)
+
+	return resp, nil
+}
+
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).

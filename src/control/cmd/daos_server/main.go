@@ -146,7 +146,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			if _, err := os.Stat(opts.ConfigPath); err == nil {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			}
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {
