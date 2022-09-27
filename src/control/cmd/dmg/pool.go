@@ -320,7 +320,7 @@ type poolCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
+		Pool PoolID `positional-arg-name:"<pool name or UUID>" required:"1"`
 	} `positional-args:"yes"`
 }
 
