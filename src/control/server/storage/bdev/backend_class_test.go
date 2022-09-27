@@ -24,8 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const allBdevRoles = storage.BdevRoleWAL | storage.BdevRoleIndex | storage.BdevRoleData
-
 // TestBackend_createEmptyFile verifies empty files are created as expected.
 func TestBackend_createEmptyFile(t *testing.T) {
 	tests := map[string]struct {
@@ -163,7 +161,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Bdev: storage.BdevConfig{
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
 					DeviceRoles: storage.BdevDeviceRoles{
-						OptionBits: storage.OptionBits(allBdevRoles),
+						OptionBits: storage.OptionBits(storage.BdevRoleAll),
 					},
 				},
 			},

@@ -93,6 +93,8 @@ const (
 	BdevConfigTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU
+	BdevConfigMultiTiersWithDCPM
+	BdevConfigBadNrRoles
 )
 
 // DAOS system fault codes

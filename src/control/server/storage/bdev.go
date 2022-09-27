@@ -63,6 +63,7 @@ const (
 	BdevRoleData  = C.NVME_ROLE_DATA
 	BdevRoleIndex = C.NVME_ROLE_INDEX
 	BdevRoleWAL   = C.NVME_ROLE_WAL
+	BdevRoleAll   = BdevRoleData | BdevRoleIndex | BdevRoleWAL
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.

@@ -36,8 +36,6 @@ const (
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
-
-	allBdevRoles = storage.BdevRoleWAL | storage.BdevRoleIndex | storage.BdevRoleData
 )
 
 var (
@@ -255,7 +253,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
 					WithBdevBusidRange("0x80-0x8f").
-					WithBdevDeviceRoles(allBdevRoles),
+					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
@@ -643,7 +641,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
 							WithBdevDeviceList("0000:81:00.0").
-							WithBdevDeviceRoles(allBdevRoles),
+							WithBdevDeviceRoles(storage.BdevRoleAll),
 					).
 					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
 					WithStorageVosEnv("NVME"),

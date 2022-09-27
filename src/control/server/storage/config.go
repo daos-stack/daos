@@ -251,6 +251,14 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
+// Validation of bdev tier role assignments is based on the following assumptions and rules:
+//
+// - A role can only be assigned to one entire tier, i.e. tier 2 & 3 cannot both be assigned the
+//   Index role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
+//   in the case where > 3 bdev tiers exist.
+// - All roles (WAL, Index and Data) need to be assigned in bdev tiers if scm class is ram.
+// - If the (first) scm tier is of class dcpm, then only one bdev tier with Data role is supported,
+//   no third tier (for now).
 func (tcs TierConfigs) validateBdevTierRoles() error {
 	sc := tcs.ScmConfigs()[0]
 	bcs := tcs.BdevConfigs()
@@ -261,7 +269,7 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 		nrWALTiers = 0
 		nrIndexTiers = 0
 		if len(bcs) > 1 {
-			return errors.Errorf("more than 1 bdev tiers not allowed with dcpm scm class")
+			return FaultBdevConfigMultiTiersWithDCPM
 		}
 	}
 
@@ -280,20 +288,29 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 	}
 
 	if foundWALTiers != nrWALTiers {
-		return errors.Errorf("found %d WAL tiers, wanted %d", foundWALTiers, nrWALTiers)
+		return FaultBdevConfigBadNrRoles("WAL", foundWALTiers, nrWALTiers)
 	}
 	if foundIndexTiers != nrIndexTiers {
-		return errors.Errorf("found %d Index tiers, wanted %d", foundIndexTiers, nrIndexTiers)
+		return FaultBdevConfigBadNrRoles("Index", foundIndexTiers, nrIndexTiers)
 	}
 	// When bdev NVMe tiers exist, there should always be at least one Data tier.
 	if foundDataTiers == 0 {
-		return errors.New("found 0 Data tiers, wanted at least 1")
+		return FaultBdevConfigBadNrRoles("Data", 0, 1)
 	}
 
 	return nil
 }
 
 // Set NVME class tier roles either based on explicit settings or heuristics.
+//
+// Role assignments will be decided based on the following rule set:
+// - For 1 bdev tier, all roles will be assigned to that tier.
+// - For 2 bdev tiers, WAL and Index roles will be assigned to the first bdev tier and Data to
+//   the second bdev tier.
+// - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Index to the
+//   second bdev tier and Data to all remaining bdev tiers.
+// - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
+// - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) assignBdevTierRoles() error {
 	scs := tcs.ScmConfigs()
 	bcs := tcs.BdevConfigs()
@@ -308,11 +325,23 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 		return nil
 	}
 
-	// Skip implicit role assignment if any roles have already been explicitly assigned.
+	tiersWithoutRoles := make([]int, 0, len(bcs))
 	for _, bc := range bcs {
-		if !bc.Bdev.DeviceRoles.IsEmpty() {
-			return tcs.validateBdevTierRoles()
+		if bc.Bdev.DeviceRoles.IsEmpty() {
+			tiersWithoutRoles = append(tiersWithoutRoles, bc.Tier)
 		}
+	}
+
+	l := len(tiersWithoutRoles)
+	switch {
+	case l == 0:
+		// All bdev tiers have assigned roles, skip implicit assignment.
+		return tcs.validateBdevTierRoles()
+	case l == len(bcs):
+		// No assigned roles, fall-through to perform implicit assignment.
+	default:
+		return errors.Errorf("some bdev tiers are missing role assignments: %+v",
+			tiersWithoutRoles)
 	}
 
 	// First bdev tier should be data if scm tier is DCPM.
@@ -324,7 +353,7 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 	// Apply role assignments.
 	switch len(bcs) {
 	case 1:
-		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleIndex | BdevRoleData)
+		tcs[1].WithBdevDeviceRoles(BdevRoleAll)
 	case 2:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleIndex)
 		tcs[2].WithBdevDeviceRoles(BdevRoleData)

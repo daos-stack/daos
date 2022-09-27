@@ -349,7 +349,7 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex | BdevRoleWAL | BdevRoleData),
+					WithBdevDeviceRoles(BdevRoleAll),
 			},
 		},
 		"unspecified roles; implicit role assignment; two bdev tiers": {
@@ -570,7 +570,7 @@ storage:
   - 0000:82:00.0
   bdev_roles:
   - data`,
-			expValidateErr: errors.New("more than 1"),
+			expValidateErr: FaultBdevConfigMultiTiersWithDCPM,
 		},
 		"dcpm class; illegal roles": {
 			input: `
@@ -583,7 +583,7 @@ storage:
   class: nvme
   bdev_list: [0000:80:00.0]
   bdev_roles: [index,wal]`,
-			expValidateErr: errors.New("1 WAL tiers, wanted 0"),
+			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 1, 0),
 		},
 		"ram class; duplicate wal roles": {
 			input: `
@@ -600,7 +600,7 @@ storage:
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
   bdev_roles: [wal]`,
-			expValidateErr: errors.New("2 WAL tiers, wanted 1"),
+			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 2, 1),
 		},
 		"ram class; duplicate index roles": {
 			input: `
@@ -617,7 +617,7 @@ storage:
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
   bdev_roles: [index]`,
-			expValidateErr: errors.New("2 Index tiers, wanted 1"),
+			expValidateErr: FaultBdevConfigBadNrRoles("Index", 2, 1),
 		},
 		"ram class; missing data role": {
 			input: `
@@ -630,7 +630,23 @@ storage:
   class: nvme
   bdev_list: [0000:80:00.0]
   bdev_roles: [index,wal]`,
-			expValidateErr: errors.New("0 Data tiers, wanted at least 1"),
+			expValidateErr: FaultBdevConfigBadNrRoles("Data", 0, 1),
+		},
+		"ram class; tier with unassigned roles": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0,0000:82:00.0]
+  bdev_roles: [wal]`,
+			expValidateErr: errors.New("tiers are missing role assignments: [1]"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -675,7 +691,7 @@ func TestStorage_BdevDeviceRoles_ToYAML(t *testing.T) {
 						WithTier(1).
 						WithStorageClass("nvme").
 						WithBdevDeviceList("0000:80:00.0").
-						WithBdevDeviceRoles(BdevRoleIndex | BdevRoleWAL | BdevRoleData),
+						WithBdevDeviceRoles(BdevRoleAll),
 				},
 			},
 			expOut: `

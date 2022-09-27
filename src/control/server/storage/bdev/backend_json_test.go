@@ -93,14 +93,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"multiple controllers": {
 			class:       storage.ClassNvme,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:    allBdevRoles,
+			devRoles:    storage.BdevRoleAll,
 			expBdevCfgs: multiCtrlrConfs(),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
 			enableVmd:   true,
 			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:    allBdevRoles,
+			devRoles:    storage.BdevRoleAll,
 			expBdevCfgs: multiCtrlrConfs(),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
@@ -117,7 +117,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"multiple controllers; hotplug enabled; bus-id range specified": {
 			class:         storage.ClassNvme,
 			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:      allBdevRoles,
+			devRoles:      storage.BdevRoleAll,
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
 			expBdevCfgs:   hotplugConfs,
@@ -185,7 +185,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
 			class:        storage.ClassNvme,
 			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			devRoles:     allBdevRoles,
+			devRoles:     storage.BdevRoleAll,
 			accelEngine:  storage.AccelEngineSPDK,
 			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expBdevCfgs:  multiCtrlrConfs(),
