@@ -32,9 +32,11 @@ from process_core_files import CoreFileProcessing
 from util.logger_utils import get_console_handler, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
+from util.user_utils import get_chown_command
 
-DEFAULT_DAOS_APP_DIR = "/scratch"
-DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
+DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
+DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
@@ -619,16 +621,6 @@ class TestInfo():
             """
             return self.clients | NodeSet(get_local_host())
 
-        @property
-        def all_remote(self):
-            """Get the all the hosts excluding the localhost.
-
-            Returns:
-                NodeSet: all the hosts excluding the localhost
-
-            """
-            return self.all - NodeSet(get_local_host())
-
     def __init__(self, test_file, order):
         """Initialize a TestInfo object.
 
@@ -1123,8 +1115,12 @@ class Launch():
                 os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
-            os.environ["D_LOG_FILE"] = os.path.join(
-                os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+            if "DAOS_TEST_SHARED_DIR" not in os.environ:
+                if base_dir != os.path.join(os.sep, "usr"):
+                    os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
+                else:
+                    os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
+            os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
             # Assign the default value for transport configuration insecure mode
@@ -2272,7 +2268,7 @@ class Launch():
                 "source": os.path.join(os.sep, "etc", "daos"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
                 "pattern": "daos_*.yml",
-                "hosts": test.hosts.all_remote,
+                "hosts": test.hosts.all,
                 "depth": 1,
                 "timeout": 300,
             }
@@ -2301,7 +2297,7 @@ class Launch():
                 "timeout": 900,
             }
             remote_files["valgrind log files"] = {
-                "source": os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME']),
+                "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
                 "pattern": "valgrind*",
                 "hosts": test.hosts.servers,
@@ -2576,7 +2572,7 @@ class Launch():
                     logger.debug(
                         "Found a file matching the '%s' failure trigger on %s",
                         FAILURE_TRIGGER, data.hosts)
-                    message = "Error trigger failure file detected (testing error handling)"
+                    message = f"Error trigger failure file found in {source} (error handling test)"
                     self._fail_test(self.result.tests[-1], "Process", message)
                     hosts_with_files.add(data.hosts)
                     status = 16
@@ -2708,7 +2704,15 @@ class Launch():
         """
         logger.debug("-" * 80)
         logger.debug("Moving files from %s to %s on %s", source, destination, hosts)
-        os.makedirs(destination, exist_ok=True)
+
+        # Core and dump files require a file ownership change before they can be copied
+        if "stacktrace" in destination or "daos_dumps" in destination:
+            # pylint: disable=import-outside-toplevel
+            other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
+            if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
+                message = f"Error changing {os.path.join(source, pattern)} file permissions"
+                self._fail_test(self.result.tests[-1], "Process", message)
+                return 16
 
         # Use the last directory in the destination path to create a temporary sub-directory on the
         # remote hosts in which all the source files matching the pattern will be copied. The entire
@@ -2716,25 +2720,24 @@ class Launch():
         # destination directory plus the name of the host from which the files originated. Finally
         # delete this temporary sub-directory to remove the files from the remote hosts.
         rcopy_dest, tmp_copy_dir = os.path.split(destination)
-        tmp_copy_dir = os.path.join(source, tmp_copy_dir)
-
-        # Core and dump files require a file permission change before they can be copied
-        if "stacktrace" in destination or "daos_dumps" in destination:
-            other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", "chmod", "644"]
-            if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
-                message = f"Error changing {os.path.join(source, pattern)} file permissions"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 16
+        if source == os.path.join(os.sep, "etc", "daos"):
+            # Use a temporary sub-directory in a directory where the user has permissions
+            tmp_copy_dir = os.path.join(
+                os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR), tmp_copy_dir)
+            sudo_command = "sudo -n "
+        else:
+            tmp_copy_dir = os.path.join(source, tmp_copy_dir)
+            sudo_command = ""
 
         # Create a temporary remote directory
-        command = f"sudo -n mkdir -p {tmp_copy_dir}"
+        command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
-        other = f"-print0 | xargs -0 -r0 -I '{{}}' sudo -n mv '{{}}' {tmp_copy_dir}/"
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' {tmp_copy_dir}/"
         if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error moving files to temporary remote copy directory {tmp_copy_dir}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2753,7 +2756,7 @@ class Launch():
 
         finally:
             # Remove the temporary remote directory on each host
-            command = f"sudo -n rm -fr {tmp_copy_dir}"
+            command = f"{sudo_command}rm -fr {tmp_copy_dir}"
             if not run_remote(logger, hosts, command).passed:
                 message = f"Error removing temporary remote copy directory {tmp_copy_dir}"
                 self._fail_test(self.result.tests[-1], "Process", message)

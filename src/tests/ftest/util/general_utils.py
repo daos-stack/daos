@@ -6,9 +6,7 @@
 # pylint: disable=too-many-lines
 
 from logging import getLogger
-import grp
 import os
-import pwd
 import re
 import random
 import string
@@ -23,6 +21,8 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+
+from user_utils import get_chown_command, get_primary_group
 
 
 class DaosTestError(Exception):
@@ -1213,8 +1213,8 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
 
     """
     return run_command(
-        "{} chown {}:{} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), owner, group, filename),
+        "{} {} {}".format(
+            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -1450,26 +1450,6 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
-
-
-def get_primary_group(user=None):
-    """Get the name of the user's primary group.
-
-    Args:
-        user (str, optional): the user account name. Defaults to None, which uses the current user.
-
-    Returns:
-        str: the primary group name
-
-    """
-    if user is None:
-        user = getuser()
-    try:
-        gid = pwd.getpwnam(user).pw_gid
-        return grp.getgrgid(gid).gr_name
-    except KeyError:
-        # User may not exist on this host, e.g. daos_server, so just return the user name
-        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):

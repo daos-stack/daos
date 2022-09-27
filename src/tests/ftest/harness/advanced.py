@@ -1,10 +1,8 @@
-#!/usr/bin/python
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from getpass import getuser
 import os
 from random import choice
 from re import findall
@@ -12,9 +10,10 @@ from re import findall
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import get_avocado_config_value, get_primary_group
+from general_utils import get_avocado_config_value
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
+from user_utils import get_chown_command
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -159,39 +158,47 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=test_launch_failures
         """
         host = NodeSet(choice(self.server_managers[0].hosts))
-        user = getuser()
         self.log.info("Creating launch.py failure trigger files on %s", host)
         failure_trigger = "00_trigger-launch-failure_00"
         failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
         failure_trigger_files = [
-            os.path.join(self.base_test_dir, "{}.yaml".format(failure_trigger)),
-            os.path.join(os.sep, "etc", "daos", "daos_{}.yml".format(failure_trigger)),
-            os.path.join(self.base_test_dir, "{}.log".format(failure_trigger)),
-            os.path.join(failure_trigger_dir, "{}.log".format(failure_trigger)),
-            os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
-            os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),
+            os.path.join(self.base_test_dir, f"{failure_trigger}_local.yaml"),
+            os.path.join(os.sep, "etc", "daos", f"daos_{failure_trigger}.yml"),
+            os.path.join(self.base_test_dir, f"{failure_trigger}.log"),
+            os.path.join(failure_trigger_dir, f"{failure_trigger}.log"),
+            os.path.join(os.sep, "tmp", f"daos_dump_{failure_trigger}.txt"),
+            os.path.join(self.tmp, f"valgrind_{failure_trigger}"),
         ]
+
         self.log.debug("Creating %s", failure_trigger_dir)
         commands = [
-            "sudo -n mkdir -p {}".format(failure_trigger_dir),
-            "sudo -n chown -R {}:{} {}".format(user, get_primary_group(user), failure_trigger_dir),
+            f"sudo -n mkdir -p {failure_trigger_dir}",
+            f"sudo -n {get_chown_command(options='-R', file=failure_trigger_dir)}",
         ]
+
+        local_trigger_file = failure_trigger_files.pop(0)
+        self.log.debug("Creating %s", local_trigger_file)
+        try:
+            with open(local_trigger_file, "w", encoding="utf-8") as local_trigger:
+                local_trigger.write("THIS IS JUST A TEST\n")
+        except IOError as error:
+            self.fail(f"Error writing {local_trigger_file}: {str(error)}")
+
         for command in commands:
             if not run_remote(self.log, host, command, timeout=20).passed:
-                self.fail("Error creating directory {}".format(failure_trigger_dir))
+                self.fail(f"Error creating directory {failure_trigger_dir}")
 
         for failure_trigger_file in failure_trigger_files:
             self.log.debug("Creating %s", failure_trigger_file)
-            sudo_command = "" if failure_trigger_file.startswith(self.tmp) else "sudo -n "
+            sudo = "" if failure_trigger_file.startswith(self.tmp) else "sudo -n "
             commands = [
-                "{}touch {}".format(sudo_command, failure_trigger_file),
-                "{}chown -R {}:{} {}".format(
-                    sudo_command, user, get_primary_group(user), failure_trigger_file),
-                "echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file),
+                f"{sudo}touch {failure_trigger_file}",
+                f"{sudo}{get_chown_command(options='-R', file=failure_trigger_file)}",
+                f"echo 'THIS IS JUST A TEST' > {failure_trigger_file}",
             ]
             for command in commands:
                 if not run_remote(self.log, host, command, timeout=20).passed:
-                    self.fail("Error creating file {}".format(failure_trigger_file))
+                    self.fail(f"Error creating file {failure_trigger_file}")
 
     def test_launch_failures_hw(self):
         """Test to verify launch.py post processing error reporting.
