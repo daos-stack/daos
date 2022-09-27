@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <linux/un.h>
 #include <errno.h>
 #include <string.h>
@@ -185,6 +186,16 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	comm->flags = flags;
 
 	*newcommp = comm;
+
+	/** Socket file readable and writable by user only */
+	if (fchmod(comm->fd, S_IRUSR|S_IWUSR) != 0) {
+		int rc = errno;
+
+		D_ERROR("Failed to set access permissions on socket fd %d, errno=%d\n",
+			comm->fd, rc);
+		unixcomm_close(comm);
+		return daos_errno2der(rc);
+	}
 
 	return 0;
 }

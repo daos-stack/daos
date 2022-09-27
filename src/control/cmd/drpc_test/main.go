@@ -54,7 +54,7 @@ func runDrpcServer(log logging.Logger) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	drpcServer, err := drpc.NewDomainSocketServer(log, *unixSocket)
+	drpcServer, err := drpc.NewDomainSocketServer(log, *unixSocket, 0666)
 	if err != nil {
 		return errors.Wrap(err, "creating socket server")
 	}

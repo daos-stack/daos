@@ -20,6 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+var testFileMode os.FileMode = 0666
+
 func TestNewSession(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -107,7 +109,17 @@ func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	dss, err := NewDomainSocketServer(log, "")
+	dss, err := NewDomainSocketServer(log, "", testFileMode)
+
+	test.CmpErr(t, errors.New("Missing Argument"), err)
+	test.AssertTrue(t, dss == nil, "expected no server created")
+}
+
+func TestNewDomainSocketServer_NoSockFileMode(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	dss, err := NewDomainSocketServer(log, "test.sock", 0)
 
 	test.CmpErr(t, errors.New("Missing Argument"), err)
 	test.AssertTrue(t, dss == nil, "expected no server created")
@@ -119,7 +131,7 @@ func TestNewDomainSocketServer(t *testing.T) {
 
 	expectedSock := "test.sock"
 
-	dss, err := NewDomainSocketServer(log, expectedSock)
+	dss, err := NewDomainSocketServer(log, expectedSock, testFileMode)
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -149,7 +161,7 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 		_ = os.Chmod(tmpDir, 0700)
 	}()
 
-	dss, _ := NewDomainSocketServer(log, path)
+	dss, _ := NewDomainSocketServer(log, path, testFileMode)
 
 	err := dss.Start(context.Background())
 
@@ -173,7 +185,7 @@ func TestServer_Start_CantListen(t *testing.T) {
 		_ = os.Chmod(tmpDir, 0700)
 	}()
 
-	dss, _ := NewDomainSocketServer(log, path)
+	dss, _ := NewDomainSocketServer(log, path, testFileMode)
 
 	err := dss.Start(context.Background())
 
@@ -185,7 +197,7 @@ func TestServer_RegisterModule(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := newTestModule(1234)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 
 	dss.RegisterRPCModule(mod)
 
@@ -206,7 +218,7 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 
 	lis := newMockListener()
 	lis.acceptErr = errors.New("mock accept error")
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
 	dss.Listen(context.Background()) // should return instantly
@@ -220,7 +232,7 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 
 	lis := newMockListener()
 	lis.setNumConnsToAccept(3)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
 	dss.Listen(context.Background()) // will return when error is sent
@@ -235,7 +247,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	conn := newMockConn()
 	conn.ReadOutputError = errors.New("mock read error")
 	session := NewSession(conn, dss.service)
@@ -257,7 +269,7 @@ func TestServer_Shutdown(t *testing.T) {
 
 	ctx, shutdown := context.WithCancel(context.Background())
 
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	lis := newCtxMockListener(ctx)
 	dss.listener = lis
 
@@ -283,7 +295,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	defer tmpCleanup()
 	path := filepath.Join(tmpDir, "test.sock")
 
-	dss, err := NewDomainSocketServer(log, path)
+	dss, err := NewDomainSocketServer(log, path, testFileMode)
 	if err != nil {
 		t.Fatal(err)
 	}
