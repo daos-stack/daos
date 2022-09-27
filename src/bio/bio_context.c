@@ -395,7 +395,6 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 			rc = bio_blob_delete(pool_id, xs_ctxt, st);
 			if (rc)
 				return rc;
-			bxb->bxb_blobstore = NULL;
 		}
 	}
 
