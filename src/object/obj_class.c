@@ -97,6 +97,17 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		char *p = oc->oc_name;
 		int i = 0;
 
+		if (p[i] == 'S') {
+			str[0] = 'S';
+			i = snprintf(&str[1], MAX_OBJ_CLASS_NAME_LEN - 1, "%u", nr_grps);
+			if (i < 0) {
+				D_ERROR("Failed to encode object class name\n");
+				strcpy(str, "UNKNOWN");
+				return -1;
+			}
+			return 0;
+		}
+
 		while (p[i] != 'G') {
 			str[i] = p[i];
 			i++;
@@ -705,7 +716,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 18) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
@@ -725,7 +736,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 20) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;
