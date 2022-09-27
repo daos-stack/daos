@@ -27,8 +27,15 @@
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
+/* The start and end time in ns for individual test*/
+uint64_t	t_start, t_end;
+char		iops[32];
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
+#define OUTPUT_IOPS(x) ({\
+		snprintf(iops, sizeof(iops)-1, "%6.1lfK IO/sec", (x));\
+		step_success(iops);\
+		})
 
 /** Step timing  */
 clock_t	start;
@@ -335,6 +342,7 @@ oS1(void)
 	total_nr = 1000000;
 	setup_progress();
 
+	t_start = daos_get_ntime();
 	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
@@ -350,9 +358,10 @@ oS1(void)
 		}
 		increment_progress(i);
 	}
+	t_end = daos_get_ntime();
 
 	finish_progress();
-	step_success("");
+	OUTPUT_IOPS(total_nr/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -369,6 +378,7 @@ oSX(void)
 	total_nr = 10000;
 	setup_progress();
 
+	t_start = daos_get_ntime();
 	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
@@ -384,9 +394,10 @@ oSX(void)
 		}
 		increment_progress(i);
 	}
+	t_end = daos_get_ntime();
 
 	finish_progress();
-	step_success("");
+	OUTPUT_IOPS(total_nr/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -698,7 +709,9 @@ kv_insert128(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -711,7 +724,7 @@ kv_insert128(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -728,7 +741,9 @@ kv_read128(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -740,8 +755,7 @@ kv_read128(void)
 		step_fail("failed to close object: %s", d_errdesc(rc));
 		return rc;
 	}
-
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -799,7 +813,9 @@ kv_insert4k(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	put_rc = kv_put(oh, 4096);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -812,7 +828,7 @@ kv_insert4k(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -829,7 +845,9 @@ kv_read4k(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	get_rc = kv_get(oh, 4096);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -842,7 +860,7 @@ kv_read4k(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -862,7 +880,9 @@ kv_insert1m(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	put_rc = kv_put(oh, 1048576);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -875,7 +895,7 @@ kv_insert1m(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -891,8 +911,9 @@ kv_read1m(void)
 		step_fail("failed to open object: %s", d_errdesc(rc));
 		return rc;
 	}
-
+	t_start = daos_get_ntime();
 	get_rc = kv_get(oh, 1048576);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -904,8 +925,7 @@ kv_read1m(void)
 		step_fail("failed to close object: %s", d_errdesc(rc));
 		return rc;
 	}
-
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -928,7 +948,9 @@ kv_insertrf1(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -940,7 +962,7 @@ kv_insertrf1(void)
 		step_fail("failed to close object: %s", d_errdesc(rc));
 		return rc;
 	}
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
 skip_step:
@@ -964,7 +986,9 @@ kv_readrf1(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -977,7 +1001,7 @@ kv_readrf1(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
 skip_step:
@@ -1004,7 +1028,9 @@ kv_insertrf2(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -1017,7 +1043,7 @@ kv_insertrf2(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
 skip_step:
@@ -1041,7 +1067,9 @@ kv_readrf2(void)
 		return rc;
 	}
 
+	t_start = daos_get_ntime();
 	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -1054,7 +1082,7 @@ kv_readrf2(void)
 		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
 skip_step:
