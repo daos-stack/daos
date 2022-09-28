@@ -2048,6 +2048,7 @@ out:
 
 struct enum_unpack_arg {
 	struct iter_obj_arg	*arg;
+	daos_handle_t		oh;
 	struct daos_oclass_attr	oc_attr;
 	daos_epoch_range_t	epr;
 	d_list_t		merge_list;
@@ -2202,18 +2203,33 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	struct migrate_one	*mo;
 	bool			merged = false;
 	bool			create_migrate_one = false;
+	uint32_t		parity_shard;
+	uint32_t		shard;
 	int			rc = 0;
 	int			i;
 
 	if (!daos_oclass_is_ec(&arg->oc_attr))
 		return migrate_one_create(arg, io);
 
+	/* If parity shard alive for this dkey, then ignore the data shard enumeration
+	 * from data shard.
+ 	 */
+	rc = obj_ec_parity_alive(arg->oh, io->ui_dkey_hash, &parity_shard);
+ 	if (rc < 0)
+ 		return rc;
+
+	shard = arg->arg->shard % obj_ec_tgt_nr(&arg->oc_attr);
+	if ((rc == 1 && io->ui_oid.id_shard != parity_shard) || io->ui_oid.id_shard == shard) {
+		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u.\n",
+ 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard);
+ 		return 0;
+	}
+
 	/* Convert EC object offset to DAOS offset. */
 	for (i = 0; i <= io->ui_iods_top && io->ui_dkey_punch_eph == 0 &&
 	     io->ui_obj_punch_eph == 0; i++) {
 		daos_iod_t	*iod = &io->ui_iods[i];
 		daos_epoch_t	**ephs = &io->ui_recx_ephs[i];
-		uint32_t	shard;
 
 		if (iod->iod_type == DAOS_IOD_SINGLE || io->ui_akey_punch_ephs[i] != 0) {
 			create_migrate_one = true;
@@ -2437,6 +2453,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	unpack_arg.arg = arg;
 	unpack_arg.epr = *epr;
+	unpack_arg.oh = oh;
 	D_INIT_LIST_HEAD(&unpack_arg.merge_list);
 	buf = stack_buf;
 	buf_len = ITER_BUF_SIZE;

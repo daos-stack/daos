@@ -820,6 +820,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint64_t		ui_dkey_hash;
 	uint32_t		ui_version;
 	uint32_t		ui_type;
 };

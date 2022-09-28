@@ -1222,23 +1222,24 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		if (task->dst_rebuild_op == RB_OP_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
-						 rgt->rgt_reclaim_epoch, &task->dst_tgts,
+						 rgt->rgt_stable_epoch, &task->dst_tgts,
 						 RB_OP_RECLAIM, 5);
 			return rc;
 		}
 
-		/* Schedule reclaim to clean up current op. Let's keep go ahead to retry even if
-		 * reclaim the current rebuilding fails.
-		 */
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
-					 rgt->rgt_reclaim_epoch, &task->dst_tgts, RB_OP_RECLAIM, 5);
-		if (rc)
-			D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
-				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-
+		/* Schedule reclaim to clean up current op, if scan/migrate already start */
+		if (rgt->rgt_init_scan) {
+			rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
+						 rgt->rgt_stable_epoch, &task->dst_tgts,
+						 RB_OP_RECLAIM, 5);
+			if (rc)
+				D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
+					DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+			/* Let's keep go ahead to retry anyway. */
+		}
 		/* Then retry */
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, ++task->dst_rebuild_gen,
-					 rgt->rgt_reclaim_epoch, &task->dst_tgts,
+					 rgt->rgt_stable_epoch, &task->dst_tgts,
 					 task->dst_rebuild_op, 5);
 	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
 		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
