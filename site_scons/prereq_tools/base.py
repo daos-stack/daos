@@ -600,10 +600,10 @@ class PreReqComponent():
         self.__opts = variables
         self.configs = None
 
-        self.add_opts(EnumVariable('SCONS_ENV', "Default SCons environment mode",
-                                   'default', ['default', 'user'], ignorecase=1))
+        self.add_opts(EnumVariable('SCONS_ENV', "Default SCons environment inheritance",
+                                   'full', ['minimal', 'full'], ignorecase=1))
 
-        if self.__env.get("SCONS_ENV") == 'user':
+        if self.__env.get("SCONS_ENV") == 'full':
             real_env = os.environ
         else:
             real_env = self.__env['ENV']
