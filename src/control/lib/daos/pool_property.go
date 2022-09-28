@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package control
+package daos
 
 import (
 	"encoding/json"
@@ -15,8 +15,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 // PoolProperties returns a map of property names to handlers
@@ -25,18 +23,18 @@ func PoolProperties() PoolPropertyMap {
 	return map[string]*PoolPropHandler{
 		"reclaim": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertySpaceReclaim,
+				Number:      PoolPropertySpaceReclaim,
 				Description: "Reclaim strategy",
 			},
 			values: map[string]uint64{
-				"disabled": daos.PoolSpaceReclaimDisabled,
-				"lazy":     daos.PoolSpaceReclaimLazy,
-				"time":     daos.PoolSpaceReclaimTime,
+				"disabled": PoolSpaceReclaimDisabled,
+				"lazy":     PoolSpaceReclaimLazy,
+				"time":     PoolSpaceReclaimTime,
 			},
 		},
 		"self_heal": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertySelfHealing,
+				Number:      PoolPropertySelfHealing,
 				Description: "Self-healing policy",
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
@@ -44,9 +42,9 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch {
-					case n&daos.PoolSelfHealingAutoExclude > 0:
+					case n&PoolSelfHealingAutoExclude > 0:
 						return "exclude"
-					case n&daos.PoolSelfHealingAutoRebuild > 0:
+					case n&PoolSelfHealingAutoRebuild > 0:
 						return "rebuild"
 					default:
 						return "unknown"
@@ -54,13 +52,13 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 			values: map[string]uint64{
-				"exclude": daos.PoolSelfHealingAutoExclude,
-				"rebuild": daos.PoolSelfHealingAutoRebuild,
+				"exclude": PoolSelfHealingAutoExclude,
+				"rebuild": PoolSelfHealingAutoRebuild,
 			},
 		},
 		"space_rb": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyReservedSpace,
+				Number:      PoolPropertyReservedSpace,
 				Description: "Rebuild space ratio",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid space_rb value %s (valid values: 0-100)", s)
@@ -85,10 +83,10 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"label": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyLabel,
+				Number:      PoolPropertyLabel,
 				Description: "Pool label",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					if !daos.LabelIsValid(s) {
+					if !LabelIsValid(s) {
 						return nil, errors.Errorf("invalid label %q", s)
 					}
 					return &PoolPropertyValue{s}, nil
@@ -97,11 +95,11 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"ec_cell_sz": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyECCellSize,
+				Number:      PoolPropertyECCellSize,
 				Description: "EC cell size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					b, err := humanize.ParseBytes(s)
-					if err != nil || !daos.EcCellSizeIsValid(b) {
+					if err != nil || !EcCellSizeIsValid(b) {
 						return nil, errors.Errorf("invalid EC Cell size %q", s)
 					}
 
@@ -119,15 +117,15 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"rf": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyRedunFac,
+				Number:      PoolPropertyRedunFac,
 				Description: "Pool redundancy factor",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-%d)", s, daos.PoolRedunFacMax)
+					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-%d)", s, PoolRedunFacMax)
 					rfVal, err := strconv.ParseUint(s, 10, 64)
 					if err != nil {
 						return nil, rbErr
 					}
-					if rfVal > daos.PoolRedunFacMax {
+					if rfVal > PoolRedunFacMax {
 						return nil, rbErr
 					}
 					return &PoolPropertyValue{rfVal}, nil
@@ -144,12 +142,12 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"ec_pda": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyECPda,
+				Number:      PoolPropertyECPda,
 				Description: "Performance domain affinity level of EC",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					ecpdaErr := errors.Errorf("invalid ec_pda value %q", s)
 					pdalvl, err := strconv.ParseUint(s, 10, 32)
-					if err != nil || !daos.EcPdaIsValid(pdalvl) {
+					if err != nil || !EcPdaIsValid(pdalvl) {
 						return nil, ecpdaErr
 					}
 					return &PoolPropertyValue{pdalvl}, nil
@@ -166,12 +164,12 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"rp_pda": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyRPPda,
+				Number:      PoolPropertyRPPda,
 				Description: "Performance domain affinity level of RP",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rppdaErr := errors.Errorf("invalid rp_pda value %q", s)
 					pdalvl, err := strconv.ParseUint(s, 10, 32)
-					if err != nil || !daos.RpPdaIsValid(pdalvl) {
+					if err != nil || !RpPdaIsValid(pdalvl) {
 						return nil, rppdaErr
 					}
 					return &PoolPropertyValue{pdalvl}, nil
@@ -188,10 +186,10 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"policy": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyPolicy,
+				Number:      PoolPropertyPolicy,
 				Description: "Tier placement policy",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					if !daos.PoolPolicyIsValid(s) {
+					if !PoolPolicyIsValid(s) {
 						return nil, errors.Errorf("invalid policy string %q", s)
 					}
 					return &PoolPropertyValue{s}, nil
@@ -201,7 +199,7 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"global_version": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyGlobalVersion,
+				Number:      PoolPropertyGlobalVersion,
 				Description: "Global Version",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					gvErr := errors.Errorf("invalid global version %q", s)
@@ -223,30 +221,30 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"upgrade_status": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyUpgradeStatus,
+				Number:      PoolPropertyUpgradeStatus,
 				Description: "Upgrade Status",
 			},
 			values: map[string]uint64{
-				"not started": daos.PoolUpgradeStatusNotStarted,
-				"in progress": daos.PoolUpgradeStatusInProgress,
-				"completed":   daos.PoolUpgradeStatusCompleted,
-				"failed":      daos.PoolUpgradeStatusFailed,
+				"not started": PoolUpgradeStatusNotStarted,
+				"in progress": PoolUpgradeStatusInProgress,
+				"completed":   PoolUpgradeStatusCompleted,
+				"failed":      PoolUpgradeStatusFailed,
 			},
 		},
 		"scrub": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyScrubMode,
+				Number:      PoolPropertyScrubMode,
 				Description: "Checksum scrubbing mode",
 			},
 			values: map[string]uint64{
-				"off":   daos.PoolScrubModeOff,
-				"lazy":  daos.PoolScrubModeLazy,
-				"timed": daos.PoolScrubModeTimed,
+				"off":   PoolScrubModeOff,
+				"lazy":  PoolScrubModeLazy,
+				"timed": PoolScrubModeTimed,
 			},
 		},
 		"scrub-freq": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyScrubFreq,
+				Number:      PoolPropertyScrubFreq,
 				Description: "Checksum scrubbing frequency",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
@@ -268,7 +266,7 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"scrub-thresh": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyScrubThresh,
+				Number:      PoolPropertyScrubThresh,
 				Description: "Checksum scrubbing threshold",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Threshold value %s", s)
@@ -290,15 +288,15 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"svc_rf": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertySvcRedunFac,
+				Number:      PoolPropertySvcRedunFac,
 				Description: "Pool service redundancy factor",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					svcRFErr := errors.Errorf("invalid service redundancy factor value %s (valid values: 0-%d)", s, daos.PoolSvcRedunFacMax)
+					svcRFErr := errors.Errorf("invalid service redundancy factor value %s (valid values: 0-%d)", s, PoolSvcRedunFacMax)
 					svcRFVal, err := strconv.ParseUint(s, 10, 64)
 					if err != nil {
 						return nil, svcRFErr
 					}
-					if svcRFVal > daos.PoolSvcRedunFacMax {
+					if svcRFVal > PoolSvcRedunFacMax {
 						return nil, svcRFErr
 					}
 					return &PoolPropertyValue{svcRFVal}, nil
@@ -341,8 +339,12 @@ func (ppv *PoolPropertyValue) SetNumber(numVal uint64) {
 	ppv.data = numVal
 }
 
+func (ppv *PoolPropertyValue) IsSet() bool {
+	return ppv != nil && ppv.data != nil
+}
+
 func (ppv *PoolPropertyValue) String() string {
-	if ppv == nil || ppv.data == nil {
+	if !ppv.IsSet() {
 		return "value not set"
 	}
 
@@ -359,7 +361,7 @@ func (ppv *PoolPropertyValue) String() string {
 // GetNumber returns the numeric value set for the property,
 // or an error if the value is not a number.
 func (ppv *PoolPropertyValue) GetNumber() (uint64, error) {
-	if ppv == nil || ppv.data == nil {
+	if !ppv.IsSet() {
 		return 0, errors.New("value not set")
 	}
 	if v, ok := ppv.data.(uint64); ok {
