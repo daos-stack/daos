@@ -33,9 +33,9 @@
 /** A-key name of SB magic */
 #define MAGIC_NAME	"DFS_MAGIC"
 /** A-key name of SB version */
-#define SB_VERSION_NAME	"DFS_SB_VERSION"
+#define SB_VER_NAME	"DFS_SB_VERSION"
 /** A-key name of DFS Layout Version */
-#define LAYOUT_NAME	"DFS_LAYOUT_VERSION"
+#define LAYOUT_VER_NAME	"DFS_LAYOUT_VERSION"
 /** A-key name of Default chunk size */
 #define CS_NAME		"DFS_CHUNK_SIZE"
 /** A-key name of Default Object Class for files */
@@ -43,18 +43,18 @@
 /** A-key name of Default Object Class for directories */
 #define DIR_OC_NAME	"DFS_DIR_OBJ_CLASS"
 /** Consistency mode of the DFS container */
-#define MODE_NAME	"DFS_MODE"
+#define CONT_MODE_NAME	"DFS_MODE"
 /** A-key name of the object class hints */
-#define HINT_NAME	"DFS_HINTS"
+#define CONT_HINT_NAME	"DFS_HINTS"
 
 #define MAGIC_IDX	0
 #define SB_VER_IDX	1
-#define LO_VER_IDX	2
+#define LAYOUT_VER_IDX	2
 #define CS_IDX		3
 #define FILE_OC_IDX	4
 #define DIR_OC_IDX	5
 #define CONT_MODE_IDX	6
-#define HINTS_IDX	7
+#define CONT_HINT_IDX	7
 
 /** Magic Value */
 #define DFS_SB_MAGIC		0xda05df50da05df50
@@ -440,64 +440,6 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 		else
 			*dir_hints = obj_hint;
 		t = strtok_r(NULL, ",", &end_token);
-#if 0
-		char *name;
-		char *val;
-		char *save = NULL;
-
-		/** get object type (file or dir) */
-		name = strtok_r(t, ":", &save);
-		if (name == NULL) {
-			D_ERROR("Invalid object type in hint: %s\n", hints);
-			D_GOTO(out, rc = EINVAL);
-		}
-
-		if (strcasecmp(name, "dir") == 0 || strcasecmp(name, "directory") == 0) {
-			/** get prop value */
-			val = strtok_r(NULL, ",", &save);
-			if (val == NULL) {
-				D_ERROR("Invalid Hint value for directory type (%s)\n",
-					hints);
-				D_GOTO(out, rc = EINVAL);
-			}
-			if (strcasecmp(val, "single") == 0) {
-				if (rf == 0)
-					*dir_hints = DAOS_OCH_SHD_TINY;
-				else
-					*dir_hints = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
-			} else if (strcasecmp(val, "max") == 0) {
-				if (rf == 0)
-					*dir_hints = DAOS_OCH_SHD_MAX;
-				else
-					*dir_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
-			} else {
-				D_ERROR("Invalid directory hint: %s\n", val);
-				D_GOTO(out, rc = EINVAL);
-			}
-		} else if (strcasecmp(name, "file") == 0) {
-			/** get prop value */
-			val = strtok_r(NULL, ",", &save);
-			if (val == NULL) {
-				D_ERROR("Invalid Hint value for file type (%s)\n", hints);
-				D_GOTO(out, rc = EINVAL);
-			}
-			if (strcasecmp(val, "single") == 0) {
-				if (rf == 0)
-					*file_hints = DAOS_OCH_SHD_TINY;
-				else
-					*file_hints = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
-			} else if (strcasecmp(val, "max") == 0) {
-				if (rf == 0)
-					*file_hints = DAOS_OCH_SHD_MAX;
-				else
-					*file_hints = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
-			} else {
-				D_ERROR("Invalid file hint: %s\n", val);
-				D_GOTO(out, rc = EINVAL);
-			}
-		}
-		t = strtok_r(NULL, ";", &end_token);
-#endif
 	}
 
 out:
@@ -514,6 +456,8 @@ dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid)
 	enum daos_otype_t	type;
 	int			rc;
 
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 	if (hint == NULL)
 		return EINVAL;
 	if (strnlen(hint, DAOS_CONT_HINT_MAX_LEN) > DAOS_CONT_HINT_MAX_LEN + 1)
@@ -1625,13 +1569,13 @@ set_sb_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 {
 	d_iov_set(dkey, SB_DKEY, sizeof(SB_DKEY) - 1);
 	set_daos_iod(for_update, &iods[MAGIC_IDX], MAGIC_NAME, sizeof(dfs_magic_t));
-	set_daos_iod(for_update, &iods[SB_VER_IDX], SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
-	set_daos_iod(for_update, &iods[LO_VER_IDX], LAYOUT_NAME, sizeof(dfs_layout_ver_t));
+	set_daos_iod(for_update, &iods[SB_VER_IDX], SB_VER_NAME, sizeof(dfs_sb_ver_t));
+	set_daos_iod(for_update, &iods[LAYOUT_VER_IDX], LAYOUT_VER_NAME, sizeof(dfs_layout_ver_t));
 	set_daos_iod(for_update, &iods[CS_IDX], CS_NAME, sizeof(daos_size_t));
 	set_daos_iod(for_update, &iods[FILE_OC_IDX], FILE_OC_NAME, sizeof(daos_oclass_id_t));
 	set_daos_iod(for_update, &iods[DIR_OC_IDX], DIR_OC_NAME, sizeof(daos_oclass_id_t));
-	set_daos_iod(for_update, &iods[CONT_MODE_IDX], MODE_NAME, sizeof(uint32_t));
-	set_daos_iod(for_update, &iods[HINTS_IDX], HINT_NAME, DAOS_CONT_HINT_MAX_LEN);
+	set_daos_iod(for_update, &iods[CONT_MODE_IDX], CONT_MODE_NAME, sizeof(uint32_t));
+	set_daos_iod(for_update, &iods[CONT_HINT_IDX], CONT_HINT_NAME, DAOS_CONT_HINT_MAX_LEN);
 }
 
 static int
@@ -1663,7 +1607,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 	d_iov_set(&sg_iovs[MAGIC_IDX], &magic, sizeof(dfs_magic_t));
 	d_iov_set(&sg_iovs[SB_VER_IDX], &sb_ver, sizeof(dfs_sb_ver_t));
-	d_iov_set(&sg_iovs[LO_VER_IDX], &layout_ver, sizeof(dfs_layout_ver_t));
+	d_iov_set(&sg_iovs[LAYOUT_VER_IDX], &layout_ver, sizeof(dfs_layout_ver_t));
 	d_iov_set(&sg_iovs[CS_IDX], &chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[FILE_OC_IDX], &oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[DIR_OC_IDX], &dir_oclass, sizeof(daos_oclass_id_t));
@@ -1684,8 +1628,8 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 		/** adjust the IOD for the hints string to the actual size */
 		if (hint_len) {
-			set_daos_iod(true, &iods[HINTS_IDX], HINT_NAME, hint_len + 1);
-			d_iov_set(&sg_iovs[HINTS_IDX], attr->da_hints, hint_len + 1);
+			set_daos_iod(true, &iods[CONT_HINT_IDX], CONT_HINT_NAME, hint_len + 1);
+			d_iov_set(&sg_iovs[CONT_HINT_IDX], attr->da_hints, hint_len + 1);
 		} else {
 			num_iods--;
 		}
@@ -1714,8 +1658,8 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	}
 
 	/** set hints value to max */
-	d_iov_set(&sg_iovs[HINTS_IDX], &hints, DAOS_CONT_HINT_MAX_LEN);
-	set_daos_iod(false, &iods[HINTS_IDX], HINT_NAME, DAOS_CONT_HINT_MAX_LEN);
+	d_iov_set(&sg_iovs[CONT_HINT_IDX], &hints, DAOS_CONT_HINT_MAX_LEN);
+	set_daos_iod(false, &iods[CONT_HINT_IDX], CONT_HINT_NAME, DAOS_CONT_HINT_MAX_LEN);
 
 	/* Fetch the values and verify SB */
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls, NULL, NULL);
@@ -1741,7 +1685,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	if (iods[LO_VER_IDX].iod_size != sizeof(layout_ver) ||
+	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
 	    layout_ver > DFS_LAYOUT_VERSION) {
 		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
 		D_GOTO(err, rc = EINVAL);
@@ -1755,7 +1699,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	attr->da_oclass_id = oclass;
 	attr->da_dir_oclass_id = dir_oclass;
 	attr->da_mode = mode;
-	if (iods[HINTS_IDX].iod_size != 0)
+	if (iods[CONT_HINT_IDX].iod_size != 0)
 		strcpy(attr->da_hints, hints);
 
 	return 0;
@@ -2182,6 +2126,8 @@ dfs_disconnect(dfs_t *dfs)
 {
 	int		rc;
 
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 	if (dfs->mounted != DFS_MOUNT_ALL) {
 		D_ERROR("DFS is not mounted with dfs_connect() or dfs_global2local_all()\n");
 		return EINVAL;
