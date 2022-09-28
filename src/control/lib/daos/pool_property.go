@@ -15,7 +15,17 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
+
+func numericMarshaler(v *PoolPropertyValue) ([]byte, error) {
+	n, err := v.GetNumber()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(n)
+}
 
 // PoolProperties returns a map of property names to handlers
 // for processing property values.
@@ -78,7 +88,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d%%", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"label": {
@@ -112,7 +122,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return humanize.IBytes(n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"rf": {
@@ -137,7 +147,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"ec_pda": {
@@ -159,7 +169,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"rp_pda": {
@@ -181,7 +191,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"policy": {
@@ -216,7 +226,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"upgrade_status": {
@@ -261,7 +271,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"scrub-thresh": {
@@ -283,7 +293,7 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"svc_rf": {
@@ -308,7 +318,26 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return fmt.Sprintf("%d", n)
 				},
-				jsonNumeric: true,
+				valueMarshaler: numericMarshaler,
+			},
+		},
+		"svc_list": {
+			Property: PoolProperty{
+				Number:      PoolPropertySvcList,
+				Description: "Pool service replica list",
+				valueHandler: func(string) (*PoolPropertyValue, error) {
+					return nil, errors.New("cannot set pool service replica list")
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					return v.String()
+				},
+				valueMarshaler: func(v *PoolPropertyValue) ([]byte, error) {
+					rs, err := ranklist.CreateRankSet(v.String())
+					if err != nil {
+						return nil, err
+					}
+					return json.Marshal(rs.Ranks())
+				},
 			},
 		},
 	}
@@ -372,13 +401,13 @@ func (ppv *PoolPropertyValue) GetNumber() (uint64, error) {
 
 // PoolProperty contains a name/value pair representing a pool property.
 type PoolProperty struct {
-	Number        uint32            `json:"-"`
-	Name          string            `json:"name"`
-	Description   string            `json:"description"`
-	Value         PoolPropertyValue `json:"value"`
-	jsonNumeric   bool              // true if value should be numeric in JSON
-	valueHandler  func(string) (*PoolPropertyValue, error)
-	valueStringer func(*PoolPropertyValue) string
+	Number         uint32            `json:"-"`
+	Name           string            `json:"name"`
+	Description    string            `json:"description"`
+	Value          PoolPropertyValue `json:"value"`
+	valueHandler   func(string) (*PoolPropertyValue, error)
+	valueStringer  func(*PoolPropertyValue) string
+	valueMarshaler func(*PoolPropertyValue) ([]byte, error)
 }
 
 func (p *PoolProperty) SetValue(strVal string) error {
@@ -412,30 +441,28 @@ func (p *PoolProperty) StringValue() string {
 	return p.Value.String()
 }
 
-func (p *PoolProperty) MarshalJSON() ([]byte, error) {
+func (p *PoolProperty) MarshalJSON() (_ []byte, err error) {
 	if p == nil {
 		return nil, errors.New("nil property")
 	}
 
-	// In some cases, the raw numeric value is preferred
-	// for JSON output. Otherwise, just use the string.
-	var jsonValue interface{}
-	if p.jsonNumeric {
-		n, err := p.Value.GetNumber()
-		if err != nil {
+	var value json.RawMessage
+	if p.valueMarshaler != nil {
+		if value, err = p.valueMarshaler(&p.Value); err != nil {
 			return nil, err
 		}
-		jsonValue = n
 	} else {
-		jsonValue = p.StringValue()
+		if value, err = json.Marshal(p.StringValue()); err != nil {
+			return nil, err
+		}
 	}
 
 	type toJSON PoolProperty
 	return json.Marshal(&struct {
 		*toJSON
-		Value interface{} `json:"value"`
+		Value json.RawMessage `json:"value"`
 	}{
-		Value:  jsonValue,
+		Value:  value,
 		toJSON: (*toJSON)(p),
 	})
 }

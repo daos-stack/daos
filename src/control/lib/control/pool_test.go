@@ -1088,6 +1088,10 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("svc_rf", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{3},
 						},
+						{
+							Number: propWithVal("svc_list", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
+						},
 					},
 				}),
 			},
@@ -1108,6 +1112,11 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
 				propWithVal("svc_rf", "3"),
 				propWithVal("upgrade_status", "in progress"),
 			},
