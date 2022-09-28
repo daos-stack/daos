@@ -630,7 +630,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get DAOS server file
 	 */
 	D_ALLOC(control_log_file, 1024);
-	D_ALLOC(control_log_file);
+	D_ASSERT(control_log_file);
 	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	D_ASSERT(server_config_file);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
