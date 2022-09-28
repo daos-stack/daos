@@ -224,9 +224,10 @@ if ${SETUP_ONLY:-false}; then
 fi
 
 export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
+export STAGE_NAME
 
 # check if slurm needs to be configured for soak
-if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
+if [[ "${TEST_TAG_ARG}" =~ soak && "${STAGE_NAME}" =~ Hardware ]]; then
     if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
