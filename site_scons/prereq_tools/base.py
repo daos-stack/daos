@@ -600,16 +600,22 @@ class PreReqComponent():
         self.__opts = variables
         self.configs = None
 
-        real_env = self.__env['ENV']
+        self.add_opts(EnumVariable('SCONS_ENV', "Default SCons environment mode",
+                                   'default', ['default', 'user'], ignorecase=1))
 
-        for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
-                    "http_proxy", "https_proxy",
-                    "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED",
-                    "I_MPI_ROOT"]:
-            value = os.environ.get(var)
-            if value:
-                real_env[var] = value
+        if self.__env.get("SCONS_ENV") == 'user':
+            real_env = os.environ
+        else:
+            real_env = self.__env['ENV']
+
+            for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
+                        "http_proxy", "https_proxy",
+                        "PKG_CONFIG_PATH", "MODULEPATH",
+                        "MODULESHOME", "MODULESLOADED",
+                        "I_MPI_ROOT"]:
+                value = os.environ.get(var)
+                if value:
+                    real_env[var] = value
 
         libtoolize = 'libtoolize'
         if self.__env['PLATFORM'] == 'darwin':
