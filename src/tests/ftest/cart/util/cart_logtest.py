@@ -221,16 +221,8 @@ class LogTest():
         self.log_locs = Counter()
         self.log_fac = Counter()
         self.log_levels = Counter()
-        self.nil_frees = Counter()
-        self.nil_free_ref = {}
         self.log_count = 0
         self._common_shown = False
-
-    def save_nill_free(self, line):
-        """Save the location of a nill free call"""
-        loc = '{}:{}'.format(line.filename, line.lineno)
-        self.nil_frees[loc] += 1
-        self.nil_free_ref[loc] = line
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
@@ -273,14 +265,6 @@ class LogTest():
             print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level], count,
                                             100 * count / self.log_count))
         self._common_shown = True
-
-        for (loc, count) in self.nil_frees.most_common(10):
-            if count < 10:
-                break
-            line = self.nil_free_ref[loc]
-            print('NULL was freed {} times at {}:{}'.format(count, line.filename, line.lineno))
-            if count > 250:
-                show_line(line, 'NORMAL', 'Frequent free with NULL value, Use D_FREE_NLF')
 
     def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""
@@ -504,6 +488,8 @@ class LogTest():
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
                     elif pointer != '(nil)':
+                        # Logs no longer contain free(NULL) however old logs might so continue
+                        # to handle this case.
                         if pointer in old_regions:
                             show_line(old_regions[pointer][0], 'ERROR',
                                       'double-free allocation point')
@@ -512,8 +498,6 @@ class LogTest():
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
-                    else:
-                        self.save_nill_free(line)
                 elif line.is_realloc():
                     (new_pointer, old_pointer) = line.realloc_pointers()
                     (new_size, old_size) = line.realloc_sizes()

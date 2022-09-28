@@ -2643,7 +2643,7 @@ again2:
 	 * RPC to non-leaders. Then the non-leader replicas can commit
 	 * them before real modifications to avoid availability issues.
 	 */
-	D_FREE_NLF(dti_cos);
+	D_FREE(dti_cos);
 	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
 				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
 				   &dti_cos);
@@ -2743,8 +2743,8 @@ out:
 
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
 	obj_ec_split_req_fini(split_req);
-	D_FREE_NLF(mbs);
-	D_FREE_NLF(dti_cos);
+	D_FREE(mbs);
+	D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
 }
 

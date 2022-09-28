@@ -243,8 +243,8 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 out:
-	D_FREE_NLF(iv_entry);
-	D_FREE_NLF(snaps);
+	D_FREEF(iv_entry);
+	D_FREEF(snaps);
 	return rc;
 }
 

@@ -678,7 +678,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
-	D_FREE_NLF(cont->sc_snapshots);
+	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_mutex_free(&cont->sc_mutex);
@@ -1631,7 +1631,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE_NLF(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 
 	if (rc != 0) {
 		/* Once it exclude the target from the pool, since the target

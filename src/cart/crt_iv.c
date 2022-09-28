@@ -1777,7 +1777,7 @@ exit:
 		}
 	}
 
-	D_FREE_NLF(iv_value);
+	D_FREE(iv_value);
 
 	/* ADDREF done in lookup above */
 	if (ivns_internal)
@@ -2083,7 +2083,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 		D_ERROR("ivo_pre_sync(): "DF_RC"\n", DP_RC(rc));
 
 exit:
-	D_FREE_NLF(tmp_iovs);
+	D_FREE(tmp_iovs);
 	if (need_put)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	return rc;

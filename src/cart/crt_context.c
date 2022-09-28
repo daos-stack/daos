@@ -1064,7 +1064,7 @@ out:
 
 out_unlock:
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	D_FREE_NLF(epi);
+	D_FREE(epi);
 	return rc;
 }
 
@@ -1500,7 +1500,7 @@ crt_register_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 		}
 	}
 
-	D_FREE_NLF(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
 
 	crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = cbs_prog;
 	cbs_size += CRT_CALLBACKS_NUM;
