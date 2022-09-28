@@ -156,11 +156,12 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.
  * \param[in] svcl	New list of pool service replica ranks.
+ * \param[in] version	Version of \a svcl.
  *
  * \retval		Zero on success, non-zero otherwise.
  */
 int
-ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version);
 
 /**
  * Notify control plane that swim has detected a dead rank.

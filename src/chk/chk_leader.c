@@ -574,7 +574,7 @@ chk_leader_reset_pool_svc(struct chk_pool_rec *cpr)
 
 	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, &rank_list, NULL /* excluded */,
-			       true /* destroy */);
+			       RDB_NIL_TERM, true /* destroy */);
 	D_FREE(ranks);
 
 out:
@@ -1297,7 +1297,7 @@ chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
 		ranks->rl_ranks[0] = clue->pc_rank;
 	}
 
-	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, cpr->cpr_uuid, ranks,
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, cpr->cpr_uuid, ranks, RDB_NIL_TERM,
 				cpr->cpr_healthy ? DS_RSVC_START : DS_RSVC_DICTATE,
 				false /* bootstrap */, 0 /* size */);
 

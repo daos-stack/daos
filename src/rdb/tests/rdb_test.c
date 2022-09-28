@@ -34,8 +34,6 @@ rdbt_svc_obj(struct ds_rsvc *rsvc)
 	return container_of(rsvc, struct rdbt_svc, rt_rsvc);
 }
 
-#define ID_OK(id) ioveq((id), &test_svc_id)
-
 #define MUST(call)							\
 do {									\
 	int _rc = call;							\
@@ -62,8 +60,7 @@ ioveq(const d_iov_t *iov1, const d_iov_t *iov2)
 static int
 test_svc_name_cb(d_iov_t *id, char **name)
 {
-	ID_OK(id);
-	D_STRNDUP(*name, test_svc_name, strlen(test_svc_name));
+	D_STRNDUP(*name, id->iov_buf, id->iov_len - 1);
 	D_ASSERT(*name != NULL);
 	return 0;
 }
@@ -73,8 +70,7 @@ test_svc_locate_cb(d_iov_t *id, char **path)
 {
 	int	rc;
 
-	ID_OK(id);
-	rc = asprintf(path, "%s/rdbt-%s", dss_storage_path, test_svc_name);
+	rc = asprintf(path, "%s/rdbt-%s", dss_storage_path, (char *)id->iov_buf);
 	D_ASSERTF(rc > 0, "%d\n", rc);
 	D_ASSERT(*path != NULL);
 	return 0;
@@ -85,10 +81,14 @@ test_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **svcp)
 {
 	struct rdbt_svc	       *svc;
 
-	ID_OK(id);
 	D_ALLOC_PTR(svc);
 	D_ASSERT(svc != NULL);
-	svc->rt_rsvc.s_id = test_svc_id;
+
+	D_ALLOC(svc->rt_rsvc.s_id.iov_buf, id->iov_len);
+	D_ASSERT(svc->rt_rsvc.s_id.iov_buf != NULL);
+	memcpy(svc->rt_rsvc.s_id.iov_buf, id->iov_buf, id->iov_len);
+	svc->rt_rsvc.s_id.iov_buf_len = id->iov_len;
+	svc->rt_rsvc.s_id.iov_len = id->iov_len;
 
 	MUST(rdb_path_init(&svc->rt_root_kvs_path));
 	MUST(rdb_path_push(&svc->rt_root_kvs_path, &rdb_path_root_key));
@@ -108,6 +108,7 @@ test_svc_free_cb(struct ds_rsvc *rsvc)
 	svc = rdbt_svc_obj(rsvc);
 	rdb_path_fini(&svc->rt_kvs1_path);
 	rdb_path_fini(&svc->rt_root_kvs_path);
+	D_FREE(svc->rt_rsvc.s_id.iov_buf);
 	D_FREE(svc);
 }
 
@@ -259,6 +260,39 @@ rdbt_test_path(void)
 
 	D_WARN("fini rdb path\n");
 	rdb_path_fini(&path);
+}
+
+static void
+rdbt_test_rsvc(void)
+{
+	char	       *svc_name = "tmp";
+	d_iov_t		svc_id;
+	uuid_t		uuid;
+	int		rc;
+
+	d_iov_set(&svc_id, svc_name, strlen(svc_name) + 1);
+	uuid_generate(uuid);
+
+	/*
+	 * A leader of an older term can't destroy a replica created by a
+	 * leader with a newer term.
+	 */
+	MUST(ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 2 /* term */, true /* create */,
+			   DB_CAP, NULL /* replicas */, NULL /* arg */));
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 1 /* term */, true /* destroy */);
+	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
+
+	/*
+	 * A leader of an older term can't destroy a replica touched by a
+	 * leader with a newer term.
+	 */
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 3 /* term */, true /* create */,
+			   DB_CAP, NULL /* replicas */, NULL /* arg */);
+	D_ASSERTF(rc == -DER_ALREADY, DF_RC"\n", DP_RC(rc));
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 2 /* term */, true /* destroy */);
+	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
+
+	MUST(ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 3 /* term */, true /* destroy */));
 }
 
 struct iterate_cb_arg {
@@ -606,7 +640,7 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	for (ri = 0; ri < ranks->rl_nr; ri++)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
-	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks,
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
 				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP));
 	crt_reply_send(rpc);
 }
@@ -628,8 +662,7 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	for (ri = 0; ri < ranks->rl_nr; ri++)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
-	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL,
-			       true));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
 	crt_reply_send(rpc);
 }
 
@@ -697,6 +730,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	       rdbt_membership_opname(in->tti_memb_op));
 	rdbt_test_util();
 	rdbt_test_path();
+	rdbt_test_rsvc();
 	rc = rdbt_test_tx(in->tti_update, in->tti_memb_op, in->tti_key,
 			  in->tti_val, &out->tto_val, &out->tto_hint);
 	out->tto_rc = rc;
@@ -759,8 +793,7 @@ rdbt_replicas_remove_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks,
-				     true /* stop */, &out->rtmo_hint);
+	rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, &out->rtmo_hint);
 	out->rtmo_failed = ranks;
 
 out:
@@ -811,12 +844,12 @@ rdbt_dictate_handler(crt_rpc_t *rpc)
 
 	MUST(d_rank_list_dup(&ranks, in->rti_ranks));
 	MUST(d_rank_list_del(ranks, in->rti_rank));
-	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, true));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
 
 	ranks->rl_ranks[0] = in->rti_rank;
 	ranks->rl_nr = 1;
-	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, DS_RSVC_DICTATE,
-				false /* bootstrap */, 0 /* size */));
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, RDB_NIL_TERM,
+				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */));
 
 	d_rank_list_free(ranks);
 	out->rto_rc = 0;

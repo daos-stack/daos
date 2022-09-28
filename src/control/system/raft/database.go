@@ -950,9 +950,25 @@ func (db *Database) UpdatePoolService(ps *system.PoolService) error {
 	db.Lock()
 	defer db.Unlock()
 
-	_, err := db.FindPoolServiceByUUID(ps.PoolUUID)
+	p, err := db.FindPoolServiceByUUID(ps.PoolUUID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to retrieve pool %s", ps.PoolUUID)
+	}
+
+	// This is a workaround before we can handle the following race
+	// properly.
+	//
+	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
+	//     Write ps: Creating
+	//                            Read ps: Creating
+	//     Write ps: Ready
+	//                            Write ps: Creating
+	//
+	// The pool remains in Creating state after PoolCreate completes,
+	// leading to DER_AGAINs during PoolDestroy.
+	if p.State == system.PoolServiceStateReady && ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("ignoring invalid pool service update: %+v -> %+v", p, ps)
+		return nil
 	}
 
 	if err := db.submitPoolUpdate(raftOpUpdatePoolService, ps); err != nil {
