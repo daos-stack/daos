@@ -35,14 +35,19 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
 			entry.ino, ie->ie_stat.st_mode);
 
-	if (!is_new)
+	if (is_new) {
+		rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+					       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
+	} else {
 		rlink = d_hash_rec_findx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 					 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length,
 					 &position);
 
-	if (!rlink) {
-		rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
-						sizeof(ie->ie_stat.st_ino), cookie, &ie->ie_htl);
+		if (!rlink) {
+			rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+							sizeof(ie->ie_stat.st_ino), cookie,
+							&ie->ie_htl);
+		}
 	}
 
 	if (rlink != &ie->ie_htl) {
