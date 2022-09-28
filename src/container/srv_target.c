@@ -2563,8 +2563,7 @@ cont_rf_check_get_tgt(uuid_t pool_uuid)
 	}
 
 out:
-	if (failed_tgts != NULL)
-		D_FREE(failed_tgts);
+	D_FREE(failed_tgts);
 	return rc;
 }
 

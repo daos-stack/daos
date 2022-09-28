@@ -881,8 +881,7 @@ skip_led_str:
 	}
 
 free_traddr:
-	if (b_info.bdi_traddr != NULL)
-		D_FREE(b_info.bdi_traddr);
+	D_FREE(b_info.bdi_traddr);
 
 	return rc;
 }

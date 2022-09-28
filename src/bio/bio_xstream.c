@@ -142,8 +142,7 @@ bio_spdk_env_init(void)
 		spdk_env_fini();
 	}
 out:
-	if (opts.pci_allowed != NULL)
-		D_FREE(opts.pci_allowed);
+	D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -562,7 +561,6 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 		d_bdev->bb_blobstore = NULL;
 	}
 
-	if (d_bdev->bb_name != NULL)
 		D_FREE(d_bdev->bb_name);
 
 	D_FREE(d_bdev);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -222,8 +222,7 @@ out:
 
 	for (i = 0; i < OIT_BUCKET_MAX; i++) {
 		bucket = &oa->oa_buckets[i];
-		if (bucket->ob_oids)
-			D_FREE(bucket->ob_oids);
+		D_FREE(bucket->ob_oids);
 	}
 	D_FREE(oa);
 	return rc;

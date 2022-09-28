@@ -750,7 +750,6 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	D_ALLOC_ARRAY(bbc->bbc_sorted, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_sorted == NULL) {
 		D_FREE(bbc->bbc_grps);
-		bbc->bbc_grps = NULL;
 		return -DER_NOMEM;
 	}
 

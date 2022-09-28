@@ -387,8 +387,7 @@ out_eventual:
 	}
 
 out_mem:
-	if (snapshots)
-		D_FREE(snapshots);
+	D_FREE(snapshots);
 out:
 	if (rc == 0)
 		*snap_countp = snap_count;
