@@ -154,6 +154,7 @@ def library(env, *args, **kwargs):
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
+    denv.AppendUnique(LINKFLAGS=['-fpic','-pie'])
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     prog = denv.Program(*args, **kwargs)
