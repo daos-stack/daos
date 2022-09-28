@@ -42,7 +42,7 @@ func TestStorageQueryCommands(t *testing.T) {
 				Rank:             ranklist.NilRank,
 				OmitPools:        true,
 				IncludeBioHealth: true,
-				IDs:              "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			}),
 			nil,
 		},
@@ -76,7 +76,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			printRequest(t, &control.SmdQueryReq{
 				Rank:        ranklist.NilRank,
 				OmitDevices: true,
-				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				UUID:        "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			}),
 			nil,
 		},
@@ -133,7 +133,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"storage query list-devices --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
 				Rank:      ranklist.NilRank,
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				OmitPools: true,
 			}),
 			nil,
@@ -147,10 +147,9 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"Set FAULTY device status (force)",
 			"storage set nvme-faulty --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
-			printRequest(t, &control.SmdQueryReq{
+			printRequest(t, &control.SmdManageReq{
 				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				SetFaulty: true,
-				OmitPools: true,
 			}),
 			nil,
 		},
@@ -175,22 +174,20 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"Reuse a FAULTY device",
 			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdQueryReq{
+			printRequest(t, &control.SmdManageReq{
 				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				ReplaceUUID: "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				NoReint:     false,
-				OmitPools:   true,
 			}),
 			nil,
 		},
 		{
 			"Replace an evicted device with a new device",
 			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 2ccb8afb-5d32-454e-86e3-762ec5dca7be",
-			printRequest(t, &control.SmdQueryReq{
+			printRequest(t, &control.SmdManageReq{
 				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				ReplaceUUID: "2ccb8afb-5d32-454e-86e3-762ec5dca7be",
 				NoReint:     false,
-				OmitPools:   true,
 			}),
 			nil,
 		},
@@ -209,40 +206,36 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"Identify a device",
 			"storage led identify 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdQueryReq{
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				Identify:  true,
-				OmitPools: true,
+			printRequest(t, &control.SmdManageReq{
+				IDs:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify: true,
 			}),
 			nil,
 		},
 		{
 			"Identify a device with multiple device IDs",
 			"storage led identify 842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
-			printRequest(t, &control.SmdQueryReq{
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
-				Identify:  true,
-				OmitPools: true,
+			printRequest(t, &control.SmdManageReq{
+				IDs:      "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+				Identify: true,
 			}),
 			nil,
 		},
 		{
 			"Check LED state of a VMD device",
 			"storage led check 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdQueryReq{
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				GetLED:    true,
-				OmitPools: true,
+			printRequest(t, &control.SmdManageReq{
+				IDs:    "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				GetLED: true,
 			}),
 			nil,
 		},
 		{
 			"Check LED state of a VMD device with multiple device IDs",
 			"storage led check 842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
-			printRequest(t, &control.SmdQueryReq{
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
-				GetLED:    true,
-				OmitPools: true,
+			printRequest(t, &control.SmdManageReq{
+				IDs:    "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+				GetLED: true,
 			}),
 			nil,
 		},

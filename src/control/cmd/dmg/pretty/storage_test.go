@@ -1278,15 +1278,14 @@ func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	mockController := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
-		req         *control.SmdQueryReq
+		noDevs      bool
+		noPools     bool
 		hsm         control.HostStorageMap
 		opts        []PrintConfigOption
 		expPrintStr string
 	}{
 		"list-pools (standard)": {
-			req: &control.SmdQueryReq{
-				OmitDevices: true,
-			},
+			noDevs: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1324,10 +1323,8 @@ host1
 `,
 		},
 		"list-pools (verbose)": {
-			req: &control.SmdQueryReq{
-				OmitDevices: true,
-			},
-			opts: []PrintConfigOption{PrintWithVerboseOutput(true)},
+			noDevs: true,
+			opts:   []PrintConfigOption{PrintWithVerboseOutput(true)},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1364,11 +1361,8 @@ host1
 
 `,
 		},
-
 		"list-pools (none found)": {
-			req: &control.SmdQueryReq{
-				OmitDevices: true,
-			},
+			noDevs: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1385,9 +1379,7 @@ host1
 `,
 		},
 		"list-devices": {
-			req: &control.SmdQueryReq{
-				OmitPools: true,
-			},
+			noPools: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1447,9 +1439,7 @@ host1
 `,
 		},
 		"list-devices (none found)": {
-			req: &control.SmdQueryReq{
-				OmitPools: true,
-			},
+			noPools: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1466,9 +1456,7 @@ host1
 `,
 		},
 		"device-health": {
-			req: &control.SmdQueryReq{
-				OmitPools: true,
-			},
+			noPools: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1556,12 +1544,8 @@ host1
 			),
 		},
 		"identify led": {
-			req: &control.SmdQueryReq{
-				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-				Identify:  true,
-				OmitPools: true,
-			},
-			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			noPools: true,
+			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1587,12 +1571,8 @@ host1
 `,
 		},
 		"identify led; transport address specified": {
-			req: &control.SmdQueryReq{
-				IDs:       "0000:8a:00.0",
-				Identify:  true,
-				OmitPools: true,
-			},
-			opts: []PrintConfigOption{PrintOnlyLEDInfo()},
+			noPools: true,
+			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1619,7 +1599,7 @@ host1
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintSmdInfoMap(tc.req, tc.hsm, &bld, tc.opts...); err != nil {
+			if err := PrintSmdInfoMap(tc.noDevs, tc.noPools, tc.hsm, &bld, tc.opts...); err != nil {
 				t.Fatal(err)
 			}
 

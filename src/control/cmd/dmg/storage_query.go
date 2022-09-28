@@ -53,20 +53,12 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
 		return err
 	}
-	if err := pretty.PrintSmdInfoMap(req, resp.HostStorage, &bld, opts...); err != nil {
+	if err := pretty.PrintSmdInfoMap(req.OmitDevices, req.OmitPools, resp.HostStorage, &bld, opts...); err != nil {
 		return err
 	}
 	cmd.Info(bld.String())
 
 	return resp.Errors()
-}
-
-type ledCmd struct {
-	smdQueryCmd
-
-	Args struct {
-		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device"`
-	} `positional-args:"yes"`
 }
 
 // storageQueryCmd is the struct representing the storage query subcommand
@@ -89,7 +81,7 @@ func (cmd *devHealthQueryCmd) Execute(_ []string) error {
 		OmitPools:        true,
 		IncludeBioHealth: true,
 		Rank:             ranklist.NilRank,
-		IDs:              cmd.UUID,
+		UUID:             cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req)
 }
@@ -126,7 +118,7 @@ func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 		OmitPools:        true,
 		IncludeBioHealth: cmd.Health,
 		Rank:             cmd.GetRank(),
-		IDs:              cmd.UUID,
+		UUID:             cmd.UUID,
 		FaultyDevsOnly:   cmd.EvictedOnly,
 	}
 	return cmd.makeRequest(ctx, req)
@@ -144,7 +136,7 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		OmitDevices: true,
 		Rank:        cmd.GetRank(),
-		IDs:         cmd.UUID,
+		UUID:        cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req, pretty.PrintWithVerboseOutput(cmd.Verbose))
 }
@@ -188,12 +180,43 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	return resp.Errors()
 }
 
+type smdManageCmd struct {
+	baseCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+}
+
+func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
+		return err
+	}
+	if err := pretty.PrintSmdInfoMap(false, true, resp.HostStorage, &bld, opts...); err != nil {
+		return err
+	}
+	cmd.Info(bld.String())
+
+	return resp.Errors()
+}
+
 type setFaultyCmd struct {
 	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" description:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
 type nvmeSetFaultyCmd struct {
-	smdQueryCmd
+	smdManageCmd
 	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
 	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
 }
@@ -208,10 +231,9 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		}
 	}
 
-	req := &control.SmdQueryReq{
+	req := &control.SmdManageReq{
 		IDs:       cmd.UUID,
 		SetFaulty: true,
-		OmitPools: true,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }
@@ -223,7 +245,7 @@ type storageReplaceCmd struct {
 
 // nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
 type nvmeReplaceCmd struct {
-	smdQueryCmd
+	smdManageCmd
 	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
 	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
 	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
@@ -241,13 +263,20 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		return errors.New("NoReint is not currently implemented")
 	}
 
-	req := &control.SmdQueryReq{
+	req := &control.SmdManageReq{
 		IDs:         cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 		NoReint:     cmd.NoReint,
-		OmitPools:   true,
 	}
 	return cmd.makeRequest(context.Background(), req)
+}
+
+type ledCmd struct {
+	smdManageCmd
+
+	Args struct {
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device"`
+	} `positional-args:"yes"`
 }
 
 type ledManageCmd struct {
@@ -267,9 +296,8 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
-	req := &control.SmdQueryReq{
-		IDs:       cmd.Args.IDs,
-		OmitPools: true,
+	req := &control.SmdManageReq{
+		IDs: cmd.Args.IDs,
 	}
 	if cmd.Reset {
 		req.ResetLED = true
@@ -290,10 +318,9 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
-	req := &control.SmdQueryReq{
-		IDs:       cmd.Args.IDs,
-		GetLED:    true,
-		OmitPools: true,
+	req := &control.SmdManageReq{
+		IDs:    cmd.Args.IDs,
+		GetLED: true,
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }

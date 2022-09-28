@@ -661,6 +661,12 @@ void   ctl__smd_manage_req__free_unpacked
   assert(message->base.descriptor == &ctl__smd_manage_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   ctl__smd_manage_resp__result__init
+                     (Ctl__SmdManageResp__Result         *message)
+{
+  static const Ctl__SmdManageResp__Result init_value = CTL__SMD_MANAGE_RESP__RESULT__INIT;
+  *message = init_value;
+}
 void   ctl__smd_manage_resp__rank_resp__init
                      (Ctl__SmdManageResp__RankResp         *message)
 {
@@ -1692,7 +1698,7 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] =
+static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[6] =
 {
   {
     "omit_devices",
@@ -1731,20 +1737,8 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "set_faulty",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, set_faulty),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "uuid",
-    5,
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -1756,7 +1750,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] 
   },
   {
     "rank",
-    6,
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1768,7 +1762,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] 
   },
   {
     "target",
-    7,
+    6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -1778,100 +1772,19 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "no_reint",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, no_reint),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "identify",
-    10,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, identify),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "replace_uuid",
-    12,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, replace_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "reset_led",
-    13,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, reset_led),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "get_led",
-    14,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, get_led),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tr_addr",
-    15,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, tr_addr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned ctl__smd_query_req__field_indices_by_name[] = {
-  11,   /* field[11] = get_led */
-  8,   /* field[8] = identify */
   2,   /* field[2] = include_bio_health */
-  7,   /* field[7] = no_reint */
   0,   /* field[0] = omit_devices */
   1,   /* field[1] = omit_pools */
-  5,   /* field[5] = rank */
-  9,   /* field[9] = replace_uuid */
-  10,   /* field[10] = reset_led */
-  3,   /* field[3] = set_faulty */
-  6,   /* field[6] = target */
-  12,   /* field[12] = tr_addr */
-  4,   /* field[4] = uuid */
+  4,   /* field[4] = rank */
+  5,   /* field[5] = target */
+  3,   /* field[3] = uuid */
 };
-static const ProtobufCIntRange ctl__smd_query_req__number_ranges[3 + 1] =
+static const ProtobufCIntRange ctl__smd_query_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 9, 7 },
-  { 12, 9 },
-  { 0, 13 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
 {
@@ -1881,30 +1794,18 @@ const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
   "Ctl__SmdQueryReq",
   "ctl",
   sizeof(Ctl__SmdQueryReq),
-  13,
+  6,
   ctl__smd_query_req__field_descriptors,
   ctl__smd_query_req__field_indices_by_name,
-  3,  ctl__smd_query_req__number_ranges,
+  1,  ctl__smd_query_req__number_ranges,
   (ProtobufCMessageInit) ctl__smd_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[3] =
+static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[2] =
 {
   {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "details",
-    2,
+    1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1916,7 +1817,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_healt
   },
   {
     "health",
-    3,
+    2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1928,14 +1829,13 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_healt
   },
 };
 static const unsigned ctl__smd_query_resp__smd_device_with_health__field_indices_by_name[] = {
-  1,   /* field[1] = details */
-  2,   /* field[2] = health */
-  0,   /* field[0] = status */
+  0,   /* field[0] = details */
+  1,   /* field[1] = health */
 };
 static const ProtobufCIntRange ctl__smd_query_resp__smd_device_with_health__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor =
 {
@@ -1945,7 +1845,7 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__de
   "Ctl__SmdQueryResp__SmdDeviceWithHealth",
   "ctl",
   sizeof(Ctl__SmdQueryResp__SmdDeviceWithHealth),
-  3,
+  2,
   ctl__smd_query_resp__smd_device_with_health__field_descriptors,
   ctl__smd_query_resp__smd_device_with_health__field_indices_by_name,
   1,  ctl__smd_query_resp__smd_device_with_health__number_ranges,
@@ -2223,12 +2123,12 @@ static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[3]
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "noReint",
+    "no_reint",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, noreint),
+    offsetof(Ctl__DevReplaceReq, no_reint),
     NULL,
     NULL,
     0,             /* flags */
@@ -2237,7 +2137,7 @@ static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[3]
 };
 static const unsigned ctl__dev_replace_req__field_indices_by_name[] = {
   1,   /* field[1] = new_dev_uuid */
-  2,   /* field[2] = noReint */
+  2,   /* field[2] = no_reint */
   0,   /* field[0] = old_dev_uuid */
 };
 static const ProtobufCIntRange ctl__dev_replace_req__number_ranges[1 + 1] =
@@ -2413,6 +2313,57 @@ const ProtobufCMessageDescriptor ctl__smd_manage_req__descriptor =
   (ProtobufCMessageInit) ctl__smd_manage_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor ctl__smd_manage_resp__result__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdManageResp__Result, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "device",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdManageResp__Result, device),
+    &ctl__smd_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__smd_manage_resp__result__field_indices_by_name[] = {
+  1,   /* field[1] = device */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange ctl__smd_manage_resp__result__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor ctl__smd_manage_resp__result__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.SmdManageResp.Result",
+  "Result",
+  "Ctl__SmdManageResp__Result",
+  "ctl",
+  sizeof(Ctl__SmdManageResp__Result),
+  2,
+  ctl__smd_manage_resp__result__field_descriptors,
+  ctl__smd_manage_resp__result__field_indices_by_name,
+  1,  ctl__smd_manage_resp__result__number_ranges,
+  (ProtobufCMessageInit) ctl__smd_manage_resp__result__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor ctl__smd_manage_resp__rank_resp__field_descriptors[2] =
 {
   {
@@ -2428,21 +2379,21 @@ static const ProtobufCFieldDescriptor ctl__smd_manage_resp__rank_resp__field_des
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "devices",
+    "results",
     2,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Ctl__SmdManageResp__RankResp, n_devices),
-    offsetof(Ctl__SmdManageResp__RankResp, devices),
-    &ctl__smd_device__descriptor,
+    offsetof(Ctl__SmdManageResp__RankResp, n_results),
+    offsetof(Ctl__SmdManageResp__RankResp, results),
+    &ctl__smd_manage_resp__result__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned ctl__smd_manage_resp__rank_resp__field_indices_by_name[] = {
-  1,   /* field[1] = devices */
   0,   /* field[0] = rank */
+  1,   /* field[1] = results */
 };
 static const ProtobufCIntRange ctl__smd_manage_resp__rank_resp__number_ranges[1 + 1] =
 {
@@ -2464,23 +2415,11 @@ const ProtobufCMessageDescriptor ctl__smd_manage_resp__rank_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_manage_resp__rank_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_manage_resp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor ctl__smd_manage_resp__field_descriptors[1] =
 {
   {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdManageResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "ranks",
-    2,
+    1,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Ctl__SmdManageResp, n_ranks),
@@ -2492,13 +2431,12 @@ static const ProtobufCFieldDescriptor ctl__smd_manage_resp__field_descriptors[2]
   },
 };
 static const unsigned ctl__smd_manage_resp__field_indices_by_name[] = {
-  1,   /* field[1] = ranks */
-  0,   /* field[0] = status */
+  0,   /* field[0] = ranks */
 };
 static const ProtobufCIntRange ctl__smd_manage_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
 {
@@ -2508,7 +2446,7 @@ const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
   "Ctl__SmdManageResp",
   "ctl",
   sizeof(Ctl__SmdManageResp),
-  2,
+  1,
   ctl__smd_manage_resp__field_descriptors,
   ctl__smd_manage_resp__field_indices_by_name,
   1,  ctl__smd_manage_resp__number_ranges,

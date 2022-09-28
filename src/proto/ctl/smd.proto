@@ -120,28 +120,18 @@ message SmdPoolResp {
 }
 
 message SmdQueryReq {
-	reserved 8, 11;
-	reserved "replaceUUID";
-	bool omit_devices = 1; // query should omit devices
-	bool omit_pools = 2; // query should omit pools
-	bool include_bio_health = 3; // query should include BIO health for devices
-	bool set_faulty = 4; // set the specified device to FAULTY
-	string uuid = 5; // constrain query to this UUID (pool or device)
-	uint32 rank = 6; // response should only include information about this rank
-	string target = 7; // response should only include information about this VOS target
-	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
-	bool identify = 10; // set the LED state to quickly blink
-	string replace_uuid = 12; // UUID of new device to replace storage with
-	bool reset_led = 13; // for resetting LED, debug only
-	bool get_led = 14; // get LED state of devices
-	string tr_addr = 15; // constrain query to this transport (PCI) address (device only)
+	bool omit_devices = 1;		// Indicate query should omit devices
+	bool omit_pools = 2;		// Indicate query should omit pools
+	bool include_bio_health = 3;	// Indicate query should include BIO health for devices
+	string uuid = 4;		// Constrain query to this UUID (pool or device)
+	uint32 rank = 5;		// Restrict response to only include info about this rank
+	string target = 6;		// Restrict response to only include info about this VOS target
 }
 
 message SmdQueryResp {
 	message SmdDeviceWithHealth {
-		int32 status = 1; // DAOS error code
-		SmdDevice details = 2;
-		BioHealthResp health = 3; // optional BIO health
+		SmdDevice details = 1;
+		BioHealthResp health = 2; // optional BIO health
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
@@ -170,9 +160,9 @@ message LedManageReq {
 }
 
 message DevReplaceReq {
-	string old_dev_uuid = 1; // UUID of old (hot-removed) blobstore/device
-	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	bool   noReint      = 3; // Skip device reintegration if set
+	string old_dev_uuid = 1;	// UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 2;	// UUID of new (hot-plugged) blobstore/device
+	bool no_reint = 3;		// Skip device reintegration if set
 }
 
 message SetFaultyReq {
@@ -193,10 +183,13 @@ message SmdManageReq {
 }
 
 message SmdManageResp {
+	message Result {
+		int32 status = 1;		// DAOS error code
+		SmdDevice device = 2;
+	}
 	message RankResp {
 		uint32 rank = 1;		// Rank to which this response corresponds
-		repeated SmdDevice devices = 2;	// List of devices on the rank
+		repeated Result results = 2;	// List of device results on the rank
 	}
-	int32 status = 1;		// DAOS error code
-	repeated RankResp ranks = 2;	// List of per-rank responses
+	repeated RankResp ranks = 1;		// List of per-rank responses
 }

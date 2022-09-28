@@ -35,21 +35,21 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	ledStateFault := ctlpb.LedState_ON
 	ledStateUnknown := ctlpb.LedState_NA
 
-	pbNormDev := &ctlpb.SmdDevice{
-		Uuid:     test.MockUUID(),
-		DevState: devStateNormal,
-		LedState: ledStateNormal,
-	}
-	pbFaultyQueryDev := &ctlpb.SmdDevice{
-		Uuid:     test.MockUUID(),
-		DevState: devStateFaulty,
-		LedState: ledStateFault,
-	}
-	pbIdentifyQueryDev := &ctlpb.SmdDevice{
-		Uuid:     test.MockUUID(),
-		DevState: devStateNormal,
-		LedState: ledStateIdentify,
-	}
+	//	pbNormDev := &ctlpb.SmdDevice{
+	//		Uuid:     test.MockUUID(),
+	//		DevState: devStateNormal,
+	//		LedState: ledStateNormal,
+	//	}
+	//	pbFaultyQueryDev := &ctlpb.SmdDevice{
+	//		Uuid:     test.MockUUID(),
+	//		DevState: devStateFaulty,
+	//		LedState: ledStateFault,
+	//	}
+	//	pbIdentifyQueryDev := &ctlpb.SmdDevice{
+	//		Uuid:     test.MockUUID(),
+	//		DevState: devStateNormal,
+	//		LedState: ledStateIdentify,
+	//	}
 
 	for name, tc := range map[string]struct {
 		setupAP        bool
@@ -78,167 +78,167 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			junkResp: true,
 			expErr:   errors.New("unmarshal"),
 		},
-		"set-faulty": {
-			req: &ctlpb.SmdQueryReq{
-				SetFaulty: true,
-				Uuid:      test.MockUUID(),
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
-						},
-					},
-					{
-						Message: &ctlpb.DevManageResp{
-							Device: &ctlpb.SmdDevice{
-								Uuid:     test.MockUUID(),
-								DevState: devStateFaulty,
-								LedState: ledStateFault,
-							},
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Details: pbFaultyQueryDev},
-						},
-					},
-				},
-			},
-		},
-		"set-faulty; DAOS Failure": {
-			req: &ctlpb.SmdQueryReq{
-				SetFaulty: true,
-				Uuid:      test.MockUUID(),
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
-						},
-					},
-					{
-						Message: &ctlpb.DevManageResp{
-							Status: int32(daos.InvalidInput),
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Status: int32(daos.InvalidInput)},
-						},
-					},
-				},
-			},
-		},
-		"identify": {
-			req: &ctlpb.SmdQueryReq{
-				Identify: true,
-				Uuid:     test.MockUUID(),
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
-						},
-					},
-					{
-						Message: &ctlpb.DevManageResp{
-							Device: &ctlpb.SmdDevice{
-								Uuid:     test.MockUUID(),
-								DevState: devStateNormal,
-								LedState: ledStateIdentify,
-							},
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Details: pbIdentifyQueryDev},
-						},
-					},
-				},
-			},
-		},
-		"get-led": {
-			req: &ctlpb.SmdQueryReq{
-				GetLed: true,
-				Uuid:   test.MockUUID(),
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
-						},
-					},
-					{
-						Message: &ctlpb.DevManageResp{
-							Device: &ctlpb.SmdDevice{
-								Uuid:     test.MockUUID(),
-								DevState: devStateNormal,
-								LedState: ledStateIdentify,
-							},
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Details: pbIdentifyQueryDev},
-						},
-					},
-				},
-			},
-		},
-		"reset-led": {
-			req: &ctlpb.SmdQueryReq{
-				ResetLed: true,
-				Uuid:     test.MockUUID(),
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev},
-						},
-					},
-					{
-						Message: &ctlpb.DevManageResp{
-							Device: &ctlpb.SmdDevice{
-								Uuid:     test.MockUUID(),
-								DevState: devStateNormal,
-								LedState: ledStateNormal,
-							},
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Details: pbNormDev},
-						},
-					},
-				},
-			},
-		},
+		//		"set-faulty": {
+		//			req: &ctlpb.SmdQueryReq{
+		//				SetFaulty: true,
+		//				Uuid:      test.MockUUID(),
+		//			},
+		//			drpcResps: map[int][]*mockDrpcResponse{
+		//				0: {
+		//					{
+		//						Message: &ctlpb.SmdDevResp{
+		//							Devices: []*ctlpb.SmdDevice{pbNormDev},
+		//						},
+		//					},
+		//					{
+		//						Message: &ctlpb.DevManageResp{
+		//							Device: &ctlpb.SmdDevice{
+		//								Uuid:     test.MockUUID(),
+		//								DevState: devStateFaulty,
+		//								LedState: ledStateFault,
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResp: &ctlpb.SmdQueryResp{
+		//				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+		//					{
+		//						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+		//							{Details: pbFaultyQueryDev},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"set-faulty; DAOS Failure": {
+		//			req: &ctlpb.SmdQueryReq{
+		//				SetFaulty: true,
+		//				Uuid:      test.MockUUID(),
+		//			},
+		//			drpcResps: map[int][]*mockDrpcResponse{
+		//				0: {
+		//					{
+		//						Message: &ctlpb.SmdDevResp{
+		//							Devices: []*ctlpb.SmdDevice{pbNormDev},
+		//						},
+		//					},
+		//					{
+		//						Message: &ctlpb.DevManageResp{
+		//							Status: int32(daos.InvalidInput),
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResp: &ctlpb.SmdQueryResp{
+		//				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+		//					{
+		//						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+		//							{Status: int32(daos.InvalidInput)},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"identify": {
+		//			req: &ctlpb.SmdQueryReq{
+		//				Identify: true,
+		//				Uuid:     test.MockUUID(),
+		//			},
+		//			drpcResps: map[int][]*mockDrpcResponse{
+		//				0: {
+		//					{
+		//						Message: &ctlpb.SmdDevResp{
+		//							Devices: []*ctlpb.SmdDevice{pbNormDev},
+		//						},
+		//					},
+		//					{
+		//						Message: &ctlpb.DevManageResp{
+		//							Device: &ctlpb.SmdDevice{
+		//								Uuid:     test.MockUUID(),
+		//								DevState: devStateNormal,
+		//								LedState: ledStateIdentify,
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResp: &ctlpb.SmdQueryResp{
+		//				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+		//					{
+		//						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+		//							{Details: pbIdentifyQueryDev},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"get-led": {
+		//			req: &ctlpb.SmdQueryReq{
+		//				GetLed: true,
+		//				Uuid:   test.MockUUID(),
+		//			},
+		//			drpcResps: map[int][]*mockDrpcResponse{
+		//				0: {
+		//					{
+		//						Message: &ctlpb.SmdDevResp{
+		//							Devices: []*ctlpb.SmdDevice{pbNormDev},
+		//						},
+		//					},
+		//					{
+		//						Message: &ctlpb.DevManageResp{
+		//							Device: &ctlpb.SmdDevice{
+		//								Uuid:     test.MockUUID(),
+		//								DevState: devStateNormal,
+		//								LedState: ledStateIdentify,
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResp: &ctlpb.SmdQueryResp{
+		//				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+		//					{
+		//						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+		//							{Details: pbIdentifyQueryDev},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"reset-led": {
+		//			req: &ctlpb.SmdQueryReq{
+		//				ResetLed: true,
+		//				Uuid:     test.MockUUID(),
+		//			},
+		//			drpcResps: map[int][]*mockDrpcResponse{
+		//				0: {
+		//					{
+		//						Message: &ctlpb.SmdDevResp{
+		//							Devices: []*ctlpb.SmdDevice{pbNormDev},
+		//						},
+		//					},
+		//					{
+		//						Message: &ctlpb.DevManageResp{
+		//							Device: &ctlpb.SmdDevice{
+		//								Uuid:     test.MockUUID(),
+		//								DevState: devStateNormal,
+		//								LedState: ledStateNormal,
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResp: &ctlpb.SmdQueryResp{
+		//				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+		//					{
+		//						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+		//							{Details: pbNormDev},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
 		"list-pools": {
 			req: &ctlpb.SmdQueryReq{
 				OmitDevices: true,

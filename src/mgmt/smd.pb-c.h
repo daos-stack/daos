@@ -34,6 +34,7 @@ typedef struct _Ctl__SetFaultyReq Ctl__SetFaultyReq;
 typedef struct _Ctl__DevManageResp Ctl__DevManageResp;
 typedef struct _Ctl__SmdManageReq Ctl__SmdManageReq;
 typedef struct _Ctl__SmdManageResp Ctl__SmdManageResp;
+typedef struct _Ctl__SmdManageResp__Result Ctl__SmdManageResp__Result;
 typedef struct _Ctl__SmdManageResp__RankResp Ctl__SmdManageResp__RankResp;
 
 
@@ -316,70 +317,38 @@ struct  _Ctl__SmdQueryReq
 {
   ProtobufCMessage base;
   /*
-   * query should omit devices
+   * Indicate query should omit devices
    */
   protobuf_c_boolean omit_devices;
   /*
-   * query should omit pools
+   * Indicate query should omit pools
    */
   protobuf_c_boolean omit_pools;
   /*
-   * query should include BIO health for devices
+   * Indicate query should include BIO health for devices
    */
   protobuf_c_boolean include_bio_health;
   /*
-   * set the specified device to FAULTY
-   */
-  protobuf_c_boolean set_faulty;
-  /*
-   * constrain query to this UUID (pool or device)
+   * Constrain query to this UUID (pool or device)
    */
   char *uuid;
   /*
-   * response should only include information about this rank
+   * Restrict response to only include info about this rank
    */
   uint32_t rank;
   /*
-   * response should only include information about this VOS target
+   * Restrict response to only include info about this VOS target
    */
   char *target;
-  /*
-   * specify if device reint is needed (used for replace cmd)
-   */
-  protobuf_c_boolean no_reint;
-  /*
-   * set the LED state to quickly blink
-   */
-  protobuf_c_boolean identify;
-  /*
-   * UUID of new device to replace storage with
-   */
-  char *replace_uuid;
-  /*
-   * for resetting LED, debug only
-   */
-  protobuf_c_boolean reset_led;
-  /*
-   * get LED state of devices
-   */
-  protobuf_c_boolean get_led;
-  /*
-   * constrain query to this transport (PCI) address (device only)
-   */
-  char *tr_addr;
 };
 #define CTL__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
 {
   ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
   Ctl__SmdDevice *details;
   /*
    * optional BIO health
@@ -388,7 +357,7 @@ struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
 };
 #define CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__smd_device_with_health__descriptor) \
-    , 0, NULL, NULL }
+    , NULL, NULL }
 
 
 struct  _Ctl__SmdQueryResp__Pool
@@ -490,7 +459,7 @@ struct  _Ctl__DevReplaceReq
   /*
    * Skip device reintegration if set
    */
-  protobuf_c_boolean noreint;
+  protobuf_c_boolean no_reint;
 };
 #define CTL__DEV_REPLACE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_req__descriptor) \
@@ -559,6 +528,20 @@ struct  _Ctl__SmdManageReq
     , CTL__SMD_MANAGE_REQ__OP__NOT_SET, {0} }
 
 
+struct  _Ctl__SmdManageResp__Result
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  Ctl__SmdDevice *device;
+};
+#define CTL__SMD_MANAGE_RESP__RESULT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_resp__result__descriptor) \
+    , 0, NULL }
+
+
 struct  _Ctl__SmdManageResp__RankResp
 {
   ProtobufCMessage base;
@@ -567,10 +550,10 @@ struct  _Ctl__SmdManageResp__RankResp
    */
   uint32_t rank;
   /*
-   * List of devices on the rank
+   * List of device results on the rank
    */
-  size_t n_devices;
-  Ctl__SmdDevice **devices;
+  size_t n_results;
+  Ctl__SmdManageResp__Result **results;
 };
 #define CTL__SMD_MANAGE_RESP__RANK_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_resp__rank_resp__descriptor) \
@@ -581,10 +564,6 @@ struct  _Ctl__SmdManageResp
 {
   ProtobufCMessage base;
   /*
-   * DAOS error code
-   */
-  int32_t status;
-  /*
    * List of per-rank responses
    */
   size_t n_ranks;
@@ -592,7 +571,7 @@ struct  _Ctl__SmdManageResp
 };
 #define CTL__SMD_MANAGE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_resp__descriptor) \
-    , 0, 0,NULL }
+    , 0,NULL }
 
 
 /* Ctl__BioHealthReq methods */
@@ -873,6 +852,9 @@ Ctl__SmdManageReq *
 void   ctl__smd_manage_req__free_unpacked
                      (Ctl__SmdManageReq *message,
                       ProtobufCAllocator *allocator);
+/* Ctl__SmdManageResp__Result methods */
+void   ctl__smd_manage_resp__result__init
+                     (Ctl__SmdManageResp__Result         *message);
 /* Ctl__SmdManageResp__RankResp methods */
 void   ctl__smd_manage_resp__rank_resp__init
                      (Ctl__SmdManageResp__RankResp         *message);
@@ -951,6 +933,9 @@ typedef void (*Ctl__DevManageResp_Closure)
 typedef void (*Ctl__SmdManageReq_Closure)
                  (const Ctl__SmdManageReq *message,
                   void *closure_data);
+typedef void (*Ctl__SmdManageResp__Result_Closure)
+                 (const Ctl__SmdManageResp__Result *message,
+                  void *closure_data);
 typedef void (*Ctl__SmdManageResp__RankResp_Closure)
                  (const Ctl__SmdManageResp__RankResp *message,
                   void *closure_data);
@@ -985,6 +970,7 @@ extern const ProtobufCMessageDescriptor ctl__set_faulty_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__result__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__rank_resp__descriptor;
 
 PROTOBUF_C__END_DECLS

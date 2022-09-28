@@ -218,7 +218,7 @@ func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOptio
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied
 // HostStorageMap, with a focus on presenting the per-server metadata (SMD) information.
-func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, key := range hsm.Keys() {
@@ -233,7 +233,7 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 			continue
 		}
 
-		if !req.OmitDevices {
+		if !omitDevs {
 			if len(hss.HostStorage.SmdInfo.Devices) > 0 {
 				fmt.Fprintln(iw, "Devices")
 
@@ -255,7 +255,7 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 			}
 		}
 
-		if !req.OmitPools {
+		if !omitPools {
 			if len(hss.HostStorage.SmdInfo.Pools) > 0 {
 				fmt.Fprintln(iw, "Pools")
 
