@@ -63,7 +63,7 @@ type PoolCreateCmd struct {
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	RankList      string           `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	RankList      ui.RankSetFlag   `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>"`
@@ -103,6 +103,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		UserGroup:  cmd.GroupName,
 		NumSvcReps: cmd.NumSvcReps,
 		Properties: cmd.Properties.ToSet,
+		Ranks:      cmd.RankList.Ranks(),
 	}
 
 	if cmd.ACLFile != "" {
@@ -110,11 +111,6 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	req.Ranks, err = system.ParseRanks(cmd.RankList)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
 	}
 
 	switch {
@@ -163,7 +159,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.Wrap(err, "failed to parse pool size")
 		}
 
-		if cmd.NumRanks > 0 && cmd.RankList != "" {
+		if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 			return errIncompatFlags("num-ranks", "ranks")
 		}
 		req.NumRanks = cmd.NumRanks
@@ -441,24 +437,18 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 // PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
 type PoolExtendCmd struct {
 	poolCmd
-	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 }
 
 // Execute is run when PoolExtendCmd subcommand is activated
 func (cmd *PoolExtendCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	ranks, err := system.ParseRanks(cmd.RankList)
-	if err != nil {
-		err = errors.Wrap(err, "parsing rank list")
-		return err
-	}
-
 	req := &control.PoolExtendReq{
-		ID: cmd.PoolID().String(), Ranks: ranks,
+		ID: cmd.PoolID().String(), Ranks: cmd.RankList.Ranks(),
 	}
 
-	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/system"
@@ -79,28 +78,19 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 // rankListCmd enables rank or host list to be supplied with command to filter
 // which ranks are operated upon.
 type rankListCmd struct {
-	Ranks string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
-	Hosts string `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+	Ranks ui.RankSetFlag `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
+	Hosts ui.HostSetFlag `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
 }
 
 // validateHostsRanks validates rank and host lists have correct format.
 //
 // Populate request with valid list strings.
-func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRanks *system.RankSet, err error) {
-	outHosts, err = hostlist.CreateSet(cmd.Hosts)
-	if err != nil {
-		return
-	}
-	outRanks, err = system.CreateRankSet(cmd.Ranks)
-	if err != nil {
-		return
+func (cmd *rankListCmd) validateHostsRanks() error {
+	if cmd.Hosts.Count() > 0 && cmd.Ranks.Count() > 0 {
+		return errors.New("--ranks and --rank-hosts options cannot be set together")
 	}
 
-	if outHosts.Count() > 0 && outRanks.Count() > 0 {
-		err = errors.New("--ranks and --rank-hosts options cannot be set together")
-	}
-
-	return
+	return nil
 }
 
 // systemQueryCmd is the struct representing the command to query system status.
@@ -119,13 +109,12 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system query failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemQueryReq)
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -181,13 +170,12 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system stop failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := &control.SystemStopReq{Force: cmd.Force}
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -219,17 +207,16 @@ type baseExcludeCmd struct {
 }
 
 func (cmd *baseExcludeCmd) execute(clear bool) error {
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
-	if rankSet.Count() == 0 && hostSet.Count() == 0 {
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
 		return errors.New("no ranks or hosts specified")
 	}
 
 	req := &control.SystemExcludeReq{Clear: clear}
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemExclude(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -284,13 +271,12 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system start failed")
 	}()
 
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
+	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemStartReq)
-	req.Hosts.Replace(hostSet)
-	req.Ranks.Replace(rankSet)
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
