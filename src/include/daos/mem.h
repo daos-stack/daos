@@ -632,4 +632,129 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
 	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
+
+/*********************************************************************************/
+
+/** Describing a storage region for I/O */
+struct umem_store_region {
+	/** start offset of the region */
+	daos_off_t	sr_addr;
+	/** size of the region */
+	daos_size_t	sr_size;
+};
+
+/** I/O descriptor, it can include arbitrary number of storage regions */
+struct umem_store_iod {
+	/* number of regions */
+	int				 io_nr;
+	/** embedded one for single region case */
+	struct umem_store_region	 io_region;
+	struct umem_store_region	*io_regions;
+};
+
+/* Type of memory actions */
+enum {
+	UMEM_ACT_NOOP			= 0,
+	/** copy appended payload to specified storage address */
+	UMEM_ACT_COPY,
+	/** copy payload addressed by @ptr to specified storage address */
+	UMEM_ACT_COPY_PTR,
+	/** assign 8/16/32 bits integer to specified storage address */
+	UMEM_ACT_ASSIGN,
+	/** move specified bytes from source address to destination address */
+	UMEM_ACT_MOVE,
+	/** memset a region with specified value */
+	UMEM_ACT_SET,
+	/** set the specified bit in bitmap */
+	UMEM_ACT_SET_BITS,
+	/** unset the specified bit in bitmap */
+	UMEM_ACT_CLR_BITS,
+	/** it's checksum of the specified address */
+	UMEM_ACT_CSUM,
+};
+
+/**
+ * Memory operations for redo/undo.
+ * 16 bytes for bit operation (set/clr) and integer assignment, 32+ bytes for other operations.
+ */
+
+struct umem_action {
+	uint16_t			ac_opc;
+	union {
+		struct {
+			uint64_t		addr;
+			uint64_t		size;
+			uint8_t			payload[0];
+		} ac_copy;	/**< copy payload from @payload to @addr */
+		struct {
+			uint64_t		addr;
+			uint64_t		size;
+			uint64_t		ptr;
+		} ac_copy_ptr;	/**< copy payload from @ptr to @addr */
+		struct {
+			uint16_t		size;
+			uint32_t		val;
+			uint64_t		addr;
+		} ac_assign;	/**< assign integer to @addr, int64 should use ac_copy */
+		struct {
+			uint16_t		num;
+			uint32_t		pos;
+			uint64_t		addr;
+		} ac_op_bits;	/**< set or clear the @pos bit in bitmap @addr */
+		struct {
+			uint8_t			val;
+			uint32_t		size;
+			uint64_t		addr;
+		} ac_set;	/**< memset(addr, val, size) */
+		struct {
+			uint32_t		size;
+			uint64_t		src;
+			uint64_t		dst;
+		} ac_move;	/**< memmove(dst, size src) */
+		struct {
+			uint16_t		csum_sz;
+			uint32_t		size;
+			uint64_t		addr;
+			uint8_t			csum[0];
+		} ac_csum;	/**< it is checksum of data stored in @addr */
+	};
+};
+
+struct umem_act_item {
+	d_list_t		it_link;
+	/** it is action for reserve, the modified content is in DRAM only */
+	bool			it_is_reserv;
+	struct umem_action	it_act;
+};
+
+struct umem_store;
+
+/* TODO: sgl */
+struct umem_store_ops {
+	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
+			   d_sg_list_t *sgl);
+	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
+			    d_sg_list_t *sgl);
+	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
+	/** @actions is list head of umem_act_item */
+	int	(*so_wal_submit)(struct umem_store *store, uint64_t id, d_list_t *actions);
+};
+
+struct umem_store {
+	/**
+	 * Base address and size of the umem storage, umem allocator manages space within
+	 * this range.
+	 */
+	daos_off_t		 stor_addr;
+	daos_size_t		 stor_size;
+	daos_size_t		 stor_blk_size;
+	/** private data passing between layers */
+	void			*stor_priv;
+	/**
+	 * Callbacks provided by upper level stack, umem allocator uses them to operate
+	 * the storage device.
+	 */
+	struct umem_store_ops	*stor_ops;
+};
+
 #endif /* __DAOS_MEM_H__ */
