@@ -875,9 +875,10 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 		return -DER_INVAL;
 	}
 
-	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("ACL is not valid\n");
-		return -DER_INVAL;
+	rc = daos_acl_validate(acl);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("ACL is not valid " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
 	current = daos_acl_get_next_ace(acl, NULL);

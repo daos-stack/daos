@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -646,7 +646,8 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate hash table entry\n");
+		rc = -DER_NOMEM;
+		D_ERROR("Failed to allocate hash table entry rc: " DF_RC "\n", DP_RC(rc));
 		return -DER_NOMEM;
 	}
 
