@@ -561,7 +561,7 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 		d_bdev->bb_blobstore = NULL;
 	}
 
-		D_FREE(d_bdev->bb_name);
+	D_FREE(d_bdev->bb_name);
 
 	D_FREE(d_bdev);
 }

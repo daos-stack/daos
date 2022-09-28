@@ -670,7 +670,7 @@ daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_siz
 		D_ERROR("Entry type does not expect a string value\n");
 		return -DER_INVAL;
 	}
-		D_FREE(entry->dpe_str);
+	D_FREE(entry->dpe_str);
 	if (str == NULL || len == 0)
 		return 0;
 
@@ -702,7 +702,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 		D_ERROR("Entry type does not expect a ptr value\n");
 		return -DER_INVAL;
 	}
-		D_FREE(entry->dpe_val_ptr);
+	D_FREE(entry->dpe_val_ptr);
 	if (ptr == NULL || size == 0)
 		return 0;
 

@@ -272,8 +272,8 @@ char *d_realpath(const char *path, char *resolved_path);
 		if (ptr) {                                                                         \
 			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
 			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
 		}                                                                                  \
-		(ptr) = NULL;                                                                      \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)

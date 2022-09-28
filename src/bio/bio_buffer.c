@@ -287,7 +287,7 @@ bio_iod_free(struct bio_desc *biod)
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
 
-		D_FREE(biod->bd_bulk_hdls);
+	D_FREE(biod->bd_bulk_hdls);
 
 	D_FREE(biod);
 }

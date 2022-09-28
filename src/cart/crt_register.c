@@ -97,7 +97,7 @@ crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 	L2_entry->L2_num_slots_total = 0;
 	L2_entry->L2_num_slots_used = 0;
 
-		D_FREE(L2_entry->L2_map);
+	D_FREE(L2_entry->L2_map);
 }
 
 void
