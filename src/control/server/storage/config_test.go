@@ -374,7 +374,7 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex | BdevRoleWAL),
+					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
 				NewTierConfig().
 					WithTier(2).
 					WithStorageClass("nvme").
@@ -412,7 +412,7 @@ storage:
 					WithTier(2).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex),
+					WithBdevDeviceRoles(BdevRoleMeta),
 				NewTierConfig().
 					WithTier(3).
 					WithStorageClass("nvme").
@@ -453,7 +453,7 @@ storage:
 					WithTier(2).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex),
+					WithBdevDeviceRoles(BdevRoleMeta),
 				NewTierConfig().
 					WithTier(3).
 					WithStorageClass("nvme").
@@ -476,7 +476,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [index,wal]
+  bdev_roles: [meta,wal]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
@@ -490,7 +490,7 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex | BdevRoleWAL),
+					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
 				NewTierConfig().
 					WithTier(2).
 					WithStorageClass("nvme").
@@ -510,7 +510,7 @@ storage:
   bdev_list:
   - 0000:80:00.0
   bdev_roles:
-  - index
+  - meta
   - wal
 -
   class: nvme
@@ -528,7 +528,7 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleIndex | BdevRoleWAL),
+					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
 				NewTierConfig().
 					WithTier(2).
 					WithStorageClass("nvme").
@@ -561,7 +561,7 @@ storage:
   bdev_list:
   - 0000:80:00.0
   bdev_roles:
-  - index
+  - meta
   - wal
 -
   class: nvme
@@ -582,7 +582,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [index,wal]`,
+  bdev_roles: [meta,wal]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 1, 0),
 		},
 		"ram class; duplicate wal roles": {
@@ -595,14 +595,14 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [index,wal]
+  bdev_roles: [meta,wal]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
   bdev_roles: [wal]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("WAL", 2, 1),
 		},
-		"ram class; duplicate index roles": {
+		"ram class; duplicate meta roles": {
 			input: `
 storage:
 -
@@ -612,12 +612,12 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [index,wal]
+  bdev_roles: [meta,wal]
 -
   class: nvme
   bdev_list: [0000:81:00.0,0000:82:00.0]
-  bdev_roles: [index]`,
-			expValidateErr: FaultBdevConfigBadNrRoles("Index", 2, 1),
+  bdev_roles: [meta]`,
+			expValidateErr: FaultBdevConfigBadNrRoles("Meta", 2, 1),
 		},
 		"ram class; missing data role": {
 			input: `
@@ -629,7 +629,7 @@ storage:
 -
   class: nvme
   bdev_list: [0000:80:00.0]
-  bdev_roles: [index,wal]`,
+  bdev_roles: [meta,wal]`,
 			expValidateErr: FaultBdevConfigBadNrRoles("Data", 0, 1),
 		},
 		"ram class; tier with unassigned roles": {
@@ -704,7 +704,7 @@ storage:
   - 0000:80:00.0
   bdev_roles:
   - data
-  - index
+  - meta
   - wal
 `,
 		},

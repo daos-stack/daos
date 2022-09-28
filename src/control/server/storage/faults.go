@@ -114,7 +114,7 @@ func FaultBdevConfigBadNrRoles(tierType string, gotNr, wantNr int) *fault.Fault 
 	return storageFault(
 		code.BdevConfigBadNrRoles,
 		fmt.Sprintf("found %d %s tiers, wanted %d", gotNr, tierType, wantNr),
-		"Adjust the bdev tier role assignments in config to fulfil the requirement")
+		"Adjust the bdev tier role assignments in config to fulfill the requirement")
 }
 
 var FaultBdevNonRootVFIODisable = storageFault(
