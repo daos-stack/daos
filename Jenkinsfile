@@ -553,11 +553,9 @@ pipeline {
                         sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'no',
-                                   stash_install: false,
+                                   stash_opt: true,
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
-                        sh '''tar -cf opt-daos.tar /opt/daos/'''
-                        stash name: 'el8-gcc-opt-tar', includes: 'opt-daos.tar'
                     }
                     post {
                         unsuccessful {
@@ -663,9 +661,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 stashes: ['el8-gcc-opt-tar',
-                                           'el8-gcc-build-vars',
-                                           'el8-gcc-tests'],
+                                 unstash_opt: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
                     }
@@ -688,7 +684,8 @@ pipeline {
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
-                                 stashes: ['el8-gcc-opt-tar', 'el8-gcc-build-vars'],
+                                 unstash_opt: true,
+                                 unstash_tests: false,
                                  inst_rpms: unitPackages()
                     }
                     post {
@@ -747,9 +744,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 stashes: ['el8-gcc-opt-tar',
-                                           'el8-gcc-build-vars',
-                                           'el8-gcc-tests'],
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
