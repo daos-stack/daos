@@ -716,7 +716,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 18) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
@@ -736,7 +736,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
 			if (domain_nr >= 20) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;
