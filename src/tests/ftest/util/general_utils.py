@@ -23,6 +23,7 @@ from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 from user_utils import get_chown_command, get_primary_group
+from run_utils import get_clush_command
 
 
 class DaosTestError(Exception):
@@ -1302,30 +1303,6 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     return result
 
 
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (object): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        str: the clush command
-
-    """
-    command = ["clush", "-w", convert_string(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return " ".join(command)
-
-
 def get_default_config_file(name):
     """Get the default config file.
 
@@ -1344,7 +1321,7 @@ def get_file_listing(hosts, files):
     """Get the file listing from multiple hosts.
 
     Args:
-        hosts (object): hosts with which to use the clush command
+        hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
 
     Returns:

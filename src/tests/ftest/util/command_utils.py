@@ -894,7 +894,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             source (str): source of the certificate files.
-            hosts (list): list of the destination hosts.
+            hosts (NodeSet): list of the destination hosts.
         """
         names = set()
         yaml = self.yaml

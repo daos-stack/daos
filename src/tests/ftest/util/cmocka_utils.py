@@ -10,9 +10,8 @@ from agent_utils import include_local_host
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
-from general_utils import get_clush_command, run_command
 from results_utils import TestName, TestResult, Results, Job, create_xml
-from run_utils import run_remote
+from run_utils import get_clush_command, run_local, run_remote
 
 
 class CmockaUtils():
@@ -22,7 +21,7 @@ class CmockaUtils():
         """Initialize a CmockaUtils object.
 
         Args:
-            hosts (str): hosts on which to run the cmocka tests
+            hosts (NodeSet): hosts on which to run the cmocka tests
             test_name (str): simple name for the test
             outputdir (str): final location for cmocka xml files on this host
             test_dir (str): directory common to all hosts for storing remote cmocka xml files
@@ -143,11 +142,11 @@ class CmockaUtils():
         command = "{0} --rcopy {1} --dest {1}".format(
             get_clush_command(self.hosts), self.cmocka_dir)
         try:
-            run_command(command)
+            run_local(test.log, command)
 
         finally:
             test.log.debug("Local %s directory after clush:", self.cmocka_dir)
-            run_command(ls_command)
+            run_local(test.log, ls_command)
             # Move local files to the avocado test variant data directory
             for cmocka_node_dir in os.listdir(self.cmocka_dir):
                 cmocka_node_path = os.path.join(self.cmocka_dir, cmocka_node_dir)
@@ -156,7 +155,7 @@ class CmockaUtils():
                         if "_cmocka_results." in cmocka_file:
                             cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
                             command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
-                            run_command(command)
+                            run_local(test.log, command)
 
     def _check_cmocka_files(self):
         """Determine if cmocka files exist in the expected location.

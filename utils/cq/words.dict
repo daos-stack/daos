@@ -99,6 +99,7 @@ chdir
 checksum
 chgrp
 chmod
+chown
 chowned
 clush
 cmd

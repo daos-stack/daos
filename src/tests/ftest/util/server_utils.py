@@ -8,7 +8,6 @@
 from getpass import getuser
 import math
 import os
-import socket
 import time
 import random
 import yaml
@@ -23,6 +22,7 @@ from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
     stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
+from run_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -167,8 +167,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), local_host.split())
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
