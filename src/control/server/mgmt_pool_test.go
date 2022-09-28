@@ -434,7 +434,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 							WithBdevDeviceList("foo", "bar"),
 					)
 				r := engine.NewTestRunner(nil, engineCfg)
-				if err := r.Start(ctx, make(chan<- error)); err != nil {
+				if _, err := r.Start(ctx); err != nil {
 					t.Fatal(err)
 				}
 
