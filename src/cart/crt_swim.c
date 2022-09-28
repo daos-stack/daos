@@ -252,7 +252,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 			SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
 			self_id, to_id, from_id, DP_RC(rc));
 	} else {
-		rc = swim_updates_parse(ctx, from_id, rpc_in->upds.ca_arrays,
+		rc = swim_updates_parse(ctx, from_id, from_id, rpc_in->upds.ca_arrays,
 					rpc_in->upds.ca_count);
 		if (rc == -DER_SHUTDOWN) {
 			if (grp_priv->gp_size > 1)
@@ -393,8 +393,9 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		}
 	}
 
-	rc = swim_updates_parse(ctx, to_id, rpc_out->upds.ca_arrays,
-				rpc_out->upds.ca_count);
+	rc = swim_updates_parse(ctx, to_id,
+				rpc_type == SWIM_RPC_IREQ && !reply_rc ? from_id : to_id,
+				rpc_out->upds.ca_arrays, rpc_out->upds.ca_count);
 	if (rc == -DER_SHUTDOWN) {
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
@@ -1130,7 +1131,6 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 {
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst2, *cst = NULL;
-	swim_id_t		 id = SWIM_ID_INVALID;
 	swim_id_t		 self_id;
 	d_rank_t		 self = grp_priv->gp_self;
 	bool			 self_in_list = false;
@@ -1177,10 +1177,9 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			if (cst == NULL)
 				D_GOTO(out_unlock, rc = -DER_NOMEM);
 		}
-		id = (swim_id_t)rank;
-		cst->cst_id = id;
+		cst->cst_id = rank;
 		cst->cst_state.sms_incarnation = 0;
-		cst->cst_state.sms_status = SWIM_MEMBER_INACTIVE;
+		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		D_CIRCLEQ_INSERT_AFTER(&csm->csm_head, csm->csm_target, cst,
 				       cst_link);
 		rank_in_list = true;
@@ -1204,9 +1203,6 @@ out_check_self:
 out_unlock:
 	crt_swim_csm_unlock(csm);
 	D_FREE(cst);
-
-	if (id != SWIM_ID_INVALID)
-		(void)swim_member_new_remote(csm->csm_ctx, id);
 
 	if (rc && rc != -DER_ALREADY) {
 		if (rank_in_list)
