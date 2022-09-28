@@ -723,7 +723,6 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	init_info.request_post_incr = 0;
 
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
-
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
