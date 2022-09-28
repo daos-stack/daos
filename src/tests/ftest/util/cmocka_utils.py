@@ -11,7 +11,7 @@ from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from results_utils import TestName, TestResult, Results, Job, create_xml
-from run_utils import get_clush_command, run_local, run_remote
+from run_utils import get_clush_command_list, run_local, run_remote
 
 
 class CmockaUtils():
@@ -135,12 +135,12 @@ class CmockaUtils():
 
         # List any remote cmocka files
         test.log.debug("Remote %s directories:", self.cmocka_dir)
-        ls_command = "ls -alR {0}".format(self.cmocka_dir)
-        run_remote(test.log, self.hosts, ls_command)
+        ls_command = ["ls", "-alR", self.cmocka_dir]
+        run_remote(test.log, self.hosts, " ".join(ls_command))
 
         # Copy any remote cmocka files back to this host
-        command = "{0} --rcopy {1} --dest {1}".format(
-            get_clush_command(self.hosts), self.cmocka_dir)
+        command = get_clush_command_list(self.hosts)
+        command.extend(["--rcopy", self.cmocka_dir, "--dest", self.cmocka_dir])
         try:
             run_local(test.log, command)
 
@@ -154,7 +154,7 @@ class CmockaUtils():
                     for cmocka_file in os.listdir(cmocka_node_path):
                         if "_cmocka_results." in cmocka_file:
                             cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
-                            command = "mv {0} {1}".format(cmocka_file_path, self.outputdir)
+                            command = ["mv", cmocka_file_path, self.outputdir]
                             run_local(test.log, command)
 
     def _check_cmocka_files(self):

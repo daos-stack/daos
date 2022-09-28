@@ -129,6 +129,30 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+def get_clush_command_list(hosts, args=None, sudo=False):
+    """Get the clush command with optional sudo arguments.
+
+    Args:
+        hosts (NodeSet): hosts with which to use the clush command
+        args (str, optional): additional clush command line arguments. Defaults
+            to None.
+        sudo (bool, optional): if set the clush command will be configured to
+            run a command with sudo privileges. Defaults to False.
+
+    Returns:
+        list: list of the clush command
+
+    """
+    command = ["clush", "-w", str(hosts)]
+    if args:
+        command.insert(1, args)
+    if sudo:
+        # If ever needed, this is how to disable host key checking:
+        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
+        command.append("sudo")
+    return command
+
+
 def get_clush_command(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
@@ -143,14 +167,7 @@ def get_clush_command(hosts, args=None, sudo=False):
         str: the clush command
 
     """
-    command = ["clush", "-w", str(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return " ".join(command)
+    return " ".join(get_clush_command_list(hosts, args, sudo))
 
 
 def get_local_host():

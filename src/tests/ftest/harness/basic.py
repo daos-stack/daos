@@ -7,9 +7,10 @@
 import os
 
 from apricot import TestWithoutServers
+from cmocka_utils import CmockaUtils
 from command_utils import SubProcessCommand
-from job_manager_utils import Orterun, Mpirun
 from exception_utils import CommandFailure
+from job_manager_utils import Orterun, Mpirun
 
 
 class HarnessBasicTest(TestWithoutServers):
@@ -92,4 +93,44 @@ class HarnessBasicTest(TestWithoutServers):
                     command.stop()
         if failed:
             self.fail("The '{}' command failed".format(command))
+        self.log.info("Test passed")
+
+    def test_no_cmocka_xml(self):
+        """Test to verify CmockaUtils detects lack of cmocka file generation.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_cmocka
+        :avocado: tags=test_no_cmocka_xml
+        """
+        self.log.info("=" * 80)
+        self.log.info("Running the 'hostname' command via CmockaUtils")
+        self.log.info("  This should generate a cmocka xml file with a 'Missing file' error")
+        name = "no_cmocka_xml_file_test"
+        cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
+        command = cmocka_utils.get_cmocka_command("hostname")
+        cmocka_utils.run_cmocka_test(self, command)
+
+        # Verify a generated cmocka xml file exists
+        expected = os.path.join(self.outputdir, f"{name}_cmocka_results.xml")
+        self.log.info("Verifying the existence of the generated cmocka file: %s", expected)
+        if not os.path.isfile(expected):
+            self.fail(f"No {expected} file found")
+
+        # Verify the generated cmocka xml file contains the expected error
+        self.log.info("Verifying contents of the generated cmocka file: %s", expected)
+        with open(expected, "r", encoding="utf-8") as file_handle:
+            actual_contents = file_handle.readlines()
+        error_message = f"Missing cmocka results for hostname in {self.outputdir}"
+        expected_lines = [
+            f"<testsuite errors=\"1\" failures=\"0\" name=\"{name}\" skipped=\"0\" tests=\"1\"",
+            f"<testcase classname=\"{name}\" name=\"{self.name}\"",
+            f"<error message=\"{error_message}\" type=\"Missing file\">"
+        ]
+        for index, actual_line in enumerate(actual_contents[1:4]):
+            self.log.debug("  expecting: %s", expected_lines[index])
+            self.log.debug("  in actual: %s", actual_line[:-1].strip())
+            if expected_lines[index] not in actual_line:
+                self.fail(f"Badly formed {expected} file")
+
         self.log.info("Test passed")

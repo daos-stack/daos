@@ -17,7 +17,7 @@ import sys
 from ClusterShell.NodeSet import NodeSet
 
 from util.logger_utils import get_console_handler
-from util.run_utils import get_clush_command, run_local, run_remote, RunException
+from util.run_utils import get_clush_command_list, run_local, run_remote, RunException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -190,7 +190,8 @@ def start_munge(args):
         return 1
 
     # copy munge.key to all hosts
-    command = "{0} --copy {1} --dest {1}".format(get_clush_command(nodes), "/etc/munge/munge.key")
+    command = get_clush_command_list(nodes)
+    command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
     try:
         run_local(logger, command, check=True)
     except RunException:

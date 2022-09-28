@@ -292,6 +292,7 @@ opcode
 openmpi
 orterun
 os
+oStrictHostKeyChecking
 outdata
 outputdir
 params
