@@ -754,8 +754,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
-		rc = -DER_NOMEM;
-		goto error;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	/*

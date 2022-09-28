@@ -299,7 +299,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			/* TODO: Use D_STRNDUP *.
+			/* TODO: Use D_STRNDUP */
 			D_ALLOC(resp->devices[i]->tr_addr, buflen);
 			if (resp->devices[i]->tr_addr == NULL) {
 				rc = -DER_NOMEM;
