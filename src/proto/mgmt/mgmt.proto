@@ -74,6 +74,8 @@ service MgmtSvc {
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
 	// Start DAOS system (restart data-plane instances)
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	// Exclude DAOS ranks
+	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node

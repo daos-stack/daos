@@ -45,8 +45,8 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		}
 	}
 
-	delFn := func(idx uint32) func(context.Context, uint32, system.Rank, error, uint64) error {
-		return func(_ context.Context, _ uint32, rank system.Rank, _ error, _ uint64) error {
+	delFn := func(idx uint32) func(context.Context, uint32, system.Rank, error, int) error {
+		return func(_ context.Context, _ uint32, rank system.Rank, _ error, _ int) error {
 			log.Debugf("Tearing down metrics collection for engine %d (rank %s)", idx, rank.String())
 			c.RemoveSource(idx)
 			return nil

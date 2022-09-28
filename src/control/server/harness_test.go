@@ -62,9 +62,11 @@ func TestServer_Harness_Start(t *testing.T) {
 	}{
 		"normal startup/shutdown": {
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(testLongTimeout)
-					return errors.New("ending")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("ending"),
+					}
 				},
 			},
 			instanceUuids: map[int]string{
@@ -93,9 +95,11 @@ func TestServer_Harness_Start(t *testing.T) {
 		},
 		"startup/shutdown with preset ranks": {
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(testLongTimeout)
-					return errors.New("ending")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("ending"),
+					}
 				},
 			},
 			rankInSuperblock: true,
@@ -130,9 +134,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(delayedFailTimeout)
-					return errors.New("oops")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("oops"),
+					}
 				},
 			},
 			expStartCount: maxEngines,
@@ -149,9 +155,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(delayedFailTimeout)
-					return errors.New("oops")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("oops"),
+					}
 				},
 			},
 			instanceUuids: map[int]string{
@@ -461,16 +469,22 @@ func (db *mockdb) ShutdownRaft() error {
 	return db.shutdownErr
 }
 
+func (db *mockdb) ResignLeadership(error) error {
+	db.isLeader = false
+	return nil
+}
+
 func TestServer_Harness_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mics        []*MockInstanceConfig
-		method      drpc.Method
-		body        proto.Message
-		notStarted  bool
-		notLeader   bool
-		resignCause error
-		expShutdown bool
-		expErr      error
+		mics         []*MockInstanceConfig
+		method       drpc.Method
+		body         proto.Message
+		notStarted   bool
+		notLeader    bool
+		resignCause  error
+		expShutdown  bool
+		expNotLeader bool
+		expErr       error
 	}{
 		"success": {
 			mics: []*MockInstanceConfig{
@@ -539,8 +553,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: FaultDataPlaneNotStarted,
 				},
 			},
-			expShutdown: true,
-			expErr:      FaultDataPlaneNotStarted,
+			expNotLeader: true,
+			expErr:       FaultDataPlaneNotStarted,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -587,6 +601,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			_, gotErr := h.CallDrpc(ctx, tc.method, tc.body)
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
+			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
 		})
 	}
 }
