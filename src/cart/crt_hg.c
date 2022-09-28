@@ -1448,15 +1448,15 @@ int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		   crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
 {
-	void		**buf_ptrs = NULL;
-	void		*buf_ptrs_stack[CRT_HG_IOVN_STACK];
-	hg_size_t	*buf_sizes = NULL;
-	hg_size_t	buf_sizes_stack[CRT_HG_IOVN_STACK];
-	hg_uint8_t	flags;
-	hg_bulk_t	hg_bulk_hdl;
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0, i;
-	bool		allocate = false;
+	void      **buf_ptrs                           = NULL;
+	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
+	hg_size_t  *buf_sizes                          = NULL;
+	hg_size_t   buf_sizes_stack[CRT_HG_IOVN_STACK] = {0};
+	hg_uint8_t  flags;
+	hg_bulk_t   hg_bulk_hdl;
+	hg_return_t hg_ret;
+	int         rc       = 0, i;
+	bool        allocate = false;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
