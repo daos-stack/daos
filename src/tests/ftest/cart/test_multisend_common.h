@@ -138,7 +138,7 @@ test_parse_args(int argc, char **argv)
 	int				option_index = 0;
 	int				rc = 0;
 	struct option			long_options[] = {
-		{"name",	required_argument,	0, 'n'},
+		{"name",	required_argument,	0, 'g'},
 		{"attach_to",	required_argument,	0, 'a'},
 		{"cfg_path",	required_argument,	0, 's'},
 		{"num_ctx",	required_argument,	0, 'e'},
@@ -151,7 +151,7 @@ test_parse_args(int argc, char **argv)
 	test.tg_do_put = false;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "c:n:a:s:p:m:e:xq", long_options,
+		rc = getopt_long(argc, argv, "g:c:n:a:s:p:m:e:xq", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -168,6 +168,9 @@ test_parse_args(int argc, char **argv)
 		case 'a':
 			test.tg_remote_group_name = optarg;
 			test.tg_should_attach = 1;
+			break;
+		case 'g':
+			test.tg_local_group_name =  optarg;
 			break;
 		case 's':
 			test.tg_save_cfg = true;
