@@ -2175,8 +2175,7 @@ rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
  * error.
  */
 int
-rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
-	      const d_rank_list_t *replicas)
+rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas)
 {
 	daos_handle_t		lc;
 	struct rdb_lc_record    record;
@@ -2453,7 +2452,7 @@ rdb_raft_get_ae_max_size(void)
 }
 
 int
-rdb_raft_open(struct rdb *db)
+rdb_raft_open(struct rdb *db, uint64_t caller_term)
 {
 	int rc;
 
@@ -2500,6 +2499,32 @@ rdb_raft_open(struct rdb *db)
 			rc);
 		rc = dss_abterr2der(rc);
 		goto err_replies_cv;
+	}
+
+	if (caller_term != RDB_NIL_TERM) {
+		uint64_t	term;
+		d_iov_t		value;
+
+		d_iov_set(&value, &term, sizeof(term));
+		rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
+		if (rc == -DER_NONEXIST)
+			term = 0;
+		else if (rc != 0)
+			goto err_compact_cv;
+
+		if (caller_term < term) {
+			D_DEBUG(DB_MD, DF_DB": stale caller term: "DF_X64" < "DF_X64"\n", DP_DB(db),
+				caller_term, term);
+			rc = -DER_STALE;
+			goto err_compact_cv;
+		} else if (caller_term > term) {
+			D_DEBUG(DB_MD, DF_DB": updating term: "DF_X64" -> "DF_X64"\n", DP_DB(db),
+				term, caller_term);
+			d_iov_set(&value, &caller_term, sizeof(caller_term));
+			rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_term, &value);
+			if (rc != 0)
+				goto err_compact_cv;
+		}
 	}
 
 	rc = rdb_raft_open_lc(db);
@@ -2772,6 +2797,31 @@ rdb_raft_campaign(struct rdb *db)
 out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
 	return rc;
+}
+
+int
+rdb_raft_ping(struct rdb *db, uint64_t caller_term)
+{
+	msg_appendentries_t		ae = {.term = caller_term};
+	msg_appendentries_response_t	ae_resp;
+	struct rdb_raft_state		state;
+	int				rc;
+
+	ABT_mutex_lock(db->d_raft_mutex);
+	rdb_raft_save_state(db, &state);
+	rc = raft_recv_appendentries(db->d_raft, NULL /* node */, &ae, &ae_resp);
+	rc = rdb_raft_check_state(db, &state, rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
+	if (rc != 0)
+		return rc;
+
+	if (caller_term < ae_resp.term) {
+		D_DEBUG(DB_MD, DF_DB": stale caller term: "DF_X64" < "DF_X64"\n", DP_DB(db),
+			caller_term, ae_resp.term);
+		return -DER_STALE;
+	}
+
+	return 0;
 }
 
 /* Wait for index to be applied in term. For leaders only.
