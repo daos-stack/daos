@@ -2270,7 +2270,7 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
 	if (rc != 0)
-		D_GOTO(fail, rc);
+		D_GOTO(fail_dcu, rc);
 
 	dcsr->dcsr_reasb = NULL;
 	dcsr->dcsr_sgls = NULL;
@@ -2350,7 +2350,7 @@ fail:
 			D_FREE(dcsr->dcsr_sgls);
 		}
 	}
-
+fail_dcu:
 	daos_iov_free(&dcsr->dcsr_dkey);
 	obj_decref(dcsr->dcsr_obj);
 
