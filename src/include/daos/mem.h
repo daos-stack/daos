@@ -677,7 +677,7 @@ enum {
  * Memory operations for redo/undo.
  * 16 bytes for bit operation (set/clr) and integer assignment, 32+ bytes for other operations.
  */
-
+#define UMEM_ACT_PAYLOAD_MAX_LEN	(1ULL << 20)
 struct umem_action {
 	uint16_t			ac_opc;
 	union {
