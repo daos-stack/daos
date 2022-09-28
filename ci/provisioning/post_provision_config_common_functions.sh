@@ -284,7 +284,7 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
         if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360  install "$LSB_RELEASE" "--nobest"
+            retry_dnf 360  install --nobest "$LSB_RELEASE"
         fi
     fi
 
