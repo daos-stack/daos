@@ -671,6 +671,9 @@ int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
  */
 int bio_iod_post(struct bio_desc *biod, int err);
 
+/* Asynchronous bio_iod_post(), don't wait NVMe I/O completion */
+int bio_iod_post_async(struct bio_desc *biod, int err);
+
 /*
  * Helper function to copy data between SG lists of io descriptor and user
  * specified DRAM SG lists.
@@ -922,13 +925,12 @@ enum bio_mc_flags {
  * \param[in]	meta_sz		Meta blob size in bytes
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
- * \param[in]	csum_type	Checksum type used for WAL
  * \param[in]	flags		bio_mc_flags
  *
  * \return			Zero on success, negative value on error.
  */
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, uint16_t csum_type, enum bio_mc_flags flags);
+		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
 
 /*
  * Destroy Meta/Data/WAL blobs
@@ -966,5 +968,28 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
  * \return			N/A
  */
 void bio_mc_close(struct bio_meta_context *mc);
+
+/*
+ * Reserve WAL log space for current transaction
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[out]	tx_id		Reserved transaction ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
+
+/*
+ * Submit WAL I/O and wait for completion
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	tx_id		WAL transaction ID
+ * \param[in]	actv		Actions involved in this transaction
+ * \param[in]	biod_data	BIO descriptor for data update (optional)
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
+		   struct bio_desc *biod_data);
 
 #endif /* __BIO_API_H__ */
