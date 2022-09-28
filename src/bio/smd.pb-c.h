@@ -23,15 +23,18 @@ typedef struct _Ctl__SmdDevResp Ctl__SmdDevResp;
 typedef struct _Ctl__SmdPoolReq Ctl__SmdPoolReq;
 typedef struct _Ctl__SmdPoolResp Ctl__SmdPoolResp;
 typedef struct _Ctl__SmdPoolResp__Pool Ctl__SmdPoolResp__Pool;
-typedef struct _Ctl__DevManageReq Ctl__DevManageReq;
-typedef struct _Ctl__DevManageResp Ctl__DevManageResp;
-typedef struct _Ctl__DevReplaceReq Ctl__DevReplaceReq;
-typedef struct _Ctl__DevReplaceResp Ctl__DevReplaceResp;
 typedef struct _Ctl__SmdQueryReq Ctl__SmdQueryReq;
 typedef struct _Ctl__SmdQueryResp Ctl__SmdQueryResp;
 typedef struct _Ctl__SmdQueryResp__SmdDeviceWithHealth Ctl__SmdQueryResp__SmdDeviceWithHealth;
 typedef struct _Ctl__SmdQueryResp__Pool Ctl__SmdQueryResp__Pool;
 typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
+typedef struct _Ctl__LedManageReq Ctl__LedManageReq;
+typedef struct _Ctl__DevReplaceReq Ctl__DevReplaceReq;
+typedef struct _Ctl__SetFaultyReq Ctl__SetFaultyReq;
+typedef struct _Ctl__DevManageResp Ctl__DevManageResp;
+typedef struct _Ctl__SmdManageReq Ctl__SmdManageReq;
+typedef struct _Ctl__SmdManageResp Ctl__SmdManageResp;
+typedef struct _Ctl__SmdManageResp__RankResp Ctl__SmdManageResp__RankResp;
 
 
 /* --- enums --- */
@@ -309,71 +312,6 @@ struct  _Ctl__SmdPoolResp
     , 0, 0,NULL }
 
 
-struct  _Ctl__DevManageReq
-{
-  ProtobufCMessage base;
-  char *uuid;
-  char *tr_addr;
-  Ctl__LedAction led_action;
-  Ctl__LedState led_state;
-};
-#define CTL__DEV_MANAGE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF }
-
-
-struct  _Ctl__DevManageResp
-{
-  ProtobufCMessage base;
-  int32_t status;
-  /*
-   * Details of device that has been managed
-   */
-  Ctl__SmdDevice *device;
-};
-#define CTL__DEV_MANAGE_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_resp__descriptor) \
-    , 0, NULL }
-
-
-struct  _Ctl__DevReplaceReq
-{
-  ProtobufCMessage base;
-  /*
-   * UUID of old (hot-removed) blobstore/device
-   */
-  char *old_dev_uuid;
-  /*
-   * UUID of new (hot-plugged) blobstore/device
-   */
-  char *new_dev_uuid;
-  /*
-   * Skip device reintegration if set
-   */
-  protobuf_c_boolean noreint;
-};
-#define CTL__DEV_REPLACE_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
-
-
-struct  _Ctl__DevReplaceResp
-{
-  ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
-  /*
-   * Details of new (hot-plugged) blobstore/device
-   */
-  Ctl__SmdDevice *device;
-};
-#define CTL__DEV_REPLACE_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_resp__descriptor) \
-    , 0, NULL }
-
-
 struct  _Ctl__SmdQueryReq
 {
   ProtobufCMessage base;
@@ -517,6 +455,146 @@ struct  _Ctl__SmdQueryResp
     , 0, 0,NULL }
 
 
+struct  _Ctl__LedManageReq
+{
+  ProtobufCMessage base;
+  /*
+   * List of Device-UUIDs and/or PCI-addresses
+   */
+  char *ids;
+  /*
+   * LED action to perform
+   */
+  Ctl__LedAction led_action;
+  /*
+   * LED control case
+   */
+  Ctl__LedState led_state;
+};
+#define CTL__LED_MANAGE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__led_manage_req__descriptor) \
+    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF }
+
+
+struct  _Ctl__DevReplaceReq
+{
+  ProtobufCMessage base;
+  /*
+   * UUID of old (hot-removed) blobstore/device
+   */
+  char *old_dev_uuid;
+  /*
+   * UUID of new (hot-plugged) blobstore/device
+   */
+  char *new_dev_uuid;
+  /*
+   * Skip device reintegration if set
+   */
+  protobuf_c_boolean noreint;
+};
+#define CTL__DEV_REPLACE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+
+
+struct  _Ctl__SetFaultyReq
+{
+  ProtobufCMessage base;
+  /*
+   * Device-UUID (as recorded in SMD)
+   */
+  char *uuid;
+};
+#define CTL__SET_FAULTY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__set_faulty_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Ctl__DevManageResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * Details of device that has been managed
+   */
+  Ctl__SmdDevice *device;
+};
+#define CTL__DEV_MANAGE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_manage_resp__descriptor) \
+    , 0, NULL }
+
+
+typedef enum {
+  CTL__SMD_MANAGE_REQ__OP__NOT_SET = 0,
+  CTL__SMD_MANAGE_REQ__OP_LED = 1,
+  CTL__SMD_MANAGE_REQ__OP_REPLACE = 2,
+  CTL__SMD_MANAGE_REQ__OP_FAULTY = 3
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__SMD_MANAGE_REQ__OP)
+} Ctl__SmdManageReq__OpCase;
+
+struct  _Ctl__SmdManageReq
+{
+  ProtobufCMessage base;
+  Ctl__SmdManageReq__OpCase op_case;
+  union {
+    /*
+     * Request to manage LED state
+     */
+    Ctl__LedManageReq *led;
+    /*
+     * Request to replace SMD device
+     */
+    Ctl__DevReplaceReq *replace;
+    /*
+     * Request to set SMD device faulty
+     */
+    Ctl__SetFaultyReq *faulty;
+  };
+};
+#define CTL__SMD_MANAGE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_req__descriptor) \
+    , CTL__SMD_MANAGE_REQ__OP__NOT_SET, {0} }
+
+
+struct  _Ctl__SmdManageResp__RankResp
+{
+  ProtobufCMessage base;
+  /*
+   * Rank to which this response corresponds
+   */
+  uint32_t rank;
+  /*
+   * List of devices on the rank
+   */
+  size_t n_devices;
+  Ctl__SmdDevice **devices;
+};
+#define CTL__SMD_MANAGE_RESP__RANK_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_resp__rank_resp__descriptor) \
+    , 0, 0,NULL }
+
+
+struct  _Ctl__SmdManageResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * List of per-rank responses
+   */
+  size_t n_ranks;
+  Ctl__SmdManageResp__RankResp **ranks;
+};
+#define CTL__SMD_MANAGE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_manage_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Ctl__BioHealthReq methods */
 void   ctl__bio_health_req__init
                      (Ctl__BioHealthReq         *message);
@@ -653,82 +731,6 @@ Ctl__SmdPoolResp *
 void   ctl__smd_pool_resp__free_unpacked
                      (Ctl__SmdPoolResp *message,
                       ProtobufCAllocator *allocator);
-/* Ctl__DevManageReq methods */
-void   ctl__dev_manage_req__init
-                     (Ctl__DevManageReq         *message);
-size_t ctl__dev_manage_req__get_packed_size
-                     (const Ctl__DevManageReq   *message);
-size_t ctl__dev_manage_req__pack
-                     (const Ctl__DevManageReq   *message,
-                      uint8_t             *out);
-size_t ctl__dev_manage_req__pack_to_buffer
-                     (const Ctl__DevManageReq   *message,
-                      ProtobufCBuffer     *buffer);
-Ctl__DevManageReq *
-       ctl__dev_manage_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   ctl__dev_manage_req__free_unpacked
-                     (Ctl__DevManageReq *message,
-                      ProtobufCAllocator *allocator);
-/* Ctl__DevManageResp methods */
-void   ctl__dev_manage_resp__init
-                     (Ctl__DevManageResp         *message);
-size_t ctl__dev_manage_resp__get_packed_size
-                     (const Ctl__DevManageResp   *message);
-size_t ctl__dev_manage_resp__pack
-                     (const Ctl__DevManageResp   *message,
-                      uint8_t             *out);
-size_t ctl__dev_manage_resp__pack_to_buffer
-                     (const Ctl__DevManageResp   *message,
-                      ProtobufCBuffer     *buffer);
-Ctl__DevManageResp *
-       ctl__dev_manage_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   ctl__dev_manage_resp__free_unpacked
-                     (Ctl__DevManageResp *message,
-                      ProtobufCAllocator *allocator);
-/* Ctl__DevReplaceReq methods */
-void   ctl__dev_replace_req__init
-                     (Ctl__DevReplaceReq         *message);
-size_t ctl__dev_replace_req__get_packed_size
-                     (const Ctl__DevReplaceReq   *message);
-size_t ctl__dev_replace_req__pack
-                     (const Ctl__DevReplaceReq   *message,
-                      uint8_t             *out);
-size_t ctl__dev_replace_req__pack_to_buffer
-                     (const Ctl__DevReplaceReq   *message,
-                      ProtobufCBuffer     *buffer);
-Ctl__DevReplaceReq *
-       ctl__dev_replace_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   ctl__dev_replace_req__free_unpacked
-                     (Ctl__DevReplaceReq *message,
-                      ProtobufCAllocator *allocator);
-/* Ctl__DevReplaceResp methods */
-void   ctl__dev_replace_resp__init
-                     (Ctl__DevReplaceResp         *message);
-size_t ctl__dev_replace_resp__get_packed_size
-                     (const Ctl__DevReplaceResp   *message);
-size_t ctl__dev_replace_resp__pack
-                     (const Ctl__DevReplaceResp   *message,
-                      uint8_t             *out);
-size_t ctl__dev_replace_resp__pack_to_buffer
-                     (const Ctl__DevReplaceResp   *message,
-                      ProtobufCBuffer     *buffer);
-Ctl__DevReplaceResp *
-       ctl__dev_replace_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   ctl__dev_replace_resp__free_unpacked
-                     (Ctl__DevReplaceResp *message,
-                      ProtobufCAllocator *allocator);
 /* Ctl__SmdQueryReq methods */
 void   ctl__smd_query_req__init
                      (Ctl__SmdQueryReq         *message);
@@ -776,6 +778,123 @@ Ctl__SmdQueryResp *
 void   ctl__smd_query_resp__free_unpacked
                      (Ctl__SmdQueryResp *message,
                       ProtobufCAllocator *allocator);
+/* Ctl__LedManageReq methods */
+void   ctl__led_manage_req__init
+                     (Ctl__LedManageReq         *message);
+size_t ctl__led_manage_req__get_packed_size
+                     (const Ctl__LedManageReq   *message);
+size_t ctl__led_manage_req__pack
+                     (const Ctl__LedManageReq   *message,
+                      uint8_t             *out);
+size_t ctl__led_manage_req__pack_to_buffer
+                     (const Ctl__LedManageReq   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__LedManageReq *
+       ctl__led_manage_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__led_manage_req__free_unpacked
+                     (Ctl__LedManageReq *message,
+                      ProtobufCAllocator *allocator);
+/* Ctl__DevReplaceReq methods */
+void   ctl__dev_replace_req__init
+                     (Ctl__DevReplaceReq         *message);
+size_t ctl__dev_replace_req__get_packed_size
+                     (const Ctl__DevReplaceReq   *message);
+size_t ctl__dev_replace_req__pack
+                     (const Ctl__DevReplaceReq   *message,
+                      uint8_t             *out);
+size_t ctl__dev_replace_req__pack_to_buffer
+                     (const Ctl__DevReplaceReq   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__DevReplaceReq *
+       ctl__dev_replace_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__dev_replace_req__free_unpacked
+                     (Ctl__DevReplaceReq *message,
+                      ProtobufCAllocator *allocator);
+/* Ctl__SetFaultyReq methods */
+void   ctl__set_faulty_req__init
+                     (Ctl__SetFaultyReq         *message);
+size_t ctl__set_faulty_req__get_packed_size
+                     (const Ctl__SetFaultyReq   *message);
+size_t ctl__set_faulty_req__pack
+                     (const Ctl__SetFaultyReq   *message,
+                      uint8_t             *out);
+size_t ctl__set_faulty_req__pack_to_buffer
+                     (const Ctl__SetFaultyReq   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__SetFaultyReq *
+       ctl__set_faulty_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__set_faulty_req__free_unpacked
+                     (Ctl__SetFaultyReq *message,
+                      ProtobufCAllocator *allocator);
+/* Ctl__DevManageResp methods */
+void   ctl__dev_manage_resp__init
+                     (Ctl__DevManageResp         *message);
+size_t ctl__dev_manage_resp__get_packed_size
+                     (const Ctl__DevManageResp   *message);
+size_t ctl__dev_manage_resp__pack
+                     (const Ctl__DevManageResp   *message,
+                      uint8_t             *out);
+size_t ctl__dev_manage_resp__pack_to_buffer
+                     (const Ctl__DevManageResp   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__DevManageResp *
+       ctl__dev_manage_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__dev_manage_resp__free_unpacked
+                     (Ctl__DevManageResp *message,
+                      ProtobufCAllocator *allocator);
+/* Ctl__SmdManageReq methods */
+void   ctl__smd_manage_req__init
+                     (Ctl__SmdManageReq         *message);
+size_t ctl__smd_manage_req__get_packed_size
+                     (const Ctl__SmdManageReq   *message);
+size_t ctl__smd_manage_req__pack
+                     (const Ctl__SmdManageReq   *message,
+                      uint8_t             *out);
+size_t ctl__smd_manage_req__pack_to_buffer
+                     (const Ctl__SmdManageReq   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__SmdManageReq *
+       ctl__smd_manage_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__smd_manage_req__free_unpacked
+                     (Ctl__SmdManageReq *message,
+                      ProtobufCAllocator *allocator);
+/* Ctl__SmdManageResp__RankResp methods */
+void   ctl__smd_manage_resp__rank_resp__init
+                     (Ctl__SmdManageResp__RankResp         *message);
+/* Ctl__SmdManageResp methods */
+void   ctl__smd_manage_resp__init
+                     (Ctl__SmdManageResp         *message);
+size_t ctl__smd_manage_resp__get_packed_size
+                     (const Ctl__SmdManageResp   *message);
+size_t ctl__smd_manage_resp__pack
+                     (const Ctl__SmdManageResp   *message,
+                      uint8_t             *out);
+size_t ctl__smd_manage_resp__pack_to_buffer
+                     (const Ctl__SmdManageResp   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__SmdManageResp *
+       ctl__smd_manage_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__smd_manage_resp__free_unpacked
+                     (Ctl__SmdManageResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Ctl__BioHealthReq_Closure)
@@ -802,18 +921,6 @@ typedef void (*Ctl__SmdPoolResp__Pool_Closure)
 typedef void (*Ctl__SmdPoolResp_Closure)
                  (const Ctl__SmdPoolResp *message,
                   void *closure_data);
-typedef void (*Ctl__DevManageReq_Closure)
-                 (const Ctl__DevManageReq *message,
-                  void *closure_data);
-typedef void (*Ctl__DevManageResp_Closure)
-                 (const Ctl__DevManageResp *message,
-                  void *closure_data);
-typedef void (*Ctl__DevReplaceReq_Closure)
-                 (const Ctl__DevReplaceReq *message,
-                  void *closure_data);
-typedef void (*Ctl__DevReplaceResp_Closure)
-                 (const Ctl__DevReplaceResp *message,
-                  void *closure_data);
 typedef void (*Ctl__SmdQueryReq_Closure)
                  (const Ctl__SmdQueryReq *message,
                   void *closure_data);
@@ -828,6 +935,27 @@ typedef void (*Ctl__SmdQueryResp__RankResp_Closure)
                   void *closure_data);
 typedef void (*Ctl__SmdQueryResp_Closure)
                  (const Ctl__SmdQueryResp *message,
+                  void *closure_data);
+typedef void (*Ctl__LedManageReq_Closure)
+                 (const Ctl__LedManageReq *message,
+                  void *closure_data);
+typedef void (*Ctl__DevReplaceReq_Closure)
+                 (const Ctl__DevReplaceReq *message,
+                  void *closure_data);
+typedef void (*Ctl__SetFaultyReq_Closure)
+                 (const Ctl__SetFaultyReq *message,
+                  void *closure_data);
+typedef void (*Ctl__DevManageResp_Closure)
+                 (const Ctl__DevManageResp *message,
+                  void *closure_data);
+typedef void (*Ctl__SmdManageReq_Closure)
+                 (const Ctl__SmdManageReq *message,
+                  void *closure_data);
+typedef void (*Ctl__SmdManageResp__RankResp_Closure)
+                 (const Ctl__SmdManageResp__RankResp *message,
+                  void *closure_data);
+typedef void (*Ctl__SmdManageResp_Closure)
+                 (const Ctl__SmdManageResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -846,15 +974,18 @@ extern const ProtobufCMessageDescriptor ctl__smd_dev_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__pool__descriptor;
-extern const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor;
-extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor;
-extern const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor;
-extern const ProtobufCMessageDescriptor ctl__dev_replace_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__rank_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor;
+extern const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor;
+extern const ProtobufCMessageDescriptor ctl__set_faulty_req__descriptor;
+extern const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__smd_manage_req__descriptor;
+extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__rank_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

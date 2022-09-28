@@ -328,186 +328,6 @@ void   ctl__smd_pool_resp__free_unpacked
   assert(message->base.descriptor == &ctl__smd_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   ctl__dev_manage_req__init
-                     (Ctl__DevManageReq         *message)
-{
-  static const Ctl__DevManageReq init_value = CTL__DEV_MANAGE_REQ__INIT;
-  *message = init_value;
-}
-size_t ctl__dev_manage_req__get_packed_size
-                     (const Ctl__DevManageReq *message)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_req__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t ctl__dev_manage_req__pack
-                     (const Ctl__DevManageReq *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_req__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t ctl__dev_manage_req__pack_to_buffer
-                     (const Ctl__DevManageReq *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_req__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Ctl__DevManageReq *
-       ctl__dev_manage_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Ctl__DevManageReq *)
-     protobuf_c_message_unpack (&ctl__dev_manage_req__descriptor,
-                                allocator, len, data);
-}
-void   ctl__dev_manage_req__free_unpacked
-                     (Ctl__DevManageReq *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &ctl__dev_manage_req__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   ctl__dev_manage_resp__init
-                     (Ctl__DevManageResp         *message)
-{
-  static const Ctl__DevManageResp init_value = CTL__DEV_MANAGE_RESP__INIT;
-  *message = init_value;
-}
-size_t ctl__dev_manage_resp__get_packed_size
-                     (const Ctl__DevManageResp *message)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t ctl__dev_manage_resp__pack
-                     (const Ctl__DevManageResp *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t ctl__dev_manage_resp__pack_to_buffer
-                     (const Ctl__DevManageResp *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Ctl__DevManageResp *
-       ctl__dev_manage_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Ctl__DevManageResp *)
-     protobuf_c_message_unpack (&ctl__dev_manage_resp__descriptor,
-                                allocator, len, data);
-}
-void   ctl__dev_manage_resp__free_unpacked
-                     (Ctl__DevManageResp *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   ctl__dev_replace_req__init
-                     (Ctl__DevReplaceReq         *message)
-{
-  static const Ctl__DevReplaceReq init_value = CTL__DEV_REPLACE_REQ__INIT;
-  *message = init_value;
-}
-size_t ctl__dev_replace_req__get_packed_size
-                     (const Ctl__DevReplaceReq *message)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t ctl__dev_replace_req__pack
-                     (const Ctl__DevReplaceReq *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t ctl__dev_replace_req__pack_to_buffer
-                     (const Ctl__DevReplaceReq *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Ctl__DevReplaceReq *
-       ctl__dev_replace_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Ctl__DevReplaceReq *)
-     protobuf_c_message_unpack (&ctl__dev_replace_req__descriptor,
-                                allocator, len, data);
-}
-void   ctl__dev_replace_req__free_unpacked
-                     (Ctl__DevReplaceReq *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   ctl__dev_replace_resp__init
-                     (Ctl__DevReplaceResp         *message)
-{
-  static const Ctl__DevReplaceResp init_value = CTL__DEV_REPLACE_RESP__INIT;
-  *message = init_value;
-}
-size_t ctl__dev_replace_resp__get_packed_size
-                     (const Ctl__DevReplaceResp *message)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_resp__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t ctl__dev_replace_resp__pack
-                     (const Ctl__DevReplaceResp *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_resp__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t ctl__dev_replace_resp__pack_to_buffer
-                     (const Ctl__DevReplaceResp *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &ctl__dev_replace_resp__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Ctl__DevReplaceResp *
-       ctl__dev_replace_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Ctl__DevReplaceResp *)
-     protobuf_c_message_unpack (&ctl__dev_replace_resp__descriptor,
-                                allocator, len, data);
-}
-void   ctl__dev_replace_resp__free_unpacked
-                     (Ctl__DevReplaceResp *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &ctl__dev_replace_resp__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   ctl__smd_query_req__init
                      (Ctl__SmdQueryReq         *message)
 {
@@ -614,6 +434,282 @@ void   ctl__smd_query_resp__free_unpacked
   if(!message)
     return;
   assert(message->base.descriptor == &ctl__smd_query_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__led_manage_req__init
+                     (Ctl__LedManageReq         *message)
+{
+  static const Ctl__LedManageReq init_value = CTL__LED_MANAGE_REQ__INIT;
+  *message = init_value;
+}
+size_t ctl__led_manage_req__get_packed_size
+                     (const Ctl__LedManageReq *message)
+{
+  assert(message->base.descriptor == &ctl__led_manage_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__led_manage_req__pack
+                     (const Ctl__LedManageReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__led_manage_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__led_manage_req__pack_to_buffer
+                     (const Ctl__LedManageReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__led_manage_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__LedManageReq *
+       ctl__led_manage_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__LedManageReq *)
+     protobuf_c_message_unpack (&ctl__led_manage_req__descriptor,
+                                allocator, len, data);
+}
+void   ctl__led_manage_req__free_unpacked
+                     (Ctl__LedManageReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__led_manage_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__dev_replace_req__init
+                     (Ctl__DevReplaceReq         *message)
+{
+  static const Ctl__DevReplaceReq init_value = CTL__DEV_REPLACE_REQ__INIT;
+  *message = init_value;
+}
+size_t ctl__dev_replace_req__get_packed_size
+                     (const Ctl__DevReplaceReq *message)
+{
+  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__dev_replace_req__pack
+                     (const Ctl__DevReplaceReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__dev_replace_req__pack_to_buffer
+                     (const Ctl__DevReplaceReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__DevReplaceReq *
+       ctl__dev_replace_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__DevReplaceReq *)
+     protobuf_c_message_unpack (&ctl__dev_replace_req__descriptor,
+                                allocator, len, data);
+}
+void   ctl__dev_replace_req__free_unpacked
+                     (Ctl__DevReplaceReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__dev_replace_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__set_faulty_req__init
+                     (Ctl__SetFaultyReq         *message)
+{
+  static const Ctl__SetFaultyReq init_value = CTL__SET_FAULTY_REQ__INIT;
+  *message = init_value;
+}
+size_t ctl__set_faulty_req__get_packed_size
+                     (const Ctl__SetFaultyReq *message)
+{
+  assert(message->base.descriptor == &ctl__set_faulty_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__set_faulty_req__pack
+                     (const Ctl__SetFaultyReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__set_faulty_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__set_faulty_req__pack_to_buffer
+                     (const Ctl__SetFaultyReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__set_faulty_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__SetFaultyReq *
+       ctl__set_faulty_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__SetFaultyReq *)
+     protobuf_c_message_unpack (&ctl__set_faulty_req__descriptor,
+                                allocator, len, data);
+}
+void   ctl__set_faulty_req__free_unpacked
+                     (Ctl__SetFaultyReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__set_faulty_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__dev_manage_resp__init
+                     (Ctl__DevManageResp         *message)
+{
+  static const Ctl__DevManageResp init_value = CTL__DEV_MANAGE_RESP__INIT;
+  *message = init_value;
+}
+size_t ctl__dev_manage_resp__get_packed_size
+                     (const Ctl__DevManageResp *message)
+{
+  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__dev_manage_resp__pack
+                     (const Ctl__DevManageResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__dev_manage_resp__pack_to_buffer
+                     (const Ctl__DevManageResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__DevManageResp *
+       ctl__dev_manage_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__DevManageResp *)
+     protobuf_c_message_unpack (&ctl__dev_manage_resp__descriptor,
+                                allocator, len, data);
+}
+void   ctl__dev_manage_resp__free_unpacked
+                     (Ctl__DevManageResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__dev_manage_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__smd_manage_req__init
+                     (Ctl__SmdManageReq         *message)
+{
+  static const Ctl__SmdManageReq init_value = CTL__SMD_MANAGE_REQ__INIT;
+  *message = init_value;
+}
+size_t ctl__smd_manage_req__get_packed_size
+                     (const Ctl__SmdManageReq *message)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__smd_manage_req__pack
+                     (const Ctl__SmdManageReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__smd_manage_req__pack_to_buffer
+                     (const Ctl__SmdManageReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__SmdManageReq *
+       ctl__smd_manage_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__SmdManageReq *)
+     protobuf_c_message_unpack (&ctl__smd_manage_req__descriptor,
+                                allocator, len, data);
+}
+void   ctl__smd_manage_req__free_unpacked
+                     (Ctl__SmdManageReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__smd_manage_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ctl__smd_manage_resp__rank_resp__init
+                     (Ctl__SmdManageResp__RankResp         *message)
+{
+  static const Ctl__SmdManageResp__RankResp init_value = CTL__SMD_MANAGE_RESP__RANK_RESP__INIT;
+  *message = init_value;
+}
+void   ctl__smd_manage_resp__init
+                     (Ctl__SmdManageResp         *message)
+{
+  static const Ctl__SmdManageResp init_value = CTL__SMD_MANAGE_RESP__INIT;
+  *message = init_value;
+}
+size_t ctl__smd_manage_resp__get_packed_size
+                     (const Ctl__SmdManageResp *message)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__smd_manage_resp__pack
+                     (const Ctl__SmdManageResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__smd_manage_resp__pack_to_buffer
+                     (const Ctl__SmdManageResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__smd_manage_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__SmdManageResp *
+       ctl__smd_manage_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__SmdManageResp *)
+     protobuf_c_message_unpack (&ctl__smd_manage_resp__descriptor,
+                                allocator, len, data);
+}
+void   ctl__smd_manage_resp__free_unpacked
+                     (Ctl__SmdManageResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__smd_manage_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 static const ProtobufCFieldDescriptor ctl__bio_health_req__field_descriptors[2] =
@@ -1596,249 +1692,6 @@ const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__dev_manage_req__field_descriptors[4] =
-{
-  {
-    "uuid",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageReq, uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tr_addr",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageReq, tr_addr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "led_action",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageReq, led_action),
-    &ctl__led_action__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "led_state",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageReq, led_state),
-    &ctl__led_state__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__dev_manage_req__field_indices_by_name[] = {
-  2,   /* field[2] = led_action */
-  3,   /* field[3] = led_state */
-  1,   /* field[1] = tr_addr */
-  0,   /* field[0] = uuid */
-};
-static const ProtobufCIntRange ctl__dev_manage_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 4 }
-};
-const ProtobufCMessageDescriptor ctl__dev_manage_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.DevManageReq",
-  "DevManageReq",
-  "Ctl__DevManageReq",
-  "ctl",
-  sizeof(Ctl__DevManageReq),
-  4,
-  ctl__dev_manage_req__field_descriptors,
-  ctl__dev_manage_req__field_indices_by_name,
-  1,  ctl__dev_manage_req__number_ranges,
-  (ProtobufCMessageInit) ctl__dev_manage_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor ctl__dev_manage_resp__field_descriptors[2] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "device",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevManageResp, device),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__dev_manage_resp__field_indices_by_name[] = {
-  1,   /* field[1] = device */
-  0,   /* field[0] = status */
-};
-static const ProtobufCIntRange ctl__dev_manage_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.DevManageResp",
-  "DevManageResp",
-  "Ctl__DevManageResp",
-  "ctl",
-  sizeof(Ctl__DevManageResp),
-  2,
-  ctl__dev_manage_resp__field_descriptors,
-  ctl__dev_manage_resp__field_indices_by_name,
-  1,  ctl__dev_manage_resp__number_ranges,
-  (ProtobufCMessageInit) ctl__dev_manage_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[3] =
-{
-  {
-    "old_dev_uuid",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, old_dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "new_dev_uuid",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, new_dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "noReint",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, noreint),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__dev_replace_req__field_indices_by_name[] = {
-  1,   /* field[1] = new_dev_uuid */
-  2,   /* field[2] = noReint */
-  0,   /* field[0] = old_dev_uuid */
-};
-static const ProtobufCIntRange ctl__dev_replace_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 3 }
-};
-const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.DevReplaceReq",
-  "DevReplaceReq",
-  "Ctl__DevReplaceReq",
-  "ctl",
-  sizeof(Ctl__DevReplaceReq),
-  3,
-  ctl__dev_replace_req__field_descriptors,
-  ctl__dev_replace_req__field_indices_by_name,
-  1,  ctl__dev_replace_req__number_ranges,
-  (ProtobufCMessageInit) ctl__dev_replace_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor ctl__dev_replace_resp__field_descriptors[2] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "device",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceResp, device),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__dev_replace_resp__field_indices_by_name[] = {
-  1,   /* field[1] = device */
-  0,   /* field[0] = status */
-};
-static const ProtobufCIntRange ctl__dev_replace_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor ctl__dev_replace_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.DevReplaceResp",
-  "DevReplaceResp",
-  "Ctl__DevReplaceResp",
-  "ctl",
-  sizeof(Ctl__DevReplaceResp),
-  2,
-  ctl__dev_replace_resp__field_descriptors,
-  ctl__dev_replace_resp__field_indices_by_name,
-  1,  ctl__dev_replace_resp__number_ranges,
-  (ProtobufCMessageInit) ctl__dev_replace_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[13] =
 {
   {
@@ -2276,6 +2129,390 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor =
   ctl__smd_query_resp__field_indices_by_name,
   1,  ctl__smd_query_resp__number_ranges,
   (ProtobufCMessageInit) ctl__smd_query_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__led_manage_req__field_descriptors[3] =
+{
+  {
+    "ids",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__LedManageReq, ids),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "led_action",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__LedManageReq, led_action),
+    &ctl__led_action__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "led_state",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__LedManageReq, led_state),
+    &ctl__led_state__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__led_manage_req__field_indices_by_name[] = {
+  0,   /* field[0] = ids */
+  1,   /* field[1] = led_action */
+  2,   /* field[2] = led_state */
+};
+static const ProtobufCIntRange ctl__led_manage_req__number_ranges[2 + 1] =
+{
+  { 1, 0 },
+  { 3, 1 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.LedManageReq",
+  "LedManageReq",
+  "Ctl__LedManageReq",
+  "ctl",
+  sizeof(Ctl__LedManageReq),
+  3,
+  ctl__led_manage_req__field_descriptors,
+  ctl__led_manage_req__field_indices_by_name,
+  2,  ctl__led_manage_req__number_ranges,
+  (ProtobufCMessageInit) ctl__led_manage_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[3] =
+{
+  {
+    "old_dev_uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevReplaceReq, old_dev_uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "new_dev_uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevReplaceReq, new_dev_uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "noReint",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevReplaceReq, noreint),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__dev_replace_req__field_indices_by_name[] = {
+  1,   /* field[1] = new_dev_uuid */
+  2,   /* field[2] = noReint */
+  0,   /* field[0] = old_dev_uuid */
+};
+static const ProtobufCIntRange ctl__dev_replace_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.DevReplaceReq",
+  "DevReplaceReq",
+  "Ctl__DevReplaceReq",
+  "ctl",
+  sizeof(Ctl__DevReplaceReq),
+  3,
+  ctl__dev_replace_req__field_descriptors,
+  ctl__dev_replace_req__field_indices_by_name,
+  1,  ctl__dev_replace_req__number_ranges,
+  (ProtobufCMessageInit) ctl__dev_replace_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__set_faulty_req__field_descriptors[1] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetFaultyReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__set_faulty_req__field_indices_by_name[] = {
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange ctl__set_faulty_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor ctl__set_faulty_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.SetFaultyReq",
+  "SetFaultyReq",
+  "Ctl__SetFaultyReq",
+  "ctl",
+  sizeof(Ctl__SetFaultyReq),
+  1,
+  ctl__set_faulty_req__field_descriptors,
+  ctl__set_faulty_req__field_indices_by_name,
+  1,  ctl__set_faulty_req__number_ranges,
+  (ProtobufCMessageInit) ctl__set_faulty_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__dev_manage_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevManageResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "device",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__DevManageResp, device),
+    &ctl__smd_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__dev_manage_resp__field_indices_by_name[] = {
+  1,   /* field[1] = device */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange ctl__dev_manage_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor ctl__dev_manage_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.DevManageResp",
+  "DevManageResp",
+  "Ctl__DevManageResp",
+  "ctl",
+  sizeof(Ctl__DevManageResp),
+  2,
+  ctl__dev_manage_resp__field_descriptors,
+  ctl__dev_manage_resp__field_indices_by_name,
+  1,  ctl__dev_manage_resp__number_ranges,
+  (ProtobufCMessageInit) ctl__dev_manage_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__smd_manage_req__field_descriptors[3] =
+{
+  {
+    "led",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__SmdManageReq, op_case),
+    offsetof(Ctl__SmdManageReq, led),
+    &ctl__led_manage_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replace",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__SmdManageReq, op_case),
+    offsetof(Ctl__SmdManageReq, replace),
+    &ctl__dev_replace_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "faulty",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__SmdManageReq, op_case),
+    offsetof(Ctl__SmdManageReq, faulty),
+    &ctl__set_faulty_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__smd_manage_req__field_indices_by_name[] = {
+  2,   /* field[2] = faulty */
+  0,   /* field[0] = led */
+  1,   /* field[1] = replace */
+};
+static const ProtobufCIntRange ctl__smd_manage_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor ctl__smd_manage_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.SmdManageReq",
+  "SmdManageReq",
+  "Ctl__SmdManageReq",
+  "ctl",
+  sizeof(Ctl__SmdManageReq),
+  3,
+  ctl__smd_manage_req__field_descriptors,
+  ctl__smd_manage_req__field_indices_by_name,
+  1,  ctl__smd_manage_req__number_ranges,
+  (ProtobufCMessageInit) ctl__smd_manage_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__smd_manage_resp__rank_resp__field_descriptors[2] =
+{
+  {
+    "rank",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdManageResp__RankResp, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "devices",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__SmdManageResp__RankResp, n_devices),
+    offsetof(Ctl__SmdManageResp__RankResp, devices),
+    &ctl__smd_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__smd_manage_resp__rank_resp__field_indices_by_name[] = {
+  1,   /* field[1] = devices */
+  0,   /* field[0] = rank */
+};
+static const ProtobufCIntRange ctl__smd_manage_resp__rank_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor ctl__smd_manage_resp__rank_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.SmdManageResp.RankResp",
+  "RankResp",
+  "Ctl__SmdManageResp__RankResp",
+  "ctl",
+  sizeof(Ctl__SmdManageResp__RankResp),
+  2,
+  ctl__smd_manage_resp__rank_resp__field_descriptors,
+  ctl__smd_manage_resp__rank_resp__field_indices_by_name,
+  1,  ctl__smd_manage_resp__rank_resp__number_ranges,
+  (ProtobufCMessageInit) ctl__smd_manage_resp__rank_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__smd_manage_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdManageResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ranks",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__SmdManageResp, n_ranks),
+    offsetof(Ctl__SmdManageResp, ranks),
+    &ctl__smd_manage_resp__rank_resp__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__smd_manage_resp__field_indices_by_name[] = {
+  1,   /* field[1] = ranks */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange ctl__smd_manage_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.SmdManageResp",
+  "SmdManageResp",
+  "Ctl__SmdManageResp",
+  "ctl",
+  sizeof(Ctl__SmdManageResp),
+  2,
+  ctl__smd_manage_resp__field_descriptors,
+  ctl__smd_manage_resp__field_indices_by_name,
+  1,  ctl__smd_manage_resp__number_ranges,
+  (ProtobufCMessageInit) ctl__smd_manage_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[3] =
