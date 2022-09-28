@@ -22,6 +22,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -90,7 +91,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 //
 // MemberResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+func drespToMemberResult(rank ranklist.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
 	if err != nil {
 		return system.NewMemberResult(rank,
 			errors.WithMessagef(err, "rank %s dRPC failed", &rank),

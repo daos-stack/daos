@@ -26,6 +26,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -124,7 +125,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					Properties: []*control.PoolProperty{
 						propWithVal("label", "foo"),
 					},
@@ -141,7 +142,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					Properties: []*control.PoolProperty{
 						propWithVal("label", "foo"),
 					},
@@ -158,7 +159,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					Properties: []*control.PoolProperty{
 						propWithVal("label", "foo"),
 					},
@@ -223,7 +224,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.1, 0.9},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -242,8 +243,22 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual ranks",
+			fmt.Sprintf("pool create --size %s --ranks 1,2", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{1, 2},
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
 				}),
 			}, " "),
 			nil,
@@ -258,7 +273,7 @@ func TestPoolCommands(t *testing.T) {
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -271,7 +286,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -285,7 +300,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -299,7 +314,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -328,7 +343,7 @@ func TestPoolCommands(t *testing.T) {
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
-					Ranks:     []system.Rank{},
+					Ranks:     []ranklist.Rank{},
 					TierBytes: []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -419,7 +434,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1},
+					Ranks: []ranklist.Rank{1},
 				}),
 			}, " "),
 			nil,
@@ -430,7 +445,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1, 2, 3},
+					Ranks: []ranklist.Rank{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -1407,7 +1422,9 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			poolCreateCmd.SetLog(log)
 			poolCreateCmd.Size = tc.StorageRatio
 			if tc.TgtRanks != "" {
-				poolCreateCmd.RankList = tc.TgtRanks
+				if err := poolCreateCmd.RankList.UnmarshalFlag(tc.TgtRanks); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			err := poolCreateCmd.Execute(nil)
@@ -1441,12 +1458,12 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					"Invalid size of TotalBytes attribute: disabled with manual allocation")
 				if tc.TgtRanks != "" {
 					test.AssertEqual(t,
-						system.RankList(poolCreateRequest.Ranks).String(),
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
 						tc.ExpectedOutput.PoolConfig.Ranks,
 						"Invalid list of Ranks")
 				} else {
 					test.AssertEqual(t,
-						system.RankList(poolCreateRequest.Ranks).String(),
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
 						"",
 						"Invalid list of Ranks")
 				}

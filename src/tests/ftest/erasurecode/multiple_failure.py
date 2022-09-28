@@ -1,11 +1,10 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
-from apricot import skipForTicket
+
 
 class EcodOnlineMultFail(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -20,7 +19,6 @@ class EcodOnlineMultFail(ErasureCodeIor):
         super().__init__(*args, **kwargs)
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-9051")
     def run_ior_cascade_failure(self):
         """Common function to Write and Read IOR"""
         # Write IOR data set with different EC object. kill rank, targets or mix of both while IOR
@@ -35,7 +33,6 @@ class EcodOnlineMultFail(ErasureCodeIor):
         # intact and no data corruption observed.
         self.ior_read_dataset(parity=2)
 
-    @skipForTicket("DAOS-9051")
     def test_ec_multiple_rank_failure(self):
         """Jira ID: DAOS-7344.
 
@@ -45,9 +42,9 @@ class EcodOnlineMultFail(ErasureCodeIor):
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_multiple_rank_failure
+        :avocado: tags=test_ec_multiple_rank_failure
         """
         # Kill Two server ranks
         self.rank_to_kill = [self.server_count - 1, self.server_count - 3]
@@ -62,9 +59,9 @@ class EcodOnlineMultFail(ErasureCodeIor):
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_multiple_target_on_same_rank_failure
+        :avocado: tags=test_ec_multiple_targets_on_same_rank
         """
         # Kill Two targets 2,4 from same rank 2
         self.pool_exclude[2] = "2,4"
@@ -79,16 +76,15 @@ class EcodOnlineMultFail(ErasureCodeIor):
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_multiple_rank_on_diff_target_failure
+        :avocado: tags=test_ec_multiple_targets_on_diff_ranks
         """
         # Kill Two targets from different ranks
         self.pool_exclude[2] = "2"
         self.pool_exclude[3] = "3"
         self.run_ior_cascade_failure()
 
-    @skipForTicket("DAOS-9051")
     def test_ec_single_target_rank_failure(self):
         """Jira ID: DAOS-7344.
 
@@ -98,9 +94,9 @@ class EcodOnlineMultFail(ErasureCodeIor):
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_single_target_rank_failure
+        :avocado: tags=test_ec_single_target_rank_failure
         """
         # Kill One server rank
         self.rank_to_kill = [self.server_count - 1]

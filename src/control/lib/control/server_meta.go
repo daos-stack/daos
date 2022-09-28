@@ -16,17 +16,17 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
 	// SmdPool contains the per-server components of a DAOS pool.
 	SmdPool struct {
-		UUID      string      `json:"uuid"`
-		TargetIDs []int32     `hash:"set" json:"tgt_ids"`
-		Blobs     []uint64    `hash:"set" json:"blobs"`
-		Rank      system.Rank `hash:"set" json:"rank"`
+		UUID      string        `json:"uuid"`
+		TargetIDs []int32       `hash:"set" json:"tgt_ids"`
+		Blobs     []uint64      `hash:"set" json:"blobs"`
+		Rank      ranklist.Rank `hash:"set" json:"rank"`
 	}
 
 	// SmdPoolMap provides a map from pool UUIDs to per-rank pool info.
@@ -42,19 +42,19 @@ type (
 	// operation.
 	SmdQueryReq struct {
 		unaryRequest
-		OmitDevices      bool        `json:"omit_devices"`
-		OmitPools        bool        `json:"omit_pools"`
-		IncludeBioHealth bool        `json:"include_bio_health"`
-		SetFaulty        bool        `json:"set_faulty"`
-		IDs              string      `json:"uuid"` // comma separated list of IDs
-		Rank             system.Rank `json:"rank"`
-		Target           string      `json:"target"`
-		ReplaceUUID      string      `json:"replace_uuid"` // UUID of new device to replace storage
-		NoReint          bool        `json:"no_reint"`     // for device replacement
-		Identify         bool        `json:"identify"`     // for VMD LED device identification
-		ResetLED         bool        `json:"reset_led"`    // for resetting VMD LED, debug only
-		GetLED           bool        `json:"get_led"`      // get LED state of VMD devices
-		FaultyDevsOnly   bool        `json:"-"`            // only show faulty devices
+		OmitDevices      bool          `json:"omit_devices"`
+		OmitPools        bool          `json:"omit_pools"`
+		IncludeBioHealth bool          `json:"include_bio_health"`
+		SetFaulty        bool          `json:"set_faulty"`
+		IDs              string        `json:"uuid"` // comma separated list of IDs
+		Rank             ranklist.Rank `json:"rank"`
+		Target           string        `json:"target"`
+		ReplaceUUID      string        `json:"replace_uuid"` // UUID of new device to replace storage
+		NoReint          bool          `json:"no_reint"`     // for device replacement
+		Identify         bool          `json:"identify"`     // for VMD LED device identification
+		ResetLED         bool          `json:"reset_led"`    // for resetting VMD LED, debug only
+		GetLED           bool          `json:"get_led"`      // get LED state of VMD devices
+		FaultyDevsOnly   bool          `json:"-"`            // only show faulty devices
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -65,7 +65,7 @@ type (
 	}
 )
 
-func (si *SmdInfo) addRankPools(rank system.Rank, pools []*SmdPool) {
+func (si *SmdInfo) addRankPools(rank ranklist.Rank, pools []*SmdPool) {
 	for _, pool := range pools {
 		if _, found := si.Pools[pool.UUID]; !found {
 			si.Pools[pool.UUID] = make([]*SmdPool, 0, 1)
@@ -91,7 +91,7 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse, faultyOnly bool) erro
 		},
 	}
 	for _, rResp := range pbResp.GetRanks() {
-		rank := system.Rank(rResp.Rank)
+		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbDev := range rResp.GetDevices() {
 			if faultyOnly && (pbDev.Details.DevState != ctlpb.NvmeDevState_EVICTED) {

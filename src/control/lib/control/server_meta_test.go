@@ -15,9 +15,9 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type mockSmdQueryResp struct {
@@ -152,13 +152,13 @@ func TestControl_SmdQuery(t *testing.T) {
 							test.MockUUID(0): {
 								{
 									UUID:      test.MockUUID(0),
-									Rank:      system.Rank(0),
+									Rank:      ranklist.Rank(0),
 									TargetIDs: []int32{0, 1},
 									Blobs:     []uint64{42, 43},
 								},
 								{
 									UUID:      test.MockUUID(0),
-									Rank:      system.Rank(1),
+									Rank:      ranklist.Rank(1),
 									TargetIDs: []int32{0, 1},
 									Blobs:     []uint64{42, 43},
 								},
@@ -208,7 +208,7 @@ func TestControl_SmdQuery(t *testing.T) {
 							{
 								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(0),
-								Rank:      system.Rank(0),
+								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{0},
 								NvmeState: storage.NvmeStateNormal,
 								LedState:  storage.LedStateNormal,
@@ -216,7 +216,7 @@ func TestControl_SmdQuery(t *testing.T) {
 							{
 								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
-								Rank:      system.Rank(1),
+								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{0},
 								NvmeState: storage.NvmeStateFaulty,
 								LedState:  storage.LedStateFaulty,
@@ -250,9 +250,9 @@ func TestControl_SmdQuery(t *testing.T) {
 						Devices: []*storage.SmdDevice{
 							{
 								TrAddr:    test.MockPCIAddr(2),
-								UUID:      test.MockUUID(1),
-								Rank:      system.Rank(0),
+								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
+								UUID:      test.MockUUID(1),
 								NvmeState: storage.NvmeStateNew,
 								LedState:  storage.LedStateUnknown,
 							},
@@ -302,7 +302,7 @@ func TestControl_SmdQuery(t *testing.T) {
 							{
 								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
-								Rank:      system.Rank(1),
+								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{1, 2, 3},
 								NvmeState: storage.NvmeStateFaulty,
 								LedState:  storage.LedStateUnknown,
@@ -351,7 +351,7 @@ func TestControl_SmdQuery(t *testing.T) {
 							{
 								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
-								Rank:      system.Rank(0),
+								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								NvmeState: storage.NvmeStateNormal,
 								LedState:  storage.LedStateIdentify,

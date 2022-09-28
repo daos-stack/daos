@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
@@ -22,7 +22,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata target health query",
 			"storage query target-health -r 0 -t 1",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:             system.Rank(0),
+				Rank:             ranklist.Rank(0),
 				OmitPools:        true,
 				IncludeBioHealth: true,
 				Target:           "1",
@@ -39,7 +39,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata device health query",
 			"storage query device-health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:             system.NilRank,
+				Rank:             ranklist.NilRank,
 				OmitPools:        true,
 				IncludeBioHealth: true,
 				IDs:              "842c739b-86b5-462f-a7ba-b4a91b674f3d",
@@ -56,7 +56,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query pools",
 			"storage query list-pools",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:        system.NilRank,
+				Rank:        ranklist.NilRank,
 				OmitDevices: true,
 			}),
 			nil,
@@ -65,7 +65,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query pools (by rank)",
 			"storage query list-pools --rank 42",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:        system.Rank(42),
+				Rank:        ranklist.Rank(42),
 				OmitDevices: true,
 			}),
 			nil,
@@ -74,7 +74,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query pools (by uuid)",
 			"storage query list-pools --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:        system.NilRank,
+				Rank:        ranklist.NilRank,
 				OmitDevices: true,
 				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			}),
@@ -84,7 +84,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices",
 			"storage query list-devices",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:      system.NilRank,
+				Rank:      ranklist.NilRank,
 				OmitPools: true,
 			}),
 			nil,
@@ -93,7 +93,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (include health)",
 			"storage query list-devices --health",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:             system.NilRank,
+				Rank:             ranklist.NilRank,
 				OmitPools:        true,
 				IncludeBioHealth: true,
 			}),
@@ -103,7 +103,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted)",
 			"storage query list-devices --show-evicted",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:           system.NilRank,
+				Rank:           ranklist.NilRank,
 				OmitPools:      true,
 				FaultyDevsOnly: true,
 			}),
@@ -113,7 +113,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted short)",
 			"storage query list-devices -e",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:           system.NilRank,
+				Rank:           ranklist.NilRank,
 				OmitPools:      true,
 				FaultyDevsOnly: true,
 			}),
@@ -123,7 +123,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (by rank)",
 			"storage query list-devices --rank 42",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:      system.Rank(42),
+				Rank:      ranklist.Rank(42),
 				OmitPools: true,
 			}),
 			nil,
@@ -132,7 +132,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (by uuid)",
 			"storage query list-devices --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:      system.NilRank,
+				Rank:      ranklist.NilRank,
 				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 				OmitPools: true,
 			}),

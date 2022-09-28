@@ -16,8 +16,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -194,7 +194,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
-		Rank:       system.Rank(uint32(idx)),
+		Rank:       ranklist.Rank(uint32(idx)),
 	}
 }
 

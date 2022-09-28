@@ -30,13 +30,13 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -1185,7 +1185,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					t.Fatal("drpc response mocks unpopulated")
 				}
 				ne.setDrpcClient(newMockDrpcClient(dcc))
-				ne._superblock.Rank = system.NewRankPtr(uint32(idx + 1))
+				ne._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
 
 				cs.harness.instances[idx] = ne
 			}

@@ -20,9 +20,9 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -225,16 +225,16 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string       `json:"uuid"`
-	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState `json:"dev_state"`
-	LedState    LedState     `json:"led_state"`
-	Rank        system.Rank  `json:"rank"`
-	TotalBytes  uint64       `json:"total_bytes"`
-	AvailBytes  uint64       `json:"avail_bytes"`
-	ClusterSize uint64       `json:"cluster_size"`
-	Health      *NvmeHealth  `json:"health"`
-	TrAddr      string       `json:"tr_addr"`
+	UUID        string        `json:"uuid"`
+	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
+	NvmeState   NvmeDevState  `json:"dev_state"`
+	LedState    LedState      `json:"led_state"`
+	Rank        ranklist.Rank `json:"rank"`
+	TotalBytes  uint64        `json:"total_bytes"`
+	AvailBytes  uint64        `json:"avail_bytes"`
+	ClusterSize uint64        `json:"cluster_size"`
+	Health      *NvmeHealth   `json:"health"`
+	TrAddr      string        `json:"tr_addr"`
 }
 
 func (sd *SmdDevice) String() string {
