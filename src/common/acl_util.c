@@ -322,7 +322,6 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	/* Will be mangling the string during processing */
 	D_STRNDUP(tmpstr, str, len);
 	if (tmpstr == NULL) {
-		D_ERROR("Couldn't allocate temporary string\n");
 		return -DER_NOMEM;
 	}
 

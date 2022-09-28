@@ -211,11 +211,9 @@ daos_profile_dump(struct daos_profile *dp)
 	int	i;
 
 	if (dp->dp_dir_path) {
+		/* TODO: Use D_STRNDUP */
 		D_ALLOC(path, strlen(dp->dp_dir_path) + PF_MAX_NAME_SIZE);
 		if (path == NULL) {
-			rc = -DER_NOMEM;
-			D_ERROR("start dump ult failed: rc "DF_RC"\n",
-				DP_RC(rc));
 			return;
 		}
 

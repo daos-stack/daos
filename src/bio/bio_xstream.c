@@ -748,14 +748,12 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 
 	D_ALLOC_PTR(d_bdev);
 	if (d_bdev == NULL) {
-		D_ERROR("failed to allocate bio_bdev\n");
 		return -DER_NOMEM;
 	}
 
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
-		D_ERROR("Failed to allocate bdev name for %s\n", bdev_name);
 		rc = -DER_NOMEM;
 		goto error;
 	}

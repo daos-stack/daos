@@ -232,7 +232,6 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	/** Track all handles */
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
-		D_ERROR("failed to allocate internal handle to open container\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}

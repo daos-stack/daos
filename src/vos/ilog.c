@@ -291,7 +291,6 @@ ilog_ctx_create(struct umem_instance *umm, struct ilog_root *root,
 {
 	D_ALLOC_PTR(*lctxp);
 	if (*lctxp == NULL) {
-		D_ERROR("Could not allocate memory for open incarnation log\n");
 		return -DER_NOMEM;
 	}
 

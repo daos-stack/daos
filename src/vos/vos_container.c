@@ -358,7 +358,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	D_ALLOC_PTR(cont);
 	if (!cont) {
-		D_ERROR("Error in allocating container handle\n");
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 
