@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,7 +100,7 @@ static void swim_srv_cb(crt_rpc_t *rpc_req)
 	dbg("receive RPC %u <== %lu", global_srv.my_rank, rpc_cli_input->src);
 	if (global_srv.my_rank != FAILED_MEMBER &&
 	    rpc_cli_input->src != FAILED_MEMBER) {
-		rc = swim_updates_parse(global_srv.swim_ctx, rpc_cli_input->src,
+		rc = swim_updates_parse(global_srv.swim_ctx, rpc_cli_input->src, rpc_cli_input->src,
 					rpc_cli_input->upds.ca_arrays,
 					rpc_cli_input->upds.ca_count);
 		D_ASSERTF(rc == 0, "swim_parse_rpc() failed rc=%d", rc);
