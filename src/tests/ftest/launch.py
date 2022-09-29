@@ -213,6 +213,9 @@ def set_test_environment(args):
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["COVFILE"] = "/tmp/test.cov"
 
+    # force debug mask to DEBUG
+    os.environ["D_LOG_MASK"] = "DEBUG"
+
     # Python paths required for functional testing
     set_python_environment()
 
