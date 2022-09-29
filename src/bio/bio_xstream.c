@@ -1571,6 +1571,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev		*d_bdev;
 	unsigned int		 led_state;
+	int			 rc;
 
 	/*
 	 * Check VMD_LED_PERIOD environment variable, if not set use double
@@ -1583,7 +1584,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if (d_bdev->bb_led_start_time != 0) {
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
-				continue
+				continue;
 
 			/* LED will be reset to either faulty or normal state */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,

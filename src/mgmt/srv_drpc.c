@@ -2240,13 +2240,13 @@ void
 ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Ctl__DevManageReq	*req = NULL;
+	Ctl__SetFaultyReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
 	uint8_t			*body = NULL;
 	uuid_t			 dev_uuid;
 	int			 rc = 0;
 
-	req = ctl__dev_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	req = ctl__set_faulty_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		D_ERROR("Failed to unpack req (dev state set faulty)\n");
@@ -2283,7 +2283,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	drpc_dev_manage_pack(resp, body, drpc_resp);
 out:
-	ctl__dev_manage_req__free_unpacked(req, &alloc.alloc);
+	ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
 	drpc_dev_manage_free(resp);
 }
 
@@ -2291,12 +2291,12 @@ void
 ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Ctl__DevManageReq	*req = NULL;
+	Ctl__LedManageReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
 	uint8_t			*body = NULL;
 	int			 rc = 0;
 
-	req = ctl__dev_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	req = ctl__led_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		D_ERROR("Failed to unpack req (dev manage led)\n");
@@ -2304,8 +2304,7 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to manage LED (PCI-addr: %s, device-ID: %s)\n", req->tr_addr,
-	       req->uuid);
+	D_INFO("Received request to manage LED at address %s\n", req->ids);
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -2323,7 +2322,7 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	drpc_dev_manage_pack(resp, body, drpc_resp);
 out:
-	ctl__dev_manage_req__free_unpacked(req, &alloc.alloc);
+	ctl__led_manage_req__free_unpacked(req, &alloc.alloc);
 	drpc_dev_manage_free(resp);
 }
 
@@ -2332,7 +2331,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__DevReplaceReq	*req = NULL;
-	Ctl__DevReplaceResp	*resp = NULL;
+	Ctl__DevManageResp	*resp = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	uuid_t			 old_uuid;
@@ -2373,7 +2372,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	/* Response status is populated with SUCCESS on init. */
-	ctl__dev_replace_resp__init(resp);
+	ctl__dev_manage_resp__init(resp);
 
 	D_ALLOC_PTR(resp->device);
 	if (resp == NULL) {
@@ -2405,13 +2404,13 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			req->new_dev_uuid, rc);
 
 	resp->status = rc;
-	len = ctl__dev_replace_resp__get_packed_size(resp);
+	len = ctl__dev_manage_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		ctl__dev_replace_resp__pack(resp, body);
+		ctl__dev_manage_resp__pack(resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}

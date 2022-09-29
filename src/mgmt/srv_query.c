@@ -624,15 +624,14 @@ out:
 }
 
 int
-ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
+ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 {
 	struct bio_led_manage_info	led_info = { 0 };
 	Ctl__LedState			led_state;
 	uuid_t				dev_uuid;
 	int				rc = 0;
 
-	D_ASSERT(req->tr_addr != NULL);
-	D_ASSERT(req->uuid != NULL);
+	D_ASSERT(req->ids != NULL);
 
 	D_ALLOC_PTR(resp->device);
 	if (resp->device == NULL) {
@@ -648,16 +647,21 @@ ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 		return -DER_NOMEM;
 	}
 
-	/* Either tr_addr or uuid to be set in led_info */
-	if (strlen(req->tr_addr) != 0) {
-		D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->tr_addr);
+	if (strlen(req->ids) == 0) {
+		D_ERROR("Neither transport address or device UUID are provided in request\n");
+		return -DER_INVAL;
+	}
 
-		strncpy(resp->device->tr_addr, req->tr_addr, ADDR_STR_MAX_LEN + 1);
+	/* Either tr_addr or uuid to be set in led_info */
+	if (req->use_tr_addr) {
+		D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->ids);
+
+		strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
 		uuid_clear(dev_uuid);
-	} else if (strlen(req->uuid) != 0) {
-		rc = uuid_parse(req->uuid, dev_uuid);
+	} else {
+		rc = uuid_parse(req->ids, dev_uuid);
 		if (rc != 0) {
-			D_ERROR("Unable to parse device UUID %s: %d\n", req->uuid, rc);
+			D_ERROR("Unable to parse device UUID %s: %d\n", req->ids, rc);
 			return rc;
 		}
 		if (uuid_is_null(dev_uuid))
@@ -671,9 +675,6 @@ ds_mgmt_dev_manage_led(Ctl__DevManageReq *req, Ctl__DevManageResp *resp)
 			return -DER_NOMEM;
 		}
 		uuid_unparse_lower(dev_uuid, resp->device->uuid);
-	} else {
-		D_ERROR("Transport address and device UUID both empty in request\n");
-		return -DER_INVAL;
 	}
 
 	/* tr_addr will be used if set and get populated if not */
@@ -726,7 +727,7 @@ bio_storage_dev_replace(void *arg)
 }
 
 int
-ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevReplaceResp *resp)
+ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp *resp)
 {
 	struct bio_replace_dev_info	 replace_dev_info = { 0 };
 	int				 rc = 0;

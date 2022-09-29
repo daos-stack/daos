@@ -439,10 +439,14 @@ struct  _Ctl__LedManageReq
    * LED control case
    */
   Ctl__LedState led_state;
+  /*
+   * Identify device by transport (PCI) address
+   */
+  protobuf_c_boolean use_tr_addr;
 };
 #define CTL__LED_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__led_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF }
+    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF, 0 }
 
 
 struct  _Ctl__DevReplaceReq

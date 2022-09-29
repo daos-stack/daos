@@ -568,6 +568,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 				switch {
 				case dev.trAddr != "":
 					dreq.Ids = dev.trAddr
+					dreq.UseTrAddr = true
 				case dev.uuid != "":
 					dreq.Ids = dev.uuid
 				default:
