@@ -2286,23 +2286,23 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	D_ALLOC_ARRAY(iod_array->oia_iods, nr);
 	if (iod_array->oia_iods == NULL)
-		D_GOTO(fail_dcu, rc = -DER_NOMEM);
+		D_GOTO(fail, rc = -DER_NOMEM);
 
 	for (i = 0; i < nr; i++) {
 		rc = daos_iov_copy(&iod_array->oia_iods[i].iod_name, &iods[i].iod_name);
 		if (rc != 0)
-			D_GOTO(fail_dcu, rc);
+			D_GOTO(fail_iods, rc);
 
 		iod_array->oia_iods[i].iod_size = iods[i].iod_size;
 		iod_array->oia_iods[i].iod_type = iods[i].iod_type;
-		iod_array->oia_iods[i].iod_nr = iods[i].iod_nr;
+		iod_array->oia_iods[i].iod_nr   = iods[i].iod_nr;
 
 		if (iods[i].iod_recxs == NULL)
 			continue;
 
 		D_ALLOC_ARRAY(iod_array->oia_iods[i].iod_recxs, iods[i].iod_nr);
 		if (iod_array->oia_iods[i].iod_recxs == NULL)
-			D_GOTO(fail_dcu, rc = -DER_NOMEM);
+			D_GOTO(fail_iods, rc = -DER_NOMEM);
 
 		memcpy(iod_array->oia_iods[i].iod_recxs, iods[i].iod_recxs,
 		       sizeof(daos_recx_t) * iods[i].iod_nr);
@@ -2310,14 +2310,14 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	D_ALLOC_ARRAY(dcsr->dcsr_sgls, nr);
 	if (dcsr->dcsr_sgls == NULL)
-		D_GOTO(fail_dcu, rc = -DER_NOMEM);
+		D_GOTO(fail_iods, rc = -DER_NOMEM);
 
 	if (tx->tx_flags & DAOS_TF_ZERO_COPY)
 		rc = daos_sgls_copy_ptr(dcsr->dcsr_sgls, nr, sgls, nr);
 	else
 		rc = daos_sgls_copy_all(dcsr->dcsr_sgls, nr, sgls, nr);
 	if (rc != 0)
-		D_GOTO(fail_dcu, rc);
+		D_GOTO(fail_sgl, rc);
 
 	tx->tx_write_cnt++;
 
@@ -2328,21 +2328,17 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	return 0;
 
-fail_dcu:
-	if (iod_array->oia_iods != NULL) {
-		for (i = 0; i < nr; i++) {
-			daos_iov_free(&iod_array->oia_iods[i].iod_name);
-			D_FREE(iod_array->oia_iods[i].iod_recxs);
-		}
+fail_sgl:
+	for (i = 0; i < nr; i++)
+		d_sgl_fini(&dcsr->dcsr_sgls[i], !(tx->tx_flags & DAOS_TF_ZERO_COPY));
+	D_FREE(dcsr->dcsr_sgls);
 
-		D_FREE(iod_array->oia_iods);
+fail_iods:
+	for (i = 0; i < nr; i++) {
+		daos_iov_free(&iod_array->oia_iods[i].iod_name);
+		D_FREE(iod_array->oia_iods[i].iod_recxs);
 	}
-
-	if (dcsr->dcsr_sgls != NULL) {
-		for (i = 0; i < nr; i++)
-			d_sgl_fini(&dcsr->dcsr_sgls[i], !(tx->tx_flags & DAOS_TF_ZERO_COPY));
-		D_FREE(dcsr->dcsr_sgls);
-	}
+	D_FREE(iod_array->oia_iods);
 
 fail:
 	daos_iov_free(&dcsr->dcsr_dkey);
