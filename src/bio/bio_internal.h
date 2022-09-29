@@ -9,12 +9,12 @@
 
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/smd.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 #include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
-#include "smd/smd_internal.h"
 
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)

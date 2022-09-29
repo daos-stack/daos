@@ -288,7 +288,7 @@ out:
  * Case1: META && WAL share same blobstore with DATA.
  * Case2: WAL share same blobstore with META.
  * Case3: DATA, META, WAL have own blobstore separately.
- * case4: no DATA blobstore, WAL, META have seperate blobstore.
+ * case4: no DATA blobstore, WAL, META have separate blobstore.
  * case5: no DATA blobstore, WAL & META share same blobstore.
  */
 struct bio_xs_blobstore *
