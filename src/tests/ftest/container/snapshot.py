@@ -186,10 +186,9 @@ class Snapshot(TestWithServers):
         # (2)Verify the snapshot is working properly.
         try:
             obj.open()
-            snap_handle = snapshot.open(
-                self.container.coh, snapshot.epoch)
+            snap_handle = snapshot.open(self.container.coh, snapshot.epoch)
             thedata2 = self.container.read_an_obj(
-                len(thedata)+1, dkey, akey, obj, txn=snap_handle.value)
+                len(thedata) + 1, dkey, akey, obj, txn=snap_handle.value)
         except Exception as error:
             self.fail(
                 "##(2)Error when retrieving the snapshot data:"
@@ -199,10 +198,8 @@ class Snapshot(TestWithServers):
         self.log.info("==written thedata=%s", thedata)
         self.log.info("==thedata2.value= %s", thedata2.value)
         if thedata2.value != thedata:
-            self.fail("##(2)The data in the snapshot is not the same as the "
-                      "original data")
-        self.log.info("==Snapshot data matches the data originally "
-                      "written.")
+            self.fail("##(2)The data in the snapshot is not the same as the original data")
+        self.log.info("==Snapshot data matches the data originally written.")
 
         # (3)Test snapshot with an invalid container handle
         self.log.info("==(3)Snapshot with an invalid container handle.")
