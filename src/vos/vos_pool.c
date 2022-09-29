@@ -142,9 +142,6 @@ pool_hop_free(struct d_ulink *hlink)
 
 	vos_dedup_fini(pool);
 
-	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id);
-
 	if (pool->vp_meta_context != NULL) {
 		rc = bio_mc_close(pool->vp_meta_context, bm_flags);
 		if (rc)
@@ -156,6 +153,9 @@ pool_hop_free(struct d_ulink *hlink)
 				DF_UUID"\n",
 				pool->vp_meta_context, DP_UUID(pool->vp_id));
 	}
+
+	if (pool->vp_dying)
+		vos_delete_blob(pool->vp_id);
 
 	D_FREE(pool);
 }
@@ -690,21 +690,22 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		D_GOTO(failed, rc);
 	}
 
-	xs_ctxt = vos_xsctxt_get();
-	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
-		xs_ctxt, DP_UUID(pool_df->pd_id));
-	if (pool_df->pd_nvme_sz == 0)
-		bm_flags |= BIO_MC_FL_NO_DATABLOB;
+	if (uma->uma_id == UMEM_CLASS_PMEM) {
+		xs_ctxt = vos_xsctxt_get();
+		D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_df->pd_id));
+		if (pool_df->pd_nvme_sz == 0)
+			bm_flags |= BIO_MC_FL_NO_DATABLOB;
 
-	rc = bio_mc_open(xs_ctxt, pool_df->pd_id, &pool->vp_umm,
-			 bm_flags, &pool->vp_meta_context);
-	if (rc) {
-		D_ERROR("Failed to open VOS I/O context for xs:%p "
-			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(pool_df->pd_id),
-			DP_RC(rc));
-		goto failed;
+		rc = bio_mc_open(xs_ctxt, pool_df->pd_id, bm_flags, &pool->vp_meta_context);
+		if (rc) {
+			D_ERROR("Failed to open VOS I/O context for xs:%p "
+				"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(pool_df->pd_id),
+				DP_RC(rc));
+			goto failed;
+		}
 	}
-
+	bio_mc_init_umem(pool->vp_meta_context, &pool->vp_umm);
 
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);
@@ -783,6 +784,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	struct umem_pool	*ph;
 	int			 rc;
 	bool			 skip_uuid_check = flags & VOS_POF_SKIP_UUID_CHECK;
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
@@ -814,6 +816,18 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			pool->vp_opened++;
 			*poh = vos_pool2hdl(pool);
 			return 0;
+		}
+	}
+
+	if (xs_ctxt && bio_xs_is_meta_on_ssd(xs_ctxt)) {
+		D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(uuid));
+		rc = bio_mc_open(xs_ctxt, uuid, 0, &pool->vp_meta_context);
+		if (rc) {
+			D_ERROR("Failed to open VOS I/O context for xs:%p "
+				"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),
+				DP_RC(rc));
+			return rc;
 		}
 	}
 

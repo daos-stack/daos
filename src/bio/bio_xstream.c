@@ -340,7 +340,6 @@ bio_bdev_list(void)
 inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
-
 	D_ASSERT(ctxt != NULL);
 	return ctxt->bxc_thread == nvme_glb.bd_init_thread;
 }
@@ -358,6 +357,8 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 		bxb = bio_xs_context2xs_blobstore(ctxt, st);
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
+		if (ctxt->bxc_meta_on_ssd == 0)
+			return false;
 	}
 
 	return false;
@@ -1718,7 +1719,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blobstore &&
 		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
-			bio_bs_monitor(bxb->bxb_blobstore, now);
+			bio_bs_monitor(ctxt, st, now);
 	}
 
 	if (is_init_xstream(ctxt)) {

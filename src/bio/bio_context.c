@@ -282,26 +282,42 @@ out:
  *	Y		N		N
  *	Y		Y		N
  *	Y		Y		Y
+ *	N		Y		Y
+ *	N		Y		N
  *
  * Case1: META && WAL share same blobstore with DATA.
  * Case2: WAL share same blobstore with META.
  * Case3: DATA, META, WAL have own blobstore separately.
+ * case4: no DATA blobstore, WAL, META have seperate blobstore.
+ * case5: no DATA blobstore, WAL & META share same blobstore.
  */
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 {
-	struct bio_xs_blobstore *bxb;
+	struct bio_xs_blobstore *bxb = NULL;
 
-	bxb = xs_ctxt->bxc_xs_blobstores[st];
-	/* metadata on ssd not enabled */
-	if (bxb == NULL && xs_ctxt->bxc_meta_on_ssd == 0) {
-		return NULL;
-	} else if (bxb == NULL) {
-		/* Meta && Wal share same blobstore */
-		if (xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META] != NULL)
-			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META];
-		else /* Meta, Wal && data share same blobstore */
-			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_DATA];
+	if (st != SMD_DEV_TYPE_DATA)
+		D_ASSERT(xs_ctxt->bxc_meta_on_ssd != 0);
+
+	switch (st) {
+	case SMD_DEV_TYPE_WAL:
+		if (xs_ctxt->bxc_xs_blobstores[st] != NULL) {
+			bxb = xs_ctxt->bxc_xs_blobstores[st];
+			break;
+		}
+		/* fall through */
+	case SMD_DEV_TYPE_META:
+		if (xs_ctxt->bxc_xs_blobstores[st] != NULL) {
+			bxb = xs_ctxt->bxc_xs_blobstores[st];
+			break;
+		}
+		/* fall through */
+	case SMD_DEV_TYPE_DATA:
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		break;
+	default:
+		D_ASSERT(0);
+		break;
 	}
 
 	return bxb;
@@ -396,6 +412,8 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 			if (rc)
 				return rc;
 		}
+		if (xs_ctxt->bxc_meta_on_ssd == 0)
+			break;
 	}
 
 	return 0;
@@ -609,10 +627,23 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	return rc;
 }
 
+void
+bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem)
+{
+	if (mc->mc_data != NULL)
+		mc->mc_data->bic_umem = umem;
+
+	if (mc->mc_meta != NULL)
+		mc->mc_meta->bic_umem = umem;
+
+	if (mc->mc_wal != NULL)
+		mc->mc_wal->bic_umem = umem;
+
+}
+
 static int
 __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		  struct umem_instance *umem, uuid_t uuid, enum bio_mc_flags flags,
-		  enum smd_dev_type st)
+		  uuid_t uuid, enum bio_mc_flags flags, enum smd_dev_type st)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
@@ -623,8 +654,6 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->bic_link);
-	ctxt->bic_umem = umem;
-	ctxt->bic_pmempool_uuid = umem_get_uuid(umem);
 	ctxt->bic_xs_ctxt = xs_ctxt;
 	uuid_copy(ctxt->bic_pool_id, uuid);
 
@@ -647,8 +676,7 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	if (rc) {
 		D_FREE(ctxt);
 	} else {
-		d_list_add_tail(&ctxt->bic_link,
-				&bxb->bxb_io_ctxts);
+		d_list_add_tail(&ctxt->bic_link, &bxb->bxb_io_ctxts);
 		*pctxt = ctxt;
 	}
 
@@ -659,10 +687,18 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		    struct umem_instance *umem, uuid_t uuid)
 {
-	return __bio_ioctxt_open(pctxt, xs_ctxt, umem, uuid, 0, SMD_DEV_TYPE_DATA);
+	int rc;
+
+	rc = __bio_ioctxt_open(pctxt, xs_ctxt, uuid, 0, SMD_DEV_TYPE_DATA);
+	if (rc)
+		return rc;
+
+	(*pctxt)->bic_umem = umem;
+
+	return rc;
 }
 
-int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_instance *umm,
+int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		enum bio_mc_flags flags, struct bio_meta_context **mc)
 {
 	struct bio_meta_context	*bio_mc;
@@ -672,29 +708,30 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_inst
 	if (bio_mc == NULL)
 		return -DER_NOMEM;
 
-	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, umm, pool_id, flags,
-			       SMD_DEV_TYPE_DATA);
-	if (rc)
-		goto failed;
-
-	if (flags & BIO_MC_FL_NO_DATABLOB)
+	if (xs_ctxt == NULL)
 		goto out;
 
-	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_META) != NULL) {
-		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, umm, pool_id,
+	if (xs_ctxt->bxc_meta_on_ssd == 1) {
+		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_META);
 		if (rc)
 			goto failed;
-	}
-
-	if (bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_WAL) != NULL) {
-		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, umm, pool_id,
+		/*
+		 * Check Meta blob header if pool nvme size is 0,
+		 * set BIO_MC_FL_NO_DATABLOB if needed.
+		 */
+		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_WAL);
 		if (rc)
 			goto failed;
 	}
 
 out:
+	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, pool_id, flags,
+			       SMD_DEV_TYPE_DATA);
+	if (rc)
+		goto failed;
+
 	*mc = bio_mc;
 	return 0;
 
@@ -1060,4 +1097,10 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc)
 {
 	return mc->mc_data;
+}
+
+bool
+bio_xs_is_meta_on_ssd(struct bio_xs_context *xs_ctxt)
+{
+	return xs_ctxt->bxc_meta_on_ssd == 1;
 }

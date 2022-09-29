@@ -928,13 +928,12 @@ struct bio_meta_context;
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID
- * \param[in]	umm		umem instance
  * \param[in]	flags		bio_mc_flags
  * \param[out]	mc		BIO meta context
  *
  * \return			Zero on success, negative value on error
  */
-int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id, struct umem_instance *umm,
+int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		enum bio_mc_flags flags, struct bio_meta_context **mc);
 
 /*
@@ -949,5 +948,14 @@ int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
 
 /* Function to return current data io context */
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
+
+/*
+ * Init Metadata context umem instance
+ */
+void
+bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem);
+
+/* Function to check if metadata on ssd enabled or not */
+bool bio_xs_is_meta_on_ssd(struct bio_xs_context *xs_ctxt);
 
 #endif /* __BIO_API_H__ */

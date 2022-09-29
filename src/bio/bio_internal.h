@@ -384,7 +384,6 @@ struct bio_xs_context {
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
 	struct umem_instance	*bic_umem;
-	uint64_t		 bic_pmempool_uuid;
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
@@ -592,7 +591,7 @@ int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_blobstore *bbs, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t now);
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
