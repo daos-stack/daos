@@ -222,10 +222,9 @@ struct d_hash_bucket {
 	d_list_t		hb_head;
 	int                     hb_insert_count;
 	int                     hb_remove_count;
+#if D_HASH_DEBUG
 	ATOMIC uint32_t         hb_read_lock_count;
 	ATOMIC uint32_t         hb_read_lock_count_max;
-
-#if D_HASH_DEBUG
 	unsigned int		hb_dep;
 #endif
 };
