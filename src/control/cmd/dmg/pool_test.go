@@ -249,6 +249,20 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Create pool with manual ranks",
+			fmt.Sprintf("pool create --size %s --ranks 1,2", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{1, 2},
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with auto storage parameters",
 			fmt.Sprintf("pool create --size %s --tier-ratio 2,98 --nranks 8", testSizeStr),
 			strings.Join([]string{
@@ -1413,7 +1427,9 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			poolCreateCmd.SetLog(log)
 			poolCreateCmd.Size = tc.StorageRatio
 			if tc.TgtRanks != "" {
-				poolCreateCmd.RankList = tc.TgtRanks
+				if err := poolCreateCmd.RankList.UnmarshalFlag(tc.TgtRanks); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			err := poolCreateCmd.Execute(nil)

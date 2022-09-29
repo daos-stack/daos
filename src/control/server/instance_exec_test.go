@@ -40,7 +40,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 		exitErr          error
 		expShouldForward bool
 		expEvtMsg        string
-		expExPid         uint64
+		expExPid         int
 	}{
 		"without rank": {
 			expEvtMsg: fmt.Sprintf(exitMsg, 0),
@@ -77,13 +77,13 @@ func TestIOEngineInstance_exit(t *testing.T) {
 				})
 			}
 			if tc.expExPid == 0 {
-				tc.expExPid = uint64(os.Getpid())
+				tc.expExPid = os.Getpid()
 			}
 
 			hn, _ := os.Hostname()
 			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
-			engine.exit(context.Background(), exitErr)
+			engine.handleExit(context.Background(), tc.expExPid, exitErr)
 
 			test.AssertEqual(t, 1, len(rxEvts),
 				"unexpected number of events published")
@@ -92,8 +92,9 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			if diff := cmp.Diff(tc.expEvtMsg, rxEvts[0].Msg); diff != "" {
 				t.Fatalf("unexpected message (-want, +got):\n%s\n", diff)
 			}
-			test.AssertEqual(t, tc.expExPid, rxEvts[0].ProcID,
-				"unexpected process ID in event")
+			if tc.expExPid != rxEvts[0].ProcID {
+				t.Fatalf("unexpected PID in event (%d != %d)", tc.expExPid, rxEvts[0].ProcID)
+			}
 		})
 	}
 }
