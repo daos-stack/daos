@@ -9,9 +9,7 @@
 set -uex
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# at some point we want to use:
 # shellcheck source=utils/scripts/helpers/distro_info.sh
-# shell#check disable=SC1091
 source "$mydir/distro_info.sh"
 
 # We need sudo for running the scan and git for backward

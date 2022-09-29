@@ -6,9 +6,7 @@ set -uex
 # of the resulting system volume.
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# at some point we want to use:
 # shellcheck source=utils/scripts/helpers/distro_info.sh
-# shell#check disable=SC1091
 source "$mydir/distro_info.sh"
 
 if command -v dnf; then
