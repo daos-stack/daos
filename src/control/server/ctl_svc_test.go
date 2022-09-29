@@ -34,6 +34,9 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	// share sys provider between engines to be able to access to same mock config data
 	sp := scm.NewMockSysProvider(log, smsc)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	cs := &ControlService{
 		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 			sp,
@@ -42,7 +45,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		harness: &EngineHarness{
 			log: log,
 		},
-		events: events.NewPubSub(context.TODO(), log),
+		events: events.NewPubSub(ctx, log),
 		srvCfg: cfg,
 	}
 

@@ -65,13 +65,11 @@ func checkDrpcClientSocketPath(socketPath string) error {
 
 	f, err := os.Stat(socketPath)
 	if err != nil {
-		return errors.Errorf("socket path %q could not be accessed: %s",
-			socketPath, err.Error())
+		return errors.Wrapf(err, "socket path %q could not be accessed", socketPath)
 	}
 
 	if (f.Mode() & os.ModeSocket) == 0 {
-		return errors.Errorf("path %q is not a socket",
-			socketPath)
+		return errors.Errorf("path %q is not a socket", socketPath)
 	}
 
 	return nil

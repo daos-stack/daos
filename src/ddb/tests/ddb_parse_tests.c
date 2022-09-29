@@ -320,6 +320,29 @@ has_parts_tests(void **state)
 	assert_true(dv_has_akey(&vtp));
 }
 
+#define assert_invalid_parse_dtx_id(str) \
+	do { \
+		struct dtx_id __dtx_id = {0}; \
+		assert_invalid(ddb_parse_dtx_id(str, &__dtx_id)); \
+	} while (0)
+
+static void
+parse_dtx_id_tests(void **state)
+{
+	struct dtx_id id;
+	uuid_t uuid;
+
+	assert_invalid_parse_dtx_id(NULL);
+	assert_invalid_parse_dtx_id("");
+	assert_invalid_parse_dtx_id("garbage.more_garbage");
+	assert_invalid_parse_dtx_id("12345678-1234-1243-1243-124356789012.garbage");
+	assert_invalid_parse_dtx_id("garbage.123456890");
+
+	assert_success(ddb_parse_dtx_id("12345678-1234-1243-1243-124356789012.123456890", &id));
+	uuid_parse("12345678-1234-1243-1243-124356789012", uuid);
+	assert_uuid_equal(uuid, id.dti_uuid);
+	assert_int_equal(0x123456890, id.dti_hlc);
+}
 
 /*
  * -----------------------------------------------
@@ -337,7 +360,8 @@ ddb_parse_tests_run()
 		TEST(vos_path_parse_tests),
 		TEST(vos_path_parse_and_print_tests),
 		TEST(parse_idx_tests),
-		TEST(has_parts_tests)
+		TEST(has_parts_tests),
+		TEST(parse_dtx_id_tests)
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

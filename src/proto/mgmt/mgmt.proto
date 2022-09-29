@@ -17,6 +17,7 @@ import "mgmt/svc.proto";
 import "mgmt/acl.proto"; // ACL-related requests
 import "mgmt/system.proto";
 import "chk/chk.proto";
+import "chk/faults.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -76,6 +77,8 @@ service MgmtSvc {
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
 	// Start DAOS system (restart data-plane instances)
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	// Exclude DAOS ranks
+	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
@@ -96,8 +99,6 @@ service MgmtSvc {
 	rpc SystemCheckRepair(CheckActReq) returns(CheckActResp){}
 	// PoolUpgrade queries a DAOS pool.
 	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
-	// FaultInjectReport injects a checker report.
-	rpc FaultInjectReport(chk.CheckReport) returns (DaosResp) {}
 	// Set a system attribute or attributes.
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.
@@ -106,4 +107,12 @@ service MgmtSvc {
 	rpc SystemSetProp(SystemSetPropReq) returns (DaosResp) {}
 	// Get a system property or properties.
 	rpc SystemGetProp(SystemGetPropReq) returns (SystemGetPropResp) {}
+
+
+	// Fault injection handlers are only implemented in non-release builds.
+	// FaultInjectReport injects a checker report.
+	rpc FaultInjectReport(chk.CheckReport) returns (DaosResp) {}
+	// FaultInjectPoolFault creates a pool fault for testing the checker.
+	rpc FaultInjectPoolFault(chk.Fault) returns (DaosResp) {}
+	rpc FaultInjectMgmtPoolFault(chk.Fault) returns (DaosResp) {}
 }

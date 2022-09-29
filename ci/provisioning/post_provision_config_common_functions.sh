@@ -188,10 +188,8 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] &&
-       [ -z "$(rpm_test_version)" ] &&
-       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]] &&
-       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != provider-testing* ]]; then
+    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
+       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
@@ -276,9 +274,10 @@ post_provision_config_nodes() {
             disable_gpg_check "$repo_url"
         done
     fi
+    inst_rpms=()
     if [ -n "$INST_RPMS" ]; then
-        # shellcheck disable=SC2086
-        time dnf -y erase $INST_RPMS
+        eval "inst_rpms=($INST_RPMS)"
+        time dnf -y erase "${inst_rpms[@]}"
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
@@ -292,10 +291,8 @@ post_provision_config_nodes() {
     if ! rpm -q "$(echo "$INST_RPMS" |
                    sed -e 's/--exclude [^ ]*//'                 \
                        -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
-        # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
-            # shellcheck disable=SC2154
-            if ! retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 install "${inst_rpms[@]}"; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"

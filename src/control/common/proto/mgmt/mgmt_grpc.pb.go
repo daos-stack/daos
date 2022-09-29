@@ -71,6 +71,8 @@ type MgmtSvcClient interface {
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
+	// Exclude DAOS ranks
+	SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -91,8 +93,6 @@ type MgmtSvcClient interface {
 	SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
-	// FaultInjectReport injects a checker report.
-	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -101,6 +101,12 @@ type MgmtSvcClient interface {
 	SystemSetProp(ctx context.Context, in *SystemSetPropReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(ctx context.Context, in *SystemGetPropReq, opts ...grpc.CallOption) (*SystemGetPropResp, error)
+	// Fault injection handlers are only implemented in non-release builds.
+	// FaultInjectReport injects a checker report.
+	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
+	// FaultInjectPoolFault creates a pool fault for testing the checker.
+	FaultInjectPoolFault(ctx context.Context, in *chk.Fault, opts ...grpc.CallOption) (*DaosResp, error)
+	FaultInjectMgmtPoolFault(ctx context.Context, in *chk.Fault, opts ...grpc.CallOption) (*DaosResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -336,6 +342,15 @@ func (c *mgmtSvcClient) SystemStart(ctx context.Context, in *SystemStartReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error) {
+	out := new(SystemExcludeResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemExclude", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error) {
 	out := new(SystemEraseResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemErase", in, out, opts...)
@@ -426,15 +441,6 @@ func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error) {
-	out := new(DaosResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/FaultInjectReport", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtSvcClient) SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemSetAttr", in, out, opts...)
@@ -465,6 +471,33 @@ func (c *mgmtSvcClient) SystemSetProp(ctx context.Context, in *SystemSetPropReq,
 func (c *mgmtSvcClient) SystemGetProp(ctx context.Context, in *SystemGetPropReq, opts ...grpc.CallOption) (*SystemGetPropResp, error) {
 	out := new(SystemGetPropResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemGetProp", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/FaultInjectReport", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) FaultInjectPoolFault(ctx context.Context, in *chk.Fault, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/FaultInjectPoolFault", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) FaultInjectMgmtPoolFault(ctx context.Context, in *chk.Fault, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/FaultInjectMgmtPoolFault", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -526,6 +559,8 @@ type MgmtSvcServer interface {
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
+	// Exclude DAOS ranks
+	SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
 	// Clean up leaked resources for a given node
@@ -546,8 +581,6 @@ type MgmtSvcServer interface {
 	SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
-	// FaultInjectReport injects a checker report.
-	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -556,6 +589,12 @@ type MgmtSvcServer interface {
 	SystemSetProp(context.Context, *SystemSetPropReq) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error)
+	// Fault injection handlers are only implemented in non-release builds.
+	// FaultInjectReport injects a checker report.
+	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
+	// FaultInjectPoolFault creates a pool fault for testing the checker.
+	FaultInjectPoolFault(context.Context, *chk.Fault) (*DaosResp, error)
+	FaultInjectMgmtPoolFault(context.Context, *chk.Fault) (*DaosResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
 }
 
@@ -638,6 +677,9 @@ func (UnimplementedMgmtSvcServer) SystemStop(context.Context, *SystemStopReq) (*
 func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemStart not implemented")
 }
+func (UnimplementedMgmtSvcServer) SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemExclude not implemented")
+}
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
 }
@@ -668,9 +710,6 @@ func (UnimplementedMgmtSvcServer) SystemCheckRepair(context.Context, *CheckActRe
 func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolUpgrade not implemented")
 }
-func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectReport not implemented")
-}
 func (UnimplementedMgmtSvcServer) SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemSetAttr not implemented")
 }
@@ -682,6 +721,15 @@ func (UnimplementedMgmtSvcServer) SystemSetProp(context.Context, *SystemSetPropR
 }
 func (UnimplementedMgmtSvcServer) SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemGetProp not implemented")
+}
+func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectReport not implemented")
+}
+func (UnimplementedMgmtSvcServer) FaultInjectPoolFault(context.Context, *chk.Fault) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectPoolFault not implemented")
+}
+func (UnimplementedMgmtSvcServer) FaultInjectMgmtPoolFault(context.Context, *chk.Fault) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectMgmtPoolFault not implemented")
 }
 func (UnimplementedMgmtSvcServer) mustEmbedUnimplementedMgmtSvcServer() {}
 
@@ -1146,6 +1194,24 @@ func _MgmtSvc_SystemStart_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemExclude_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemExcludeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemExclude(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemExclude",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemExclude(ctx, req.(*SystemExcludeReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemEraseReq)
 	if err := dec(in); err != nil {
@@ -1326,24 +1392,6 @@ func _MgmtSvc_PoolUpgrade_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_FaultInjectReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(chk.CheckReport)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).FaultInjectReport(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/FaultInjectReport",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).FaultInjectReport(ctx, req.(*chk.CheckReport))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtSvc_SystemSetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemSetAttrReq)
 	if err := dec(in); err != nil {
@@ -1412,6 +1460,60 @@ func _MgmtSvc_SystemGetProp_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).SystemGetProp(ctx, req.(*SystemGetPropReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_FaultInjectReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(chk.CheckReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).FaultInjectReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/FaultInjectReport",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).FaultInjectReport(ctx, req.(*chk.CheckReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_FaultInjectPoolFault_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(chk.Fault)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).FaultInjectPoolFault(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/FaultInjectPoolFault",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).FaultInjectPoolFault(ctx, req.(*chk.Fault))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_FaultInjectMgmtPoolFault_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(chk.Fault)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).FaultInjectMgmtPoolFault(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/FaultInjectMgmtPoolFault",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).FaultInjectMgmtPoolFault(ctx, req.(*chk.Fault))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1524,6 +1626,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_SystemStart_Handler,
 		},
 		{
+			MethodName: "SystemExclude",
+			Handler:    _MgmtSvc_SystemExclude_Handler,
+		},
+		{
 			MethodName: "SystemErase",
 			Handler:    _MgmtSvc_SystemErase_Handler,
 		},
@@ -1564,10 +1670,6 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_PoolUpgrade_Handler,
 		},
 		{
-			MethodName: "FaultInjectReport",
-			Handler:    _MgmtSvc_FaultInjectReport_Handler,
-		},
-		{
 			MethodName: "SystemSetAttr",
 			Handler:    _MgmtSvc_SystemSetAttr_Handler,
 		},
@@ -1582,6 +1684,18 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemGetProp",
 			Handler:    _MgmtSvc_SystemGetProp_Handler,
+		},
+		{
+			MethodName: "FaultInjectReport",
+			Handler:    _MgmtSvc_FaultInjectReport_Handler,
+		},
+		{
+			MethodName: "FaultInjectPoolFault",
+			Handler:    _MgmtSvc_FaultInjectPoolFault_Handler,
+		},
+		{
+			MethodName: "FaultInjectMgmtPoolFault",
+			Handler:    _MgmtSvc_FaultInjectMgmtPoolFault_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

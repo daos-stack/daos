@@ -94,6 +94,7 @@ centric
 chdir
 checksum
 chgrp
+chk
 chmod
 chowned
 clush
@@ -163,6 +164,7 @@ environ
 epcrange
 errored
 ethernet
+fallocate
 fchmod
 fcntl
 filename
@@ -173,6 +175,7 @@ fio
 fnctl
 fpp
 fs
+fstab
 fstat
 ftest
 fuseblk
@@ -205,6 +208,7 @@ iod
 iodepth
 ioengine
 ior
+ioreqs
 iotype
 iov
 ip
@@ -287,6 +291,7 @@ openmpi
 orterun
 os
 outdata
+outputdir
 params
 patchelf
 pci

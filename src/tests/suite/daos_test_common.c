@@ -960,6 +960,30 @@ daos_reint_server(const uuid_t pool_uuid, const char *grp,
 }
 
 void
+daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
+{
+	char	dmg_cmd[DTS_CFG_MAX];
+	int	rc;
+
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr++;
+
+	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
+
+	/* build and invoke dmg cmd to stop the server */
+	dts_create_config(dmg_cmd, "dmg system start -r %d", rank);
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
+	assert_rc_equal(rc, 0);
+
+	daos_cont_status_clear(arg->coh, NULL);
+}
+
+void
 daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		 const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
@@ -1118,6 +1142,8 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		strcat(dpid, line);
 	}
 
+	if (line)
+		free(line);
 	pclose(fp1);
 	return 0;
 }
@@ -1190,7 +1216,8 @@ get_server_config(char *host, char *server_config_file)
 	pclose(fp);
 
 	D_FREE(dpid);
-	free(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1219,13 +1246,12 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
-
-		D_FREE(line);
 	}
 
 out:
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return rc;
 }
 
@@ -1251,7 +1277,8 @@ int get_log_file(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1278,7 +1305,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		snprintf(command, sizeof(command),
 			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
 		fp = popen(command, "r");
-		while ((read = getline(&line, &len, fp)) != -1) {
+		while (fp && (read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
 					      state, pch);
@@ -1290,12 +1317,14 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 
 		if (fp != NULL)
 			pclose(fp);
-		free(line);
 	}
 
+	if (line)
+		free(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
+	free(line);
 	D_FREE(tmp);
 	return 0;
 }

@@ -1556,8 +1556,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool			*pool = (struct ds_pool *)in;
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
-	int				ret = 0;
-	uint64_t			features = 0;
+	int                              ret         = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1566,9 +1565,14 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (pool->sp_global_version >= 1)
-		features = VOS_POOL_FEAT_AGG_OPT;
-	vos_pool_features_set(child->spc_hdl, features);
+	if (ret == 0) {
+		/** If necessary, upgrade the vos pool format */
+		if (pool->sp_global_version >= 2)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+		else if (pool->sp_global_version == 1)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	}
+
 	ds_pool_child_put(child);
 
 	return ret;

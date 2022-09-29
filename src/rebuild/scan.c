@@ -366,11 +366,14 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND)
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
-			rc = 0;
-		}
+		else
+			/* Since it is harmless, let's skip duplicate obj for other cases. */
+			D_WARN(DF_UUID" found duplicate "DF_UOID" %d\n",
+			       DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
+		rc = 0;
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -630,7 +633,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
 
-			discard_epr.epr_hi = rpt->rt_stable_epoch;
+			D_ASSERT(rpt->rt_reclaim_epoch != 0);
+			discard_epr.epr_hi = rpt->rt_reclaim_epoch;
 			discard_epr.epr_lo = 0;
 			/*
 			 * It's possible this object might still be being

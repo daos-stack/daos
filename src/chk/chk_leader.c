@@ -628,6 +628,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -641,6 +642,12 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		option_nr = 2;
@@ -771,6 +778,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_exist_on_ms = 1;
 			}
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		/* Fall through. */
@@ -790,6 +798,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 		 * whether it is destroyed successfully or not.
 		 */
 		cpr->cpr_skip = 1;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -807,6 +816,12 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 
 interact:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -975,6 +990,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * whether it is destroyed successfully or not.
 			 */
 			cpr->cpr_skip = 1;
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 			/* Report the inconsistency without repair. */
@@ -990,6 +1006,12 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -1031,6 +1053,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
 			 *	We need to start the PS under DICTATE mode in subsequent step.
 			 */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 			seq = ++(ins->ci_seq);
@@ -1063,6 +1086,12 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+				/* Ignore the inconsistency if admin does not want interaction. */
+				cbk->cb_statistics.cs_ignored++;
+				break;
+			}
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1340,6 +1369,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 
 		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
 		cpr->cpr_delay_label = 1;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		goto out;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 
@@ -1356,6 +1386,7 @@ try_ps:
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		cbk->cb_statistics.cs_total++;
@@ -1370,6 +1401,12 @@ try_ps:
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			cbk->cb_statistics.cs_ignored++;
+			break;
+		}
+
 		if (clp->clp_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
@@ -1697,6 +1734,25 @@ chk_leader_pool_mbs(struct chk_sched_args *csa)
 	return rc;
 }
 
+/*
+ * Whether need to stop current check instance or not.
+ *
+ * \return	1:	the check is completed.
+ * \return	0:	someone wants to stop the check.
+ * \return	-1:	continue the check.
+ */
+static inline int
+chk_leader_need_stop(struct chk_instance *ins)
+{
+	if (d_list_empty(&ins->ci_rank_list))
+		return 1;
+
+	if (!ins->ci_sched_running)
+		return 0;
+
+	return -1;
+}
+
 static void
 chk_leader_sched(void *args)
 {
@@ -1719,11 +1775,6 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
-	if (d_list_empty(&ins->ci_rank_list)) {
-		ABT_mutex_unlock(ins->ci_abt_mutex);
-		D_GOTO(out, rc = 1);
-	}
-
 	if (ins->ci_started) {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		goto handle;
@@ -1734,6 +1785,19 @@ again:
 	goto again;
 
 handle:
+	/*
+	 * For very race case, there may be no pools on check engines, so check engines
+	 * may complete check scan very quickly before leader sched here. But there are
+	 * still potential dangling pool entries on MS. Let's check it before complete.
+	 */
+	if (unlikely(d_list_empty(&ins->ci_rank_list))) {
+		rc = chk_leader_handle_pools_list(csa);
+		if (rc == 0)
+			rc = 1;
+
+		D_GOTO(out, bcast = false);
+	}
+
 	phase = chk_leader_find_slowest(ins);
 	if (phase != cbk->cb_phase) {
 		cbk->cb_phase = phase;
@@ -1744,6 +1808,10 @@ handle:
 		rc = chk_leader_handle_pools_list(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
+
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
 
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST;
@@ -1772,9 +1840,17 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		rc = chk_leader_handle_pools_svc(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
+
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
 
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
@@ -1803,20 +1879,21 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		rc = chk_leader_pool_mbs(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 	}
 
-	while (ins->ci_sched_running) {
+	while (1) {
+		rc = chk_leader_need_stop(ins);
+		if (rc >= 0)
+			goto out;
+
 		dss_sleep(300);
-
-		/* Someone wants to stop the check. */
-		if (!ins->ci_sched_running)
-			D_GOTO(out, rc = 0);
-
-		if (d_list_empty(&ins->ci_rank_list))
-			D_GOTO(out, rc = 1);
 
 		/*
 		 * TBD: The leader may need to detect engines' status/phase actively, otherwise
@@ -2264,6 +2341,10 @@ out_log:
 			chk_pools_dump(pool_nr, pools);
 		else if (prop->cp_pool_nr > 0)
 			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
+
+		/* Notify the control plane that the check (re-)starts from the beginning. */
+		if (flags & CHK__CHECK_FLAG__CF_RESET)
+			rc = 1;
 	} else if (rc != -DER_ALREADY) {
 		D_ERROR("Leader failed to start check on %u ranks for %d pools with "
 			"flags %x, phase %d, leader %u, gen "DF_X64": "DF_RC"\n",

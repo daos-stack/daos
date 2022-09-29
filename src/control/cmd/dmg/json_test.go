@@ -100,6 +100,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID(), "label")
 			case "pool extend":
 				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
+			case "pool upgrade":
+				testArgs = append(testArgs, test.MockUUID())
 			case "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
 			case "pool query-targets":
@@ -117,6 +119,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
+			case "system exclude":
+				testArgs = append(testArgs, "--ranks", "0")
+			case "system clear-exclude":
+				testArgs = append(testArgs, "--ranks", "0")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

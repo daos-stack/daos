@@ -42,16 +42,33 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		"unable to configure privileged helper logging")
 }
 
+type iommuCheckFn func() (bool, error)
+
 type iommuChecker interface {
-	setIOMMUChecker(func() (bool, error))
+	setIOMMUChecker(iommuCheckFn)
 }
 
 type iommuCheckerCmd struct {
-	isIOMMUEnabled func() (bool, error)
+	isIOMMUEnabled iommuCheckFn
 }
 
-func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
-	icc.isIOMMUEnabled = isIOMMUEnabled
+func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	if icc == nil {
+		return
+	}
+	icc.isIOMMUEnabled = fn
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
+func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	if icc == nil {
+		return false, errors.New("nil pointer receiver")
+	}
+	if icc.isIOMMUEnabled == nil {
+		return false, errors.New("nil isIOMMUEnabled function")
+	}
+
+	return icc.isIOMMUEnabled()
 }
 
 type mainOpts struct {
@@ -129,7 +146,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			if _, err := os.Stat(opts.ConfigPath); err == nil {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			}
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {
@@ -142,10 +161,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(func() (bool, error) {
-				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
-			})
+			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

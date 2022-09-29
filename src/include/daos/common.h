@@ -498,8 +498,6 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
-#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
-
 /* byte swapper */
 #define D_SWAP16(x)	bswap_16(x)
 #define D_SWAP32(x)	bswap_32(x)
@@ -797,6 +795,7 @@ enum {
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
+#define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)

@@ -199,8 +199,6 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 }
 
 // PrintNvmeControllers displays controller details in a verbose table.
-//
-// TODO: un-export function when not needed in cmd/daos_server/storage.go
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 

@@ -305,3 +305,32 @@ ddb_vtp_fini(struct dv_tree_path_builder *vt_path)
 	D_FREE(vt_path->vtp_dkey_buf);
 	D_FREE(vt_path->vtp_akey_buf);
 }
+
+int
+ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
+{
+	char	 cpy[128] = {0};
+	char	 validate_buf[128] = {0};
+	char	*tok;
+
+	if (dtx_id_str == NULL)
+		return -DER_INVAL;
+
+	strncpy(cpy, dtx_id_str, sizeof(cpy) - 1);
+
+	tok = strtok(cpy, ".");
+	if (tok == NULL)
+		return -DER_INVAL;
+	if (uuid_parse(tok, dtx_id->dti_uuid) < 0)
+		return -DER_INVAL;
+
+	tok = strtok(NULL, ".");
+	dtx_id->dti_hlc = strtoll(tok, NULL, 16);
+
+	/* Validate input was complete and in correct format */
+	snprintf(validate_buf, 128, DF_DTIF, DP_DTI(dtx_id));
+	if (strncmp(dtx_id_str, validate_buf, 128) != 0)
+		return -DER_INVAL;
+
+	return DER_SUCCESS;
+}

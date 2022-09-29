@@ -187,6 +187,7 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 		iod->iod_recxs = recxs;
 	} else {
 		iod->iod_nr = 1;
+		iod->iod_recxs = NULL;
 	}
 }
 
@@ -4363,6 +4364,12 @@ oclass_auto_setting(void **state)
 			  DAOS_RES_REPL, 2, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Array oid with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_array,
+			  DAOS_RES_REPL, 2, OC_RP_2GX);
+	assert_rc_equal(rc, 0);
+
 	/** object with EC hint should use OC_EC_NP1G1 */
 	print_message("oid with DAOS_OCH_RDD_EC hint:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
@@ -4425,6 +4432,12 @@ oclass_auto_setting(void **state)
 	print_message("BYTE ARRAY oid class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, 0, feat_byte_array,
 			  DAOS_RES_EC, 2, ecidx);
+	assert_rc_equal(rc, 0);
+
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Byte Array with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_byte_array,
+			  DAOS_RES_REPL, 2, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
 	print_message("KV oid with DAOS_OCH_RDD_EC hint:\t");
@@ -4490,6 +4503,12 @@ oclass_auto_setting(void **state)
 	print_message("BYTE ARRAY oid class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, 0, feat_byte_array,
 			  DAOS_RES_EC, 3, ecidx);
+	assert_rc_equal(rc, 0);
+
+	/** Array object with RP hint should use OC_RP_GX */
+	print_message("Byte Array with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_RP, feat_byte_array,
+			  DAOS_RES_REPL, 3, OC_RP_3GX);
 	assert_rc_equal(rc, 0);
 
 	print_message("KV oid with DAOS_OCH_RDD_EC hint:\t");

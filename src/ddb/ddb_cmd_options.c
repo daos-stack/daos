@@ -27,6 +27,8 @@
 #define COMMAND_NAME_SMD_SYNC "smd_sync"
 #define COMMAND_NAME_DUMP_VEA "dump_vea"
 #define COMMAND_NAME_UPDATE_VEA "update_vea"
+#define COMMAND_NAME_DTX_COMMIT "dtx_commit"
+#define COMMAND_NAME_DTX_ABORT "dtx_abort"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -45,7 +47,7 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'r':
 			cmd_args->recursive = true;
@@ -88,7 +90,7 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'w':
 			cmd_args->write_mode = true;
@@ -133,7 +135,7 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -178,7 +180,7 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -216,7 +218,7 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -261,7 +263,7 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -299,7 +301,7 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -337,7 +339,7 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -377,7 +379,7 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
 		switch (opt) {
 		case 'a':
 			cmd_args->active = true;
@@ -425,7 +427,7 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -463,7 +465,7 @@ update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -481,6 +483,96 @@ update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args
 		index++;
 	} else {
 		ddb_print(ctx, "Expected argument 'blk_cnt'\n");
+		return -DER_INVAL;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+/* Parse command line options for the 'dtx_commit' command */
+static int
+dtx_commit_option_parse(struct ddb_ctx *ctx, struct dtx_commit_options *cmd_args,
+			uint32_t argc, char **argv)
+{
+	char		 *options_short = "";
+	int		  index = 0;
+	struct option	  options_long[] = {
+		{ NULL }
+	};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->path = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'path'\n");
+		return -DER_INVAL;
+	}
+	if (argc - index > 0) {
+		cmd_args->dtx_id = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'dtx_id'\n");
+		return -DER_INVAL;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+/* Parse command line options for the 'dtx_abort' command */
+static int
+dtx_abort_option_parse(struct ddb_ctx *ctx, struct dtx_abort_options *cmd_args,
+		       uint32_t argc, char **argv)
+{
+	char		 *options_short = "";
+	int		  index = 0;
+	struct option	  options_long[] = {
+		{ NULL }
+	};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->path = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'path'\n");
+		return -DER_INVAL;
+	}
+	if (argc - index > 0) {
+		cmd_args->dtx_id = argv[index];
+		index++;
+	} else {
+		ddb_print(ctx, "Expected argument 'dtx_id'\n");
 		return -DER_INVAL;
 	}
 
@@ -576,6 +668,16 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return update_vea_option_parse(ctx, &info->dci_cmd_option.dci_update_vea,
 		       argc, argv);
 	}
+	if (same(cmd, COMMAND_NAME_DTX_COMMIT)) {
+		info->dci_cmd = DDB_CMD_DTX_COMMIT;
+		return dtx_commit_option_parse(ctx, &info->dci_cmd_option.dci_dtx_commit,
+		       argc, argv);
+	}
+	if (same(cmd, COMMAND_NAME_DTX_ABORT)) {
+		info->dci_cmd = DDB_CMD_DTX_ABORT;
+		return dtx_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_abort,
+		       argc, argv);
+	}
 
 	ddb_errorf(ctx, "'%s' is not a valid command. Available commands are:"
 			"'help', "
@@ -594,7 +696,9 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 			"'clear_cmt_dtx', "
 			"'smd_sync', "
 			"'dump_vea', "
-			"'update_vea'\n", cmd);
+			"'update_vea', "
+			"'dtx_commit', "
+			"'dtx_abort'\n", cmd);
 
 	return -DER_INVAL;
 }
@@ -723,7 +827,7 @@ ddb_commands_help(struct ddb_ctx *ctx)
 
 	/* Command: dump_vea */
 	ddb_print(ctx, "dump_vea\n");
-	ddb_print(ctx, "\tDump information from the vea tree about free regions on NVMe SSDs\n");
+	ddb_print(ctx, "\tDump information from the vea about free regions\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: update_vea */
@@ -733,6 +837,24 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tBlock offset of the region to mark free.\n");
 	ddb_print(ctx, "    <blk_cnt>\n");
 	ddb_print(ctx, "\tTotal blocks of the region to mark free.\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: dtx_commit */
+	ddb_print(ctx, "dtx_commit <path> <dtx_id>\n");
+	ddb_print(ctx, "\tMark the active dtx entry as committed\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to a container.\n");
+	ddb_print(ctx, "    <dtx_id>\n");
+	ddb_print(ctx, "\tDTX id of the entry to commit.\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: dtx_abort */
+	ddb_print(ctx, "dtx_abort <path> <dtx_id>\n");
+	ddb_print(ctx, "\tMark the active dtx entry as aborted\n");
+	ddb_print(ctx, "    <path>\n");
+	ddb_print(ctx, "\tVOS tree path to a container.\n");
+	ddb_print(ctx, "    <dtx_id>\n");
+	ddb_print(ctx, "\tDTX id of the entry to abort.\n");
 	ddb_print(ctx, "\n");
 }
 
@@ -794,4 +916,6 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   smd_sync          Restore the SMD file with backup from blob\n");
 	ddb_print(ctx, "   dump_vea          Dump information from the vea about free regions\n");
 	ddb_print(ctx, "   update_vea        Alter the VEA tree to mark a region as free.\n");
+	ddb_print(ctx, "   dtx_commit        Mark the active dtx entry as committed\n");
+	ddb_print(ctx, "   dtx_abort         Mark the active dtx entry as aborted\n");
 }

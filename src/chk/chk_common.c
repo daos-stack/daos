@@ -415,7 +415,7 @@ chk_pool_filter(uuid_t uuid, void *arg)
 		}
 	}
 
-	return found ? 1 : 0;
+	return found ? 0 : 1;
 }
 
 int
