@@ -601,7 +601,7 @@ class PreReqComponent():
         self.configs = None
 
         self.add_opts(EnumVariable('SCONS_ENV', "Default SCons environment inheritance",
-                                   'full', ['minimal', 'full'], ignorecase=1))
+                                   'minimal', ['minimal', 'full'], ignorecase=1))
 
         if self.__env.get("SCONS_ENV") == 'full':
             real_env = os.environ
