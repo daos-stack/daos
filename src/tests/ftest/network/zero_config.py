@@ -227,7 +227,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Get the available interfaces and their domains
         self.get_device_info()
-        exp_iface = random.choice(list(self.interfaces.keys())) #nosec
+        exp_iface = random.choice(list(self.interfaces.keys()))  # nosec
 
         # Configure the daos server
         self.setup_servers()
