@@ -284,7 +284,7 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
         if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360  install '--nobest' "$LSB_RELEASE"
+            retry_dnf 360  install "$LSB_RELEASE"
         fi
     fi
 
@@ -295,7 +295,7 @@ post_provision_config_nodes() {
         # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
             # shellcheck disable=SC2154
-            if ! retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 install --nobest $INST_RPMS; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"
