@@ -21,14 +21,15 @@ ARG REPOS
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/ci/repo-helper-el8.sh /tmp/repo-helper.sh
+COPY ./utils/scripts/helpers/repo-helper-el8.sh /tmp/repo-helper.sh
 RUN set -e;                                         \
     chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh
 
 # Add DAOS users
 ARG UID=1000
-COPY ./utils/ci/daos-server-user-setup.sh /tmp/daos-server-user-setup.sh
+COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
+     /tmp/daos-server-user-setup.sh
 RUN set -e;                                    \
     chmod +x /tmp/daos-server-user-setup.sh && \
     /tmp/daos-server-user-setup.sh
@@ -154,7 +155,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
         mvn clean install -T 1C                                                               \
             -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
             -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
