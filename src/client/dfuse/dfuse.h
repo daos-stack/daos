@@ -69,6 +69,7 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_hdl        *doh_rd;
 
 	ATOMIC uint32_t                  doh_il_calls;
+	ATOMIC uint64_t                  doh_write_count;
 
 	/** True if caching is enabled for this file. */
 	bool                             doh_caching;
@@ -157,12 +158,12 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t                   de_req; /**< The fuse request handle */
-	daos_event_t                 de_ev;
-	size_t                       de_len;          /**< The size returned by daos */
-	off_t                        de_req_position; /**< The file position requested by fuse */
-	d_iov_t                      de_iov;
-	d_sg_list_t                  de_sgl;
+	fuse_req_t            de_req; /**< The fuse request handle */
+	daos_event_t          de_ev;
+	size_t                de_len;          /**< The size returned by daos */
+	off_t                 de_req_position; /**< The file position requested by fuse */
+	d_iov_t               de_iov;
+	d_sg_list_t           de_sgl;
 	struct dfuse_obj_hdl *de_oh;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
@@ -401,22 +402,32 @@ struct fuse_lowlevel_ops dfuse_ops;
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(ie, req, attr)					\
-	do {								\
-		int __rc;						\
-		double timeout = 0;					\
-		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0)	\
-			timeout = (ie)->ie_dfs->dfc_attr_timeout;	\
-		DFUSE_TRA_DEBUG(ie,					\
-				"Returning attr inode %#lx mode %#o size %zi",	\
-				(attr)->st_ino,				\
-				(attr)->st_mode,			\
-				(attr)->st_size);			\
-		__rc = fuse_reply_attr(req, attr, timeout);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(ie,				\
-					"fuse_reply_attr returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
+	do {                                                                                       \
+		int    __rc;                                                                       \
+		double timeout = 0;                                                                \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
+				(attr)->st_mode, (attr)->st_size);                                 \
+		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
+			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
+			dfuse_cache_set_time(ie);                                                  \
+		}                                                                                  \
+		__rc = fuse_reply_attr(req, attr, timeout);                                        \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(ie, "fuse_reply_attr returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_ATTR_FORCE(ie, req, timeout)                                                   \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
+				(ie)->ie_stat.st_size, timeout);                                   \
+		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(ie, "fuse_reply_attr returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_READLINK(ie, req, path)				\
@@ -463,30 +474,28 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning create");		\
-		__rc = fuse_reply_create(req, &entry, fi);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_create returned %d:%s",\
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_CREATE(desc, req, entry, fi)                                                   \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
+		__rc = fuse_reply_create(req, &entry, fi);                                         \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_create returned %d:%s", __rc,            \
+					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_ENTRY(desc, req, entry)				\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o size %zi",	\
-				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				(entry).attr.st_size);			\
-		__rc = fuse_reply_entry(req, &entry);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_entry returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi",             \
+				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
+		if (atomic_load_relaxed(&(inode)->ie_open_count) == 0) {                           \
+			dfuse_cache_set_time(inode);                                               \
+		}                                                                                  \
+		__rc = fuse_reply_entry(req, &entry);                                              \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(inode, "fuse_reply_entry returned %d:%s", __rc,            \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_STATFS(desc, req, stat)				\
@@ -530,9 +539,8 @@ struct dfuse_inode_entry {
 
 	dfs_obj_t               *ie_obj;
 
-	/** DAOS object ID of the dfs object.  Used for uniquely identifying
-	 * files
-	 */
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying files */
+
 	daos_obj_id_t            ie_oid;
 
 	/** The name of the entry, relative to the parent.
@@ -560,8 +568,6 @@ struct dfuse_inode_entry {
 	d_list_t                 ie_htl;
 
 	/* Time of last kernel cache update.
-	 * For directories this is the time of the most recent closedir for a handle which may
-	 * have populated the cache.
 	 */
 	struct timespec          ie_cache_last_update;
 
@@ -576,6 +582,8 @@ struct dfuse_inode_entry {
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
+
+	ATOMIC uint32_t          ie_open_write_count;
 
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
@@ -616,8 +624,13 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_set_time(struct dfuse_inode_entry *ie);
 
+/* Set the cache as invalid */
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie);
+
+/* Check the cache setting against a given timeout, and return time left */
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age);
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,

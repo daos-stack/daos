@@ -16,11 +16,11 @@ pool:
    control_method: dmg
 uuids: !mux
    perfect:
-     uuid:
-       - VALID
-       - PASS
+      uuid:
+         - VALID
+         - PASS
 poolhandle: !mux
    goodone:
-       handle: VALID
+      handle: VALID
    badone:
-       handle: 99999
+      handle: 99999

@@ -1,7 +1,7 @@
 hosts:
   test_servers: 6
   test_clients: 1
-timeout: 1500
+timeout: 2100
 setup:
   start_agents_once: False
   start_servers_once: False

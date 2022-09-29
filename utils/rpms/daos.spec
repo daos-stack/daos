@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.100
-Release:       21%{?relval}%{?dist}
+Version:       2.3.101
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -493,7 +493,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/io_conf
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -561,6 +560,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 20 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.101-1
+- Bump version to 2.3.101
+
+* Thu Sep 8 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-22
+- Move io_conf files from bin to TESTING
+
 * Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-21
 - Update PMDK to 1.12.1~rc1 to fix DAOS-11151
 

@@ -9,6 +9,9 @@ server_config:
     targets: 2
     nr_xs_helpers: 0
     scm_size: 4
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+        - DD_MASK=mgmt,md,rebuild
 pool:
   mode: 511
   name: daos_server
