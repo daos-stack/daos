@@ -16,8 +16,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -66,7 +66,7 @@ func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
 	)
 }
 
-func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(action string, rank ranklist.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
 		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
@@ -96,7 +96,7 @@ func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	)
 }
 
-func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 	rs := make([]string, len(invalid))
 	for i, r := range invalid {
 		rs[i] = r.String()
