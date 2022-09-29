@@ -764,6 +764,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 {
 
 	int			rc = 0;
+	int			rc2 = 0;
 	bool			deserialize_label = false;
 	bool			close_cont = true;
 	uint64_t		total_props = 0;
@@ -1059,8 +1060,11 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 	*_prop = prop;
 out:
 	/* close container after checking if label exists in pool */
-	if (close_cont)
-		daos_cont_close(coh, NULL);
+	if (close_cont) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
 	if (rc != 0 && prop != NULL)
 		daos_prop_free(prop);
 	D_FREE(label);

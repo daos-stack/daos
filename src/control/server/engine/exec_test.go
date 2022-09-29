@@ -100,16 +100,16 @@ func TestRunnerContextExit(t *testing.T) {
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
-	errOut := make(chan error)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if err := runner.Start(ctx, errOut); err != nil {
+	eiChan, err := runner.Start(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	cancel()
 
-	err := <-errOut
-	if errors.Cause(err) == common.NormalExit {
+	ei := <-eiChan
+	if errors.Cause(ei.Error) == common.NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
 }
@@ -148,14 +148,14 @@ func TestRunnerNormalExit(t *testing.T) {
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)
-	errOut := make(chan error)
 
-	if err := runner.Start(context.Background(), errOut); err != nil {
+	eiChan, err := runner.Start(context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	err := <-errOut
-	if errors.Cause(err).Error() != common.NormalExit.Error() {
+	ei := <-eiChan
+	if errors.Cause(ei.Error).Error() != common.NormalExit.Error() {
 		t.Fatalf("expected normal exit; got %s", err)
 	}
 

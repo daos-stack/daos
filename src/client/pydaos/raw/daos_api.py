@@ -1402,7 +1402,8 @@ class DaosContProperties(ctypes.Structure):
                 ("enable_chksum", ctypes.c_bool),
                 ("srv_verify", ctypes.c_bool),
                 ("chksum_type", ctypes.c_uint64),
-                ("chunk_size", ctypes.c_uint64)]
+                ("chunk_size", ctypes.c_uint64),
+                ("rf_lvl", ctypes.c_uint64)]
 
     def __init__(self):
         # Set some default values for
@@ -1418,6 +1419,7 @@ class DaosContProperties(ctypes.Structure):
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
+        self.rf_lvl = ctypes.c_uint64(daos_cref.DAOS_PROP_CO_REDUN_DEFAULT)
 
 
 class DaosInputParams():
@@ -1487,21 +1489,15 @@ class DaosContainer():
         # 2. Enable checksum,
         # 3. Server Verify
         # 4. Chunk Size Allocation.
-        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-                and (self.cont_input_values.enable_chksum is False)):
-            # Only type like posix, hdf5 defined.
-            num_prop = 1
-        elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
-              and (self.cont_input_values.enable_chksum is True)):
-            # Only checksum enabled.
-            num_prop = 3
-        elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-              and (self.cont_input_values.enable_chksum is True)):
-            # Both layout and checksum properties defined
-            num_prop = 4
+        num_prop = 0
+        if self.cont_input_values.type.decode("UTF-8") != "Unknown":
+            num_prop = num_prop + 1
+        if self.cont_input_values.enable_chksum is True:
+            num_prop = num_prop + 3
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+            num_prop = num_prop + 1
 
-        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
-                or (self.cont_input_values.enable_chksum is True)):
+        if num_prop != 0:
             self.cont_prop = daos_cref.DaosProperty(num_prop)
         # idx index is used to increment the dpp_entries array
         # value. If layer_type is None and checksum is enabled
@@ -1550,6 +1546,13 @@ class DaosContainer():
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     self.cont_input_values.chunk_size)
+            idx = idx + 1
+
+        if self.cont_input_values.rf_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
+            self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                self.cont_input_values.rf_lvl)
 
         func = self.context.get_function('create-cont')
 

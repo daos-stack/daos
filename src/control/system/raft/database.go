@@ -492,7 +492,9 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
-				_ = db.ResignLeadership(err)
+				if err = db.ResignLeadership(err); err != nil {
+					db.log.Errorf("raft ResignLeadership() failed: %s", err)
+				}
 				break
 			}
 			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
@@ -503,7 +505,9 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				if err := fn(gainedCtx); err != nil {
 					db.log.Errorf("failure in onLeadershipGained callback: %s", err)
 					cancelGainedCtx()
-					_ = db.ResignLeadership(err)
+					if err = db.ResignLeadership(err); err != nil {
+						db.log.Errorf("raft ResignLeadership() failed: %s", err)
+					}
 					break
 				}
 			}
@@ -940,9 +944,25 @@ func (db *Database) UpdatePoolService(ps *system.PoolService) error {
 	db.Lock()
 	defer db.Unlock()
 
-	_, err := db.FindPoolServiceByUUID(ps.PoolUUID)
+	p, err := db.FindPoolServiceByUUID(ps.PoolUUID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to retrieve pool %s", ps.PoolUUID)
+	}
+
+	// This is a workaround before we can handle the following race
+	// properly.
+	//
+	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
+	//     Write ps: Creating
+	//                            Read ps: Creating
+	//     Write ps: Ready
+	//                            Write ps: Creating
+	//
+	// The pool remains in Creating state after PoolCreate completes,
+	// leading to DER_AGAINs during PoolDestroy.
+	if p.State == system.PoolServiceStateReady && ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("ignoring invalid pool service update: %+v -> %+v", p, ps)
+		return nil
 	}
 
 	if err := db.submitPoolUpdate(raftOpUpdatePoolService, ps); err != nil {

@@ -22,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 const defaultConfigFile = "daos_server.yml"
@@ -70,11 +69,6 @@ func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
 	}
 
 	return icc.isIOMMUEnabled()
-}
-
-type socketCmd struct {
-	affinitySource config.EngineAffinityFn
-	SocketID       *uint `long:"socket" description:"Perform command operations on the socket identified by this ID (defaults to all sockets)"`
 }
 
 type mainOpts struct {
@@ -152,7 +146,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			if _, err := os.Stat(opts.ConfigPath); err == nil {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			}
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {

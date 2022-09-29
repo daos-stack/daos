@@ -1,3 +1,15 @@
+daos (2.3.101-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.3.101
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 20 Sep 2022 10:00:00 -0100
+
+daos (2.3.100-22) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Move io_conf files from bin to TESTING
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Thu, 8 Sep 2022 10:26:00 -0400
+
 daos (2.3.100-21) unstable; urgency=medium
   [ Jeff Olivier ]
   * Update PMDK to 1.12.1~rc1 to fix DAOS-11151
