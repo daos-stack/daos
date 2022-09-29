@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -105,8 +106,17 @@ type localFabricCache struct {
 	log         logging.Logger
 	enabled     atm.Bool
 	initialized atm.Bool
+	ignoredDevs common.StringSet
+
 	// cached fabric interfaces organized by NUMA affinity
 	localNUMAFabric *NUMAFabric
+}
+
+// WithIgnoredDevices adds a set of devices that should be ignored when looking
+// up fabric devices in the cache.
+func (c *localFabricCache) WithIgnoredDevices(devs ...string) *localFabricCache {
+	c.ignoredDevs = common.NewStringSet(devs...)
+	return c
 }
 
 // IsEnabled reports whether the cache is enabled.
@@ -157,7 +167,7 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 		return
 	}
 
-	c.localNUMAFabric = nf
+	c.localNUMAFabric = nf.WithIgnoredDevices(c.ignoredDevs)
 
 	c.initialized.SetTrue()
 	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
