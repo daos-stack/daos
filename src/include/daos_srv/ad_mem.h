@@ -12,10 +12,6 @@ struct ad_tx {
 	uint64_t		 tx_id;
 	d_list_t		 tx_redo;
 	d_list_t		 tx_undo;
-	struct {
-		void		*tr_addr;
-		daos_size_t	 tr_size;
-	}			 tx_touch_region;
 };
 
 #define ad_ptr2addr(ptr)	((uintptr_t)ptr)
@@ -29,23 +25,18 @@ ad_tx_begin(struct ad_blob *blob, struct ad_tx *tx);
 int
 ad_tx_end(struct ad_tx *tx, int err);
 
-/**
- * declare this storage region is going to be changed (for redo and undo), it does memset
- * the region if @reset is true.
- */
-int
-ad_tx_touch_region(struct ad_tx *tx, void *addr, daos_size_t size, bool reset);
-
-/** finished the change */
-int
-ad_tx_touch_done(struct ad_tx *tx);
+enum ad_tx_copy_flags {
+	AD_TX_UNDO	= (1 << 0),
+	AD_TX_REDO	= (1 << 1),
+	AD_TX_COPY_PTR	= (1 << 2),
+};
 
 /**
- * copy data from buffer @ptr to storage address @addr, both old and new data will be saved
+ * copy data from buffer @ptr to storage address @addr, both old and new data can be saved
  * for TX redo and undo.
  */
 int
-ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, bool ptr_only);
+ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags);
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
 int

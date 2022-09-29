@@ -64,11 +64,11 @@ ad_act_item_replay(struct umem_action *act)
 		break;
 	case UMEM_ACT_COPY:
 		rc = ad_tx_copy(NULL, ad_addr2ptr(act->ac_copy.addr), act->ac_copy.size,
-				act->ac_copy.payload, false);
+				act->ac_copy.payload, 0);
 		break;
 	case UMEM_ACT_COPY_PTR:
 		rc = ad_tx_copy(NULL, ad_addr2ptr(act->ac_copy_ptr.addr), act->ac_copy_ptr.size,
-				ad_addr2ptr(act->ac_copy_ptr.ptr), false);
+				(void *)act->ac_copy_ptr.ptr, 0);
 		break;
 	case UMEM_ACT_ASSIGN:
 		rc = ad_tx_assign(NULL, ad_addr2ptr(act->ac_assign.addr), act->ac_assign.size,
@@ -150,69 +150,16 @@ ad_tx_end(struct ad_tx *tx, int err)
 }
 
 /**
- * declare this storage region is going to be changed (for redo and undo), it does memset
- * the region if @reset is true.
- */
-int
-ad_tx_touch_region(struct ad_tx *tx, void *addr, daos_size_t size, bool reset)
-{
-	struct umem_act_item	*it_undo;
-
-	if (tx == NULL || addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
-		return -DER_INVAL;
-
-	D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
-	if (it_undo == NULL)
-		return -DER_NOMEM;
-
-	memcpy(it_undo->it_act.ac_copy.payload, addr, size);
-	it_undo->it_act.ac_copy.addr = ad_ptr2addr(addr);
-	it_undo->it_act.ac_copy.size = size;
-	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
-
-	if (reset)
-		memset(addr, 0, size);
-
-	tx->tx_touch_region.tr_addr = addr;
-	tx->tx_touch_region.tr_size = size;
-
-	return 0;
-}
-
-/** finished the change */
-int
-ad_tx_touch_done(struct ad_tx *tx)
-{
-	struct umem_act_item	*it_redo;
-	void			*addr = tx->tx_touch_region.tr_addr;
-	daos_size_t		 size = tx->tx_touch_region.tr_size;
-
-	if (tx == NULL || addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
-		return -DER_INVAL;
-
-	D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
-	if (it_redo == NULL)
-		return -DER_NOMEM;
-
-	memcpy(it_redo->it_act.ac_copy.payload, addr, size);
-	it_redo->it_act.ac_copy.addr = ad_ptr2addr(addr);
-	it_redo->it_act.ac_copy.size = size;
-	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
-
-	tx->tx_touch_region.tr_addr = NULL;
-	tx->tx_touch_region.tr_size = 0;
-
-	return 0;
-}
-
-/**
- * copy data from buffer @ptr to storage address @addr, both old and new data will be saved
+ * copy data from buffer @ptr to storage address @addr, both old and new data can be saved
  * for TX redo and undo.
  */
 int
-ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, bool ptr_only)
+ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags)
 {
-	struct umem_act_item	*it_undo, *it_redo;
+	struct umem_act_item	*it_undo = NULL, *it_redo = NULL;
+	bool			 ptr_only = flags & AD_TX_COPY_PTR;
+	bool			 undo = flags & AD_TX_UNDO;
+	bool			 redo = flags & AD_TX_REDO;
 
 	if (addr == NULL || ptr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
@@ -222,34 +169,42 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, bool ptr_o
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
-	if (it_undo == NULL)
-		return -DER_NOMEM;
-
-	if (ptr_only)
-		D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
-	else
-		D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
-	if (it_redo == NULL) {
-		D_FREE(it_undo);
-		return -DER_NOMEM;
+	if (undo) {
+		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+		if (it_undo == NULL)
+			return -DER_NOMEM;
 	}
 
-	memcpy(it_undo->it_act.ac_copy.payload, addr, size);
-	it_undo->it_act.ac_copy.addr = ad_ptr2addr(addr);
-	it_undo->it_act.ac_copy.size = size;
-	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
-
-	if (ptr_only) {
-		it_redo->it_act.ac_copy_ptr.addr = ad_ptr2addr(addr);
-		it_redo->it_act.ac_copy_ptr.ptr = ad_ptr2addr(ptr);
-		it_redo->it_act.ac_set.size = size;
-	} else {
-		memcpy(it_redo->it_act.ac_copy.payload, ptr, size);
-		it_redo->it_act.ac_copy.addr = ad_ptr2addr(addr);
-		it_redo->it_act.ac_copy.size = size;
+	if (redo) {
+		if (ptr_only)
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
+		else
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+		if (it_redo == NULL && it_undo != NULL) {
+			D_FREE(it_undo);
+			return -DER_NOMEM;
+		}
 	}
-	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
+
+	if (undo) {
+		memcpy(it_undo->it_act.ac_copy.payload, addr, size);
+		it_undo->it_act.ac_copy.addr = ad_ptr2addr(addr);
+		it_undo->it_act.ac_copy.size = size;
+		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
+	}
+
+	if (redo) {
+		if (ptr_only) {
+			it_redo->it_act.ac_copy_ptr.addr = ad_ptr2addr(addr);
+			it_redo->it_act.ac_copy_ptr.ptr = (uintptr_t)ptr;
+			it_redo->it_act.ac_set.size = size;
+		} else {
+			memcpy(it_redo->it_act.ac_copy.payload, ptr, size);
+			it_redo->it_act.ac_copy.addr = ad_ptr2addr(addr);
+			it_redo->it_act.ac_copy.size = size;
+		}
+		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
+	}
 
 	return 0;
 }
