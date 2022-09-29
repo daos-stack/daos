@@ -410,7 +410,8 @@ class DaosServerManager(SubprocessManager):
                 time.sleep(1)
 
         # Summarize results
-        self.manager.job.report_subprocess_status(elapsed, detected, complete, timed_out, sub_process)
+        self.manager.job.report_subprocess_status(
+            elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 

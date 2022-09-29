@@ -5,13 +5,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
 import uuid
-import time
 from enum import IntEnum
 
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
-from general_utils import get_subprocess_stdout
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
