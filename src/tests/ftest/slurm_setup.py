@@ -13,8 +13,16 @@ import logging
 import re
 import socket
 import sys
+
 from ClusterShell.NodeSet import NodeSet
-from util.general_utils import pcmd, run_task, get_clush_command, run_command, DaosTestError
+
+from util.logger_utils import get_console_handler
+from util.run_utils import get_clush_command_list, run_local, run_remote, RunException
+
+# Set up a logger for the console messages
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(get_console_handler("%(message)s", logging.INFO))
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
@@ -69,28 +77,24 @@ def update_config_cmdlist(args):
     # grep SLURM_CONF to determine format of the the file
     for ctl_host in ["SlurmctldHost", "ControlMachine"]:
         command = r"grep {} {}".format(ctl_host, SLURM_CONF)
-        task = run_task(all_nodes, command)
-        results = dict(task.iter_retcodes())
-        if len(results) == 1 and 0 in results:
+        if run_remote(logger, all_nodes, command).passed:
             ctl_str = "sed -i -e 's/{0}=linux0/{0}={1}/g' {2}".format(
                 ctl_host, args.control, SLURM_CONF)
             cmd_list.insert(0, ctl_str)
             match = True
             break
     if not match:
-        logging.error("% could not be updated. Check conf file format", SLURM_CONF)
+        logger.error("% could not be updated. Check conf file format", SLURM_CONF)
         sys.exit(1)
 
     # This info needs to be gathered from every node that can run a slurm job
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
-    task = run_task(all_nodes, command)
-    for output, nodes in task.iter_buffers():
-        output_str = "\n".join([line.decode("utf-8") for line in output])
+    result = run_remote(logger, all_nodes, command)
+    for data in result.output:
         info = {
-            data[0]: data[1]
-            for data in re.findall(
-                r"(Socket|Core|Thread).*:\s+(\d+)", str(output_str))
-            if len(data) > 1}
+            match[0]: match[1]
+            for match in re.findall(r"(Socket|Core|Thread).*:\s+(\d+)", "\n".join(data.stdout))
+            if len(match) > 1}
 
         if "Socket" not in info or "Core" not in info or "Thread" not in info:
             # Did not find value for socket|core|thread so do not
@@ -98,8 +102,8 @@ def update_config_cmdlist(args):
             pass
         cmd_list.append("echo \"NodeName={0} Sockets={1} CoresPerSocket={2} "
                         "ThreadsPerCore={3}\" |{4} tee -a {5}".format(
-                            NodeSet.fromlist(nodes), info["Socket"],
-                            info["Core"], info["Thread"], sudo, SLURM_CONF))
+                            data.hosts, info["Socket"], info["Core"], info["Thread"], sudo,
+                            SLURM_CONF))
 
     #
     cmd_list.append("echo \"PartitionName={} Nodes={} Default=YES "
@@ -118,16 +122,14 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
         sudo (str, optional): Execute cmd with sudo privileges. Defaults to false.
 
      Returns:
-        ret_code: returns error code if pcmd fails;
+        ret_code: returns 0 if all commands passed on all hosts; 1 otherwise
 
     """
     for cmd in cmdlist:
         if sudo:
             cmd = "sudo {}".format(cmd)
-        result = pcmd(nodes, cmd, True, None, 0)
-        # if at least one node failed or all nodes failed
-        # return on first failure
-        if len(result) > 1 or 0 not in result:
+        if not run_remote(logger, nodes, cmd).passed:
+            # Do not bother executing any remaining commands if this one failed
             return 1
     return 0
 
@@ -144,7 +146,7 @@ def configuring_packages(args, action):
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
-        logging.info("%s %s on %s", action, package, all_nodes)
+        logger.info("%s %s on %s", action, package, all_nodes)
         cmd_list.append("dnf {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
@@ -188,10 +190,11 @@ def start_munge(args):
         return 1
 
     # copy munge.key to all hosts
-    command = "{0} --copy {1} --dest {1}".format(get_clush_command(nodes), "/etc/munge/munge.key")
+    command = get_clush_command_list(nodes)
+    command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
     try:
-        run_command(command)
-    except DaosTestError:
+        run_local(logger, command, check=True)
+    except RunException:
         return 1
 
     # set the protection back to defaults
@@ -261,10 +264,6 @@ def start_slurm(args):
 
 def main():
     """Set up test env with slurm."""
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)-5s %(message)s",
-        datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG)
-
     parser = argparse.ArgumentParser(prog="slurm_setup.py")
 
     parser.add_argument(
@@ -301,11 +300,11 @@ def main():
         help="Run all debug commands")
 
     args = parser.parse_args()
-    logging.info("Arguments: %s", args)
+    logger.info("Arguments: %s", args)
 
     # Check params
     if args.nodes is None:
-        logging.error("slurm_nodes: Specify at least one slurm node")
+        logger.error("slurm_nodes: Specify at least one slurm node")
         sys.exit(1)
 
     # Convert control node and slurm node list into NodeSets
