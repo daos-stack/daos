@@ -24,8 +24,8 @@
 #define OFFSET_BASE        2
 
 struct iterate_data {
-	off_t                 id_base_offset;
-	int                   id_index;
+	off_t                     id_base_offset;
+	int                       id_index;
 	struct dfuse_readdir_hdl *id_hdl;
 };
 
@@ -51,9 +51,9 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 static int
 fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eod)
 {
-	struct iterate_data idata = {};
-	uint32_t            count = to_fetch;
-	int                 rc;
+	struct iterate_data       idata = {};
+	uint32_t                  count = to_fetch;
+	int                       rc;
 	struct dfuse_readdir_hdl *hdl = oh->doh_rd;
 
 	idata.id_base_offset = offset;
@@ -218,19 +218,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			D_GOTO(out, rc = ENOMEM);
 
 		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
-
-		D_ALLOC_ARRAY(oh->doh_rd->drh_dre, READDIR_MAX_COUNT);
-		if (oh->doh_rd->drh_dre == NULL) {
-			D_FREE(oh->doh_rd);
-			D_GOTO(out, rc = ENOMEM);
-		}
 	}
 
 	hdl = oh->doh_rd;
 
-	/* if starting from the beginning, reset the anchor attached to
-	 * the open handle.
-	 */
+	/* if starting from the beginning, reset the anchor attached to the open handle. */
 	if (offset == 0) {
 		if (oh->doh_kreaddir_started)
 			oh->doh_kreaddir_invalid = true;
@@ -384,9 +376,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 				D_GOTO(reply, rc = 0);
 			}
 
-			/* This entry has been added to the buffer so mark it as
-			 * empty
-			 */
+			/* This entry has been added to the buffer so mark it as empty */
 			dre->dre_offset = 0;
 			buff_offset += written;
 			added++;

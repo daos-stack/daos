@@ -56,38 +56,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 struct dfuse_inode_entry;
 
-/** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
-struct dfuse_obj_hdl {
-	/** pointer to dfs_t */
-	dfs_t                           *doh_dfs;
-	/** the DFS object handle.  Not created for directories. */
-	dfs_obj_t                       *doh_obj;
-	/** the inode entry for the file */
-	struct dfuse_inode_entry        *doh_ie;
-
-	/** readdir handle. */
-	struct dfuse_readdir_hdl        *doh_rd;
-
-	ATOMIC uint32_t                  doh_il_calls;
-	ATOMIC uint64_t                  doh_write_count;
-
-	/** True if caching is enabled for this file. */
-	bool                             doh_caching;
-
-	/* True if the file handle is writeable - used for cache invalidation */
-	bool                             doh_writeable;
-
-	/* Track possible kernel cache of readdir on this directory */
-	/* Set to true if there is any reason the kernel will not use this directory handle as the
-	 * basis for a readdir cache.  Includes if seekdir or rewind are used.
-	 */
-	bool                             doh_kreaddir_invalid;
-	/* Set to true if readdir calls are made on this handle */
-	bool                             doh_kreaddir_started;
-	/* Set to true if readdir calls are made on this handle */
-	bool                             doh_kreaddir_finished;
-};
-
 struct dfuse_readdir_entry {
 	/* Name of this directory entry */
 	char  dre_name[NAME_MAX + 1];
@@ -102,18 +70,53 @@ struct dfuse_readdir_entry {
 	off_t dre_next_offset;
 };
 
+/** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
+struct dfuse_obj_hdl {
+	/** pointer to dfs_t */
+	dfs_t                    *doh_dfs;
+	/** the DFS object handle.  Not created for directories. */
+	dfs_obj_t                *doh_obj;
+	/** the inode entry for the file */
+	struct dfuse_inode_entry *doh_ie;
+
+	/** readdir handle. */
+	struct dfuse_readdir_hdl *doh_rd;
+
+	ATOMIC uint32_t           doh_il_calls;
+	ATOMIC uint64_t           doh_write_count;
+
+	/** True if caching is enabled for this file. */
+	bool                      doh_caching;
+
+	/* True if the file handle is writeable - used for cache invalidation */
+	bool                      doh_writeable;
+
+	/* Track possible kernel cache of readdir on this directory */
+	/* Set to true if there is any reason the kernel will not use this directory handle as the
+	 * basis for a readdir cache.  Includes if seekdir or rewind are used.
+	 */
+	bool                      doh_kreaddir_invalid;
+	/* Set to true if readdir calls are made on this handle */
+	bool                      doh_kreaddir_started;
+	/* Set to true if readdir calls reach EOF made on this handle */
+	bool                      doh_kreaddir_finished;
+};
+
+/* Maximum number of dentries to read at one time. */
+#define READDIR_MAX_COUNT 1024
+
 struct dfuse_readdir_hdl {
 	/** an anchor to track listing in readdir */
-	daos_anchor_t               drh_anchor;
+	daos_anchor_t              drh_anchor;
 
 	/** Array of entries returned by dfs but not reported to kernel */
-	struct dfuse_readdir_entry *drh_dre;
+	struct dfuse_readdir_entry drh_dre[READDIR_MAX_COUNT];
 	/** Current index into doh_dre array */
-	uint32_t                    drh_dre_index;
+	uint32_t                   drh_dre_index;
 	/** Last index containing valid data */
-	uint32_t                    drh_dre_last_index;
+	uint32_t                   drh_dre_last_index;
 	/** Next value from anchor */
-	uint32_t                    drh_anchor_index;
+	uint32_t                   drh_anchor_index;
 };
 
 /*

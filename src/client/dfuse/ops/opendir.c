@@ -68,9 +68,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	DFUSE_REPLY_ZERO(oh, req);
-	if (oh->doh_rd != NULL) {
-		D_FREE(oh->doh_rd->drh_dre);
-		D_FREE(oh->doh_rd);
-	}
+	D_FREE(oh->doh_rd);
 	D_FREE(oh);
 };
