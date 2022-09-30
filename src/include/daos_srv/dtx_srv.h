@@ -142,7 +142,8 @@ struct dtx_sub_status {
 };
 
 struct dtx_leader_handle;
-typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, void *arg);
+typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, int allow_failure);
+
 /* Transaction handle on the leader node to manage the transaction */
 struct dtx_leader_handle {
 	/* The dtx handle on the leader node */
@@ -157,16 +158,20 @@ struct dtx_leader_handle {
 	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
+	dtx_agg_cb_t			dlh_agg_cb;
+	int32_t				dlh_allow_failure;
 	/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1;
 	/* How many normal sub request. */
 	uint32_t			dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
 	uint32_t			dlh_delay_sub_cnt;
+	/* The index of the first target that forward sub-request to. */
+	uint32_t			dlh_forward_idx;
+	/* The count of the targets that forward sub-request to. */
+	uint32_t			dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
-	dtx_agg_cb_t			dlh_agg_cb;
-	void				*dlh_agg_cb_arg;
 };
 
 struct dtx_stat {
@@ -234,7 +239,7 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	     uint64_t dkey_hash, int max, struct dtx_id **dtis);
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
+		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg);
 
 int dtx_cont_open(struct ds_cont_child *cont);
 
