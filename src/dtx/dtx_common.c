@@ -24,6 +24,7 @@ uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
 uint32_t dtx_batched_ult_max;
 
+/* Just for some test baseline. */
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
