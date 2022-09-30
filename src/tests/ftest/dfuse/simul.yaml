@@ -11,8 +11,8 @@ pool:
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 mpi: !mux
   openmpi:
     mpi_type: openmpi
