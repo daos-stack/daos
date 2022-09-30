@@ -77,6 +77,11 @@ struct clear_cmt_dtx_options {
 	char *path;
 };
 
+struct smd_sync_options {
+	char *nvme_conf;
+	char *db_path;
+};
+
 struct update_vea_options {
 	char *offset;
 	char *blk_cnt;
@@ -105,6 +110,7 @@ struct ddb_cmd_info {
 		struct rm_ilog_options dci_rm_ilog;
 		struct dump_dtx_options dci_dump_dtx;
 		struct clear_cmt_dtx_options dci_clear_cmt_dtx;
+		struct smd_sync_options dci_smd_sync;
 		struct update_vea_options dci_update_vea;
 		struct dtx_commit_options dci_dtx_commit;
 		struct dtx_abort_options dci_dtx_abort;
@@ -128,7 +134,7 @@ int ddb_run_commit_ilog(struct ddb_ctx *ctx, struct commit_ilog_options *opt);
 int ddb_run_rm_ilog(struct ddb_ctx *ctx, struct rm_ilog_options *opt);
 int ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt);
 int ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt);
-int ddb_run_smd_sync(struct ddb_ctx *ctx);
+int ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt);
 int ddb_run_dump_vea(struct ddb_ctx *ctx);
 int ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt);
 int ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt);

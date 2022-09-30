@@ -593,28 +593,39 @@ done:
 }
 
 static int
-sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, daos_size_t blob_size)
+sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id,
+	    daos_size_t blob_size, uuid_t dev_id)
 {
 	struct ddb_ctx *ctx = cb_args;
 
-	ddb_printf(ctx, "Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
+	ddb_printf(ctx, "> Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
 		   "blob_size: %lu\n", DP_UUID(pool_id),
 		   vos_id, blob_id, blob_size);
+	ddb_printf(ctx, "> Sync Info - dev: "DF_UUIDF", target id: %d\n", DP_UUID(dev_id), vos_id);
 
 	return 0;
 }
 
 int
-ddb_run_smd_sync(struct ddb_ctx *ctx)
+ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 {
-	int rc;
+	/* Some defaults */
+	char	nvme_conf[256] = "/mnt/daos/daos_nvme.conf";
+	char	db_path[256] = "/mnt/daos";
+	int	rc;
 
 	if (daos_handle_is_valid(ctx->dc_poh)) {
 		ddb_print(ctx, "Close pool connection before attempting to sync smd\n");
 		return -DER_INVAL;
 	}
 
-	rc = dv_sync_smd(sync_smd_cb, ctx);
+	if (opt->nvme_conf != NULL)
+		strncpy(nvme_conf, opt->nvme_conf, ARRAY_SIZE(nvme_conf) - 1);
+	if (opt->db_path != NULL)
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+
+	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
+	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
 	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }

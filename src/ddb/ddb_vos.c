@@ -1560,12 +1560,13 @@ dv_dtx_clear_cmt_table(daos_handle_t coh)
 struct dv_sync_cb_args {
 	dv_smd_sync_complete	 sync_complete_cb;
 	void			*sync_cb_args;
+	int			 sync_rc;
 };
 
-static int
-sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
+static void
+sync_cb(struct ddbs_sync_info *info, void *cb_args)
 {
-	uint8_t			*pool_id = hdr->bbh_pool;
+	uint8_t			*pool_id = info->dsi_hdr->bbh_pool;
 	struct smd_pool_info	*pool_info = NULL;
 	daos_size_t		 blob_size;
 	struct dv_sync_cb_args	*args = cb_args;
@@ -1573,10 +1574,25 @@ sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
 
 	D_ASSERT(args != NULL);
 
+	if (info->dsi_hdr == NULL) {
+		D_ERROR("Got called without the header. Unable to sync.\n");
+		args->sync_rc = -DER_UNKNOWN;
+		return;
+	}
+	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id);
+	smd_dev_set_state(info->dsi_dev_id, SMD_DEV_NORMAL);
+	if (rc == -DER_EXIST)
+		D_INFO("tgt_id(%d) already mapped to dev_id("DF_UUID")",
+		       info->dsi_hdr->bbh_vos_id, info->dsi_dev_id);
+	else if (rc != 0)
+		D_ERROR("Error mapping tgt_id(%d) to dev_id("DF_UUID")",
+			info->dsi_hdr->bbh_vos_id, info->dsi_dev_id);
+
 	rc = smd_pool_get_info(pool_id, &pool_info);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to get smd pool info: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		args->sync_rc = rc;
+		return;
 	}
 
 	/*
@@ -1588,41 +1604,34 @@ sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
 	smd_pool_free_info(pool_info);
 
 	/* Try to delete the target first */
-	rc = smd_pool_del_tgt(pool_id, hdr->bbh_vos_id);
+	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id);
 	if (!SUCCESS(rc)) {
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
 		rc = 0;
 	}
 
-	rc = smd_pool_add_tgt(pool_id, hdr->bbh_vos_id, hdr->bbh_blob_id, blob_size);
+	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, blob_size);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		args->sync_rc = rc;
+		return;
 	}
 
 	if (args->sync_complete_cb) {
-		rc = args->sync_complete_cb(args->sync_cb_args, pool_id, hdr->bbh_vos_id,
-					    hdr->bbh_blob_id, blob_size);
+		rc = args->sync_complete_cb(args->sync_cb_args, pool_id,
+					    info->dsi_hdr->bbh_vos_id,
+					    info->dsi_hdr->bbh_blob_id,
+					    blob_size, info->dsi_dev_id);
 	}
-
-	return rc;
 }
 
 int
-dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args)
+dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
+	    void *cb_args)
 {
 	struct dv_sync_cb_args	 sync_cb_args = {0};
-	char			*nvme_conf;
-	char			*db_path;
 	int			 rc;
-
-	/*
-	 * Current limitation is that the only single engine is supported
-	 * which puts the paths here ... (this will be changed in the future)
-	 */
-	nvme_conf = "/mnt/daos/daos_nvme.conf";
-	db_path = "/mnt/daos";
 
 	/* don't initialize NVMe within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
@@ -1641,6 +1650,9 @@ dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args)
 	sync_cb_args.sync_complete_cb = complete_cb;
 	sync_cb_args.sync_cb_args = cb_args;
 	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
+
+	if (rc == 0 && sync_cb_args.sync_rc != 0)
+		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
 	vos_db_fini();

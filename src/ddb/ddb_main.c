@@ -124,7 +124,7 @@ run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 		rc = ddb_run_clear_cmt_dtx(ctx, &info.dci_cmd_option.dci_clear_cmt_dtx);
 		break;
 	case DDB_CMD_SMD_SYNC:
-		rc = ddb_run_smd_sync(ctx);
+		rc = ddb_run_smd_sync(ctx, &info.dci_cmd_option.dci_smd_sync);
 		break;
 	case DDB_CMD_DUMP_VEA:
 		rc = ddb_run_dump_vea(ctx);
