@@ -4023,10 +4023,9 @@ io_capa_iv_fetch(void **state)
 		skip();
 
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, leader == 0 ? leader + 1 : leader - 1);
 
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
