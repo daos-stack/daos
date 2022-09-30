@@ -278,17 +278,13 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     anotherEvent = DaosEvent()
     c_event_ptr = ctypes.pointer(anotherEvent)
 
-    self.log.info("API has been called, now poll its result")
     # start polling, wait forever
     rc = efunc(qhandle, c_wait, c_timeout, c_num, ctypes.byref(c_event_ptr))
-    self.log.info("polling successful !")
 
     # signal the caller that api function has completed
     if cb_func is not None:
         cb_event = CallbackEvent(obj, the_event)
-        self.log.info("calling callback")
         cb_func(cb_event)
-        self.log.info("callback has returned")
 
     # clean up
     qfunc = context.get_function('destroy-eq')

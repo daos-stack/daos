@@ -41,7 +41,6 @@ class CallbackHandler():
 
         # Indicate that this method has being called
         self._called = True
-        self.log.info(" Async callback has been called ...")
 
     def wait(self):
         """Wait for this object's callback() method to be called."""
