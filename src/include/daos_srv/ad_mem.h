@@ -10,8 +10,11 @@ struct ad_blob;
 struct ad_tx {
 	struct ad_blob		*tx_blob;
 	uint64_t		 tx_id;
-	d_list_t		 tx_redo;
 	d_list_t		 tx_undo;
+	d_list_t		 tx_redo;
+	uint32_t		 tx_redo_act_nr;
+	uint32_t		 tx_redo_payload_len;
+	struct umem_act_item	*tx_redo_act_pos;
 };
 
 #define ad_ptr2addr(ptr)	((uintptr_t)ptr)
@@ -62,5 +65,23 @@ ad_tx_setbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits);
 /** clear bit in the bitmap, save the operation for redo and the reversed operation for undo */
 int
 ad_tx_clrbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits);
+
+/**
+ * query action number in redo list.
+ */
+uint32_t
+ad_tx_redo_act_nr(struct ad_tx *tx);
+
+/**
+ * query payload length in redo list.
+ */
+uint32_t
+ad_tx_redo_payload_len(struct ad_tx *tx);
+
+/**
+ * get next action pointer, NULL for done or list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_next(struct ad_tx *tx);
 
 #endif /* __DAOS_AD_HOC_MEM_H__ */

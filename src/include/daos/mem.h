@@ -712,10 +712,9 @@ struct umem_action {
 			uint64_t		dst;
 		} ac_move;	/**< memmove(dst, size src) */
 		struct {
-			uint16_t		csum_sz;
+			uint32_t		csum;
 			uint32_t		size;
 			uint64_t		addr;
-			uint8_t			csum[0];
 		} ac_csum;	/**< it is checksum of data stored in @addr */
 	};
 };

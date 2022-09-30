@@ -14,10 +14,19 @@ enum {
 
 #define AD_TX_ACT_ADD(tx, it, undo_or_redo)						\
 	do {										\
-		if (undo_or_redo == ACT_UNDO)						\
-			d_list_add(&it->it_link, &tx->tx_undo);				\
-		else									\
-			d_list_add_tail(&it->it_link, &tx->tx_redo);			\
+		if (undo_or_redo == ACT_UNDO) {						\
+			d_list_add(&(it)->it_link, &(tx)->tx_undo);			\
+		} else {								\
+			d_list_add_tail(&(it)->it_link, &(tx)->tx_redo);		\
+			(tx)->tx_redo_act_nr++;						\
+			if ((it)->it_act.ac_opc == UMEM_ACT_COPY ||			\
+			    (it)->it_act.ac_opc == UMEM_ACT_COPY_PTR) {			\
+				(tx)->tx_redo_payload_len += (it)->it_act.ac_copy.size;	\
+			} else if ((it)->it_act.ac_opc == UMEM_ACT_MOVE) {		\
+				/* ac_move src addr is playload after wal_trans_entry */\
+				(tx)->tx_redo_payload_len += sizeof(uint64_t);		\
+			}								\
+		}									\
 	} while (0)
 
 #define AD_TX_ACT_DEL(it)	d_list_del(it)
@@ -28,9 +37,6 @@ enum {
 		if (opc == UMEM_ACT_COPY)						\
 			D_ALLOC(it, offsetof(struct umem_act_item,			\
 					     it_act.ac_copy.payload[size]));		\
-		else if (opc == UMEM_ACT_CSUM)						\
-			D_ALLOC(it, offsetof(struct umem_act_item,			\
-					     it_act.ac_csum.csum[size]));		\
 		else									\
 			D_ALLOC_PTR(it);						\
 		if (likely(it != NULL)) {						\
@@ -50,6 +56,9 @@ ad_tx_begin(struct ad_blob *blob, struct ad_tx *tx)
 	tx->tx_id = ++tx_id;
 	D_INIT_LIST_HEAD(&tx->tx_redo);
 	D_INIT_LIST_HEAD(&tx->tx_undo);
+	tx->tx_redo_act_nr	= 0;
+	tx->tx_redo_payload_len	= 0;
+	tx->tx_redo_act_pos	= NULL;
 
 	return rc;
 }
@@ -423,4 +432,46 @@ ad_tx_clrbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
 
 	return 0;
+}
+
+/**
+ * query action number in redo list.
+ */
+uint32_t
+ad_tx_redo_act_nr(struct ad_tx *tx)
+{
+	return tx->tx_redo_act_nr;
+}
+
+/**
+ * query payload length in redo list.
+ */
+uint32_t
+ad_tx_redo_payload_len(struct ad_tx *tx)
+{
+	return tx->tx_redo_payload_len;
+}
+
+/**
+ * get next action pointer, NULL for done or list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_next(struct ad_tx *tx)
+{
+	if (tx->tx_redo_act_pos == NULL) {
+		if (d_list_empty(&tx->tx_redo))
+			return NULL;
+		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item,
+						   it_link);
+		return &tx->tx_redo_act_pos->it_act;
+	}
+
+	D_ASSERT(!d_list_empty(&tx->tx_redo));
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
+					   struct umem_act_item, it_link);
+	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
+		tx->tx_redo_act_pos = NULL;
+		return NULL;
+	}
+	return &tx->tx_redo_act_pos->it_act;
 }
