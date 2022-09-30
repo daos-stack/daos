@@ -303,7 +303,8 @@ type (
 	// RamdiskParams defines the sub-parameters of a Format operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size uint
+		Size     uint
+		MpolNode uint // NUMA node to bind ramdisk to
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
@@ -328,10 +329,10 @@ type (
 	// ScmMountRequest defines the parameters for a Mount operation.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class  Class
-		Device string
-		Target string
-		Size   uint
+		Class   Class
+		Device  string
+		Target  string
+		Ramdisk *RamdiskParams
 	}
 
 	// ScmMountResponse contains the results of a successful Mount operation.
