@@ -133,7 +133,7 @@ transport_config:
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
-				ExcludeFabricIfaces: []string{"ib3"},
+				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{
 						NUMANode: 0,

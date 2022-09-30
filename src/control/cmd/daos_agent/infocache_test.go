@@ -299,7 +299,9 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			},
 		},
 		"ignores passed down": {
-			lfc:       newLocalFabricCache(nil, true).WithIgnoredDevices("test1"),
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
 			input:     hardware.NewFabricInterfaceSet(),
 			expCached: true,
 			expResult: &NUMAFabric{
@@ -340,9 +342,10 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 
 func TestAgent_localFabricCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
-		lfc       *localFabricCache
-		input     *NUMAFabric
-		expCached bool
+		lfc        *localFabricCache
+		input      *NUMAFabric
+		expCached  bool
+		expIgnored common.StringSet
 	}{
 		"nil": {},
 		"nil NUMAFabric": {
@@ -380,7 +383,9 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 			expCached: true,
 		},
 		"ignores passed down": {
-			lfc: newLocalFabricCache(nil, true).WithIgnoredDevices("test1"),
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
 			input: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
@@ -391,7 +396,8 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 					},
 				},
 			},
-			expCached: true,
+			expCached:  true,
+			expIgnored: common.NewStringSet("test1"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -421,7 +427,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
-				if diff := cmp.Diff(tc.lfc.ignoredDevs, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
+				if diff := cmp.Diff(tc.expIgnored, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {

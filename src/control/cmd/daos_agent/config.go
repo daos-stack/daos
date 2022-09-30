@@ -35,7 +35,7 @@ type Config struct {
 	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
 	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
-	ExcludeFabricIfaces []string                  `yaml:"exclude_fabric_ifaces,omitempty"`
+	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
