@@ -226,14 +226,14 @@ value can be:
  - max (maximum sharded objects for large files / directories)
 ~~~~~~
 
-If a hint is set to single, depending on the container redundance factor, the oclass would be (same
+If a hint is set to single, depending on the container redundancy factor, the oclass would be (same
 for files and dirs in this case):
  - S1 if rf == 0
  - RP_2G1 if rf == 1
  - RP_3G1 if rf == 2
 
-Otherwise if the hint is set to max, for directories it would be the same as single except the group
-would be X for max sharding (SX, RP_2GX, etc.). For files on the other hand, we use EC for
+Otherwise if the hint is set to max, for directories, it would be the same as single except the
+group would be X for max sharding (SX, RP_2GX, etc.). For files on the other hand, we use EC for
 redundancy instead of replication in this case (n depends on the number of fault domains in the
 pool):
  - SX if rf == 0
