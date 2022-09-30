@@ -68,41 +68,6 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
-# Give the avocado test tearDown method a minimum of 120 seconds to complete when the test process
-# has timed out.  The test harness will increment this timeout based upon the number of pools
-# created in the test to account for pool destroy command timeouts.
-mkdir -p ~/.config/avocado/
-cat <<EOF > ~/.config/avocado/avocado.conf
-[datadir.paths]
-logs_dir = $logs_prefix/ftest/avocado/job-results
-data_dir = $logs_prefix/ftest/avocado/data
-
-[job.output]
-loglevel = DEBUG
-
-[runner.timeout]
-after_interrupted = 120
-process_alive = 120
-process_died = 120
-
-[sysinfo.collectibles]
-files = \$HOME/.config/avocado/sysinfo/files
-# File with list of commands that will be executed and have their output
-# collected
-commands = \$HOME/.config/avocado/sysinfo/commands
-EOF
-
-mkdir -p ~/.config/avocado/sysinfo/
-cat <<EOF > ~/.config/avocado/sysinfo/commands
-ps axf
-dmesg
-df -h
-EOF
-
-cat <<EOF > ~/.config/avocado/sysinfo/files
-/proc/mounts
-EOF
-
 # apply patches to Avocado
 pydir=""
 for loc in /usr/lib/python2*/site-packages/ \
@@ -223,37 +188,19 @@ export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
-    else
-        rc=0
     fi
 
     if ! mkdir -p "${DAOS_APP_DIR}/soak/apps"; then
         exit "${PIPESTATUS[0]}"
-    else
-        rc=0
     fi
 
     if ! cp -r /scratch/soak/apps/* "${DAOS_APP_DIR}/soak/apps/"; then
         exit "${PIPESTATUS[0]}"
-    else
-        rc=0
     fi
 fi
 
 # need to increase the number of oopen files (on EL8 at least)
 ulimit -n 4096
-
-launch_args="-jcrisa"
-# processing cores is broken on EL7 currently
-id="$(lsb_release -si)"
-if { [ "$id" = "CentOS" ]                 &&
-     [[ $(lsb_release -s -r) != 7.* ]]; } ||
-   [ "$id" = "AlmaLinux" ]                ||
-   [ "$id" = "Rocky" ]                    ||
-   [ "$id" = "RedHatEnterpriseServer" ]   ||
-   [ "$id" = "openSUSE" ]; then
-    launch_args+="p"
-fi
 
 # Clean stale job results
 if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
@@ -264,6 +211,8 @@ fi
 # shellcheck disable=SC2086
 export WITH_VALGRIND
 export STAGE_NAME
+export TEST_RPMS
+export DAOS_BASE
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
@@ -276,7 +225,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 # shellcheck disable=SC2086,SC2090
-if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
+if ! ./launch.py --mode ci -th "${LOGS_THRESHOLD}" \
                  ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
