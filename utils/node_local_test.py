@@ -631,8 +631,9 @@ class DaosServer():
             valgrind_args = ['--fair-sched=yes',
                              '--gen-suppressions=all',
                              '--xml=yes',
-                             '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=2',
+                             '--xml-file=dnt.server.%p.memcheck.xml',
+                             '--num-callers=10',
+                             '--track-origins=yes',
                              '--leak-check=full']
             suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
@@ -652,7 +653,7 @@ class DaosServer():
 
             plain_env['PATH'] = f'{self._io_server_dir.name}:{plain_env["PATH"]}'
             self.max_start_time = 300
-            self.max_stop_time = 300
+            self.max_stop_time = 600
             self.stop_sleep_time = 10
 
         daos_server = join(self.conf['PREFIX'], 'bin', 'daos_server')
