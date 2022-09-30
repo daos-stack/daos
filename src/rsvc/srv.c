@@ -1006,7 +1006,7 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, boo
 		if (rc != -DER_NOTREPLICA && destroy) {
 			char *path;
 
-			rc = rsvc_class(class)->sc_locate(&svc->s_id, &path);
+			rc = rsvc_class(class)->sc_locate(id, &path);
 			if (rc != 0)
 				return rc;
 			rc = remove_path(path);

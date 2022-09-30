@@ -116,6 +116,15 @@ reconf_end(struct pool_svc_reconf *reconf)
 }
 
 static void
+reconf_wait(struct pool_svc_reconf *reconf)
+{
+	ABT_mutex_lock(reconf->psc_mutex);
+	while (reconf->psc_in_progress)
+		ABT_cond_wait(reconf->psc_cv, reconf->psc_mutex);
+	ABT_mutex_unlock(reconf->psc_mutex);
+}
+
+static void
 reconf_cancel_and_wait(struct pool_svc_reconf *reconf)
 {
 	/*
@@ -1583,7 +1592,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
-static void pool_svc_schedule_reconf(struct pool_svc *svc);
+static void pool_svc_schedule_reconf(struct pool_svc *svc, bool for_chk);
 static void pool_svc_cancel_and_wait_reconf(struct pool_svc *svc);
 
 static int
@@ -1645,7 +1654,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * reconfigurations or the last MS notification.
 	 */
 	svc->ps_reconf.psc_force_notify = true;
-	pool_svc_schedule_reconf(svc);
+	pool_svc_schedule_reconf(svc, false /* for_chk */);
 	reconf_scheduled = true;
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
@@ -5413,7 +5422,7 @@ out:
 }
 
 static void
-pool_svc_schedule_reconf(struct pool_svc *svc)
+pool_svc_schedule_reconf(struct pool_svc *svc, bool for_chk)
 {
 	struct pool_svc_reconf *reconf = &svc->ps_reconf;
 	enum ds_rsvc_state	state;
@@ -5421,7 +5430,7 @@ pool_svc_schedule_reconf(struct pool_svc *svc)
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
-	if (engine_in_check()) {
+	if (!for_chk && engine_in_check()) {
 		D_DEBUG(DB_MD, DF_UUID": end: skip in check mode\n", DP_UUID(svc->ps_uuid));
 		return;
 	}
@@ -5462,6 +5471,19 @@ static void
 pool_svc_cancel_and_wait_reconf(struct pool_svc *svc)
 {
 	reconf_cancel_and_wait(&svc->ps_reconf);
+}
+
+/**
+ * Perform PS reconfigurations (if necessary) synchronously. This is currently
+ * for the chk module only.
+ */
+void
+ds_pool_svc_reconf(struct ds_pool_svc *svc)
+{
+	struct pool_svc *s = pool_ds2svc(svc);
+
+	pool_svc_schedule_reconf(s, true /* for_chk */);
+	reconf_wait(&s->ps_reconf);
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
@@ -5595,7 +5617,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	pool_svc_schedule_reconf(svc);
+	pool_svc_schedule_reconf(svc, false /* for_chk */);
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -5874,7 +5896,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	pool_svc_schedule_reconf(svc);
+	pool_svc_schedule_reconf(svc, false /* for_chk */);
 
 out_map:
 	if (map_version_p != NULL) {
@@ -7177,7 +7199,7 @@ ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
 	} else {
 		ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-		pool_svc_schedule_reconf(svc);
+		pool_svc_schedule_reconf(svc, false /* for_chk */);
 	}
 
 out_buf:

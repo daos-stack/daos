@@ -1614,6 +1614,10 @@ cont:
 	}
 
 	rc = chk_engine_cont_cleanup(cpr, svc, &aggregator);
+	if (rc != 0)
+		goto out;
+
+	ds_pool_svc_reconf(svc);
 
 out:
 	chk_engine_cont_list_fini(&aggregator);
