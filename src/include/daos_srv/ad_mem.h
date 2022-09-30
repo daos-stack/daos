@@ -79,6 +79,12 @@ uint32_t
 ad_tx_redo_payload_len(struct ad_tx *tx);
 
 /**
+ * get first action pointer, NULL for list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_first(struct ad_tx *tx);
+
+/**
  * get next action pointer, NULL for done or list empty.
  */
 struct umem_action *

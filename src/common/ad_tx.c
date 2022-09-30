@@ -453,6 +453,21 @@ ad_tx_redo_payload_len(struct ad_tx *tx)
 }
 
 /**
+ * get first action pointer, NULL for list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_first(struct ad_tx *tx)
+{
+	if (d_list_empty(&tx->tx_redo)) {
+		tx->tx_redo_act_pos = NULL;
+		return NULL;
+	}
+
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item, it_link);
+	return &tx->tx_redo_act_pos->it_act;
+}
+
+/**
  * get next action pointer, NULL for done or list empty.
  */
 struct umem_action *
