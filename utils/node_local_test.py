@@ -645,7 +645,7 @@ class DaosServer():
             with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
                 fd.write(f"export PATH={join(self.conf['PREFIX'],'bin')}:$PATH\n")
-                fd.write('exec valgrind {" "".join(valgrind_args)} daos_engine "$@"\n')
+                fd.write(f'exec valgrind {" ".join(valgrind_args)} daos_engine "$@"\n')
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
