@@ -191,7 +191,7 @@ static inline bool
 daos_rpc_retryable_rc(int rc)
 {
 	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
-	       rc == -DER_GRPVER || rc == -DER_EXCLUDED;
+	       rc == -DER_GRPVER || rc == -DER_EXCLUDED || rc == -DER_PROTO;
 }
 
 /* Determine if the RPC is from a client. If not, it's from a server rank. */
