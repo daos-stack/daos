@@ -505,12 +505,11 @@ class DaosServer():
                                                      delete=False)
         self.server_logs = []
         for engine in range(self.engines):
-            prefix = 'dnt_server_{}_'.format(engine)
-            lf = tempfile.NamedTemporaryFile(prefix=prefix,
-                                             suffix='.log',
-                                             dir=conf.tmp_dir,
-                                             delete=False)
-            self.server_logs.append(lf)
+            prefix = f'dnt_server_{engine}_'
+            self.server_logs.append(tempfile.NamedTemporaryFile(prefix=prefix,
+                                                                suffix='.log',
+                                                                dir=conf.tmp_dir,
+                                                                delete=False))
         self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'memcheck-amd64-'
