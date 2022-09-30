@@ -449,6 +449,45 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	return 0;
 }
 
+/* Parse command line options for the 'smd_sync' command */
+static int
+smd_sync_option_parse(struct ddb_ctx *ctx, struct smd_sync_options *cmd_args,
+		      uint32_t argc, char **argv)
+{
+	char		 *options_short = "";
+	int		  index = 0;
+	struct option	  options_long[] = {
+		{ NULL }
+	};
+
+	memset(cmd_args, 0, sizeof(*cmd_args));
+
+	/* Restart getopt */
+	optind = 1;
+	opterr = 0;
+	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
+	}
+
+	index = optind;
+	if (argc - index > 0) {
+		cmd_args->nvme_conf = argv[index];
+		index++;
+	}
+	if (argc - index > 0) {
+		cmd_args->db_path = argv[index];
+		index++;
+	}
+
+	if (argc - index > 0) {
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 /* Parse command line options for the 'update_vea' command */
 static int
 update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args,
@@ -657,7 +696,8 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 	}
 	if (same(cmd, COMMAND_NAME_SMD_SYNC)) {
 		info->dci_cmd = DDB_CMD_SMD_SYNC;
-		return 0;
+		return smd_sync_option_parse(ctx, &info->dci_cmd_option.dci_smd_sync,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_DUMP_VEA)) {
 		info->dci_cmd = DDB_CMD_DUMP_VEA;
@@ -821,8 +861,12 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\n");
 
 	/* Command: smd_sync */
-	ddb_print(ctx, "smd_sync\n");
+	ddb_print(ctx, "smd_sync [nvme_conf] [db_path]\n");
 	ddb_print(ctx, "\tRestore the SMD file with backup from blob\n");
+	ddb_print(ctx, "    [nvme_conf]\n");
+	ddb_print(ctx, "\tPath to the nvme conf file. (default /mnt/daos/daos_nvme.conf)\n");
+	ddb_print(ctx, "    [db_path]\n");
+	ddb_print(ctx, "\tPath to the vos db. (default /mnt/daos)\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: dump_vea */

@@ -231,6 +231,22 @@ clear_cmt_dtx_options_parsing(void **state)
 }
 
 static void
+smd_sync_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct smd_sync_options	*options = &info.dci_cmd_option.dci_smd_sync;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("smd_sync", "nvme_conf", "db_path", "extra"); /* too many argument */
+	test_run_inval_cmd("smd_sync", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "smd_sync", "nvme_conf", "db_path");
+	assert_non_null(options->nvme_conf);
+	assert_non_null(options->db_path);
+}
+
+static void
 update_vea_options_parsing(void **state)
 {
 	struct ddb_cmd_info	 info = {0};
@@ -298,6 +314,7 @@ ddb_cmd_options_tests_run()
 		TEST(rm_ilog_options_parsing),
 		TEST(dump_dtx_options_parsing),
 		TEST(clear_cmt_dtx_options_parsing),
+		TEST(smd_sync_options_parsing),
 		TEST(update_vea_options_parsing),
 		TEST(dtx_commit_options_parsing),
 		TEST(dtx_abort_options_parsing),
