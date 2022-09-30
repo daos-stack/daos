@@ -6,9 +6,7 @@
 # pylint: disable=too-many-lines
 
 from logging import getLogger
-import grp
 import os
-import pwd
 import re
 import random
 import string
@@ -23,6 +21,9 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+
+from user_utils import get_chown_command, get_primary_group
+from run_utils import get_clush_command
 
 
 class DaosTestError(Exception):
@@ -132,146 +133,6 @@ class SimpleProfiler():
         avg_time = sum(data) / len(data) if data else 0
 
         return max_time, min_time, avg_time
-
-
-class RemoteCommandResult():
-    """Stores the command result from a Task object."""
-
-    class ResultData():
-        # pylint: disable=too-few-public-methods
-        """Command result data for the set of hosts."""
-
-        def __init__(self, command, returncode, hosts, stdout, timeout):
-            """Initialize a ResultData object.
-
-            Args:
-                command (str): the executed command
-                returncode (int): the return code of the executed command
-                hosts (NodeSet): the host(s) on which the executed command yielded this result
-                stdout (list): the result of the executed command split by newlines
-                timeout (bool): indicator for a command timeout
-            """
-            self.command = command
-            self.returncode = returncode
-            self.hosts = hosts
-            self.stdout = stdout
-            self.timeout = timeout
-
-    def __init__(self, command, task):
-        """Create a RemoteCommandResult object.
-
-        Args:
-            command (str): command executed
-            task (Task): object containing the results from an executed clush command
-        """
-        self.output = []
-        self._process_task(task, command)
-
-    @property
-    def homogeneous(self):
-        """Did all the hosts produce the same output.
-
-        Returns:
-            bool: if all the hosts produced the same output
-
-        """
-        return len(self.output) == 1
-
-    @property
-    def passed(self):
-        """Did the command pass on all the hosts.
-
-        Returns:
-            bool: if the command was successful on each host
-
-        """
-        all_zero = all(data.returncode == 0 for data in self.output)
-        return all_zero and not self.timeout
-
-    @property
-    def timeout(self):
-        """Did the command timeout on any hosts.
-
-        Returns:
-            bool: True if the command timed out on at least one set of hosts; False otherwise
-
-        """
-        return any(data.timeout for data in self.output)
-
-    def _process_task(self, task, command):
-        """Populate the output list and determine the passed result for the specified task.
-
-        Args:
-            task (Task): a ClusterShell.Task.Task object for the executed command
-            command (str): the executed command
-        """
-        # Get a dictionary of host list values for each unique return code key
-        results = dict(task.iter_retcodes())
-
-        # Get a list of any hosts that timed out
-        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-
-        # Populate the a list of unique output for each NodeSet
-        for code in sorted(results):
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-            for output, output_hosts in output_data:
-                # In run_remote(), task.run() is executed with the stderr=False default.
-                # As a result task.iter_buffers() will return combined stdout and stderr.
-                stdout = []
-                for line in output.splitlines():
-                    if isinstance(line, bytes):
-                        stdout.append(line.decode("utf-8"))
-                    else:
-                        stdout.append(line)
-                self.output.append(
-                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
-        if timed_out:
-            self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
-
-    def log_output(self):
-        """Log the command result."""
-        log = getLogger()
-        for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.stdout:
-                    log.debug("    %s", line)
-
-
-def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False):
-    """Run the command on the remote hosts.
-
-    Args:
-        hosts (NodeSet): hosts on which to run the command
-        command (str): command from which to obtain the output
-        verbose (bool, optional): log the command output. Defaults to True.
-        timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to 120 seconds.
-        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
-
-    Returns:
-        RemoteCommandResult: a grouping of the command results from the same hosts with the same
-            return status
-
-    """
-    task = task_self()
-    if task_debug:
-        task.set_info('debug', True)
-    # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", "-oForwardAgent=yes")
-    getLogger().debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
-    task.run(command=command, nodes=hosts, timeout=timeout)
-    results = RemoteCommandResult(command, task)
-    if verbose:
-        results.log_output()
-    return results
 
 
 def human_to_bytes(size):
@@ -1353,8 +1214,8 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
 
     """
     return run_command(
-        "{} chown {}:{} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), owner, group, filename),
+        "{} {} {}".format(
+            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -1442,30 +1303,6 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     return result
 
 
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (object): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        str: the clush command
-
-    """
-    command = ["clush", "-w", convert_string(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return " ".join(command)
-
-
 def get_default_config_file(name):
     """Get the default config file.
 
@@ -1484,7 +1321,7 @@ def get_file_listing(hosts, files):
     """Get the file listing from multiple hosts.
 
     Args:
-        hosts (object): hosts with which to use the clush command
+        hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
 
     Returns:
@@ -1590,26 +1427,6 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
-
-
-def get_primary_group(user=None):
-    """Get the name of the user's primary group.
-
-    Args:
-        user (str, optional): the user account name. Defaults to None, which uses the current user.
-
-    Returns:
-        str: the primary group name
-
-    """
-    if user is None:
-        user = getuser()
-    try:
-        gid = pwd.getpwnam(user).pw_gid
-        return grp.getgrgid(gid).gr_name
-    except KeyError:
-        # User may not exist on this host, e.g. daos_server, so just return the user name
-        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
