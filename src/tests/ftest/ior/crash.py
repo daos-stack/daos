@@ -46,7 +46,7 @@ class IorCrash(IorTestBase):
         """
         # Run IOR and crash it in the middle of Write
         self.run_ior_with_pool()
-        self.check_subprocess_status()
+        self.check_subprocess_status("write")
         time.sleep(self.ior_cmd.sw_deadline.value / 2)
         self.stop_ior()
 
@@ -58,8 +58,10 @@ class IorCrash(IorTestBase):
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
         self.run_ior_with_pool()
-        time.sleep(self.ior_cmd.sw_deadline.value * 1.5)
+        self.check_subprocess_status("write")
+        time.sleep(self.ior_cmd.sw_deadline.value)
         self.check_subprocess_status("read")
+        time.sleep(self.ior_cmd.sw_deadline.value / 2)
         self.stop_ior()
 
         # Verify engines did not crash
