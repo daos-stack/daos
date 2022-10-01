@@ -7,6 +7,7 @@ BW
 Broadwell
 CGO
 Cilk
+CompletedProcess
 DArray
 DDict
 DFS
@@ -15,6 +16,7 @@ EL
 EOF
 FPP
 FS
+FileHandler
 GHA
 Gopath
 Haswell
@@ -22,6 +24,7 @@ IOF
 IOR
 ISA
 KVM
+Launchable
 Lustre
 MPI
 Makefile
@@ -58,6 +61,7 @@ UCX
 UNS
 Uncomment
 VMD
+XUnitResult
 acl
 akey
 akeys
@@ -95,6 +99,7 @@ chdir
 checksum
 chgrp
 chmod
+chown
 chowned
 clush
 cmd
@@ -240,6 +245,7 @@ lspci
 lua
 lustre
 macsio
+makecache
 malloc
 mca
 mdtest
@@ -286,6 +292,7 @@ opcode
 openmpi
 orterun
 os
+oStrictHostKeyChecking
 outdata
 outputdir
 params
@@ -336,6 +343,7 @@ recurse
 redistributions
 refactor
 repo
+returncode
 rf
 rmdir
 romio
@@ -365,6 +373,7 @@ src
 srun
 ssd
 ssds
+stacktrace
 statfs
 statvfs
 stddev
@@ -425,6 +434,7 @@ unittest
 unlink
 unlinked
 unlinking
+unmangle
 unmount
 unwritable
 uri
@@ -449,5 +459,6 @@ xattrs
 xfer
 xfersize
 xml
+xunit
 yaml
 yamllint
