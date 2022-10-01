@@ -1462,8 +1462,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
 	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE :
-					     HG_BULK_READ_ONLY;
+	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;
