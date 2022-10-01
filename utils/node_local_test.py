@@ -3470,7 +3470,7 @@ def run_dfuse(server, conf):
     return fatal_errors.errors
 
 
-def run_in_fg(server, conf):
+def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
     Block until Control-C is pressed.
@@ -3509,19 +3509,29 @@ def run_in_fg(server, conf):
 
     t_dir = join(dfuse.dir, container)
 
-    print('Running at {}'.format(t_dir))
-    print('export PATH={}:$PATH'.format(os.path.join(conf['PREFIX'], 'bin')))
-    print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
-    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
+    print(f'Running at {t_dir}')
+    print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
+    print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
+    print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
-    print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
-    print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos cont list {}'.format(pool.label))
+    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    print(f'daos container destroy --path {t_dir}/uns-link')
+    print(f'daos cont list {pool.label}')
     try:
-        dfuse.wait_for_exit()
+        if args.launch_cmd:
+            start = time.time()
+            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
+            elapsed = time.time() - start
+            dfuse.stop()
+            (minutes, seconds) = divmod(elapsed, 60)
+            print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
+            print(rc)
+        else:
+            dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
     dfuse = None
+
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
@@ -4400,7 +4410,7 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server, fe=fatal_errors) as server:
             if args.mode == 'launch':
-                run_in_fg(server, conf)
+                run_in_fg(server, conf, args)
             elif args.mode == 'kv':
                 test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':
@@ -4494,9 +4504,10 @@ def run(wf, args):
 
     wf_server.close()
     conf.flush_bz2()
-    print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
-    print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
+    print(f'Total time in log analysis: {conf.lt.total:.2f} seconds')
+    print(f'Total time in log compression: {conf.lt_compress.total:.2f} seconds')
     return fatal_errors
+
 
 def main():
     """Wrap the core function, and catch/report any exceptions
@@ -4517,8 +4528,19 @@ def main():
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
+    parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    if args.mode:
+        mode_list = args.mode
+        args.mode = mode_list.pop(0)
+
+        if args.mode != 'launch' and mode_list:
+            print(f"unrecognized arguments: {' '.join(mode_list)}")
+            sys.exit(1)
+        args.launch_cmd = mode_list
+    else:
+        args.mode = None
 
     if args.mode and args.test:
         print('Cannot use mode and test')
@@ -4526,10 +4548,10 @@ def main():
 
     if args.test == 'list':
         tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
+        for method in dir(posix_tests):
+            if method.startswith('test'):
+                tests.append(method[5:])
+        print(f"Tests are: {','.join(sorted(tests))}")
         sys.exit(1)
 
     wf = WarningsFactory('nlt-errors.json',
