@@ -269,7 +269,7 @@ class DfuseFind(DfuseTestBase):
         with the prefix value.
         """
         letters = string.ascii_lowercase + string.digits
-        random_name = "".join(random.choice(letters) for _ in range(8)) #nosec
+        random_name = "".join(random.choice(letters) for _ in range(8))  # nosec
 
         return os.path.join(root, "{}{}".format(prefix, random_name))
 

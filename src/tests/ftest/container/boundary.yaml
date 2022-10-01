@@ -23,12 +23,12 @@ boundary_test: !mux
   test_1:
     num_pools: 1
     num_containers: 30000
-    with_io: False
+    with_io: false
   test_2:
     num_pools: 100
     num_containers: 200
-    with_io: False
+    with_io: false
   test_with_io:
     num_pools: 20
     num_containers: 200
-    with_io: True
+    with_io: true
