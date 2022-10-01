@@ -44,10 +44,6 @@ addFilter("E: static-library-without-debuginfo \/usr\/lib64\/lib(dfuse|ioil)\.a"
 
 # DO NOT LAND
 # these need to be fixed:
-# https://daosio.atlassian.net/browse/DAOS-11534
-addFilter("W: position-independent-executable-suggested")
 
 # https://daosio.atlassian.net/browse/DAOS-11539
 addFilter("W: no-soname \/usr\/lib64\/lib(daos_(common|cmd_hdlrs|tests|serialize|common_pmem)|dfs|dfuse|duns|ioil|dpar(|_mpi)).so")
-
-#addFilter("daos-client-tests.x86_64: W: devel-file-in-non-devel-package /usr/lib/daos/TESTING/ftest/cart/test_linkage.cpp|utest_hlc.c|utest_portnumber.c|utest_swim.c|wrap_cmocka.h")
