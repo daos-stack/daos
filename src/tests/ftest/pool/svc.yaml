@@ -15,9 +15,9 @@ pool:
   pool_query_timeout: 30
 svc_params_mux: !mux
   svc_params_none:
-    svc_params: [None, 4]
+    svc_params: [None, 5]
   svc_params_0:
-    svc_params: [0, 4]
+    svc_params: [0, 5]
   svc_params_1:
     svc_params: [1, 1]
   svc_params_2:
@@ -27,6 +27,6 @@ svc_params_mux: !mux
   svc_params_4:
     svc_params: [4, 3]
   svc_params_5:
-    svc_params: [5, 4]
+    svc_params: [5, 5]
   svc_params_6:
     svc_params: [6, 0]
