@@ -2688,7 +2688,7 @@ again2:
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, 0, &exec_arg);
 
 	/* Stop the distributed transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -3314,50 +3314,44 @@ out:
 }
 
 static int
-obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
+obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 {
-	uint64_t	*flag = agg_arg;
-	uint32_t	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	int		succeeds = 0;
-	int		allow_failure = 0;
-	int		allow_failure_cnt = 0;
-	int		result = 0;
-	int		i;
+	struct dtx_sub_status	*sub;
+	uint32_t		 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+	int			 allow_failure_cnt = 0;
+	int			 succeeds = 0;
+	int			 result = 0;
+	int			 i;
 
-	D_ASSERT(flag != NULL);
-	if (*flag & DAOS_COND_PUNCH)
-		allow_failure = -DER_NONEXIST;
+	/*
+	 * For conditional punch, let's ignore DER_NONEXIST if some shard succeed,
+	 * since the object may not exist on some shards due to EC partial update.
+	 */
+	if (allow_failure != 0)
+		D_ASSERTF(allow_failure == -DER_NONEXIST,
+			  "Unexpected allow failure %d\n", allow_failure);
 
 	for (i = 0; i < sub_cnt; i++) {
-		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
+		sub = &dlh->dlh_subs[i];
+		if (sub->dss_tgt.st_rank != DAOS_TGT_IGNORE) {
+			D_ASSERT(sub->dss_comp == 1);
 
-		if (sub->dss_result == 0) {
-			succeeds++;
-		} else if (sub->dss_result == allow_failure) {
-			allow_failure_cnt++;
-		} else {
-			/* Ignore INPROGRESS if there other failures */
-			if (result == -DER_INPROGRESS || result == 0)
+			if (sub->dss_result == 0)
+				succeeds++;
+			else if (sub->dss_result == allow_failure)
+				allow_failure_cnt++;
+			else if (result == -DER_INPROGRESS || result == 0)
+				/* Ignore INPROGRESS if there other failures */
 				result = sub->dss_result;
 		}
 	}
 
-	D_DEBUG(DB_IO, DF_DTI" %d/%d shards flags "DF_X64" result %d\n",
-		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt,
-		succeeds, *flag, result);
+	D_DEBUG(DB_IO, DF_DTI" sub_requests %d/%d, allow_failure %d, result %d\n",
+		DP_DTI(&dlh->dlh_handle.dth_xid),
+		allow_failure_cnt, succeeds, allow_failure, result);
 
-	if (*flag & DAOS_COND_PUNCH) {
-		/* For punch, let's ignore DER_NONEXIST if there are shards
-		 * succeed, since the object may not exist on some shards
-		 * due to EC partial update.
-		 */
-		if (result == 0 && succeeds == 0) {
-			D_ASSERT(sub_cnt == allow_failure_cnt);
-			return -DER_NONEXIST;
-		}
-
-		return result;
-	}
+	if (allow_failure != 0 && allow_failure_cnt > 0 && result == 0 && succeeds == 0)
+		result = allow_failure;
 
 	return result;
 }
@@ -3547,7 +3541,8 @@ again2:
 
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch, obj_punch_agg_cb,
-				 &opi->opi_api_flags, &exec_arg);
+				 (opi->opi_api_flags & DAOS_COND_PUNCH) ? -DER_NONEXIST : 0,
+				 &exec_arg);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -4534,7 +4529,7 @@ again:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, 0, &exec_arg);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
