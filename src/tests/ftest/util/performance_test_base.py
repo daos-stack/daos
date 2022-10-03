@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -97,7 +96,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         old_get_default_env = cmd.get_default_env
         performance_env = self.performance_env
 
-        def new_get_default_env(self, *args, **kwargs): # pylint: disable=unused-argument
+        def new_get_default_env(self, *args, **kwargs):  # pylint: disable=unused-argument
             env = old_get_default_env(*args, **kwargs)
             for key, val in performance_env.items():
                 env[key] = val
@@ -432,8 +431,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.set_processes_ppn(namespace)
 
         # Performance with POSIX/DFUSE is tricky because we can't just set
-        # dfs_dir_oclass and dfs_oclass. This needs more work before running non-DFS.
-        if self.mdtest_cmd.api.value != 'DFS':
+        # dfs_dir_oclass and dfs_oclass. This needs more work to get good results on non-DFS.
+        if self.mdtest_cmd.api.value not in ('DFS', 'POSIX'):
             self.fail("Only DFS API supported")
 
         stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
@@ -449,8 +448,12 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_dir_oclass.value)])
 
         # Create pool and container upfront so rank stop timing is more accurate
-        self.add_pool(connect=False)
-        self.add_container(self.pool, create=False)
+        self.pool = self.get_pool(connect=False)
+        self.container = self.get_container(
+            self.pool,
+            create=False,
+            oclass=self.mdtest_cmd.dfs_oclass.value,
+            chunk_size=self.mdtest_cmd.dfs_chunk.value)
         properties = "rd_fac:{}".format(cont_rf)
         current_properties = self.container.properties.value
         if current_properties:
