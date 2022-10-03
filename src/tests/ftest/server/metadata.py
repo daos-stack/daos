@@ -285,8 +285,9 @@ class ObjectMetadata(TestWithServers):
         self.container = None
         try:
             self.destroy_pools(self.pool)
-            self.log.info("Phase 4: passed (pool with full metadata rdb was successfully destroyed)")
+            self.log.info("Phase 4: passed (pool with full metadata rdb successfully destroyed)")
         except TestFail as error:
+            self.log.error(str(error))
             self.fail("Phase 4: fail (pool with full metadata rdb NOT destroyed)")
         self.log.info("Test passed")
 
