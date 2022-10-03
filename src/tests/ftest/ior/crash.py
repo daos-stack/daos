@@ -70,6 +70,7 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Run IOR and verify it completes successfully
+        self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
         self.run_ior_with_pool()
         self.job_manager.wait()
 
