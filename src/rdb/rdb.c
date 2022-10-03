@@ -18,7 +18,8 @@
 #include "rdb_layout.h"
 
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
-			     struct rdb_cbs *cbs, void *arg, struct rdb **dbp);
+			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
+			     struct rdb **dbp);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
@@ -26,6 +27,7 @@ static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t 
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	size		replica size in bytes
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
@@ -33,8 +35,9 @@ static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t 
  * \param[out]	storagep	database storage
  */
 int
-rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
-	   struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep)
+rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
+	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	   struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
@@ -43,8 +46,8 @@ rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas: caller_term="DF_X64"\n",
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
@@ -86,7 +89,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
+	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -224,8 +227,8 @@ rdb_lookup(const uuid_t uuid)
  * the caller shall not close in this case.
  */
 static int
-rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, struct rdb_cbs *cbs,
-		  void *arg, struct rdb **dbp)
+rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint64_t caller_term,
+		  struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
 	int			rc;
@@ -309,7 +312,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, struc
 		SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
 		rdb_extra_sys[DAOS_MEDIA_SCM]);
 
-	rc = rdb_raft_open(db);
+	rc = rdb_raft_open(db, caller_term);
 	if (rc != 0)
 		goto err_kvss;
 
@@ -333,14 +336,22 @@ err:
 /**
  * Open an RDB replica at \a path.
  *
+ * If \a caller_term is not RDB_NIL_TERM, it shall be the term of the leader
+ * (of the same RDB) who is calling this function (usually via an RPC). This is
+ * used to perform the Raft term check/update so that an older leader doesn't
+ * interrupt with a newer leader.
+ *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
  * \param[out]	storagep	database storage
+ *
+ * \retval	-DER_STALE	\a caller_term < the current term
  */
 int
-rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 	 struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
@@ -351,7 +362,8 @@ rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": opening db %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MD, DF_UUID": opening db %s: caller_term="DF_X64"\n", DP_UUID(uuid), path,
+		caller_term);
 
 	/*
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
@@ -422,7 +434,7 @@ rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 
-	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
+	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
 	if (rc != 0)
 		goto err_mc;
 
@@ -762,6 +774,22 @@ int
 rdb_campaign(struct rdb *db)
 {
 	return rdb_raft_campaign(db);
+}
+
+/**
+ * Simulate a ping (i.e., an empty AE) from the leader of \a caller_term to \a
+ * db. This essentially checks if \a caller_term is stale, and if not, update
+ * the current term. See also rdb_open.
+ *
+ * \param[in]	db		database
+ * \param[in]	caller_term	caller term
+ *
+ * \retval -DER_STALE	\a caller_term < the current term
+ */
+int
+rdb_ping(struct rdb *db, uint64_t caller_term)
+{
+	return rdb_raft_ping(db, caller_term);
 }
 
 /**

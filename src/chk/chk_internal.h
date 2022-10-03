@@ -816,7 +816,7 @@ chk_pool_shutdown(struct chk_pool_rec *cpr)
 
 	if (cpr->cpr_started) {
 		d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
-		ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, false);
+		ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
 		ds_pool_stop(cpr->cpr_uuid);
 		cpr->cpr_started = 0;
 	}

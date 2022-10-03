@@ -34,7 +34,7 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	rc = rdb_open(path, uuid, NULL /* cbs */, NULL /* arg */, &storage);
+	rc = rdb_open(path, uuid, RDB_NIL_TERM, NULL /* cbs */, NULL /* arg */, &storage);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
 		goto out;

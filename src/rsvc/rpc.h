@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,6 +56,7 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((uint32_t)		(sai_flags)		CRT_VAR) \
 	((uint32_t)		(sai_padding)		CRT_VAR) \
 	((uint64_t)		(sai_size)		CRT_VAR) \
+	((uint64_t)		(sai_term)		CRT_VAR) \
 	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
 
 #define DAOS_OSEQ_RSVC_START /* output fields (rc: err count) */ \
@@ -68,7 +69,8 @@ CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 #define DAOS_ISEQ_RSVC_STOP /* input fields */			 \
 	((d_iov_t)		(soi_svc_id)		CRT_VAR) \
 	((uint32_t)		(soi_class)		CRT_VAR) \
-	((uint32_t)		(soi_flags)		CRT_VAR)
+	((uint32_t)		(soi_flags)		CRT_VAR) \
+	((uint64_t)		(soi_term)		CRT_VAR)
 
 #define DAOS_OSEQ_RSVC_STOP /* output fields */			 \
 	((int32_t)		(soo_rc)		CRT_VAR)
