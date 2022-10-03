@@ -110,6 +110,14 @@ func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
 	)
 }
 
+func FaultPoolInvalidNumRanks(req, avail int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolInvalidNumRanks,
+		fmt.Sprintf("pool request contains invalid number of ranks (requested: %d, available: %d)", req, avail),
+		"retry the request with a valid number of ranks",
+	)
+}
+
 func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	return serverFault(
 		code.ServerPoolDuplicateLabel,
