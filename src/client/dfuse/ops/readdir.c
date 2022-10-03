@@ -38,10 +38,12 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 {
 	uint32_t open_count = atomic_load_relaxed(&ie->ie_open_count);
 
+	/* TODO: Reset cache time for directory */
+
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
-	return;
+	dfuse_cache_evict(ie);
 }
 
 static int
