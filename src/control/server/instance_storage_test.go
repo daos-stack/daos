@@ -14,15 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func TestIOEngineInstance_MountScmDevice(t *testing.T) {
@@ -348,7 +349,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			if tc.hasSB {
 				engine.setSuperblock(&Superblock{
-					Rank: system.NewRankPtr(0), ValidRank: true,
+					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
 			}
 

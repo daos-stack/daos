@@ -42,13 +42,14 @@ class DfuseTestBase(TestWithServers):
             error_list.append("Error stopping dfuse: {}".format(error))
         return error_list
 
-    def load_dfuse(self, hosts):
+    def load_dfuse(self, hosts, namespace=None):
         """Create a DfuseCommand object
 
         Args:
             hosts (NodeSet): hosts on which to start Dfuse
+            namespace (str, optional): dfuse namespace. Defaults to None
         """
-        self.dfuse = get_dfuse(self, hosts)
+        self.dfuse = get_dfuse(self, hosts, namespace)
 
     def start_dfuse(self, hosts, pool=None, container=None, **params):
         """Create a DfuseCommand object and use it to start Dfuse.

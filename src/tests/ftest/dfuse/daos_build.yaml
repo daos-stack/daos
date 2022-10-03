@@ -18,3 +18,9 @@ container:
   control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  cores: '0-17'
+  thread_count: 36
+dfuse_vm:
+  mount_dir: "/tmp/daos_dfuse"
+  cores: '0-3'
+  thread_count: 8
