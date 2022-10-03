@@ -66,7 +66,7 @@ class BadEvictTest(TestWithServers):
             if self.pool.pool.uuid[4] != 244:
                 self.pool.pool.uuid[4] = 244
             else:
-                self.pool.pool.uuid[4] == 255
+                self.pool.pool.uuid[4] = 255
 
         self.pool.uuid = self.pool.pool.get_uuid_str()
 
