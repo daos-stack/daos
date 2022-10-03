@@ -278,11 +278,17 @@ class ObjectMetadata(TestWithServers):
                 self.fail("Phase 3: fail (unexpected container create error)")
         self.log.info(
             "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
-        self.log.info("Test passed")
 
-        # instruct tearDown to skip containers destroy
-        # (we want to invoke pool destroy with a full metadata rdb)
-        self.skip_destroy_containers = True
+        # Phase 4 destroy pool while metadata rdb is full
+        # And prevent container destroy steps from running in teardown
+        self.log.info("Phase 4: Destroy pool while metadata rdb is full (expected to work)")
+        self.container = None
+        try:
+            self.destroy_pools(self.pool)
+            self.log.info("Phase 4: passed (pool with full metadata rdb was successfully destroyed)")
+        except TestFail as error:
+            self.fail("Phase 4: fail (pool with full metadata rdb NOT destroyed)")
+        self.log.info("Test passed")
 
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
