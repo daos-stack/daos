@@ -21,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -28,7 +29,7 @@ import (
 
 func rankSetCmpOpt() []cmp.Option {
 	return []cmp.Option{
-		cmp.Transformer("RankSet", func(in *system.RankSet) *[]system.Rank {
+		cmp.Transformer("RankSet", func(in *ranklist.RankSet) *[]ranklist.Rank {
 			if in == nil {
 				return nil
 			}
@@ -492,8 +493,8 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					DisabledTargets:  4,
 					Version:          5,
 					Leader:           6,
-					EnabledRanks:     system.MustCreateRankSet("[0-3,5]"),
-					DisabledRanks:    &system.RankSet{},
+					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
@@ -549,8 +550,8 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 					DisabledTargets:  4,
 					Version:          5,
 					Leader:           6,
-					EnabledRanks:     system.MustCreateRankSet("[0-3,5]"),
-					DisabledRanks:    &system.RankSet{},
+					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
@@ -737,7 +738,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							MediaType: StorageMediaTypeNvme,
 						},
 					},
-					EnabledRanks: system.MustCreateRankSet("[0-3,5]"),
+					EnabledRanks: ranklist.MustCreateRankSet("[0-3,5]"),
 				},
 			},
 		},
@@ -809,7 +810,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							MediaType: StorageMediaTypeNvme,
 						},
 					},
-					DisabledRanks: &system.RankSet{},
+					DisabledRanks: &ranklist.RankSet{},
 				},
 			},
 		},
@@ -1351,7 +1352,7 @@ func TestControl_ListPools(t *testing.T) {
 				Pools: []*Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1402,7 +1403,7 @@ func TestControl_ListPools(t *testing.T) {
 				Pools: []*Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1410,7 +1411,7 @@ func TestControl_ListPools(t *testing.T) {
 					},
 					{
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{1, 2, 3},
+						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1444,13 +1445,13 @@ func TestControl_ListPools(t *testing.T) {
 				Pools: []*Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryErrorMsg:   "remote failed",
 						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{1, 2, 3},
+						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1486,13 +1487,13 @@ func TestControl_ListPools(t *testing.T) {
 				Pools: []*Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
 						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{1, 2, 3},
+						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1526,7 +1527,7 @@ func TestControl_ListPools(t *testing.T) {
 				Pools: []*Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
@@ -1534,7 +1535,7 @@ func TestControl_ListPools(t *testing.T) {
 					},
 					{
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{1, 2, 3},
+						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						State:           system.PoolServiceStateDestroying.String(),
 					},
 				},
@@ -1580,7 +1581,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		HostsConfigArray []MockHostStorageConfig
-		TgtRanks         []system.Rank
+		TgtRanks         []ranklist.Rank
 		ExpectedOutput   ExpectedOutput
 	}{
 		"single server": {
@@ -1805,7 +1806,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			TgtRanks: []system.Rank{0, 1, 2, 4},
+			TgtRanks: []ranklist.Rank{0, 1, 2, 4},
 			ExpectedOutput: ExpectedOutput{
 				ScmBytes:  uint64(50) * uint64(humanize.GByte),
 				NvmeBytes: uint64(700) * uint64(humanize.GByte),
@@ -1933,7 +1934,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			TgtRanks: []system.Rank{0, 1, 2, 4},
+			TgtRanks: []ranklist.Rank{0, 1, 2, 4},
 			ExpectedOutput: ExpectedOutput{
 				ScmBytes:  uint64(50) * uint64(humanize.GByte),
 				NvmeBytes: uint64(0),
@@ -2192,7 +2193,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			TgtRanks: []system.Rank{1},
+			TgtRanks: []ranklist.Rank{1},
 			ExpectedOutput: ExpectedOutput{
 				Error: errors.New("No SCM storage space available"),
 			},
