@@ -9,6 +9,7 @@ from apricot import TestWithServers, skipForTicket
 from general_utils import get_random_bytes, DaosTestError
 from test_utils_container import TestContainerData
 
+
 class FullPoolContainerCreate(TestWithServers):
     """
     Class for test to create a container in a pool with no remaining free space.
@@ -105,8 +106,7 @@ class FullPoolContainerCreate(TestWithServers):
         # checking for a closer returned space value instead of exact value
         # as the test is using scm only
         counter = 1
-        threshold_value = free_space_before - (free_space_before *
-                                               threshold_percent)
+        threshold_value = free_space_before - (free_space_before * threshold_percent)
         free_space = self.pool.get_pool_free_space()
         while free_space < threshold_value:
             # try to wait for 4 x 30 secs for aggregation to be completed or

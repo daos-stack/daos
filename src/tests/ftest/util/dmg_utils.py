@@ -789,25 +789,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("pool", "list"), no_query=no_query, verbose=verbose)
 
-    def pool_set_prop(self, pool, name, value):
+    def pool_set_prop(self, pool, properties):
         """Set property for a given Pool.
 
         Args:
-            pool (str): Pool uuid for which property is supposed
-                        to be set.
-            name (str): Property name to be set
-            value (str): Property value to be set
+            pool (str): Pool uuid for which property is supposed to be set.
+            properties (str): Property in the form of key:val[,key:val...]
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: if the dmg pool set-prop command fails.
 
         """
-        return self._get_result(
-            ("pool", "set-prop"), pool=pool, name=name, value=value)
+        return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
     def pool_get_prop(self, pool, name):
         """Get the Property for a given pool.

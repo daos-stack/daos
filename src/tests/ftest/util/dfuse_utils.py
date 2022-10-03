@@ -80,13 +80,15 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
-    def __init__(self, hosts, tmp):
+    def __init__(self, hosts, tmp, namespace="/run/dfuse/*"):
         """Create a dfuse object.
 
         Args:
             hosts (NodeSet): hosts on which to run dfuse
+            tmp (str): tmp directory path
+            namespace (str): dfuse namespace. Defaults to /run/dfuse/*
         """
-        super().__init__("/run/dfuse/*", "dfuse")
+        super().__init__(namespace, "dfuse")
 
         # set params
         self.hosts = hosts.copy()
@@ -412,18 +414,22 @@ class Dfuse(DfuseCommand):
             self.log.info("No hosts running dfuse - nothing to stop")
 
 
-def get_dfuse(test, hosts):
+def get_dfuse(test, hosts, namespace=None):
     """Get a new Dfuse instance.
 
     Args:
         test (Test): the test instance
         hosts (NodeSet): hosts on which to start Dfuse
+        namespace (str, optional): dfuse namespace. Defaults to None
 
     Returns:
         Dfuse: the new dfuse object
 
     """
-    dfuse = Dfuse(hosts, test.tmp)
+    if namespace:
+        dfuse = Dfuse(hosts, test.tmp, namespace)
+    else:
+        dfuse = Dfuse(hosts, test.tmp)
     dfuse.get_params(test)
     return dfuse
 
