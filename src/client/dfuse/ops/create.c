@@ -169,6 +169,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(err, rc);
 
+	dfuse_cache_evict_dir(fs_handle, parent);
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)

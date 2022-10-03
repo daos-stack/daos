@@ -29,6 +29,21 @@ struct iterate_data {
 	struct dfuse_readdir_hdl *id_hdl;
 };
 
+/* Mark a directory change so that any cache can be evicted.  The kernel pagecache is already
+ * wiped on unlink if the directory isn't open, if it is then already open handles will return
+ * the unlinked file, and a inval() call here does not change that.
+ */
+void
+dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+{
+	uint32_t open_count = atomic_load_relaxed(&ie->ie_open_count);
+
+	if (open_count != 0)
+		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
+
+	return;
+}
+
 static int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {

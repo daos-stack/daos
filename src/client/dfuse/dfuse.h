@@ -623,6 +623,12 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
+/* Mark the cache for a directory invalid.  Called when directory contents change on create,
+ * unlink or rename
+ */
+void
+dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
+
 /* Mark the cache as up-to-date from now */
 void
 dfuse_cache_set_time(struct dfuse_inode_entry *ie);

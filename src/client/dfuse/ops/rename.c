@@ -85,8 +85,13 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 #endif
 	}
 
-	if (!newparent)
+	dfuse_cache_evict_dir(fs_handle, parent);
+
+	if (newparent) {
+		dfuse_cache_evict_dir(fs_handle, newparent);
+	} else {
 		newparent = parent;
+	}
 
 	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, flags, parent->ie_obj, (char *)name,
 			       newparent->ie_obj, (char *)newname, &moid, &oid);

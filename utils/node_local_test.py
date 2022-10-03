@@ -1880,6 +1880,39 @@ class posix_tests():
         assert files == files2
         assert len(files) == count
 
+    @needs_dfuse
+    def test_readdir_unlink(self):
+        """Test readdir where a entry is removed mid read
+
+        Populate a directory, read the contents to know the order, then unlink a file and re-read
+        to verify the file is missing.  If doing the unlink during read then the kernel cache
+        will include the unlinked file so do not check for this behavior.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 50
+        for idx in range(count):
+            with open(join(test_dir, f'file_{idx}'), 'w'):
+                pass
+
+        files = []
+        with os.scandir(test_dir) as entries:
+            for entry in entries:
+                files.append(entry.name)
+
+        os.unlink(join(test_dir, files[-2]))
+
+        post_files = []
+        with os.scandir(test_dir) as entries:
+            for entry in entries:
+                post_files.append(entry.name)
+
+        print(files)
+        print(post_files)
+        assert len(files) == count
+        assert len(post_files) == len(files) - 1
+        assert post_files == files[:-2] + [files[-1]]
+
     @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
         """Test single-threaded mode"""
