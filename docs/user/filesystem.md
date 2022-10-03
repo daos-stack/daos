@@ -282,7 +282,7 @@ $
 #### 2> Use dfuse entry in /etc/fstab to mount the container.
 
 ```bash
-$  dmg -o /home/samirrav/scripts/EC_Demo/test_daos_dmg.yaml pool create --scm-size=8G --nvme-size=64G --label=admin_pool
+$  dmg pool create --scm-size=8G --nvme-size=64G --label=admin_pool
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
@@ -513,12 +513,12 @@ $ daos container info --path <path to entry point>
 Please find below an example.
 
 ```bash
-$ dfuse -m /scratch_fs/dfuse --pool tank --cont mycont
+$ dfuse -m /scratch_fs/dfuse --pool tank --cont mycont3
 $ cd /scratch_fs/dfuse/
 $ ls -l
 total 0
 -rw-rw-r-- 1 samirrav samirrav 0 Sep 23 16:31 foo
-$ daos cont create tank mycont3 --type POSIX --path ./link_to_externa_container
+$ daos cont create tank mycont3 --type POSIX --path ./link_to_external_container
   Container UUID : 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca
   Container Label: mycont3
   Container Type : POSIX
@@ -527,9 +527,9 @@ Successfully created container 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca type POSIX
 $ ls -lrt
 total 0
 -rw-rw-r-- 1 samirrav samirrav   0 Sep 23 16:31 foo
-drwxr-xr-x 1 samirrav samirrav 120 Sep 23 16:32 link_to_externa_container
-$ daos cont destroy --path ./link_to_externa_container/
-Successfully destroyed container ./link_to_externa_container/
+drwxr-xr-x 1 samirrav samirrav 120 Sep 23 16:32 link_to_external_container
+$ daos cont destroy --path ./link_to_external_container/
+Successfully destroyed container ./link_to_external_container/
 $ pwd
 /scratch_fs/dfuse
 $ ls -l
