@@ -667,8 +667,8 @@ co_acl(void **state)
 	daos_prop_t		*prop_in;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
-	const char		*exp_owner = "fictionaluser@";
-	const char		*exp_owner_grp = "admins@";
+	const char		exp_owner[] = "fictionaluser@";
+	const char		exp_owner_grp[] = "admins@";
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl;
 	struct daos_ace		*ace;
@@ -706,11 +706,9 @@ co_acl(void **state)
 	prop_in = daos_prop_alloc(3);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_owner);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner_grp,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner_grp);
 	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_ACL;
 	prop_in->dpp_entries[2].dpe_val_ptr = daos_acl_dup(exp_acl);
 
@@ -845,8 +843,8 @@ co_set_prop(void **state)
 	daos_prop_t		*prop_out = NULL;
 	struct daos_prop_entry	*entry;
 	int			 rc;
-	const char		*exp_label = "NEW_FANCY_LABEL";
-	const char		*exp_owner = "wonderfuluser@wonderfuldomain";
+	const char		 exp_label[] = "NEW_FANCY_LABEL";
+	const char		 exp_owner[] = "wonderfuluser@wonderfuldomain";
 
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -865,11 +863,9 @@ co_set_prop(void **state)
 	prop_in = daos_prop_alloc(2);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_label,
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_label);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner);
 
 	print_message("Setting the container props\n");
 	rc = daos_cont_set_prop(arg->coh, prop_in, NULL);

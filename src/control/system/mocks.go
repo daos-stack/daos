@@ -94,9 +94,10 @@ type (
 		response interface{}
 	}
 	mockRaftServiceConfig struct {
-		LeaderCh      <-chan bool
-		ServerAddress raft.ServerAddress
-		State         raft.RaftState
+		LeaderCh              <-chan bool
+		ServerAddress         raft.ServerAddress
+		State                 raft.RaftState
+		LeadershipTransferErr error
 	}
 	mockRaftService struct {
 		cfg mockRaftServiceConfig
@@ -135,7 +136,10 @@ func (mrs *mockRaftService) LeaderCh() <-chan bool {
 }
 
 func (mrs *mockRaftService) LeadershipTransfer() raft.Future {
-	return &mockRaftFuture{}
+	if mrs.cfg.LeadershipTransferErr == nil {
+		mrs.cfg.State = raft.Follower
+	}
+	return &mockRaftFuture{err: mrs.cfg.LeadershipTransferErr}
 }
 
 func (mrs *mockRaftService) Shutdown() raft.Future {
