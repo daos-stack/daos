@@ -81,6 +81,1376 @@ Integer getuid() {
     return cached_uid
 }
 
+def test_hardware() {
+    parallel {
+        stage('Functional Hardware Small') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                // 2 node cluster with 1 IB/node + 1 test control node
+                label params.CI_NVME_3_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            }
+        } // stage('Functional_Hardware_Small')
+        stage('Functional Hardware Medium') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                // 4 node cluster with 2 IB/node + 1 test control node
+                label params.CI_NVME_5_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            }
+        } // stage('Functional_Hardware_Medium')
+        stage('Functional Hardware Large') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                // 8+ node cluster with 1 IB/node + 1 test control node
+                label params.CI_NVME_9_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            }
+        } // stage('Functional_Hardware_Large')
+    } // parallel
+}
+
+def test_report() {
+    parallel {
+        stage('Bullseye Report on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.el.8'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        qb: quickBuild()) +
+                        " -t ${sanitized_JOB_NAME}-el8 " +
+                        ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                        ' --build-arg QUICKBUILD_DEPS="' +
+                        quickBuildDeps('el8') + '"' +
+                        ' --build-arg REPOS="' + prRepos() + '"'
+                }
+            }
+            steps {
+                // The coverage_healthy is primarily set here
+                // while the code coverage feature is being implemented.
+                cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
+                                                        'func-vm-cov',
+                                                        'func-hw-small-cov',
+                                                        'func-hw-medium-cov',
+                                                        'func-hw-large-cov'],
+                                    coverage_healthy: [methodCoverage: 0,
+                                                        conditionalCoverage: 0,
+                                                        statementCoverage: 0],
+                                    ignore_failure: true
+            }
+            post {
+                cleanup {
+                    job_status_update()
+                }
+            }
+        } // stage('Bullseye Report on EL 8')
+    } // parallel
+}
+
+def test_stage() {
+    parallel {
+        stage('Coverity on CentOS 7') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.centos.7'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        qb: true) +
+                                        " -t ${sanitized_JOB_NAME}-centos7 " +
+                                        ' --build-arg QUICKBUILD_DEPS="' +
+                                        quickBuildDeps('centos7', true) + '"' +
+                                        ' --build-arg REPOS="' + prRepos() + '"'
+                }
+            }
+            steps {
+                sconsBuild coverity: 'daos-stack/daos',
+                            parallel_build: parallelBuild()
+            }
+            post {
+                success {
+                    /* groovylint-disable-next-line DuplicateMapLiteral */
+                    coverityPost condition: 'success'
+                }
+                unsuccessful {
+                    /* groovylint-disable-next-line DuplicateMapLiteral */
+                    coverityPost condition: 'unsuccessful'
+                }
+                cleanup {
+                    job_status_update()
+                }
+            }
+        } // stage('Coverity on CentOS 7')
+        stage('Functional on EL 8 with Valgrind') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_FUNCTIONAL_VM9_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            }
+        } // stage('Functional on EL 8 with Valgrind')
+        stage('Functional on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_FUNCTIONAL_VM9_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            }
+        } // stage('Functional on EL 8')
+        stage('Functional on Leap 15') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_FUNCTIONAL_VM9_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            } // post
+        } // stage('Functional on Leap 15')
+        stage('Functional on Ubuntu 20.04') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_FUNCTIONAL_VM9_LABEL
+            }
+            steps {
+                functionalTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                test_function: 'runTestFunctionalV2'
+            }
+            post {
+                always {
+                    functionalTestPostV2()
+                    job_status_update()
+                }
+            } // post
+        } // stage('Functional on Ubuntu 20.04')
+        stage('Scan EL 8 RPMs') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_UNIT_VM1_LABEL
+            }
+            steps {
+                scanRpms inst_repos: daosRepos(),
+                            daos_pkg_version: daosPackagesVersion(next_version)
+            }
+            post {
+                always {
+                    junit 'maldetect.xml'
+                    job_status_update()
+                }
+            }
+        } // stage('Scan EL 8 RPMs')
+        stage('Scan Leap 15 RPMs') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_UNIT_VM1_LABEL
+            }
+            steps {
+                scanRpms inst_repos: daosRepos(),
+                            daos_pkg_version: daosPackagesVersion(next_version)
+            }
+            post {
+                always {
+                    junit 'maldetect.xml'
+                    job_status_update()
+                }
+            }
+        } // stage('Scan Leap 15 RPMs')
+        stage('Fault injection testing on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.el.8'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        parallel_build: true,
+                                                        deps_build: true)
+                    args '--tmpfs /mnt/daos_0'
+                }
+            }
+            steps {
+                sconsBuild parallel_build: true,
+                            scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                            build_deps: 'no'
+                sh label: 'Fault injection testing using NLT',
+                    script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
+            }
+            post {
+                always {
+                    discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                scm: 'daos-stack/daos'
+                    recordIssues enabledForFailure: true,
+                                    failOnError: false,
+                                    ignoreFailedBuilds: true,
+                                    ignoreQualityGate: true,
+                                    qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+                                                [threshold: 1, type: 'TOTAL_HIGH'],
+                                                [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                                [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                    tools: [issues(pattern: 'nlt-errors.json',
+                                                name: 'Fault injection issues',
+                                                id: 'Fault_Injection'),
+                                            issues(pattern: 'nlt-client-leaks.json',
+                                                name: 'Fault injection leaks',
+                                                id: 'NLT_client')]
+                    junit testResults: 'nlt-junit.xml'
+                    archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                    job_status_update()
+                }
+            }
+        } // stage('Fault inection testing')
+    } // parallel
+}
+
+def unit_tests() {
+    parallel {
+        stage('Unit Test on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_UNIT_VM1_LABEL
+            }
+            steps {
+                unitTest timeout_time: 60,
+                            inst_repos: prRepos(),
+                            inst_rpms: unitPackages()
+            }
+            post {
+                always {
+                    unitTestPost artifacts: ['unit_test_logs/*']
+                    job_status_update()
+                }
+            }
+        }
+        stage('NLT on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_NLT_1_LABEL
+            }
+            steps {
+                unitTest timeout_time: 60,
+                            inst_repos: prRepos(),
+                            test_script: 'ci/unit/test_nlt.sh',
+                            inst_rpms: unitPackages()
+            }
+            post {
+                always {
+                    unitTestPost artifacts: ['nlt_logs/*'],
+                                    testResults: 'nlt-junit.xml',
+                                    always_script: 'ci/unit/test_nlt_post.sh',
+                                    valgrind_stash: 'el8-gcc-nlt-memcheck'
+                    recordIssues enabledForFailure: true,
+                                    failOnError: false,
+                                    ignoreFailedBuilds: true,
+                                    ignoreQualityGate: true,
+                                    name: 'NLT server leaks',
+                                    qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                    tool: issues(pattern: 'nlt-server-leaks.json',
+                                    name: 'NLT server results',
+                                    id: 'NLT_server')
+                    job_status_update()
+                }
+            }
+        }
+        stage('Unit Test Bullseye on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_UNIT_VM1_LABEL
+            }
+            steps {
+                unitTest timeout_time: 60,
+                            ignore_failure: true,
+                            inst_repos: prRepos(),
+                            inst_rpms: unitPackages()
+            }
+            post {
+                always {
+                    // This is only set while dealing with issues
+                    // caused by code coverage instrumentation affecting
+                    // test results, and while code coverage is being
+                    // added.
+                    unitTestPost ignore_failure: true,
+                                    artifacts: ['covc_test_logs/*',
+                                                'covc_vm_test/**']
+                    job_status_update()
+                }
+            }
+        } // stage('Unit test Bullseye on EL 8')
+        stage('Unit Test with memcheck on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                label params.CI_UNIT_VM1_LABEL
+            }
+            steps {
+                unitTest timeout_time: 60,
+                            ignore_failure: true,
+                            inst_repos: prRepos(),
+                            inst_rpms: unitPackages()
+            }
+            post {
+                always {
+                    unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                'unit_test_memcheck_logs/*.log'],
+                                    valgrind_stash: 'el8-gcc-unit-memcheck'
+                    job_status_update()
+                }
+            }
+        } // stage('Unit Test with memcheck on EL 8')
+    }
+}
+
+def build_steps() {
+    parallel {
+        stage('Build RPM on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'packaging/Dockerfile.mockbuild'
+                    dir 'utils/rpms'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs()
+                    args '--cap-add=SYS_ADMIN'
+                }
+            }
+            steps {
+                buildRpm()
+            }
+            post {
+                success {
+                    buildRpmPost condition: 'success'
+                }
+                unstable {
+                    buildRpmPost condition: 'unstable'
+                }
+                failure {
+                    buildRpmPost condition: 'failure'
+                }
+                unsuccessful {
+                    buildRpmPost condition: 'unsuccessful'
+                }
+                cleanup {
+                    buildRpmPost condition: 'cleanup'
+                    job_status_update()
+                }
+            }
+        }
+        stage('Build RPM on Leap 15') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'packaging/Dockerfile.mockbuild'
+                    dir 'utils/rpms'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs()
+                    args  '--cap-add=SYS_ADMIN'
+                }
+            }
+            steps {
+                buildRpm()
+            }
+            post {
+                success {
+                    buildRpmPost condition: 'success'
+                }
+                unstable {
+                    buildRpmPost condition: 'unstable'
+                }
+                failure {
+                    buildRpmPost condition: 'failure'
+                }
+                unsuccessful {
+                    buildRpmPost condition: 'unsuccessful'
+                }
+                cleanup {
+                    buildRpmPost condition: 'cleanup'
+                    job_status_update()
+                }
+            }
+        }
+        stage('Build DEB on Ubuntu 20.04') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'packaging/Dockerfile.ubuntu.20.04'
+                    dir 'utils/rpms'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs()
+                    args '--cap-add=SYS_ADMIN'
+                }
+            }
+            steps {
+                buildRpm()
+            }
+            post {
+                success {
+                    buildRpmPost condition: 'success'
+                }
+                unstable {
+                    buildRpmPost condition: 'unstable'
+                }
+                failure {
+                    buildRpmPost condition: 'failure'
+                }
+                unsuccessful {
+                    buildRpmPost condition: 'unsuccessful'
+                }
+                cleanup {
+                    buildRpmPost condition: 'cleanup'
+                    job_status_update()
+                }
+            }
+        }
+        stage('Build on EL 8') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.el.8'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        qb: quickBuild()) +
+                                        " -t ${sanitized_JOB_NAME}-el8 " +
+                                        ' --build-arg QUICKBUILD_DEPS="' +
+                                        quickBuildDeps('el8') + '"' +
+                                        ' --build-arg REPOS="' + prRepos() + '"'
+                }
+            }
+            steps {
+                sconsBuild parallel_build: parallelBuild(),
+                            stash_files: 'ci/test_files_to_stash.txt',
+                            scons_args: sconsFaultsArgs()
+            }
+            post {
+                unsuccessful {
+                    sh '''if [ -f config.log ]; then
+                                mv config.log config.log-el8-gcc
+                            fi'''
+                    archiveArtifacts artifacts: 'config.log-el8-gcc',
+                                        allowEmptyArchive: true
+                }
+                cleanup {
+                    job_status_update()
+                }
+            }
+        }
+        stage('Build on EL 8 Bullseye') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.el.8'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        qb: true) +
+                        " -t ${sanitized_JOB_NAME}-el8 " +
+                        ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                        ' --build-arg QUICKBUILD_DEPS="' +
+                        quickBuildDeps('el8', true) + '"' +
+                        ' --build-arg REPOS="' + prRepos() + '"'
+                }
+            }
+            steps {
+                sconsBuild parallel_build: parallelBuild(),
+                            stash_files: 'ci/test_files_to_stash.txt',
+                            build_deps: 'no',
+                            scons_args: sconsFaultsArgs()
+            }
+            post {
+                unsuccessful {
+                    sh label: 'Save failed Bullseye logs',
+                        script: '''if [ -f config.log ]; then
+                                    mv config.log config.log-el8-covc
+                                fi'''
+                    archiveArtifacts artifacts: 'config.log-el8-covc',
+                                        allowEmptyArchive: true
+                }
+                cleanup {
+                    job_status_update()
+                }
+            }
+        }
+        stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'utils/docker/Dockerfile.leap.15'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                        parallel_build: true,
+                                                        deps_build: true) +
+                                        " -t ${sanitized_JOB_NAME}-leap15" +
+                                        ' --build-arg COMPILER=icc'
+                }
+            }
+            steps {
+                sconsBuild parallel_build: parallelBuild(),
+                            scons_args: sconsFaultsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release',
+                            build_deps: 'no'
+            }
+            post {
+                unsuccessful {
+                    sh '''if [ -f config.log ]; then
+                                mv config.log config.log-leap15-intelc
+                            fi'''
+                    archiveArtifacts artifacts: 'config.log-leap15-intelc',
+                                        allowEmptyArchive: true
+                }
+                cleanup {
+                    job_status_update()
+                }
+            }
+        }
+    }
+}
+
+def pre_build_steps() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps2() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps3() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps4() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps5() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps6() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps7() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
+def pre_build_steps8() {
+    parallel {
+        stage('checkpatch') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.checkpatch'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                checkPatch user: GITHUB_USER_USR,
+                            password: GITHUB_USER_PSW,
+                            ignored_files: 'src/control/vendor/*:' +
+                                            '*.pb-c.[ch]:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                            'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                            /* groovylint-disable-next-line LineLength */
+                                            'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                            '*.crt:' +
+                                            '*.pem:' +
+                                            '*_test.go:' +
+                                            'src/cart/_structures_from_macros_.h:' +
+                                            'src/tests/ftest/*.patch:' +
+                                            'src/tests/ftest/large_stdout.txt'
+            }
+            post {
+                always {
+                    job_status_update()
+                    /* when JENKINS-39203 is resolved, can probably use stepResult
+                        here and remove the remaining post conditions
+                        stepResult name: env.STAGE_NAME,
+                                    context: 'build/' + env.STAGE_NAME,
+                                    result: ${currentBuild.currentResult}
+                    */
+                }
+                /* temporarily moved some stuff into stepResult due to JENKINS-39203
+                failure {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'ERROR'
+                }
+                success {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'SUCCESS'
+                }
+                unstable {
+                    githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                    description: env.STAGE_NAME,
+                                    context: 'pre-build/' + env.STAGE_NAME,
+                                    status: 'FAILURE'
+                } */
+            }
+        } // stage('checkpatch')
+        stage('Python Bandit check') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            agent {
+                dockerfile {
+                    filename 'Dockerfile.code_scanning'
+                    dir 'utils/docker'
+                    label 'docker_runner'
+                    additionalBuildArgs dockerBuildArgs(add_repos: false)
+                }
+            }
+            steps {
+                pythonBanditCheck()
+            }
+            post {
+                always {
+                    // Bandit will have empty results if it does not
+                    // find any issues.
+                    junit testResults: 'bandit.xml',
+                            allowEmptyResults: true
+                    job_status_update()
+                }
+            }
+        } // stage('Python Bandit check')
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -322,94 +1692,7 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('checkpatch') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.checkpatch'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.[ch]:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  '*.crt:' +
-                                                  '*.pem:' +
-                                                  '*_test.go:' +
-                                                  'src/cart/_structures_from_macros_.h:' +
-                                                  'src/tests/ftest/*.patch:' +
-                                                  'src/tests/ftest/large_stdout.txt'
-                    }
-                    post {
-                        always {
-                            job_status_update()
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        } */
-                    }
-                } // stage('checkpatch')
-                stage('Python Bandit check') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.code_scanning'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        pythonBanditCheck()
-                    }
-                    post {
-                        always {
-                            // Bandit will have empty results if it does not
-                            // find any issues.
-                            junit testResults: 'bandit.xml',
-                                  allowEmptyResults: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Python Bandit check')
-            }
+            steps{pre_build_steps()}
         }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
@@ -421,541 +1704,21 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Build RPM on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args '--cap-add=SYS_ADMIN'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'packaging/Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args '--cap-add=SYS_ADMIN'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: sconsFaultsArgs()
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8 Bullseye') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8', true) + '"' +
-                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   stash_files: 'ci/test_files_to_stash.txt',
-                                   build_deps: 'no',
-                                   scons_args: sconsFaultsArgs()
-                    }
-                    post {
-                        unsuccessful {
-                            sh label: 'Save failed Bullseye logs',
-                               script: '''if [ -f config.log ]; then
-                                          mv config.log config.log-el8-covc
-                                       fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-covc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15" +
-                                                ' --build-arg COMPILER=icc'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_args: sconsFaultsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                   build_deps: 'no'
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-            }
+            steps {build_steps()}
         }
         stage('Unit Tests') {
             when {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Unit Test on EL 8') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_logs/*']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('NLT on EL 8') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: prRepos(),
-                                 test_script: 'ci/unit/test_nlt.sh',
-                                 inst_rpms: unitPackages()
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/*'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreFailedBuilds: true,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test Bullseye on EL 8') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 ignore_failure: true,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
-                    }
-                    post {
-                        always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['covc_test_logs/*',
-                                                     'covc_vm_test/**']
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit test Bullseye on EL 8')
-                stage('Unit Test with memcheck on EL 8') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 ignore_failure: true,
-                                 inst_repos: prRepos(),
-                                 inst_rpms: unitPackages()
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with memcheck on EL 8')
-            }
+            steps {unit_tests()}
         }
         stage('Test') {
             when {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Coverity on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: 'daos-stack/daos',
-                                   parallel_build: parallelBuild()
-                    }
-                    post {
-                        success {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
-                stage('Functional on EL 8 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8 with Valgrind')
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Scan EL 8 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: true,
-                                   scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                   build_deps: 'no'
-                        sh label: 'Fault injection testing using NLT',
-                           script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
-                    }
-                    post {
-                        always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos'
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreFailedBuilds: true,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')]
-                            junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault inection testing')
-            } // parallel
+            steps{test_stage()}
         } // stage('Test')
         stage('Test Storage Prep on EL 8') {
             when {
@@ -981,112 +1744,10 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
-                stage('Functional Hardware Medium') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional Hardware Large') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Large')
-            } // parallel
+            steps{test_hardware()}
         } // stage('Test Hardware')
         stage('Test Report') {
-            parallel {
-                stage('Bullseye Report on EL 8') {
-                    when {
-                      beforeAgent true
-                      expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8') + '"' +
-                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        // The coverage_healthy is primarily set here
-                        // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
-                                                               'func-vm-cov',
-                                                               'func-hw-small-cov',
-                                                               'func-hw-medium-cov',
-                                                               'func-hw-large-cov'],
-                                            coverage_healthy: [methodCoverage: 0,
-                                                               conditionalCoverage: 0,
-                                                               statementCoverage: 0],
-                                            ignore_failure: true
-                    }
-                    post {
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Bullseye Report on EL 8')
-            } // parallel
+            steps{test_report()}
         } // stage ('Test Report')
     } // stages
     post {
@@ -1101,3 +1762,4 @@ pipeline {
         }
     } // post
 }
+
