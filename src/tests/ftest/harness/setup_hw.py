@@ -12,14 +12,14 @@ class HarnessSetupTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_setup(self):
+    def test_setup_hw(self):
         """Verify the TestWithServers.setUp() method.
 
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=vm
-        :avocado: tags=harness,harness_setup_test,test_setup
+        :avocado: tags=hw,small,medium,large
+        :avocado: tags=harness,harness_setup_test,test_setup_hw
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,
                          "FAILED: storage prepare was not set correctly from the yaml")

@@ -297,16 +297,21 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		// Otherwise, create the pool across the requested number of
 		// available ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
-		nRanks := len(allRanks)
+		nAllRanks := len(allRanks)
+		nRanks := nAllRanks
 		if req.GetNumranks() > 0 {
 			nRanks = int(req.GetNumranks())
+
+			if nRanks > nAllRanks {
+				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
+			}
 
 			// TODO (DAOS-6263): Improve rank selection algorithm.
 			// In the short term, we can just randomize the set of
 			// available ranks in order to avoid always choosing the
 			// first N ranks.
 			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(allRanks), func(i, j int) {
+			rand.Shuffle(nAllRanks, func(i, j int) {
 				allRanks[i], allRanks[j] = allRanks[j], allRanks[i]
 			})
 		}
@@ -582,9 +587,9 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		}
 
 		// If the request is being forced, or the evict request did not fail
-		// due to the pool being busy, then transition to the destroying state
-		// and persist the update(s).
-		if req.Force || evStatus != daos.Busy {
+		// due to the pool being busy or service not up, then transition to the
+		// destroying state and persist the update(s).
+		if req.Force || (evStatus != daos.Busy && evStatus != daos.NoService) {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)

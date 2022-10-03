@@ -1436,6 +1436,9 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id, in->soi_term,
 			  in->soi_flags & RDB_OF_DESTROY);
+	if (rc == -DER_ALREADY)
+		rc = 0;
+
 	out->soo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
