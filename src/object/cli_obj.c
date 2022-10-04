@@ -3619,8 +3619,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 		kds[i] = shard_arg->la_kds[i];
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
-		obj_arg->sgl->sg_iovs[0].iov_len);
+	D_DEBUG(DB_TRACE, "shard %u shard nr %u merge_nr %d/"DF_U64"\n", shard_auxi->shard,
+		shard_arg->la_nr, iter_arg->merge_nr, obj_arg->sgl->sg_iovs[0].iov_len);
 	return rc;
 }
 
@@ -3879,6 +3879,7 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 						shard_auxi->shard, obj_arg->kds[0].kd_key_len,
 						shard_arg->la_kds[0].kd_key_len);
 					obj_arg->kds[0] = shard_arg->la_kds[0];
+					iter_arg->merge_nr++;
 				}
 			}
 
@@ -6823,4 +6824,61 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 		return 0;
 
 	return (ord << OC_REDUN_SHIFT) | nr_grp;
+}
+
+static inline bool
+obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
+{
+	bool invalid_shard;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj_is_modification_opc(opc))
+		invalid_shard = obj->cob_shards->do_shards[shard_idx].do_target_id == -1 ||
+				obj->cob_shards->do_shards[shard_idx].do_shard == -1;
+	else
+		invalid_shard = obj->cob_shards->do_shards[shard_idx].do_rebuilding ||
+				obj->cob_shards->do_shards[shard_idx].do_target_id == -1 ||
+				obj->cob_shards->do_shards[shard_idx].do_shard == -1;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return invalid_shard || (DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
+				 daos_shard_in_fail_value(shard_idx));
+}
+
+/**
+ * Check if there are any EC parity shards still alive under the oh/dkey_hash.
+ * 1: alive,  0: no alive  < 0: failure.
+ */
+int
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
+{
+	struct daos_oclass_attr *oca;
+	struct dc_object	*obj;
+	int			grp_idx;
+	int			i;
+	int			rc = 0;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	grp_idx = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
+	if (grp_idx < 0)
+		D_GOTO(out_put, rc = grp_idx);
+
+	oca = obj_get_oca(obj);
+	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++) {
+		*shard = grp_idx * obj_get_grp_size(obj) + obj_ec_data_tgt_nr(oca) + i;
+		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d\n", *shard,
+			obj->cob_shards->do_shards[*shard].do_rebuilding,
+			obj->cob_shards->do_shards[*shard].do_target_id,
+			obj->cob_shards->do_shards[*shard].do_shard);
+		if (!obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH) &&
+		    !obj->cob_shards->do_shards[*shard].do_reintegrating)
+			D_GOTO(out_put, rc = 1);
+	}
+
+out_put:
+	obj_decref(obj);
+	return rc;
 }

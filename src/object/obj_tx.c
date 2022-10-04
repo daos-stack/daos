@@ -962,7 +962,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
 		tx->tx_set_resend = 1;
 		tx->tx_status = TX_FAILED;
 
