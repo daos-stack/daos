@@ -18,6 +18,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -39,10 +40,10 @@ func testPoolService() *system.PoolService {
 	return &system.PoolService{
 		PoolLabel: "test-pool",
 		PoolUUID:  uuid.MustParse(mockUUID),
-		Replicas:  []system.Rank{0, 1, 2},
+		Replicas:  []ranklist.Rank{0, 1, 2},
 		State:     system.PoolServiceStateReady,
 		Storage: &system.PoolServiceStorage{
-			CreationRankStr: system.MustCreateRankSet("0-2").String(),
+			CreationRankStr: ranklist.MustCreateRankSet("0-2").String(),
 		},
 	}
 }

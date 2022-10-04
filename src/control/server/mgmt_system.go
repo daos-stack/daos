@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -61,7 +62,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp := new(mgmtpb.GetAttachInfoResp)
 	rankURIs := groupMap.RankEntries
 	if !req.GetAllRanks() {
-		rankURIs = make(map[system.Rank]raft.RankEntry)
+		rankURIs = make(map[ranklist.Rank]raft.RankEntry)
 
 		// If the request does not indicate that all ranks should be returned,
 		// it may be from an older client, in which case we should just return
@@ -97,7 +98,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if len(svc.clientNetworkHint) > 1 {
 		resp.SecondaryClientNetHints = svc.clientNetworkHint[1:]
 	}
-	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
+	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
 	// For resp.RankUris may be large, we make a resp copy with a limited
 	// number of rank URIs, to avoid flooding the debug log.
@@ -289,7 +290,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:                system.Rank(req.Rank),
+		Rank:                ranklist.Rank(req.Rank),
 		UUID:                uuid,
 		ControlAddr:         req.peerAddr,
 		PrimaryFabricURI:    req.GetUri(),
@@ -377,7 +378,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
-	rankSet := &system.RankSet{}
+	rankSet := &ranklist.RankSet{}
 	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank:        rank.Uint32(),
@@ -479,7 +480,7 @@ type (
 
 	fanoutRequest struct {
 		Method     systemRanksFunc
-		Ranks      *system.RankSet
+		Ranks      *ranklist.RankSet
 		Force      bool
 		FullSystem bool
 	}
@@ -487,13 +488,13 @@ type (
 	fanoutResponse struct {
 		Results     system.MemberResults
 		AbsentHosts *hostlist.HostSet
-		AbsentRanks *system.RankSet
+		AbsentRanks *ranklist.RankSet
 	}
 )
 
 // resolveRanks derives ranks to be used for fanout by comparing host and rank
 // sets with the contents of the membership.
-func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.RankSet, missHS *hostlist.HostSet, err error) {
+func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *ranklist.RankSet, missHS *hostlist.HostSet, err error) {
 	hasHosts := hosts != ""
 	hasRanks := ranks != ""
 
@@ -525,14 +526,14 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 		missHS = new(hostlist.HostSet)
 	}
 	if missRS == nil {
-		missRS = new(system.RankSet)
+		missRS = new(ranklist.RankSet)
 	}
 
 	return
 }
 
 // synthesise "Stopped" rank results for any harness host errors
-func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.Rank, rr *control.RanksResp, resp *fanoutResponse) {
 	for _, hes := range rr.HostErrors {
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
@@ -585,7 +586,7 @@ func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
-func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *ranklist.RankSet, error) {
 	if req == nil || req.Method == nil {
 		return nil, nil, errors.New("nil fanout request or method")
 	}
@@ -605,8 +606,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
 	}
 
-	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
-	finished := system.MustCreateRankSet("")
+	waiting := ranklist.RankSetFromRanks(req.Ranks.Ranks())
+	finished := ranklist.MustCreateRankSet("")
 	ranksReq.SetReportCb(func(hr *control.HostResponse) {
 		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
 		if !ok {
@@ -615,8 +616,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		}
 
 		for _, rr := range rs.GetResults() {
-			waiting.Delete(system.Rank(rr.Rank))
-			finished.Add(system.Rank(rr.Rank))
+			waiting.Delete(ranklist.Rank(rr.Rank))
+			finished.Add(ranklist.Rank(rr.Rank))
 		}
 
 		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
@@ -758,7 +759,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 	return &fanoutRequest{
 			Ranks:      hitRanks,
 			Force:      force,
-			FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
+			FullSystem: len(ranklist.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
 		}, &fanoutResponse{
 			AbsentRanks: missRanks,
 			AbsentHosts: missHosts,

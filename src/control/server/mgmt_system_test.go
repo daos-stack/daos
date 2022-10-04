@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -462,7 +463,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	}
 	uri := fmt.Sprintf("tcp://%s", addr)
 
-	m := system.MockMemberFullSpec(t, system.Rank(r), test.MockUUID(r), uri, addr, state)
+	m := system.MockMemberFullSpec(t, ranklist.Rank(r), test.MockUUID(r), uri, addr, state)
 	m.FabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
@@ -531,7 +532,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
-	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
+	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = ranklist.NewRankPtr(0)
 	svc.sysdb = raft.MockDatabase(t, l)
 	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
@@ -648,7 +649,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method:     control.StartRanks,
-				Ranks:      system.MustCreateRankSet("0-7"),
+				Ranks:      ranklist.MustCreateRankSet("0-7"),
 				FullSystem: true,
 			},
 			// results from ranks on failing hosts generated
@@ -748,7 +749,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
-				Ranks:  system.MustCreateRankSet("0-3,6-7"),
+				Ranks:  ranklist.MustCreateRankSet("0-3,6-7"),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -839,7 +840,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
-				Ranks:  system.MustCreateRankSet("0-5"),
+				Ranks:  ranklist.MustCreateRankSet("0-5"),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -931,7 +932,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			},
 			expFanReq: &fanoutRequest{
 				Method: control.StopRanks,
-				Ranks:  system.MustCreateRankSet("0-3"),
+				Ranks:  ranklist.MustCreateRankSet("0-3"),
 			},
 			// Verifies de-duplication of rank results.
 			expResults: system.MemberResults{
@@ -1976,7 +1977,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host; NilRank": {
 			req: &mgmtpb.JoinReq{
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
 			},
@@ -1998,7 +1999,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
@@ -2023,7 +2024,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			req: &mgmtpb.JoinReq{
 				Addr:        common.LocalhostCtrlAddr().String(),
 				Uri:         "tcp://" + common.LocalhostCtrlAddr().String(),
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 				Incarnation: newMember.Incarnation,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
@@ -2052,7 +2053,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			// Make a copy to avoid test side-effects.
 			curCopy := &system.Member{}
 			*curCopy = *curMember
-			curCopy.Rank = system.NilRank // ensure that db.data.NextRank is incremented
+			curCopy.Rank = ranklist.NilRank // ensure that db.data.NextRank is incremented
 
 			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
 

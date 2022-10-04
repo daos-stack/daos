@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -199,8 +200,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(ranklist.Rank)
+				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -371,11 +372,11 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				ei.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				ei.setIndex(uint32(i))
 
-				ei._superblock.Rank = new(system.Rank)
-				*ei._superblock.Rank = system.Rank(i + 1)
+				ei._superblock.Rank = new(ranklist.Rank)
+				*ei._superblock.Rank = ranklist.Rank(i + 1)
 
 				ei.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ int) error {
+					func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})
@@ -566,8 +567,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(ranklist.Rank)
+				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -723,8 +724,8 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					UUID:    test.MockUUID(),
 					System:  "test",
 				}
-				superblock.Rank = new(system.Rank)
-				*superblock.Rank = system.Rank(i + 1)
+				superblock.Rank = new(ranklist.Rank)
+				*superblock.Rank = ranklist.Rank(i + 1)
 				ei.setSuperblock(superblock)
 				if err := ei.WriteSuperblock(); err != nil {
 					t.Fatal(err)
@@ -842,8 +843,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(ranklist.Rank)
+				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
@@ -967,8 +968,8 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				srv.setIndex(uint32(i))
 
 				if !tc.missingRank {
-					srv._superblock.Rank = new(system.Rank)
-					*srv._superblock.Rank = system.Rank(i + 1)
+					srv._superblock.Rank = new(ranklist.Rank)
+					*srv._superblock.Rank = ranklist.Rank(i + 1)
 				}
 
 				cfg := new(mockDrpcClientConfig)

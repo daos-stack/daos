@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,6 +148,7 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 	args->dkey	= dkey;
 	args->akey	= akey;
 	args->recx	= recx;
+	args->max_epoch = NULL;
 
 	return 0;
 }
