@@ -1435,7 +1435,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
-				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
+				daos_recx_ep_list_set(parity_list, orw->orw_nr,
+					ioc->ioc_coc->sc_ec_agg_eph_boundry, 0);
 				daos_recx_ep_list_merge(parity_list, orw->orw_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
