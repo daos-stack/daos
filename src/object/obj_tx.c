@@ -2249,11 +2249,11 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		 daos_key_t *dkey, uint32_t nr, daos_iod_t *iods,
 		 d_sg_list_t *sgls)
 {
-	struct daos_cpd_sub_req	*dcsr;
-	struct daos_cpd_update	*dcu = NULL;
-	struct obj_iod_array	*iod_array;
-	int			 rc;
-	int			 i;
+	struct daos_cpd_sub_req *dcsr;
+	struct daos_cpd_update  *dcu;
+	struct obj_iod_array    *iod_array;
+	int                      rc;
+	int                      i;
 
 	D_ASSERT(nr != 0);
 	D_ASSERT(obj != NULL);
@@ -2289,22 +2289,20 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		D_GOTO(fail, rc = -DER_NOMEM);
 
 	for (i = 0; i < nr; i++) {
-		rc = daos_iov_copy(&iod_array->oia_iods[i].iod_name,
-				   &iods[i].iod_name);
+		rc = daos_iov_copy(&iod_array->oia_iods[i].iod_name, &iods[i].iod_name);
 		if (rc != 0)
-			D_GOTO(fail, rc);
+			D_GOTO(fail_iods, rc);
 
 		iod_array->oia_iods[i].iod_size = iods[i].iod_size;
 		iod_array->oia_iods[i].iod_type = iods[i].iod_type;
-		iod_array->oia_iods[i].iod_nr = iods[i].iod_nr;
+		iod_array->oia_iods[i].iod_nr   = iods[i].iod_nr;
 
 		if (iods[i].iod_recxs == NULL)
 			continue;
 
-		D_ALLOC_ARRAY(iod_array->oia_iods[i].iod_recxs,
-			      iods[i].iod_nr);
+		D_ALLOC_ARRAY(iod_array->oia_iods[i].iod_recxs, iods[i].iod_nr);
 		if (iod_array->oia_iods[i].iod_recxs == NULL)
-			D_GOTO(fail, rc = -DER_NOMEM);
+			D_GOTO(fail_iods, rc = -DER_NOMEM);
 
 		memcpy(iod_array->oia_iods[i].iod_recxs, iods[i].iod_recxs,
 		       sizeof(daos_recx_t) * iods[i].iod_nr);
@@ -2312,14 +2310,14 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	D_ALLOC_ARRAY(dcsr->dcsr_sgls, nr);
 	if (dcsr->dcsr_sgls == NULL)
-		D_GOTO(fail, rc = -DER_NOMEM);
+		D_GOTO(fail_iods, rc = -DER_NOMEM);
 
 	if (tx->tx_flags & DAOS_TF_ZERO_COPY)
 		rc = daos_sgls_copy_ptr(dcsr->dcsr_sgls, nr, sgls, nr);
 	else
 		rc = daos_sgls_copy_all(dcsr->dcsr_sgls, nr, sgls, nr);
 	if (rc != 0)
-		D_GOTO(fail, rc);
+		D_GOTO(fail_sgl, rc);
 
 	tx->tx_write_cnt++;
 
@@ -2330,27 +2328,19 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 
 	return 0;
 
-fail:
-	if (dcu != NULL) {
-		if (iod_array->oia_iods != NULL) {
-			for (i = 0; i < nr; i++) {
-				daos_iov_free(&iod_array->oia_iods[i].iod_name);
-				D_FREE(iod_array->oia_iods[i].iod_recxs);
-			}
+fail_sgl:
+	for (i = 0; i < nr; i++)
+		d_sgl_fini(&dcsr->dcsr_sgls[i], !(tx->tx_flags & DAOS_TF_ZERO_COPY));
+	D_FREE(dcsr->dcsr_sgls);
 
-			D_FREE(iod_array->oia_iods);
-		}
-
-		if (dcsr->dcsr_sgls != NULL) {
-			for (i = 0; i < nr; i++)
-				d_sgl_fini(&dcsr->dcsr_sgls[i],
-					      !(tx->tx_flags &
-						DAOS_TF_ZERO_COPY));
-
-			D_FREE(dcsr->dcsr_sgls);
-		}
+fail_iods:
+	for (i = 0; i < nr; i++) {
+		daos_iov_free(&iod_array->oia_iods[i].iod_name);
+		D_FREE(iod_array->oia_iods[i].iod_recxs);
 	}
+	D_FREE(iod_array->oia_iods);
 
+fail:
 	daos_iov_free(&dcsr->dcsr_dkey);
 	obj_decref(dcsr->dcsr_obj);
 
