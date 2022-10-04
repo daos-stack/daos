@@ -3750,7 +3750,7 @@ class AllocFailTestRun():
         # The subprocess handle
         self._sp = None
         # The valgrind handle
-        self.vh = None
+        self.valgrindh = None
         # The return from subprocess.poll
         self.ret = None
 
@@ -3766,54 +3766,56 @@ class AllocFailTestRun():
         self.loc = loc
 
         if loc is None:
-            prefix = 'dnt_fi_{}_reference_'.format(aft.description)
+            prefix = 'reference_'
         else:
-            prefix = 'dnt_fi_{}_{:04d}_'.format(aft.description, loc)
+            prefix = f'{loc:04d}_'
+        log_dir = join(self.aft.conf.tmp_dir, f'dnt_fi_{aft.description}_logs')
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
-                                                    dir=self.aft.conf.tmp_dir,
+                                                    dir=log_dir,
                                                     delete=False).name
         self.env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
-        res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
-        res += 'Fault injection location {}\n'.format(self.loc)
+        cmd_text = ' '.join(self.cmd)
+        res = f"Fault injection test of '{cmd_text}'\n"
+        res += f'Fault injection location {self.loc}\n'
         if self.vh:
             res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
             res += 'Process not completed'
         else:
-            res += 'Returncode was {}'.format(self.returncode)
+            res += f'Returncode was {self.returncode}'
 
         if self.stdout:
-            res += '\nSTDOUT:{}'.format(self.stdout.decode('utf-8').strip())
+            res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
 
         if self.stderr:
-            res += '\nSTDERR:{}'.format(self.stderr.decode('utf-8').strip())
+            res += f'\nSTDERR:{self.stderr.decode("utf-8").strip()}'
         return res
 
     def start(self):
         """Start the command"""
-        fc = {}
+        faults = {}
 
-        fc['fault_config'] = [{'id': 100,
-                               'probability_x': 1,
-                               'probability_y': 1}]
+        faults['fault_config'] = [{'id': 100,
+                                   'probability_x': 1,
+                                   'probability_y': 1}]
 
         if self.loc:
-            fc['fault_config'].append({'id': 0,
-                                       'probability_x': 1,
-                                       'probability_y': 1,
-                                       'interval': self.loc,
-                                       'max_faults': 1})
+            faults['fault_config'].append({'id': 0,
+                                           'probability_x': 1,
+                                           'probability_y': 1,
+                                           'interval': self.loc,
+                                           'max_faults': 1})
 
             if self.aft.skip_daos_init:
-                fc['fault_config'].append({'id': 101, 'probability_x': 1})
+                faults['fault_config'].append({'id': 101, 'probability_x': 1})
 
         # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
-        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        self._fi_file.write(yaml.dump(faults, encoding='utf=8'))
         self._fi_file.flush()
 
         self.env['D_FI_CONFIG'] = self._fi_file.name
@@ -3934,13 +3936,13 @@ class AllocFailTestRun():
                 if 'DER_UNKNOWN' in line:
                     self.aft.wf.add(self.fi_loc,
                                     'HIGH',
-                                    "Incorrect stderr '{}'".format(line),
+                                    f"Incorrect stderr '{line}'",
                                     mtype='Invalid error code used')
                     continue
 
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                "Unexpected stderr '{}'".format(line),
+                                f"Unexpected stderr '{line}'",
                                 mtype='Unrecognised error')
             _explain()
             return
@@ -3949,7 +3951,7 @@ class AllocFailTestRun():
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                "Incorrect stdout '{}'".format(self.stdout),
+                                f"Incorrect stdout '{self.stdout}'",
                                 mtype='Out of memory caused zero exit '
                                 'code with incorrect output')
 
@@ -3964,9 +3966,10 @@ class AllocFailTestRun():
                 print()
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
-                            "Incorrect stderr '{}'".format(stderr),
+                            f"Incorrect stderr '{stderr}'",
                             mtype='Out of memory not reported correctly via stderr')
         _explain()
+
 
 class AllocFailTest():
     # pylint: disable=too-few-public-methods
@@ -4012,7 +4015,7 @@ class AllocFailTest():
         else:
             max_child = int(num_cores / 4 * 3)
 
-        print('Maximum number of spawned tests will be {}'.format(max_child))
+        print(f'Maximum number of spawned tests will be {max_child}')
 
         active = []
         fid = 2
@@ -4053,8 +4056,8 @@ class AllocFailTest():
                     finished = True
                 break
 
-        print('Completed, fid {}'.format(fid))
-        print('Max in flight {}'.format(max_count))
+        print(f'Completed, fid {fid}')
+        print(f'Max in flight {max_count}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4086,7 +4089,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.vh = ValgrindHelper(self.conf)
+            aftf.valgrindh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
             # why it crashed.
             aftf.vh.full_check = False
@@ -4094,6 +4097,7 @@ class AllocFailTest():
         aftf.start()
 
         return aftf
+
 
 def test_dfuse_start(server, conf, wf):
     """Start dfuse under fault injection
@@ -4150,15 +4154,13 @@ def test_alloc_fail_copy(server, conf, wf):
     os.symlink('file.0', join(sub_dir, 'link'))
 
     def get_cmd(cont_id):
-        container = 'container_' + str(cont_id)
-        cmd = [join(conf['PREFIX'], 'bin', 'daos'),
-               'filesystem',
-               'copy',
-               '--src',
-               src_dir.name,
-               '--dst',
-               'daos://{}/{}'.format(pool, container)]
-        return cmd
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'filesystem',
+                'copy',
+                '--src',
+                src_dir.name,
+                '--dst',
+                f'daos://{pool}/container_{cont_id}']
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.skip_daos_init = False
