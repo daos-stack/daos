@@ -65,6 +65,8 @@ def get_build_flags(benv):
     if not is_release_build(benv):
         # enable race detector for non-release builds
         flags += "-race"
+    else:
+        flags += '-buildmode=pie'
     return flags
 
 
@@ -118,13 +120,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    if not is_release_build(denv):
-        flag_pie = ' '
-    else:
-        flag_pie = '-buildmode=pie '
     target = daos_build.run_command(denv, build_bin, src, libs,
                                     f'cd {gosrc}; {GO_BIN} build -mod vendor {go_ldflags()} '
-                                    + flag_pie
                                     + f'{get_build_flags(denv)} '
                                     + f'{get_build_tags(denv)} '
                                     + f'-o {build_bin} {install_src}')
