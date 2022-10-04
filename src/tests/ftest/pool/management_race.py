@@ -65,6 +65,9 @@ class PoolManagementRace(TestWithServers):
                             "race condition detected by dmg, retry.. %s", pool_id, error)
                         time.sleep(wait_time)
                         if float(time.time()) - start > max_query_time:
+                            self.info("Log reference (a.b.c.d): \n a: test_thread_number \n"
+                                      " b: 2 (pool delete), 3 (pool create), 4 (pool query) \n"
+                                      " c: pool_label \n d: test_loop number")
                             self.fail("#({}.5.{}.{})Pool query failed and retry timeout.".format(
                                       thread_num, pool_id, test_num))
                 daos_tool.exit_status_exception = True
@@ -117,7 +120,7 @@ class PoolManagementRace(TestWithServers):
                       thread_manager.qty)
         failed_thread_count = thread_manager.check_run()
         if failed_thread_count > 0:
-            msg = "#(6.{}) FAILED del_and_recreate_pool Threads".format(failed_thread_count)
-            self.d_log.error(msg)
+            msg = "#{} thread(s) FAILED, pool del_and_recreate and pool query, "\
+                  "please check job.log for detail.".format(failed_thread_count)
             self.fail(msg)
         self.log.info("===>Pool management race test passed.")
