@@ -163,6 +163,17 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
 			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
+		needsHelper := func() bool {
+			_, okVersion := cmd.(*versionCmd)
+			_, okNetwork := cmd.(*networkScanCmd)
+			return !(okVersion || okNetwork)
+		}
+		if needsHelper() {
+			// Check this early to avoid lots of annoying failures later.
+			if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
+				exitWithError(log, err)
+			}
+		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
 			return err
@@ -183,11 +194,6 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 func main() {
 	log := logging.NewCommandLineLogger()
 	var opts mainOpts
-
-	// Check this right away to avoid lots of annoying failures later.
-	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
-		exitWithError(log, err)
-	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
