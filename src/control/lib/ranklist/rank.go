@@ -4,12 +4,11 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package ranklist
 
 import (
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -17,9 +16,6 @@ import (
 type (
 	// Rank is used to uniquely identify a server within a cluster.
 	Rank uint32
-
-	// RankList provides convenience methods for working with Rank slices.
-	RankList []Rank
 )
 
 const (
@@ -108,14 +104,6 @@ func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
 	}
 
 	return rankList
-}
-
-func (rl RankList) String() string {
-	rs := make([]string, len(rl))
-	for i, r := range rl {
-		rs[i] = r.String()
-	}
-	return strings.Join(rs, ",")
 }
 
 // RanksToUint32 is a convenience method to convert this
