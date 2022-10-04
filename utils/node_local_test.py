@@ -3770,6 +3770,7 @@ class AllocFailTestRun():
         else:
             prefix = f'{loc:04d}_'
         log_dir = join(self.aft.conf.tmp_dir, f'dnt_fi_{aft.description}_logs')
+        os.mkdir(log_dir)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
                                                     dir=log_dir,
