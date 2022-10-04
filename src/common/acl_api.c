@@ -646,6 +646,7 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
+		D_ERROR("Failed to allocate hash table entry\n");
 		return -DER_NOMEM;
 	}
 

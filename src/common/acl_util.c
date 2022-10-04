@@ -322,6 +322,7 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	/* Will be mangling the string during processing */
 	D_STRNDUP(tmpstr, str, len);
 	if (tmpstr == NULL) {
+		D_ERROR("Couldn't allocate temporary string\n");
 		return -DER_NOMEM;
 	}
 
@@ -831,14 +832,12 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 }
 
 static void
-free_strings(char **str, size_t str_count, bool free_array)
+free_strings(char **str, size_t str_count)
 {
 	int i;
 
 	for (i = 0; i < str_count; i++)
 		D_FREE(str[i]);
-	if (free_array)
-		D_FREE(str);
 }
 
 static int
@@ -852,7 +851,7 @@ convert_aces_to_strs(struct daos_acl *acl, size_t ace_nr, char **result)
 		current = daos_acl_get_next_ace(acl, current);
 		rc = alloc_str_for_ace(current, &(result[i]));
 		if (rc != 0) {
-			free_strings(result, i, false);
+			free_strings(result, i);
 			return rc;
 		}
 	}
@@ -874,10 +873,9 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 		return -DER_INVAL;
 	}
 
-	rc = daos_acl_validate(acl);
-	if (rc != -DER_SUCCESS) {
-		D_ERROR("ACL is not valid " DF_RC "\n", DP_RC(rc));
-		return rc;
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("ACL is not valid\n");
+		return -DER_INVAL;
 	}
 
 	current = daos_acl_get_next_ace(acl, NULL);
@@ -962,7 +960,8 @@ daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
 
 out:
 	if (aces != NULL) {
-		free_strings(aces, aces_nr, true);
+		free_strings(aces, aces_nr);
+		D_FREE(aces);
 	}
 	return rc;
 }
