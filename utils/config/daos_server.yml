@@ -307,7 +307,7 @@
 #
 #  # Specify the fabric network interface and interface port that will
 #  # be used by this engine. The fabric_iface_port must be different
-#  # for each engine on a DAOS server. 
+#  # for each engine on a DAOS server.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000
