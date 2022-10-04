@@ -372,7 +372,6 @@ ds_mgmt_tgt_setup(void)
 	/* create lock/cv and hash table to track outstanding pool creates */
 	D_ALLOC_PTR(pooltgts);
 	if (pooltgts == NULL) {
-		D_ERROR("failed to allocate pooltgts struct\n");
 		D_GOTO(err_zombies, rc = -DER_NOMEM);
 	}
 

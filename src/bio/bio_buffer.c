@@ -35,7 +35,6 @@ dma_alloc_chunk(unsigned int cnt)
 	D_ASSERT(bytes > 0);
 	D_ALLOC_PTR(chunk);
 	if (chunk == NULL) {
-		D_ERROR("Failed to allocate chunk\n");
 		return NULL;
 	}
 

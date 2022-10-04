@@ -128,7 +128,6 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__set_log_masks_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -215,7 +214,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__group_update_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -407,7 +405,6 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
 	if (resp->tier_bytes == NULL) {
 		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate memory for tiers size: rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
 	resp->n_tier_bytes = DAOS_MEDIA_MAX;
@@ -508,7 +505,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_create_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -576,7 +572,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_destroy_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -673,7 +668,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_evict_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -765,7 +759,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -814,7 +807,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -901,7 +893,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_extend_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -951,7 +942,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_reintegrate_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1073,7 +1063,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_upgrade_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1323,7 +1312,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -1766,7 +1754,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
-		D_ERROR("Failed to allocate tier_stats for resp\n");
 		D_GOTO(out_ranges, rc = -DER_NOMEM);
 	}
 
@@ -1949,7 +1936,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__smd_dev_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -1966,7 +1952,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__smd_dev_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2022,7 +2007,6 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__smd_pool_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2039,7 +2023,6 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__smd_pool_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2094,7 +2077,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__bio_health_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2114,7 +2096,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC_PTR(bio_health);
 	if (bio_health == NULL) {
-		D_ERROR("Failed to allocate bio health struct\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2127,7 +2108,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
-		D_ERROR("failed to allocate buffer");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2181,7 +2161,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__bio_health_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2220,7 +2199,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2249,7 +2227,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__dev_state_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2293,7 +2270,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2322,7 +2298,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__dev_state_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2381,7 +2356,6 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2415,7 +2389,6 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__dev_replace_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2466,7 +2439,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2493,7 +2465,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		ctl__dev_identify_resp__pack(resp, body);
 		drpc_resp->body.len = len;
@@ -2575,7 +2546,6 @@ out:
 	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		D_ERROR("Failed to allocate response body\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
 		mgmt__cont_set_owner_resp__pack(&resp, body);

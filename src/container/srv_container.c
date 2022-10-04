@@ -1656,7 +1656,6 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, st
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
-		D_ERROR("Failed to allocate container descriptor\n");
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
 

@@ -1875,7 +1875,6 @@ crt_hdlr_iv_sync_aux(void *arg)
 
 		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
 		if (tmp_iovs == NULL) {
-			D_ERROR("Failed to allocate temporary iovs\n");
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 
