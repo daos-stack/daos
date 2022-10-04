@@ -1242,12 +1242,14 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(["version"])
 
 
-def check_system_query_status(data):
+def check_system_query_status(data, exclude_addr=[]):
     """Check if any server crashed.
 
     Args:
         data (dict): dictionary of system query data obtained from
             DmgCommand.system_query()
+        exclude_addr (list): Addresses to skip the state check. I.e., The ranks in these
+            addresses are expected to be at failed state. Defaults to empty list.
 
     Returns:
         bool: True if no server crashed, False otherwise.
@@ -1264,8 +1266,10 @@ def check_system_query_status(data):
             print(
                 "Rank {} info:\n  {}".format(
                     member["rank"], "\n  ".join(rank_info)))
-            if "state" in member and member["state"].lower() in failed_states:
-                failed_rank_list[member["rank"]] = member["state"]
+            ip_addr = member["addr"].split(":")[0]
+            if ip_addr not in exclude_addr:
+                if "state" in member and member["state"].lower() in failed_states:
+                    failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
     for rank in sorted(failed_rank_list):

@@ -123,6 +123,27 @@ class NetworkFailureTest(IorTestBase):
 
         return ip_to_host
 
+    def create_host_to_ip(self):
+        """Create a dictionary of hostname to IP address of the server nodes.
+
+        Returns:
+            dict: Dictionary of hostname (NodeSet representation) to IP addresses of all
+                server nodes.
+
+        """
+        command = "hostname -i"
+        results = run_pcmd(hosts=self.hostlist_servers, command=command)
+        self.log.info("hostname -i results = %s", results)
+
+        host_to_ip = {}
+        for result in results:
+            ips_str = result["stdout"][0]
+            # There may be multiple IP addresses for one host.
+            ip_addresses = ips_str.split()
+            host_to_ip[str(result["hosts"])] = ip_addresses
+
+        return host_to_ip
+
     def create_host_to_ranks(self, ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
@@ -145,8 +166,13 @@ class NetworkFailureTest(IorTestBase):
 
         return host_to_ranks
 
-    def wait_for_ranks_to_join(self):
+    def wait_for_ranks_to_join(self, exclude_addr=[]):
         """Wait for all ranks to join.
+
+        Args:
+            exclude_addr (list): Addresses to skip the state check. I.e., The ranks in
+                these addresses are expected to be at failed state. Defaults to empty
+                list.
 
         Returns:
             bool: False if any of the rank's state is in the failed state (unknown,
@@ -157,8 +183,14 @@ class NetworkFailureTest(IorTestBase):
 
         for _ in range(12):
             time.sleep(10)
-            if check_system_query_status(self.get_dmg_command().system_query()):
-                self.log.info("All ranks are joined after updating the interface.")
+            query_out = self.get_dmg_command().system_query()
+            if check_system_query_status(data=query_out, exclude_addr=exclude_addr):
+                if exclude_addr:
+                    msg = ("All ranks except {} are joined after updating the "
+                           "interface.").format(exclude_addr)
+                    self.log.info(msg)
+                else:
+                    self.log.info("All ranks are joined after updating the interface.")
                 return True
             self.log.info("One or more servers crashed. Check system query again.")
 
@@ -379,6 +411,10 @@ class NetworkFailureTest(IorTestBase):
         self.network_down_host = NodeSet(self.hostlist_servers[2])
         self.log.info("network_down_host = %s", self.network_down_host)
 
+        # Determine the IP address of network_down_host.
+        host_to_ip = self.create_host_to_ip()
+        network_down_addresses = host_to_ip[str(self.network_down_host)]
+
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
         # to provide the size because we're using --ranks.
         self.add_pool(namespace="/run/pool_size_value/*", target_list=target_list)
@@ -403,9 +439,12 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing down the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
+        # Wait until all ranks, except the ranks where the network was turned off, become
+        # joined.
+        self.log.info(
+            "Wait for all ranks except %s become joined after bringing down interface.",
+            network_down_addresses)
+        if not self.wait_for_ranks_to_join(exclude_addr=network_down_addresses):
             self.fail(
                 "One or more servers crashed after bringing down the network interface!")
 
@@ -450,6 +489,8 @@ class NetworkFailureTest(IorTestBase):
 
         # Some ranks may be excluded after bringing up the network interface, so wait
         # until they are up (joined).
+        self.log.info(
+            "Wait for all ranks to become joined after bringing up the interface.")
         if not self.wait_for_ranks_to_join():
             msg = "One or more servers crashed after bringing up the network interface!"
             errors.append(msg)
