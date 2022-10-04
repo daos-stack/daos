@@ -125,8 +125,6 @@ handler_ping(crt_rpc_t *rpc)
 	output = crt_reply_get(rpc);
 
 	output->rc = 0;
-	DBG_PRINT("Sizes: %d %d\n", input->size1, input->size2);
-
 	ctx = rpc->cr_ctx;
 
 	rc = crt_req_src_provider_is_primary(rpc, &primary_origin);

@@ -106,8 +106,6 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 20, false, true);
 
-	DBG_PRINT("Client starting up\n");
-
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {
 		D_ERROR("sem_init() failed; rc=%d\n", rc);
@@ -123,7 +121,7 @@ int main(int argc, char **argv)
 		  arg_provider, arg_interface, arg_domain);
 	DBG_PRINT("Number of remote tags: %d\n", num_remote_tags);
 	DBG_PRINT("Primary_provider: %d\n", use_primary);
-	DBG_PRINT("------------------------------------\n");
+	DBG_PRINT("------------------------------------\n\n");
 	crt_init_options_t init_opts = {0};
 
 	init_opts.cio_provider = arg_provider;
@@ -190,12 +188,9 @@ int main(int argc, char **argv)
 			if (rc == EOF)
 				error_exit();
 
-			printf("server_rank=%d\n", serv_rank);
-			printf("pri_uri=%s\n", pri_uri0);
-			printf("sec_uri=%s\n", sec_uri0);
-
-			printf("Using %s URIs for ranks\n",
-			       (use_primary) ? "primary" : "secondary");
+			DBG_PRINT("Rank: %d URI: '%s' (%s)\n", serv_rank,
+				  (use_primary) ? pri_uri0 : sec_uri0,
+				  (use_primary) ? "primary" : "secondary");
 			rc = crt_group_primary_rank_add(crt_ctx, grp, serv_rank,
 							(use_primary) ? pri_uri0 : sec_uri0);
 			fclose(f);
@@ -230,7 +225,7 @@ int main(int argc, char **argv)
 		rank = rank_list->rl_ranks[i];
 
 		for (tag = 0; tag < num_remote_tags; tag++) {
-			DBG_PRINT("Sending ping to %d:%d\n", rank, tag);
+			DBG_PRINT(">>> Ping to rank=%d:tag=%d\n", rank, tag);
 
 			server_ep.ep_rank = rank;
 			server_ep.ep_tag = tag;
@@ -250,7 +245,7 @@ int main(int argc, char **argv)
 			input->size2 = 10;
 			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 			crtu_sem_timedwait(&sem, 10, __LINE__);
-			DBG_PRINT("Ping response from %d:%d\n", rank, tag);
+			DBG_PRINT("<<< Response from rank=%d:tag=%d\n\n", rank, tag);
 		}
 	}
 
@@ -301,7 +296,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	DBG_PRINT("Client successfully finished\n");
+	DBG_PRINT("Exiting\n");
 	d_log_fini();
 
 	return 0;
