@@ -3780,7 +3780,7 @@ class AllocFailTestRun():
         cmd_text = ' '.join(self.cmd)
         res = f"Fault injection test of '{cmd_text}'\n"
         res += f'Fault injection location {self.loc}\n'
-        if self.vh:
+        if self.valgrindh:
             res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
             res += 'Process not completed'
@@ -3820,8 +3820,8 @@ class AllocFailTestRun():
 
         self.env['D_FI_CONFIG'] = self._fi_file.name
 
-        if self.vh:
-            exec_cmd = self.vh.get_cmd_prefix()
+        if self.valgrindh:
+            exec_cmd = self.valgrindh.get_cmd_prefix()
             exec_cmd.extend(self.cmd)
         else:
             exec_cmd = self.cmd
@@ -3899,8 +3899,8 @@ class AllocFailTestRun():
                 if self.aft.expected_stdout is not None:
                     assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
-        if self.vh:
-            self.vh.convert_xml()
+        if self.valgrindh:
+            self.valgrindh.convert_xml()
         if not self.fault_injected:
             _explain()
             return
@@ -4090,9 +4090,8 @@ class AllocFailTest():
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
             aftf.valgrindh = ValgrindHelper(self.conf)
-            # Turn off leak checking in this case, as we're just interested in
-            # why it crashed.
-            aftf.vh.full_check = False
+            # Turn off leak checking in this case, as we're just interested in why it crashed.
+            aftf.valgrindh.full_check = False
 
         aftf.start()
 
