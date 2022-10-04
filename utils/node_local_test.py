@@ -4125,6 +4125,7 @@ def test_dfuse_start(server, conf, wf):
     os.rmdir(mount_point)
     return rc
 
+
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -4141,8 +4142,8 @@ def test_alloc_fail_copy(server, conf, wf):
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     sub_dir = join(src_dir.name, 'new_dir')
     os.mkdir(sub_dir)
-    for f in range(5):
-        with open(join(sub_dir, 'file.{}'.format(f)), 'w') as ofd:
+    for idx in range(5):
+        with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
             ofd.write('hello')
 
     os.symlink('broken', join(sub_dir, 'broken_s'))
@@ -4199,6 +4200,47 @@ def test_alloc_fail_cat(server, conf):
     return rc
 
 
+def test_alloc_fail_il_cp(server, conf):
+    """Run the Interception library with fault injection
+
+    Start dfuse for this test, and do not do output checking on the command
+    itself yet.
+    """
+
+    pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='il_cp')
+
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    test_dir = join(dfuse.dir, 'test_dir')
+
+    os.mkdir(test_dir)
+
+    cmd = ['fs', 'set-attr', '--path', test_dir, '--oclass', 'S4', '--chunk-size', '8']
+
+    rc = run_daos_cmd(conf, cmd)
+    print(rc)
+
+    src_file = join(test_dir, 'src_file')
+
+    with open(src_file, 'w') as fd:
+        fd.write('Some raw test data that spans over at least two targets and possibly more.')
+
+    def get_cmd(loc):
+        return ['cp', src_file, join(test_dir, f'test_{loc}')]
+
+    test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
+    test_cmd.use_il = True
+    test_cmd.check_stderr = False
+    test_cmd.wf = conf.wf
+
+    rc = test_cmd.launch()
+    dfuse.stop()
+    return rc
+
+
 def test_fi_list_attr(server, conf, wf):
     """Run daos cont list-attr with fault injection"""
 
@@ -4224,6 +4266,28 @@ def test_fi_list_attr(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-list-attr', cmd)
     test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+
+def test_fi_get_prop(server, conf, wf):
+    """Run daos cont list-attr with fault injection"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool, ctype='POSIX')
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'get-prop',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
+    test_cmd.wf = wf
+    test_cmd.check_stderr = False
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
@@ -4422,6 +4486,8 @@ def run(wf, args):
                 fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
                 fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
+                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
@@ -4434,6 +4500,9 @@ def run(wf, args):
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
+                # Copy (read/write) via IL, requires dfuse.
+                fatal_errors.add_result(test_alloc_fail_il_cp(server, conf))
 
             if args.perf_check:
                 check_readdir_perf(server, conf)
