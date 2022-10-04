@@ -152,7 +152,7 @@ handler_ping(crt_rpc_t *rpc)
 		  primary_origin ? "primary" : "secondary");
 
 	/* TODO: Change this to rank == 2 when bulk support is added */
-	if (g_my_rank == 100002) {
+	if (g_my_rank == 10002) {
 		struct crt_bulk_desc	bulk_desc;
 		crt_bulk_t		dst_bulk;
 		char			*dst;
