@@ -17,11 +17,11 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
@@ -151,7 +151,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-pools": {
 			req: &ctlpb.SmdQueryReq{
 				OmitDevices: true,
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -223,7 +223,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-pools; filter by uuid": {
 			req: &ctlpb.SmdQueryReq{
 				OmitDevices: true,
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 				Uuid:        test.MockUUID(1),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -267,7 +267,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-pools; DAOS Failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitDevices: true,
-				Rank:        uint32(system.NilRank),
+				Rank:        uint32(ranklist.NilRank),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -283,7 +283,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-devices": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
-				Rank:      uint32(system.NilRank),
+				Rank:      uint32(ranklist.NilRank),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -369,7 +369,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-devices; missing state": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
-				Rank:      uint32(system.NilRank),
+				Rank:      uint32(ranklist.NilRank),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -404,7 +404,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-devices; show only faulty": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
-				Rank:      uint32(system.NilRank),
+				Rank:      uint32(ranklist.NilRank),
 				StateMask: storage.NvmeStateFaulty.Uint32(),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -516,7 +516,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-devices; filter by uuid": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
-				Rank:      uint32(system.NilRank),
+				Rank:      uint32(ranklist.NilRank),
 				Uuid:      test.MockUUID(1),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -563,7 +563,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"list-devices; DAOS Failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
-				Rank:      uint32(system.NilRank),
+				Rank:      uint32(ranklist.NilRank),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -579,7 +579,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"device-health": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
-				Rank:             uint32(system.NilRank),
+				Rank:             uint32(ranklist.NilRank),
 				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
@@ -636,7 +636,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"device-health (NEW SMD); skip health collection": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
-				Rank:             uint32(system.NilRank),
+				Rank:             uint32(ranklist.NilRank),
 				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
@@ -690,7 +690,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"device-health; DAOS Failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
-				Rank:             uint32(system.NilRank),
+				Rank:             uint32(ranklist.NilRank),
 				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
@@ -812,7 +812,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"target-health; missing rank": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
-				Rank:             uint32(system.NilRank),
+				Rank:             uint32(ranklist.NilRank),
 				Target:           "0",
 				IncludeBioHealth: true,
 			},
@@ -820,7 +820,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		},
 		"ambiguous UUID": {
 			req: &ctlpb.SmdQueryReq{
-				Rank: uint32(system.NilRank),
+				Rank: uint32(ranklist.NilRank),
 				Uuid: test.MockUUID(),
 			},
 			expErr: errors.New("ambiguous"),

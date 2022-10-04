@@ -14,8 +14,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getTierNameText(tierIdx int) string {
@@ -247,7 +247,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 
 	svcReps := "N/A"
 	if len(pool.ServiceReplicas) != 0 {
-		rl := system.RanksToUint32(pool.ServiceReplicas)
+		rl := ranklist.RanksToUint32(pool.ServiceReplicas)
 		svcReps = formatRanks(rl)
 	}
 
