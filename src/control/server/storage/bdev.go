@@ -58,6 +58,14 @@ const (
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
+// Role assignments for NVMe SSDs related to type of storage (enables Metadata-on-SSD capability).
+const (
+	BdevRoleData  = C.NVME_ROLE_DATA
+	BdevRoleIndex = C.NVME_ROLE_INDEX
+	BdevRoleWAL   = C.NVME_ROLE_WAL
+	BdevRoleAll   = BdevRoleData | BdevRoleIndex | BdevRoleWAL
+)
+
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
 
@@ -407,6 +415,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
+		DeviceRoles    BdevDeviceRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.

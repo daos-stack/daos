@@ -258,11 +258,11 @@ func (p *Provider) HasBlockDevices() bool {
 // BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
-		Class:      cfg.Class,
-		DeviceList: cfg.Bdev.DeviceList,
-		// cfg size in nr GiBytes
+		Class:          cfg.Class,
+		DeviceList:     cfg.Bdev.DeviceList,
 		DeviceFileSize: uint64(humanize.GiByte * cfg.Bdev.FileSize),
 		Tier:           cfg.Tier,
+		DeviceRoles:    cfg.Bdev.DeviceRoles,
 	}
 }
 

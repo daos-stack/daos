@@ -217,7 +217,9 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 		}
 
 		for index, dev := range tier.DeviceList.Devices() {
-			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
+			// Encode bdev tier info in RPC name field.
+			name := fmt.Sprintf("%s_%d_%d_%s", req.Hostname, index, tier.Tier,
+				tier.DeviceRoles.String())
 			sscs = append(sscs, f(name, dev))
 		}
 	}

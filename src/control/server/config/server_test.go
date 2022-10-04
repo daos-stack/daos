@@ -252,7 +252,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevBusidRange("0x80-0x8f"),
+					WithBdevBusidRange("0x80-0x8f").
+					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
@@ -639,7 +640,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							WithScmMountPoint("/foo"),
 						storage.NewTierConfig().
 							WithStorageClass("nvme").
-							WithBdevDeviceList("0000:81:00.0"),
+							WithBdevDeviceList("0000:81:00.0").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
 					).
 					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
 					WithStorageVosEnv("NVME"),
