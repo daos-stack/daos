@@ -17,8 +17,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // EngineRunner defines an interface for starting and stopping the
@@ -111,7 +111,7 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 // createPublishInstanceExitFunc returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
 func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname string) onInstanceExitFn {
-	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error, exPid int) error {
+	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, exitErr error, exPid int) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
@@ -120,7 +120,7 @@ func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname stri
 			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
-		publish(evt.WithForwardable(!rank.Equals(system.NilRank)))
+		publish(evt.WithForwardable(!rank.Equals(ranklist.NilRank)))
 
 		return nil
 	}
@@ -139,7 +139,7 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 	if exitPid != 0 {
 		details = append(details, fmt.Sprintf("pid %d", exitPid))
 	}
-	if !rank.Equals(system.NilRank) {
+	if !rank.Equals(ranklist.NilRank) {
 		details = append(details, fmt.Sprintf("rank %d", rank))
 	}
 	strDetails := strings.Join(details, ", ")
