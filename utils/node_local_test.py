@@ -3765,10 +3765,10 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        if loc is None:
-            prefix = 'reference_'
-        else:
+        if loc:
             prefix = f'{loc:04d}_'
+        else:
+            prefix = 'reference_'
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
                                                     dir=self.aft.log_dir,
@@ -3781,10 +3781,10 @@ class AllocFailTestRun():
         res += f'Fault injection location {self.loc}\n'
         if self.valgrindh:
             res += 'Valgrind enabled for this test\n'
-        if self.returncode is None:
-            res += 'Process not completed'
-        else:
+        if self.returncode:
             res += f'Returncode was {self.returncode}'
+        else:
+            res += 'Process not completed'
 
         if self.stdout:
             res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
