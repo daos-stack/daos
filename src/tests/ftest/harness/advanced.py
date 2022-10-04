@@ -157,7 +157,7 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=harness,harness_advanced_test,launch_failures
         :avocado: tags=test_launch_failures
         """
-        host = NodeSet(choice(self.server_managers[0].hosts))  # nosec
+        host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         self.log.info("Creating launch.py failure trigger files on %s", host)
         failure_trigger = "00_trigger-launch-failure_00"
         failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
