@@ -3769,11 +3769,9 @@ class AllocFailTestRun():
             prefix = 'reference_'
         else:
             prefix = f'{loc:04d}_'
-        log_dir = join(self.aft.conf.tmp_dir, f'dnt_fi_{aft.description}_logs')
-        os.mkdir(log_dir)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
-                                                    dir=log_dir,
+                                                    dir=self.aft.log_dir,
                                                     delete=False).name
         self.env['D_LOG_FILE'] = self.log_file
 
@@ -3992,6 +3990,14 @@ class AllocFailTest():
         self.wf = conf.wf
         # Instruct the fault injection code to skip daos_init().
         self.skip_daos_init = True
+        if conf.tmp_dir:
+            self.log_dir = join(conf.tmp_dir, f'dnt_fi_{self.description}_logs')
+        else:
+            self.log_dir = f'dnt_fi_{self.description}_logs'
+        try:
+            os.mkdir(self.log_dir)
+        except FileExistsError:
+            pass
 
     def launch(self):
         """Run all tests for this command"""
@@ -4009,6 +4015,7 @@ class AllocFailTest():
         print('Expected stdout is')
         print(self.expected_stdout)
 
+        # pylint: disable-next=no-member
         num_cores = len(os.sched_getaffinity(0))
 
         if num_cores < 20:
