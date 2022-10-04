@@ -1,3 +1,9 @@
+daos (2.2.0-3) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Second release candidate for 2.2.0
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 4 Oct 2022 12:00:00 -0100
+
 daos (2.2.0-2) unstable; urgency=medium
   [ Joseph Moore ]
   * Pin Mercury version to 2.2.0-1.

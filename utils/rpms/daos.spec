@@ -571,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 4 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-3
+- Second release candidate for 2.2.0.
+
 * Tue Sep 20 2022 Joseph Moore <joseph.moore@intel.com> 2.2.0-2
 - Pin Mercury version to 2.2.0-1.
 
