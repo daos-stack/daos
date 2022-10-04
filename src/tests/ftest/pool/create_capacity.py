@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,7 +38,7 @@ class PoolCreateTests(PoolTestBase):
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         self.add_pool_qty(quantity, create=False)
-        self.check_pool_creation(10)
+        self.check_pool_creation(30)
 
         # Verify DAOS can be restarted in less than 2 minutes
         try:
