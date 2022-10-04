@@ -12,6 +12,8 @@
 struct ddbs_sync_info {
 	struct bio_blob_hdr	*dsi_hdr;
 	uuid_t			 dsi_dev_id;
+	uint64_t		 dsi_cluster_size;
+	uint64_t		 dsi_cluster_nr;
 };
 
 typedef void (*ddbs_sync_cb)(struct ddbs_sync_info *dsi, void *cb_arg);

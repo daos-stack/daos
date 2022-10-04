@@ -355,6 +355,8 @@ dsc_get_dev_id(struct ddb_spdk_context *ctx)
 	struct spdk_bs_type bstype = spdk_bs_get_bstype(ctx->dsc_bs);
 
 	memcpy(ctx->dsc_dsi.dsi_dev_id, bstype.bstype, sizeof(ctx->dsc_dsi.dsi_dev_id));
+	ctx->dsc_dsi.dsi_cluster_size = spdk_bs_get_cluster_size(ctx->dsc_bs);
+	ctx->dsc_dsi.dsi_cluster_nr = spdk_blob_get_num_clusters(ctx->dsc_blob);
 	TRACE("Got device id: "DF_UUID"\n", DP_UUID(ctx->dsc_dsi.dsi_dev_id));
 }
 
@@ -470,7 +472,7 @@ dsc_run_state_machine(struct ddb_spdk_context *ctx)
 			ST_TSN_ASYNC(ctx, dsc_blob_read_hdr_async(ctx), DDB_SPDK_ST_SEND_INFO);
 			break;
 		case DDB_SPDK_ST_SEND_INFO:
-			ST_TSN(ctx, dsc_send_info(ctx), DDB_SPDK_ST_BLOB_CLOSE_ASYNC);
+			ST_TSN(ctx, dsc_send_info(ctx), DDB_SPDK_ST_BLOB_ITER_ASYNC);
 			break;
 		case DDB_SPDK_ST_BLOB_CLOSE_ASYNC:
 			/* After closing, start the iteration loop over */

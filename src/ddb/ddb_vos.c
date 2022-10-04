@@ -1590,18 +1590,17 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 
 	rc = smd_pool_get_info(pool_id, &pool_info);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to get smd pool info: "DF_RC"\n", DP_RC(rc));
-		args->sync_rc = rc;
-		return;
+		D_ERROR("Failed to get smd pool info. Going to continue rebuilding smd_pool "
+			"table with spdk cluster size and cluster count: "DF_RC". \n", DP_RC(rc));
+		/*
+		 * This could be larger than how the pool was originally configured, but it will
+		 * not be smaller
+		 */
+		blob_size = info->dsi_cluster_nr * info->dsi_cluster_size;
+	} else {
+		blob_size = pool_info->spi_blob_sz;
+		smd_pool_free_info(pool_info);
 	}
-
-	/*
-	 * Currently, use the pool's already configured blob size. In the future will need to
-	 * make it more robust and use info from spdk blob's cluster, page size, etc to get
-	 * blob size
-	 */
-	blob_size = pool_info->spi_blob_sz;
-	smd_pool_free_info(pool_info);
 
 	/* Try to delete the target first */
 	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id);
