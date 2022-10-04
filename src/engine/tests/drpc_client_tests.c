@@ -320,7 +320,7 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks), 0);
+	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks, 1), 0);
 	verify_notify_pool_svc_update(&pool_uuid, svc_ranks);
 
 	d_rank_list_free(svc_ranks);
@@ -339,7 +339,7 @@ test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    pool_uuid), 0);
 
-	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
+	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, NULL, 1),
 			-DER_INVAL);
 	assert_int_equal(sendmsg_call_count, 0);
 
@@ -358,7 +358,7 @@ test_drpc_verify_notify_pool_svc_update_nopool(void **state)
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_rc_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
+	assert_rc_equal(ds_notify_pool_svc_update(NULL, svc_ranks, 1),
 			-DER_INVAL);
 	assert_int_equal(sendmsg_call_count, 0);
 
