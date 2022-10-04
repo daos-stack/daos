@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -234,12 +235,37 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%s\n", mgmtpb.Debug(req))
 
+	resp = new(mgmtpb.PoolCreateResp)
+	cached, err := svc.sysdb.CheckRecordedRequest(req, resp, false)
+	for {
+		if err != nil {
+			switch errors.Cause(err) {
+			case raft.ErrRequestIncomplete:
+				svc.log.Debugf("MgmtSvc.PoolCreate retrying request, req:%s\n", mgmtpb.Debug(req))
+				cached, err = svc.sysdb.CheckRecordedRequest(req, resp, true)
+				continue
+			default:
+				return nil, err
+			}
+		}
+		if cached {
+			svc.log.Debugf("MgmtSvc.PoolCreate returning cached response, req:%s\n", mgmtpb.Debug(req))
+			return resp, nil
+		}
+		break
+	}
+
+	defer func() {
+		if compErr := svc.sysdb.CompleteRecordedRequest(req, resp, err); compErr != nil {
+			svc.log.Errorf("failed to complete recorded request: %s", compErr)
+		}
+	}()
+
 	uuid, err := uuid.Parse(req.GetUuid())
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse pool UUID %q", req.GetUuid())
 	}
 
-	resp = new(mgmtpb.PoolCreateResp)
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
@@ -416,6 +442,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	}
+	if resp.Uuid == "" {
+		resp.Uuid = req.Uuid
 	}
 
 	if resp.GetStatus() != 0 {

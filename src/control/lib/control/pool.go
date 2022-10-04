@@ -228,6 +228,7 @@ type (
 		// manual params
 		Ranks     []ranklist.Rank
 		TierBytes []uint64
+		IdemKey   uint64 `json:"idem_key"`
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -273,7 +274,6 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	}
 
 	pcr := new(PoolCreateResp)
-	pcr.UUID = pbReq.Uuid
 
 	return pcr, convert.Types(pbPcr, pcr)
 }

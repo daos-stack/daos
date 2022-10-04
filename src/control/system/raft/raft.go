@@ -20,6 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -44,6 +46,8 @@ const (
 	raftOpRemovePoolService
 	raftOpIncMapVer
 	raftOpUpdateSystemAttrs
+	raftOpRecordRequest
+	raftOpCompleteRequest
 
 	sysDBFile = "daos_system.db"
 )
@@ -431,6 +435,56 @@ func (db *Database) submitSystemAttrsUpdate(props map[string]string) error {
 	return db.submitRaftUpdate(data)
 }
 
+type submittedRequest struct {
+	ID            uint64
+	Request       json.RawMessage
+	RequestLeader string
+	Time          time.Time
+}
+
+type completedRequest struct {
+	ID       uint64
+	Error    error
+	Response json.RawMessage
+	Time     time.Time
+}
+
+func (db *Database) submitRecordedRequest(req IDRequest) error {
+	raw, err := protojson.Marshal(req.ProtoReflect().Interface())
+	if err != nil {
+		return err
+	}
+	data, err := createRaftUpdate(raftOpRecordRequest, &submittedRequest{
+		ID:            req.GetIdemKey(),
+		RequestLeader: db.leaderHint(),
+		Request:       raw,
+		Time:          time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+	db.log.Debugf("submitting recorded request for %d: %+v", req.GetIdemKey(), req)
+	return db.submitRaftUpdate(data)
+}
+
+func (db *Database) submitRecordedRequestCompletion(id uint64, resp proto.Message, err error) error {
+	raw, err := protojson.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	data, err := createRaftUpdate(raftOpCompleteRequest, &completedRequest{
+		ID:       id,
+		Error:    err,
+		Response: raw,
+		Time:     time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+	db.log.Debugf("submitting recorded request completion for %d: %+v (%+v)", id, resp, err)
+	return db.submitRaftUpdate(data)
+}
+
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
@@ -491,6 +545,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpUpdateSystemAttrs:
 		f.data.applySystemUpdate(c.Op, c.Data, f.EmergencyShutdown)
+	case raftOpRecordRequest, raftOpCompleteRequest:
+		f.data.applyRequestUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
 		return nil
@@ -593,6 +649,39 @@ func (d *dbData) applySystemUpdate(op raftOp, data []byte, panicFn func(error)) 
 		}
 	default:
 		panicFn(errors.Errorf("unhandled System Apply operation: %d", op))
+		return
+	}
+}
+
+func (d *dbData) applyRequestUpdate(op raftOp, data []byte, panicFn func(error)) {
+	d.Lock()
+	defer d.Unlock()
+
+	switch op {
+	case raftOpRecordRequest:
+		var req submittedRequest
+		if err := json.Unmarshal(data, &req); err != nil {
+			panicFn(errors.Wrap(err, "failed to decode submitted request"))
+		}
+		d.Requests.Requests[req.ID] = &RequestEntry{
+			Created:       req.Time,
+			Request:       req.Request,
+			RequestLeader: req.RequestLeader,
+		}
+	case raftOpCompleteRequest:
+		var req completedRequest
+		if err := json.Unmarshal(data, &req); err != nil {
+			panicFn(errors.Wrap(err, "failed to decode completed request"))
+		}
+		e, found := d.Requests.Requests[req.ID]
+		if !found {
+			panicFn(errors.Errorf("completed request %d not found", req.ID))
+		}
+		e.Completed = req.Time
+		e.CompletionError = req.Error
+		e.Response = req.Response
+	default:
+		panicFn(errors.Errorf("unhandled applyRequestUpdate operation: %d", op))
 		return
 	}
 }

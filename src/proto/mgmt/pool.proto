@@ -32,6 +32,7 @@ message PoolCreateReq {
 	uint32 numranks = 11; // Number of target ranks to use (auto config)
 	repeated uint32 ranks = 12; // target ranks (manual config)
 	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
+	uint64 idem_key = 14; // Idempotency key
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -40,6 +41,7 @@ message PoolCreateResp {
 	repeated uint32 svc_reps = 2; // pool service replica ranks
 	repeated uint32 tgt_ranks = 3; // pool target ranks
 	repeated uint64 tier_bytes = 4; // storage tiers allocated to pool
+	string uuid = 5; // UUID of created pool
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.

@@ -64,6 +64,7 @@ type PoolCreateCmd struct {
 	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	RankList      ui.RankSetFlag   `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	IdemKey uint64 `short:"m" long:"idem-key" description:"Idempotency key for pool creation"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>"`
@@ -104,6 +105,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		NumSvcReps: cmd.NumSvcReps,
 		Properties: cmd.Properties.ToSet,
 		Ranks:      cmd.RankList.Ranks(),
+		IdemKey:   cmd.IdemKey,
 	}
 
 	if cmd.ACLFile != "" {
