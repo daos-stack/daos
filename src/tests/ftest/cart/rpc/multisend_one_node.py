@@ -9,14 +9,14 @@ from cart_utils import CartTest
 
 class CartMultisendOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
-    """Run multisend test that launches 16 servers and splits bulk
+    """Run multi-send test that launches 16 servers and splits bulk
        transfers among them using different parameters.
 
     :avocado: recursive
     """
 
     def test_cart_multisend(self):
-        """Test multisend
+        """Test multi-send
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,rpc,one_node,memcheck,multisend,bulk
@@ -26,8 +26,8 @@ class CartMultisendOneNodeTest(CartTest):
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as my_except:
+            self.print("Exception in launching server : {}".format(my_except))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
