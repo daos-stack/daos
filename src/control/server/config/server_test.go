@@ -1343,7 +1343,7 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	}
 }
 
-func TestConfig_setEngineAffinity(t *testing.T) {
+func TestConfig_SetNUMAAffinity(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg     *engine.Config
 		setNUMA uint
@@ -1444,9 +1444,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					engine.MockConfig().
 						WithFabricInterface("ib0").
 						WithFabricProvider("ofi+verbs").
-						WithPinnedNumaNode(0),
+						WithPinnedNumaNode(1),
 				),
-			expNumaSet: []int{0},
+			expNumaSet: []int{1},
 		},
 		"single engine without pinned_numa_node set and no detected affinity": {
 			cfg: baseSrvCfg().

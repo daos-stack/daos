@@ -300,11 +300,11 @@ type (
 		Device string
 	}
 
-	// RamdiskParams defines the sub-parameters of a Format operation that
+	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
 		Size     uint
-		MpolNode uint // NUMA node to bind ramdisk to
+		NUMANode uint
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.

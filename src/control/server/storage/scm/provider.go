@@ -606,7 +606,7 @@ func (p *Provider) MountRamdisk(target string, params *storage.RamdiskParams) (*
 	var opts = []string{
 		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
 		// mpol=prefer:Node prefers to allocate memory from the given Node
-		fmt.Sprintf("mpol=prefer:%d", params.MpolNode),
+		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
 	}
 	if params.Size > 0 {
 		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))

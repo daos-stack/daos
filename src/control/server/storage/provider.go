@@ -121,7 +121,7 @@ func (p *Provider) MountScm() error {
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
 			Size:     cfg.Scm.RamdiskSize,
-			MpolNode: cfg.Scm.NumaNodeIndex,
+			NUMANode: cfg.Scm.NumaNodeIndex,
 		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
@@ -155,7 +155,7 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
 			Size:     scmCfg.RamdiskSize,
-			MpolNode: scmCfg.NumaNodeIndex,
+			NUMANode: scmCfg.NumaNodeIndex,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
