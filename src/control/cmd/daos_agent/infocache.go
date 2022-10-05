@@ -105,8 +105,16 @@ type localFabricCache struct {
 	log         logging.Logger
 	enabled     atm.Bool
 	initialized atm.Bool
+	cfg         *Config
+
 	// cached fabric interfaces organized by NUMA affinity
 	localNUMAFabric *NUMAFabric
+}
+
+// WithConfig adds a config file for the cache to use.
+func (c *localFabricCache) WithConfig(cfg *Config) *localFabricCache {
+	c.cfg = cfg
+	return c
 }
 
 // IsEnabled reports whether the cache is enabled.
@@ -157,7 +165,11 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 		return
 	}
 
-	c.localNUMAFabric = nf
+	if c.cfg == nil {
+		c.localNUMAFabric = nf
+	} else {
+		c.localNUMAFabric = nf.WithIgnoredDevices(c.cfg.ExcludeFabricIfaces)
+	}
 
 	c.initialized.SetTrue()
 	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)

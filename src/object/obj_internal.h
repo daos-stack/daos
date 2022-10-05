@@ -516,12 +516,11 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-			   uint32_t flags, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, struct dtx_id *dti,
-			   unsigned int *map_ver, unsigned int req_map_ver,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			   uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+			   struct dtx_id *dti, uint32_t *map_ver,
 			   daos_handle_t th, tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -575,7 +574,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)

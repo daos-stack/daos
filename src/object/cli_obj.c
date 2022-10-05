@@ -472,7 +472,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
 	idx = grp_start + d_rand() % grp_size;
-	for (i = 0; i < grp_size; i++, idx++) {
+	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
 		uint32_t tgt_id;
 		int index;
 
@@ -1613,7 +1613,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	tse_task_t	 *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
-	bool		  keep_result = false;
 
 	if (pmap_stale) {
 		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
@@ -1638,21 +1637,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		}
 		*io_task_reinited = true;
 		obj_auxi->retry_cnt++;
-	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
-		/* If the RPC sponsor specifies shard or group, we will NOT
-		 * reschedule the IO, but not prevent the pool map refresh.
-		 * Restore the original RPC (task) result, the RPC sponsor
-		 * will handle that by itself.
-		 */
-		keep_result = true;
 	}
 
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
 		tse_task_schedule(pool_task, obj_auxi->io_retry);
-
-	if (keep_result)
-		task->dt_result = result;
 
 	D_DEBUG(DB_IO, "Retrying task=%p/%d for err=%d, io_retry=%d\n",
 		task, task->dt_result, result, obj_auxi->io_retry);
@@ -1720,7 +1709,7 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
  * 1: alive,  0: no alive  < 0: failure.
  */
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 {
 	struct daos_oclass_attr *oca;
 	struct dc_object	*obj;
@@ -1743,14 +1732,15 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
 	oca = obj_get_oca(obj);
 	p_shard = obj_ec_parity_start(obj_ec_dkey_hash_get(obj, dkey_hash), oca);
 	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++, p_shard++) {
-		uint32_t shard;
-
-		shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
-		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d\n", shard,
-			obj->cob_shards->do_shards[shard].do_rebuilding,
-			obj->cob_shards->do_shards[shard].do_target_id,
-			obj->cob_shards->do_shards[shard].do_shard);
-		if (!obj_shard_is_invalid(obj, shard, DAOS_OBJ_RPC_FETCH))
+		*shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
+		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", *shard,
+			obj->cob_shards->do_shards[*shard].do_rebuilding,
+			obj->cob_shards->do_shards[*shard].do_reintegrating,
+			obj->cob_shards->do_shards[*shard].do_target_id,
+			obj->cob_shards->do_shards[*shard].do_shard,
+			obj->cob_shards->do_shards[*shard].do_shard_idx);
+		if (!obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH) &&
+		    !obj->cob_shards->do_shards[*shard].do_reintegrating)
 			D_GOTO(out_put, rc = 1);
 	}
 
@@ -5912,7 +5902,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_TO_SPEC_GROUP) {
 		*shard = dc_obj_anchor2shard(args->dkey_anchor);
 		obj_auxi->spec_group = 1;
-		grp_idx = *shard / obj_get_grp_size(obj);
+		grp_idx = *shard / obj_get_replicas(obj);
 	} else {
 		if (args->dkey != NULL) {
 			grp_idx = obj_dkey2grpidx(obj, obj_auxi->dkey_hash, map_ver);
@@ -6244,6 +6234,7 @@ dc_obj_punch_akeys_task(tse_task_t *task)
 }
 
 struct shard_query_key_args {
+	/* shard_auxi_args must be the first for shard_task_sched(). */
 	struct shard_auxi_args	 kqa_auxi;
 	uuid_t			 kqa_coh_uuid;
 	uuid_t			 kqa_cont_uuid;
@@ -6273,13 +6264,13 @@ shard_query_key_task(tse_task_t *task)
 		if (rc < 0) {
 			tse_task_complete(task, rc);
 			return rc;
-		} else if (rc == DC_TX_GE_REINITED) {
-			return 0;
 		}
+
+		if (rc == DC_TX_GE_REINITED)
+			return 0;
 	}
 
-	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
-			    &obj_shard);
+	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver, &obj_shard);
 	if (rc != 0) {
 		/* skip a failed target */
 		if (rc == -DER_NONEXIST)
@@ -6294,15 +6285,13 @@ shard_query_key_task(tse_task_t *task)
 	else
 		dkey_hash = args->kqa_auxi.obj_auxi->dkey_hash;
 
-	tse_task_stack_push_data(task, &dkey_hash, sizeof(dkey_hash));
 	api_args = dc_task_get_args(args->kqa_auxi.obj_auxi->obj_task);
-	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
+	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
+				    args->kqa_auxi.obj_auxi->map_ver_req, dkey_hash, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
-				    &args->kqa_auxi.obj_auxi->map_ver_reply,
-				    args->kqa_auxi.obj_auxi->map_ver_req,
-				    th, task);
+				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
 
 	obj_shard_close(obj_shard);
 	return rc;
@@ -6443,7 +6432,6 @@ dc_obj_query_key(tse_task_t *api_task)
 		 * the leader status might change.
 		 */
 		tse_task_list_traverse(head, shard_task_remove, NULL);
-		D_ASSERT(d_list_empty(head));
 		obj_auxi->args_initialized = 0;
 		obj_auxi->new_shard_tasks = 1;
 	}
@@ -6498,14 +6486,13 @@ non_leader:
 	}
 
 	obj_auxi->args_initialized = 1;
-
 	obj_shard_task_sched(obj_auxi, &epoch);
-	return rc;
+
+	return 0;
 
 out_task:
 	if (head != NULL && !d_list_empty(head)) {
-		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
-			DP_RC(rc));
+		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n", DP_RC(rc));
 		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	} else {

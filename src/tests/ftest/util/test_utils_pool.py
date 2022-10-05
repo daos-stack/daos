@@ -455,7 +455,8 @@ class TestPool(TestDaosApiBase):
                 prop_name = self.prop_name.value
             if prop_value is None:
                 prop_value = self.prop_value.value
-            self.dmg.pool_set_prop(self.identifier, prop_name, prop_value)
+            properties = ":".join([prop_name, prop_value])
+            self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):

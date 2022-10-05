@@ -16,6 +16,8 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -115,7 +117,7 @@ func memberStateFromString(in string) MemberState {
 // Map state combinations to true (illegal) or false (legal) and return negated
 // value.
 func (ms MemberState) isTransitionIllegal(to MemberState) bool {
-	if ms == MemberStateUnknown {
+	if ms == MemberStateUnknown || ms == MemberStateAdminExcluded {
 		return true // no legal transitions
 	}
 	if ms == to {
@@ -159,16 +161,16 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank           Rank         `json:"rank"`
-	Incarnation    uint64       `json:"incarnation"`
-	UUID           uuid.UUID    `json:"uuid"`
-	Addr           *net.TCPAddr `json:"addr"`
-	FabricURI      string       `json:"fabric_uri"`
-	FabricContexts uint32       `json:"fabric_contexts"`
-	State          MemberState  `json:"-"`
-	Info           string       `json:"info"`
-	FaultDomain    *FaultDomain `json:"fault_domain"`
-	LastUpdate     time.Time    `json:"last_update"`
+	Rank           ranklist.Rank `json:"rank"`
+	Incarnation    uint64        `json:"incarnation"`
+	UUID           uuid.UUID     `json:"uuid"`
+	Addr           *net.TCPAddr  `json:"addr"`
+	FabricURI      string        `json:"fabric_uri"`
+	FabricContexts uint32        `json:"fabric_contexts"`
+	State          MemberState   `json:"-"`
+	Info           string        `json:"info"`
+	FaultDomain    *FaultDomain  `json:"fault_domain"`
+	LastUpdate     time.Time     `json:"last_update"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -254,7 +256,7 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member.
 type MemberResult struct {
 	Addr    string
-	Rank    Rank
+	Rank    ranklist.Rank
 	Action  string
 	Errored bool
 	Msg     string
@@ -314,7 +316,7 @@ func (mr *MemberResult) Equals(other *MemberResult) bool {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank Rank, err error, state MemberState, action ...string) *MemberResult {
+func NewMemberResult(rank ranklist.Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
@@ -332,7 +334,7 @@ type MemberResults []*MemberResult
 
 // Errors returns an error indicating if and which ranks failed.
 func (mrs MemberResults) Errors() error {
-	rs, err := CreateRankSet("")
+	rs, err := ranklist.CreateRankSet("")
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ hosts:
   test_servers: 3
   test_clients: 1
 
-timeout: 300
+timeout: 420
 daos_server:
   pattern_timeout: 60
 
@@ -41,6 +41,7 @@ pool_size_ratio_80:
 pool_size_value:
   size: 100G
   control_method: dmg
+  svcn: 3
 
 container_wo_rf:
   type: POSIX

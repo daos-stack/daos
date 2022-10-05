@@ -11,13 +11,13 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // mockControlService takes cfgs for tuneable scm and sys provider behavior but
@@ -34,6 +34,9 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	// share sys provider between engines to be able to access to same mock config data
 	sp := scm.NewMockSysProvider(log, smsc)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	cs := &ControlService{
 		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 			sp,
@@ -42,7 +45,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		harness: &EngineHarness{
 			log: log,
 		},
-		events: events.NewPubSub(context.TODO(), log),
+		events: events.NewPubSub(ctx, log),
 		srvCfg: cfg,
 	}
 
@@ -56,7 +59,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			bdev.NewMockProvider(log, bmbc))
 		ei := NewEngineInstance(log, sp, nil, runner)
 		ei.setSuperblock(&Superblock{
-			Rank: system.NewRankPtr(ec.Rank.Uint32()),
+			Rank: ranklist.NewRankPtr(ec.Rank.Uint32()),
 		})
 		ei.ready.SetTrue()
 		if err := cs.harness.AddInstance(ei); err != nil {

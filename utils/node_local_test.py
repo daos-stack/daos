@@ -1514,6 +1514,8 @@ def needs_dfuse(method):
 
     return _helper
 
+
+# pylint: disable-next=invalid-name
 class needs_dfuse_with_opt():
     """Decorator class for starting dfuse under posix_tests class
 
@@ -1524,8 +1526,9 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, single_threaded=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False):
         self.caching = caching
+        self.wbcache = wbcache
         self.single_threaded = single_threaded
 
     def __call__(self, method):
@@ -1538,13 +1541,14 @@ class needs_dfuse_with_opt():
                 if obj.call_index == 0:
                     caching = True
                     obj.needs_more = True
-                    obj.test_name = '{}_with_caching'.format(method.__name__)
+                    obj.test_name = f'{method.__name__}_with_caching'
                 else:
                     caching = False
 
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
+                              wbcache=self.wbcache,
                               pool=obj.pool.dfuse_mount_name(),
                               container=obj.container)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
@@ -1556,7 +1560,8 @@ class needs_dfuse_with_opt():
             return rc
         return _helper
 
-class print_stat():
+
+class PrintStat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""
 
     headers = ['uid', 'gid', 'size', 'mode', 'filename']
@@ -2008,7 +2013,21 @@ class posix_tests():
 
             xattr.set(fd, 'user.Xfuse.ids', b'other_value')
             for (key, value) in xattr.get_all(fd):
-                print('xattr is {}:{}'.format(key, value))
+                print(f'xattr is {key}:{value}')
+
+    @needs_dfuse_with_opt(wbcache=True, caching=True)
+    def test_stat_before_open(self):
+        """Run open/close in a loop on the same file
+
+        This only runs a reproducer, it does not trawl the logs to ensure the feature is working"""
+
+        test_file = join(self.dfuse.dir, 'test_file')
+        with open(test_file, 'w'):
+            pass
+
+        for _ in range(100):
+            with open(test_file, 'r'):
+                pass
 
     @needs_dfuse
     def test_chmod(self):
@@ -2286,22 +2305,22 @@ class posix_tests():
 
         dfuse.start(v_hint='cont_rw_1')
 
-        ps = print_stat(dfuse.dir)
+        stat_log = PrintStat(dfuse.dir)
         testfile = join(dfuse.dir, 'testfile')
         with open(testfile, 'w') as fd:
-            ps.add(testfile, attr=os.fstat(fd.fileno()))
+            stat_log.add(testfile, attr=os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         os.mkdir(dirname)
 
-        ps.add(dirname)
+        stat_log.add(dirname)
 
         dir_perms = os.stat(dirname).st_mode
         base_perms = stat.S_IMODE(dir_perms)
 
         os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
-        ps.add(dirname)
-        print(ps)
+        stat_log.add(dirname)
+        print(stat_log)
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2334,19 +2353,19 @@ class posix_tests():
                       caching=False)
         dfuse.start(v_hint='cont_rw_2')
 
-        ps = print_stat()
-        ps.add(dfuse.dir, show_dir=True)
+        stat_log = PrintStat()
+        stat_log.add(dfuse.dir, show_dir=True)
 
         with open(join(dfuse.dir, 'testfile'), 'r') as fd:
-            ps.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+            stat_log.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
 
         dirname = join(dfuse.dir, 'rw_dir')
         testfile = join(dirname, 'new_file')
         fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
         os.write(fd, b'read-only-data')
-        ps.add(testfile, attr=os.fstat(fd))
+        stat_log.add(testfile, attr=os.fstat(fd))
         os.close(fd)
-        print(ps)
+        print(stat_log)
 
         fd = os.open(testfile, os.O_RDONLY)
         # previous code was using stream/file methods and it appears that
@@ -3396,7 +3415,7 @@ def run_dfuse(server, conf):
     return fatal_errors.errors
 
 
-def run_in_fg(server, conf):
+def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
     Block until Control-C is pressed.
@@ -3435,19 +3454,29 @@ def run_in_fg(server, conf):
 
     t_dir = join(dfuse.dir, container)
 
-    print('Running at {}'.format(t_dir))
-    print('export PATH={}:$PATH'.format(os.path.join(conf['PREFIX'], 'bin')))
-    print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
-    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
+    print(f'Running at {t_dir}')
+    print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
+    print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
+    print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
-    print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
-    print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos cont list {}'.format(pool.label))
+    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    print(f'daos container destroy --path {t_dir}/uns-link')
+    print(f'daos cont list {pool.label}')
     try:
-        dfuse.wait_for_exit()
+        if args.launch_cmd:
+            start = time.time()
+            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
+            elapsed = time.time() - start
+            dfuse.stop()
+            (minutes, seconds) = divmod(elapsed, 60)
+            print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
+            print(rc)
+        else:
+            dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
     dfuse = None
+
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
@@ -4326,7 +4355,7 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server, fe=fatal_errors) as server:
             if args.mode == 'launch':
-                run_in_fg(server, conf)
+                run_in_fg(server, conf, args)
             elif args.mode == 'kv':
                 test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':
@@ -4420,9 +4449,10 @@ def run(wf, args):
 
     wf_server.close()
     conf.flush_bz2()
-    print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
-    print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
+    print(f'Total time in log analysis: {conf.lt.total:.2f} seconds')
+    print(f'Total time in log compression: {conf.lt_compress.total:.2f} seconds')
     return fatal_errors
+
 
 def main():
     """Wrap the core function, and catch/report any exceptions
@@ -4443,8 +4473,19 @@ def main():
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
+    parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    if args.mode:
+        mode_list = args.mode
+        args.mode = mode_list.pop(0)
+
+        if args.mode != 'launch' and mode_list:
+            print(f"unrecognized arguments: {' '.join(mode_list)}")
+            sys.exit(1)
+        args.launch_cmd = mode_list
+    else:
+        args.mode = None
 
     if args.mode and args.test:
         print('Cannot use mode and test')
@@ -4452,10 +4493,10 @@ def main():
 
     if args.test == 'list':
         tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
+        for method in dir(posix_tests):
+            if method.startswith('test'):
+                tests.append(method[5:])
+        print(f"Tests are: {','.join(sorted(tests))}")
         sys.exit(1)
 
     wf = WarningsFactory('nlt-errors.json',
