@@ -76,6 +76,24 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
+        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional on EL 8 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
+                     defaultValue: false,
+                     description: 'Run the CI Functional on Ubuntu 20.04 test stage')
+        booleanParam(name: 'CI_small_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Small test stage')
+        booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_large_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large test stage')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
