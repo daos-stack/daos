@@ -15,6 +15,8 @@ from exception_utils import CommandFailure
 class Label(TestWithServers):
     """Test create and destroy a pool with a label.
 
+    Test
+
     :avocado: recursive
     """
 
