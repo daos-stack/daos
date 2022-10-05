@@ -627,11 +627,13 @@ class TestPool(TestDaosApiBase):
 
     def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
         """Check pool free space with expected value.
+
         Args:
             expected_scm (int, optional): pool expected SCM free space.
             expected_nvme (int, optional): pool expected NVME free space.
             timeout(int, optional): time to fail test if it could not match
                 expected values.
+
         Note:
             Arguments may also be provided as a string with a number preceded
             by '<', '<=', '>', or '>=' for other comparisons besides the
@@ -881,10 +883,10 @@ class TestPool(TestDaosApiBase):
 
         """
         daos_space = self.get_pool_daos_space()
-        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
-                                     float(daos_space["s_total"][0]) * 100, 4),
-                        'nvme': round(float(daos_space["s_free"][1]) /
-                                      float(daos_space["s_total"][1]) * 100, 4)}
+        pool_percent = {
+            'scm': round(float(daos_space["s_free"][0]) / float(daos_space["s_total"][0]) * 100, 4),
+            'nvme': round(float(daos_space["s_free"][1]) / float(daos_space["s_total"][1]) * 100, 4)
+        }
         return pool_percent
 
     def get_pool_rebuild_status(self):
@@ -1092,7 +1094,7 @@ class TestPool(TestDaosApiBase):
                 collecting the data from its output. Defaults to False.
 
         Raises:
-            CommandFailure: if there was error collecting the dmg pool query data or the keys 
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
 
         Returns:
             object: the requested dmg pool query data subset

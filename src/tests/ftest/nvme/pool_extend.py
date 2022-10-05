@@ -12,6 +12,7 @@ from dmg_utils import check_system_query_status
 
 
 class NvmePoolExtend(OSAUtils):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
     NVME Pool Extend test cases.
