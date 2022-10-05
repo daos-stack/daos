@@ -26,5 +26,5 @@
 * [ ] Check the target branch.   If it is master branch, should the PR go to a feature branch?  If
       it is a release branch, does it have merge approval in the JIRA ticket.
 * [ ] Check the commit message when landing. Check the standard
-      [here](https://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Commentshttps://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Comments). Edit it to create a single commit. If necessary, ask submitter for
-      a new summary.
+      [here](https://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Comments). Edit
+      it to create a single commit. If necessary, ask submitter for a new summary.
